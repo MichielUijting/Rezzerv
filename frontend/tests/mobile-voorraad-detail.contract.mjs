@@ -150,7 +150,7 @@ assert.doesNotMatch(mobileSource, /mobile-article-back-to-inventory|navigate\('\
 assert.match(mobileSource, /<QuantityStepper/)
 assert.match(mobileSource, /valueEditable=\{canDirectEditQuantity\}/)
 assert.match(mobileSource, /onValueCommit=\{setExactInventoryQuantity\}/)
-assert.match(mobileSource, /event_type: 'adjustment'/)
+assert.match(mobileSource, /await submitArticleQuantity\(normalizedQuantity, 'adjustment'/)
 assert.match(mobileSource, /decreaseTestId="mobile-article-stock-minus"/)
 assert.match(mobileSource, /increaseTestId="mobile-article-stock-plus"/)
 assert.match(mobileSource, /data-testid="mobile-article-add-to-shopping-list"/)
@@ -160,7 +160,7 @@ assert.match(mobileSource, /staat op de boodschappenlijst/)
 assert.match(mobileSource, /locationTrackingEnabled\s*\?\s*\[/)
 assert.match(mobileSource, /fetchMobileLocationTracking\(authContext\)/)
 assert.match(mobileSource, /isMobileArticleLocationTrackingEnabled\(authContext\)/)
-assert.match(mobileSource, /event_type: direction > 0 \? 'adjustment' : 'consume'/)
+assert.match(mobileSource, /direction > 0 \? 'adjustment' : 'consume'/)
 assert.doesNotMatch(mobileSource, /Naar boodschappen|Naar inkooplijstje/i)
 assert.doesNotMatch(mobileSource, /Verbruik registreren/i)
 assert.doesNotMatch(mobileSource, />Voorraad aanpassen</)
@@ -179,6 +179,13 @@ assert.match(mobileCss, /\.rz-mobile-article-functional-tabs > \.rz-tabbar \.rz-
 assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-article-subtabs > \.rz-tabbar\s*\{[\s\S]*display:\s*none/)
 assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-field-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/)
 assert.doesNotMatch(mobileCss, /\.rz-mobile-article-back\s*\{/)
+
+// Show the new value before the API completes, then reconcile or roll back.
+assert.match(mobileSource, /setLiveRows\(\(current\) => current\.map/)
+assert.match(mobileSource, /setLiveRows\(previousRows\)/)
+assert.match(mobileSource, /data\?\.row_new_quantity/)
+assert.doesNotMatch(mobileSource, /await refreshInventory\(\)/)
+assert.doesNotMatch(mobileSource, /showSuccess\('Voorraad/)
 
 // Wat Inhuis -> Waar Inhuis: bestaand voorraadartikel zonder locatie.
 const stockTab = readFileSync(new URL('../src/features/articles/tabs/ArticleStockTab.jsx', import.meta.url), 'utf8')
