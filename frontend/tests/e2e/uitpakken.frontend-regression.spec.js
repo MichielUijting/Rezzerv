@@ -742,9 +742,14 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Garage');
 
     await page.getByTestId(`receipt-line-article-group-select-${lineId}`).click();
-    await page.getByTestId(`receipt-line-article-group-select-${lineId}-popover`).getByRole('option', { name: 'Artikelgroep toevoegen...' }).click();
+    const groupPopover = page.getByTestId(`receipt-line-article-group-select-${lineId}-popover`);
+    await groupPopover.getByRole('searchbox').fill('Frisdrank');
+    await expect(groupPopover.getByRole('option', { name: 'Voorraadgroep' })).toHaveCount(0);
+    await expect(groupPopover.getByRole('option', { name: 'Artikelgroep toevoegen', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toHaveCount(0);
+    await groupPopover.getByRole('option', { name: 'Artikelgroep toevoegen', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toBeVisible();
-    await page.getByRole('dialog', { name: 'Nieuwe artikelgroep' }).getByRole('textbox').fill('Frisdrank');
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' }).getByRole('textbox')).toHaveValue('Frisdrank');
     await page.getByRole('button', { name: 'Opslaan en koppelen' }).click();
     await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
     await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toContainText('Frisdrank');
