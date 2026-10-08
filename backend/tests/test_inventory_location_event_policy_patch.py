@@ -297,3 +297,103 @@ def test_household_without_product_configuration_keeps_legacy_strict_guard(monke
     assert exc_info.value.detail == (
         "Voorraadmutatie vereist een expliciete ruimte of sublocatie"
     )
+
+
+@pytest.mark.parametrize("level", ["exact", "global"])
+@pytest.mark.parametrize("event_type", ["consume", "manual_adjustment"])
+def test_existing_legacy_locationless_stock_remains_editable_after_enabling_locations(
+    monkeypatch, level, event_type,
+):
+    module = _fake_main_module()
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_household_product_configuration",
+        lambda conn, household_id: SimpleNamespace(location_tracking_level=level),
+    )
+    def strict_resolver(conn, household_id, **kwargs):
+        if not kwargs.get("space_id") and not kwargs.get("sublocation_id"):
+            raise HTTPException(
+                status_code=400,
+                detail="Een exacte voorraadlocatie is verplicht voor dit huishouden",
+            )
+        return _location_payload()
+
+    monkeypatch.setattr(policy_patch, "resolve_inventory_location", strict_resolver)
+    policy_patch.install_inventory_location_event_policy_patch(module)
+
+    existing_row_location = module.build_location_payload_from_inventory_row(
+        {"space_id": None, "sublocation_id": None, "location_label": ""}
+    )
+    result = module.create_inventory_event(
+        object(),
+        household_id="house-was-locationless",
+        resolved_location=existing_row_location,
+        event_type=event_type,
+        source="manual_inventory_api",
+        quantity=1,
+    )
+    assert result["resolved_location"] == _locationless_payload()
+    assert policy_patch._processing_household_id.get() is None
+
+
+@pytest.mark.parametrize("source,event_type", [
+    ("manual_inventory_api", "purchase"),
+    ("other_source", "consume"),
+    ("other_source", "manual_adjustment"),
+])
+def test_new_or_untrusted_locationless_events_still_require_exact_location(
+    monkeypatch, source, event_type,
+):
+    module = _fake_main_module()
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_household_product_configuration",
+        lambda conn, household_id: SimpleNamespace(location_tracking_level="exact"),
+    )
+    def strict_resolver(conn, household_id, **kwargs):
+        if not kwargs.get("space_id") and not kwargs.get("sublocation_id"):
+            raise HTTPException(
+                status_code=400,
+                detail="Een exacte voorraadlocatie is verplicht voor dit huishouden",
+            )
+        return _location_payload()
+    monkeypatch.setattr(policy_patch, "resolve_inventory_location", strict_resolver)
+    policy_patch.install_inventory_location_event_policy_patch(module)
+
+    # This marker can only be constructed by the persisted row adapter.
+    existing_row_location = module.build_location_payload_from_inventory_row(
+        {"space_id": None, "sublocation_id": None, "location_label": ""}
+    )
+    with pytest.raises(HTTPException) as exc:
+        module.create_inventory_event(
+            object(),
+            household_id="house-exact",
+            resolved_location=existing_row_location,
+            event_type=event_type,
+            source=source,
+            quantity=1,
+        )
+    assert exc.value.status_code == 400
+
+
+def test_plain_untrusted_null_location_cannot_bypass_exact_policy(monkeypatch):
+    module = _fake_main_module()
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_household_product_configuration",
+        lambda conn, household_id: SimpleNamespace(location_tracking_level="exact"),
+    )
+    def reject_missing(conn, household_id, **kwargs):
+        raise HTTPException(status_code=400, detail="Exacte locatie verplicht")
+    monkeypatch.setattr(policy_patch, "resolve_inventory_location", reject_missing)
+    policy_patch.install_inventory_location_event_policy_patch(module)
+
+    with pytest.raises(HTTPException):
+        module.create_inventory_event(
+            object(),
+            household_id="house-exact",
+            resolved_location=_locationless_payload(),
+            event_type="manual_adjustment",
+            source="manual_inventory_api",
+            quantity=1,
+        )
