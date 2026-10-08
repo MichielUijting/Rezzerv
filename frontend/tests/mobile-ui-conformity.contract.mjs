@@ -71,7 +71,7 @@ assert.match(mobileHomeSource, /rz-dashboard-grid/)
 assert.match(mobileHomeSource, /rz-dashboard-shared-legend/)
 assert.match(mobileHomeSource, /aria-label="Productfamilies"/)
 assert.match(mobileHomeSource, /openBarDrilldown/)
-assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
+assert.doesNotMatch(mobileHomeSource, /function InHuisWordmark\(/)
 assert.match(mobileHomeSource, /function EmptyDashboardChart\(\)/)
 assert.match(mobileHomeSource, /const visibleCards = dashboard \? orderedCards : loadingCards/)
 assert.match(mobileHomeSource, /aria-disabled=\{!dashboard\}/)
@@ -98,9 +98,12 @@ assert.match(
   mobileComponentsCss,
   /\.rz-mobile-module-header\s*\{[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
-assert.match(mobileModuleHeaderSource, /rz-mobile-module-header-wordmark/)
-assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-huis\s*\{[\s\S]*color:\s*#fff;/i)
-assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-in\s*\{[\s\S]*color:\s*rgb\(40 169 158\);/i)
+assert.match(mobileModuleHeaderSource, /import BrandLogo from '\.\/BrandLogo\.jsx'/)
+assert.match(mobileModuleHeaderSource, /<BrandLogo variant="header" \/>/)
+assert.match(mobileAppChromeSource, /<MobileModuleHeader[\s\S]*className="rz-mobile-app-header"[\s\S]*showBack/)
+assert.match(mobileAppChromeSource, /mobileRouteTitle\(location\.pathname\)/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\)/)
 assert.match(
   mobileInventoryCss,
   /\.rz-mobile-inventory-list\s*\{[\s\S]*background:\s*#ffffff;/i,
@@ -145,7 +148,8 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /<MobileBackControl[^>]*testId="mobile-global-back"[^>]*onBack=\{location\.pathname === '\/home' \? handleHomeBack : location\.pathname === '\/kassa' \|\| location\.pathname === '\/kassa\/nieuw' \? handleKassaBack : null\}[^>]*\/>/)
+assert.match(mobileAppChromeSource, /backTestId="mobile-global-back"/)
+assert.match(mobileModuleHeaderSource, /<MobileBackControl testId=\{backTestId\} onBack=\{onBack\} \/>/)
 assert.match(mobileAppChromeSource, /function handleKassaBack\(\)/)
 assert.match(mobileAppChromeSource, /new Event\('inhuis:mobile-kassa-back', \{ cancelable: true \}\)/)
 assert.match(mobileAppChromeSource, /title: 'Inhuis verlaten'/)
@@ -186,15 +190,10 @@ assert.match(
   mobileComponentsCss,
   /\.rz-mobile-back-control\s*\{[\s\S]*min-height:\s*44px;[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
-assert.match(
-  mobileAppChromeCss,
-  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*position:\s*fixed;[\s\S]*left:\s*8px;/,
-)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-header \.rz-brandlogo-header/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-bottom-space\s*\{[\s\S]*display:\s*block;/)
-assert.match(
-  mobileAppChromeCss,
-  /\.rz-mobile-app-chrome:not\(:has\(\.rz-header, \.rz-mobile-module-header, \.rz-mobile-superuser-header\)\)\s*\{[\s\S]*padding-top:\s*calc\(58px \+ env\(safe-area-inset-top\)\);/,
-)
+assert.doesNotMatch(mobileAppChromeCss, /position:\s*fixed;[\s\S]*\.rz-mobile-back-control/)
+
 
 assert.match(mobileArticleSource, /<MobileModuleHeader title="Artikel in Voorraad" testId="mobile-article-header" \/>/)
 assert.doesNotMatch(mobileArticleSource, /mobile-article-back-to-inventory|navigate\('\/voorraad'\)/)
