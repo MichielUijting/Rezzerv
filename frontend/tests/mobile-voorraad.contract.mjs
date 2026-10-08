@@ -165,10 +165,9 @@ assert.match(mobileSource, /useAppFeedback\(\)/)
 assert.match(mobileSource, /showFeedback\(\{[\s\S]*testId: 'mobile-inventory-quick-feedback'/)
 assert.doesNotMatch(mobileSource, /mutationFeedback|setMutationFeedback/)
 
-assert.match(mobileSource, /function requiresStockLocationAssignment\(row\)/)
-assert.match(mobileSource, /locationTrackingEnabled && row\?\.location === 'Geen locatie'/)
-assert.match(mobileSource, /function warnAssignLocationFirst\(\)/)
-assert.match(mobileSource, /variant: 'warning'/)
-assert.match(mobileSource, /if \(requiresStockLocationAssignment\(row\)\)/)
+// A pre-existing locationless row remains editable after Waar Inhuis is enabled.
+assert.doesNotMatch(mobileSource, /requiresStockLocationAssignment|warnAssignLocationFirst/)
+assert.match(mobileSource, /buildQuickInventoryMutation\(row, direction\)/)
+assert.match(mobileSource, /buildExactInventoryMutation\(row, nextQuantity\)/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
