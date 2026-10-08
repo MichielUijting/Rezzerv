@@ -1044,7 +1044,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         }
       }
       setLocationCreateMode('')
-      await applyPickedLocation(String(created.id), nextOptions)
+      const locationLinked = await applyPickedLocation(String(created.id), nextOptions)
+      if (!locationLinked) {
+        throw new Error('De nieuwe locatie is aangemaakt maar niet aan de bonregel gekoppeld.')
+      }
       showUitpakkenFeedback('success', `${mode === 'space' ? 'Locatie' : 'Sublocatie'} ${name} is toegevoegd en geselecteerd.`, { key: `uitpakken-location-created-${mode}-${created.id}` })
     } catch (createError) {
       const message = normalizeErrorMessage(createError?.message || createError)
@@ -1069,7 +1072,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
       for (const entry of targetEntries) {
         const saved = await persistLineDraft(entry.line, { locationId: nextLocationId }, { suppressSuccessFeedback: true })
-        if (!saved) return
+        if (!saved) return false
       }
 
       setStatus(nextLocationId
@@ -1077,19 +1080,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         : `Locatie verwijderd bij ${targetEntries.length} geselecteerde regel(s).`
       )
       closeLocationPicker()
-      return
+      return true
     }
 
     const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
     if (!pickerEntry) {
       closeLocationPicker()
-      return
+      return false
     }
 
     if (locationPickerSaveMode === 'handling') {
       const saved = await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)
       if (saved) closeLocationPicker()
-      return
+      return saved
     }
 
     const hasArticle = Boolean(String(pickerEntry.draft?.articleId || pickerEntry.line?.matched_household_article_id || '').trim())
@@ -1100,7 +1103,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         locationId: nextLocationId,
       })
       closeLocationPicker()
-      return
+      return false
     }
 
     const saved = await persistLineDraft(
@@ -1109,6 +1112,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       { defaultLocationPolicy: 'line_only' }
     )
     if (saved) closeLocationPicker()
+    return saved
   }
 
   async function confirmDefaultLocationChoice(defaultLocationPolicy) {
@@ -1202,6 +1206,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         })
       }
       const refreshedBatch = await refreshBatch(batch.batch_id)
+      const persistedLine = refreshedBatch?.lines?.find((candidate) => String(candidate.id) === String(line.id))
+      if (!persistedLine) {
+        throw new Error('De bijgewerkte bonregel kon niet opnieuw worden geladen.')
+      }
+      if (articleGroupChanged && String(persistedLine.selected_article_group_id || '') !== nextArticleGroupId) {
+        throw new Error('De artikelgroep is niet aan de bonregel gekoppeld. Probeer opnieuw.')
+      }
+      if (locationChanged && String(persistedLine.target_location_id || '') !== nextLocationId) {
+        throw new Error('De locatie is niet bij de bonregel opgeslagen. Probeer opnieuw.')
+      }
+      if (articleChanged && String(persistedLine.matched_household_article_id || '') !== nextArticleId) {
+        throw new Error('Het artikel is niet aan de bonregel gekoppeld. Probeer opnieuw.')
+      }
       await refreshLocationOptions()
       setLineSaveState((current) => ({
         ...current,
@@ -1331,7 +1348,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       )
       setArticleGroupOptions(nextGroups)
 
-      await persistLineDraft(targetLine, { articleGroupId: createdId }, { suppressSuccessFeedback: true })
+      const linked = await persistLineDraft(targetLine, { articleGroupId: createdId }, {
+        suppressSuccessFeedback: true,
+        throwOnError: true,
+      })
+      if (!linked) throw new Error('De nieuwe artikelgroep kon niet aan de bonregel worden gekoppeld.')
       setNewArticleGroupLineId('')
       setNewArticleGroupName('')
       showUitpakkenFeedback(
