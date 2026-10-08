@@ -25,8 +25,8 @@ LOG = DATA / "logs"
 PORT = 5174
 
 
-def run(args, *, env=None, capture=False):
-    return subprocess.run([str(a) for a in args], check=True, env=env, text=True,
+def run(args, *, env=None, capture=False, cwd=None):
+    return subprocess.run([str(a) for a in args], check=True, env=env, cwd=cwd, text=True,
                           stdout=subprocess.PIPE if capture else None,
                           stderr=subprocess.STDOUT if capture else None)
 
@@ -79,7 +79,7 @@ def begin():
     # Preflight intentionally retained: do not skip real schema migration.
     backend_env = env | {"PYTHONPATH": str(BASE / "backend")}
     with (LOG / "preflight.log").open("a", encoding="utf-8") as logfile:
-        run([PYTHON, "-m", "app.runtime_preflight"], env=backend_env, capture=False)
+        run([PYTHON, "-m", "app.runtime_preflight"], env=backend_env, cwd=BASE / "backend")
     backend_log = (LOG / "backend.log").open("a", encoding="utf-8")
     backend = subprocess.Popen(
         [str(PYTHON), "-m", "uvicorn", "app.session_entrypoint:app",
