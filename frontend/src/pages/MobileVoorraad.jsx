@@ -162,24 +162,8 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setSortKey((current) => current === 'location' ? 'name-asc' : current)
   }, [locationTrackingEnabled])
 
-  function requiresStockLocationAssignment(row) {
-    return locationTrackingEnabled && row?.location === 'Geen locatie'
-  }
-
-  function warnAssignLocationFirst() {
-    showFeedback({
-      variant: 'warning',
-      message: 'Dit artikel heeft nog geen voorraadlocatie. Wijs eerst een locatie en sublocatie toe via de artikeldetails.',
-      testId: 'mobile-inventory-quick-feedback',
-    })
-  }
-
   async function mutateQuickInventory(row, direction) {
     if (!canEditInventory || mutatingRowId) return
-    if (requiresStockLocationAssignment(row)) {
-      warnAssignLocationFirst()
-      return
-    }
     const mutation = buildQuickInventoryMutation(row, direction)
     if (!mutation || !row?.householdArticleId) return
 
@@ -223,10 +207,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
   async function setExactInventoryQuantity(row, nextQuantity) {
     if (!canEditInventory || mutatingRowId || !row?.householdArticleId) return
-    if (requiresStockLocationAssignment(row)) {
-      warnAssignLocationFirst()
-      return
-    }
     const mutation = buildExactInventoryMutation(row, nextQuantity)
     if (!mutation) return
     if (Number(nextQuantity) === Number(row.quantity)) return
