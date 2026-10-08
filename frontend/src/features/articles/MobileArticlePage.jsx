@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
@@ -90,6 +90,7 @@ export default function MobileArticlePage() {
   const [activeDetailTab, setActiveDetailTab] = useState('Artikel')
   const [loading, setLoading] = useState(true)
   const [inventoryBusy, setInventoryBusy] = useState(false)
+  const inventoryMutationLockRef = useRef(false)
   const [shoppingBusy, setShoppingBusy] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [error, setError] = useState('')
@@ -201,63 +202,63 @@ export default function MobileArticlePage() {
     showFeedback({ variant: 'error', message, testId: 'mobile-article-feedback' })
   }
 
-  async function refreshInventory() {
-    const inventory = await fetchMobileInventoryRows()
-    setLiveRows(inventory)
+  // Update only the existing inventory identity shown on the detail page.
+  // Keep the last confirmed rows for rollback if the server rejects the edit.
+  async function submitArticleQuantity(nextQuantity, eventType, note) {
+    if (!canEditInventory || inventoryMutationLockRef.current || !householdArticleId || !selectedRow?.id) return
+    const inventoryId = selectedRow.id
+    const previousRows = liveRows
+    inventoryMutationLockRef.current = true
+    setInventoryBusy(true)
+    setLiveRows((current) => current.map((item) => (
+      String(item.id) === inventoryId
+        ? { ...item, aantal: nextQuantity, quantity: nextQuantity }
+        : item
+    )))
+    try {
+      const data = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
+        method: 'POST',
+        body: JSON.stringify({
+          inventory_id: inventoryId,
+          article_name: articleName,
+          quantity: eventType === 'consume' ? 1 : nextQuantity,
+          event_type: eventType,
+          note,
+        }),
+      })
+      const savedQuantity = Number(data?.row_new_quantity)
+      if (data?.row_new_quantity != null && Number.isFinite(savedQuantity)) {
+        setLiveRows((current) => current.map((item) => (
+          String(item.id) === inventoryId
+            ? { ...item, aantal: savedQuantity, quantity: savedQuantity }
+            : item
+        )))
+      }
+    } catch (mutationError) {
+      setLiveRows(previousRows)
+      showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
+    } finally {
+      inventoryMutationLockRef.current = false
+      setInventoryBusy(false)
+    }
   }
 
   async function changeInventory(direction) {
-    if (!canEditInventory || inventoryBusy || !householdArticleId || !selectedRow?.id) return
-    if (direction < 0 && selectedRow.quantity <= 0) return
-
-    setInventoryBusy(true)
-    try {
-      await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
-        method: 'POST',
-        body: JSON.stringify({
-          inventory_id: selectedRow.id,
-          article_name: articleName,
-          quantity: direction > 0 ? selectedRow.quantity + 1 : 1,
-          event_type: direction > 0 ? 'adjustment' : 'consume',
-          note: direction > 0
-            ? 'Voorraad verhoogd via mobiel artikeldetail.'
-            : 'Voorraad verlaagd via mobiel artikeldetail.',
-        }),
-      })
-      await refreshInventory()
-      showSuccess(direction > 0 ? 'Voorraad met 1 verhoogd.' : 'Voorraad met 1 verlaagd.')
-    } catch (mutationError) {
-      showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
-    } finally {
-      setInventoryBusy(false)
-    }
+    if (!selectedRow?.id || (direction < 0 && selectedRow.quantity <= 0)) return
+    const nextQuantity = selectedRow.quantity + (direction > 0 ? 1 : -1)
+    await submitArticleQuantity(
+      nextQuantity,
+      direction > 0 ? 'adjustment' : 'consume',
+      direction > 0 ? 'Voorraad verhoogd via mobiel artikeldetail.' : 'Voorraad verlaagd via mobiel artikeldetail.',
+    )
   }
 
   async function setExactInventoryQuantity(nextQuantity) {
-    if (!canDirectEditQuantity || inventoryBusy || !householdArticleId || !selectedRow?.id) return
+    if (!canDirectEditQuantity || !selectedRow?.id) return
     const normalizedQuantity = Number(String(nextQuantity ?? '').replace(',', '.'))
     if (!Number.isFinite(normalizedQuantity) || normalizedQuantity < 0) return
     if (normalizedQuantity === Number(displayedQuantity)) return
-
-    setInventoryBusy(true)
-    try {
-      await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
-        method: 'POST',
-        body: JSON.stringify({
-          inventory_id: selectedRow.id,
-          article_name: articleName,
-          quantity: normalizedQuantity,
-          event_type: 'adjustment',
-          note: 'Exact aantal aangepast via mobiel artikeldetail.',
-        }),
-      })
-      await refreshInventory()
-      showSuccess('Voorraad aangepast naar ' + formatQuantity(normalizedQuantity) + '.')
-    } catch (mutationError) {
-      showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
-    } finally {
-      setInventoryBusy(false)
-    }
+    await submitArticleQuantity(normalizedQuantity, 'adjustment', 'Exact aantal aangepast via mobiel artikeldetail.')
   }
 
   async function addToShoppingList() {
