@@ -75,6 +75,7 @@ export default function Select({
   value = '',
   onChange,
   options = [],
+  persistentOptionValues = [],
   className = '',
   triggerClassName = '',
   ariaLabel,
@@ -101,8 +102,11 @@ export default function Select({
   const visibleOptions = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase('nl-NL')
     if (!mobileViewport || !query) return normalizedOptions
-    return normalizedOptions.filter((option) => option.label.toLocaleLowerCase('nl-NL').includes(query))
-  }, [mobileViewport, normalizedOptions, searchQuery])
+    return normalizedOptions.filter((option) => (
+      option.label.toLocaleLowerCase('nl-NL').includes(query)
+      || persistentOptionValues.includes(option.value)
+    ))
+  }, [mobileViewport, normalizedOptions, persistentOptionValues, searchQuery])
 
   const visibleSelectedIndex = visibleOptions.findIndex((option) => option.value === String(value ?? ''))
 
@@ -180,7 +184,7 @@ export default function Select({
   function chooseOption(index) {
     const option = visibleOptions[index]
     if (!option || option.disabled) return
-    onChange?.(option.value)
+    onChange?.(option.value, searchQuery.trim())
     closeMenu()
   }
 
