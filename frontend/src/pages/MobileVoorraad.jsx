@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
@@ -13,6 +13,7 @@ import {
   readStoredAuthContext,
 } from '../lib/authSession.js'
 import {
+  applyInventoryRowQuantity,
   buildExactInventoryMutation,
   buildQuickInventoryMutation,
   selectExactInventoryTarget,
@@ -136,6 +137,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [groupFilter, setGroupFilter] = useState('')
   const [sortKey, setSortKey] = useState('name-asc')
   const [mutatingRowId, setMutatingRowId] = useState('')
+  const mutationLockRef = useRef(false)
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
@@ -162,12 +164,14 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setSortKey((current) => current === 'location' ? 'name-asc' : current)
   }, [locationTrackingEnabled])
 
-  async function mutateQuickInventory(row, direction) {
-    if (!canEditInventory || mutatingRowId) return
-    const mutation = buildQuickInventoryMutation(row, direction)
-    if (!mutation || !row?.householdArticleId) return
-
+  async function submitInventoryMutation(row, mutation, nextRowQuantity) {
+    if (!canEditInventory || mutationLockRef.current || !row?.householdArticleId) return
+    const inventoryId = String(mutation.inventory_id || '')
+    const previousRows = rows
+    // Optimistic feedback: change the number immediately, not after two full GETs.
+    mutationLockRef.current = true
     setMutatingRowId(row.id)
+    setRows((current) => applyInventoryRowQuantity(current, row.id, inventoryId, nextRowQuantity))
     try {
       const response = await fetchJsonWithAuth(
         `/api/household-articles/${encodeURIComponent(row.householdArticleId)}/inventory-events`,
@@ -186,65 +190,38 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
           : (data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
         throw new Error(message)
       }
-      setRows(await loadMobileInventory())
-      showFeedback({
-        variant: 'success',
-        message: direction === 'decrease'
-          ? `${row.householdName}: 1 afgeboekt.`
-          : `${row.householdName}: 1 opgeboekt.`,
-        testId: 'mobile-inventory-quick-feedback',
-      })
+      // Reconcile the changed identity from the authoritative POST response.
+      // No reload of all inventory rows, GPC projections or article groups.
+      const serverQuantity = Number(data?.row_new_quantity)
+      if (data?.row_new_quantity != null && Number.isFinite(serverQuantity)) {
+        setRows((current) => applyInventoryRowQuantity(current, row.id, inventoryId, serverQuantity))
+      }
     } catch (err) {
+      setRows(previousRows)
       showFeedback({
         variant: 'error',
         message: String(err?.message || 'Voorraadmutatie kon niet worden opgeslagen.'),
         testId: 'mobile-inventory-quick-feedback',
       })
     } finally {
+      mutationLockRef.current = false
       setMutatingRowId('')
     }
   }
 
-  async function setExactInventoryQuantity(row, nextQuantity) {
-    if (!canEditInventory || mutatingRowId || !row?.householdArticleId) return
-    const mutation = buildExactInventoryMutation(row, nextQuantity)
+  async function mutateQuickInventory(row, direction) {
+    const mutation = buildQuickInventoryMutation(row, direction)
     if (!mutation) return
-    if (Number(nextQuantity) === Number(row.quantity)) return
+    const target = selectQuickInventoryTarget(row, direction)
+    if (!target) return
+    const nextRowQuantity = direction === 'decrease' ? target.quantity - 1 : Number(mutation.quantity)
+    await submitInventoryMutation(row, mutation, nextRowQuantity)
+  }
 
-    setMutatingRowId(row.id)
-    try {
-      const response = await fetchJsonWithAuth(
-        `/api/household-articles/${encodeURIComponent(row.householdArticleId)}/inventory-events`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            ...mutation,
-            article_name: String(row.articleName || row.householdName || '').trim(),
-          }),
-        },
-      )
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        const message = response.status >= 500
-          ? 'Voorraadmutatie kon niet worden opgeslagen.'
-          : (data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
-        throw new Error(message)
-      }
-      setRows(await loadMobileInventory())
-      showFeedback({
-        variant: 'success',
-        message: `${row.householdName}: aantal aangepast naar ${formatQuantity(nextQuantity)}.`,
-        testId: 'mobile-inventory-quick-feedback',
-      })
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        message: String(err?.message || 'Voorraadmutatie kon niet worden opgeslagen.'),
-        testId: 'mobile-inventory-quick-feedback',
-      })
-    } finally {
-      setMutatingRowId('')
-    }
+  async function setExactInventoryQuantity(row, nextQuantity) {
+    const mutation = buildExactInventoryMutation(row, nextQuantity)
+    if (!mutation || Number(nextQuantity) === Number(row.quantity)) return
+    await submitInventoryMutation(row, mutation, Number(mutation.quantity))
   }
 
   const locationOptions = useMemo(() => {
