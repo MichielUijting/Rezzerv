@@ -101,7 +101,7 @@ def begin():
             if backend.poll() is not None or frontend.poll() is not None:
                 raise RuntimeError("Een InHuis-proces is voortijdig gestopt; zie data/logs.")
             try:
-                with urlopen(f"http://127.0.0.1:{PORT}/", timeout=1):
+                with urlopen("http://127.0.0.1:18001/openapi.json", timeout=1):
                     break
             except Exception:
                 time.sleep(1)
