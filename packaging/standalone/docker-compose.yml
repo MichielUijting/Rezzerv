@@ -1,0 +1,52 @@
+name: inhuis-standalone
+services:
+  postgres:
+    image: inhuis-standalone-postgres:local
+    restart: "no"
+    environment:
+      POSTGRES_DB: inhuis
+      POSTGRES_USER: inhuis_bootstrap
+      POSTGRES_PASSWORD: inhuis-bootstrap-temporary
+      REZZERV_POSTGRES_MIGRATION_USER: inhuis_migrator
+      REZZERV_POSTGRES_MIGRATION_PASSWORD: inhuis-migrator-temporary
+      REZZERV_POSTGRES_RUNTIME_USER: inhuis_app
+      REZZERV_POSTGRES_RUNTIME_PASSWORD: inhuis-app-temporary
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$$REZZERV_POSTGRES_MIGRATION_PASSWORD psql -h localhost -U $$REZZERV_POSTGRES_MIGRATION_USER -d $$POSTGRES_DB -Atqc 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  backend:
+    image: inhuis-standalone-backend:local
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://inhuis_app:inhuis-app-temporary@postgres:5432/inhuis
+      MIGRATION_DATABASE_URL: postgresql://inhuis_migrator:inhuis-migrator-temporary@postgres:5432/inhuis
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: "true"
+      REZZERV_SUPERGEBRUIKER_PASSWORD: InhuisTemporary123!
+      REZZERV_SESSION_COOKIE_SECURE: "false"
+      REZZERV_EMAIL_ENABLED: "false"
+      REZZERV_RESEND_API_KEY: ""
+      REZZERV_GS1_MPM_SHARE_API_KEY: ""
+      REZZERV_RETAILER_ACCOUNT_KEY: ""
+      REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL: ""
+      REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY: ""
+      REZZERV_RECEIPT_STARTUP_OCR_WARMUP: "false"
+      REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: "false"
+      REZZERV_APP_BASE_URL: http://localhost:5174
+      REZZERV_BACKEND_PUBLIC_URL: ""
+    volumes:
+      - ./data/receipts:/app/data/receipts
+  frontend:
+    image: inhuis-standalone-frontend:local
+    restart: "no"
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5174:80"
