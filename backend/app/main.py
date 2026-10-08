@@ -8156,13 +8156,11 @@ def build_resolved_location_payload(conn, household_id: str, space_id: str | Non
 
 
 
-def require_resolved_location(resolved_location: dict | None, *, allow_existing_unassigned: bool = False):
+def require_resolved_location(resolved_location: dict | None):
     if not resolved_location:
         raise HTTPException(status_code=400, detail="Geen geldige locatie beschikbaar voor voorraadmutatie")
     if not resolved_location.get("space_id") and not resolved_location.get("sublocation_id"):
-        if not allow_existing_unassigned:
-            raise HTTPException(status_code=400, detail="Voorraadmutatie vereist een expliciete ruimte of sublocatie")
-        return {**resolved_location, "location_id": None, "location_label": ""}
+        raise HTTPException(status_code=400, detail="Voorraadmutatie vereist een expliciete ruimte of sublocatie")
     return resolved_location
 
 
@@ -8251,11 +8249,8 @@ def create_inventory_event(
     price: float | None = None,
     currency: str | None = None,
     barcode: str | None = None,
-    allow_existing_unassigned: bool = False,
-):
-    safe_location = require_resolved_location(
-        resolved_location, allow_existing_unassigned=allow_existing_unassigned,
-    )
+): 
+    safe_location = require_resolved_location(resolved_location)
     household_article_id = resolve_or_create_inventory_household_article(
         conn,
         household_id=household_id,
@@ -15020,9 +15015,7 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 conn.execute(text("UPDATE inventory SET household_article_id = :household_article_id WHERE id = :id AND household_id = :household_id"), {'household_article_id': household_article_id, 'id': str(inventory_row['id']), 'household_id': household_id})
                 inventory_row['household_article_id'] = household_article_id
             resolved_location = build_location_payload_from_inventory_row(inventory_row)
-            existing_inventory_without_location = not inventory_row.get('space_id') and not inventory_row.get('sublocation_id')
         else:
-            existing_inventory_without_location = False
             article_name = normalize_household_article_name(payload.article_name)
             if not article_name:
                 raise HTTPException(status_code=400, detail="Artikelnaam of inventory_id is verplicht")
@@ -15070,7 +15063,6 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 new_quantity=new_total,
                 source='manual_inventory_api',
                 note=(payload.note or '').strip() or 'Voorraad handmatig verbruikt via mutatie-endpoint.',
-                allow_existing_unassigned=existing_inventory_without_location,
             )
             return {
                 'status': 'ok',
@@ -15098,7 +15090,6 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
             new_quantity=new_total,
             source='manual_inventory_api',
             note=(payload.note or '').strip() or 'Voorraad handmatig aangepast via mutatie-endpoint.',
-            allow_existing_unassigned=existing_inventory_without_location,
         )
         reconcile_inventory_total(
             conn,
