@@ -165,4 +165,10 @@ assert.match(mobileSource, /useAppFeedback\(\)/)
 assert.match(mobileSource, /showFeedback\(\{[\s\S]*testId: 'mobile-inventory-quick-feedback'/)
 assert.doesNotMatch(mobileSource, /mutationFeedback|setMutationFeedback/)
 
+assert.match(mobileSource, /function requiresStockLocationAssignment\(row\)/)
+assert.match(mobileSource, /locationTrackingEnabled && row\?\.location === 'Geen locatie'/)
+assert.match(mobileSource, /function warnAssignLocationFirst\(\)/)
+assert.match(mobileSource, /variant: 'warning'/)
+assert.match(mobileSource, /if \(requiresStockLocationAssignment\(row\)\)/)
+
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
