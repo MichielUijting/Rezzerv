@@ -233,7 +233,7 @@ console.log('MOBILE_UI_CONFORMITY_GREEN')
 
 assert.match(mobileAppChromeSource, /inhuis:mobile-home-back/)
 assert.match(mobileComponentsCss, /min-width:\s*56px/)
-assert.match(mobileAppChromeCss, /left:\s*8px/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
 
 // Meldingen blijft als dashboardstatus doorklikbaar en als actie beschikbaar in de globale onderbalk.
 assert.match(mobileHomeSource, /openStatus\('meldingen'\)/)
