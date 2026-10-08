@@ -16,7 +16,7 @@ De Windows-bouwer controleert enkele essentiële dependencies, bouwt het fronten
 ## Blokkerende punten vóór uitlevering
 
 1. Gebundelde portable CPython inclusief OCR-systeembinaries en databasebinaries daadwerkelijk bouwen en controleren op relocatie naar willekeurige mappen.
-2. Het huidige PostgreSQL-schema- en rollenbeleid compatibel maken met tijdelijke lokaal geïnitialiseerde PostgreSQL, zonder dat het afzwakt voor de normale app. Het huidige `trust`-prototype is alleen voor lokale exploratie; herzien vóór uitlevering.
+2. Het huidige PostgreSQL-schema- en rollenbeleid compatibel maken met tijdelijke lokaal geïnitialiseerde PostgreSQL, zonder dat het afzwakt voor de normale app. De huidige portable database gebruikt SCRAM-wachtwoordauthenticatie met een lokaal willekeurig gegenereerd wachtwoord en luistert alleen op 127.0.0.1. De portable editie gebruikt één lokale databasegebruiker voor migraties en runtime; controleer de beperking ten opzichte van de gescheiden productie-rollen vóór uitlevering.
 3. Kassabon-upload, herkenning, opslag, herstart en opnieuw bekijken op een schone Windows-pc aantoonbaar testen.
 4. Controleren dat runtime-preflight en de gekozen healthcheck correct werken. Poortconflicten en start/stop zijn nog onvoldoende afgevangen.
 5. Uninstall volledig afmaken: programma en gegevens verwijderen zonder procesrestanten of wijzigingen aan andere software. De huidige CMD verwijdert alleen testdata en vereist handmatig verwijderen van de uitgepakte map.
