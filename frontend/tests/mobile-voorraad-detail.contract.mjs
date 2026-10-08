@@ -180,4 +180,18 @@ assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-article-subtab
 assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-field-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/)
 assert.doesNotMatch(mobileCss, /\.rz-mobile-article-back\s*\{/)
 
+// Wat Inhuis -> Waar Inhuis: bestaand voorraadartikel zonder locatie.
+const stockTab = readFileSync(new URL('../src/features/articles/tabs/ArticleStockTab.jsx', import.meta.url), 'utf8')
+const locationTab = readFileSync(new URL('../src/features/articles/tabs/ArticleLocationsTab.jsx', import.meta.url), 'utf8')
+assert.match(stockTab, /row\.isUnassigned[\s\S]*Locatie toewijzen/)
+assert.match(stockTab, /quantity: String\(row\.quantity\)/)
+assert.match(stockTab, /max=\{String\(selectedAssignmentRow\.quantity\)\}/)
+assert.match(locationTab, /defaultTransferRow = locationRows\.find\(\(row\) => row\.unassigned/)
+assert.match(locationTab, /data-testid="article-location-action-transfer"[^\n]*Locatie toewijzen/)
+assert.match(locationTab, /quantity: row\?\.aantal \|\| ''/)
+assert.match(locationTab, /max=\{String\(transferMaxQuantity\)\}/)
+assert.match(locationTab, /quantity > transferMaxQuantity/)
+assert.match(mobileSource, /selectedStockHasNoLocation\(\)/)
+assert.match(mobileSource, /variant: 'warning'/)
+
 console.log('MOBILE_VOORRAAD_DETAIL_CONTRACT_GREEN')
