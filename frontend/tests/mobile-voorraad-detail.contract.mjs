@@ -191,7 +191,7 @@ assert.match(locationTab, /data-testid="article-location-action-transfer"[^\n]*L
 assert.match(locationTab, /quantity: row\?\.aantal \|\| ''/)
 assert.match(locationTab, /max=\{String\(transferMaxQuantity\)\}/)
 assert.match(locationTab, /quantity > transferMaxQuantity/)
-assert.match(mobileSource, /selectedStockHasNoLocation\(\)/)
-assert.match(mobileSource, /variant: 'warning'/)
+assert.doesNotMatch(mobileSource, /selectedStockHasNoLocation\(\)|warnMissingStockLocation/)
+assert.match(mobileSource, /onValueCommit=\{setExactInventoryQuantity\}/)
 
 console.log('MOBILE_VOORRAAD_DETAIL_CONTRACT_GREEN')
