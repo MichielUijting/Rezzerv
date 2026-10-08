@@ -734,12 +734,13 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect.poll(() => targetLocationWrites.map((write) => write.target_location_id)).toContain('space-garage');
     await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Garage');
 
-    await page.getByTestId(`receipt-line-article-group-select-${lineId}`).selectOption('__add_article_group__');
+    await page.getByTestId(`receipt-line-article-group-select-${lineId}`).click();
+    await page.getByTestId(`receipt-line-article-group-select-${lineId}-popover`).getByRole('option', { name: 'Artikelgroep toevoegen...' }).click();
     await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toBeVisible();
     await page.getByRole('dialog', { name: 'Nieuwe artikelgroep' }).getByRole('textbox').fill('Frisdrank');
     await page.getByRole('button', { name: 'Opslaan en koppelen' }).click();
     await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
-    await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toHaveValue('group-frisdrank');
+    await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toContainText('Frisdrank');
   });
 
 });
