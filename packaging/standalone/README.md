@@ -23,3 +23,12 @@ De Windows-bouwer controleert enkele essentiële dependencies, bouwt het fronten
 6. Alle licenties, modelgewichten, downloadvereisten, totale ZIP-grootte en antivirusgedrag vaststellen.
 
 Pas na al deze controles kan de PR Ready for review worden en de ZIP verspreid worden. Geen updateproces wordt toegevoegd.
+
+
+## Eén-klik-EXE-bouw (Windows bouwcomputer)
+
+Nieuw: dubbelklik `packaging/standalone/Build-InHuis-Standalone.cmd`. Dit roept `Build-InHuis-Standalone.ps1` aan. Dit script vereist **op de bouwcomputer** Git, Node/npm, Python 3.11 (via `py`) en een volledige Windows PostgreSQL-installatie (incl. `bin` en `share`). PostgreSQL is ook lokaal in de distributie benodigd; Docker Linux-images zijn hiervoor niet bruikbaar. Met `INHUIS_POSTGRES_HOME` kan de broninstallatie worden geselecteerd.
+
+Het script kopieert beide runtimes naar `portable-runtime`, installeert afhankelijkheden in die kopie, bouwt de React-frontend en compileert een `InHuis.exe` via PyInstaller. Het verpakresultaat en de log komen onder `release/`. De testcomputer heeft hiervoor geen Docker nodig.
+
+**Belangrijk: deze nieuwe bouwstraat is nog onbeproefd.** Met name PaddleOCR/OpenCV/Tesseract/Ghostscript/native DLL's, modelbestanden, relocatie van een Python-installatie en volledige PostgreSQL-SCRAM-migratie vereisen end-to-end Windows-testen. Het script faalt zodra een bekende bouwafhankelijkheid ontbreekt in plaats van stilzwijgend een onvolledig pakket goed te keuren. `Uninstall.exe` is nog niet aanwezig; de huidige tijdelijke uninstall is geen definitieve veilige verwijdering. Geen distributie aan testers vóór acceptatie.
