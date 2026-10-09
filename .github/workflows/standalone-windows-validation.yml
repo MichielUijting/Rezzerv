@@ -16,7 +16,7 @@ jobs:
       - name: Compile portable Python sources
         shell: pwsh
         run: |
-          python -m py_compile packaging/standalone/portable_db.py packaging/standalone/portable_start.py packaging/standalone/portable_server.py
+          python -m py_compile packaging/standalone/portable_db.py packaging/standalone/portable_start.py packaging/standalone/portable_server.py packaging/standalone/exe_entry.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test database bootstrap invariants
         shell: pwsh
@@ -26,7 +26,7 @@ jobs:
       - name: Validate Windows packaging scripts parse
         shell: pwsh
         run: |
-          $scripts = @('Build-Windows-Portable.ps1','Build-Package.ps1','Start-InHuis.ps1','Stop-InHuis.ps1','Uninstall-InHuis.ps1')
+          $scripts = @('Build-Windows-Portable.ps1','Build-Package.ps1','Start-InHuis.ps1','Stop-InHuis.ps1','Uninstall-InHuis.ps1','Build-InHuis-Standalone.ps1')
           foreach ($name in $scripts) {
             $path = Join-Path 'packaging/standalone' $name
             $tokens = $null
