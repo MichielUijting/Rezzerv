@@ -1,0 +1,42 @@
+name: InHuis standalone Windows packaging checks
+on:
+  pull_request:
+    paths:
+      - 'packaging/standalone/**'
+      - '.github/workflows/standalone-windows-validation.yml'
+  workflow_dispatch:
+jobs:
+  portable-source-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile portable Python sources
+        shell: pwsh
+        run: |
+          python -m py_compile packaging/standalone/portable_db.py packaging/standalone/portable_start.py packaging/standalone/portable_server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test database bootstrap invariants
+        shell: pwsh
+        run: |
+          python packaging/standalone/test_portable_db.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate Windows packaging scripts parse
+        shell: pwsh
+        run: |
+          $scripts = @('Build-Windows-Portable.ps1','Build-Package.ps1','Start-InHuis.ps1','Stop-InHuis.ps1','Uninstall-InHuis.ps1')
+          foreach ($name in $scripts) {
+            $path = Join-Path 'packaging/standalone' $name
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path),[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { $errors | Out-String | Write-Error; exit 1 }
+          }
+      - name: Confirm source package excludes external scanner integration
+        shell: pwsh
+        run: |
+          $start = Get-Content packaging/standalone/portable_start.py -Raw
+          if ($start -notmatch '"REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL": ""') { throw 'External scanner must be disabled' }
+          if ($start -notmatch '"REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY": ""') { throw 'External scanner secret must be empty' }
