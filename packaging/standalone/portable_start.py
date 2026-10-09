@@ -3,14 +3,15 @@ from __future__ import annotations
 
 import os
 import secrets
-import shutil
 import socket
 import subprocess
 import sys
+import signal
 import time
 import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
+from urllib.error import URLError
 from portable_db import initialize, database_url
 
 BASE = Path(__file__).resolve().parent
@@ -51,6 +52,8 @@ def begin():
     env = os.environ.copy()
     env["PGPORT"] = "15432"
     env["PGHOST"] = "127.0.0.1"
+    env["PGCLIENTENCODING"] = "UTF8"
+    env["PATH"] = str(BIN) + os.pathsep + str(RUNTIME / "python") + os.pathsep + env.get("PATH", "")
     user, password = initialize(INITDB, DB, DATA, env)
     run([PG_CTL, "-D", DB, "-l", LOG / "postgres.log", "-o",
          "-h 127.0.0.1 -p 15432", "-w", "start"], env=env)
@@ -65,6 +68,7 @@ def begin():
         "REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL": "",
         "REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY": "",
         "REZZERV_SESSION_COOKIE_SECURE": "false",
+        "REZZERV_RECEIPT_STORAGE_ROOT": str(DATA / "receipts"),
         "REZZERV_APP_BASE_URL": "http://localhost:5174",
         "REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO": "true",
         "REZZERV_RECEIPT_STARTUP_REMBG_WARMUP": "false",
@@ -112,11 +116,16 @@ def begin():
         while backend.poll() is None and frontend.poll() is None:
             time.sleep(1)
     finally:
-        frontend.terminate()
-        backend.terminate()
         for proc in (frontend, backend):
-            try: proc.wait(timeout=10)
-            except subprocess.TimeoutExpired: proc.kill()
+            if proc.poll() is None:
+                proc.terminate()
+        for proc in (frontend, backend):
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        backend_log.close()
+        frontend_log.close()
         run([PG_CTL, "-D", DB, "-m", "fast", "-w", "stop"], env=env)
 
 
