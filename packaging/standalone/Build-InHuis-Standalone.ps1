@@ -11,16 +11,36 @@ try {
   foreach ($cmd in @('git','npm','py')) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "Benodigd op BOUW-pc: $cmd" }
   }
-  & py -3.11 -c 'import sys; print(sys.version)'
-  if ($LASTEXITCODE -ne 0) { throw 'Python 3.11 x64 ontbreekt op de bouw-pc.' }
-  $pyhome = (& py -3.11 -c 'import sys; print(sys.base_prefix)').Trim()
+  & py -3.12 -c 'import sys; print(sys.version)'
+  if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 x64 ontbreekt op de bouw-pc.' }
+  $pyhome = (& py -3.12 -c 'import sys; print(sys.base_prefix)').Trim()
   if ($LASTEXITCODE -ne 0) { throw 'Python-basisinstallatie niet gevonden.' }
-  $postgresCandidates = @()
-  if ($env:INHUIS_POSTGRES_HOME) { $postgresCandidates += $env:INHUIS_POSTGRES_HOME }
-  $postgresCandidates += @(Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | ForEach-Object FullName)
-  $postgresHome = $postgresCandidates | Where-Object { Test-Path (Join-Path $_ 'bin\initdb.exe') } | Select-Object -First 1
-  if (-not $postgresHome) { throw 'Windows PostgreSQL serverbinaries ontbreken. Installeer op BOUW-pc PostgreSQL 17 of stel INHUIS_POSTGRES_HOME in.' }
-  if (-not (Test-Path (Join-Path $postgresHome 'share'))) { throw 'PostgreSQL share-directory ontbreekt.' }
+  # Find a downloaded official Windows binaries archive without installing a service.
+  $archive = Join-Path $env:USERPROFILE 'Downloads\postgresql-18.6-5-windows-x64-binaries.zip'
+  if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+    throw "PostgreSQL archive ontbreekt: $archive"
+  }
+  $pyhome = (& py -3.12 -c 'import sys; print(sys.base_prefix)').Trim()
+  if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 niet gevonden.' }
+  if ($pyhome -match 'WindowsApps|Microsoft\\WindowsApps') {
+    throw 'Microsoft Store Python is niet veilig overdraagbaar door simpel kopieren. Gebruik eerst een afzonderlijke officiele Windows Python 3.12 installatie op de bouw-pc; de bestaande Store-installatie blijft ongewijzigd.'
+  }
+  $extractRoot = Join-Path $release 'postgresql-extracted'
+  if (Test-Path -LiteralPath $extractRoot) {
+    throw "Tijdelijke extractiemap bestaat al; handmatige controle vereist: $extractRoot"
+  }
+  New-Item -ItemType Directory -Path $extractRoot | Out-Null
+  Write-Host "PostgreSQL ZIP uitpakken: $archive"
+  Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
+  $initdbFiles = @(Get-ChildItem -LiteralPath $extractRoot -Filter initdb.exe -File -Recurse)
+  $valid = @($initdbFiles | Where-Object {
+    (Test-Path (Join-Path $_.DirectoryName 'postgres.exe')) -and
+    (Test-Path (Join-Path $_.DirectoryName 'pg_ctl.exe')) -and
+    (Test-Path (Join-Path (Split-Path $_.DirectoryName -Parent) 'share'))
+  })
+  if ($valid.Count -ne 1) { throw "Geen eenduidige PostgreSQL runtime gevonden in archief; kandidaten: $($valid.Count)" }
+  $postgresHome = Split-Path $valid[0].DirectoryName -Parent
+  Write-Host "PostgreSQL runtime gevonden: $postgresHome"
   $source = Join-Path $root 'portable-runtime'
   if (Test-Path $source) { throw 'portable-runtime bestaat al: om onverwacht overschrijven te vermijden gestopt. Verplaats deze map eerst.' }
   New-Item -ItemType Directory -Path $source -Force | Out-Null
