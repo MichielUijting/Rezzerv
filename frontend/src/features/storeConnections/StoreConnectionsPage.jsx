@@ -358,13 +358,30 @@ export default function StoreConnectionsPage() {
       const failureDiagnosis = failed
         ? 'Fout bij: ' + [...failedStages].join(', ') + '. Type: ' + [...failedTypes].join(', ') + '. Reden: ' + [...reasons].join(', ') + '.'
         : ''
-      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : ''))
+      const emptyLineDiagnostics = (Array.isArray(result?.errors) ? result.errors : [])
+        .filter((entry) => entry?.reason_code === 'missing_article_lines' && entry?.structure_diagnostic)
+        .map((entry) => entry.structure_diagnostic)
+      const lineDiagnostic = emptyLineDiagnostics.map((item) => {
+        const rawCount = Number.isInteger(item?.raw_products_count) ? item.raw_products_count : 0
+        const mappedCount = Number.isInteger(item?.mapped_products_count) ? item.mapped_products_count : 0
+        const discountsCount = Number.isInteger(item?.discounts_count) ? item.discounts_count : 0
+        const paymentsCount = Number.isInteger(item?.payments_count) ? item.payments_count : 0
+        const safeFields = new Set(['items', 'lines', 'receiptLines', 'basketItems', 'entries'])
+        const alternatives = Array.isArray(item?.alternate_fields)
+          ? item.alternate_fields.filter((key) => safeFields.has(key))
+          : []
+        const rawType = ['missing', 'list', 'null', 'other'].includes(item?.products_type) ? item.products_type : 'onbekend'
+        return 'AH-structuur: products=' + rawType + ' (' + rawCount + ' ruwe regels, '
+          + mappedCount + ' herkend), andere artikelvelden=' + (alternatives.join(', ') || 'geen')
+          + ', kortingen=' + discountsCount + ', betalingen=' + paymentsCount + '.'
+      }).join(' ')
+      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : ''))
       showFeedback({
         variant: failed ? 'warning' : 'success',
         title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
         message: summary,
         detail: failed
-          ? failureDiagnosis + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
+          ? failureDiagnosis + (lineDiagnostic ? ' ' + lineDiagnostic : '') + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
           : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
