@@ -256,3 +256,33 @@ def test_ah_unreconciled_total_is_flagged_for_review() -> None:
     )
     assert str(result.receipt.totals.grand_total) == '5.02'
     assert len(result.receipt.lines) == 2
+
+
+def test_ah_empty_products_exposes_only_safe_structure_counts() -> None:
+    """Empty AH receipt details must be diagnosable without exposing source data."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"posReceiptDetails": {
+            "id": "private-receipt",
+            "memberId": "private-member",
+            "products": [],
+            "items": [{"name": "PRIVATE ARTICLE", "amount": {"amount": 123}}],
+            "discounts": [{"name": "PRIVATE DISCOUNT"}],
+            "payments": [{"method": "PRIVATE PAYMENT"}],
+            "access_token": "private-token",
+        }}})
+
+    client = AHReceiptClient(http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+    _, envelope = client.get_receipt_envelope(
+        AHAccountSession("private-access", "private-refresh"),
+        AHReceiptSummary("private-receipt", "2026-10-01T12:00:00", 1.0),
+    )
+    report = envelope.receipt["_ah_structure_diagnostic"]
+    assert report == {
+        "products_type": "list",
+        "raw_products_count": 0,
+        "mapped_products_count": 0,
+        "alternate_fields": ["items"],
+        "discounts_count": 1,
+        "payments_count": 1,
+    }
+    assert "private" not in str(report).lower()
