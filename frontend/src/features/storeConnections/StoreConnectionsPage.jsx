@@ -344,8 +344,19 @@ export default function StoreConnectionsPage() {
         .map((entry) => entry?.stage === 'details' ? 'ophalen van bondetails' : entry?.stage === 'import' ? 'verwerken in Kassa' : 'onbekende stap'))
       const failedTypes = new Set((Array.isArray(result?.errors) ? result.errors : [])
         .map((entry) => ['ValueError', 'HTTPStatusError', 'TimeoutException', 'ConnectError', 'IntegrityError'].includes(entry?.error_type) ? entry.error_type : 'overige fout'))
+      const reasonLabels = {
+        missing_article_lines: 'Geen artikelregels beschikbaar',
+        missing_total_amount: 'Geen bruikbaar totaalbedrag',
+        receipt_not_recognized: 'Bon niet als bruikbare kassabon herkend',
+        inactive_source: 'Importbron niet actief',
+        other_validation_failure: 'Andere validatiefout',
+        detail_request_failed: 'Fout bij het ophalen van AH-details',
+        other_import_failure: 'Andere importfout',
+      }
+      const reasons = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => reasonLabels[entry?.reason_code] || 'Reden nog onbekend'))
       const failureDiagnosis = failed
-        ? 'Fout bij: ' + [...failedStages].join(', ') + '. Type: ' + [...failedTypes].join(', ') + '.'
+        ? 'Fout bij: ' + [...failedStages].join(', ') + '. Type: ' + [...failedTypes].join(', ') + '. Reden: ' + [...reasons].join(', ') + '.'
         : ''
       setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : ''))
       showFeedback({
