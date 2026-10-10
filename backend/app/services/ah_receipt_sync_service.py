@@ -149,6 +149,8 @@ def sync_ah_receipts(
                 errors.append(
                     {
                         "external_receipt_id": summary.receipt_id,
+                        "date_time": summary.date_time,
+                        "transaction_type": None,  # AH does not supply a verified type in the current contract.
                         "error": str(exc),
                         "stage": stage,
                         "error_type": type(exc).__name__,
