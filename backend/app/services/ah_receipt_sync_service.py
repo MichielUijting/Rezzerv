@@ -106,9 +106,11 @@ def sync_ah_receipts(
         completed_ids: set[str] = set()
 
         for summary in pending:
+            stage = "details"
             try:
                 session, envelope = active_client.get_receipt_envelope(session, summary)
                 save_ah_session(engine, household_id, session)
+                stage = "import"
                 result = import_retailer_receipt(
                     engine,
                     receipt_storage_root,
@@ -129,6 +131,8 @@ def sync_ah_receipts(
                     {
                         "external_receipt_id": summary.receipt_id,
                         "error": str(exc),
+                        "stage": stage,
+                        "error_type": type(exc).__name__,
                     }
                 )
 
