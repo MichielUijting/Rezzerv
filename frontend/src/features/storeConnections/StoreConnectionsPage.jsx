@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -22,7 +22,8 @@ import {
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 
 export default function StoreConnectionsPage() {
-  const { showFeedback } = useAppFeedback()
+  const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
+  const ahSyncPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
@@ -126,6 +127,14 @@ export default function StoreConnectionsPage() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    ahSyncPageMountedRef.current = true
+    return () => {
+      ahSyncPageMountedRef.current = false
+      dismissFeedbackIfKey('ah-receipt-sync')
+    }
+  }, [dismissFeedbackIfKey])
 
   useEffect(() => {
     loadPageData()
@@ -390,7 +399,9 @@ export default function StoreConnectionsPage() {
           + '; transactietype niet beschikbaar.'
       }).join(' ')
       setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : ''))
+      if (!ahSyncPageMountedRef.current) return
       showFeedback({
+        key: 'ah-receipt-sync',
         variant: failed ? 'warning' : 'success',
         title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
         message: summary,
@@ -402,7 +413,9 @@ export default function StoreConnectionsPage() {
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
       setAhSyncProgress('AH-synchronisatie mislukt. Probeer het opnieuw.')
+      if (!ahSyncPageMountedRef.current) return
       showFeedback({
+        key: 'ah-receipt-sync',
         variant: 'error',
         title: 'AH-bonnen ophalen',
         message,
