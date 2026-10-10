@@ -375,13 +375,28 @@ export default function StoreConnectionsPage() {
           + mappedCount + ' herkend), andere artikelvelden=' + (alternatives.join(', ') || 'geen')
           + ', kortingen=' + discountsCount + ', betalingen=' + paymentsCount + '.'
       }).join(' ')
-      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : ''))
+      const failedReceiptDates = (Array.isArray(result?.errors) ? result.errors : []).map((entry) => {
+        // Only accept calendar-like AH timestamps; never echo arbitrary provider data.
+        const value = typeof entry?.date_time === 'string' ? entry.date_time.trim() : ''
+        const match = /^(\\d{4})-(\\d{2})-(\\d{2})(?:[T ](\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?$/.exec(value)
+        if (!match) return 'Datum niet beschikbaar; tijd niet beschikbaar; transactietype niet beschikbaar.'
+        const [, year, month, day, hour, minute] = match
+        const date = year + '-' + month + '-' + day
+        const validDate = Number(month) >= 1 && Number(month) <= 12
+          && Number(day) >= 1 && Number(day) <= new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate()
+        const validTime = hour === undefined || (Number(hour) <= 23 && Number(minute) <= 59)
+        if (!validDate || !validTime) return 'Datum niet beschikbaar; tijd niet beschikbaar; transactietype niet beschikbaar.'
+        return 'Mislukte bon van ' + day + '-' + month + '-' + year
+          + (hour === undefined ? ', tijd niet beschikbaar' : ' om ' + hour + ':' + minute)
+          + '; transactietype niet beschikbaar.'
+      }).join(' ')
+      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : ''))
       showFeedback({
         variant: failed ? 'warning' : 'success',
         title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
         message: summary,
         detail: failed
-          ? failureDiagnosis + (lineDiagnostic ? ' ' + lineDiagnostic : '') + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
+          ? failureDiagnosis + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : '') + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
           : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
