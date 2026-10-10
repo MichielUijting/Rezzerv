@@ -80,6 +80,24 @@ def count_pending_ah_receipts(
         if owns_client:
             active_client.close()
 
+def _safe_ah_import_failure_reason(exc: Exception, stage: str) -> str:
+    """Public diagnostic category; never return raw provider/receipt error messages."""
+    if stage != "import":
+        return "detail_request_failed"
+    if not isinstance(exc, ValueError):
+        return "other_import_failure"
+    message = str(exc).lower()
+    if "geen artikelregels" in message:
+        return "missing_article_lines"
+    if "geen bruikbaar totaalbedrag" in message:
+        return "missing_total_amount"
+    if "niet als bruikbare kassabon herkend" in message:
+        return "receipt_not_recognized"
+    if "bron is niet actief" in message:
+        return "inactive_source"
+    return "other_validation_failure"
+
+
 def sync_ah_receipts(
     engine: Engine,
     receipt_storage_root: Path,
@@ -133,6 +151,7 @@ def sync_ah_receipts(
                         "error": str(exc),
                         "stage": stage,
                         "error_type": type(exc).__name__,
+                        "reason_code": _safe_ah_import_failure_reason(exc, stage),
                     }
                 )
 
