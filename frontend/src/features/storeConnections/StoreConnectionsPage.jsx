@@ -346,7 +346,7 @@ export default function StoreConnectionsPage() {
         title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
         message: summary,
         detail: failed
-          ? 'Mislukte bonnen blijven beschikbaar voor een volgende synchronisatie. Er zijn geen bonnen stilzwijgend overgeslagen.'
+          ? 'Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
           : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
