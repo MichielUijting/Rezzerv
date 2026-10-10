@@ -125,6 +125,7 @@ def sync_ah_receipts(
 
         for summary in pending:
             stage = "details"
+            envelope = None
             try:
                 session, envelope = active_client.get_receipt_envelope(session, summary)
                 save_ah_session(engine, household_id, session)
@@ -152,6 +153,13 @@ def sync_ah_receipts(
                         "stage": stage,
                         "error_type": type(exc).__name__,
                         "reason_code": _safe_ah_import_failure_reason(exc, stage),
+                        "structure_diagnostic": (
+                            envelope.receipt.get("_ah_structure_diagnostic")
+                            if stage == "import"
+                            and envelope is not None
+                            and _safe_ah_import_failure_reason(exc, stage) == "missing_article_lines"
+                            else None
+                        ),
                     }
                 )
 
