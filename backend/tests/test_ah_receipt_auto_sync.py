@@ -138,3 +138,72 @@ def test_count_pending_ah_receipts_does_not_import(monkeypatch):
     }
     assert client.detail_calls == []
     assert saved_sessions == [session]
+
+
+def test_sync_failed_receipt_is_retryable_without_duplicate_success(tmp_path, monkeypatch):
+    """One failure in a batch must not mark that receipt as imported."""
+    engine = object()
+    session = AHAccountSession("fake-access", "fake-refresh")
+    known_ids: set[str] = set()
+    imported: list[str] = []
+    attempts: dict[str, int] = {}
+
+    class RetryClient(FakeClient):
+        def list_receipts(self, session, *, limit=100):
+            return session, [
+                AHReceiptSummary("ok-1", "2026-09-29T12:00:00", 10.0),
+                AHReceiptSummary("retry-2", "2026-09-30T12:00:00", 12.0),
+            ]
+
+        def get_receipt_envelope(self, session, summary):
+            attempts[summary.receipt_id] = attempts.get(summary.receipt_id, 0) + 1
+            if summary.receipt_id == "retry-2" and attempts[summary.receipt_id] == 1:
+                raise ValueError("tijdelijke detailfout")
+            return super().get_receipt_envelope(session, summary)
+
+    monkeypatch.setattr(sync_service, "get_ah_session", lambda *_args: session)
+    monkeypatch.setattr(sync_service, "save_ah_session", lambda *_args: None)
+    monkeypatch.setattr(sync_service, "get_known_ah_receipt_ids", lambda *_args: set(known_ids))
+    monkeypatch.setattr(sync_service, "mark_ah_receipts_synced", lambda _engine, _household, values: known_ids.update(values))
+    monkeypatch.setattr(sync_service, "touch_ah_sync", lambda *_args: None)
+    monkeypatch.setattr(sync_service, "ah_session_status", lambda *_args: {"last_sync_at": "test"})
+
+    def fake_import(_engine, _storage_root, *, household_id, envelope):
+        assert household_id == "household-a"
+        imported.append(envelope.external_receipt_id)
+        return {"receipt_id": envelope.external_receipt_id}
+
+    monkeypatch.setattr(sync_service, "import_retailer_receipt", fake_import)
+    client = RetryClient()
+    first = sync_service.sync_ah_receipts(engine, tmp_path, household_id="household-a", client=client)
+
+    assert first["receipts_found"] == 2
+    assert first["receipts_processed"] == 1
+    assert first["receipts_failed"] == 1
+    assert first["errors"][0]["external_receipt_id"] == "retry-2"
+    assert first["errors"][0]["stage"] == "details"
+    assert first["errors"][0]["error_type"] == "ValueError"
+    assert first["errors"][0]["date_time"] == "2026-09-30T12:00:00"
+    assert first["errors"][0]["transaction_type"] is None
+    assert known_ids == {"ok-1"}
+
+    second = sync_service.sync_ah_receipts(engine, tmp_path, household_id="household-a", client=client)
+    assert second["receipts_skipped_known"] == 1
+    assert second["receipts_processed"] == 1
+    assert second["receipts_failed"] == 0
+    assert known_ids == {"ok-1", "retry-2"}
+    assert imported == ["ok-1", "retry-2"]
+
+    third = sync_service.sync_ah_receipts(engine, tmp_path, household_id="household-a", client=client)
+    assert third["receipts_processed"] == 0
+    assert third["receipts_skipped_known"] == 2
+    assert imported == ["ok-1", "retry-2"]
+
+
+def test_safe_ah_import_failure_reasons_never_expose_raw_error_text():
+    classify = sync_service._safe_ah_import_failure_reason
+    assert classify(ValueError("Digitale kassabon bevat geen artikelregels"), "import") == "missing_article_lines"
+    assert classify(ValueError("Digitale kassabon bevat geen bruikbaar totaalbedrag"), "import") == "missing_total_amount"
+    assert classify(ValueError("Gedeelde inhoud is niet als bruikbare kassabon herkend."), "import") == "receipt_not_recognized"
+    assert classify(ValueError("account secret: do not expose"), "import") == "other_validation_failure"
+    assert classify(ValueError("account secret: do not expose"), "details") == "detail_request_failed"

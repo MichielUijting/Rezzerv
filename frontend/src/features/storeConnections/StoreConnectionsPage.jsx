@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -22,7 +22,8 @@ import {
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 
 export default function StoreConnectionsPage() {
-  const { showFeedback } = useAppFeedback()
+  const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
+  const ahSyncPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
@@ -34,6 +35,7 @@ export default function StoreConnectionsPage() {
   const [cardNumber, setCardNumber] = useState('')
   const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'encrypted_database' })
   const [ahBusy, setAhBusy] = useState(false)
+  const [ahSyncProgress, setAhSyncProgress] = useState('')
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
@@ -125,6 +127,14 @@ export default function StoreConnectionsPage() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    ahSyncPageMountedRef.current = true
+    return () => {
+      ahSyncPageMountedRef.current = false
+      dismissFeedbackIfKey('ah-receipt-sync')
+    }
+  }, [dismissFeedbackIfKey])
 
   useEffect(() => {
     loadPageData()
@@ -328,23 +338,87 @@ export default function StoreConnectionsPage() {
 
   async function syncAhReceipts() {
     setAhBusy(true)
+    setAhSyncProgress('AH-bonnen worden opgehaald en gecontroleerd…')
     try {
       const result = await fetchJson('/api/receipts/retailers/ah/sync', {
         method: 'POST',
         body: JSON.stringify({ limit: 100 }),
       })
+      const found = Number(result?.receipts_found || 0)
+      const processed = Number(result?.receipts_processed || 0)
+      const skipped = Number(result?.receipts_skipped_known || 0)
+      const failed = Number(result?.receipts_failed || 0)
+      const summary = found + ' gevonden · ' + processed + ' nieuw verwerkt · ' + skipped + ' al bekend · ' + failed + ' mislukt.'
+      const failedStages = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => entry?.stage === 'details' ? 'ophalen van bondetails' : entry?.stage === 'import' ? 'verwerken in Kassa' : 'onbekende stap'))
+      const failedTypes = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => ['ValueError', 'HTTPStatusError', 'TimeoutException', 'ConnectError', 'IntegrityError'].includes(entry?.error_type) ? entry.error_type : 'overige fout'))
+      const reasonLabels = {
+        missing_article_lines: 'Geen artikelregels beschikbaar',
+        missing_total_amount: 'Geen bruikbaar totaalbedrag',
+        receipt_not_recognized: 'Bon niet als bruikbare kassabon herkend',
+        inactive_source: 'Importbron niet actief',
+        other_validation_failure: 'Andere validatiefout',
+        detail_request_failed: 'Fout bij het ophalen van AH-details',
+        other_import_failure: 'Andere importfout',
+      }
+      const reasons = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => reasonLabels[entry?.reason_code] || 'Reden nog onbekend'))
+      const failureDiagnosis = failed
+        ? 'Fout bij: ' + [...failedStages].join(', ') + '. Type: ' + [...failedTypes].join(', ') + '. Reden: ' + [...reasons].join(', ') + '.'
+        : ''
+      const emptyLineDiagnostics = (Array.isArray(result?.errors) ? result.errors : [])
+        .filter((entry) => entry?.reason_code === 'missing_article_lines' && entry?.structure_diagnostic)
+        .map((entry) => entry.structure_diagnostic)
+      const lineDiagnostic = emptyLineDiagnostics.map((item) => {
+        const rawCount = Number.isInteger(item?.raw_products_count) ? item.raw_products_count : 0
+        const mappedCount = Number.isInteger(item?.mapped_products_count) ? item.mapped_products_count : 0
+        const discountsCount = Number.isInteger(item?.discounts_count) ? item.discounts_count : 0
+        const paymentsCount = Number.isInteger(item?.payments_count) ? item.payments_count : 0
+        const safeFields = new Set(['items', 'lines', 'receiptLines', 'basketItems', 'entries'])
+        const alternatives = Array.isArray(item?.alternate_fields)
+          ? item.alternate_fields.filter((key) => safeFields.has(key))
+          : []
+        const rawType = ['missing', 'list', 'null', 'other'].includes(item?.products_type) ? item.products_type : 'onbekend'
+        return 'AH-structuur: products=' + rawType + ' (' + rawCount + ' ruwe regels, '
+          + mappedCount + ' herkend), andere artikelvelden=' + (alternatives.join(', ') || 'geen')
+          + ', kortingen=' + discountsCount + ', betalingen=' + paymentsCount + '.'
+      }).join(' ')
+      const failedReceiptDates = (Array.isArray(result?.errors) ? result.errors : []).map((entry) => {
+        // Only accept calendar-like AH timestamps; never echo arbitrary provider data.
+        const value = typeof entry?.date_time === 'string' ? entry.date_time.trim() : ''
+        const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(value)
+        if (!match) return 'Datum niet beschikbaar; tijd niet beschikbaar; transactietype niet beschikbaar.'
+        const [, year, month, day, hour, minute] = match
+        const validDate = Number(month) >= 1 && Number(month) <= 12
+          && Number(day) >= 1 && Number(day) <= new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate()
+        const validTime = hour === undefined || (Number(hour) <= 23 && Number(minute) <= 59)
+        if (!validDate || !validTime) return 'Datum niet beschikbaar; tijd niet beschikbaar; transactietype niet beschikbaar.'
+        return 'Mislukte bon van ' + day + '-' + month + '-' + year
+          + (hour === undefined ? ', tijd niet beschikbaar' : ' om ' + hour + ':' + minute)
+          + '; transactietype niet beschikbaar.'
+      }).join(' ')
+      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : ''))
+      if (!ahSyncPageMountedRef.current) return
       showFeedback({
-        variant: result?.receipts_failed ? 'warning' : 'success',
-        title: 'AH-bonnen opgehaald',
-        message: String(Number(result?.receipts_processed || 0)) + ' van ' + String(Number(result?.receipts_found || 0)) + ' bonnen verwerkt.',
-        detail: result?.receipts_failed ? String(result.receipts_failed) + ' bon(nen) konden niet worden verwerkt.' : 'De bonnen staan nu in Kassa.',
+        key: 'ah-receipt-sync',
+        variant: failed ? 'warning' : 'success',
+        title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
+        message: summary,
+        detail: failed
+          ? failureDiagnosis + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : '') + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
+          : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
     } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
+      setAhSyncProgress('AH-synchronisatie mislukt. Probeer het opnieuw.')
+      if (!ahSyncPageMountedRef.current) return
       showFeedback({
+        key: 'ah-receipt-sync',
         variant: 'error',
         title: 'AH-bonnen ophalen',
-        message: normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.',
+        message,
       })
     } finally {
       setAhBusy(false)
@@ -466,13 +540,18 @@ export default function StoreConnectionsPage() {
             ) : (
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
-                  Nu synchroniseren
+                  {ahBusy ? 'AH-bonnen ophalen…' : 'Nu synchroniseren'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={disconnectAh} disabled={ahBusy} data-testid="ah-disconnect">
                   Ontkoppelen
                 </Button>
               </div>
             )}
+            {ahSyncProgress ? (
+              <div className="rz-inline-feedback" role="status" aria-live="polite" data-testid="ah-sync-progress">
+                {ahSyncProgress}
+              </div>
+            ) : null}
           </div>
         </Card>
 

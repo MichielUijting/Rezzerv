@@ -112,6 +112,11 @@ export function AppFeedbackProvider({ children }) {
     setIsActionPending(false)
   }, [])
 
+  const dismissFeedbackIfKey = useCallback((key) => {
+    // A page may only dismiss the feedback it owns, not another page's alert.
+    setFeedback((current) => current?.key === key ? null : current)
+  }, [])
+
   const showFeedback = useCallback((nextFeedback) => {
     const normalized = normalizeFeedback(nextFeedback)
     if (!normalized) return
@@ -159,7 +164,8 @@ export function AppFeedbackProvider({ children }) {
     feedback,
     showFeedback,
     dismissFeedback,
-  }), [feedback, showFeedback, dismissFeedback])
+    dismissFeedbackIfKey,
+  }), [feedback, showFeedback, dismissFeedback, dismissFeedbackIfKey])
 
   return (
     <AppFeedbackContext.Provider value={value}>

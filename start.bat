@@ -168,17 +168,11 @@ del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
 exit /b 0
 
 :SanitizeRepoRuntimeArtifacts
-echo Cleaning accidental .dockerignore files ^(can break Docker builds^)...
-for /r %%F in (.dockerignore) do (
-  if /I not "%%F"=="%cd%\frontend\.dockerignore" (
-    if /I not "%%F"=="%cd%\backend\.dockerignore" del /f /q "%%F" >nul 2>&1
-  )
-)
-if exist "%cd%\frontend\dist" rmdir /s /q "%cd%\frontend\dist"
-if exist "%cd%\frontend\node_modules\.vite" rmdir /s /q "%cd%\frontend\node_modules\.vite"
-if exist "%cd%\frontend\.vite" rmdir /s /q "%cd%\frontend\.vite"
-for /r "%cd%" %%f in (*.pyc) do del /q "%%f" 2>nul
-for /d /r "%cd%" %%d in (__pycache__) do rmdir /s /q "%%d" 2>nul
+echo [INFO] Repositorybrede cache- en .dockerignore-opruiming wordt overgeslagen.
+echo [INFO] Bestaande bestanden blijven behouden; Docker-build gebruikt de bestaande configuratie.
+rem Geen recursieve for /r of for /d /r scans: die kunnen op grote
+rem Windows-werkmappen vastlopen en onbedoeld lokale data verwijderen.
+rem Problemen met build-context of caches worden afzonderlijk gediagnosticeerd.
 exit /b 0
 
 :EnsureDockerRunning

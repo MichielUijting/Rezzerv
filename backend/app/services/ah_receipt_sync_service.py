@@ -80,6 +80,24 @@ def count_pending_ah_receipts(
         if owns_client:
             active_client.close()
 
+def _safe_ah_import_failure_reason(exc: Exception, stage: str) -> str:
+    """Public diagnostic category; never return raw provider/receipt error messages."""
+    if stage != "import":
+        return "detail_request_failed"
+    if not isinstance(exc, ValueError):
+        return "other_import_failure"
+    message = str(exc).lower()
+    if "geen artikelregels" in message:
+        return "missing_article_lines"
+    if "geen bruikbaar totaalbedrag" in message:
+        return "missing_total_amount"
+    if "niet als bruikbare kassabon herkend" in message:
+        return "receipt_not_recognized"
+    if "bron is niet actief" in message:
+        return "inactive_source"
+    return "other_validation_failure"
+
+
 def sync_ah_receipts(
     engine: Engine,
     receipt_storage_root: Path,
@@ -106,9 +124,12 @@ def sync_ah_receipts(
         completed_ids: set[str] = set()
 
         for summary in pending:
+            stage = "details"
+            envelope = None
             try:
                 session, envelope = active_client.get_receipt_envelope(session, summary)
                 save_ah_session(engine, household_id, session)
+                stage = "import"
                 result = import_retailer_receipt(
                     engine,
                     receipt_storage_root,
@@ -128,7 +149,19 @@ def sync_ah_receipts(
                 errors.append(
                     {
                         "external_receipt_id": summary.receipt_id,
+                        "date_time": summary.date_time,
+                        "transaction_type": None,  # AH does not supply a verified type in the current contract.
                         "error": str(exc),
+                        "stage": stage,
+                        "error_type": type(exc).__name__,
+                        "reason_code": _safe_ah_import_failure_reason(exc, stage),
+                        "structure_diagnostic": (
+                            envelope.receipt.get("_ah_structure_diagnostic")
+                            if stage == "import"
+                            and envelope is not None
+                            and _safe_ah_import_failure_reason(exc, stage) == "missing_article_lines"
+                            else None
+                        ),
                     }
                 )
 

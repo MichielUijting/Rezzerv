@@ -382,6 +382,26 @@ def normalize_retailer_receipt(
             "message": "Niet alle digitale bonregels bevatten een regelbedrag.",
         })
 
+    # AH discounts may be exposed separately from the product amounts. Both
+    # gross and already-discounted product totals are accepted; a discrepancy
+    # is reviewable rather than silently changing financial or stock lines.
+    if envelope.provider == "ah" and not missing_line_totals:
+        product_total = sum(
+            (line.line_total for line in lines
+             if line.line_type in {"product", "deposit"} and line.line_total is not None),
+            Decimal("0"),
+        )
+        applied_discount = abs(discount_total) if discount_total is not None else Decimal("0")
+        difference = min(
+            abs(product_total - grand_total),
+            abs(product_total - applied_discount - grand_total),
+        )
+        if difference > Decimal("0.01"):
+            warnings.append({
+                "code": "AH_TOTAL_RECONCILIATION_REQUIRED",
+                "message": "Artikelregels, kortingen en AH-bontotaal sluiten niet op elkaar aan.",
+            })
+
     quality_score = 1.0 if missing_line_totals == 0 else max(0.7, 1.0 - (missing_line_totals / max(1, len(lines))))
     return CanonicalReceiptV1(
         scan_id=scan_id,
@@ -419,7 +439,7 @@ def normalize_retailer_receipt(
         ),
         quality=QualityV1(
             overall_confidence=quality_score,
-            requires_review=bool(missing_line_totals),
+            requires_review=bool(warnings),
         ),
         processed_at=datetime.now(timezone.utc),
     )
