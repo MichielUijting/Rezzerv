@@ -340,13 +340,20 @@ export default function StoreConnectionsPage() {
       const skipped = Number(result?.receipts_skipped_known || 0)
       const failed = Number(result?.receipts_failed || 0)
       const summary = found + ' gevonden · ' + processed + ' nieuw verwerkt · ' + skipped + ' al bekend · ' + failed + ' mislukt.'
-      setAhSyncProgress(summary)
+      const failedStages = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => entry?.stage === 'details' ? 'ophalen van bondetails' : entry?.stage === 'import' ? 'verwerken in Kassa' : 'onbekende stap'))
+      const failedTypes = new Set((Array.isArray(result?.errors) ? result.errors : [])
+        .map((entry) => ['ValueError', 'HTTPStatusError', 'TimeoutException', 'ConnectError', 'IntegrityError'].includes(entry?.error_type) ? entry.error_type : 'overige fout'))
+      const failureDiagnosis = failed
+        ? 'Fout bij: ' + [...failedStages].join(', ') + '. Type: ' + [...failedTypes].join(', ') + '.'
+        : ''
+      setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : ''))
       showFeedback({
         variant: failed ? 'warning' : 'success',
         title: failed ? 'AH-synchronisatie deels gelukt' : 'AH-synchronisatie afgerond',
         message: summary,
         detail: failed
-          ? 'Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
+          ? failureDiagnosis + ' Mislukte bonnen worden bij een volgende synchronisatie opnieuw geprobeerd.'
           : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
