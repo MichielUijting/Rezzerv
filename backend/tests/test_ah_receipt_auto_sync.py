@@ -196,3 +196,12 @@ def test_sync_failed_receipt_is_retryable_without_duplicate_success(tmp_path, mo
     assert third["receipts_processed"] == 0
     assert third["receipts_skipped_known"] == 2
     assert imported == ["ok-1", "retry-2"]
+
+
+def test_safe_ah_import_failure_reasons_never_expose_raw_error_text():
+    classify = sync_service._safe_ah_import_failure_reason
+    assert classify(ValueError("Digitale kassabon bevat geen artikelregels"), "import") == "missing_article_lines"
+    assert classify(ValueError("Digitale kassabon bevat geen bruikbaar totaalbedrag"), "import") == "missing_total_amount"
+    assert classify(ValueError("Gedeelde inhoud is niet als bruikbare kassabon herkend."), "import") == "receipt_not_recognized"
+    assert classify(ValueError("account secret: do not expose"), "import") == "other_validation_failure"
+    assert classify(ValueError("account secret: do not expose"), "details") == "detail_request_failed"
