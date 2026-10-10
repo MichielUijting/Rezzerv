@@ -183,6 +183,8 @@ def test_sync_failed_receipt_is_retryable_without_duplicate_success(tmp_path, mo
     assert first["errors"][0]["external_receipt_id"] == "retry-2"
     assert first["errors"][0]["stage"] == "details"
     assert first["errors"][0]["error_type"] == "ValueError"
+    assert first["errors"][0]["date_time"] == "2026-09-30T12:00:00"
+    assert first["errors"][0]["transaction_type"] is None
     assert known_ids == {"ok-1"}
 
     second = sync_service.sync_ah_receipts(engine, tmp_path, household_id="household-a", client=client)
