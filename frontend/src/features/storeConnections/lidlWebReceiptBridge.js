@@ -176,7 +176,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
           rawText: clean(text),
           // Lidl marks deposits as a structured article in some receipt layouts.
           // Preserve the financial line but never treat it as stockable product.
-          lineType: /\b(statiegeld|deposit|pfand)\b/i.test(description) ? 'deposit' : 'product',
+          lineType: /\b(statiegeld|emballage|fust|deposit|pfand)\b/i.test(description) ? 'deposit' : 'product',
           discounts: [],
         }
         if (identifier) {
@@ -199,7 +199,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       }
 
       const lower = clean(text).toLowerCase()
-      if (amount && /\b(statiegeld|deposit|pfand)\b/i.test(lower)) {
+      if (amount && /\b(statiegeld|emballage|fust|deposit|pfand)\b/i.test(lower)) {
         products.push({
           name: clean(text.replace(amount, '')) || 'Statiegeld',
           quantity: '1',
