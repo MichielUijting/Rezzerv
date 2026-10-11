@@ -1,5 +1,6 @@
 """Lidl import window settings per household."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 
@@ -14,7 +15,7 @@ def get_window(engine, household_id):
     start = _date(data.get("from_date"))
     end = _date(data.get("to_date"))
     last = _date(data.get("last_imported_date"))
-    today = date.today()
+    today = datetime.now(ZoneInfo('Europe/Amsterdam')).date()
     return {
         "from_date": (start or last or (today - timedelta(days=30))).isoformat(),
         "to_date": (end or today).isoformat(),
@@ -31,7 +32,7 @@ def save_window(engine, household_id, start, end):
         raise ValueError("Van-datum ligt na tot-datum.")
     if (start is None) != (end is None) and start is None:
         raise ValueError("Kies een van-datum bij een vaste tot-datum.")
-    if start and not end and start > date.today():
+    if start and not end and start > datetime.now(ZoneInfo('Europe/Amsterdam')).date():
         raise ValueError("Van-datum ligt in de toekomst.")
     with engine.begin() as conn:
         conn.execute(text("""
@@ -51,7 +52,7 @@ def record_import_date(engine, household_id, timestamp):
         day = date.fromisoformat(timestamp[:10])
     except ValueError:
         return
-    if day > date.today():
+    if day > datetime.now(ZoneInfo('Europe/Amsterdam')).date():
         return
     with engine.begin() as conn:
         conn.execute(text("""
