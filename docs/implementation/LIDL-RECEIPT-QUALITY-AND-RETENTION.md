@@ -27,3 +27,10 @@ Basis: main `043802a8f579ce50e6488232c3c23a3bf7b12af2`, na PR #572.
 - Een financieel sluitende digitale bon met kortingsregel is niet uitsluitend door korting `review_needed`.
 - Bij containervervanging blijft een nieuw opgeslagen digitale bronbon leesbaar.
 - Bestaande database/bonnen/volumes zijn onveranderd, tenzij een afzonderlijk veilig migratiepad expliciet wordt uitgevoerd.
+
+## Styleguide-impact
+STYLEGUIDE_IMPACT: reviewed-no-change
+STYLEGUIDE_REASON: Alleen de semantische depositclassificatie in de Lidl-browserbridge verandert; er is geen zichtbaar ontwerp- of interactieverschil.
+
+## Migratiebeperking
+De nieuwe persistente opslag geldt voor nieuwe digitale bonnen. Historische bronbestanden die alleen in een containerfilesystem staan mogen vóór containervervanging niet worden overschreven of verborgen. De lokale PO-testroute stopt daarom vooraf wanneer zulke onbeschermde bestanden aanwezig kunnen zijn.
