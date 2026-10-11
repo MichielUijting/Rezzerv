@@ -4,7 +4,7 @@ export const LIDL_BOOKMARKLET_VERSION = 2
 export const LIDL_HISTORY_URL =
   'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1'
 
-function lidlWebPageRunner(INHUIS_ORIGIN) {
+function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
   const target = window.opener
   if (!target) {
     alert('De bestaande Inhuis-sessie is niet meer beschikbaar. Open Lidl opnieuw via Inhuis > Winkelkoppelingen.')
@@ -43,6 +43,24 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       }
       window.addEventListener('message', onMessage)
     })
+  }
+
+  const fromDate = String(DATE_RANGE?.from_date || '')
+  const toDate = String(DATE_RANGE?.to_date || '')
+
+  function normalizeDay(value) {
+    const text = String(value || '')
+    const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/)
+    if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3]
+    const dutch = text.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/)
+    if (dutch) return dutch[3] + '-' + dutch[2].padStart(2, '0') + '-' + dutch[1].padStart(2, '0')
+    return ''
+  }
+
+  function withinWindow(value) {
+    const day = normalizeDay(value)
+    if (!day) return null
+    return (!fromDate || day >= fromDate) && (!toDate || day <= toDate)
   }
 
   function parseDateTime(text, fallbackDate = '') {
@@ -363,10 +381,12 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
           seen.add(id)
           added += 1
           const q = (testId) => clean(anchor.querySelector('[data-testid="' + testId + '"]')?.textContent)
+          const rowDate = q('purchase-history-row-date')
+          if (withinWindow(rowDate) === false) continue
           all.push({
             id,
             href: anchor.href,
-            date: q('purchase-history-row-date'),
+            date: rowDate,
             store: q('purchase-history-row-store'),
             amount: q('primary-amount'),
           })
@@ -393,7 +413,10 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
         throw new Error('Open eerst Mijn digitale kassabonnen of een Lidl-kassabon.')
       }
 
-      if (!entries.length) throw new Error('Geen Lidl-kassabonnen gevonden.')
+      if (!entries.length) {
+        post({ type: 'inhuis:lidl-complete', count: 0 })
+        return
+      }
 
       let imported = 0
       for (const entry of entries) {
@@ -402,6 +425,11 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
           message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
         })
         const receipt = await loadDetail(entry.href, entry)
+        const matchesWindow = withinWindow(receipt.dateTime)
+        if (matchesWindow !== true) {
+          if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
+          continue
+        }
         target.postMessage({ type: 'inhuis:lidl-receipt', receipt }, INHUIS_ORIGIN)
         await waitForAck(receipt.id)
         imported += 1
@@ -443,7 +471,10 @@ export function buildLidlWebBookmarklet(inhuisOrigin) {
   )
 }
 
-export function buildLidlWebPageScript(inhuisOrigin) {
+export function buildLidlWebPageScript(inhuisOrigin, dateWindow = {}) {
   const origin = String(inhuisOrigin || '').replace(/\/$/, '')
-  return '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ')'
+  return '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ',' + JSON.stringify({
+    from_date: String(dateWindow.from_date || ''),
+    to_date: String(dateWindow.to_date || ''),
+  }) + ')'
 }
