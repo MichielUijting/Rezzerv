@@ -57,7 +57,7 @@ from typing import Any, Iterable
 
 from sqlalchemy import text
 
-from app.receipt_ingestion.line_classifier import classify_receipt_text_line
+from app.receipt_ingestion.line_classifier import classify_receipt_text_line, receipt_financial_candidate_line_type
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
@@ -1219,7 +1219,7 @@ def _parse_result_from_text_lines(
 
 
 
-def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
+def _parse_receipt_content_without_financial_typing(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
     suffix = Path(filename).suffix.lower()
 
     if mime_type == 'message/rfc822' or suffix == '.eml':
@@ -1716,6 +1716,29 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         ) if text_lines else _failed_receipt_result(0.0)
 
     return _failed_receipt_result(0.0)
+def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
+    """Classify priced deposit lines at the legacy source-parser boundary.
+
+    Canonical scanner adapters and downstream inventory handling consume the
+    resulting line_type without reinterpreting retailer labels. Never remove
+    the financial line or alter receipt amounts.
+    """
+    result = _parse_receipt_content_without_financial_typing(file_bytes, filename, mime_type)
+    if not result.is_receipt or not result.lines:
+        return result
+    for line in result.lines:
+        if not isinstance(line, dict):
+            continue
+        if str(line.get("line_type") or "").strip().lower() not in {"", "product"}:
+            continue
+        if line.get("line_total") is None and line.get("unit_price") is None:
+            continue
+        label = str(line.get("normalized_label") or line.get("raw_label") or "")
+        if receipt_financial_candidate_line_type(label, has_amount=True) == "deposit":
+            line["line_type"] = "deposit"
+    return result
+
+
 def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str) -> list[dict[str, Any]]:
     sources_root = receipt_root.parent / 'sources' / str(household_id)
     sources_root.mkdir(parents=True, exist_ok=True)
