@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from app.integrations.receipt_scanners.normalizer import canonical_to_receipt_parse_result
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.integrations.retailer_receipts import RetailerReceiptEnvelope, normalize_retailer_receipt
 
 
@@ -48,6 +49,9 @@ def test_lidl_explicit_deposit_is_financial_but_not_product() -> None:
     assert sum(line.line_total or Decimal("0") for line in canonical.receipt.lines) == Decimal("6.59")
     persisted = canonical_to_receipt_parse_result(canonical)
     assert persisted.lines[1]["line_type"] == "deposit"
+    semantics = derive_receipt_line_semantics(persisted.lines[1])
+    assert semantics["line_role"] == "financial"
+    assert semantics["inventory_eligible"] is False
     assert persisted.parse_status == "approved"
 
 
