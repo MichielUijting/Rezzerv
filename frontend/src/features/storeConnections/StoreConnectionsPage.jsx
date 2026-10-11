@@ -220,10 +220,19 @@ export default function StoreConnectionsPage() {
         }
         lidlSourceWindow = event.source
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
-        event.source?.postMessage({
-          type: 'inhuis:lidl-script',
-          script: buildLidlWebPageScript(window.location.origin, await fetchJson('/api/receipts/retailers/lidl/import-window')),
-        }, LIDL_WEB_ORIGIN)
+        try {
+          const period = await fetchJson('/api/receipts/retailers/lidl/import-window')
+          if (cancelled) return
+          setLidlWindow(period)
+          setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
+          event.source?.postMessage({
+            type: 'inhuis:lidl-script',
+            script: buildLidlWebPageScript(window.location.origin, period),
+          }, LIDL_WEB_ORIGIN)
+        } catch (err) {
+          setLidlWebProgress('Lidl-import afgebroken: importperiode kon niet worden geladen.')
+          showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Importperiode ophalen mislukt.' })
+        }
         return
       }
 
