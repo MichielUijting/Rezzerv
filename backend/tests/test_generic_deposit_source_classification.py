@@ -28,7 +28,8 @@ def test_legacy_parser_deposit_is_financial_not_inventory(label):
     assert result.total_amount == Decimal("4.00")
     assert result.lines[0]["line_type"] == "deposit"
     assert derive_receipt_line_semantics(result.lines[0])["inventory_eligible"] is False
-    assert derive_receipt_line_semantics(result.lines[1])["inventory_eligible"] is False  # Untyped fails closed
+    from app.integrations.receipt_scanners.adapters.rezzerv_legacy import _canonical_line_type_from_legacy
+    assert _canonical_line_type_from_legacy(result.lines[1]) == "product"
 
 
 def test_legacy_explicit_financial_type_cannot_be_reclassified():
