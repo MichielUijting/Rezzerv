@@ -1050,3 +1050,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Bij verlaten van de pagina **Winkelkoppelingen** wordt de bijbehorende AH-synchronisatiemelding direct verwijderd. Een laat binnenkomend resultaat mag die melding niet opnieuw tonen op een andere pagina.
 - De eigenaar van de melding wordt onderscheiden met de sleutel `ah-receipt-sync`. De op pagina-verlaten uitgevoerde opruiming mag uitsluitend een melding met deze sleutel wissen, nooit een gelijktijdige melding van een andere module.
 - Er is **geen nieuwe modale, kaart-, kleur- of tokenvariant** geïntroduceerd; gebruik en vormgeving volgen volledig de bestaande centrale feedbackstijl.
+
+### Lidl-webimport: paginagebonden feedback en eerlijke verwerkingstelling — 11 oktober 2026
+
+- Lidl-webimportmeldingen gebruiken dezelfde centrale `AppFeedbackProvider` als AH en krijgen een eigen sleutel `lidl-receipt-import`. Bij verlaten van Winkelkoppelingen verdwijnen uitsluitend de Lidl- en AH-pagina-eigen syncmeldingen; meldingen van andere onderdelen blijven intact.
+- Ook bij een laat antwoord van de browserbridge na het verlaten van Winkelkoppelingen verschijnt geen nieuwe Lidl-melding op Kassa of elders.
+- Een succesvolle serverreactie betekent niet automatisch een nieuwe bon. De Lidl-terugkoppeling onderscheidt **nieuw**, **al bekend**, **bestaande bon bijgewerkt** en **mislukt** aan de hand van het bestaande backend-importresultaat. Een onbekend resultaat telt nooit stilzwijgend als nieuw.
+- De melding presenteert alleen aantoonbaar nieuwe bonnen als toegevoegd aan Kassa; bestaande bonnen houden hun bestaande verwerkingstoestand. Er wordt geen nieuw feedbackdesign, kleurpatroon of modale variant geïntroduceerd.
