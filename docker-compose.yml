@@ -46,6 +46,8 @@ services:
       - rezzerv_retailer_secrets:/app/secrets
       # Separate, durable storage for new digital retailer receipts; no mount over legacy raw paths.
       - rezzerv_retailer_receipts:/app/data/retailer-receipts
+      # Preserve original receipts at their existing database storage_path across backend recreation.
+      - rezzerv_receipt_raw:/app/data/receipts/raw
 
   frontend:
     build:
@@ -64,3 +66,4 @@ volumes:
   rezzerv_paddlex:
   rezzerv_retailer_secrets:
   rezzerv_retailer_receipts:
+  rezzerv_receipt_raw:
