@@ -54,4 +54,14 @@ assert.doesNotMatch(script, /localStorage/)
 assert.doesNotMatch(script, /sessionStorage/)
 assert.doesNotMatch(script, /Password|password/)
 
+const windowedScript = buildLidlWebPageScript('http://localhost:5174', {
+  from_date: '2026-10-01', to_date: '2026-10-11',
+})
+assert.match(windowedScript, /2026-10-01/)
+assert.match(windowedScript, /2026-10-11/)
+assert.match(windowedScript, /withinWindow\(rowDate\)/)
+assert.match(windowedScript, /withinWindow\(receipt.dateTime\)/)
+assert.match(windowedScript, /fromDate/)
+assert.match(windowedScript, /toDate/)
+
 console.log('LIDL_WEB_RECEIPT_BRIDGE_CONTRACT_GREEN')
