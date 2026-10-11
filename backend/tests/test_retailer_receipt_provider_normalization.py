@@ -406,3 +406,74 @@ def test_lidl_ger_statiegeld_is_financial_not_unpack_inventory():
     product = derive_receipt_line_semantics(legacy.lines[1])
     assert deposit == {"line_role": "financial", "inventory_eligible": False}
     assert product == {"line_role": "product", "inventory_eligible": True}
+
+
+@pytest.mark.parametrize("provider", ["lidl", "ah", "jumbo"])
+@pytest.mark.parametrize("label", [
+    "6pak Ger. statiegeld", "Statiegeld retour", "Emballage", "Fust retour",
+])
+@pytest.mark.parametrize("explicit_type", [None, "product"])
+def test_deposit_never_enters_inventory_across_retailers(provider, label, explicit_type):
+    from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+
+    deposit_line = {"name": label, "quantity": 1, "lineTotal": "0.60"}
+    if explicit_type is not None:
+        deposit_line["lineType"] = explicit_type
+    envelope = RetailerReceiptEnvelope(
+        provider=provider,
+        external_receipt_id=f"{provider}-deposit-check",
+        receipt={
+            "dateTime": "2026-10-11T12:00:00",
+            "totalAmount": "2.60",
+            "products": [
+                deposit_line,
+                {"name": "Melk", "lineType": "product", "quantity": 1, "lineTotal": "2.00"},
+            ],
+        },
+    )
+    canonical = normalize_retailer_receipt(
+        envelope, scan_id="shared_deposit_test", document_sha256="a" * 64,
+    )
+    assert canonical.receipt is not None
+    assert canonical.receipt.totals.grand_total == Decimal("2.60")
+    assert canonical.receipt.lines[0].line_type == "deposit"
+    assert canonical.receipt.lines[0].line_total == Decimal("0.60")
+    assert canonical.receipt.lines[1].line_type == "product"
+    legacy = canonical_to_receipt_parse_result(canonical)
+    assert derive_receipt_line_semantics(legacy.lines[0]) == {
+        "line_role": "financial", "inventory_eligible": False,
+    }
+    assert derive_receipt_line_semantics(legacy.lines[1]) == {
+        "line_role": "product", "inventory_eligible": True,
+    }
+
+
+@pytest.mark.parametrize("provider", ["lidl", "ah", "jumbo"])
+def test_product_name_containing_deposit_word_is_not_automatically_removed(provider):
+    envelope = RetailerReceiptEnvelope(
+        provider=provider,
+        external_receipt_id=f"{provider}-ordinary-product",
+        receipt={
+            "totalAmount": "2.00",
+            "products": [{"name": "Statiegeldvrije fles", "lineTotal": "2.00"}],
+        },
+    )
+    canonical = normalize_retailer_receipt(
+        envelope, scan_id="non_deposit_test", document_sha256="b" * 64,
+    )
+    assert canonical.receipt.lines[0].line_type == "product"
+
+
+def test_explicit_payment_line_is_not_reinterpreted_as_deposit():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="explicit-payment",
+        receipt={
+            "totalAmount": "1.00",
+            "products": [{"name": "Statiegeld", "lineType": "payment", "lineTotal": "1.00"}],
+        },
+    )
+    canonical = normalize_retailer_receipt(
+        envelope, scan_id="payment_test", document_sha256="c" * 64,
+    )
+    assert canonical.receipt.lines[0].line_type == "payment"
