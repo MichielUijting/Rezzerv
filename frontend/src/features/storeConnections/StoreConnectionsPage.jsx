@@ -24,6 +24,7 @@ import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsMod
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const ahSyncPageMountedRef = useRef(false)
+  const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
@@ -130,9 +131,12 @@ export default function StoreConnectionsPage() {
 
   useEffect(() => {
     ahSyncPageMountedRef.current = true
+    lidlImportPageMountedRef.current = true
     return () => {
       ahSyncPageMountedRef.current = false
       dismissFeedbackIfKey('ah-receipt-sync')
+      lidlImportPageMountedRef.current = false
+      dismissFeedbackIfKey('lidl-receipt-import')
     }
   }, [dismissFeedbackIfKey])
 
@@ -163,7 +167,7 @@ export default function StoreConnectionsPage() {
   }, [showFeedback])
 
   useEffect(() => {
-    let importedCount = 0
+    let lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
     let cancelled = false
     let lidlSourceWindow = null
 
@@ -173,9 +177,11 @@ export default function StoreConnectionsPage() {
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
         if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
           setLidlWebProgress('Je gebruikt een oude Lidl-favoriet. Verwijder die en sleep de nieuwe Lidl-bonnen naar Inhuis v2-knop opnieuw naar je favorietenbalk.')
           showFeedback({
+            key: 'lidl-receipt-import',
             variant: 'warning',
             title: 'Lidl-favoriet vernieuwen',
             message: 'De opgeslagen Lidl-favoriet is verouderd.',
@@ -204,6 +210,7 @@ export default function StoreConnectionsPage() {
         const receiptId = String(receipt?.id || '').trim()
         const products = Array.isArray(receipt?.products) ? receipt.products : []
         if (!/^\d{8,40}$/.test(receiptId) || !products.length) {
+          lidlCounts.failed += 1
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
@@ -214,7 +221,7 @@ export default function StoreConnectionsPage() {
         }
 
         try {
-          await fetchJson('/api/receipts/retailers/import', {
+          const result = await fetchJson('/api/receipts/retailers/import', {
             method: 'POST',
             body: JSON.stringify({
               schema_version: '1.0',
@@ -223,14 +230,29 @@ export default function StoreConnectionsPage() {
               receipt,
             }),
           })
-          importedCount += 1
-          setLidlWebProgress(importedCount + ' Lidl-bon(nen) naar Kassa verwerkt.')
+          if (result?.refreshed_existing_receipt) lidlCounts.refreshed += 1
+          else if (result?.duplicate === true) lidlCounts.known += 1
+          else if (result?.duplicate === false && result?.raw_receipt_id) lidlCounts.new += 1
+          else {
+            // Unknown acknowledgement is not proof of a new receipt.
+            lidlCounts.failed += 1
+            event.source?.postMessage({
+              type: 'inhuis:lidl-ack',
+              receipt_id: receiptId,
+              ok: false,
+              error: 'Inhuis gaf geen herkenbaar importresultaat terug.',
+            }, LIDL_WEB_ORIGIN)
+            return
+          }
+          setLidlWebProgress('Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
+            + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.')
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
             ok: true,
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
+          lidlCounts.failed += 1
           const message = normalizeErrorMessage(err?.message) || 'De Lidl-bon kon niet worden geïmporteerd.'
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
@@ -238,19 +260,26 @@ export default function StoreConnectionsPage() {
             ok: false,
             error: message,
           }, LIDL_WEB_ORIGIN)
-          showFeedback({ variant: 'error', title: 'Lidl-bon importeren', message })
+          if (lidlImportPageMountedRef.current) showFeedback({
+            key: 'lidl-receipt-import', variant: 'error', title: 'Lidl-bon importeren', message,
+          })
         }
         return
       }
 
       if (data.type === 'inhuis:lidl-complete') {
-        const count = Number(data.count || importedCount || 0)
-        setLidlWebProgress(count + ' Lidl-bon(nen) verwerkt. Open Kassa om ze te controleren.')
+        const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
+          + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.'
+        setLidlWebProgress(summary)
+        if (!lidlImportPageMountedRef.current) return
         showFeedback({
-          variant: 'success',
-          title: 'Lidl-bonnen geïmporteerd',
-          message: count + ' bon(nen) via je bestaande Lidl-websessie verwerkt.',
-          detail: 'De import is teruggekomen in dezelfde Inhuis-sessie. Je Lidl-wachtwoord en browsercookies zijn niet naar Inhuis gekopieerd.',
+          key: 'lidl-receipt-import',
+          variant: lidlCounts.failed ? 'warning' : 'success',
+          title: lidlCounts.failed ? 'Lidl-synchronisatie deels gelukt' : 'Lidl-synchronisatie afgerond',
+          message: summary,
+          detail: lidlCounts.new
+            ? 'Alleen nieuwe bonnen zijn toegevoegd aan Kassa. Al bekende bonnen zijn niet dubbel toegevoegd.'
+            : 'Er zijn geen nieuwe bonnen toegevoegd. Bekende bonnen blijven in hun bestaande verwerkingsfase.',
         })
         return
       }
@@ -258,7 +287,9 @@ export default function StoreConnectionsPage() {
       if (data.type === 'inhuis:lidl-error') {
         const message = String(data.message || 'De Lidl-webimport is mislukt.')
         setLidlWebProgress(message)
-        showFeedback({ variant: 'error', title: 'Lidl-webimport', message })
+        if (lidlImportPageMountedRef.current) showFeedback({
+          key: 'lidl-receipt-import', variant: 'error', title: 'Lidl-webimport', message,
+        })
       }
     }
 
