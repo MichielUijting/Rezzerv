@@ -38,6 +38,10 @@ export default function StoreConnectionsPage() {
   const [ahBusy, setAhBusy] = useState(false)
   const [ahSyncProgress, setAhSyncProgress] = useState('')
   const [lidlWebProgress, setLidlWebProgress] = useState('')
+  const [lidlWindow, setLidlWindow] = useState(null)
+  const [lidlFrom, setLidlFrom] = useState('')
+  const [lidlTo, setLidlTo] = useState('')
+  const [lidlWindowSaving, setLidlWindowSaving] = useState(false)
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
 
