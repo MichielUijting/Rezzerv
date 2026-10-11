@@ -198,3 +198,91 @@ def test_runtime_session_store_is_household_scoped_and_exposes_no_tokens() -> No
     assert "secret-refresh" not in str(status)
 
     delete_ah_session("household-a")
+
+
+def test_ah_discount_reconciliation_keeps_nonphysical_discounts_out_of_stock_lines() -> None:
+    from app.integrations.retailer_receipts import RetailerReceiptEnvelope
+
+    source = RetailerReceiptEnvelope(
+        provider="ah",
+        external_receipt_id="synthetic-discount-receipt",
+        receipt={
+            "id": "synthetic-discount-receipt",
+            "dateTime": "2026-10-01T12:00:00",
+            "totalAmount": 3.23,
+            "discountTotal": 0.15,
+            "products": [
+                {"name": "Artikel A", "quantity": 1, "unitPrice": 1.19, "lineTotal": 1.19},
+                {"name": "Artikel B", "quantity": 1, "unitPrice": 2.19, "lineTotal": 2.19},
+            ],
+            "discounts": [{"name": "Bonus", "amount": {"amount": -0.15}}],
+            "payments": [{"method": "PIN", "amount": {"amount": 3.23}}],
+        },
+    )
+    result = normalize_retailer_receipt(
+        source, scan_id="synthetic-1", document_sha256="a" * 64,
+    )
+    assert str(result.receipt.totals.discount_total) == '0.15'
+    assert str(result.receipt.totals.grand_total) == '3.23'
+    assert len(result.receipt.lines) == 2
+    assert all(line.line_type == "product" for line in result.receipt.lines)
+    assert result.quality.requires_review is False
+
+
+def test_ah_unreconciled_total_is_flagged_for_review() -> None:
+    from app.integrations.retailer_receipts import RetailerReceiptEnvelope
+
+    source = RetailerReceiptEnvelope(
+        provider="ah",
+        external_receipt_id="synthetic-mismatch",
+        receipt={
+            "id": "synthetic-mismatch",
+            "dateTime": "2026-10-01T12:00:00",
+            "totalAmount": 5.02,
+            "discountTotal": 0.15,
+            "products": [
+                {"name": "Artikel A", "quantity": 1, "lineTotal": 1.19},
+                {"name": "Artikel B", "quantity": 1, "lineTotal": 2.19},
+            ],
+        },
+    )
+    result = normalize_retailer_receipt(
+        source, scan_id="synthetic-2", document_sha256="b" * 64,
+    )
+    assert result.quality.requires_review is True
+    assert any(
+        warning["code"] == "AH_TOTAL_RECONCILIATION_REQUIRED"
+        for warning in result.receipt.warnings
+    )
+    assert str(result.receipt.totals.grand_total) == '5.02'
+    assert len(result.receipt.lines) == 2
+
+
+def test_ah_empty_products_exposes_only_safe_structure_counts() -> None:
+    """Empty AH receipt details must be diagnosable without exposing source data."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"posReceiptDetails": {
+            "id": "private-receipt",
+            "memberId": "private-member",
+            "products": [],
+            "items": [{"name": "PRIVATE ARTICLE", "amount": {"amount": 123}}],
+            "discounts": [{"name": "PRIVATE DISCOUNT"}],
+            "payments": [{"method": "PRIVATE PAYMENT"}],
+            "access_token": "private-token",
+        }}})
+
+    client = AHReceiptClient(http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+    _, envelope = client.get_receipt_envelope(
+        AHAccountSession("private-access", "private-refresh"),
+        AHReceiptSummary("private-receipt", "2026-10-01T12:00:00", 1.0),
+    )
+    report = envelope.receipt["_ah_structure_diagnostic"]
+    assert report == {
+        "products_type": "list",
+        "raw_products_count": 0,
+        "mapped_products_count": 0,
+        "alternate_fields": ["items"],
+        "discounts_count": 1,
+        "payments_count": 1,
+    }
+    assert "private" not in str(report).lower()

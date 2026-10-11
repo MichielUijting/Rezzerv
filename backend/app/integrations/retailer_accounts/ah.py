@@ -272,6 +272,30 @@ class AHReceiptClient:
             if value is not None:
                 discount_total += abs(float(value))
 
+        # Only for an empty mapped product list: expose a fixed, non-sensitive
+        # structural summary for troubleshooting the failed import. Never store
+        # raw provider keys, identifiers, product names or values.
+        empty_products_diagnostic = None
+        if not products:
+            raw_products = details.get("products")
+            known_alternates = ("items", "lines", "receiptLines", "basketItems", "entries")
+            empty_products_diagnostic = {
+                "products_type": (
+                    "missing" if "products" not in details else
+                    "list" if isinstance(raw_products, list) else
+                    "null" if raw_products is None else
+                    "other"
+                ),
+                "raw_products_count": len(raw_products) if isinstance(raw_products, list) else 0,
+                "mapped_products_count": 0,
+                "alternate_fields": [
+                    key for key in known_alternates
+                    if isinstance(details.get(key), list) and len(details[key]) > 0
+                ],
+                "discounts_count": len(details.get("discounts")) if isinstance(details.get("discounts"), list) else 0,
+                "payments_count": len(details.get("payments")) if isinstance(details.get("payments"), list) else 0,
+            }
+
         receipt_payload: dict[str, Any] = {
             "id": str(details.get("id")),
             "dateTime": summary.date_time,
@@ -281,6 +305,8 @@ class AHReceiptClient:
             "discounts": discounts,
             "payments": details.get("payments") or [],
         }
+        if empty_products_diagnostic is not None:
+            receipt_payload["_ah_structure_diagnostic"] = empty_products_diagnostic
         return active, RetailerReceiptEnvelope(
             provider="ah",
             external_receipt_id=summary.receipt_id,

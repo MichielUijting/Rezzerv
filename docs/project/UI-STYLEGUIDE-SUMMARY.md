@@ -1043,3 +1043,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Desktopweergaven (`>720px`) behouden bestaande exportfunctionaliteit ongewijzigd.
 - Deze app-brede mobiele regel vervangt oudere mobiele afspraken waarin **Exporteren** nog als zichtbare bulk- of detailactie werd genoemd.
 - De exportcode hoeft niet per module te worden verwijderd; de gedeelde Button-authority markeert de exacte actie **Exporteren** en de centrale mobiele styling verbergt die uitsluitend op de mobiele viewport.
+
+## Pagina-eigen meldingen bij Winkelkoppelingen — 11 oktober 2026
+
+- Het resultaat van handmatige AH-bonnensynchronisatie wordt op **Winkelkoppelingen** getoond via de bestaande centrale `AppFeedbackProvider` en blijft op die pagina zichtbaar tot de gebruiker de melding sluit of navigeert.
+- Bij verlaten van de pagina **Winkelkoppelingen** wordt de bijbehorende AH-synchronisatiemelding direct verwijderd. Een laat binnenkomend resultaat mag die melding niet opnieuw tonen op een andere pagina.
+- De eigenaar van de melding wordt onderscheiden met de sleutel `ah-receipt-sync`. De op pagina-verlaten uitgevoerde opruiming mag uitsluitend een melding met deze sleutel wissen, nooit een gelijktijdige melding van een andere module.
+- Er is **geen nieuwe modale, kaart-, kleur- of tokenvariant** geïntroduceerd; gebruik en vormgeving volgen volledig de bestaande centrale feedbackstijl.
