@@ -126,6 +126,10 @@ export default function StoreConnectionsPage() {
       setProviders(providerData)
       setConnections(connectionData)
       await loadAhStatus()
+      const windowData = await fetchJson('/api/receipts/retailers/lidl/import-window')
+      setLidlWindow(windowData)
+      setLidlFrom(windowData.configured_from_date || windowData.from_date || '')
+      setLidlTo(windowData.configured_to_date || '')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
