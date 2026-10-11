@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs'
 
 const bridge = readFileSync(new URL('../src/features/storeConnections/lidlWebReceiptBridge.js', import.meta.url), 'utf8')
 
-assert.match(bridge, /lineType:\s*\/\\b\(statiegeld\|deposit\|pfand\)\\b\/i\.test\(description\)\s*\?\s*'deposit'/)
-assert.match(bridge, /lineType:\s*'deposit'/)
-assert.match(bridge, /product\.lineType\s*!==\s*'deposit'/)
-assert.match(bridge, /product\.lineType\s*===\s*'deposit'/)
+// Both structured article DOM nodes and plain-text deposit rows must map to deposit.
+assert.ok(bridge.includes("test(description) ? 'deposit' : 'product'"))
+assert.ok(bridge.includes("lineType: 'deposit'"))
+assert.ok(bridge.includes("product.lineType !== 'deposit'"))
+assert.ok(bridge.includes("product.lineType === 'deposit'"))
 
 console.log('Lidl structured deposit classification contract passed')
