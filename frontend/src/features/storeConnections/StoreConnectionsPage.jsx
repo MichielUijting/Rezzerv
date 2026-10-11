@@ -137,6 +137,27 @@ export default function StoreConnectionsPage() {
     }
   }
 
+  async function saveLidlWindow(reset = false) {
+    setLidlWindowSaving(true)
+    try {
+      const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
+        method: 'PUT',
+        body: JSON.stringify({
+          from_date: reset ? null : (lidlFrom || null),
+          to_date: reset ? null : (lidlTo || null),
+        }),
+      })
+      setLidlWindow(data)
+      setLidlFrom(data.configured_from_date || data.from_date || '')
+      setLidlTo(data.configured_to_date || '')
+      showFeedback({ variant: 'success', title: 'Lidl-importperiode opgeslagen', message: reset ? 'Automatische periode hersteld.' : 'De nieuwe periode geldt bij de volgende import.' })
+    } catch (err) {
+      showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Opslaan mislukt.' })
+    } finally {
+      setLidlWindowSaving(false)
+    }
+  }
+
   useEffect(() => {
     ahSyncPageMountedRef.current = true
     lidlImportPageMountedRef.current = true
