@@ -25,7 +25,7 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 95
+EXPECTED_APPLICATION_TABLES = 96  # Household Lidl import window adds one canonical table.
 SYSTEM_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_CONFIG = BACKEND_ROOT / "alembic.ini"
