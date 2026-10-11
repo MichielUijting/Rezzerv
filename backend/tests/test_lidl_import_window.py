@@ -1,5 +1,6 @@
 """Focused Lidl household import-window tests without a substitute database."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock
 import pytest
 
@@ -13,7 +14,7 @@ def _engine(row=None):
 
 
 def test_default_window_and_household_checkpoint():
-    today = date.today()
+    today = datetime.now(ZoneInfo('Europe/Amsterdam')).date()
     automatic = get_window(_engine(), "household-1")
     assert automatic["from_date"] == (today - timedelta(days=30)).isoformat()
     assert automatic["to_date"] == today.isoformat()
