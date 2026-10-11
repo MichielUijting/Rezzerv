@@ -54,6 +54,12 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3]
     const dutch = text.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/)
     if (dutch) return dutch[3] + '-' + dutch[2].padStart(2, '0') + '-' + dutch[1].padStart(2, '0')
+    const names = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december']
+    const named = text.toLowerCase().match(/(\d{1,2})\s+([a-zéë]+)\.?\s+(\d{4})/)
+    if (named) {
+      const month = names.findIndex((name) => name === named[2] || name.startsWith(named[2]))
+      if (month >= 0) return named[3] + '-' + String(month + 1).padStart(2, '0') + '-' + named[1].padStart(2, '0')
+    }
     return ''
   }
 
