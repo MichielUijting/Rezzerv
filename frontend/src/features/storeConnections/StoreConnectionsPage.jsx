@@ -193,7 +193,7 @@ export default function StoreConnectionsPage() {
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         event.source?.postMessage({
           type: 'inhuis:lidl-script',
-          script: buildLidlWebPageScript(window.location.origin),
+          script: buildLidlWebPageScript(window.location.origin, await fetchJson('/api/receipts/retailers/lidl/import-window')),
         }, LIDL_WEB_ORIGIN)
         return
       }
