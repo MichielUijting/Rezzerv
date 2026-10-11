@@ -3,13 +3,17 @@ from datetime import date, timedelta
 from sqlalchemy import text
 
 
+def _date(value):
+    return date.fromisoformat(value) if isinstance(value, str) else value
+
+
 def get_window(engine, household_id):
     with engine.connect() as conn:
         row = conn.execute(text("SELECT from_date, to_date, last_imported_date FROM household_lidl_import_windows WHERE household_id=:id"), {"id": household_id}).mappings().first()
     data = dict(row or {})
-    start = data.get("from_date")
-    end = data.get("to_date")
-    last = data.get("last_imported_date")
+    start = _date(data.get("from_date"))
+    end = _date(data.get("to_date"))
+    last = _date(data.get("last_imported_date"))
     today = date.today()
     return {
         "from_date": (start or last or (today - timedelta(days=30))).isoformat(),
