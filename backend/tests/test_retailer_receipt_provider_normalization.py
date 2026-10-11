@@ -377,3 +377,32 @@ def test_lidl_weight_detail_discount_is_applied_to_priced_article():
         for line in canonical.receipt.lines
         if line.line_type in {"product", "deposit"}
     ) == Decimal("3.06")
+
+
+def test_lidl_ger_statiegeld_is_financial_not_unpack_inventory():
+    """Real-world deposit label remains on the financial receipt, not in Uitpakken."""
+    from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+
+    receipt = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="lidl-deposit-6pak-regression",
+        receipt={
+            "dateTime": "2024-03-11T12:00:00",
+            "totalAmount": "9.25",
+            "products": [
+                {"name": "6pak Ger. Statiegeld", "quantity": "1", "lineTotal": "1.50", "lineType": "deposit"},
+                {"name": "Bockworst Bl", "quantity": "1", "lineTotal": "7.75", "lineType": "product"},
+            ],
+        },
+    )
+    canonical = normalize_retailer_receipt(receipt, scan_id="deposit_test", document_sha256="f" * 64)
+    assert canonical.receipt is not None
+    assert canonical.receipt.lines[0].line_type == "deposit"
+    assert canonical.receipt.lines[0].line_total == Decimal("1.50")
+    assert canonical.receipt.totals.grand_total == Decimal("9.25")
+
+    legacy = canonical_to_receipt_parse_result(canonical)
+    deposit = derive_receipt_line_semantics(legacy.lines[0])
+    product = derive_receipt_line_semantics(legacy.lines[1])
+    assert deposit == {"line_role": "financial", "inventory_eligible": False}
+    assert product == {"line_role": "product", "inventory_eligible": True}
