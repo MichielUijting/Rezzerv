@@ -174,6 +174,9 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
           unit: clean(data.unit || data.unitOfMeasure || data.uom) || packageSize || null,
           packageSize,
           rawText: clean(text),
+          // Lidl marks deposits as a structured article in some receipt layouts.
+          // Preserve the financial line but never treat it as stockable product.
+          lineType: /\b(statiegeld|deposit|pfand)\b/i.test(description) ? 'deposit' : 'product',
           discounts: [],
         }
         if (identifier) {
