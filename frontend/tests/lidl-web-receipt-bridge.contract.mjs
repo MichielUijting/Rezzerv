@@ -65,3 +65,10 @@ assert.match(windowedScript, /fromDate/)
 assert.match(windowedScript, /toDate/)
 
 console.log('LIDL_WEB_RECEIPT_BRIDGE_CONTRACT_GREEN')
+
+// A single old purchase-detail remains available outside the automatic window.
+assert.match(windowedScript, /isHistory && matchesWindow !== true/)
+assert.match(windowedScript, /orderedPages >= 2/)
+assert.match(windowedScript, /pageNumber === 50/)
+assert.match(windowedScript, /last_imported_date/)
+assert.match(windowedScript, /await waitForAck\(receipt.id\)/)

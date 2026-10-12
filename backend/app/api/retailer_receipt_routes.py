@@ -29,7 +29,7 @@ from app.services.ah_receipt_sync_service import (
 from app.services.household_context_adapter import household_context_from_runtime_context
 from app.services.retailer_account_secure_store import ah_session_status
 from app.services.retailer_receipt_import_service import import_retailer_receipt
-from app.services.lidl_import_window_service import get_window, save_window, record_import_date
+from app.services.lidl_import_window_service import get_window, save_window, complete_import
 from app.api.household_profile_routes import _context_and_membership
 from app.services.authorization_foundation_service import evaluate_household_permission
 
@@ -66,6 +66,24 @@ def update_lidl_import_window(payload: LidlImportWindowRequest):
             raise HTTPException(status_code=403, detail="Alleen een bevoegde beheerder kan de Lidl-importperiode wijzigen.")
     try:
         return {**save_window(engine, str(context.active_household_id), payload.from_date, payload.to_date), "can_manage": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class LidlImportCompleteRequest(BaseModel):
+    from_date: date
+    to_date: date
+    last_imported_date: date | None = None
+
+
+@router.post("/lidl/complete")
+def complete_lidl_import(payload: LidlImportCompleteRequest, authorization: Optional[str] = Header(None)):
+    household_id = _authorized_household_id(authorization)
+    try:
+        return complete_import(
+            engine, household_id,
+            payload.last_imported_date, payload.from_date, payload.to_date,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -115,15 +133,12 @@ def import_structured_retailer_receipt(
 ):
     household_id = _authorized_household_id(authorization)
     try:
-        result = import_retailer_receipt(
+        return import_retailer_receipt(
             engine,
             RECEIPT_STORAGE_ROOT,
             household_id=household_id,
             envelope=payload,
         )
-        if payload.provider == "lidl":
-            record_import_date(engine, household_id, payload.receipt.get("dateTime"))
-        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

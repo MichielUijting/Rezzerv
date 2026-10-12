@@ -306,6 +306,23 @@ export default function StoreConnectionsPage() {
       }
 
       if (data.type === 'inhuis:lidl-complete') {
+        if (data.mode === 'history' && lidlCounts.failed === 0) {
+          try {
+            const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
+              method: 'POST',
+              body: JSON.stringify({
+                from_date: data.from_date,
+                to_date: data.to_date,
+                last_imported_date: data.last_imported_date,
+              }),
+            })
+            setLidlWindow(updated)
+          } catch (err) {
+            lidlCounts.failed += 1
+            showFeedback({ variant: 'warning', title: 'Lidl-importcheckpoint niet bijgewerkt',
+              message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
+          }
+        }
         const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
           + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.'
         setLidlWebProgress(summary)

@@ -45,15 +45,20 @@ def save_window(engine, household_id, start, end):
     return get_window(engine, household_id)
 
 
-def record_import_date(engine, household_id, timestamp):
-    if not isinstance(timestamp, str):
-        return
-    try:
-        day = date.fromisoformat(timestamp[:10])
-    except ValueError:
-        return
-    if day > datetime.now(ZoneInfo('Europe/Amsterdam')).date():
-        return
+def complete_import(engine, household_id, last_day, expected_start, expected_end):
+    """Advance only after the browser confirmed a complete, acknowledged history scan.
+
+    A manual date window/backfill must never skip receipts in automatic mode.
+    The inclusive last date is re-scanned on the next run for idempotent recovery.
+    """
+    window = get_window(engine, household_id)
+    if (window["from_date"], window["to_date"]) != (expected_start.isoformat(), expected_end.isoformat()):
+        raise ValueError("Lidl-importperiode is tijdens het ophalen gewijzigd; start de import opnieuw.")
+    if not window["automatic_from"] or not window["automatic_to"] or last_day is None:
+        return window
+    today = datetime.now(ZoneInfo("Europe/Amsterdam")).date()
+    if not (expected_start <= last_day <= expected_end <= today):
+        raise ValueError("Lidl-checkpoint valt buiten de gecontroleerde importperiode.")
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO household_lidl_import_windows(household_id, last_imported_date)
@@ -65,4 +70,5 @@ def record_import_date(engine, household_id, timestamp):
                 THEN EXCLUDED.last_imported_date
                 ELSE household_lidl_import_windows.last_imported_date END,
             updated_at=CURRENT_TIMESTAMP
-        """), {"id": household_id, "day": day})
+        """), {"id": household_id, "day": last_day})
+    return get_window(engine, household_id)

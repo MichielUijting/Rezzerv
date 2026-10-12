@@ -355,6 +355,8 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
   async function collectHistory() {
     const all = []
     const seen = new Set()
+    let orderedPages = 0
+    let previousOldestDay = ''
 
     for (let pageNumber = 1; pageNumber <= 50; pageNumber += 1) {
       const url = new URL('/mre/purchase-history', location.origin)
@@ -381,6 +383,12 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
 
         if (!anchors.length) break
         let added = 0
+        const pageDays = anchors.map(anchor => normalizeDay(clean(anchor.querySelector('[data-testid="purchase-history-row-date"]')?.textContent)))
+        const fullyDated = pageDays.every(Boolean)
+        const descending = fullyDated && pageDays.every((day, index) => index === 0 || pageDays[index - 1] >= day)
+        const pageConsistent = descending && (!previousOldestDay || previousOldestDay >= pageDays[0])
+        orderedPages = pageConsistent ? orderedPages + 1 : 0
+        previousOldestDay = pageConsistent ? pageDays[pageDays.length - 1] : ''
         for (const anchor of anchors) {
           const id = receiptIdFromUrl(anchor.href)
           if (!id || seen.has(id)) continue
@@ -397,7 +405,12 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
             amount: q('primary-amount'),
           })
         }
+        // Stop only after two consecutive consistently newest-first pages are
+        // entirely before the inclusive start date. Unknown/unsorted pages
+        // never authorize an early stop.
+        if (orderedPages >= 2 && fromDate && pageDays.every(day => day < fromDate)) break
         if (!added) break
+        if (pageNumber === 50) throw new Error('Lidl-historie heeft meer dan 50 pagina’s; import onvolledig, checkpoint niet bijgewerkt.')
       } finally {
         iframe.remove()
       }
@@ -420,10 +433,13 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       }
 
       if (!entries.length) {
-        post({ type: 'inhuis:lidl-complete', count: 0 })
+        post({ type: 'inhuis:lidl-complete', count: 0, mode: 'history',
+          last_imported_date: null, from_date: fromDate, to_date: toDate })
         return
       }
 
+      const isHistory = location.pathname.includes('/mre/purchase-history')
+      let lastImportedDay = ''
       let imported = 0
       for (const entry of entries) {
         post({
@@ -432,12 +448,16 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
         })
         const receipt = await loadDetail(entry.href, entry)
         const matchesWindow = withinWindow(receipt.dateTime)
-        if (matchesWindow !== true) {
+        if (isHistory && matchesWindow !== true) {
           if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
           continue
         }
         target.postMessage({ type: 'inhuis:lidl-receipt', receipt }, INHUIS_ORIGIN)
         await waitForAck(receipt.id)
+        if (isHistory) {
+          const day = normalizeDay(receipt.dateTime)
+          if (day > lastImportedDay) lastImportedDay = day
+        }
         imported += 1
         post({
           type: 'inhuis:lidl-progress',
@@ -445,7 +465,12 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
         })
       }
 
-      post({ type: 'inhuis:lidl-complete', count: imported })
+      post({
+        type: 'inhuis:lidl-complete', count: imported,
+        mode: isHistory ? 'history' : 'detail',
+        last_imported_date: isHistory ? (lastImportedDay || null) : null,
+        from_date: fromDate, to_date: toDate,
+      })
       target.focus()
     } catch (error) {
       post({ type: 'inhuis:lidl-error', message: String(error && error.message ? error.message : error) })

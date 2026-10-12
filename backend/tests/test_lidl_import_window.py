@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock
 import pytest
 
-from app.services.lidl_import_window_service import get_window, save_window, record_import_date
+from app.services.lidl_import_window_service import get_window, save_window, complete_import
 
 
 def _engine(row=None):
@@ -41,11 +41,33 @@ def test_reverse_period_is_rejected_before_sql():
     engine.begin.assert_not_called()
 
 
-def test_import_checkpoint_ignores_invalid_and_future_dates():
+def test_import_checkpoint_requires_completed_automatic_window():
     engine = _engine()
-    record_import_date(engine, "h", "not-a-date")
-    record_import_date(engine, "h", "2099-01-01T12:00:00")
-    engine.begin.assert_not_called()
-    record_import_date(engine, "h", "2026-10-01T12:00:00")
+    today = datetime.now(ZoneInfo("Europe/Amsterdam")).date()
+    start = today - timedelta(days=30)
+    complete_import(engine, "h", today, start, today)
     assert engine.begin.called
-    assert engine.begin.return_value.__enter__.return_value.execute.call_args.args[1]["day"] == date(2026, 10, 1)
+    assert engine.begin.return_value.__enter__.return_value.execute.call_args.args[1]["day"] == today
+
+
+def test_partial_run_does_not_advance_checkpoint():
+    # Individual receipt imports deliberately do not call complete_import.
+    engine = _engine()
+    assert get_window(engine, "h")["last_imported_date"] is None
+    engine.begin.assert_not_called()
+
+
+def test_wrong_window_or_future_checkpoint_fails_closed():
+    engine = _engine()
+    today = datetime.now(ZoneInfo("Europe/Amsterdam")).date()
+    with pytest.raises(ValueError):
+        complete_import(engine, "h", today, today - timedelta(days=31), today)
+    with pytest.raises(ValueError):
+        complete_import(engine, "h", today + timedelta(days=1), today - timedelta(days=30), today)
+    engine.begin.assert_not_called()
+
+
+def test_historical_manual_backfill_does_not_advance_auto_cursor():
+    engine = _engine({"from_date": date(2024, 3, 1), "to_date": date(2024, 3, 31)})
+    complete_import(engine, "h", date(2024, 3, 11), date(2024, 3, 1), date(2024, 3, 31))
+    engine.begin.assert_not_called()
