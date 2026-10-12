@@ -34,3 +34,12 @@ STYLEGUIDE_REASON: Alleen de semantische depositclassificatie in de Lidl-browser
 
 ## Migratiebeperking
 De nieuwe persistente opslag geldt voor nieuwe digitale bonnen. Historische bronbestanden die alleen in een containerfilesystem staan mogen vóór containervervanging niet worden overschreven of verborgen. De lokale PO-testroute stopt daarom vooraf wanneer zulke onbeschermde bestanden aanwezig kunnen zijn.
+
+## Structurele emballageclassificatie (aanvulling PR #573)
+- Het centrale canonieke contract blijft leidend: `deposit` wordt `line_role=financial` en `inventory_eligible=false`. Uitpakken filtert op dit vastgelegde gegeven, niet op bontekst.
+- De gedeelde digitale importnormalizer classificeert herkenbare geprijsde statiegeld-, emballage- en fustregels voor Lidl, AH en Jumbo als `deposit`, ook als de bron alleen het generieke type `product` opgeeft. Expliciete andersoortige financiële typen worden niet overschreven.
+- De reguliere (OCR/e-mail/PDF/tekst) scanner verrijkt het resultaat *binnen de bronparser* met het type `deposit` wanneer de al bestaande generieke classificatie een geprijsde depositregel herkent. De Canonical V1-adapter blijft alleen de bronfeiten doorgeven.
+- De financiële regel en zijn bedrag blijven aanwezig voor totaalcontrole en herleidbaarheid. Producten met bijvoorbeeld het aaneengesloten woord 'statiegeldvrij' blijven gewone producten.
+- De bekende bon van 11-03-2024, bedrag € 18,92, bevat historisch een onjuist opgeslagen statiegeldregel van € 0,60 met `line_role=product` en `inventory_eligible=1`. De read-only diagnose bevestigt dit, maar deze codewijziging herschrijft **geen** goedgekeurde bonnen en verwijdert geen voorraadmutaties. Historisch herstel vereist een apart, fail-closed en voor die actuele runtime geverifieerd herstelpad.
+- De gemeten bronbonbehoudtest van de PO bevestigde 75 SHA256-gecontroleerde kopieën in persistente opslag; dat is afzonderlijk bewijs, geen bewijs van historische herclassificatie.
+- Testniveau L blijft van toepassing. Alle verplichte gates, inclusief finale F7 op exacte head-SHA, moeten groen vóór Ready.

@@ -108,6 +108,11 @@ read-only is. Inspecteer bij twijfel eerst de inhoud. Meld wat het script doet,
 welke mutaties mogelijk zijn en vraag expliciete toestemming voordat je het
 uitvoert.
 
+Verplichte leesstap voor lokale PO-test- en diagnosescripts:
+`docs/project/LOCAL-PO-TEST-STARTUP-STANDARD.md`.
+Hergebruik de bewezen opstartwerkwijze. Nieuwe Docker- of database-orchestratie
+is geen standaardonderdeel van een lokale PR-test.
+
 Voor scripts die de PO zelf lokaal moet uitvoeren gelden aanvullend de
 PO-werkafspraken uit `docs/project/CHATGPT-CODEX-WORKRULES.md`: voerbaar vanuit
 de repository-root, beginnen met `CLS`, opnieuw `CLS` vlak vóór relevante

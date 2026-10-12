@@ -32,6 +32,7 @@ from app.integrations.receipt_scanners.schemas.canonical_receipt_v1 import (
     TransactionV1,
 )
 from app.integrations.retailer_receipts.contracts import RetailerReceiptEnvelope
+from app.receipt_ingestion.line_classifier import receipt_financial_candidate_line_type
 
 _PROVIDER_NAMES = {
     "ah": "Albert Heijn",
@@ -211,6 +212,18 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
 
 def _line_type(item: dict[str, Any]) -> str:
     raw = str(_first(item, "line_type", "lineType", "type", "kind") or "").strip().lower()
+    # A retailer may mark every priced entry as a generic product. At this
+    # source-normalization boundary, recognize explicit financial labels before
+    # the business routing persists inventory_eligible. Financial components
+    # remain in the receipt and its grand total.
+    product = _mapping(_first(item, "product", "article", "item"))
+    label = _first(item, "description", "name", "productName", "title", "label", "text")
+    if label in (None, ""):
+        label = _first(product, "description", "name", "title", "label")
+    amount = _first(item, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice", "grossAmount")
+    financial_type = receipt_financial_candidate_line_type(str(label or ""), has_amount=_decimal(amount) is not None)
+    if financial_type == "deposit" and raw in {"", "product", "article", "item"}:
+        return "deposit"
     if raw in {"discount", "korting", "promotion", "promo"}:
         return "discount"
     if raw in {"deposit", "statiegeld", "returnable_deposit"}:

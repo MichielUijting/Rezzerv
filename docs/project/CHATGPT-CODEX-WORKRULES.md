@@ -51,6 +51,8 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 25. Lokaal testbewijs is SHA-gebonden. Wijzigt de head-SHA na een lokale test, dan geldt het eerdere lokale resultaat alleen voor de oude SHA en wordt de relevante lokale test op de nieuwe kandidaat opnieuw aangeboden/uitgevoerd.
 26. Vroeg lokaal testen vervangt geen CI-, Ready-, exact-candidate-, merge- of releasegate. Een PR blijft tijdens ontwikkeling Draft; verplichte gates moeten op de toepasselijke definitieve kandidaat groen zijn en merge/release blijven afhankelijk van de bestaande expliciete PO-beslismomenten.
 
+**Bindende uitvoeringsstandaard bij §4 (17–26):** lees vóór ieder nieuw lokaal PO-testscript of diagnosescript `docs/project/LOCAL-PO-TEST-STARTUP-STANDARD.md`. Hergebruik het eerder bewezen PR #544-testpatroon en de Lidl-bonstatusdiagnose. PR #573 documenteert een afzonderlijke, aantoonbaar noodzakelijke bronbonbehoudsuitzondering, geen algemene vervanging van `start.bat`. Zonder concrete diagnose geen alternatieve Docker-, Compose-, database- of volume-orchestratie. Dit geldt ook in iedere nieuwe chat.
+
 ## 5. Rollen, communicatie en verantwoordelijkheid
 
 27. De gebruiker is PO en hoeft geen technische ontwikkel-, Git-, Docker-, database- of bestandsbeheerhandelingen uit te voeren wanneer ChatGPT/Codex die zelf veilig kan uitvoeren. ChatGPT/Codex vervult binnen de opdracht de technische rollen Architect, Engineer, QA/QC en Release Coordinator, met behoud van de formele PO-beslismomenten. Een merge blijft afhankelijk van expliciete PO-toestemming voor de specifieke PR en de op dat moment gecontroleerde kandidaat-SHA.
