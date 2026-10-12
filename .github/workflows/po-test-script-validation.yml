@@ -43,6 +43,7 @@ jobs:
         run: |
           python -m py_compile scripts/po-tests/generate_po_test.py scripts/po-tests/test_generate_po_test.py
           python scripts/po-tests/test_generate_po_test.py
+          python scripts/po-tests/test_po_test_windows.py
       - name: Prove missing reference fails closed
         shell: pwsh
         run: |
