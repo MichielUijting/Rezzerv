@@ -13,10 +13,11 @@ if str(BACKEND_ROOT) not in sys.path:
 
 import migration_foundation_selftest as foundation_test
 from app.alembic_head_authority import repository_head_revision
+from app.maintenance.postgresql_legacy_production_rebuild import EXPECTED_APPLICATION_TABLES
 
 
 HEAD_REVISION = repository_head_revision()
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 95
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_APPLICATION_TABLES
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
 HOME_SETTINGS_TABLE = "platform_home_settings"
