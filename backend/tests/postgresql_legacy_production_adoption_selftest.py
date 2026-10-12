@@ -10,6 +10,7 @@ from pathlib import Path
 from app.maintenance.postgresql_legacy_production_adoption import (
     HEAD_REVISION,
     SQLITE_BASELINE,
+    EXPECTED_APPLICATION_TABLES,
     LegacyAdoptionError,
     _validate_legacy_purchase_import_quantities,
     adopt_legacy_production_snapshot,
@@ -262,7 +263,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
         assert report["source_unversioned_tables"] > 0, report
         assert report["source_rows"] > 0, report
         assert report["target_revision"] == HEAD_REVISION, report
-        assert report["application_tables"] == 95, report
+        assert report["application_tables"] == EXPECTED_APPLICATION_TABLES, report
         assert len(report["source_data_proofs"]) == report["source_unversioned_tables"], report
         assert report["manual_sources_added"] >= 1, report
         assert report["canonical_only_seeded_tables"].get("external_product_index", 0) > 0, report
@@ -286,7 +287,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
                 if not str(row[0]).startswith("sqlite_")
                 and str(row[0]) != "alembic_version"
             }
-            assert len(tables) == 95, len(tables)
+            assert len(tables) == EXPECTED_APPLICATION_TABLES, len(tables)
             assert "platform_home_action_order" in tables
             assert "platform_home_settings" in tables
             assert "household_profiles" in tables
