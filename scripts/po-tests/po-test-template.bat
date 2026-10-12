@@ -46,14 +46,19 @@ if errorlevel 1 (
 )
 
 set "PHASE=Lokale wijzigingen"
-set "DIRTY="
-for /f "delims=" %%A in ('git status --porcelain --untracked-files=no 2^>nul') do set "DIRTY=JA"
+git status --porcelain --untracked-files=no >nul 2>&1
 if errorlevel 1 (
     set "WHY=Git kon de werkmapstatus niet betrouwbaar vaststellen."
     goto FAIL
 )
-if defined DIRTY (
+git diff --quiet --exit-code
+if errorlevel 1 (
     set "WHY=Er zijn lokale wijzigingen. Bestaand werk wordt niet overschreven."
+    goto FAIL
+)
+git diff --cached --quiet --exit-code
+if errorlevel 1 (
+    set "WHY=Er zijn lokale staged wijzigingen. Bestaand werk wordt niet overschreven."
     goto FAIL
 )
 rem Untracked artefacten worden niet verwijderd. Git switch/merge weigeren
