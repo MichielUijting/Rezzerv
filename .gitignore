@@ -54,3 +54,8 @@ docs/*architectuurnotitie*
 # Ad hoc local files
 testfile
 testwrite.txt
+
+# Standalone build output and bundled local runtimes
+portable-runtime/
+release/
+packaging/standalone/*.spec
