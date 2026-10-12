@@ -57,4 +57,10 @@ assert.doesNotMatch(page, /<table className="rz-table" data-testid="store-connec
 const table = readFileSync(new URL('../src/ui/Table.jsx', import.meta.url), 'utf8')
 assert.match(table, /columnIndex >= widths\.length - 1\) return/)
 assert.match(table, /RESIZE_HIT_ZONE_PX/)
+const lidlBridge = readFileSync(new URL('../src/features/storeConnections/lidlWebReceiptBridge.js', import.meta.url), 'utf8')
+assert.ok(lidlBridge.includes("test(description) ? 'deposit' : 'product'"))
+assert.ok(lidlBridge.includes("lineType: 'deposit'"))
+assert.ok(lidlBridge.includes("product.lineType !== 'deposit'"))
+assert.ok(lidlBridge.includes("product.lineType === 'deposit'"))
+
 console.log('STORE_CONNECTIONS_AH_TABLE_GREEN')

@@ -31,7 +31,7 @@ from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 router = APIRouter(prefix="/api/receipts/retailers", tags=["receipts-retailers"])
 
-RECEIPT_STORAGE_ROOT = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
+RECEIPT_STORAGE_ROOT = Path(os.getenv("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw"))
 
 
 class AHConnectRequest(BaseModel):

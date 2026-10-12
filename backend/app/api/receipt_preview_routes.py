@@ -13,6 +13,7 @@ Technical Design Reference:
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Callable, Optional
@@ -58,6 +59,18 @@ def _require_configured() -> tuple[object, Path, object, Callable]:
     if _engine is None or _receipt_storage_root is None or _receipt_preview_normalizer is None or _require_entity_household_access is None:
         raise HTTPException(status_code=500, detail="Receipt preview router is niet geconfigureerd")
     return _engine, _receipt_storage_root, _receipt_preview_normalizer, _require_entity_household_access
+
+
+def _is_allowed_receipt_storage_path(storage_path: Path, legacy_root: Path) -> bool:
+    """Allow only configured legacy or persistent retailer roots (never arbitrary DB paths)."""
+    retailer_root = Path(os.getenv("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw"))
+    for root in (legacy_root, retailer_root):
+        try:
+            storage_path.resolve().relative_to(root.resolve())
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 def _generate_fallback_processed_preview(storage_path: Path) -> Path | None:
@@ -125,9 +138,7 @@ def get_receipt_preview(receipt_table_id: str, variant: str = Query("original"),
     if not storage_path.exists() or not storage_path.is_file():
         raise HTTPException(status_code=404, detail="Originele bon ontbreekt")
 
-    try:
-        storage_path.resolve().relative_to(receipt_storage_root.resolve())
-    except Exception:
+    if not _is_allowed_receipt_storage_path(storage_path, receipt_storage_root):
         raise HTTPException(status_code=403, detail="Bonbestand ligt buiten de toegestane opslag")
 
     mime_type = str(record["mime_type"] or "application/octet-stream")
@@ -136,9 +147,7 @@ def get_receipt_preview(receipt_table_id: str, variant: str = Query("original"),
 
     source_preview_path = Path(str(storage_path) + ".source-preview.png")
     if variant_value == "original" and source_preview_path.exists() and source_preview_path.is_file():
-        try:
-            source_preview_path.resolve().relative_to(receipt_storage_root.resolve())
-        except Exception:
+        if not _is_allowed_receipt_storage_path(source_preview_path, receipt_storage_root):
             raise HTTPException(status_code=403, detail="Bonpreview ligt buiten de toegestane opslag")
         preview_name = f"{Path(filename).stem}-source-preview.png"
         return FileResponse(
