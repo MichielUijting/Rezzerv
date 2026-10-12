@@ -59,6 +59,7 @@ jobs:
             if ($LASTEXITCODE -eq 0) { throw 'Generator fail-open: missing template accepted' }
             if (Test-Path $target) { throw 'Generator left output when reference absent' }
             Write-Host 'PO_TEST_MISSING_SOURCE_FAIL_CLOSED_GREEN'
+            exit 0
           } finally {
             Move-Item $temporary $original
           }
