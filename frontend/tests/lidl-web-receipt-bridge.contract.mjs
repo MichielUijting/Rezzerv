@@ -74,7 +74,7 @@ assert.match(windowedScript, /last_imported_date/)
 assert.match(windowedScript, /await waitForAck\(receipt.id\)/)
 
 
- 
+
 // Regression: the Lidl history UI renders '9 september' without a year.
 // Resolve the year from the preceding month heading before applying the
 // import window. Unknown years must fail closed instead of scanning 75 rows.
