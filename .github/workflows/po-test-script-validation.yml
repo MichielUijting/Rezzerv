@@ -2,9 +2,6 @@ name: Canonical PO test script validation and delivery
 
 on:
   pull_request:
-    paths:
-      - 'scripts/po-tests/**'
-      - '.github/workflows/po-test-script-validation.yml'
   workflow_dispatch:
     inputs:
       pr_number:
