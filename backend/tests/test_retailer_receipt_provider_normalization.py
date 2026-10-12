@@ -469,8 +469,11 @@ def test_explicit_payment_line_is_not_reinterpreted_as_deposit():
         provider="lidl",
         external_receipt_id="explicit-payment",
         receipt={
-            "totalAmount": "1.00",
-            "products": [{"name": "Statiegeld", "lineType": "payment", "lineTotal": "1.00"}],
+            "totalAmount": "3.00",
+            "products": [
+                {"name": "Statiegeld", "lineType": "payment", "lineTotal": "1.00"},
+                {"name": "Brood", "lineType": "product", "lineTotal": "2.00"},
+            ],
         },
     )
     canonical = normalize_retailer_receipt(
