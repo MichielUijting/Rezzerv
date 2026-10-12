@@ -408,8 +408,8 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
         // Stop only after two consecutive consistently newest-first pages are
         // entirely before the inclusive start date. Unknown/unsorted pages
         // never authorize an early stop.
+        if (!added) throw new Error('Lidl leverde een herhaalde historiepagina; import afgebroken zonder checkpoint.')
         if (orderedPages >= 2 && fromDate && pageDays.every(day => day < fromDate)) break
-        if (!added) break
         if (pageNumber === 50) throw new Error('Lidl-historie heeft meer dan 50 pagina’s; import onvolledig, checkpoint niet bijgewerkt.')
       } finally {
         iframe.remove()
