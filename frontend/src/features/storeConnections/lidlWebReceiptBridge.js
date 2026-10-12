@@ -69,6 +69,33 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     return (!fromDate || day >= fromDate) && (!toDate || day <= toDate)
   }
 
+  function historyRowDay(anchor, doc) {
+    const raw = clean(anchor.querySelector('[data-testid="purchase-history-row-date"]')?.textContent)
+    const absolute = normalizeDay(raw)
+    if (absolute) return absolute
+
+    // Lidl renders '9 september' beneath a 'September 2026' section heading.
+    // An undated history row must NEVER be accepted as within the window.
+    const names = ['januari', 'februari', 'maart', 'april', 'mei', 'juni',
+      'juli', 'augustus', 'september', 'oktober', 'november', 'december']
+    const match = raw.toLowerCase().match(/^(\d{1,2})\s+([a-zéë]+)$/)
+    if (!match) throw new Error('Datum van Lidl-historieregel ontbreekt of is onbekend: ' + raw)
+    const month = names.findIndex(name => name === match[2] || name.startsWith(match[2]))
+    if (month < 0) throw new Error('Lidl-historiemaand niet herkend: ' + raw)
+
+    let year = ''
+    for (const node of doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,strong,div')) {
+      if (!(node.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING)) continue
+      const label = clean(node.textContent)
+      const header = label.match(/^(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)\s+(20\d{2})$/i)
+      if (header && names.indexOf(header[1].toLowerCase()) === month) year = header[2]
+    }
+    if (!year) throw new Error('Jaartal ontbreekt bij Lidl-historiebon ' + raw + '; import veilig afgebroken.')
+    const day = normalizeDay(match[1] + ' ' + match[2] + ' ' + year)
+    if (!day) throw new Error('Lidl-historiedatum kan niet worden vastgesteld: ' + raw)
+    return day
+  }
+
   function parseDateTime(text, fallbackDate = '') {
     const match = String(text || '').match(/(\d{2})[.\/-](\d{2})[.\/-](\d{2,4})\s+(\d{2}:\d{2})/)
     if (!match) return fallbackDate
@@ -383,20 +410,20 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
 
         if (!anchors.length) break
         let added = 0
-        const pageDays = anchors.map(anchor => normalizeDay(clean(anchor.querySelector('[data-testid="purchase-history-row-date"]')?.textContent)))
+        const pageDays = anchors.map(anchor => historyRowDay(anchor, iframe.contentDocument))
         const fullyDated = pageDays.every(Boolean)
         const descending = fullyDated && pageDays.every((day, index) => index === 0 || pageDays[index - 1] >= day)
         const pageConsistent = descending && (!previousOldestDay || previousOldestDay >= pageDays[0])
         orderedPages = pageConsistent ? orderedPages + 1 : 0
         previousOldestDay = pageConsistent ? pageDays[pageDays.length - 1] : ''
-        for (const anchor of anchors) {
+        for (const [rowIndex, anchor] of anchors.entries()) {
           const id = receiptIdFromUrl(anchor.href)
           if (!id || seen.has(id)) continue
           seen.add(id)
           added += 1
           const q = (testId) => clean(anchor.querySelector('[data-testid="' + testId + '"]')?.textContent)
-          const rowDate = q('purchase-history-row-date')
-          if (withinWindow(rowDate) === false) continue
+          const rowDate = pageDays[rowIndex]
+          if (withinWindow(rowDate) !== true) continue
           all.push({
             id,
             href: anchor.href,
@@ -439,6 +466,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       }
 
       const isHistory = location.pathname.includes('/mre/purchase-history')
+      post({ type: 'inhuis:lidl-progress', message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
       let lastImportedDay = ''
       let imported = 0
       for (const entry of entries) {
