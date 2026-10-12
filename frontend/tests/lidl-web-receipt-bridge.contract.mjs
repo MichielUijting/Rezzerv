@@ -72,3 +72,52 @@ assert.match(windowedScript, /orderedPages >= 2/)
 assert.match(windowedScript, /pageNumber === 50/)
 assert.match(windowedScript, /last_imported_date/)
 assert.match(windowedScript, /await waitForAck\(receipt.id\)/)
+
+
+ 
+// Regression: the Lidl history UI renders '9 september' without a year.
+// Resolve the year from the preceding month heading before applying the
+// import window. Unknown years must fail closed instead of scanning 75 rows.
+const normalizeSource = windowedScript.slice(
+  windowedScript.indexOf('function normalizeDay('),
+  windowedScript.indexOf('function withinWindow('),
+)
+const historySource = windowedScript.slice(
+  windowedScript.indexOf('function historyRowDay('),
+  windowedScript.indexOf('function parseDateTime('),
+)
+assert.ok(normalizeSource.includes('function normalizeDay('))
+assert.ok(historySource.includes('function historyRowDay('))
+const parseHistoryDay = new Function('clean', 'Node',
+  normalizeSource + historySource + 'return historyRowDay;')(
+  value => String(value || '').replace(/\\s+/g, ' ').trim(),
+  { DOCUMENT_POSITION_FOLLOWING: 4 },
+)
+function historyFixture(row, heading) {
+  const anchor = {
+    querySelector: () => ({ textContent: row }),
+  }
+  const doc = {
+    querySelectorAll: () => heading === null ? [] : [{
+      textContent: heading,
+      compareDocumentPosition: node => node === anchor ? 4 : 0,
+    }],
+  }
+  return { anchor, doc }
+}
+{
+  const { anchor, doc } = historyFixture('9 september', 'September 2026')
+  assert.equal(parseHistoryDay(anchor, doc), '2026-09-09')
+}
+{
+  const { anchor, doc } = historyFixture('25 augustus', 'Augustus 2026')
+  assert.equal(parseHistoryDay(anchor, doc), '2026-08-25')
+}
+{
+  const { anchor, doc } = historyFixture('9 september', null)
+  assert.throws(() => parseHistoryDay(anchor, doc), /Jaartal ontbreekt/)
+}
+assert.match(windowedScript, /anchors\.map\(anchor => historyRowDay\(/)
+assert.match(windowedScript, /withinWindow\(rowDate\) !== true/)
+assert.match(windowedScript, /entries\.length \+ ' bonnen binnen de ingestelde periode gevonden/)
+console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
