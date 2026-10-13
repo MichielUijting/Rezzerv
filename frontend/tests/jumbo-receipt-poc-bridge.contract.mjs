@@ -97,7 +97,12 @@ assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
 assert.match(storeConnectionsSource, /window\.location\.assign\(JUMBO_ORDERS_URL\)/)
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
-assert.doesNotMatch(storeConnectionsSource, /postMessage/)
+// The Lidl bridge legitimately uses postMessage; isolate the Jumbo redirect handler.
+const jumboHandler = storeConnectionsSource.slice(
+  storeConnectionsSource.indexOf("const hash = String(window.location.hash || '')"),
+  storeConnectionsSource.indexOf('async function startAhLogin()'),
+)
+assert.doesNotMatch(jumboHandler, /postMessage/)
 
 // Synthetic receipt tests: no real Jumbo account or database is touched.
 const observation = {
