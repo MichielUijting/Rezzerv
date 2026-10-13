@@ -69,11 +69,17 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'issue_comment'
     needs: safety-tests
     runs-on: windows-latest
+    env:
+      PR_NUMBER: ${{ inputs.pr_number }}
+      EXPECTED_BRANCH: ${{ inputs.branch }}
+      EXPECTED_SHA: ${{ inputs.sha }}
+      PO_TITLE: ${{ inputs.title }}
+      PO_INSTRUCTIONS: ${{ inputs.test_instructions }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Authorize and resolve PO command
+      - name: Authorize and resolve PO comment
         if: github.event_name == 'issue_comment'
         shell: pwsh
         env:
@@ -83,19 +89,29 @@ jobs:
           REQUESTED_PR: ${{ github.event.issue.number }}
         run: |
           $ErrorActionPreference = 'Stop'
-          # Only the repository owner may request executable Windows artifacts.
-          # The comment is never evaluated as shell code.
+          # Only the repository owner can authorize Windows script generation.
+          # All comment text is passed as environment data, never evaluated as code.
           if ($env:COMMENT_AUTHOR -ine $env:REPOSITORY_OWNER) {
             throw 'Only the repository owner may request a PO test script'
           }
-          $lines = @($env:COMMENT_BODY -split '`r?`n')
-          if ($lines.Count -lt 2 -or $lines[0] -cnotmatch '^/inhuis-po-test ([0-9a-f]{40})
+          $lines = @($env:COMMENT_BODY -split '\r?\n')
+          if ($lines.Count -lt 2 -or $lines[0] -cnotmatch '^/inhuis-po-test ([0-9a-f]{40})$') {
+            throw 'Expected /inhuis-po-test SHA and at least one instruction'
+          }
+          $requestedSha = $Matches[1]
+          $instructions = ($lines | Select-Object -Skip 1) -join "`n"
+          if ([string]::IsNullOrWhiteSpace($instructions)) { throw 'PO test instructions are missing' }
+          $instructionFile = Join-Path $env:GITHUB_WORKSPACE 'po-test-comment-instructions.txt'
+          Set-Content -LiteralPath $instructionFile -Value $instructions -Encoding ascii
+          "PO_INSTRUCTIONS_FILE=$instructionFile" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "EXPECTED_SHA=$requestedSha" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "PR_NUMBER=$env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "PO_TITLE=Inhuis PR $env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          Write-Host 'PO_TEST_OWNER_COMMAND_AUTHORIZED'
+      - name: Verify live PR head, branch and repository
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
           $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" | ConvertFrom-Json
@@ -103,17 +119,17 @@ jobs:
           if ($pr.state -ne 'open') { throw 'PR is not open' }
           if ($pr.head.repo.full_name -ne $env:GITHUB_REPOSITORY) { throw 'Wrong head repository' }
           if ($env:GITHUB_EVENT_NAME -eq 'issue_comment') {
-            if ($pr.head.ref -cnotmatch '^codex/[a-z0-9][a-z0-9_./-]*
+            if ($pr.head.ref -cnotmatch '^codex/[a-z0-9][a-z0-9_./-]*$' -or $pr.head.ref.Contains('..')) {
+              throw 'Invalid PO task branch'
+            }
+            $env:EXPECTED_BRANCH = $pr.head.ref
+            "EXPECTED_BRANCH=$env:EXPECTED_BRANCH" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          }
+          if ($pr.head.ref -cne $env:EXPECTED_BRANCH) { throw 'Wrong current PR branch' }
           if ($pr.head.sha -cne $env:EXPECTED_SHA) { throw 'PR head SHA has changed' }
           Write-Host 'PO_TEST_LIVE_CANDIDATE_VERIFIED'
       - name: Generate script from canonical source
         shell: pwsh
-        env:
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-          PO_TITLE: ${{ inputs.title }}
-          PO_INSTRUCTIONS: ${{ inputs.test_instructions }}
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Path po-test-artifact -Force | Out-Null
@@ -148,191 +164,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: validated-inhuis-po-test-${{ github.run_id }}
-          path: po-test-artifact/*
-          if-no-files-found: error
-          retention-days: 30
-) {
-            throw 'Expected exact /inhuis-po-test SHA followed by test instructions'
-          }
-          $requestedSha = $Matches[1]
-          $instructions = ($lines | Select-Object -Skip 1) -join "`n"
-          if ([string]::IsNullOrWhiteSpace($instructions)) { throw 'PO instructions are missing' }
-          $instructionFile = Join-Path $env:GITHUB_WORKSPACE 'po-test-comment-instructions.txt'
-          Set-Content -LiteralPath $instructionFile -Value $instructions -Encoding ascii
-          "PO_INSTRUCTIONS_FILE=$instructionFile" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "EXPECTED_SHA=$requestedSha" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "PR_NUMBER=$env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "PO_TITLE=Inhuis PR $env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          Write-Host 'PO_TEST_OWNER_COMMAND_AUTHORIZED'
-      - name: Verify live PR head, branch and repository
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'GitHub PR could not be verified' }
-          if ($pr.state -ne 'open') { throw 'PR is not open' }
-          if ($pr.head.repo.full_name -ne $env:GITHUB_REPOSITORY) { throw 'Wrong head repository' }
-          if ($pr.head.ref -cne $env:EXPECTED_BRANCH) { throw 'Wrong current PR branch' }
-          if ($pr.head.sha -cne $env:EXPECTED_SHA) { throw 'PR head SHA has changed' }
-          Write-Host 'PO_TEST_LIVE_CANDIDATE_VERIFIED'
-      - name: Generate script from canonical source
-        shell: pwsh
-        env:
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-          PO_TITLE: ${{ inputs.title }}
-          PO_INSTRUCTIONS: ${{ inputs.test_instructions }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Path po-test-artifact -Force | Out-Null
-          Set-Content -LiteralPath po-test-artifact/instructions.txt -Value $env:PO_INSTRUCTIONS -Encoding Ascii
-          $output = "po-test-artifact/Inhuis_PR$env:PR_NUMBER" + "_Lokaal_Testen.bat"
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output
-          if ($LASTEXITCODE -ne 0) { throw 'PO script validation/generation failed' }
-          # The exact bytes about to be uploaded must match fresh canonical output.
-          # A failure here prevents both evidence creation and artifact publication.
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output --verify-only
-          if ($LASTEXITCODE -ne 0) { throw 'Exact PO batch artifact verification failed' }
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash
-          $evidence = [ordered]@{
-            pr_number = $env:PR_NUMBER
-            candidate_branch = $env:EXPECTED_BRANCH
-            candidate_sha = $env:EXPECTED_SHA
-            generator_commit = $env:GITHUB_SHA
-            script_sha256 = $hash
-            workflow_run_id = $env:GITHUB_RUN_ID
-            windows_self_tests = 'passed'
-            exact_artifact_verification = 'PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN'
-          }
-          $evidence | ConvertTo-Json | Set-Content po-test-artifact/evidence.json -Encoding UTF8
-          Remove-Item po-test-artifact/instructions.txt
-          Write-Host "PO_TEST_VALIDATED_SHA256=$hash"
-      - name: Upload validated single-click script with evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-inhuis-po-test-pr-${{ inputs.pr_number }}-${{ inputs.sha }}
-          path: po-test-artifact/*
-          if-no-files-found: error
-          retention-days: 30
- -or $pr.head.ref.Contains('..')) { throw 'Invalid PO task branch' }
-            $env:EXPECTED_BRANCH = $pr.head.ref
-            "EXPECTED_BRANCH=$env:EXPECTED_BRANCH" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          }
-          if ($pr.head.ref -cne $env:EXPECTED_BRANCH) { throw 'Wrong current PR branch' }
-          if ($pr.head.sha -cne $env:EXPECTED_SHA) { throw 'PR head SHA has changed' }
-          Write-Host 'PO_TEST_LIVE_CANDIDATE_VERIFIED'
-      - name: Generate script from canonical source
-        shell: pwsh
-        env:
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-          PO_TITLE: ${{ inputs.title }}
-          PO_INSTRUCTIONS: ${{ inputs.test_instructions }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Path po-test-artifact -Force | Out-Null
-          Set-Content -LiteralPath po-test-artifact/instructions.txt -Value $env:PO_INSTRUCTIONS -Encoding Ascii
-          $output = "po-test-artifact/Inhuis_PR$env:PR_NUMBER" + "_Lokaal_Testen.bat"
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output
-          if ($LASTEXITCODE -ne 0) { throw 'PO script validation/generation failed' }
-          # The exact bytes about to be uploaded must match fresh canonical output.
-          # A failure here prevents both evidence creation and artifact publication.
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output --verify-only
-          if ($LASTEXITCODE -ne 0) { throw 'Exact PO batch artifact verification failed' }
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash
-          $evidence = [ordered]@{
-            pr_number = $env:PR_NUMBER
-            candidate_branch = $env:EXPECTED_BRANCH
-            candidate_sha = $env:EXPECTED_SHA
-            generator_commit = $env:GITHUB_SHA
-            script_sha256 = $hash
-            workflow_run_id = $env:GITHUB_RUN_ID
-            windows_self_tests = 'passed'
-            exact_artifact_verification = 'PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN'
-          }
-          $evidence | ConvertTo-Json | Set-Content po-test-artifact/evidence.json -Encoding UTF8
-          Remove-Item po-test-artifact/instructions.txt
-          Write-Host "PO_TEST_VALIDATED_SHA256=$hash"
-      - name: Upload validated single-click script with evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-inhuis-po-test-pr-${{ inputs.pr_number }}-${{ inputs.sha }}
-          path: po-test-artifact/*
-          if-no-files-found: error
-          retention-days: 30
-) {
-            throw 'Expected exact /inhuis-po-test SHA followed by test instructions'
-          }
-          $requestedSha = $Matches[1]
-          $instructions = ($lines | Select-Object -Skip 1) -join "`n"
-          if ([string]::IsNullOrWhiteSpace($instructions)) { throw 'PO instructions are missing' }
-          $instructionFile = Join-Path $env:GITHUB_WORKSPACE 'po-test-comment-instructions.txt'
-          Set-Content -LiteralPath $instructionFile -Value $instructions -Encoding ascii
-          "PO_INSTRUCTIONS_FILE=$instructionFile" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "EXPECTED_SHA=$requestedSha" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "PR_NUMBER=$env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          "PO_TITLE=Inhuis PR $env:REQUESTED_PR" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-          Write-Host 'PO_TEST_OWNER_COMMAND_AUTHORIZED'
-      - name: Verify live PR head, branch and repository
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'GitHub PR could not be verified' }
-          if ($pr.state -ne 'open') { throw 'PR is not open' }
-          if ($pr.head.repo.full_name -ne $env:GITHUB_REPOSITORY) { throw 'Wrong head repository' }
-          if ($pr.head.ref -cne $env:EXPECTED_BRANCH) { throw 'Wrong current PR branch' }
-          if ($pr.head.sha -cne $env:EXPECTED_SHA) { throw 'PR head SHA has changed' }
-          Write-Host 'PO_TEST_LIVE_CANDIDATE_VERIFIED'
-      - name: Generate script from canonical source
-        shell: pwsh
-        env:
-          PR_NUMBER: ${{ inputs.pr_number }}
-          EXPECTED_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.sha }}
-          PO_TITLE: ${{ inputs.title }}
-          PO_INSTRUCTIONS: ${{ inputs.test_instructions }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Path po-test-artifact -Force | Out-Null
-          Set-Content -LiteralPath po-test-artifact/instructions.txt -Value $env:PO_INSTRUCTIONS -Encoding Ascii
-          $output = "po-test-artifact/Inhuis_PR$env:PR_NUMBER" + "_Lokaal_Testen.bat"
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output
-          if ($LASTEXITCODE -ne 0) { throw 'PO script validation/generation failed' }
-          # The exact bytes about to be uploaded must match fresh canonical output.
-          # A failure here prevents both evidence creation and artifact publication.
-          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output --verify-only
-          if ($LASTEXITCODE -ne 0) { throw 'Exact PO batch artifact verification failed' }
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash
-          $evidence = [ordered]@{
-            pr_number = $env:PR_NUMBER
-            candidate_branch = $env:EXPECTED_BRANCH
-            candidate_sha = $env:EXPECTED_SHA
-            generator_commit = $env:GITHUB_SHA
-            script_sha256 = $hash
-            workflow_run_id = $env:GITHUB_RUN_ID
-            windows_self_tests = 'passed'
-            exact_artifact_verification = 'PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN'
-          }
-          $evidence | ConvertTo-Json | Set-Content po-test-artifact/evidence.json -Encoding UTF8
-          Remove-Item po-test-artifact/instructions.txt
-          Write-Host "PO_TEST_VALIDATED_SHA256=$hash"
-      - name: Upload validated single-click script with evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-inhuis-po-test-pr-${{ inputs.pr_number }}-${{ inputs.sha }}
           path: po-test-artifact/*
           if-no-files-found: error
           retention-days: 30
