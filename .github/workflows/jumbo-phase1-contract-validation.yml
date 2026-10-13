@@ -1,0 +1,26 @@
+name: Jumbo phase 1 Kassa contract validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/storeConnections/jumboReceiptPocBridge.js'
+      - 'frontend/src/features/storeConnections/jumboReceiptImport.js'
+      - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
+      - 'frontend/tests/jumbo-receipt-poc-bridge.contract.mjs'
+      - '.github/workflows/jumbo-phase1-contract-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jumbo-contract:
+    name: Jumbo POC and validated Kassa import contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test synthetic import and fail-closed rejection
+        run: node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs
