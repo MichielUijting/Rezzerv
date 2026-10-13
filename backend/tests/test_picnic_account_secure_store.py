@@ -92,3 +92,51 @@ def test_picnic_keys_encrypted_household_scoped_and_separate_from_ah(tmp_path, m
         assert engine.records[("family-one", "ah")] == "untouched-ah-ciphertext"
     finally:
         shared.reset_retailer_account_key_cache_for_tests()
+
+
+def test_expired_sms_session_cannot_be_verified_or_reused(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.delenv("REZZERV_RETAILER_ACCOUNT_KEY", raising=False)
+    monkeypatch.setenv("REZZERV_RETAILER_ACCOUNT_KEY_PATH", str(tmp_path / "account.key"))
+    shared.reset_retailer_account_key_cache_for_tests()
+    engine = FakeEngine()
+    try:
+        save_picnic_auth(engine, "family-one", "pending-secret-key-123", pending_2fa=True)
+        cipher = engine.records[("family-one", "picnic")]
+        payload = json.loads(shared._fernet().decrypt(cipher.encode("ascii")))
+        payload["pending_until"] = (datetime.now(timezone.utc) - timedelta(seconds=2)).isoformat()
+        engine.records[("family-one", "picnic")] = shared._fernet().encrypt(
+            json.dumps(payload).encode("utf-8")
+        ).decode("ascii")
+        assert get_picnic_auth(engine, "family-one") is None
+        assert picnic_status(engine, "family-one")["connected"] is False
+        with pytest.raises(ValueError, match="verlopen"):
+            reserve_picnic_sms_request(engine, "family-one")
+    finally:
+        shared.reset_retailer_account_key_cache_for_tests()
+
+
+def test_sms_request_limit_of_three(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.delenv("REZZERV_RETAILER_ACCOUNT_KEY", raising=False)
+    monkeypatch.setenv("REZZERV_RETAILER_ACCOUNT_KEY_PATH", str(tmp_path / "account.key"))
+    shared.reset_retailer_account_key_cache_for_tests()
+    engine = FakeEngine()
+    try:
+        save_picnic_auth(engine, "family-one", "pending-secret-key-123", pending_2fa=True)
+        for index in range(3):
+            assert reserve_picnic_sms_request(engine, "family-one") == "pending-secret-key-123"
+            encrypted = engine.records[("family-one", "picnic")]
+            state = json.loads(shared._fernet().decrypt(encrypted.encode("ascii")))
+            state["sms_last_requested"] = (datetime.now(timezone.utc) - timedelta(seconds=61)).isoformat()
+            engine.records[("family-one", "picnic")] = shared._fernet().encrypt(
+                json.dumps(state).encode("utf-8")
+            ).decode("ascii")
+        with pytest.raises(ValueError, match="Maximum"):
+            reserve_picnic_sms_request(engine, "family-one")
+    finally:
+        shared.reset_retailer_account_key_cache_for_tests()
