@@ -12,6 +12,7 @@ from app.integrations.picnic_readonly_probe import PicnicReadOnlyContractError
 from app.integrations.retailer_receipts import normalize_retailer_receipt
 from app.integrations.receipt_scanners.normalizer import canonical_to_receipt_parse_result
 from app.services.retailer_receipt_import_service import import_retailer_receipt
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 
 
 def sample():
@@ -119,6 +120,8 @@ def test_synthetic_deposit_is_separate_non_inventory_financial_line():
     assert deposit.line_total == 0.25
     legacy = canonical_to_receipt_parse_result(canonical)
     assert legacy.lines[-1]["line_type"] == "deposit"
+    assert derive_receipt_line_semantics(legacy.lines[-1])["inventory_eligible"] is False
+    assert derive_receipt_line_semantics(legacy.lines[0])["inventory_eligible"] is True
     assert legacy.parse_status == "review_needed"
 
 
