@@ -32,7 +32,7 @@ from app.integrations.picnic_auth_protocol import PicnicAuthClient, PicnicAuthEr
 from app.integrations.picnic_http_transport import PicnicHttpTransport
 from app.integrations.picnic_readonly_probe import PicnicReadOnlyProbe, PicnicReadOnlyContractError
 from app.services.picnic_account_secure_store import (
-    picnic_status, save_picnic_auth, get_picnic_auth, delete_picnic_auth,
+    picnic_status, save_picnic_auth, get_picnic_auth, delete_picnic_auth, reserve_picnic_sms_request,
 )
 
 from app.services.retailer_receipt_import_service import import_retailer_receipt
@@ -244,12 +244,13 @@ def connect_picnic_account(
 @router.post("/picnic/request-sms")
 def request_picnic_sms(authorization: Optional[str] = Header(None)):
     household_id = _authorized_household_id(authorization)
-    auth = get_picnic_auth(engine, household_id)
-    if not auth or not auth["pending_2fa"]:
-        raise HTTPException(status_code=409, detail="Geen Picnic-sms-verificatie actief.")
+    try:
+        reserved_token = reserve_picnic_sms_request(engine, household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
     transport = PicnicHttpTransport()
     try:
-        PicnicAuthClient(transport.send).request_sms(auth["auth_key"])
+        PicnicAuthClient(transport.send).request_sms(reserved_token)
         return {"verification_required": True, "sms_requested": True}
     except PicnicAuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
