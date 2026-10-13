@@ -1,6 +1,9 @@
-"""Picnic encrypted credential partition and 2FA pending-state contracts."""
+"""Test Picnic secret handling without introducing a new database engine.
+
+The Inhuis PostgreSQL gate is authoritative. These tests use an in-memory
+recording SQL-connection double for encryption, scope and state transitions.
+"""
 import pytest
-from sqlalchemy import create_engine, text
 
 from app.services import retailer_account_secure_store as shared
 from app.services.picnic_account_secure_store import (
@@ -9,27 +12,63 @@ from app.services.picnic_account_secure_store import (
 )
 
 
-def test_picnic_keys_are_encrypted_household_scoped_and_not_ah(tmp_path, monkeypatch):
+class FakeResult:
+    def __init__(self, value=None, rowcount=0):
+        self.value = value
+        self.rowcount = rowcount
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class FakeConnection:
+    def __init__(self, records):
+        self.records = records
+
+    def execute(self, statement, values):
+        sql = str(statement).upper()
+        key = (str(values["household_id"]), str(values["provider"]))
+        prior = self.records.get(key)
+        if "SELECT CREDENTIAL_CIPHERTEXT" in sql:
+            return FakeResult(prior)
+        if "INSERT INTO RETAILER_ACCOUNT_CREDENTIALS" in sql:
+            self.records[key] = values["ciphertext"]
+            return FakeResult(rowcount=1)
+        if "UPDATE RETAILER_ACCOUNT_CREDENTIALS" in sql:
+            if prior != values["prior_cipher"]:
+                return FakeResult(rowcount=0)
+            self.records[key] = values["next_cipher"]
+            return FakeResult(rowcount=1)
+        if "DELETE FROM RETAILER_ACCOUNT_CREDENTIALS" in sql:
+            self.records.pop(key, None)
+            return FakeResult(rowcount=int(prior is not None))
+        raise AssertionError("Unexpected SQL in Picnic credentials test")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+
+class FakeEngine:
+    def __init__(self):
+        self.records = {}
+
+    def begin(self):
+        return FakeConnection(self.records)
+
+    def connect(self):
+        return FakeConnection(self.records)
+
+
+def test_picnic_keys_encrypted_household_scoped_and_separate_from_ah(tmp_path, monkeypatch):
     monkeypatch.delenv("REZZERV_RETAILER_ACCOUNT_KEY", raising=False)
     monkeypatch.setenv("REZZERV_RETAILER_ACCOUNT_KEY_PATH", str(tmp_path / "account.key"))
     shared.reset_retailer_account_key_cache_for_tests()
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    engine = FakeEngine()
+    engine.records[("family-one", "ah")] = "untouched-ah-ciphertext"
     try:
-        with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE retailer_account_credentials (
-                    household_id TEXT NOT NULL,
-                    provider TEXT NOT NULL,
-                    credential_ciphertext TEXT NOT NULL,
-                    expires_at TEXT,
-                    updated_at TEXT,
-                    PRIMARY KEY(household_id, provider)
-                )
-            """))
-            conn.execute(text("""
-                INSERT INTO retailer_account_credentials(household_id, provider, credential_ciphertext)
-                VALUES ('family-one', 'ah', 'untouched-ah-ciphertext')
-            """))
         assert picnic_status(engine, "family-one")["connected"] is False
         save_picnic_auth(engine, "family-one", "pending-secret-key-123", pending_2fa=True)
         assert picnic_status(engine, "family-one")["verification_required"] is True
@@ -38,26 +77,18 @@ def test_picnic_keys_are_encrypted_household_scoped_and_not_ah(tmp_path, monkeyp
         assert reserve_picnic_sms_request(engine, "family-one") == "pending-secret-key-123"
         with pytest.raises(ValueError, match="minimaal één minuut"):
             reserve_picnic_sms_request(engine, "family-one")
-        with engine.connect() as conn:
-            rows = conn.execute(text("""
-                SELECT provider, credential_ciphertext FROM retailer_account_credentials
-                WHERE household_id='family-one' ORDER BY provider
-            """)).fetchall()
-        assert rows[0] == ("ah", "untouched-ah-ciphertext")
-        assert rows[1][0] == "picnic"
-        assert "pending-secret-key-123" not in rows[1][1]
+        assert engine.records[("family-one", "ah")] == "untouched-ah-ciphertext"
+        assert "pending-secret-key-123" not in engine.records[("family-one", "picnic")]
         save_picnic_auth(engine, "family-one", "verified-secret-key-456", pending_2fa=False)
         shared.reset_retailer_account_key_cache_for_tests()
-        verified_auth = get_picnic_auth(engine, "family-one")
-        assert verified_auth["auth_key"] == "verified-secret-key-456"
-        assert verified_auth["pending_2fa"] is False
-        assert verified_auth["pending_until"] is None
+        verified = get_picnic_auth(engine, "family-one")
+        assert verified["auth_key"] == "verified-secret-key-456"
+        assert verified["pending_2fa"] is False
+        assert verified["pending_until"] is None
         assert picnic_status(engine, "family-one")["connected"] is True
         assert picnic_status(engine, "family-one")["receipt_import_enabled"] is False
         delete_picnic_auth(engine, "family-one")
         assert get_picnic_auth(engine, "family-one") is None
-        with engine.connect() as conn:
-            assert conn.execute(text("SELECT count(*) FROM retailer_account_credentials WHERE provider='ah'")).scalar() == 1
+        assert engine.records[("family-one", "ah")] == "untouched-ah-ciphertext"
     finally:
-        engine.dispose()
         shared.reset_retailer_account_key_cache_for_tests()
