@@ -44,6 +44,7 @@ jobs:
           python -m py_compile scripts/po-tests/generate_po_test.py scripts/po-tests/test_generate_po_test.py
           python scripts/po-tests/test_generate_po_test.py
           python scripts/po-tests/test_po_test_windows.py
+          python scripts/po-tests/test_comment_delivery_contract.py
       - name: Prove missing reference fails closed
         shell: pwsh
         run: |
