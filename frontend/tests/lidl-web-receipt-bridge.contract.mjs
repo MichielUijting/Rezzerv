@@ -71,6 +71,8 @@ console.log('LIDL_WEB_RECEIPT_BRIDGE_CONTRACT_GREEN')
 assert.match(windowedScript, /isHistory && matchesWindow !== true/)
 assert.match(windowedScript, /orderedPages >= 2/)
 assert.match(windowedScript, /pageNumber === 50/)
+assert.match(windowedScript, /if \(pageNumber === 1\) throw new Error\('Lidl-historie kon niet worden geladen/)
+
 assert.match(windowedScript, /last_imported_date/)
 assert.match(windowedScript, /await waitForAck\(receipt.id\)/)
 
