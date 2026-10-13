@@ -92,6 +92,26 @@ def render(source: str, *, branch: str, sha: str, title: str, instructions: str)
         raise ValidationError("Niet alle placeholders zijn vervangen.")
     return script.replace("\n", "\r\n")
 
+def verify_generated_script(
+    artifact: bytes, *, source: str, branch: str, sha: str,
+    title: str, instructions: str,
+) -> None:
+    """Fail closed on the actual bytes to be delivered to the PO."""
+    expected = render(source, branch=branch, sha=sha, title=title, instructions=instructions)
+    try:
+        decoded = artifact.decode("ascii")
+    except UnicodeError as exc:
+        raise ValidationError("Eindbestand is geen geldig ASCII-batchbestand.") from exc
+    if artifact != expected.encode("ascii"):
+        raise ValidationError("Eindbestand wijkt af van canonieke generatoruitvoer.")
+    if b"\\r\\n" not in artifact or b"\\n" in artifact.replace(b"\\r\\n", b""):
+        raise ValidationError("Eindbestand mist consequente Windows-regelafbrekingen.")
+    if re.search(r"(?im)^echo\\s+echo(?:\\s|$)", decoded):
+        raise ValidationError("Dubbele echo gevonden in eindbestand.")
+    if decoded.count("call start.bat") != 1 or "@@" in decoded:
+        raise ValidationError("Eindbestand heeft ongeldige start of placeholders.")
+
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -100,6 +120,8 @@ def main() -> None:
     parser.add_argument("--title", required=True)
     parser.add_argument("--instructions-file", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--verify-only", action="store_true",
+                        help="Verify existing output byte-for-byte; never overwrite it.")
     args = parser.parse_args()
     if not TEMPLATE.is_file():
         raise SystemExit("STOP: verplichte referentiesjabloon niet gevonden. Geen script aangemaakt.")
@@ -113,8 +135,24 @@ def main() -> None:
         )
         if args.output.suffix.lower() != ".bat":
             raise ValidationError("Uitvoer moet een .bat-bestand zijn.")
+        if args.verify_only:
+            if not args.output.is_file():
+                raise ValidationError("Eindbestand ontbreekt; verificatie geweigerd.")
+            verify_generated_script(
+                args.output.read_bytes(), source=TEMPLATE.read_text(encoding="utf-8"),
+                branch=args.branch, sha=args.sha, title=args.title,
+                instructions=args.instructions_file.read_text(encoding="utf-8"),
+            )
+            print("PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN")
+            return
+        artifact = result.encode("ascii")
+        verify_generated_script(
+            artifact, source=TEMPLATE.read_text(encoding="utf-8"),
+            branch=args.branch, sha=args.sha, title=args.title,
+            instructions=args.instructions_file.read_text(encoding="utf-8"),
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_bytes(result.encode("ascii"))
+        args.output.write_bytes(artifact)
     except (OSError, UnicodeError, ValidationError) as exc:
         raise SystemExit(f"STOP: PO-testscriptaanmaak geweigerd: {exc}") from exc
     print(f"PO_TEST_ARTIFACT_GENERATED={args.output}")
