@@ -38,6 +38,44 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 - De generator van synthetische cases bewijst niet dat echte Jumbo-data
   het verwachte schema heeft.
 
+## Bounded geschiedenis en interval (v6, zonder accountsleutels)
+
+- De nieuwe Jumbo-favoriet wordt opgebouwd voor de in Winkelkoppelingen gekozen
+  datumperiode. De periode staat in de favoriet en moet na een datumwijziging
+  opnieuw als favoriet worden opgeslagen. De begin- en einddatum worden in deze
+  iteratie nog niet in PostgreSQL opgeslagen.
+- De browser bevraagt Jumbo same-origin maximaal 30 historiepagina's van maximaal
+  10 bonnen per pagina, verifieert de huidige paginanummers en een stabiel totaal,
+  selecteert uitsluitend bonnen met een geldig aankoopmoment binnen het interval
+  en haalt daarna afzonderlijk de details op.
+- Per uitvoering maximaal 10 geselecteerde bonnen; bij meer moet de gebruiker
+  de periode verkleinen. Ook een ongeldige datum, onbekende paginering, ontbrekende
+  detailinformatie of een te groot URL-fragment geeft expliciet STOP.
+- De overgang naar Inhuis toont eerst een *preview*, met knop voor expliciete
+  verwerking. Er is geen automatische POST in de redirect-effect.
+- Vóór de eerste databasewrite worden alle geselecteerde bonnen gevalideerd.
+  Daarna voert de bestaande household-scoped API de imports sequentieel uit.
+  Bij een netwerk-/serverfout stopt de reeks direct en wordt het aantal
+  reeds verwerkte bonnen gemeld. Een herstart is toegestaan: duplicaatcontrole
+  voorkomt normale dubbele ingest.
+- De `source_origin` in de redirectpayload is uitsluitend een aanwijzing, geen
+  cryptografisch herkomstbewijs. Het fragment mag nooit als authenticatie of
+  importtoestemming worden beschouwd; de huidige ingelogde Inhuis-sessie en
+  expliciete klik zijn noodzakelijk.
+
+## Beperkingen
+
+- De actuele Jumbo GraphQL-veldstructuur en eventuele 1-gebaseerde paginering
+  zijn zonder echte accountbonnen niet live gevalideerd. Onverwachte vormen
+  worden geweigerd in plaats van stilzwijgend geïnterpreteerd.
+- Sommige kortingsvarianten zitten alleen in het layoutbeeld. De adapter
+  neemt alleen herkenbare, financieel sluitende regels over; anders stopt hij.
+- BTW-/betaalregels worden voorlopig uitsluitend in de bron-/receiptgegevens
+  verwerkt waar het generieke contract dit ondersteunt. Een volledige live
+  financiële correctheid is nog NIET bewezen.
+- Integratie met Uitpakken/Voorraad wordt door het generieke Kassa-pad verzorgd;
+  een echte end-to-end Jumbo-transactie blijft te testen in fase 2.
+
 ## Bewust open vóór fase-1-acceptatie
 
 - Uitbreiden van één nieuwste bon naar volledige veilige lijstimport met
