@@ -1,0 +1,99 @@
+name: Picnic isolated PostgreSQL inventory chain proof
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/testing/picnic_postgresql_chain_proof.py'
+      - 'backend/app/integrations/picnic_order_converter.py'
+      - 'backend/app/integrations/picnic_readonly_probe.py'
+      - 'backend/app/integrations/retailer_receipts/**'
+      - 'backend/app/services/retailer_receipt_import_service.py'
+      - 'backend/app/integrations/receipt_scanners/**'
+      - '.github/workflows/picnic-postgresql-chain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  picnic-postgresql-chain:
+    name: Picnic synthetic plus production PostgreSQL chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install known production chain dependencies
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            sqlalchemy==2.0.36 \
+            alembic==1.19.1 \
+            'psycopg[binary]==3.3.4' \
+            pydantic==2.12.5 \
+            httpx==0.28.1 \
+            cryptography==46.0.3 \
+            python-multipart==0.0.20 \
+            pypdf==5.4.0 \
+            Pillow \
+            beautifulsoup4==4.12.3 \
+            opencv-python-headless
+
+      - name: Prepare official isolated PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv
+          bootstrap-user: postgres
+          bootstrap-password: postgres
+          port: '5432'
+          migrator-password: migration-pass
+          runtime-password: runtime-pass
+          migration-mode: preflight
+          evidence-file: picnic-postgresql-foundation.log
+
+      - name: Prove synthetic Picnic semantics, immutable import guard and real inventory chain
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+          MIGRATION_DATABASE_URL: ''
+          REZZERV_DATASTORE_POLICY: postgresql-only
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/picnic-isolated-receipts
+        run: |
+          set -euo pipefail
+          python -m app.testing.picnic_postgresql_chain_proof | tee picnic-postgresql-chain.log
+          grep -Fx 'PICNIC_SYNTHETIC_CANONICAL_INVENTORY_ELIGIBILITY_GREEN' picnic-postgresql-chain.log
+          grep -Fx 'PICNIC_POSTGRESQL_UNVERIFIED_IMPORT_NO_WRITE_GREEN' picnic-postgresql-chain.log
+          grep -Fx 'PICNIC_ADAPTER_PLUS_EXISTING_POSTGRESQL_CHAIN_GREEN' picnic-postgresql-chain.log
+
+      - name: Upload evidence for exact commit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: picnic-isolated-postgresql-chain-evidence
+          path: |
+            picnic-postgresql-foundation.log
+            picnic-postgresql-chain.log
+          if-no-files-found: warn
+          retention-days: 7
