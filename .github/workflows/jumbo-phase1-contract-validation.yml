@@ -1,0 +1,43 @@
+name: Jumbo phase 1 Kassa contract validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/storeConnections/jumboReceiptPocBridge.js'
+      - 'frontend/src/features/storeConnections/jumboReceiptImport.js'
+      - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
+      - 'frontend/tests/jumbo-receipt-poc-bridge.contract.mjs'
+      - 'frontend/tests/jumbo-browser-history-mock.contract.mjs'
+      - 'frontend/src/features/storeConnections/jumboReceiptBatch.js'
+      - 'backend/app/services/jumbo_receipt_validation.py'
+      - 'backend/app/services/retailer_receipt_import_service.py'
+      - 'backend/tests/test_jumbo_phase1_server_validation.py'
+      - 'backend/tests/test_jumbo_phase1_financial_normalization.py'
+      - '.github/workflows/jumbo-phase1-contract-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jumbo-contract:
+    name: Jumbo POC and validated Kassa import contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test synthetic import and fail-closed rejection
+        run: |
+          node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs
+          node frontend/tests/jumbo-browser-history-mock.contract.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal isolated backend test dependencies
+        run: python -m pip install --quiet pytest pydantic==2.12.5 sqlalchemy
+      - name: Verify Jumbo server guard and financial normalizer
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest -q backend/tests/test_jumbo_phase1_server_validation.py backend/tests/test_jumbo_phase1_financial_normalization.py

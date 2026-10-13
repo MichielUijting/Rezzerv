@@ -29,6 +29,7 @@ from app.integrations.retailer_receipts import (
     RetailerReceiptEnvelope,
 )
 from app.services.receipt_service import ingest_receipt, reparse_receipt
+from app.services.jumbo_receipt_validation import validate_jumbo_receipt_for_import
 
 _PROVIDER_LABELS = {
     "ah": "Albert Heijn digitaal",
@@ -329,6 +330,7 @@ def import_retailer_receipt(
     household_id: str,
     envelope: RetailerReceiptEnvelope,
 ) -> dict[str, Any]:
+    validate_jumbo_receipt_for_import(envelope)
     sanitized_envelope, snapshot_bytes = _sanitize_envelope_and_snapshot(envelope)
     source = ensure_retailer_receipt_source(
         engine,

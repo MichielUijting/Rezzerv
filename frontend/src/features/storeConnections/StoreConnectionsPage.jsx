@@ -19,6 +19,8 @@ import {
   JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
+import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
+import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 
 export default function StoreConnectionsPage() {
@@ -44,6 +46,17 @@ export default function StoreConnectionsPage() {
   const [lidlWindowSaving, setLidlWindowSaving] = useState(false)
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
+  const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
+  const [jumboImportBusy, setJumboImportBusy] = useState(false)
+  const [jumboFrom, setJumboFrom] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 29)
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  })
+  const [jumboTo, setJumboTo] = useState(() => {
+    const d = new Date()
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  })
 
   const rows = useMemo(
     () => deriveStoreConnectionRows(providers, connections, ahConnection),
@@ -55,9 +68,19 @@ export default function StoreConnectionsPage() {
     lidlTo !== (lidlWindow.configured_to_date || '')
   )
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
+  const jumboPeriodValid = useMemo(() => {
+    try {
+      jumboDateWindow(jumboFrom, jumboTo)
+      return true
+    } catch {
+      return false
+    }
+  }, [jumboFrom, jumboTo])
   const jumboPocBookmarklet = useMemo(
-    () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
-    [],
+    () => jumboPeriodValid
+      ? buildJumboPocBookmarklet(window.location.origin + window.location.pathname, { from_date: jumboFrom, to_date: jumboTo })
+      : '',
+    [jumboFrom, jumboTo, jumboPeriodValid],
   )
 
   const storeConnectionColumns = useMemo(() => [
@@ -375,37 +398,72 @@ export default function StoreConnectionsPage() {
         const message = String(payload?.error || 'De Jumbo redirect-POC is mislukt.')
         setJumboPocProgress(message)
         setJumboPocResult(null)
+        setJumboImportCandidate(null)
         showFeedback({ variant: 'error', title: 'Jumbo redirect-POC', message })
       } else {
         const found = Number(payload?.total_results || 0)
+        setJumboImportCandidate(Array.isArray(payload?.details) && payload.details.length ? payload : null)
         setJumboPocResult({
           totalResults: found,
           currentPage: Number(payload?.current_page || 0),
           firstDetail: payload?.first_detail || null,
+          selectedCount: Array.isArray(payload?.details) ? payload.details.length : 0,
+          details: Array.isArray(payload?.details) ? payload.details : [],
           sourceOrigin: payload?.source_origin || null,
           transport: 'url-fragment',
         })
         setJumboPocProgress(
           found > 0
-            ? found + ' Jumbo-kassabon(nen) gevonden. De nieuwste bon is opgehaald en de bonlayout is ontleed.'
+            ? found + ' Jumbo-bon(nen) in de geschiedenis; ' + (payload?.details?.length || 0) + ' binnen de gekozen periode opgehaald.'
             : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is succesvol teruggekeerd naar Inhuis.',
         )
         showFeedback({
           variant: 'success',
           title: 'Jumbo redirect-POC geslaagd',
           message: found > 0 ? 'Jumbo GraphQL, bon-detail en bonontleding werken via de redirect-POC.' : 'Jumbo GraphQL en de terugkeer naar Inhuis werken via de redirectmethode.',
-          detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geschreven.',
+          detail: 'Bekijk de gegevens en bevestig apart als je deze bon naar Kassa wilt importeren.',
         })
       }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Het Jumbo POC-resultaat kon niet worden gelezen.'
       setJumboPocProgress(message)
       setJumboPocResult(null)
+      setJumboImportCandidate(null)
       showFeedback({ variant: 'error', title: 'Jumbo redirect-POC', message })
     } finally {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
   }, [showFeedback])
+
+  async function confirmJumboImport() {
+    if (!jumboImportCandidate || jumboImportBusy) return
+    setJumboImportBusy(true)
+    try {
+      // Never use the URL fragment as an implicit instruction to write data.
+      const counts = await importJumboBatch(
+        jumboImportCandidate,
+        async (envelope) => fetchJson('/api/receipts/retailers/import', {
+          method: 'POST',
+          body: JSON.stringify(envelope),
+        }),
+        buildJumboImportEnvelope,
+      )
+      const message = 'Jumbo: ' + counts.new + ' nieuw, ' + counts.known
+        + ' al bekend, ' + counts.refreshed + ' bijgewerkt, ' + counts.failed + ' mislukt.'
+      setJumboPocProgress(message)
+      setJumboImportCandidate(null)
+      showFeedback({ variant: 'success', title: 'Jumbo kassabon', message })
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'De Jumbo-bon kon niet veilig worden geïmporteerd.'
+      const progress = err?.jumboProcessed != null
+        ? ' (' + err.jumboProcessed + ' al verwerkt; veilig gestopt bij volgende bon.)'
+        : ''
+      setJumboPocProgress(message + progress)
+      showFeedback({ variant: 'error', title: 'Jumbo kassabon', message: message + progress })
+    } finally {
+      setJumboImportBusy(false)
+    }
+  }
 
   async function startAhLogin() {
     setAhBusy(true)
@@ -650,15 +708,21 @@ export default function StoreConnectionsPage() {
             <div>
               <h3 style={{ margin: 0 }}>Jumbo kassabonnen – POC</h3>
               <p style={{ margin: '6px 0 0' }}>
-                Deze proef bewijst of Jumbo GraphQL, bon-detail en bonontleding via de nieuwe redirectmethode werken. Er wordt niets naar Kassa of Voorraad geschreven.
+                De Jumbo-koppeling leest bonnen binnen een gekozen periode via je ingelogde Jumbo-sessie. Controleer de uitkomst en bevestig daarna apart de import naar Kassa. Zonder bevestiging wordt niets opgeslagen.
               </p>
             </div>
 
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Input label="Vanaf" type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-from-date" />
+              <Input label="Tot en met" type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-to-date" />
+            </div>
+            {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v{JUMBO_BOOKMARKLET_VERSION}-knop hieronder naar je favorietenbalk.</div>
+              <div><strong>Voor Jumbo via de redirectmethode:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v{JUMBO_BOOKMARKLET_VERSION}-knop hieronder naar je favorietenbalk.</div>
               <a
-                href={jumboPocBookmarklet}
+                href={jumboPeriodValid ? jumboPocBookmarklet : undefined}
                 data-testid="jumbo-poc-bookmarklet"
+                aria-disabled={!jumboPeriodValid}
                 style={{
                   display: 'inline-flex',
                   width: 'fit-content',
@@ -673,10 +737,10 @@ export default function StoreConnectionsPage() {
                 }}
                 onClick={(event) => event.preventDefault()}
               >
-                Jumbo POC naar Inhuis
+                Jumbo-bon naar Inhuis
               </a>
               <div>
-                Open daarna Jumbo in ditzelfde tabblad. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest de bonnenlijst en, als er een bon is, ook het detail van de nieuwste bon. Daarna keert hetzelfde tabblad via het URL-fragment terug naar Inhuis.
+                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open daarna Jumbo in ditzelfde tabblad en klik op de favoriet. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Voor een grotere periode moet je kleinere periodes kiezen. Na terugkeer kun je de bonnen controleren.
               </div>
             </div>
 
@@ -686,6 +750,7 @@ export default function StoreConnectionsPage() {
                 onClick={() => {
                   setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet.')
                   setJumboPocResult(null)
+                  setJumboImportCandidate(null)
                   window.location.assign(JUMBO_ORDERS_URL)
                 }}
                 data-testid="jumbo-poc-open"
@@ -702,7 +767,14 @@ export default function StoreConnectionsPage() {
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '8px' }}>
                 <div><strong>POC transport:</strong> redirect via URL-fragment</div>
                 <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
-                <div><strong>Bonnen gevonden:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
+                <div><strong>Bonnen in geschiedenis:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
+                <div><strong>Bonnen in gekozen periode:</strong> {jumboPocResult.selectedCount || 0}</div>
+                {jumboPocResult.details.map((detail) => (
+                  <div key={detail.transactionId}>
+                    {detail.purchaseEndOn?.slice(0, 10) || 'Datum onbekend'} — bon {detail.transactionId} —
+                    totaal € {typeof detail.parsed?.total === 'number' ? detail.parsed.total.toFixed(2).replace('.', ',') : 'onbekend'}
+                  </div>
+                ))}
                 {jumboPocResult.firstDetail ? (
                   <>
                     <div><strong>Nieuwste bon-ID:</strong> {jumboPocResult.firstDetail.transactionId || '—'}</div>
@@ -717,6 +789,8 @@ export default function StoreConnectionsPage() {
                     {jumboPocResult.firstDetail.parsed?.parseError ? (
                       <div><strong>Parsermelding:</strong> {jumboPocResult.firstDetail.parsed.parseError}</div>
                     ) : null}
+                    <Button type="button" disabled={jumboImportBusy || !jumboImportCandidate} onClick={confirmJumboImport} data-testid="jumbo-confirm-import">{jumboImportBusy ? 'Jumbo-bonnen verwerken…' : 'Importeer ' + (jumboPocResult.selectedCount || 0) + ' bon(nen) naar Kassa'}</Button>
+                    <div>Alleen een financieel sluitende bon wordt geaccepteerd. Statiegeld gaat niet naar Voorraad.</div>
                   </>
                 ) : null}
               </div>
