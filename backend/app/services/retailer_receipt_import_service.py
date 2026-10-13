@@ -331,6 +331,10 @@ def import_retailer_receipt(
     household_id: str,
     envelope: RetailerReceiptEnvelope,
 ) -> dict[str, Any]:
+    if envelope.provider == "picnic":
+        # Contract/normalization is testable, but live account orders are not
+        # certified against final Picnic invoices. Do not write Kassa data.
+        raise ValueError("Picnic-import naar Kassa wacht op definitieve factuurvalidatie")
     validate_jumbo_receipt_for_import(envelope)
     sanitized_envelope, snapshot_bytes = _sanitize_envelope_and_snapshot(envelope)
     source = ensure_retailer_receipt_source(
