@@ -712,8 +712,8 @@ export default function StoreConnectionsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <label>Vanaf <Input type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-from-date" /></label>
-              <label>Tot en met <Input type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-to-date" /></label>
+              <Input label="Vanaf" type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-from-date" />
+              <Input label="Tot en met" type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-to-date" />
             </div>
             {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
             <div style={{ display: 'grid', gap: '10px' }}>
