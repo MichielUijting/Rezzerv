@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +68,29 @@ class POTestSafetyTests(unittest.TestCase):
                 artifact, source=self.template, branch=BRANCH,
                 sha="1" * 40, title=TITLE, instructions=INSTRUCTIONS,
             )
+
+    def test_cli_verifies_exact_saved_download_before_delivery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            instructions = Path(temp) / "instructions.txt"
+            output = Path(temp) / "Inhuis_PO_Test.bat"
+            instructions.write_text(INSTRUCTIONS, encoding="ascii")
+            command = [
+                sys.executable, str(Path(po.__file__)),
+                "--branch", BRANCH, "--sha", SHA,
+                "--title", TITLE, "--instructions-file", str(instructions),
+                "--output", str(output),
+            ]
+            generated = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            validated = subprocess.run(command + ["--verify-only"], capture_output=True, text=True, check=False)
+            self.assertEqual(validated.returncode, 0, validated.stderr)
+            self.assertIn("PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN", validated.stdout)
+            corrupted = output.read_bytes().replace(b"echo Controleer", b"echo echo Controleer")
+            output.write_bytes(corrupted)
+            rejected = subprocess.run(command + ["--verify-only"], capture_output=True, text=True, check=False)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("geweigerd", rejected.stderr)
+            self.assertEqual(output.read_bytes(), corrupted, "Verificatie mag bestaand bestand niet aanpassen")
 
     def test_missing_reference_must_not_fall_back(self):
         with tempfile.TemporaryDirectory() as temp:
