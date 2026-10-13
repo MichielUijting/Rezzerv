@@ -51,6 +51,35 @@ Dit zijn bewuste veiligheidswijzigingen, geen stilzwijgende herschrijving.
 
 Voor de PO blijft het uiteindelijk een eenvoudig uitvoerbaar BAT-bestand.
 
+## Eindbestand als kwaliteitsautoriteit (versterking oktober 2026)
+
+De oorzaak van de dubbele `echo echo` was dat het sjabloon zelf al een
+`echo` rond de placeholder zette, terwijl de generator iedere instructie
+ook als `echo` renderde. De uitvoer kon daardoor syntactisch geldig zijn
+en toch onjuist aan de PO worden gepresenteerd.
+
+De generator voert nu een **byte-voor-byte vergelijking** uit van het
+eindbestand met opnieuw gegenereerde canonieke uitvoer, inclusief:
+- geldige CRLF-regelafbreking en ASCII;
+- geen dubbele `echo echo` of achtergebleven placeholders;
+- exact de bedoelde kandidaatbranch en SHA in de gegenereerde uitvoer;
+- precies één officiele `start.bat`-aanroep.
+
+De bestaande Windows-workflow roept na generatie een afzonderlijke
+`--verify-only`-controle op hetzelfde artefact aan, vóór hash/evidence/upload.
+Een fout is fail-closed: er verschijnt dan **geen gevalideerd downloadartefact**.
+De negatieve tests muteren opzettelijk het gegenereerde bestand (dubbele echo,
+verkeerde SHA, aangepaste start, kapotte CRLF) en vereisen afwijzing.
+
+**Distributieregel:** lever uitsluitend een via
+`Canonical PO test script validation and delivery` / `workflow_dispatch`
+gepubliceerd artefact met het corresponderende `evidence.json` uit.
+Een handgemaakt chatbestand zonder dit actuele uitgiftebewijs mag niet als
+officieel getest PO-script worden aangeboden. Controleer vlak voor aanbieding
+dat de PR-head nog overeenkomt met het bewijs. De GitHub-ruleset beschermt
+repositorywijzigingen; hij kan technisch niet verhinderen dat iemand buiten
+GitHub om een onbewezen bestand maakt. Die grens blijft expliciet.
+
 ## Nog niet aangetoonde onafhankelijke borging
 
 - GitHub ruleset, verplichte checkstatus, reviewtoegang en bypassrechten
