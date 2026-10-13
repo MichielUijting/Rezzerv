@@ -75,3 +75,32 @@ def test_transport_blocks_non_allowlisted_requests_without_network():
 def test_unknown_api_2fa_response_fails_closed():
     with pytest.raises(PicnicAuthError):
         PicnicAuthClient(lambda *args: ({}, {"x-picnic-auth": "verifiedkey1234"})).login("test", "pass")
+
+
+def test_sms_endpoints_have_required_app_headers():
+    seen = []
+    def handler(req):
+        seen.append(req)
+        return httpx.Response(204, headers={"x-picnic-auth": "verifiedkey1234"})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    transport = PicnicHttpTransport(client)
+    for path, body in (
+        ("/user/2fa/generate", {"channel": "SMS"}),
+        ("/user/2fa/verify", {"otp": "123456"}),
+    ):
+        transport.send("POST", path, body, "pendingkey1234")
+    assert len(seen) == 2
+    for req in seen:
+        assert req.headers["x-picnic-agent"]
+        assert req.headers["x-picnic-did"]
+        assert req.headers["x-picnic-auth"] == "pendingkey1234"
+
+
+def test_transport_sanitizes_upstream_error_with_sensitive_details():
+    def handler(req):
+        return httpx.Response(401, json={"error": {"message": "secret-token-and-user-details"}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    transport = PicnicHttpTransport(client)
+    with pytest.raises(PicnicAuthError) as exc:
+        transport.send("POST", "/user/login", {"key": "user", "secret": "hash"})
+    assert "secret-token-and-user-details" not in str(exc.value)
