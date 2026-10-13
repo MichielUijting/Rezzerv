@@ -38,7 +38,7 @@ class PicnicHttpTransport:
         }
         if auth_key:
             headers["x-picnic-auth"] = auth_key
-        if path == "/user/2fa/verify":
+        if path in {"/user/2fa/generate", "/user/2fa/verify"}:
             headers.update({"x-picnic-agent": "30100;1.246.1-15599;", "x-picnic-did": "3C417201548B2E3B"})
         try:
             response = self._client.request(method, PICNIC_API_BASE + path, json=payload if method == "POST" else None, headers=headers)
