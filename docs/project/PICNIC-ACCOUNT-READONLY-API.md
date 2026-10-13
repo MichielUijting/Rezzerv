@@ -100,3 +100,43 @@ backend/tests/test_picnic_account_secure_store.py`
 
 Deze controleert protocolcontracten, foutafscherming, vast endpoint/
 request-allowlist, encryptie, huishoudscheiding en isolatie van AH.
+
+## Accountloze contractfase — Picnic-bestelling naar Inhuis (PR #582)
+
+Nieuwe, afzonderlijke `picnic_order_converter.py` vertaalt expliciete
+synthetische `ORDER_LINE` / `ORDER_ARTICLE` observaties uit het onderzochte
+open-source API-contract naar de bestaande `RetailerReceiptEnvelope`.
+Deze provider is toegevoegd aan het gedeelde gestructureerde scannercontract;
+de centrale normalizer kan een canonieke Picnic-bon opbouwen, inclusief
+artikelregels, aantallen, prijzen, kortingen, totalen en herkenbaar financieel
+statiegeld. Het retourresultaat blijft **review_needed**, omdat de definitieve
+Picnic-factuur ontbreekt.
+
+- Alleen afgeronde leveringen en niet-geannuleerde orders.
+- Elke geldsom in **gehele eurocenten**; precieze regel- en totaalreconciliatie.
+- Homogene artikelgroepen, zonder geraden aantallen of afgeronde stuksprijzen.
+- `total_savings` moet overeenkomen met som van regelkortingen.
+- `deposit_breakdown` wordt uitsluitend bij sluitend bedrag als aparte
+  financiële `lineType=deposit` regel toegevoegd, niet als voorraadartikel.
+- Onbekende fee- of retourformaten, onverklaarde statiegeldverschillen,
+  afwijkende totalen, gemengde bundels en annuleringen worden geweigerd.
+- Bronsleutel is deterministisch `delivery_id:order_id`; bij een identiek
+  synthetisch API-antwoord blijven bonidentiteit en payload stabiel.
+- `backend/tests/test_picnic_order_converter.py` verifieert deze gevallen,
+  de bestaande canonieke normalizer en het legacy Kassa-parsecontract.
+
+**Fail-closed grens:** De productie-importservice weigert alle Picnic-envelopes,
+ook als een client `_picnic_invoice_verified=true` meestuurt.
+Er worden dus nog géén Picnic-orders naar een echte Kassa- of
+Uitpakken-/Voorraaddatabase geschreven. Via `/providers` wordt Picnic
+als `supports_structured_import=false` beschreven.
+
+Een volledige Kassa → Uitpakken → Voorraad-bewijsrun vereist uiteindelijk
+een geïsoleerde, daadwerkelijk gemigreerde PostgreSQL-testomgeving met de
+bestaande Inhuis-keten. De huidige synthetische normalizerproef **bewijst
+dat nog niet**. Eerst moet vaststaan of de echte Picnic-factuur de
+bestellingstotalen en de werkelijke geleverde artikelen bevestigt. Een
+account ontbreekt op dit moment; daarom geen fictieve end-to-end-claim.
+
+Het hier getoonde depositvoorbeeld is uitsluitend een *synthetisch*
+contractvoorbeeld, geen bewezen live Picnic-factuurindeling.
