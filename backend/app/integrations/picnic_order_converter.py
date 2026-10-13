@@ -109,15 +109,37 @@ def picnic_order_to_envelope(delivery: Mapping[str, Any], order_id: str) -> Reta
     if discount_total != source_discount:
         raise PicnicReadOnlyContractError("Picnic savings do not reconcile")
     deposit = _cents(order.get("total_deposit"), "total_deposit")
-    if deposit != 0:
-        raise PicnicReadOnlyContractError("Picnic deposits require invoice reconciliation")
+    if deposit < 0:
+        raise PicnicReadOnlyContractError("Picnic deposit refunds need invoice reconciliation")
+    breakdown = order.get("deposit_breakdown") or []
+    if not isinstance(breakdown, list) or len(breakdown) > 20:
+        raise PicnicReadOnlyContractError("Picnic deposit breakdown invalid")
+    breakdown_total = 0
+    for entry in breakdown:
+        if not isinstance(entry, dict) or entry.get("type") not in {"DEFAULT", "BAG"}:
+            raise PicnicReadOnlyContractError("Unsupported Picnic deposit category")
+        unit = _positive_money(entry.get("value"), "deposit.value")
+        count = entry.get("count")
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 < count <= 1000:
+            raise PicnicReadOnlyContractError("Picnic deposit quantity invalid")
+        amount = unit * count
+        breakdown_total += amount
+        lines.append({
+            "name": "Statiegeld" if entry["type"] == "DEFAULT" else "Statiegeld tassen",
+            "lineType": "deposit",
+            "quantity": str(count),
+            "unitPrice": _eur(unit),
+            "lineTotal": _eur(amount),
+        })
+    if breakdown_total != deposit:
+        raise PicnicReadOnlyContractError("Picnic deposits do not reconcile")
     # No assumption about Picnic fee schema or whether totals already include
     # fees: reject any such financial components until real invoice evidence.
-    if order.get("fees") or order.get("deposit_breakdown") or order.get("returned_containers"):
+    if order.get("fees") or order.get("returned_containers"):
         raise PicnicReadOnlyContractError("Picnic financial adjustments require invoice reconciliation")
     final_total = _positive_money(order.get("total_price"), "total_price")
     checkout_total = _positive_money(order.get("checkout_total_price"), "checkout_total_price")
-    if final_total != checkout_total or lines_total != final_total:
+    if final_total != checkout_total or lines_total + deposit != final_total:
         raise PicnicReadOnlyContractError("Picnic order total does not reconcile")
     created = order.get("creation_time")
     if not isinstance(created, str) or len(created) < 10:
@@ -131,7 +153,7 @@ def picnic_order_to_envelope(delivery: Mapping[str, Any], order_id: str) -> Reta
             "totalAmount": _eur(final_total),
             "paidTotal": _eur(final_total),
             "discountTotal": _eur(discount_total),
-            "depositTotal": "0.00",
+            "depositTotal": _eur(deposit),
             "items": lines,
             "_picnic_invoice_verified": False,
         },
