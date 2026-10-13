@@ -128,7 +128,7 @@ echo ============================================================
 echo Versie: %EXPECTED_SHA%
 echo Open: %APP_URL%
 echo.
-echo @@TEST_INSTRUCTIONS@@
+@@TEST_INSTRUCTIONS@@
 echo.
 echo Rapport: %REPORT%
 > "%REPORT%" (
