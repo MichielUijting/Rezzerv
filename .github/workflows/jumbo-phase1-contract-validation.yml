@@ -7,6 +7,8 @@ on:
       - 'frontend/src/features/storeConnections/jumboReceiptImport.js'
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
       - 'frontend/tests/jumbo-receipt-poc-bridge.contract.mjs'
+      - 'frontend/tests/jumbo-browser-history-mock.contract.mjs'
+      - 'frontend/src/features/storeConnections/jumboReceiptBatch.js'
       - '.github/workflows/jumbo-phase1-contract-validation.yml'
   workflow_dispatch:
 
@@ -23,4 +25,6 @@ jobs:
         with:
           node-version: '22'
       - name: Test synthetic import and fail-closed rejection
-        run: node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs
+        run: |
+          node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs
+          node frontend/tests/jumbo-browser-history-mock.contract.mjs
