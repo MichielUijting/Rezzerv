@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   LIDL_BOOKMARKLET_VERSION,
   LIDL_HISTORY_URL,
@@ -121,3 +122,11 @@ assert.match(windowedScript, /anchors\.map\(anchor => historyRowDay\(/)
 assert.match(windowedScript, /withinWindow\(rowDate\) !== true/)
 assert.match(windowedScript, /entries\.length \+ ' bonnen binnen de ingestelde periode gevonden/)
 console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
+
+// The PO cannot start a Lidl history import with unsaved date edits.
+const storeConnectionScreen = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
+assert.match(storeConnectionScreen, /const lidlPeriodUnsaved =/)
+assert.match(storeConnectionScreen, /lidlFrom !== \(lidlWindow\.configured_from_date/)
+assert.match(storeConnectionScreen, /data-testid="lidl-period-unsaved"/)
+assert.match(storeConnectionScreen, /disabled=\{lidlPeriodUnsaved \|\| lidlWindowSaving \|\| !lidlWindow\}/)
+console.log('LIDL_UNSAVED_PERIOD_GUARD_GREEN')
