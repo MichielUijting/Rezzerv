@@ -38,6 +38,7 @@ _PROVIDER_NAMES = {
     "ah": "Albert Heijn",
     "jumbo": "Jumbo",
     "lidl": "Lidl",
+    "picnic": "Picnic",
 }
 
 _LINE_KEYS = ("items", "products", "lines", "entries", "receiptLines", "basketItems")
