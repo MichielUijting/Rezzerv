@@ -4,7 +4,7 @@ from copy import deepcopy
 import pytest
 
 from app.integrations.retailer_receipts import RetailerReceiptEnvelope
-from app.services.retailer_receipt_import_service import validate_jumbo_receipt_for_import
+from app.services.jumbo_receipt_validation import validate_jumbo_receipt_for_import
 
 
 GOOD_RECEIPT = {
