@@ -396,6 +396,15 @@ def normalize_retailer_receipt(
             "message": "Niet alle digitale bonregels bevatten een regelbedrag.",
         })
 
+    if envelope.provider == "picnic":
+        # Mathematical agreement within an order is not proof of what was
+        # delivered, invoiced or credited. Keep canonical quality reviewable
+        # until independently verified final Picnic invoice evidence exists.
+        warnings.append({
+            "code": "PICNIC_FINAL_INVOICE_NOT_VERIFIED",
+            "message": "Picnic-bestelling is nog niet vergeleken met de definitieve factuur.",
+        })
+
     # AH discounts may be exposed separately from the product amounts. Both
     # gross and already-discounted product totals are accepted; a discrepancy
     # is reviewable rather than silently changing financial or stock lines.
