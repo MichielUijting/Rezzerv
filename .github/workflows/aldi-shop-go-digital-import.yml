@@ -1,0 +1,25 @@
+name: Aldi Shop and Go digital receipt import contract
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/storeConnections/aldiDigitalReceiptImport.js'
+      - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
+      - 'frontend/tests/aldi-shop-go-digital-import.contract.mjs'
+      - '.github/workflows/aldi-shop-go-digital-import.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aldi-contract:
+    name: Validate household Kassa upload for digital Aldi receipts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test synthetic Aldi email and upload safety cases
+        run: node frontend/tests/aldi-shop-go-digital-import.contract.mjs
