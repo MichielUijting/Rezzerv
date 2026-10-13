@@ -140,3 +140,31 @@ account ontbreekt op dit moment; daarom geen fictieve end-to-end-claim.
 
 Het hier getoonde depositvoorbeeld is uitsluitend een *synthetisch*
 contractvoorbeeld, geen bewezen live Picnic-factuurindeling.
+
+## Geïsoleerde PostgreSQL-ketenproef (accountloos)
+
+Nieuwe test `backend/app/testing/picnic_postgresql_chain_proof.py` draait
+in GitHub Actions `.github/workflows/picnic-postgresql-chain.yml`,
+met een wegwerp-PostgreSQL-database die volgens de **bestaande officiële**
+PostgreSQL acceptance foundation wordt gemigreerd. De gewone Inhuis
+runtime-account heeft daarin geen schema-DOORVOERrechten.
+
+De bewijspunten zijn bewust opgesplitst:
+
+1. Een synthetische Picnic-bestelling levert een canonieke bon van € 5,75
+   met twee producten (aantallen 2 en 3) en € 0,25 afzonderlijk
+   statiegeld; alle financiële bedragen sluiten; het statiegeld is
+   niet voorraadgeschikt en de bon blijft `review_needed`.
+2. De productieservice weigert dezelfde niet-geverifieerde Picnic-bon
+   vóór schrijven naar Kassa, ook wanneer een echte PostgreSQL-verbinding
+   aanwezig is. Het aantal `receipt_tables` records blijft gelijk.
+3. De **bestaande** Inhuis PostgreSQL-productieketentest gebruikt een
+   afzonderlijke bekende kassabonfixture en verifieert de werkelijke
+   verwerkingsroute en idempotentie: voorraad `0 → 2 → 5 → 5 → 1`;
+   aankoopgebeurtenissen `0 → 1 → 2 → 2`.
+
+**Grenzen:** Dit test dus tegelijk de Picnic-voorbereiding en de bestaande
+voorraadketen tegen echte PostgreSQL, maar nog **niet** een opgeslagen
+Picnic-kassabon via Kassa → Uitpakken → Voorraad. Die volledige route
+blijft veilig afgeschermd tot factuurvalidatie/PO-acceptatie. Het bewijs
+mag niet worden omschreven als een voltooide end-to-end Picnic-import.
