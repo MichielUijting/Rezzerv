@@ -20,6 +20,7 @@ import {
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
+import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 
 export default function StoreConnectionsPage() {
@@ -47,6 +48,15 @@ export default function StoreConnectionsPage() {
   const [jumboPocResult, setJumboPocResult] = useState(null)
   const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
   const [jumboImportBusy, setJumboImportBusy] = useState(false)
+  const [jumboFrom, setJumboFrom] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 29)
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  })
+  const [jumboTo, setJumboTo] = useState(() => {
+    const d = new Date()
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  })
 
   const rows = useMemo(
     () => deriveStoreConnectionRows(providers, connections, ahConnection),
@@ -59,8 +69,8 @@ export default function StoreConnectionsPage() {
   )
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
   const jumboPocBookmarklet = useMemo(
-    () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
-    [],
+    () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname, { from_date: jumboFrom, to_date: jumboTo }),
+    [jumboFrom, jumboTo],
   )
 
   const storeConnectionColumns = useMemo(() => [
@@ -382,17 +392,18 @@ export default function StoreConnectionsPage() {
         showFeedback({ variant: 'error', title: 'Jumbo redirect-POC', message })
       } else {
         const found = Number(payload?.total_results || 0)
-        setJumboImportCandidate(payload?.first_detail ? payload : null)
+        setJumboImportCandidate(Array.isArray(payload?.details) && payload.details.length ? payload : null)
         setJumboPocResult({
           totalResults: found,
           currentPage: Number(payload?.current_page || 0),
           firstDetail: payload?.first_detail || null,
+          selectedCount: Array.isArray(payload?.details) ? payload.details.length : 0,
           sourceOrigin: payload?.source_origin || null,
           transport: 'url-fragment',
         })
         setJumboPocProgress(
           found > 0
-            ? found + ' Jumbo-kassabon(nen) gevonden. De nieuwste bon is opgehaald en de bonlayout is ontleed.'
+            ? found + ' Jumbo-bon(nen) in de geschiedenis; ' + (payload?.details?.length || 0) + ' binnen de gekozen periode opgehaald.'
             : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is succesvol teruggekeerd naar Inhuis.',
         )
         showFeedback({
@@ -418,23 +429,26 @@ export default function StoreConnectionsPage() {
     setJumboImportBusy(true)
     try {
       // Never use the URL fragment as an implicit instruction to write data.
-      const envelope = buildJumboImportEnvelope(jumboImportCandidate)
-      const result = await fetchJson('/api/receipts/retailers/import', {
-        method: 'POST',
-        body: JSON.stringify(envelope),
-      })
-      let message = ''
-      if (result?.refreshed_existing_receipt) message = 'Jumbo-bon in Kassa veilig bijgewerkt.'
-      else if (result?.duplicate === true) message = 'Deze Jumbo-bon was al bekend in Kassa.'
-      else if (result?.duplicate === false && result?.raw_receipt_id) message = 'Jumbo-bon is nieuw in Kassa opgeslagen.'
-      else throw new Error('Inhuis heeft de Jumbo-import niet bevestigd.')
+      const counts = await importJumboBatch(
+        jumboImportCandidate,
+        async (envelope) => fetchJson('/api/receipts/retailers/import', {
+          method: 'POST',
+          body: JSON.stringify(envelope),
+        }),
+        buildJumboImportEnvelope,
+      )
+      const message = 'Jumbo: ' + counts.new + ' nieuw, ' + counts.known
+        + ' al bekend, ' + counts.refreshed + ' bijgewerkt, ' + counts.failed + ' mislukt.'
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       showFeedback({ variant: 'success', title: 'Jumbo kassabon', message })
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De Jumbo-bon kon niet veilig worden geïmporteerd.'
-      setJumboPocProgress(message)
-      showFeedback({ variant: 'error', title: 'Jumbo kassabon', message })
+      const progress = err?.jumboProcessed != null
+        ? ' (' + err.jumboProcessed + ' al verwerkt; veilig gestopt bij volgende bon.)'
+        : ''
+      setJumboPocProgress(message + progress)
+      showFeedback({ variant: 'error', title: 'Jumbo kassabon', message: message + progress })
     } finally {
       setJumboImportBusy(false)
     }
@@ -683,10 +697,14 @@ export default function StoreConnectionsPage() {
             <div>
               <h3 style={{ margin: 0 }}>Jumbo kassabonnen – POC</h3>
               <p style={{ margin: '6px 0 0' }}>
-                De Jumbo-koppeling leest de nieuwste digitale bon via je ingelogde Jumbo-sessie. Controleer de bon en bevestig daarna apart of deze naar Kassa mag. Zonder bevestiging wordt niets opgeslagen.
+                De Jumbo-koppeling leest bonnen binnen een gekozen periode via je ingelogde Jumbo-sessie. Controleer de uitkomst en bevestig daarna apart de import naar Kassa. Zonder bevestiging wordt niets opgeslagen.
               </p>
             </div>
 
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <label>Vanaf <Input type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-from-date" /></label>
+              <label>Tot en met <Input type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-to-date" /></label>
+            </div>
             <div style={{ display: 'grid', gap: '10px' }}>
               <div><strong>Voor Jumbo via de redirectmethode:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v{JUMBO_BOOKMARKLET_VERSION}-knop hieronder naar je favorietenbalk.</div>
               <a
@@ -709,7 +727,7 @@ export default function StoreConnectionsPage() {
                 Jumbo-bon naar Inhuis
               </a>
               <div>
-                Open daarna Jumbo in ditzelfde tabblad. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest de bonnenlijst en, als er een bon is, ook het detail van de nieuwste bon. Daarna keert hetzelfde tabblad via het URL-fragment terug naar Inhuis.
+                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open daarna Jumbo in ditzelfde tabblad en klik op de favoriet. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Voor een grotere periode moet je kleinere periodes kiezen. Na terugkeer kun je de bonnen controleren.
               </div>
             </div>
 
@@ -736,7 +754,8 @@ export default function StoreConnectionsPage() {
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '8px' }}>
                 <div><strong>POC transport:</strong> redirect via URL-fragment</div>
                 <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
-                <div><strong>Bonnen gevonden:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
+                <div><strong>Bonnen in geschiedenis:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
+                <div><strong>Bonnen in gekozen periode:</strong> {jumboPocResult.selectedCount || 0}</div>
                 {jumboPocResult.firstDetail ? (
                   <>
                     <div><strong>Nieuwste bon-ID:</strong> {jumboPocResult.firstDetail.transactionId || '—'}</div>
@@ -751,7 +770,7 @@ export default function StoreConnectionsPage() {
                     {jumboPocResult.firstDetail.parsed?.parseError ? (
                       <div><strong>Parsermelding:</strong> {jumboPocResult.firstDetail.parsed.parseError}</div>
                     ) : null}
-                    <Button type="button" disabled={jumboImportBusy || !jumboImportCandidate} onClick={confirmJumboImport} data-testid="jumbo-confirm-import">{jumboImportBusy ? 'Jumbo-bon verwerken…' : 'Importeer deze bon naar Kassa'}</Button>
+                    <Button type="button" disabled={jumboImportBusy || !jumboImportCandidate} onClick={confirmJumboImport} data-testid="jumbo-confirm-import">{jumboImportBusy ? 'Jumbo-bonnen verwerken…' : 'Importeer ' + (jumboPocResult.selectedCount || 0) + ' bon(nen) naar Kassa'}</Button>
                     <div>Alleen een financieel sluitende bon wordt geaccepteerd. Statiegeld gaat niet naar Voorraad.</div>
                   </>
                 ) : null}
