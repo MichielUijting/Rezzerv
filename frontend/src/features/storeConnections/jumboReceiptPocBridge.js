@@ -1,6 +1,8 @@
-export const JUMBO_BOOKMARKLET_VERSION = 5
+import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
+
+export const JUMBO_BOOKMARKLET_VERSION = 6
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v5='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v6='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -170,13 +172,22 @@ export function parseJumboReceiptLayout(rawJson) {
   }
 }
 
-export function buildJumboPocBookmarklet(inhuisCallbackUrl) {
+export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
   const callbackUrl = String(inhuisCallbackUrl || '').replace(/#.*$/, '')
   if (!validInhuisCallbackUrl(callbackUrl)) {
     throw new Error('Ongeldige Inhuis-callback voor Jumbo-POC')
   }
 
   const parserSource = parseJumboReceiptLayout.toString()
+  const range = dateRange || (() => {
+    const now = new Date()
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const start = new Date(end)
+    start.setDate(start.getDate() - 29)
+    const toDay = (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+    return { from_date: toDay(start), to_date: toDay(end) }
+  })()
+  const checkedRange = jumboDateWindow(range.from_date, range.to_date)
 
   return (
     'javascript:(async()=>{' +
@@ -184,11 +195,17 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl) {
     'const C=' + JSON.stringify(callbackUrl) + ';' +
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
     'const parseReceipt=' + parserSource + ';' +
+    'const jumboDay=' + jumboDay.toString() + ';' +
+    'const jumboDateWindow=' + jumboDateWindow.toString() + ';' +
+    'const selectJumboHistory=' + selectJumboHistory.toString() + ';' +
+    'const RANGE=' + JSON.stringify(checkedRange) + ';' +
+    'const LIMIT=' + String(JUMBO_BATCH_LIMIT) + ';' +
+    'const MAX_PAGES=' + String(JUMBO_MAX_PAGES) + ';' +
     'const ID="__inhuis_jumbo_redirect_poc";' +
     'let box=document.getElementById(ID);' +
     'if(!box){box=document.createElement("div");box.id=ID;box.style.cssText="position:fixed;z-index:2147483647;right:12px;bottom:12px;max-width:520px;padding:12px 14px;background:#fff;border:2px solid currentColor;color:#111;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.25);white-space:pre-wrap";document.documentElement.appendChild(box);}' +
     'const show=m=>{box.textContent="Inhuis Jumbo receipt-POC\\n"+m;try{console.info("[Inhuis Jumbo receipt-POC]",m);}catch{}};' +
-    'const ret=o=>{show("Resultaat gereed; terug naar Inhuis…");location.href=C+P+encodeURIComponent(JSON.stringify(o));};' +
+    'const ret=o=>{show("Resultaat gereed; terug naar Inhuis…");if(encodeURIComponent(JSON.stringify(o)).length>48000)o={version:V,ok:false,source_origin:location.origin,error:"Te veel bongegevens voor veilige overdracht. Kies een kortere Jumbo-periode."};location.href=C+P+encodeURIComponent(JSON.stringify(o));};' +
     'const gql=async(operationName,query,variables)=>{' +
     'const r=await fetch("/api/graphql",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json","apollographql-client-name":"JUMBO_WEB-orders","apollographql-client-version":"master-v29.2.0-web","x-source":"JUMBO_WEB-orders"},body:JSON.stringify({operationName,query,variables})});' +
     'const j=await r.json().catch(()=>null);' +
@@ -200,24 +217,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl) {
     'try{' +
     'show("Stap 1/4: Jumbo bonnenlijst opvragen…");' +
     'const listQuery="query GetOnlineOrdersAndStoreReceipts($ordersInput: OrdersInput!, $page: Int, $pageSize: Int) { storeReceipts: receiptOverview(page: $page, pageSize: $pageSize) { totalResults pageSize currentPage receipts { transactionId purchaseEndOn receiptSource store { storeId name } } } onlineOrders: orders(input: $ordersInput) { totalCount } }";' +
-    'const list=await gql("GetOnlineOrdersAndStoreReceipts",listQuery,{ordersInput:{offset:0,limit:1,direction:"DESC",sortBy:"deliveryDate",statusCategory:"CLOSED"},page:0,pageSize:10});' +
-    'const s=list.storeReceipts||{};' +
-    'const receipts=Array.isArray(s.receipts)?s.receipts:[];' +
-    'const totalResults=Number(s.totalResults||receipts.length||0);' +
-    'show("Stap 2/4: "+String(totalResults)+" bon(nen) gevonden.");' +
-    'if(!receipts.length){ret({version:V,ok:true,source_origin:location.origin,total_results:totalResults,current_page:Number(s.currentPage||0),first_detail:null});return;}' +
-    'const first=receipts[0];' +
-    'const transactionId=String(first?.transactionId||"").trim();' +
-    'if(!transactionId)throw new Error("De eerste Jumbo-kassabon heeft geen transactionId");' +
-    'show("Stap 3/4: detail van nieuwste bon ophalen…");' +
-    'const detailQuery="query GetDigitalReceipt($transactionId: String) { receipt(transactionId: $transactionId) { receiptImage { image type receiptPoints { earned newBalance oldBalance redeemed } } store { name location { address { city houseNumber postalCode street } } } purchaseEndOn receiptSource transactionId } }";' +
-    'const detailData=await gql("GetDigitalReceipt",detailQuery,{transactionId});' +
-    'const receipt=detailData.receipt;' +
-    'if(!receipt||!receipt.transactionId)throw new Error("Jumbo gaf geen detail voor kassabon "+transactionId);' +
-    'const image=receipt.receiptImage||{};' +
-    'const parsed=parseReceipt(image.image);' +
-    'show("Stap 4/4: bonlayout ontleed; "+String(Array.isArray(parsed.items)?parsed.items.length:0)+" productregel(s).");' +
-    'ret({version:V,ok:true,source_origin:location.origin,total_results:totalResults,current_page:Number(s.currentPage||0),first_detail:{transactionId:String(receipt.transactionId||""),purchaseEndOn:receipt.purchaseEndOn||null,receiptSource:receipt.receiptSource||null,storeName:receipt.store?.name||null,receiptImageType:image.type||null,parsed}});' +
+    "const history=[];let totalResults=null;let finished=false;\nfor(let page=0;page<MAX_PAGES;page++){\nshow(\"Jumbo geschiedenis ophalen: pagina \"+String(page+1));\nconst list=await gql(\"GetOnlineOrdersAndStoreReceipts\",listQuery,{ordersInput:{offset:0,limit:1,direction:\"DESC\",sortBy:\"deliveryDate\",statusCategory:\"CLOSED\"},page,pageSize:10});\nconst s=list.storeReceipts||{};const receipts=s.receipts;\nif(!Array.isArray(receipts))throw new Error(\"Jumbo gaf geen geldige geschiedenis terug.\");\nconst count=Number(s.totalResults);\nif(!Number.isSafeInteger(count)||count<0||count>300)throw new Error(\"Jumbo-bonnenaantal buiten veilige limiet.\");\nif(totalResults===null)totalResults=count;\nif(count!==totalResults)throw new Error(\"Jumbo-bonnenlijst is tijdens ophalen veranderd.\");\nif(Number(s.currentPage)!==page)throw new Error(\"Jumbo-paginering wijkt af.\");\nhistory.push(...receipts);\nif(history.length>=totalResults){finished=true;break;}\nif(!receipts.length)throw new Error(\"Jumbo retourneerde een lege tussenpagina.\");\n}\nif(!finished)throw new Error(\"Jumbo-geschiedenis heeft meer paginas dan veilig toegestaan.\");\nconst selected=selectJumboHistory(history,RANGE.from_date,RANGE.to_date,LIMIT);\nif(!selected.length){ret({version:V,ok:true,source_origin:location.origin,total_results:totalResults,date_range:RANGE,details:[],first_detail:null});return;}\nconst detailQuery=\"query GetDigitalReceipt($transactionId: String) { receipt(transactionId: $transactionId) { receiptImage { image type receiptPoints { earned newBalance oldBalance redeemed } } store { name location { address { city houseNumber postalCode street } } } purchaseEndOn receiptSource transactionId } }\";\nconst details=[];\nfor(const row of selected){\nconst transactionId=String(row.transactionId||\"\").trim();\nshow(\"Jumbo-bondetail \"+String(details.length+1)+\"/\"+String(selected.length));\nconst detailData=await gql(\"GetDigitalReceipt\",detailQuery,{transactionId});\nconst receipt=detailData.receipt;\nif(!receipt||String(receipt.transactionId||\"\")!==transactionId)throw new Error(\"Jumbo-detail komt niet overeen met historiebon.\");\nif(jumboDay(receipt.purchaseEndOn)!==jumboDay(row.purchaseEndOn))throw new Error(\"Jumbo-bondatum verschilt van historiedatum.\");\nconst image=receipt.receiptImage||{};const parsed=parseReceipt(image.image);\nif(parsed.parseError)throw new Error(\"Jumbo-bonlayout kon niet worden ontleed.\");\ndetails.push({transactionId,purchaseEndOn:receipt.purchaseEndOn,receiptSource:receipt.receiptSource||null,storeName:receipt.store?.name||null,receiptImageType:image.type||null,parsed});\n}\nret({version:V,ok:true,source_origin:location.origin,total_results:totalResults,date_range:RANGE,details,first_detail:details[0]||null});" +
     '}catch(err){' +
     'const message=String(err&&err.message?err.message:err);' +
     'show("POC-fout: "+message);' +
