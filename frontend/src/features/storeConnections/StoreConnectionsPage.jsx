@@ -68,9 +68,19 @@ export default function StoreConnectionsPage() {
     lidlTo !== (lidlWindow.configured_to_date || '')
   )
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
+  const jumboPeriodValid = useMemo(() => {
+    try {
+      jumboDateWindow(jumboFrom, jumboTo)
+      return true
+    } catch {
+      return false
+    }
+  }, [jumboFrom, jumboTo])
   const jumboPocBookmarklet = useMemo(
-    () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname, { from_date: jumboFrom, to_date: jumboTo }),
-    [jumboFrom, jumboTo],
+    () => jumboPeriodValid
+      ? buildJumboPocBookmarklet(window.location.origin + window.location.pathname, { from_date: jumboFrom, to_date: jumboTo })
+      : '',
+    [jumboFrom, jumboTo, jumboPeriodValid],
   )
 
   const storeConnectionColumns = useMemo(() => [
@@ -705,11 +715,13 @@ export default function StoreConnectionsPage() {
               <label>Vanaf <Input type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-from-date" /></label>
               <label>Tot en met <Input type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null) }} data-testid="jumbo-to-date" /></label>
             </div>
+            {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
             <div style={{ display: 'grid', gap: '10px' }}>
               <div><strong>Voor Jumbo via de redirectmethode:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v{JUMBO_BOOKMARKLET_VERSION}-knop hieronder naar je favorietenbalk.</div>
               <a
-                href={jumboPocBookmarklet}
+                href={jumboPeriodValid ? jumboPocBookmarklet : undefined}
                 data-testid="jumbo-poc-bookmarklet"
+                aria-disabled={!jumboPeriodValid}
                 style={{
                   display: 'inline-flex',
                   width: 'fit-content',
