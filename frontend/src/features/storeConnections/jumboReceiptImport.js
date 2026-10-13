@@ -16,7 +16,7 @@ function validPurchaseDate(value) {
 }
 
 export function buildJumboImportEnvelope(payload) {
-  if (!payload || payload.version !== 5 || payload.ok !== true ||
+  if (!payload || payload.version !== 6 || payload.ok !== true ||
       payload.source_origin !== JUMBO_WEB_ORIGIN) {
     throw new Error('De Jumbo-herkomst of de versie van de bon is ongeldig.')
   }
