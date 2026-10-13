@@ -139,7 +139,8 @@ rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: 
 rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, total: 7.13 + 0.02 } } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, parseError: 'invalid' } } })
 const ui = storeConnectionsSource
-assert.match(ui, /buildJumboImportEnvelope\(jumboImportCandidate\)/)
+assert.match(ui, /importJumboBatch\(/)
+assert.match(ui, /buildJumboImportEnvelope,/)
 assert.match(ui, /jumbo-confirm-import/)
 assert.match(ui, /fetchJson\('\/api\/receipts\/retailers\/import'/)
 assert.match(ui, /setJumboImportCandidate\(null\)/)
