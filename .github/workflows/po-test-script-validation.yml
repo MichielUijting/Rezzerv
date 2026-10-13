@@ -101,6 +101,10 @@ jobs:
           $output = "po-test-artifact/Inhuis_PR$env:PR_NUMBER" + "_Lokaal_Testen.bat"
           python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output
           if ($LASTEXITCODE -ne 0) { throw 'PO script validation/generation failed' }
+          # The exact bytes about to be uploaded must match fresh canonical output.
+          # A failure here prevents both evidence creation and artifact publication.
+          python scripts/po-tests/generate_po_test.py --branch $env:EXPECTED_BRANCH --sha $env:EXPECTED_SHA --title $env:PO_TITLE --instructions-file po-test-artifact/instructions.txt --output $output --verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Exact PO batch artifact verification failed' }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash
           $evidence = [ordered]@{
             pr_number = $env:PR_NUMBER
@@ -110,6 +114,7 @@ jobs:
             script_sha256 = $hash
             workflow_run_id = $env:GITHUB_RUN_ID
             windows_self_tests = 'passed'
+            exact_artifact_verification = 'PO_TEST_EXACT_ARTIFACT_VERIFIED_GREEN'
           }
           $evidence | ConvertTo-Json | Set-Content po-test-artifact/evidence.json -Encoding UTF8
           Remove-Item po-test-artifact/instructions.txt
