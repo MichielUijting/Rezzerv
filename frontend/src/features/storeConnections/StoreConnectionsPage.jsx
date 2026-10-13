@@ -22,6 +22,7 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
+import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
@@ -873,6 +874,8 @@ export default function StoreConnectionsPage() {
             <p style={{ margin: 0 }}>Papieren Aldi-kassabonnen kunnen nog steeds via Kassa worden gescand.</p>
           </div>
         </Card>
+
+        <PicnicAccountResearchPanel />
 
         <Card>
           {error ? <div className="rz-inline-feedback" data-testid="store-connections-error">{error}</div> : null}
