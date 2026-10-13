@@ -35,6 +35,7 @@ _PROVIDER_LABELS = {
     "ah": "Albert Heijn digitaal",
     "jumbo": "Jumbo digitaal",
     "lidl": "Lidl Plus digitaal",
+    "picnic": "Picnic digitaal",
 }
 
 
