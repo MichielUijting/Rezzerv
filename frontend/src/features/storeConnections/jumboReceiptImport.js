@@ -36,6 +36,8 @@ export function buildJumboImportEnvelope(payload) {
   }
   const lines = []
   let calculated = 0
+  let discountCents = 0
+  let depositCents = 0
   for (const item of [...parsed.items, ...parsed.deposits]) {
     const name = String(item?.name || '').trim()
     const lineCents = moneyCents(item?.price)
@@ -54,6 +56,8 @@ export function buildJumboImportEnvelope(payload) {
     if (isDiscount && lineCents > 0) {
       throw new Error('Een Jumbo-korting heeft een onverwacht positief bedrag.')
     }
+    if (isDiscount) discountCents += lineCents
+    if (isDeposit) depositCents += lineCents
     calculated += lineCents
     lines.push({
       description: name,
@@ -76,6 +80,8 @@ export function buildJumboImportEnvelope(payload) {
       purchaseDateTime: detail.purchaseEndOn,
       storeName: String(detail.storeName || 'Jumbo').slice(0, 200),
       grandTotal: grandTotal / 100,
+      discountTotal: Math.abs(discountCents) / 100,
+      depositTotal: depositCents / 100,
       items: lines,
       paymentMethod: String(parsed.paymentMethod || '').slice(0, 80),
     },
