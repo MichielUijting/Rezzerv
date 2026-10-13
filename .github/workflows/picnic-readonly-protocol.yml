@@ -5,11 +5,17 @@ on:
     paths:
       - 'backend/app/integrations/picnic_readonly_probe.py'
       - 'backend/tests/test_picnic_readonly_probe.py'
+      - 'backend/tests/test_picnic_order_converter.py'
+      - 'backend/app/integrations/picnic_order_converter.py'
+      - 'backend/app/integrations/retailer_receipts/contracts.py'
+      - 'backend/app/integrations/retailer_receipts/normalizer.py'
+      - 'backend/app/integrations/receipt_scanners/adapters/retailer_structured.py'
+      - 'backend/app/services/retailer_receipt_import_service.py'
       - 'backend/app/integrations/picnic_auth_protocol.py'
       - 'backend/app/integrations/picnic_http_transport.py'
       - 'backend/app/services/picnic_account_secure_store.py'
       - 'backend/tests/test_picnic_auth_protocol.py'
-      - 'backend/tests/test_picnic_account_secure_store.py'
+      - 'backend/tests/test_picnic_account_secure_store.py backend/tests/test_picnic_order_converter.py'
       - 'backend/app/api/retailer_receipt_routes.py'
       - 'frontend/src/features/storeConnections/PicnicAccountResearchPanel.jsx'
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
@@ -28,7 +34,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install focused test dependency
-        run: python -m pip install pytest httpx cryptography sqlalchemy 'pydantic>=2'
+        run: python -m pip install -r backend/requirements.txt pytest
       - name: Run synthetic Picnic read-only contract
         env:
           PYTHONPATH: backend
