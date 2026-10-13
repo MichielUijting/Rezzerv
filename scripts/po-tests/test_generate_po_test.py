@@ -29,6 +29,45 @@ class POTestSafetyTests(unittest.TestCase):
         self.assertEqual(content.count("call start.bat"), 1)
         self.assertIn("echo Controleer automatische periode.", content)
 
+    def test_final_artifact_has_exactly_one_echo_per_instruction(self):
+        artifact = po.render(self.template, branch=BRANCH, sha=SHA, title=TITLE, instructions=INSTRUCTIONS).encode("ascii")
+        po.verify_generated_script(
+            artifact, source=self.template, branch=BRANCH, sha=SHA,
+            title=TITLE, instructions=INSTRUCTIONS,
+        )
+        self.assertIn(b"echo Controleer automatische periode.\\r\\n", artifact)
+        self.assertNotIn(b"echo echo Controleer", artifact)
+
+    def test_final_artifact_rejects_nested_echo(self):
+        artifact = po.render(self.template, branch=BRANCH, sha=SHA, title=TITLE, instructions=INSTRUCTIONS).encode("ascii")
+        tampered = artifact.replace(b"echo Controleer", b"echo echo Controleer")
+        with self.assertRaises(po.ValidationError):
+            po.verify_generated_script(
+                tampered, source=self.template, branch=BRANCH, sha=SHA,
+                title=TITLE, instructions=INSTRUCTIONS,
+            )
+
+    def test_final_artifact_rejects_tampered_sha_and_start(self):
+        artifact = po.render(self.template, branch=BRANCH, sha=SHA, title=TITLE, instructions=INSTRUCTIONS).encode("ascii")
+        for tampered in (
+            artifact.replace(SHA.encode(), b"0" * 40),
+            artifact.replace(b"call start.bat", b"call unsafe.bat"),
+            artifact.replace(b"\\r\\n", b"\\n"),
+        ):
+            with self.subTest(tampered=tampered[-80:]), self.assertRaises(po.ValidationError):
+                po.verify_generated_script(
+                    tampered, source=self.template, branch=BRANCH, sha=SHA,
+                    title=TITLE, instructions=INSTRUCTIONS,
+                )
+
+    def test_final_artifact_rejects_wrong_candidate_metadata(self):
+        artifact = po.render(self.template, branch=BRANCH, sha=SHA, title=TITLE, instructions=INSTRUCTIONS).encode("ascii")
+        with self.assertRaises(po.ValidationError):
+            po.verify_generated_script(
+                artifact, source=self.template, branch=BRANCH,
+                sha="1" * 40, title=TITLE, instructions=INSTRUCTIONS,
+            )
+
     def test_missing_reference_must_not_fall_back(self):
         with tempfile.TemporaryDirectory() as temp:
             self.assertFalse((Path(temp) / "po-test-template.bat").exists())
