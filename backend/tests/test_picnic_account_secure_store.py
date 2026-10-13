@@ -43,9 +43,10 @@ def test_picnic_keys_are_encrypted_household_scoped_and_not_ah(tmp_path, monkeyp
         assert "pending-secret-key-123" not in rows[1][1]
         save_picnic_auth(engine, "family-one", "verified-secret-key-456", pending_2fa=False)
         shared.reset_retailer_account_key_cache_for_tests()
-        assert get_picnic_auth(engine, "family-one") == {
-            "auth_key": "verified-secret-key-456", "pending_2fa": False,
-        }
+        verified_auth = get_picnic_auth(engine, "family-one")
+        assert verified_auth["auth_key"] == "verified-secret-key-456"
+        assert verified_auth["pending_2fa"] is False
+        assert verified_auth["pending_until"] is None
         assert picnic_status(engine, "family-one")["connected"] is True
         assert picnic_status(engine, "family-one")["receipt_import_enabled"] is False
         delete_picnic_auth(engine, "family-one")
