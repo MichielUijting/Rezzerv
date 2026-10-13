@@ -22,7 +22,6 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
-import { validateAldiDigitalFile, importAldiDigitalFile } from './aldiDigitalReceiptImport.js'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
@@ -49,9 +48,6 @@ export default function StoreConnectionsPage() {
   const [jumboPocResult, setJumboPocResult] = useState(null)
   const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
   const [jumboImportBusy, setJumboImportBusy] = useState(false)
-  const [aldiDigitalFile, setAldiDigitalFile] = useState(null)
-  const [aldiDigitalBusy, setAldiDigitalBusy] = useState(false)
-  const [aldiDigitalMessage, setAldiDigitalMessage] = useState('')
   const [jumboFrom, setJumboFrom] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 29)
@@ -123,7 +119,7 @@ export default function StoreConnectionsPage() {
             variant={(row.connectionSource === 'ah_account' && row.statusLabel === 'gekoppeld') || row.connection ? 'secondary' : 'primary'}
             data-testid={`store-connection-action-${row.providerCode}`}
             onClick={() => handleStoreConnectionAction(row)}
-            disabled={isLoading || isSaving}
+            disabled={isLoading || isSaving || row.providerCode === 'aldi'}
           >
             {row.actionLabel}
           </Button>
@@ -469,30 +465,6 @@ export default function StoreConnectionsPage() {
     }
   }
 
-  async function importAldiSelectedReceipt() {
-    if (!aldiDigitalFile || aldiDigitalBusy) return
-    setAldiDigitalBusy(true)
-    setAldiDigitalMessage('')
-    try {
-      validateAldiDigitalFile(aldiDigitalFile)
-      const result = await importAldiDigitalFile(aldiDigitalFile, String(household?.id || ''))
-      // The canonical receipt flow determines parsing and duplicate status.
-      // Never infer successful full processing from HTTP success alone.
-      const message = result?.duplicate === true
-        ? 'De kassabon is al bekend in Kassa.'
-        : 'Aldi-bon aangeboden aan Kassa. Controleer daar de herkenning en bonstatus.'
-      setAldiDigitalMessage(message)
-      setAldiDigitalFile(null)
-      showFeedback({ variant: 'success', title: 'Aldi digitale kassabon', message })
-    } catch (err) {
-      const message = normalizeErrorMessage(err?.message) || 'Aldi-bon importeren is mislukt.'
-      setAldiDigitalMessage(message)
-      showFeedback({ variant: 'error', title: 'Aldi digitale kassabon', message })
-    } finally {
-      setAldiDigitalBusy(false)
-    }
-  }
-
   async function startAhLogin() {
     setAhBusy(true)
     try {
@@ -630,6 +602,7 @@ export default function StoreConnectionsPage() {
   }
 
   function handleStoreConnectionAction(row) {
+    if (row?.providerCode === 'aldi') return
     if (row?.connectionSource === 'ah_account') {
       closeEditor()
       document.querySelector('[data-testid="ah-digital-receipts"]')?.scrollIntoView({
@@ -642,7 +615,7 @@ export default function StoreConnectionsPage() {
   }
 
   async function handleSave() {
-    if (!editingRow || !household) return
+    if (!editingRow || !household || editingRow.providerCode === 'aldi') return
     const trimmed = String(cardNumber || '').trim()
     if (!trimmed) {
       setError('Kaartnummer is verplicht.')
@@ -894,44 +867,10 @@ export default function StoreConnectionsPage() {
         </Card>
 
         <Card>
-          <div data-testid="aldi-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
-            <h3 style={{ margin: 0 }}>Aldi Shop & Go – digitale kassabonnen</h3>
-            <p style={{ margin: 0 }}>
-              Aldi Shop & Go bewaart bonnen in de app en verstuurt ze volgens Aldi per e-mail.
-              Importeer de ontvangen bon als .eml, PDF of afbeelding. Inhuis gebruikt
-              de bestaande Kassa-herkenning en duplicaatcontrole; er is nog geen
-              automatische Aldi-accountkoppeling.
-            </p>
-            <Input
-              label="Digitale Aldi-bon selecteren"
-              type="file"
-              accept=".eml,.pdf,.png,.jpg,.jpeg,.webp"
-              data-testid="aldi-digital-file"
-              onChange={(event) => {
-                const file = event.target.files?.[0] || null
-                setAldiDigitalFile(file)
-                setAldiDigitalMessage('')
-              }}
-              disabled={aldiDigitalBusy}
-            />
-            <div>Bestand: {aldiDigitalFile?.name || 'Nog geen bestand geselecteerd'}</div>
-            <Button
-              type="button"
-              onClick={importAldiSelectedReceipt}
-              disabled={!aldiDigitalFile || aldiDigitalBusy || !household?.id}
-              data-testid="aldi-digital-import"
-            >
-              {aldiDigitalBusy ? 'Aldi-bon verwerken…' : 'Importeer Aldi-bon naar Kassa'}
-            </Button>
-            {aldiDigitalMessage ? (
-              <div className="rz-inline-feedback" role="status" data-testid="aldi-digital-result">
-                {aldiDigitalMessage}
-              </div>
-            ) : null}
-            <p style={{ margin: 0 }}>
-              De werkelijke opmaak van Shop & Go-e-mailbonnen is nog niet met een echte bon gevalideerd.
-              Een onbekende bon wordt niet als succesvol verwerkt gepresenteerd.
-            </p>
+          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
+            <h3 style={{ margin: 0 }}>Aldi</h3>
+            <p style={{ margin: 0 }}>Aldi ondersteunt geen digitale kassabonnen voor reguliere winkelkoppelingen. Een koppeling met Inhuis is daarom niet mogelijk.</p>
+            <p style={{ margin: 0 }}>Papieren Aldi-kassabonnen kunnen nog steeds via Kassa worden gescand.</p>
           </div>
         </Card>
 
