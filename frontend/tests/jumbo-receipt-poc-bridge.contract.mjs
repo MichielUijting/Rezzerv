@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { buildJumboImportEnvelope } from '../src/features/storeConnections/jumboReceiptImport.js'
 import {
   JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
@@ -97,5 +98,44 @@ assert.match(storeConnectionsSource, /window\.location\.assign\(JUMBO_ORDERS_URL
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 assert.doesNotMatch(storeConnectionsSource, /postMessage/)
+
+// Synthetic receipt tests: no real Jumbo account or database is touched.
+const observation = {
+  version: JUMBO_BOOKMARKLET_VERSION,
+  ok: true,
+  source_origin: 'https://www.jumbo.com',
+  first_detail: {
+    transactionId: 'TXN-20261013-01',
+    purchaseEndOn: '2026-10-13T12:30:00',
+    storeName: 'Jumbo Test',
+    parsed,
+  },
+}
+const envelope = buildJumboImportEnvelope(observation)
+assert.equal(envelope.provider, 'jumbo')
+assert.equal(envelope.external_receipt_id, 'TXN-20261013-01')
+assert.equal(envelope.schema_version, '1.0')
+assert.equal(envelope.receipt.items.length, 3)
+assert.equal(envelope.receipt.items[0].quantity, 2)
+assert.equal(envelope.receipt.items[0].lineTotal, 1.88)
+assert.equal(envelope.receipt.items[2].lineType, 'deposit')
+assert.equal(envelope.receipt.grandTotal, 7.12)
+assert.deepEqual(Object.keys(envelope).sort(), ['external_receipt_id', 'provider', 'receipt', 'schema_version'])
+const rejected = (obj) => assert.throws(() => buildJumboImportEnvelope(obj), Error)
+rejected({ ...observation, source_origin: 'https://jumbo.com' })
+rejected({ ...observation, source_origin: 'https://evil.example' })
+rejected({ ...observation, ok: false })
+rejected({ ...observation, version: 4 })
+rejected({ ...observation, first_detail: null })
+rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
+rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
+rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, items: [] } } })
+rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, total: 7.13 + 0.02 } } })
+rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, parseError: 'invalid' } } })
+const ui = storeConnectionsSource
+assert.match(ui, /buildJumboImportEnvelope\(jumboImportCandidate\)/)
+assert.match(ui, /jumbo-confirm-import/)
+assert.match(ui, /fetchJson\('\/api\/receipts\/retailers\/import'/)
+assert.match(ui, /setJumboImportCandidate\(null\)/)
 
 console.log('JUMBO_RECEIPT_REDIRECT_DETAIL_POC_CONTRACT_GREEN')
