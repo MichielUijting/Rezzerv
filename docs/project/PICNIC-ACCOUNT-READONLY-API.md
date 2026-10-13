@@ -1,10 +1,10 @@
 # Picnic-accountgegevens — read-only protocolonderzoek (fase 1)
 
-## Waarom afzonderlijke PR
+## Scope en PR-geschiedenis
 
-De bestaande PR #581 documenteert de Picnic-e-mailstroom. Deze PR is een
-afzonderlijke implementatie van **read-only account-API-contractonderzoek**,
-gebaseerd op reeds beschikbare onafhankelijke open-source Picnic-clients.
+PR #581 is op PO-verzoek gesloten als overbodige inventarisatie-PR.
+PR #582 is de enige actieve Picnic-ontwikkel-PR, met accountloze
+bonvoorbereiding, experimentele accountaanmelding en PostgreSQL-bewijzen.
 PR #580 (Aldi) is vooraf, op afzonderlijke expliciete PO-opdracht,
 gemerged naar main.
 
@@ -20,8 +20,8 @@ gemerged naar main.
   beschrijft `items`, `total_price`, `total_savings` en `total_deposit`.
 - De externe client kent ook `POST /deliveries/{deliveryId}/resend_invoice_email`;
   **deze muterende actie is bewust niet geïmplementeerd**.
-- Er zijn externe account-/2FA-methoden, maar de Picnic-API is onofficieel;
-  wachtwoord- of sessieopslag en live-login zijn in deze fase uitgesloten.
+- Er zijn externe account-/2FA-methoden; de onofficiële login en versleutelde
+  sessieopslag zijn later experimenteel toegevoegd, maar niet live bewezen.
 
 ## Wat is werkelijk ontwikkeld?
 
@@ -35,8 +35,9 @@ Python-component met een geïnjecteerde transportfunctie. Deze component:
 5. geeft expliciet `ready_for_import: false` terug, zodat een account-API
    respons niet als gecertificeerde digitale kassabon wordt aangemerkt.
 
-Er is **geen** live API-call, accountkoppeling, login, opslag van Picnic-tokens,
-schemawijziging, databasewrite, Kassa-import of UI-schakelaar toegevoegd.
+Dit beschrijft uitsluitend de **oorspronkelijke** protocolproef. Inmiddels
+zijn experimentele login, versleutelde sessieopslag en een UI toegevoegd;
+nog altijd zijn geen echte Picnic-login, factuurvalidatie of Picnic-Kassa-import bewezen.
 
 ## Grenzen vóór een echte klantkoppeling
 
@@ -168,3 +169,40 @@ voorraadketen tegen echte PostgreSQL, maar nog **niet** een opgeslagen
 Picnic-kassabon via Kassa → Uitpakken → Voorraad. Die volledige route
 blijft veilig afgeschermd tot factuurvalidatie/PO-acceptatie. Het bewijs
 mag niet worden omschreven als een voltooide end-to-end Picnic-import.
+
+## Actuele acceptatiematrix en resterend werk — zonder Picnic-account
+
+Deze matrix gaat boven de oudere fase-1-tekst. Een groene synthetische test
+is nadrukkelijk geen bewijs van een echte Picnic-accountkoppeling.
+
+| Onderdeel | Huidig bewijs | Besluit |
+|---|---|---|
+| API-transport, login en sms-protocol | Mocktests in `test_picnic_auth_protocol.py` en `test_picnic_readonly_probe.py` | Accountloos controleerbaar; echte API nog onbewezen |
+| Encryptie per huishouden, 2FA-verloop en aanvraaglimieten | `test_picnic_account_secure_store.py` | Accountloos controleerbaar |
+| Bestelregels, centbedragen, kortingen, onvolledige orders | `test_picnic_order_converter.py` | Synthetisch controleerbaar; onbekende indelingen weigeren |
+| Statiegeld niet in Voorraad en onverklaarde kosten blokkeren | Converter, canonical normalizer, inventory eligibility tests | Synthetisch controleerbaar; echte factuurregels onbekend |
+| Deterministische identiteit en identieke herimport | Convertertests | Synthetisch gecontroleerd; operationele duplicaatproef later |
+| Werkende PostgreSQL-voorraadketen | `picnic-postgresql-chain.yml` hergebruikt officiële acceptance foundation en bestaande AH-ketenfixture | Bewezen voor bestaande keten, **niet** voor opgeslagen Picnic-bon |
+| Geen onveilige Picnic-databasewrite | Importverbod met PostgreSQL no-write bewijs | Behouden; geen activering zonder PO-geaccepteerde factuurreconciliatie |
+| Echte Picnic-aanmelding, 2FA en actuele API-responsen | Geen account beschikbaar | Uitstellen; nooit wachtwoorden in chat/GitHub delen |
+| Vergelijking bestelde versus geleverde artikelen, retouren, statiegeld, kosten en eindfactuur | Definitieve Picnic-factuur plus bijbehorende levering nodig | Uitstellen; essentiële blokkade voor Kassa-import |
+| Picnic Kassa → Uitpakken → Voorraad en echte herimport | Gevalideerde bron, geïsoleerde PostgreSQL-/UI-test vereist | **Niet bewezen; blijft geblokkeerd** |
+| Zware F7/exact-candidate en Ready | Definitieve head-SHA, versie/sync en voorgeschreven gates nodig | Pas op definitieve kandidaat; geen merge of release zonder aparte expliciete PO-GO |
+
+### Vervolg
+
+1. Laat de toegevoegde negatieve convertertests gericht slagen. Herstel alleen
+   concrete fouten. Test bestaande gebruikersdata nooit met synthetische orders.
+2. Houd de Picnic-import naar Kassa standaard geblokkeerd.
+3. Zodra een testaccount beschikbaar is: controleer onofficiële Picnic-login,
+   eventuele sms-code en historische bestellingen in read-only modus.
+4. Vergelijk een daadwerkelijke levering met de definitieve Picnic-factuur,
+   inclusief vervangingen, ontbrekende artikelen, kortingen en statiegeld.
+5. Bouw op grond van dat bewijs een gecontroleerde import en een geïsoleerde
+   werkelijke Kassa → Uitpakken → Voorraad-proef met duplicaatcontrole.
+6. Pas na finale scope en checks: exacte kandidaat-SHA, versie/sync,
+   vereiste preflight, F7 op die SHA en Ready for review. Geen merge of
+   productieactie zonder eigen expliciete PO-goedkeuring.
+
+**Besluit:** de accountloze ontwikkelbasis is vergevorderd; een volledig
+werkende Picnic-integratie is zonder account en factuur niet aantoonbaar.
