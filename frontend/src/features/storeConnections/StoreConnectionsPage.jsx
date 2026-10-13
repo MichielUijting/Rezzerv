@@ -38,6 +38,10 @@ export default function StoreConnectionsPage() {
   const [ahBusy, setAhBusy] = useState(false)
   const [ahSyncProgress, setAhSyncProgress] = useState('')
   const [lidlWebProgress, setLidlWebProgress] = useState('')
+  const [lidlWindow, setLidlWindow] = useState(null)
+  const [lidlFrom, setLidlFrom] = useState('')
+  const [lidlTo, setLidlTo] = useState('')
+  const [lidlWindowSaving, setLidlWindowSaving] = useState(false)
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
 
@@ -46,6 +50,10 @@ export default function StoreConnectionsPage() {
     [providers, connections, ahConnection],
   )
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
+  const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
+    lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
+    lidlTo !== (lidlWindow.configured_to_date || '')
+  )
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
   const jumboPocBookmarklet = useMemo(
     () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
@@ -122,10 +130,35 @@ export default function StoreConnectionsPage() {
       setProviders(providerData)
       setConnections(connectionData)
       await loadAhStatus()
+      const windowData = await fetchJson('/api/receipts/retailers/lidl/import-window')
+      setLidlWindow(windowData)
+      setLidlFrom(windowData.configured_from_date || windowData.from_date || '')
+      setLidlTo(windowData.configured_to_date || '')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function saveLidlWindow(reset = false) {
+    setLidlWindowSaving(true)
+    try {
+      const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
+        method: 'PUT',
+        body: JSON.stringify({
+          from_date: reset ? null : (lidlFrom || null),
+          to_date: reset ? null : (lidlTo || null),
+        }),
+      })
+      setLidlWindow(data)
+      setLidlFrom(data.configured_from_date || data.from_date || '')
+      setLidlTo(data.configured_to_date || '')
+      showFeedback({ variant: 'success', title: 'Lidl-importperiode opgeslagen', message: reset ? 'Automatische periode hersteld.' : 'De nieuwe periode geldt bij de volgende import.' })
+    } catch (err) {
+      showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Opslaan mislukt.' })
+    } finally {
+      setLidlWindowSaving(false)
     }
   }
 
@@ -191,10 +224,19 @@ export default function StoreConnectionsPage() {
         }
         lidlSourceWindow = event.source
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
-        event.source?.postMessage({
-          type: 'inhuis:lidl-script',
-          script: buildLidlWebPageScript(window.location.origin),
-        }, LIDL_WEB_ORIGIN)
+        try {
+          const period = await fetchJson('/api/receipts/retailers/lidl/import-window')
+          if (cancelled) return
+          setLidlWindow(period)
+          setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
+          event.source?.postMessage({
+            type: 'inhuis:lidl-script',
+            script: buildLidlWebPageScript(window.location.origin, period),
+          }, LIDL_WEB_ORIGIN)
+        } catch (err) {
+          setLidlWebProgress('Lidl-import afgebroken: importperiode kon niet worden geladen.')
+          showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Importperiode ophalen mislukt.' })
+        }
         return
       }
 
@@ -268,6 +310,23 @@ export default function StoreConnectionsPage() {
       }
 
       if (data.type === 'inhuis:lidl-complete') {
+        if (data.mode === 'history' && lidlCounts.failed === 0) {
+          try {
+            const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
+              method: 'POST',
+              body: JSON.stringify({
+                from_date: data.from_date,
+                to_date: data.to_date,
+                last_imported_date: data.last_imported_date,
+              }),
+            })
+            setLidlWindow(updated)
+          } catch (err) {
+            lidlCounts.failed += 1
+            showFeedback({ variant: 'warning', title: 'Lidl-importcheckpoint niet bijgewerkt',
+              message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
+          }
+        }
         const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
           + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.'
         setLidlWebProgress(summary)
@@ -674,6 +733,21 @@ export default function StoreConnectionsPage() {
               </p>
             </div>
 
+            <div data-testid="lidl-import-window">
+              <strong>Importperiode</strong>
+              <p>{lidlWindow ? lidlWindow.from_date + ' t/m ' + lidlWindow.to_date : 'Laden…'}</p>
+              {lidlPeriodUnsaved ? (
+                <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
+                  De gekozen importperiode is nog niet opgeslagen. Klik eerst op Opslaan.
+                </div>
+              ) : null}
+              {lidlWindow?.can_manage ? <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Input type="date" label="Van" value={lidlFrom} onChange={e => setLidlFrom(e.target.value)} />
+                <Input type="date" label="Tot (optioneel)" value={lidlTo} onChange={e => setLidlTo(e.target.value)} />
+                <Button onClick={() => saveLidlWindow(false)} disabled={lidlWindowSaving || !lidlFrom || Boolean(lidlTo && lidlFrom > lidlTo)}>Opslaan</Button>
+                <Button variant="secondary" onClick={() => saveLidlWindow(true)} disabled={lidlWindowSaving}>Automatisch</Button>
+              </div> : null}
+            </div>
             <div style={{ display: 'grid', gap: '10px' }}>
               <div><strong>Eenmalig na deze update:</strong> verwijder eerst je oude Lidl-favoriet en sleep daarna de nieuwe v2-knop hieronder naar de favorietenbalk.</div>
               <a
@@ -704,6 +778,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
+                disabled={lidlPeriodUnsaved || lidlWindowSaving || !lidlWindow}
                 data-testid="lidl-web-open-history"
               >
                 Open mijn Lidl-kassabonnen

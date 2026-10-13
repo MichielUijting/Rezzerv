@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Sequence
 
 from app.alembic_head_authority import repository_head_revision
+from app.maintenance.postgresql_legacy_production_rebuild import EXPECTED_APPLICATION_TABLES
 from app.maintenance import postgresql_data_migration as migration
 
 HEAD_REVISION = repository_head_revision()
-EXPECTED_APPLICATION_TABLES = 95
 
 
 def _assert_snapshot_storage_integrity(connection: sqlite3.Connection) -> None:

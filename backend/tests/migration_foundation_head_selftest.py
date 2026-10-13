@@ -13,10 +13,11 @@ if str(BACKEND_ROOT) not in sys.path:
 
 import migration_foundation_selftest as foundation_test
 from app.alembic_head_authority import repository_head_revision
+from app.maintenance.postgresql_legacy_production_rebuild import EXPECTED_APPLICATION_TABLES
 
 
 HEAD_REVISION = repository_head_revision()
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 95
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_APPLICATION_TABLES
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
 HOME_SETTINGS_TABLE = "platform_home_settings"
@@ -40,6 +41,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     RETAILER_ACCOUNT_CREDENTIALS_TABLE,
     HOUSEHOLD_PROFILE_TABLE,
     HOUSEHOLD_RESIDENT_TABLE,
+    "household_lidl_import_windows",
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -613,6 +615,23 @@ def _assert_household_profile_schema(connection) -> None:
         print("POSTGRESQL_HOUSEHOLD_PROFILE_SCHEMA_GREEN")
 
 
+def _assert_lidl_import_window_schema(connection) -> None:
+    inspector = inspect(connection)
+    table = "household_lidl_import_windows"
+    if not inspector.has_table(table):
+        raise AssertionError("Missing household Lidl import window table")
+    columns = {item["name"]: item for item in inspector.get_columns(table)}
+    required = {"household_id", "from_date", "to_date", "last_imported_date", "updated_at"}
+    if set(columns) != required:
+        raise AssertionError(f"Unexpected household Lidl import window columns: {set(columns)!r}")
+    primary_key = inspector.get_pk_constraint(table)
+    if tuple(primary_key.get("constrained_columns") or ()) != ("household_id",):
+        raise AssertionError("Household Lidl import window must be scoped by household_id")
+    if columns["updated_at"]["nullable"]:
+        raise AssertionError("Lidl import window updated_at must be non-nullable")
+    print("HOUSEHOLD_LIDL_IMPORT_WINDOW_SCHEMA_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -634,6 +653,7 @@ def main() -> None:
             _assert_catalog_image_authority(connection)
             _assert_household_representative_image_authority(connection)
             _assert_household_profile_schema(connection)
+            _assert_lidl_import_window_schema(connection)
     finally:
         engine.dispose()
 

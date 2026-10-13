@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from datetime import date
 from typing import Optional
 
 import httpx
@@ -28,10 +29,63 @@ from app.services.ah_receipt_sync_service import (
 from app.services.household_context_adapter import household_context_from_runtime_context
 from app.services.retailer_account_secure_store import ah_session_status
 from app.services.retailer_receipt_import_service import import_retailer_receipt
+from app.services.lidl_import_window_service import get_window, save_window, complete_import
+from app.api.household_profile_routes import _context_and_membership
+from app.services.authorization_foundation_service import evaluate_household_permission
 
 router = APIRouter(prefix="/api/receipts/retailers", tags=["receipts-retailers"])
 
 RECEIPT_STORAGE_ROOT = Path(os.getenv("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw"))
+
+
+class LidlImportWindowRequest(BaseModel):
+    from_date: date | None = None
+    to_date: date | None = None
+
+
+@router.get("/lidl/import-window")
+def get_lidl_import_window():
+    with engine.connect() as conn:
+        context, membership_id = _context_and_membership(conn)
+        decision = evaluate_household_permission(
+            conn, household_id=str(context.active_household_id),
+            membership_id=membership_id, permission_key="household_settings.manage",
+        )
+    return {**get_window(engine, str(context.active_household_id)), "can_manage": bool(decision.allowed)}
+
+
+@router.put("/lidl/import-window")
+def update_lidl_import_window(payload: LidlImportWindowRequest):
+    with engine.connect() as conn:
+        context, membership_id = _context_and_membership(conn)
+        decision = evaluate_household_permission(
+            conn, household_id=str(context.active_household_id),
+            membership_id=membership_id, permission_key="household_settings.manage",
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail="Alleen een bevoegde beheerder kan de Lidl-importperiode wijzigen.")
+    try:
+        return {**save_window(engine, str(context.active_household_id), payload.from_date, payload.to_date), "can_manage": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class LidlImportCompleteRequest(BaseModel):
+    from_date: date
+    to_date: date
+    last_imported_date: date | None = None
+
+
+@router.post("/lidl/complete")
+def complete_lidl_import(payload: LidlImportCompleteRequest, authorization: Optional[str] = Header(None)):
+    household_id = _authorized_household_id(authorization)
+    try:
+        return complete_import(
+            engine, household_id,
+            payload.last_imported_date, payload.from_date, payload.to_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 class AHConnectRequest(BaseModel):
