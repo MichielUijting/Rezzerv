@@ -120,9 +120,10 @@ def list_retailer_receipt_providers(
         "providers": [
             {
                 "code": code,
-                "supports_structured_import": True,
+                "supports_structured_import": code != "picnic",
                 "account_connection": (
-                    "persistent_encrypted" if code == "ah"
+                    "experimental_encrypted" if code == "picnic"
+                    else "persistent_encrypted" if code == "ah"
                     else "browser_assisted" if code == "lidl"
                     else "not_configured"
                 ),
