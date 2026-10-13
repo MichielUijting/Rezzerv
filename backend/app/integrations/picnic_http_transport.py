@@ -6,6 +6,7 @@ Only exact historical-read and authentication endpoints are permitted.
 from __future__ import annotations
 
 from typing import Any
+import re
 
 import httpx
 
@@ -26,8 +27,7 @@ class PicnicHttpTransport:
     def send(self, method: str, path: str, payload: Any, auth_key: str | None = None):
         allowed = (
             (method == "POST" and path in {"/user/login", "/user/2fa/generate", "/user/2fa/verify", "/deliveries/summary"})
-            or (method == "GET" and path.startswith("/deliveries/") and len(path) < 210
-                and not any(char in path for char in ("?", "#", "%2f", "%2F", "..")))
+            or (method == "GET" and re.fullmatch(r"/deliveries/[A-Za-z0-9_-]{1,180}", path) is not None)
         )
         if not allowed:
             raise PicnicAuthError("Picnic-API-actie niet toegestaan.")
