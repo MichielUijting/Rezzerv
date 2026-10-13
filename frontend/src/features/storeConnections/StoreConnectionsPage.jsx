@@ -119,7 +119,7 @@ export default function StoreConnectionsPage() {
             variant={(row.connectionSource === 'ah_account' && row.statusLabel === 'gekoppeld') || row.connection ? 'secondary' : 'primary'}
             data-testid={`store-connection-action-${row.providerCode}`}
             onClick={() => handleStoreConnectionAction(row)}
-            disabled={isLoading || isSaving}
+            disabled={isLoading || isSaving || row.providerCode === 'aldi'}
           >
             {row.actionLabel}
           </Button>
@@ -602,6 +602,7 @@ export default function StoreConnectionsPage() {
   }
 
   function handleStoreConnectionAction(row) {
+    if (row?.providerCode === 'aldi') return
     if (row?.connectionSource === 'ah_account') {
       closeEditor()
       document.querySelector('[data-testid="ah-digital-receipts"]')?.scrollIntoView({
@@ -614,7 +615,7 @@ export default function StoreConnectionsPage() {
   }
 
   async function handleSave() {
-    if (!editingRow || !household) return
+    if (!editingRow || !household || editingRow.providerCode === 'aldi') return
     const trimmed = String(cardNumber || '').trim()
     if (!trimmed) {
       setError('Kaartnummer is verplicht.')
@@ -862,6 +863,14 @@ export default function StoreConnectionsPage() {
             {lidlWebProgress ? (
               <div className="rz-inline-feedback" data-testid="lidl-web-progress">{lidlWebProgress}</div>
             ) : null}
+          </div>
+        </Card>
+
+        <Card>
+          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
+            <h3 style={{ margin: 0 }}>Aldi</h3>
+            <p style={{ margin: 0 }}>Aldi ondersteunt geen digitale kassabonnen voor reguliere winkelkoppelingen. Een koppeling met Inhuis is daarom niet mogelijk.</p>
+            <p style={{ margin: 0 }}>Papieren Aldi-kassabonnen kunnen nog steeds via Kassa worden gescand.</p>
           </div>
         </Card>
 

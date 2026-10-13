@@ -22,6 +22,10 @@ export function deriveStoreConnectionRows(providers, connections, ahConnection) 
       .map((connection) => [providerCode(connection?.store_provider_code), connection]),
   )
 
+  if (!providerList.some((provider) => providerCode(provider?.code) === 'aldi')) {
+    providerList.push({ code: 'aldi', name: 'Aldi' })
+  }
+
   if (!providerList.some((provider) => providerCode(provider?.code) === 'ah')) {
     providerList.push({ code: 'ah', name: 'Albert Heijn' })
   }
@@ -32,6 +36,19 @@ export function deriveStoreConnectionRows(providers, connections, ahConnection) 
       const code = providerCode(provider.code)
       const connection = byCode.get(code) || null
       const legacyLinked = Boolean(connection && connection.connection_status === 'active')
+      if (code === 'aldi') {
+        return {
+          providerCode: 'aldi',
+          providerName: provider.name || 'Aldi',
+          connection: null,
+          connectionSource: 'unavailable',
+          statusLabel: 'niet beschikbaar',
+          actionLabel: 'Niet mogelijk',
+          typeLabel: 'geen digitale kassabon',
+          lastSyncLabel: '—',
+          cardNumber: '',
+        }
+      }
       const isAh = code === 'ah'
       const ahLinked = Boolean(isAh && ahConnection?.connected)
 

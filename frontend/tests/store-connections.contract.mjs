@@ -7,14 +7,16 @@ const connectedAh = deriveStoreConnectionRows([], [], {
   persistence: 'encrypted_database',
   last_sync_at: '2026-10-06T12:30:00Z',
 })
-assert.equal(connectedAh.length, 1)
-assert.equal(connectedAh[0].providerCode, 'ah')
-assert.equal(connectedAh[0].providerName, 'Albert Heijn')
-assert.equal(connectedAh[0].statusLabel, 'gekoppeld')
-assert.equal(connectedAh[0].typeLabel, 'digitale kassabonnen')
-assert.equal(connectedAh[0].actionLabel, 'Beheren')
-assert.equal(connectedAh[0].connectionSource, 'ah_account')
-assert.notEqual(connectedAh[0].lastSyncLabel, '—')
+assert.equal(connectedAh.length, 2)
+const ah = connectedAh.find(row => row.providerCode === 'ah')
+assert.ok(ah)
+assert.equal(ah.providerCode, 'ah')
+assert.equal(ah.providerName, 'Albert Heijn')
+assert.equal(ah.statusLabel, 'gekoppeld')
+assert.equal(ah.typeLabel, 'digitale kassabonnen')
+assert.equal(ah.actionLabel, 'Beheren')
+assert.equal(ah.connectionSource, 'ah_account')
+assert.notEqual(ah.lastSyncLabel, '—')
 
 const secureAhOverridesLegacy = deriveStoreConnectionRows(
   [{ code: 'ah', name: 'Albert Heijn' }],
@@ -26,8 +28,8 @@ const secureAhOverridesLegacy = deriveStoreConnectionRows(
   }],
   { connected: true, persistence: 'encrypted_database' },
 )
-assert.equal(secureAhOverridesLegacy[0].typeLabel, 'digitale kassabonnen')
-assert.equal(secureAhOverridesLegacy[0].cardNumber, '')
+assert.equal(secureAhOverridesLegacy.find(row => row.providerCode === 'ah').typeLabel, 'digitale kassabonnen')
+assert.equal(secureAhOverridesLegacy.find(row => row.providerCode === 'ah').cardNumber, '')
 
 const legacyLidl = deriveStoreConnectionRows(
   [{ code: 'lidl', name: 'Lidl' }],
@@ -43,7 +45,22 @@ const legacyLidl = deriveStoreConnectionRows(
 assert.equal(legacyLidl.find((row) => row.providerCode === 'lidl')?.statusLabel, 'gekoppeld')
 assert.equal(legacyLidl.find((row) => row.providerCode === 'lidl')?.cardNumber, '12345')
 
+const unavailableAldi = deriveStoreConnectionRows(
+  [{ code: 'aldi', name: 'Aldi' }],
+  [{ store_provider_code: 'aldi', connection_status: 'active', external_account_ref: 'old-card' }],
+  { connected: false },
+).find(row => row.providerCode === 'aldi')
+assert.equal(unavailableAldi.statusLabel, 'niet beschikbaar')
+assert.equal(unavailableAldi.actionLabel, 'Niet mogelijk')
+assert.equal(unavailableAldi.connectionSource, 'unavailable')
+assert.equal(unavailableAldi.connection, null)
+assert.equal(unavailableAldi.cardNumber, '')
+
 const page = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
+assert.match(page, /aldi-digital-unavailable/)
+assert.match(page, /Aldi ondersteunt geen digitale kassabonnen/)
+assert.match(page, /row.providerCode === 'aldi'/)
+assert.doesNotMatch(page, /importAldiDigitalFile|aldi-digital-import|aldi-digital-file/)
 assert.match(page, /import DataTable from '..\/..\/ui\/DataTable\.jsx'/)
 assert.match(page, /dataTestId="store-connections-table"/)
 assert.match(page, /tableClassName="rz-store-review-table"/)
