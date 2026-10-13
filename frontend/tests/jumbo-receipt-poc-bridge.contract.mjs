@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { buildJumboImportEnvelope } from '../src/features/storeConnections/jumboReceiptImport.js'
+import { jumboDateWindow, selectJumboHistory, jumboDay, importJumboBatch } from '../src/features/storeConnections/jumboReceiptBatch.js'
 import {
   JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
@@ -9,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 5)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 6)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v5=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v6=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -62,7 +63,7 @@ assert.match(bookmarklet, /OMSCHRIJVING/)
 assert.match(bookmarklet, /Betaald/)
 assert.match(bookmarklet, /credentials:"include"/)
 assert.match(bookmarklet, /JUMBO_WEB-orders/)
-assert.match(bookmarklet, /#jumbo-poc-v5=/)
+assert.match(bookmarklet, /#jumbo-poc-v6=/)
 assert.match(bookmarklet, /location\.href=C\+P/)
 assert.match(bookmarklet, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarklet, /window\.opener/)
@@ -130,7 +131,7 @@ const rejected = (obj) => assert.throws(() => buildJumboImportEnvelope(obj), Err
 rejected({ ...observation, source_origin: 'https://jumbo.com' })
 rejected({ ...observation, source_origin: 'https://evil.example' })
 rejected({ ...observation, ok: false })
-rejected({ ...observation, version: 4 })
+rejected({ ...observation, version: 5 })
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
@@ -142,5 +143,49 @@ assert.match(ui, /buildJumboImportEnvelope\(jumboImportCandidate\)/)
 assert.match(ui, /jumbo-confirm-import/)
 assert.match(ui, /fetchJson\('\/api\/receipts\/retailers\/import'/)
 assert.match(ui, /setJumboImportCandidate\(null\)/)
+assert.match(ui, /importJumboBatch\(/)
+assert.match(ui, /jumbo-from-date/)
+assert.match(ui, /jumbo-to-date/)
+assert.match(bookmarklet, /Jumbo geschiedenis ophalen/)
+assert.match(bookmarklet, /selectJumboHistory/)
+assert.match(bookmarklet, /MAX_PAGES/)
+assert.match(bookmarklet, /Jumbo-paginering wijkt af/)
+assert.match(bookmarklet, /location\.href=C\+P/)
 
 console.log('JUMBO_RECEIPT_REDIRECT_DETAIL_POC_CONTRACT_GREEN')
+
+assert.equal(jumboDay('2026-02-30'), '')
+assert.equal(jumboDay('2026-10-13T09:00:00'), '2026-10-13')
+assert.deepEqual(jumboDateWindow('2026-10-01','2026-10-13'), { from_date: '2026-10-01', to_date: '2026-10-13' })
+assert.throws(() => jumboDateWindow('2026-10-13','2026-10-01'))
+assert.throws(() => jumboDateWindow('2026-02-30','2026-10-01'))
+const history = [
+  { transactionId:'TX-001', purchaseEndOn:'2026-09-09T14:00:00' },
+  { transactionId:'TX-002', purchaseEndOn:'2026-08-25T14:00:00' },
+  { transactionId:'TX-003', purchaseEndOn:'2026-07-01T14:00:00' },
+]
+assert.equal(selectJumboHistory(history, '2026-08-01', '2026-09-30').length, 2)
+assert.equal(selectJumboHistory(history, '2026-08-25', '2026-08-25')[0].transactionId, 'TX-002')
+assert.throws(() => selectJumboHistory([...history, history[0]], '2026-08-01', '2026-09-30'))
+assert.throws(() => selectJumboHistory(history, '2026-08-01', '2026-09-30', 1))
+assert.throws(() => selectJumboHistory([{ transactionId:'BAD', purchaseEndOn:'unknown' }], '2026-08-01', '2026-09-30'))
+const second = { ...observation.first_detail, transactionId: 'TXN-20261013-02' }
+const batch = { ...observation, details: [observation.first_detail, second] }
+const imported = []
+const counts = await importJumboBatch(batch, async (env) => {
+  imported.push(env.external_receipt_id)
+  return imported.length === 1 ? { duplicate: false, raw_receipt_id: 'receipt1' } : { duplicate: true }
+}, buildJumboImportEnvelope)
+assert.deepEqual(counts, { new: 1, known: 1, refreshed: 0, failed: 0 })
+assert.deepEqual(imported, ['TXN-20261013-01', 'TXN-20261013-02'])
+await assert.rejects(() => importJumboBatch({ ...batch, details: [observation.first_detail, observation.first_detail] }, async () => { throw new Error('Should never write') }, buildJumboImportEnvelope))
+let countProcessed = 0
+await assert.rejects(
+  () => importJumboBatch(batch, async () => {
+    countProcessed++
+    if (countProcessed === 2) throw new Error('Network interrupted')
+    return { duplicate: false, raw_receipt_id: 'receipt1' }
+  }, buildJumboImportEnvelope),
+  (error) => error.jumboProcessed === 1 && error.jumboCounts.failed === 1,
+)
+console.log('JUMBO_BATCH_IMPORT_FAIL_CLOSED_GREEN')
