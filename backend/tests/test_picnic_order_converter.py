@@ -71,6 +71,9 @@ def test_synthetic_order_enters_existing_kassa_normalizer():
     assert parsed.store_name == "Picnic"
     assert parsed.total_amount == canonical.receipt.totals.grand_total
     assert len(parsed.lines) == 2
+    assert parsed.parse_status == "review_needed"
+    assert canonical.quality.requires_review is True
+    assert any(w["code"] == "PICNIC_FINAL_INVOICE_NOT_VERIFIED" for w in canonical.receipt.warnings)
 
 
 def test_duplicate_order_observation_has_stable_identity_and_payload():
