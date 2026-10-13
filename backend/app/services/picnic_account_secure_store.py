@@ -26,6 +26,8 @@ def save_picnic_auth(engine: Engine, household_id: str, auth_key: str, *, pendin
         "auth_key": auth_key,
         "pending_2fa": bool(pending_2fa),
         "pending_until": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat() if pending_2fa else None,
+        "sms_last_requested": None,
+        "sms_request_count": 0,
     }, separators=(",", ":"))
     ciphertext = _fernet().encrypt(plaintext.encode("utf-8")).decode("ascii")
     with engine.begin() as conn:
@@ -65,6 +67,55 @@ def get_picnic_auth(engine: Engine, household_id: str) -> dict[str, Any] | None:
         except (ValueError, TypeError):
             return None
     return payload
+
+
+def reserve_picnic_sms_request(engine: Engine, household_id: str) -> str:
+    """Atomic, fail-closed SMS throttle across concurrent app workers.
+
+    Reserve before calling Picnic to avoid sending multiple codes due to
+    duplicate clicks or repeated requests. No OTP or token leaves storage.
+    """
+    now = datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        row = conn.execute(text("""
+            SELECT credential_ciphertext FROM retailer_account_credentials
+            WHERE household_id = :household_id AND provider = :provider
+        """), {"household_id": str(household_id), "provider": _PROVIDER}).scalar_one_or_none()
+        if not row:
+            raise ValueError("Geen geldige Picnic-sms-verificatie actief.")
+        try:
+            state = json.loads(_fernet().decrypt(str(row).encode("ascii")).decode("utf-8"))
+            deadline = datetime.fromisoformat(str(state["pending_until"]))
+            last_text = state.get("sms_last_requested")
+            last = datetime.fromisoformat(last_text) if last_text else None
+        except (InvalidToken, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            raise ValueError("Picnic-sms-sessie is ongeldig.") from None
+        if not state.get("pending_2fa") or deadline.tzinfo is None or now >= deadline:
+            raise ValueError("Picnic-sms-sessie is verlopen.")
+        if int(state.get("sms_request_count", 0)) >= 3:
+            raise ValueError("Maximum aantal sms-aanvragen bereikt. Meld opnieuw aan.")
+        if last is not None and (last.tzinfo is None or (now - last).total_seconds() < 60):
+            raise ValueError("Wacht minimaal één minuut voordat je opnieuw een code aanvraagt.")
+        token = state.get("auth_key")
+        if not isinstance(token, str) or not token:
+            raise ValueError("Picnic-sms-sessie is ongeldig.")
+        state["sms_last_requested"] = now.isoformat()
+        state["sms_request_count"] = int(state.get("sms_request_count", 0)) + 1
+        next_cipher = _fernet().encrypt(json.dumps(state, separators=(",", ":")).encode("utf-8")).decode("ascii")
+        updated = conn.execute(text("""
+            UPDATE retailer_account_credentials SET
+                credential_ciphertext = :next_cipher, updated_at = CURRENT_TIMESTAMP
+            WHERE household_id = :household_id AND provider = :provider
+              AND credential_ciphertext = :prior_cipher
+        """), {
+            "next_cipher": next_cipher,
+            "household_id": str(household_id),
+            "provider": _PROVIDER,
+            "prior_cipher": str(row),
+        })
+        if updated.rowcount != 1:
+            raise ValueError("Er loopt al een Picnic-sms-aanvraag. Probeer later opnieuw.")
+    return token
 
 
 def delete_picnic_auth(engine: Engine, household_id: str) -> None:
