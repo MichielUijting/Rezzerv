@@ -104,9 +104,9 @@ def verify_generated_script(
         raise ValidationError("Eindbestand is geen geldig ASCII-batchbestand.") from exc
     if artifact != expected.encode("ascii"):
         raise ValidationError("Eindbestand wijkt af van canonieke generatoruitvoer.")
-    if b"\\r\\n" not in artifact or b"\\n" in artifact.replace(b"\\r\\n", b""):
+    if b"\r\n" not in artifact or b"\n" in artifact.replace(b"\r\n", b""):
         raise ValidationError("Eindbestand mist consequente Windows-regelafbrekingen.")
-    if re.search(r"(?im)^echo\\s+echo(?:\\s|$)", decoded):
+    if re.search(r"(?im)^echo\s+echo(?:\s|$)", decoded):
         raise ValidationError("Dubbele echo gevonden in eindbestand.")
     if decoded.count("call start.bat") != 1 or "@@" in decoded:
         raise ValidationError("Eindbestand heeft ongeldige start of placeholders.")
