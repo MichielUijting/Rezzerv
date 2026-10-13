@@ -65,3 +65,38 @@ Picnic. Verplichte normale/Ready/F7-gates blijven gelden.
 De PR blijft Draft totdat scope, versie en toepasselijke gates groen zijn.
 Geen merge zonder expliciete PO-GO voor exacte kandidaat-SHA en geen
 deployment/release zonder afzonderlijke PO-GO.
+
+## Aanvulling: experimentele authenticatie (nog niet live bevestigd)
+
+PR bevat inmiddels `picnic_auth_protocol.py` met het onofficiële Picnic
+aanmeldprotocol, sms-aanvraag en sms-verificatie, plus uitsluitend
+toegestane HTTP-routes via `picnic_http_transport.py`. De Inhuis API
+biedt huishoudgebonden `/api/receipts/retailers/picnic/status`,
+`connect`, `request-sms`, `verify-sms`, `deliveries` en
+`deliveries/{id}`, plus `DELETE connect`.
+
+De inloggegevens worden direct gebruikt om aan te melden maar niet
+opgeslagen; alleen de Picnic-sessiesleutel en pending-2FA-status worden
+versleuteld bewaard in de bestaande huishoudgebonden
+`retailer_account_credentials` opslag, onder provider `picnic` en
+met dezelfde sleutelbeheerroute als AH. Gebruikers kunnen via de nieuwe
+proefsectie onder Winkelkoppelingen inloggen, de sms-code afhandelen,
+beperkt de bezorggeschiedenis uitlezen en de sessie verwijderen.
+
+**Nog geen live bewijs** dat de onofficiële inlog- en 2FA-endpoints of
+headerconventies voor huidige Picnic-klantaccounts werken. Het is
+bovendien niet bewezen dat Picnic dit gebruik volgens zijn actuele
+voorwaarden toestaat. Er is nog geen definitieve factuurreconciliatie.
+Er zijn geen Kassa-writes en de proef-UI vermeldt dat uitdrukkelijk.
+Raad gebruikers niet aan wachtwoorden buiten Inhuis te delen;
+het invoeren in de proef-UI is pas zinvol wanneer de gerichte CI en
+de risicobeoordeling van een geautoriseerde liveproef zijn afgerond.
+
+Gerichte testset:
+`PYTHONPATH=backend python -m pytest -q
+backend/tests/test_picnic_readonly_probe.py
+backend/tests/test_picnic_auth_protocol.py
+backend/tests/test_picnic_account_secure_store.py`
+
+Deze controleert protocolcontracten, foutafscherming, vast endpoint/
+request-allowlist, encryptie, huishoudscheiding en isolatie van AH.
