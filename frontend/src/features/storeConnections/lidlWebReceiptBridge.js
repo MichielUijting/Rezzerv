@@ -408,7 +408,10 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
           } catch {}
         }
 
-        if (!anchors.length) break
+        if (!anchors.length) {
+          if (pageNumber === 1) throw new Error('Lidl-historie kon niet worden geladen; er is geen import afgerond.')
+          break
+        }
         let added = 0
         const pageDays = anchors.map(anchor => historyRowDay(anchor, iframe.contentDocument))
         const fullyDated = pageDays.every(Boolean)
