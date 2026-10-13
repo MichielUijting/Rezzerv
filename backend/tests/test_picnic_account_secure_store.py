@@ -1,9 +1,11 @@
 """Picnic encrypted credential partition and 2FA pending-state contracts."""
+import pytest
 from sqlalchemy import create_engine, text
 
 from app.services import retailer_account_secure_store as shared
 from app.services.picnic_account_secure_store import (
     save_picnic_auth, get_picnic_auth, delete_picnic_auth, picnic_status,
+    reserve_picnic_sms_request,
 )
 
 
@@ -33,6 +35,9 @@ def test_picnic_keys_are_encrypted_household_scoped_and_not_ah(tmp_path, monkeyp
         assert picnic_status(engine, "family-one")["verification_required"] is True
         assert picnic_status(engine, "family-one")["connected"] is False
         assert get_picnic_auth(engine, "family-two") is None
+        assert reserve_picnic_sms_request(engine, "family-one") == "pending-secret-key-123"
+        with pytest.raises(ValueError, match="minimaal één minuut"):
+            reserve_picnic_sms_request(engine, "family-one")
         with engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT provider, credential_ciphertext FROM retailer_account_credentials
