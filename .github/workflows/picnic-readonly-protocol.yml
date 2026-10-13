@@ -15,7 +15,7 @@ on:
       - 'backend/app/integrations/picnic_http_transport.py'
       - 'backend/app/services/picnic_account_secure_store.py'
       - 'backend/tests/test_picnic_auth_protocol.py'
-      - 'backend/tests/test_picnic_account_secure_store.py backend/tests/test_picnic_order_converter.py'
+      - 'backend/tests/test_picnic_account_secure_store.py'
       - 'backend/app/api/retailer_receipt_routes.py'
       - 'frontend/src/features/storeConnections/PicnicAccountResearchPanel.jsx'
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
@@ -38,4 +38,4 @@ jobs:
       - name: Run synthetic Picnic read-only contract
         env:
           PYTHONPATH: backend
-        run: python -m pytest -q backend/tests/test_picnic_readonly_probe.py backend/tests/test_picnic_auth_protocol.py backend/tests/test_picnic_account_secure_store.py
+        run: python -m pytest -q backend/tests/test_picnic_readonly_probe.py backend/tests/test_picnic_auth_protocol.py backend/tests/test_picnic_account_secure_store.py backend/tests/test_picnic_order_converter.py
