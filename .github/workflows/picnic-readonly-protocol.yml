@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install focused test dependency
-        run: python -m pip install pytest httpx cryptography sqlalchemy
+        run: python -m pip install pytest httpx cryptography sqlalchemy 'pydantic>=2'
       - name: Run synthetic Picnic read-only contract
         env:
           PYTHONPATH: backend
