@@ -195,6 +195,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
     'const C=' + JSON.stringify(callbackUrl) + ';' +
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
     'const parseReceipt=' + parserSource + ';' +
+    'const JUMBO_BATCH_LIMIT=' + String(JUMBO_BATCH_LIMIT) + ';' +
     'const jumboDay=' + jumboDay.toString() + ';' +
     'const jumboDateWindow=' + jumboDateWindow.toString() + ';' +
     'const selectJumboHistory=' + selectJumboHistory.toString() + ';' +
