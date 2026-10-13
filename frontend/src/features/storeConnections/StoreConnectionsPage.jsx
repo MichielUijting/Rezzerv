@@ -50,6 +50,10 @@ export default function StoreConnectionsPage() {
     [providers, connections, ahConnection],
   )
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
+  const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
+    lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
+    lidlTo !== (lidlWindow.configured_to_date || '')
+  )
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
   const jumboPocBookmarklet = useMemo(
     () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
@@ -732,6 +736,11 @@ export default function StoreConnectionsPage() {
             <div data-testid="lidl-import-window">
               <strong>Importperiode</strong>
               <p>{lidlWindow ? lidlWindow.from_date + ' t/m ' + lidlWindow.to_date : 'Laden…'}</p>
+              {lidlPeriodUnsaved ? (
+                <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
+                  De gekozen importperiode is nog niet opgeslagen. Klik eerst op Opslaan.
+                </div>
+              ) : null}
               {lidlWindow?.can_manage ? <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <Input type="date" label="Van" value={lidlFrom} onChange={e => setLidlFrom(e.target.value)} />
                 <Input type="date" label="Tot (optioneel)" value={lidlTo} onChange={e => setLidlTo(e.target.value)} />
@@ -769,6 +778,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
+                disabled={lidlPeriodUnsaved || lidlWindowSaving || !lidlWindow}
                 data-testid="lidl-web-open-history"
               >
                 Open mijn Lidl-kassabonnen
