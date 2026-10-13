@@ -70,7 +70,7 @@ async function runMock({ mutatePage = null, sourceHistory = history } = {}) {
 }
 
 const ok = await runMock()
-assert.equal(ok.result.ok, true)
+assert.equal(ok.result.ok, true, JSON.stringify(ok.result))
 assert.equal(ok.result.total_results, 12)
 assert.equal(ok.result.details.length, 2)
 assert.equal(ok.result.details[0].parsed.items[0].name, 'BROOD')
