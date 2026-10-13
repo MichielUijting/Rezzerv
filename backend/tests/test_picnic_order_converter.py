@@ -97,8 +97,29 @@ def test_nonfinal_delivery_rejected(change, expected):
 def test_ungrounded_deposit_cannot_be_added_to_stock():
     data = sample()
     data["orders"][0]["total_deposit"] = 25
-    with pytest.raises(PicnicReadOnlyContractError, match="deposits require"):
+    with pytest.raises(PicnicReadOnlyContractError, match="deposits do not reconcile"):
         picnic_order_to_envelope(data, "synthetic-order-1")
+
+
+def test_synthetic_deposit_is_separate_non_inventory_financial_line():
+    data = sample()
+    order = data["orders"][0]
+    order["total_deposit"] = 25
+    order["deposit_breakdown"] = [{"type": "DEFAULT", "value": 25, "count": 1}]
+    order["total_price"] = 500
+    order["checkout_total_price"] = 500
+    result = picnic_order_to_envelope(data, "synthetic-order-1")
+    canonical = normalize_retailer_receipt(result, scan_id="picnic_deposit", document_sha256="a" * 64)
+    assert canonical.receipt.totals.grand_total == 5
+    assert canonical.receipt.totals.deposit_total == 0.25
+    assert len(canonical.receipt.lines) == 3
+    deposit = canonical.receipt.lines[-1]
+    assert deposit.line_type == "deposit"
+    assert deposit.description == "Statiegeld"
+    assert deposit.line_total == 0.25
+    legacy = canonical_to_receipt_parse_result(canonical)
+    assert legacy.lines[-1]["line_type"] == "deposit"
+    assert legacy.parse_status == "review_needed"
 
 
 def test_unknown_delivery_fee_requires_invoice_reconciliation():
