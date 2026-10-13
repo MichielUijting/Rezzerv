@@ -45,6 +45,8 @@ Dit zijn bewuste veiligheidswijzigingen, geen stilzwijgende herschrijving.
    wegwerp-Git-repository met een onschadelijke start.bat.
 3. Na merge kan een workflow_dispatch op de default branch worden uitgevoerd
    met PR-nummer, actuele branch/SHA, titel en testinstructies.
+   Als alternatief kan de repository-eigenaar via een PR-commentaar een
+   gecontroleerde uitgifte aanvragen zonder handmatige GitHub-formuliervelden.
 4. Live PR-data wordt gecontroleerd tegen de opgegeven branch en SHA.
    Alleen bij geslaagde Windows-tests wordt een batch + JSON-bewijs geupload.
 5. Bewijs bevat artifact-hash, kandidaat-SHA, generator-commit en workflow-run-ID.
@@ -73,6 +75,7 @@ verkeerde SHA, aangepaste start, kapotte CRLF) en vereisen afwijzing.
 
 **Distributieregel:** lever uitsluitend een via
 `Canonical PO test script validation and delivery` / `workflow_dispatch`
+of de door de repository-eigenaar gevraagde `issue_comment`-uitgifteroute
 gepubliceerd artefact met het corresponderende `evidence.json` uit.
 Een handgemaakt chatbestand zonder dit actuele uitgiftebewijs mag niet als
 officieel getest PO-script worden aangeboden. Controleer vlak voor aanbieding
@@ -101,3 +104,36 @@ GitHub om een onbewezen bestand maakt. Die grens blijft expliciet.
 - [ ] Officieel artifact en evidence na merge aantoonbaar geproduceerd.
 - [ ] Ruleset, bypass en reviewbescherming objectief geverifieerd.
 - [ ] Aangetoond dat verboden wijzigingen door verplichte gate worden geblokkeerd.
+
+## Uitgifte zonder PO-handwerk (PR-commentaar)
+
+De Github-koppeling van ChatGPT kan wel een GitHub PR-commentaar plaatsen,
+maar geen `workflow_dispatch` aanroepen. De officiële workflow ondersteunt
+daarom ook een verzoek via een commentaar door de repository-eigenaar:
+
+```text
+/inhuis-po-test <exacte 40-tekens kandidaat-SHA>
+Controleer Lidl importperiode
+Controleer een bestaande en een herimporteerde bon in Kassa
+```
+
+- Alleen een commentaar op een bestaande PR, afkomstig van de eigenaar van
+  de repository, mag het script vrijgeven; andere reacties worden genegeerd
+  of fail-closed afgewezen.
+- Het script wordt met `contents: read` en `pull-requests: read` op de
+  vertrouwde default-branch gegenereerd. Er zijn geen repository secrets of
+  verhoogde GitHub-schrijfrechten nodig.
+- De branch wordt uitsluitend van de actuele PR-head gelezen en moet een
+  geldige `codex/`-branch zijn. De SHA in het commentaar moet exact gelijk
+  zijn aan de actuele PR-head; een gewijzigde kandidaat wordt afgewezen.
+- Het standaard Windows-veiligheidspakket, canonieke generator, byte-identieke
+  `--verify-only` en SHA-256-bewijs gelden ongewijzigd.
+- De workflow publiceert alleen de BAT met `evidence.json` als artefact.
+  De PO hoeft hiervoor zelf geen GitHub Actions-formulier in te vullen.
+- Als GitHub deze nieuwe trigger niet start (bijvoorbeeld door de
+  identiteit van de commentaarauteur), blijft de bestaande
+  `workflow_dispatch`-route beschikbaar; er is geen toestemming tot het
+  uitschakelen van controles of omzeilen van gates.
+
+De repositorycode kan de mogelijkheden van een ChatGPT-connector niet
+wijzigen. Deze route gebruikt alleen reeds beschikbare GitHub-acties.
