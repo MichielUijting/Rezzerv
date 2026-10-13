@@ -14,12 +14,12 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 
 1. De gebruiker opent via Winkelkoppelingen zijn eigen ingelogde
    Jumbo-bestellingenpagina in hetzelfde tabblad.
-2. De bestaande favoriet leest de nieuwste digitale bon en geeft alleen
-   afgeleide bonvelden terug aan Inhuis, geen sessietokens of cookies.
-3. Inhuis toont de waargenomen bon (bonnummer, datum, winkel, totaal en
-   product-/statiegeldregels).
-4. Een expliciete knop **Importeer deze bon naar Kassa** valideert eerst
-   herkomst, versie, bonnummer, datum, artikelen, bedragen en totaalsom.
+2. De nieuwe v6-favoriet leest de begrensde historie binnen de ingestelde
+   periode en geeft alleen afgeleide bonvelden terug, geen sessietokens of cookies.
+3. Inhuis toont de geselecteerde bonnen met hun datum, bonnummer en totaal,
+   plus de detailgegevens van de eerste bon.
+4. Een expliciete knop **Importeer X bon(nen) naar Kassa** valideert eerst
+   de versie en alle bonnummers, datums, artikelen, bedragen en totaalsommen.
 5. Een geldige bon wordt via de bestaande `/api/receipts/retailers/import`
    API naar de household-scoped ontvangstketen gestuurd. De bestaande
    importservice en duplicaatcontrole bepalen nieuw/al bekend/bijgewerkt.
@@ -32,7 +32,8 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 - Een onbekende herkomst, formaatversie, ontbrekend detail, ongeldig bonnummer,
   ongeldige datum of ontbrekende artikelregels wordt geweigerd.
 - Ontbrekende/niet-valide bedragen, aantallen en niet-sluitend totaal worden
-  geweigerd; geen gedeeltelijke import en geen automatische bevestiging.
+  geweigerd vóór de eerste opslag. Bij een latere netwerkfout kan een eerder
+  verwerkte bon al in Kassa staan; de teller maakt dit zichtbaar.
 - De URL-fragment-redirect veroorzaakt zelf nooit een databasewrite.
 - Geen Jumbo-login, wachtwoord, cookie of token wordt opgeslagen in Inhuis.
 - De generator van synthetische cases bewijst niet dat echte Jumbo-data
@@ -78,9 +79,9 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 
 ## Bewust open vóór fase-1-acceptatie
 
-- Uitbreiden van één nieuwste bon naar volledige veilige lijstimport met
-  paginering en beperkte overdracht; zonder data uit echte Jumbo-accounts
-  is volledigheid van de actuele API niet bewezen.
+- De begrensde lijstimport en paginering zijn met een uitgevoerde browsermock
+  getest, maar zonder echte Jumbo-data is compatibiliteit met de actuele API
+  en zijn verschillende pagineringvarianten niet bewezen.
 - Echte kortingen en promotievarianten toetsen aan hun bronlayout, zodat
   we financiële afwijkingen niet stilzwijgend accepteren.
 - Valideren dat een echte Jumbo-bon via Kassa, Uitpakken en Voorraad
@@ -90,10 +91,22 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 
 ## Technisch testcontract
 
-`node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs`
-test synthetisch een product met hoeveelheid, promo, statiegeld, totaal,
-plus negatieve gevallen. CI draait deze test rechtstreeks in
-`jumbo-phase1-contract-validation.yml` en in de reguliere frontendregressie.
+De gerichte CI-workflow `jumbo-phase1-contract-validation.yml` draait:
+
+- `node frontend/tests/jumbo-receipt-poc-bridge.contract.mjs`:
+  hoeveelheid, promo, statiegeld, totalen, batch-deduplicatie en fail-closed.
+- `node frontend/tests/jumbo-browser-history-mock.contract.mjs`:
+  uitvoerbare bookmarklet met gesimuleerde GraphQL-pagina's, detailopvraag,
+  lege historie, pagineringsfout en te grote selectie.
+- `pytest backend/tests/test_jumbo_phase1_server_validation.py`:
+  onafhankelijke pre-ingest-controle en afwijzing van gemanipuleerde bedragen,
+  datums, aantallen, kortingen, statiegeld en productregels.
+- `pytest backend/tests/test_jumbo_phase1_financial_normalization.py`:
+  kanonieke Kassa-typen `product`, `discount`, `deposit`.
+
+De backendtests draaien met minimale afhankelijkheden en zonder PostgreSQL.
+De bestaande generieke huishoudisolatie en duplicaatguard zijn ongewijzigd
+en worden later opnieuw getoetst tijdens de verplichte integratieregessie.
 
 Zonder echte Jumbo-bon is het oordeel uitsluitend
 **technisch geautomatiseerd getest**, niet **live functioneel geaccepteerd**.
