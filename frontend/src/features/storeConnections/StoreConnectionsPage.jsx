@@ -408,6 +408,7 @@ export default function StoreConnectionsPage() {
           currentPage: Number(payload?.current_page || 0),
           firstDetail: payload?.first_detail || null,
           selectedCount: Array.isArray(payload?.details) ? payload.details.length : 0,
+          details: Array.isArray(payload?.details) ? payload.details : [],
           sourceOrigin: payload?.source_origin || null,
           transport: 'url-fragment',
         })
@@ -768,6 +769,12 @@ export default function StoreConnectionsPage() {
                 <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
                 <div><strong>Bonnen in geschiedenis:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
                 <div><strong>Bonnen in gekozen periode:</strong> {jumboPocResult.selectedCount || 0}</div>
+                {jumboPocResult.details.map((detail) => (
+                  <div key={detail.transactionId}>
+                    {detail.purchaseEndOn?.slice(0, 10) || 'Datum onbekend'} — bon {detail.transactionId} —
+                    totaal € {typeof detail.parsed?.total === 'number' ? detail.parsed.total.toFixed(2).replace('.', ',') : 'onbekend'}
+                  </div>
+                ))}
                 {jumboPocResult.firstDetail ? (
                   <>
                     <div><strong>Nieuwste bon-ID:</strong> {jumboPocResult.firstDetail.transactionId || '—'}</div>
