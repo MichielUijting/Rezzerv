@@ -159,3 +159,54 @@ def test_import_blocks_even_forged_invoice_verification_flag():
     supplied.receipt["_picnic_invoice_verified"] = True
     with pytest.raises(ValueError, match="factuurvalidatie"):
         import_retailer_receipt(None, None, household_id="synthetic-household", envelope=supplied)
+
+
+@pytest.mark.parametrize(("field", "value", "reason"), [
+    ("total_price", 476, "total does not reconcile"),
+    ("checkout_total_price", 476, "total does not reconcile"),
+    ("total_savings", 26, "savings do not reconcile"),
+    ("total_deposit", 1, "deposits do not reconcile"),
+    ("total_price", -1, "negative amount"),
+])
+def test_unreconciled_picnic_financial_fields_fail_closed(field, value, reason):
+    delivery = sample()
+    delivery["orders"][0][field] = value
+    with pytest.raises(PicnicReadOnlyContractError, match=reason):
+        picnic_order_to_envelope(delivery, "synthetic-order-1")
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("status", "CANCELLED"),
+    ("status", "CURRENT"),
+    ("cancellation_time", "2026-10-12T12:00:00Z"),
+])
+def test_nonfinal_or_cancelled_order_never_becomes_stock(field, value):
+    delivery = sample()
+    delivery["orders"][0][field] = value
+    with pytest.raises(PicnicReadOnlyContractError, match="not finalized"):
+        picnic_order_to_envelope(delivery, "synthetic-order-1")
+
+
+def test_duplicate_order_identity_is_rejected():
+    delivery = sample()
+    delivery["orders"].append(dict(delivery["orders"][0]))
+    with pytest.raises(PicnicReadOnlyContractError, match="missing or ambiguous"):
+        picnic_order_to_envelope(delivery, "synthetic-order-1")
+
+
+def test_fractional_unit_cent_allocation_is_rejected():
+    delivery = sample()
+    first = delivery["orders"][0]["items"][0]
+    first["price"] = 251
+    first["display_price"] = 251
+    delivery["orders"][0]["total_price"] = 476
+    delivery["orders"][0]["checkout_total_price"] = 476
+    with pytest.raises(PicnicReadOnlyContractError, match="unit allocation"):
+        picnic_order_to_envelope(delivery, "synthetic-order-1")
+
+
+def test_unrecognized_adjustments_do_not_become_products():
+    delivery = sample()
+    delivery["orders"][0]["returned_containers"] = [{"count": 1, "price": -25}]
+    with pytest.raises(PicnicReadOnlyContractError, match="financial adjustments"):
+        picnic_order_to_envelope(delivery, "synthetic-order-1")
