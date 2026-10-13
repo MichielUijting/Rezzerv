@@ -209,6 +209,21 @@ def remove_ah_account_connection(
 
 
 
+def _authorized_picnic_manager(authorization: str | None) -> str:
+    household_id = _authorized_household_id(authorization)
+    with engine.connect() as conn:
+        context, membership_id = _context_and_membership(conn)
+        if str(context.active_household_id) != str(household_id):
+            raise HTTPException(status_code=403, detail="Huishouden komt niet overeen.")
+        decision = evaluate_household_permission(
+            conn, household_id=str(household_id), membership_id=membership_id,
+            permission_key="household_settings.manage",
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail="Alleen een bevoegde beheerder mag Picnic koppelen.")
+    return household_id
+
+
 class PicnicLoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=1024)
@@ -229,7 +244,7 @@ def connect_picnic_account(
     payload: PicnicLoginRequest,
     authorization: Optional[str] = Header(None),
 ):
-    household_id = _authorized_household_id(authorization)
+    household_id = _authorized_picnic_manager(authorization)
     transport = PicnicHttpTransport()
     try:
         result = PicnicAuthClient(transport.send).login(payload.username, payload.password)
@@ -243,7 +258,7 @@ def connect_picnic_account(
 
 @router.post("/picnic/request-sms")
 def request_picnic_sms(authorization: Optional[str] = Header(None)):
-    household_id = _authorized_household_id(authorization)
+    household_id = _authorized_picnic_manager(authorization)
     try:
         reserved_token = reserve_picnic_sms_request(engine, household_id)
     except ValueError as exc:
@@ -263,7 +278,7 @@ def verify_picnic_sms(
     payload: PicnicSmsRequest,
     authorization: Optional[str] = Header(None),
 ):
-    household_id = _authorized_household_id(authorization)
+    household_id = _authorized_picnic_manager(authorization)
     auth = get_picnic_auth(engine, household_id)
     if not auth or not auth["pending_2fa"]:
         raise HTTPException(status_code=409, detail="Geen Picnic-sms-verificatie actief.")
@@ -280,7 +295,7 @@ def verify_picnic_sms(
 
 @router.delete("/picnic/connect")
 def disconnect_picnic_account(authorization: Optional[str] = Header(None)):
-    household_id = _authorized_household_id(authorization)
+    household_id = _authorized_picnic_manager(authorization)
     delete_picnic_auth(engine, household_id)
     return picnic_status(engine, household_id)
 
