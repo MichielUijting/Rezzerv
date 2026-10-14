@@ -1057,3 +1057,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Ook bij een laat antwoord van de browserbridge na het verlaten van Winkelkoppelingen verschijnt geen nieuwe Lidl-melding op Kassa of elders.
 - Een succesvolle serverreactie betekent niet automatisch een nieuwe bon. De Lidl-terugkoppeling onderscheidt **nieuw**, **al bekend**, **bestaande bon bijgewerkt** en **mislukt** aan de hand van het bestaande backend-importresultaat. Een onbekend resultaat telt nooit stilzwijgend als nieuw.
 - De melding presenteert alleen aantoonbaar nieuwe bonnen als toegevoegd aan Kassa; bestaande bonnen houden hun bestaande verwerkingstoestand. Er wordt geen nieuw feedbackdesign, kleurpatroon of modale variant geïntroduceerd.
+
+## Mobiele headerbranding en Uitpakken-acties (PR #588)
+
+- De gedeelde mobiele header toont rechts het officiële tweedelige InHuis-woordmerk uit de bestaande inlogpagina (de herkenbare groene cursieve **In** plus **Huis**), op mobiele schaal. Geen los huis-pictogram als vervanging voor de productidentiteit.
+- Deze headercorrectie is appbreed: individuele schermen plaatsen geen eigen afwijkend mobiel headerlogo.
+- In het mobiele Uitpakken-overzicht staan de bestaande bulkacties **Exporteren** en **Verwijderen** onder de paginering in de normale documentstroom. Het actiegebied is niet sticky/fixed en krijgt geen extra wit paneel, rand of aparte achtergrond.
+- Bestaande voorwaarden voor selectie, beschikbaarheid en autorisaties blijven van toepassing.
