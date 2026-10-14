@@ -11,6 +11,8 @@ python-dotenv==1.2.2
 numpy==2.3.5
 capybara-docsaid==0.12.0
 docaligner_docsaid==1.1.1
+# Imported by capybara.onnxengine at scanner startup; must be explicit.
+onnxruntime==1.23.2
 pypdf==6.14.2
 # capybara-docsaid trekt zelf PyTurboJPEG>=2.0 binnen, wat libjpeg-turbo 3.0+
 # vereist — Debian's standaard libturbojpeg0-pakket is nog 2.x. Vastgepind
