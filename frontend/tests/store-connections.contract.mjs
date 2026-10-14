@@ -58,7 +58,7 @@ assert.equal(unavailableAldi.cardNumber, '')
 
 const page = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(page, /aldi-digital-unavailable/)
-assert.match(page, /Aldi en PLUS/) 
+assert.match(page, /Aldi en PLUS/)
 assert.match(page, /geen digitaal toegankelijke kassabonnen voor een rechtstreekse koppeling/)
 assert.match(page, /row.providerCode === 'aldi'/)
 assert.doesNotMatch(page, /importAldiDigitalFile|aldi-digital-import|aldi-digital-file/)
