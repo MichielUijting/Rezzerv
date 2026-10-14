@@ -2154,6 +2154,38 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     }
   }
 
+  const [isBulkApprovingReceipts, setIsBulkApprovingReceipts] = useState(false)
+
+  async function approveSelectedReceipts() {
+    const ids = [...new Set(selectedReceiptIds.map((id) => String(id || '').trim()).filter(Boolean))]
+    if (!ids.length || isBulkApprovingReceipts) return
+    setIsBulkApprovingReceipts(true)
+    setError('')
+    const approved = []
+    const failed = []
+    try {
+      for (const id of ids) {
+        try {
+          // The existing backend approval endpoint remains the sole authority:
+          // no frontend shortcut around receipt/household validation.
+          await fetchJson(`/api/receipts/${encodeURIComponent(id)}/approve`, { method: 'POST' })
+          approved.push(id)
+        } catch (error) {
+          failed.push({ id, message: normalizeErrorMessage(error?.message) || 'Goedkeuren mislukt.' })
+        }
+      }
+      await loadReceipts(householdId)
+      setSelectedReceiptIds(failed.map((item) => item.id))
+      showKassaFeedback(failed.length ? 'warning' : 'success',
+        failed.length
+          ? `${approved.length} goedgekeurd, ${failed.length} niet. Niet-goedgekeurde bonnen blijven geselecteerd.`
+          : `${approved.length} kassabon${approved.length === 1 ? '' : 'nen'} goedgekeurd voor Uitpakken.`,
+        { key: 'kassa-bulk-approve-result', detail: failed.map((item) => item.message).join(' · ') })
+    } finally {
+      setIsBulkApprovingReceipts(false)
+    }
+  }
+
   async function deleteSelectedReceipts() {
     await deleteReceiptsByIds(selectedReceiptIds)
   }
@@ -3389,7 +3421,8 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
+                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
+                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
               <style>{`
