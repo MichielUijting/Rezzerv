@@ -55,7 +55,7 @@ def _map(lines):
 def test_separate_negative_discount_is_counted():
     result = _map([
         {"kind": "product", "raw_label": "Artikel", "line_total": "10.00"},
-        {"kind": "discount", "raw_label": "Actiekorting", "line_total": "-2.00"},
+        {"kind": "adjustment", "raw_label": "Actiekorting", "line_total": "-2.00"},
     ])
     assert result["status"] == "completed"
     assert result["receipt"]["totals"]["discount_total"] == "2.00"
@@ -66,7 +66,7 @@ def test_separate_negative_discount_is_counted():
 def test_explicit_discount_not_double_counted():
     result = _map([
         {"kind": "product", "raw_label": "Artikel", "line_total": "10.00", "discount_amount": "-1.00"},
-        {"kind": "discount", "raw_label": "Actiekorting", "line_total": "-2.00", "discount_amount": "-2.00"},
+        {"kind": "adjustment", "raw_label": "Actiekorting", "line_total": "-2.00"},
     ])
     assert result["receipt"]["totals"]["discount_total"] == "3.00"
 
@@ -82,8 +82,8 @@ def test_ah_single_discount_receipt_total():
         {"kind": "product", "raw_label": "Artikel A", "line_total": "1.19"},
         {"kind": "product", "raw_label": "Artikel B", "line_total": "0.99"},
         {"kind": "product", "raw_label": "Artikel C", "line_total": "2.19"},
-        {"kind": "discount", "raw_label": "Bonus Box", "line_total": "-0.15"},
-        {"kind": "fee", "raw_label": "Koopzegels", "line_total": "0.80"},
+        {"kind": "adjustment", "raw_label": "Bonus Box", "line_total": "-0.15"},
+        {"kind": "adjustment", "raw_label": "Koopzegels", "line_total": "0.80"},
     ])
     assert result["status"] == "completed"
     assert result["receipt"]["totals"]["discount_total"] == "0.15"
@@ -98,13 +98,35 @@ def test_ah_five_discounts_not_confused_with_stamps():
     discount_values = ["-0.54", "-0.20", "-0.49", "-0.54", "-0.51"]
     lines = [{"kind": "product", "raw_label": "Productensom", "line_total": "43.35"}]
     lines += [
-        {"kind": "discount", "raw_label": f"Voordeel {index}", "line_total": amount}
+        {"kind": "adjustment", "raw_label": f"Voordeel {index}", "line_total": amount}
         for index, amount in enumerate(discount_values, start=1)
     ]
-    lines.append({"kind": "fee", "raw_label": "Koopzegels", "line_total": "8.20"})
+    lines.append({"kind": "adjustment", "raw_label": "Koopzegels", "line_total": "8.20"})
     result = _map(lines)
     assert result["receipt"]["totals"]["discount_total"] == "2.28"
     assert [line["line_type"] for line in result["receipt"]["lines"][1:6]] == ["discount"] * 5
     assert result["receipt"]["lines"][-1]["line_type"] == "fee"
     amount = sum(Decimal(str(line["line_total"])) for line in result["receipt"]["lines"])
     assert amount == Decimal("49.27")
+
+
+def test_product_discount_and_positive_stamps_are_separate():
+    result = _map([
+        {"kind": "product", "raw_label": "Artikel", "line_total": "10.00", "discount_amount": "1.00"},
+        {"kind": "adjustment", "raw_label": "Koopzegels", "line_total": "0.80"},
+    ])
+    assert result["receipt"]["totals"]["discount_total"] == "1.00"
+    assert result["receipt"]["lines"][0]["line_type"] == "product"
+    assert result["receipt"]["lines"][1]["line_type"] == "fee"
+
+
+def test_ah_mobile_photo_separate_bonus_and_stamps():
+    """Source contract: 13.23 - 2.88 + 1.00 = 11.35."""
+    result = _map([
+        {"kind": "product", "raw_label": "Artikelen", "line_total": "13.23"},
+        {"kind": "adjustment", "raw_label": "BONUS", "line_total": "-2.88"},
+        {"kind": "adjustment", "raw_label": "KOOPZEGELS", "line_total": "1.00"},
+    ])
+    assert result["receipt"]["totals"]["discount_total"] == "2.88"
+    assert [line["line_type"] for line in result["receipt"]["lines"]] == ["product", "discount", "fee"]
+    assert sum(Decimal(str(line["line_total"])) for line in result["receipt"]["lines"]) == Decimal("11.35")
