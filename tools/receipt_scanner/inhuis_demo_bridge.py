@@ -141,9 +141,24 @@ def _canonical_result(
         kind = str(raw_line.get("kind") or "product").strip().lower()
         line_total = _decimal(raw_line.get("line_total"))
         discount = _decimal(raw_line.get("discount_amount"))
-        if discount is not None:
-            discount_total += abs(discount)
-        line_type = "product" if kind == "product" else ("discount" if (line_total or Decimal("0")) < 0 else "fee")
+        # MeesdeBoer emits product or adjustment, never discount/fee kinds.
+        if kind == "product":
+            if discount is not None:
+                discount_total += abs(discount)
+            line_type = "product"
+        elif kind == "adjustment":
+            if line_total is not None and line_total < 0:
+                discount_total += abs(line_total)
+            line_type = "discount" if line_total is not None and line_total < 0 else "fee"
+        else:
+            return _failed_result(
+                scan_id=scan_id,
+                sha256=sha256,
+                mime_type=mime_type,
+                message="De scanner gaf een onbekend type bonregel terug.",
+                code="INVALID_PROVIDER_RESULT",
+                retryable=False,
+            )
         lines.append(
             {
                 "line_number": index,
