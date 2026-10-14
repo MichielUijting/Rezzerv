@@ -41,6 +41,29 @@
   object-fit: contain;
 }
 
+.rz-mobile-app-header .rz-mobile-inhuis-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  line-height: 1;
+}
+.rz-mobile-app-header .rz-mobile-inhuis-wordmark-in {
+  color: #54b98b;
+  font-family: "Segoe Print", "Comic Sans MS", cursive;
+  font-size: 19px;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -2.5px;
+  transform: rotate(-4deg) skew(-8deg);
+}
+.rz-mobile-app-header .rz-mobile-inhuis-wordmark-huis {
+  color: var(--color-ui-primary-text);
+  font-size: 19px;
+  font-weight: 800;
+  margin-left: 3px;
+  letter-spacing: -1px;
+}
+
 /* Retain legacy module markup for its test hooks, but do not render an
    independent second page header or its duplicated wordmark. */
 .rz-mobile-app-chrome .rz-mobile-module-header:not(.rz-mobile-app-header),
