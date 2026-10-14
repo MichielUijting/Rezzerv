@@ -134,7 +134,7 @@ def test_ah_mobile_photo_separate_bonus_and_stamps():
 
 def _load_semantics():
     """Exercise the real persisted line-role mapping without app/database startup."""
-    source = SOURCE.parents[1] / "backend/app/receipt_ingestion/receipt_line_semantics.py"
+    source = SOURCE.parents[2] / "backend/app/receipt_ingestion/receipt_line_semantics.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     selected = [
         node for node in tree.body
@@ -170,7 +170,7 @@ def test_source_adjustments_remain_financial_and_not_inventory_eligible():
 
 def test_unpack_filters_scanner_financial_lines():
     """Guard the existing Kassa -> Uitpakken filter at its actual call site."""
-    main = (SOURCE.parents[1] / "backend/app/main.py").read_text(encoding="utf-8")
+    main = (SOURCE.parents[2] / "backend/app/main.py").read_text(encoding="utf-8")
     start = main.index("def sync_unpack_batch_lines_for_receipt(")
     end = main.index("\\ndef ", start + 1)
     body = main[start:end]
