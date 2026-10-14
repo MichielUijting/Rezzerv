@@ -869,9 +869,9 @@ export default function StoreConnectionsPage() {
 
         <Card>
           <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
-            <h3 style={{ margin: 0 }}>Aldi</h3>
-            <p style={{ margin: 0 }}>Aldi ondersteunt geen digitale kassabonnen voor reguliere winkelkoppelingen. Een koppeling met Inhuis is daarom niet mogelijk.</p>
-            <p style={{ margin: 0 }}>Papieren Aldi-kassabonnen kunnen nog steeds via Kassa worden gescand.</p>
+            <h3 style={{ margin: 0 }}>Aldi en PLUS</h3>
+            <p style={{ margin: 0 }}>Voor Aldi en PLUS zijn momenteel geen digitaal toegankelijke kassabonnen voor een rechtstreekse koppeling met Inhuis aangetoond. Rechtstreeks ophalen van kassabonnen is daarom momenteel niet mogelijk.</p>
+            <p style={{ margin: 0 }}>Papieren kassabonnen van Aldi en PLUS kunnen nog steeds via Kassa worden gescand.</p>
           </div>
         </Card>
 
