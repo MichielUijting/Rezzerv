@@ -2,6 +2,9 @@ const INHUIS_LOGO_WHITE = "/inhuis-logo-white.png";
 const INHUIS_LOGO_HEADER = "/inhuis-logo-header.png";
 
 export default function BrandLogo({ variant = "header" }) {
+  if (variant === "mobile") {
+    return <span className="rz-mobile-inhuis-wordmark" role="img" aria-label="Inhuis"><span className="rz-mobile-inhuis-wordmark-in" aria-hidden="true">In</span><span className="rz-mobile-inhuis-wordmark-huis" aria-hidden="true">Huis</span></span>;
+  }
   const isLogin = variant === "login";
   const cls = isLogin ? "rz-brandlogo-login" : "rz-brandlogo-header";
   const src = isLogin ? INHUIS_LOGO_WHITE : INHUIS_LOGO_HEADER;
