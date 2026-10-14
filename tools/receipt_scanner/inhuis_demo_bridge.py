@@ -151,14 +151,19 @@ def _canonical_result(
         kind = str(raw_line.get("kind") or "product").strip().lower()
         line_total = _decimal(raw_line.get("line_total"))
         discount = _decimal(raw_line.get("discount_amount"))
-        # A separate negative discount row may have no discount_amount field.
-        # Count its negative line_total once, without double-counting rows that
-        # already carry an explicit per-line discount_amount.
-        if discount is not None:
-            discount_total += abs(discount)
-        elif kind == "discount" and line_total is not None and line_total < 0:
-            discount_total += abs(line_total)
-        line_type = "product" if kind == "product" else ("discount" if (line_total or Decimal("0")) < 0 else "fee")
+        # MeesdeBoer's schema has only product and adjustment. Product discounts
+        # belong to discount_amount; independent adjustments retain their signed
+        # line_total (negative = discount, positive = fee/stamps).
+        if kind == "product":
+            if discount is not None:
+                discount_total += abs(discount)
+            line_type = "product"
+        elif kind == "adjustment":
+            if line_total is not None and line_total < 0:
+                discount_total += abs(line_total)
+            line_type = "discount" if line_total is not None and line_total < 0 else "fee"
+        else:
+            raise ValueError(f"Unsupported MeesdeBoer receipt line kind: {kind!r}")
         lines.append(
             {
                 "line_number": index,
