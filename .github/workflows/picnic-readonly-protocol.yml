@@ -1,0 +1,44 @@
+name: Picnic read-only API protocol contract
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/integrations/picnic_readonly_probe.py'
+      - 'backend/tests/test_picnic_readonly_probe.py'
+      - 'backend/tests/test_picnic_order_converter.py'
+      - 'backend/app/integrations/picnic_order_converter.py'
+      - 'backend/app/integrations/retailer_receipts/contracts.py'
+      - 'backend/app/integrations/retailer_receipts/normalizer.py'
+      - 'backend/app/integrations/receipt_scanners/adapters/retailer_structured.py'
+      - 'backend/app/services/retailer_receipt_import_service.py'
+      - 'backend/app/integrations/picnic_auth_protocol.py'
+      - 'backend/app/integrations/picnic_http_transport.py'
+      - 'backend/app/services/picnic_account_secure_store.py'
+      - 'backend/tests/test_picnic_auth_protocol.py'
+      - 'backend/tests/test_picnic_account_secure_store.py'
+      - 'backend/app/api/retailer_receipt_routes.py'
+      - 'frontend/src/features/storeConnections/PicnicAccountResearchPanel.jsx'
+      - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
+      - '.github/workflows/picnic-readonly-protocol.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  picnic-readonly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused test dependency
+        run: python -m pip install -r backend/requirements.txt pytest
+      - name: Run synthetic Picnic read-only contract
+        env:
+          PYTHONPATH: backend
+          REZZERV_DATASTORE_POLICY: postgresql-only
+          # No live DB: the Picnic service must reject unverified imports before any DB access.
+          DATABASE_URL: postgresql+psycopg://picnic_contract:picnic_contract@127.0.0.1:5432/picnic_contract
+        run: python -m pytest -q backend/tests/test_picnic_readonly_probe.py backend/tests/test_picnic_auth_protocol.py backend/tests/test_picnic_account_secure_store.py backend/tests/test_picnic_order_converter.py

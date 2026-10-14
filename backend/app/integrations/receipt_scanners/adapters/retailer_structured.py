@@ -43,7 +43,7 @@ class StructuredRetailerReceiptScannerAdapter:
             max_file_bytes=self.max_file_bytes,
             asynchronous=False,
             supports_cancel=False,
-            features=("structured_receipt", "ah", "jumbo", "lidl"),
+            features=("structured_receipt", "ah", "jumbo", "lidl", "picnic"),
         )
 
     def submit(self, request: ScanRequestV1) -> ScanSubmissionV1:

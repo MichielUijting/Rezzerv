@@ -18,8 +18,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 RETAILER_RECEIPT_MIME = "application/vnd.inhuis.retailer-receipt+json"
-SUPPORTED_RETAILER_PROVIDERS = ("ah", "jumbo", "lidl")
-RetailerProviderCode = Literal["ah", "jumbo", "lidl"]
+SUPPORTED_RETAILER_PROVIDERS = ("ah", "jumbo", "lidl", "picnic")
+RetailerProviderCode = Literal["ah", "jumbo", "lidl", "picnic"]
 
 
 class RetailerReceiptEnvelope(BaseModel):
