@@ -39,6 +39,7 @@ echo Dit venster open laten zolang je scant.
 set "RESULT=%ERRORLEVEL%"
 CLS
 echo INHUIS - AI-SCANNER GESTOPT (code %RESULT%).
+if "%INHUIS_SCANNER_BACKGROUND%"=="1" exit /b %RESULT%
 pause
 exit /b %RESULT%
 :create_venv
@@ -53,17 +54,20 @@ goto :setup
 :source_missing
 CLS
 echo INHUIS - De scannerbron uit jouw repository ontbreekt.
+if "%INHUIS_SCANNER_BACKGROUND%"=="1" exit /b 1
 pause
 exit /b 1
 :port_in_use
 CLS
 echo INHUIS - Poort 8003 is bezet door een onbekende of oudere scanner.
 echo Er wordt geen bestaand proces gestopt. Sluit de oude scanner eerst veilig.
+if "%INHUIS_SCANNER_BACKGROUND%"=="1" exit /b 1
 pause
 exit /b 1
 :error
 CLS
 echo INHUIS - Scannerconfiguratie of installatie is mislukt.
 echo Bestaande Docker-containers en data zijn niet gewijzigd.
+if "%INHUIS_SCANNER_BACKGROUND%"=="1" exit /b 1
 pause
 exit /b 1
