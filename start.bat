@@ -92,6 +92,12 @@ if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1" (
   start "" "%FRONTEND_URL%"
 )
 
+echo [INFO] Eigen AI-scanner opstarten zonder extra venster...
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\receipt_scanner\start_owned_scanner_background.ps1" -RepositoryRoot "%REPO_DIR%"
+if errorlevel 1 (
+  echo [WAARSCHUWING] Inhuis is gestart, maar de AI-scanner is niet gereed.
+  echo [WAARSCHUWING] Raadpleeg de bovenstaande melding; er is geen scannerproces geforceerd gestopt.
+)
 echo Startup complete.
 exit /b 0
 

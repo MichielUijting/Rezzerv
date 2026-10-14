@@ -16,20 +16,10 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXTERNAL_ROOT = Path(
-    os.getenv("INHUIS_DEMO_ROOT", str(REPO_ROOT / "external" / "in-huis-demo"))
-).resolve()
-
-# Keep the Anthropic credential in the external scanner environment; keep the
-# bridge credential in Inhuis' local .env. Neither file belongs in Git.
-load_dotenv(EXTERNAL_ROOT / ".env", override=False)
+# Scannerbron maakt nu rechtstreeks deel uit van Inhuis. Gevoelige sleutels
+# blijven uitsluitend lokaal in de niet-geversioneerde Inhuis .env.
 load_dotenv(REPO_ROOT / ".env", override=False)
-
-if not EXTERNAL_ROOT.is_dir():
-    raise RuntimeError(f"Externe scannerbron ontbreekt: {EXTERNAL_ROOT}")
-
-sys.path.insert(0, str(EXTERNAL_ROOT))
-from rezzerv import scan_engine  # noqa: E402
+from meesdeboer_engine import scan_engine  # noqa: E402
 
 
 app = Flask("inhuis-external-receipt-scanner")
@@ -151,9 +141,24 @@ def _canonical_result(
         kind = str(raw_line.get("kind") or "product").strip().lower()
         line_total = _decimal(raw_line.get("line_total"))
         discount = _decimal(raw_line.get("discount_amount"))
-        if discount is not None:
-            discount_total += abs(discount)
-        line_type = "product" if kind == "product" else ("discount" if (line_total or Decimal("0")) < 0 else "fee")
+        # MeesdeBoer emits product or adjustment, never discount/fee kinds.
+        if kind == "product":
+            if discount is not None:
+                discount_total += abs(discount)
+            line_type = "product"
+        elif kind == "adjustment":
+            if line_total is not None and line_total < 0:
+                discount_total += abs(line_total)
+            line_type = "discount" if line_total is not None and line_total < 0 else "fee"
+        else:
+            return _failed_result(
+                scan_id=scan_id,
+                sha256=sha256,
+                mime_type=mime_type,
+                message="De scanner gaf een onbekend type bonregel terug.",
+                code="INVALID_PROVIDER_RESULT",
+                retryable=False,
+            )
         lines.append(
             {
                 "line_number": index,
@@ -227,7 +232,7 @@ def health():
             "provider": PROVIDER_CODE,
             "model": str(getattr(scan_engine, "CLAUDE_MODEL", "") or "") or None,
             "headless": True,
-            "bridge_version": 2,
+            "bridge_version": 3,
             "capabilities": {"live_corner_detection": True},
         }
     )
