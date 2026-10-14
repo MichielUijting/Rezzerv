@@ -13,6 +13,15 @@ if not exist "%BRIDGE%" goto :source_missing
 if not exist "%CONFIG%" goto :source_missing
 if not exist "%PYTHON%" goto :create_venv
 :setup
+rem Repair incomplete existing venvs without touching unrelated environments.
+"%PYTHON%" -c "import onnxruntime, capybara, docaligner, anthropic, flask" >nul 2>&1
+if errorlevel 1 (
+  echo INHUIS - Ontbrekende scannerpakketten worden aangevuld.
+  "%PYTHON%" -m pip install --disable-pip-version-check -r "%SCANNER%\requirements.txt"
+  if errorlevel 1 goto :error
+  "%PYTHON%" -c "import onnxruntime, capybara, docaligner, anthropic, flask" >nul 2>&1
+  if errorlevel 1 goto :error
+)
 "%PYTHON%" "%CONFIG%"
 if errorlevel 1 goto :error
 rem Fail closed if any unknown listener owns scanner port; never kill processes.
