@@ -130,3 +130,50 @@ def test_ah_mobile_photo_separate_bonus_and_stamps():
     assert result["receipt"]["totals"]["discount_total"] == "2.88"
     assert [line["line_type"] for line in result["receipt"]["lines"]] == ["product", "discount", "fee"]
     assert sum(Decimal(str(line["line_total"])) for line in result["receipt"]["lines"]) == Decimal("11.35")
+
+
+def _load_semantics():
+    """Exercise the real persisted line-role mapping without app/database startup."""
+    source = SOURCE.parents[1] / "backend/app/receipt_ingestion/receipt_line_semantics.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    selected = [
+        node for node in tree.body
+        if (isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id.startswith("ROLE_") for t in node.targets
+        ))
+        or (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+            and node.target.id == "_CANONICAL_TO_BUSINESS_ROLE")
+        or (isinstance(node, ast.FunctionDef) and node.name in {
+            "_as_bool", "derive_receipt_line_semantics"
+        })
+    ]
+    scope = {"Any": Any}
+    exec(compile(ast.Module(body=selected, type_ignores=[]), str(source), "exec"), scope)
+    return scope["derive_receipt_line_semantics"]
+
+
+def test_source_adjustments_remain_financial_and_not_inventory_eligible():
+    """Kassa persistence semantics: negative discount and positive stamps never stock."""
+    converted = _map([
+        {"kind": "product", "raw_label": "Artikel", "line_total": "13.23"},
+        {"kind": "adjustment", "raw_label": "Actiekorting", "line_total": "-2.88"},
+        {"kind": "adjustment", "raw_label": "Zegels", "line_total": "1.00"},
+    ])
+    derive = _load_semantics()
+    facts = [derive(line) for line in converted["receipt"]["lines"]]
+    assert facts == [
+        {"line_role": "product", "inventory_eligible": True},
+        {"line_role": "financial", "inventory_eligible": False},
+        {"line_role": "financial", "inventory_eligible": False},
+    ]
+
+
+def test_unpack_filters_scanner_financial_lines():
+    """Guard the existing Kassa -> Uitpakken filter at its actual call site."""
+    main = (SOURCE.parents[1] / "backend/app/main.py").read_text(encoding="utf-8")
+    start = main.index("def sync_unpack_batch_lines_for_receipt(")
+    end = main.index("\\ndef ", start + 1)
+    body = main[start:end]
+    assert "derive_receipt_line_semantics(" in body
+    assert "if not semantics['inventory_eligible']:" in body
+    assert "continue" in body[body.index("if not semantics['inventory_eligible']:"):body.index("prior_processed = get_prior_processed_line_fact")]
