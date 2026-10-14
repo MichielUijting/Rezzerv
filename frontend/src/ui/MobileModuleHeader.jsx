@@ -48,7 +48,7 @@ export default function MobileModuleHeader({
         <h1>{title}</h1>
       </div>
       {trailingAction ? <div className="rz-mobile-module-header-trailing">{trailingAction}</div> : (
-        <div className="rz-mobile-module-header-brand"><BrandLogo variant="header" /></div>
+        <div className="rz-mobile-module-header-brand"><BrandLogo variant="mobile" /></div>
       )}
     </header>
   )
