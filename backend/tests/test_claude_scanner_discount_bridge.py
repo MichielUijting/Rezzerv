@@ -74,3 +74,37 @@ def test_explicit_discount_not_double_counted():
 def test_missing_discount_is_not_invented():
     result = _map([{"kind": "product", "raw_label": "Artikel", "line_total": "8.00"}])
     assert result["receipt"]["totals"]["discount_total"] is None
+
+
+def test_ah_single_discount_receipt_total():
+    """Anonymized AH receipt: 4.37 - 0.15 + 0.80 stamps = 5.02."""
+    result = _map([
+        {"kind": "product", "raw_label": "Artikel A", "line_total": "1.19"},
+        {"kind": "product", "raw_label": "Artikel B", "line_total": "0.99"},
+        {"kind": "product", "raw_label": "Artikel C", "line_total": "2.19"},
+        {"kind": "discount", "raw_label": "Bonus Box", "line_total": "-0.15"},
+        {"kind": "fee", "raw_label": "Koopzegels", "line_total": "0.80"},
+    ])
+    assert result["status"] == "completed"
+    assert result["receipt"]["totals"]["discount_total"] == "0.15"
+    assert result["receipt"]["lines"][3]["line_type"] == "discount"
+    assert result["receipt"]["lines"][4]["line_type"] == "fee"
+    amount = sum(Decimal(str(line["line_total"])) for line in result["receipt"]["lines"])
+    assert amount == Decimal("5.02")
+
+
+def test_ah_five_discounts_not_confused_with_stamps():
+    """Anonymized AH totals: 43.35 - 2.28 + 8.20 stamps = 49.27."""
+    discount_values = ["-0.54", "-0.20", "-0.49", "-0.54", "-0.51"]
+    lines = [{"kind": "product", "raw_label": "Productensom", "line_total": "43.35"}]
+    lines += [
+        {"kind": "discount", "raw_label": f"Voordeel {index}", "line_total": amount}
+        for index, amount in enumerate(discount_values, start=1)
+    ]
+    lines.append({"kind": "fee", "raw_label": "Koopzegels", "line_total": "8.20"})
+    result = _map(lines)
+    assert result["receipt"]["totals"]["discount_total"] == "2.28"
+    assert [line["line_type"] for line in result["receipt"]["lines"][1:6]] == ["discount"] * 5
+    assert result["receipt"]["lines"][-1]["line_type"] == "fee"
+    amount = sum(Decimal(str(line["line_total"])) for line in result["receipt"]["lines"])
+    assert amount == Decimal("49.27")
