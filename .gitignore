@@ -54,3 +54,5 @@ docs/*architectuurnotitie*
 # Ad hoc local files
 testfile
 testwrite.txt
+
+tools/receipt_scanner/.venv/
