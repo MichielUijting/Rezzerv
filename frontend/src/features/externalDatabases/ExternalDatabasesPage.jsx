@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
@@ -43,6 +44,8 @@ function ErrorOverlay({ message, onClose }) {
 export default function ExternalDatabasesPage() {
   const [summary, setSummary] = useState(null)
   const [retailers, setRetailers] = useState([])
+  const [retailerPage, setRetailerPage] = useState(1)
+  const [candidatePage, setCandidatePage] = useState(1)
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
   const [selectedRetailer, setSelectedRetailer] = useState('lidl')
   const [matchResult, setMatchResult] = useState(null)
@@ -89,6 +92,12 @@ export default function ExternalDatabasesPage() {
       cancelled = true
     }
   }, [])
+
+  const retailerPageCount = Math.max(1, Math.ceil(retailers.length / 10))
+  const currentRetailerPage = Math.min(retailerPage, retailerPageCount)
+  const pageRetailers = retailers.slice((currentRetailerPage - 1) * 10, currentRetailerPage * 10)
+  useEffect(() => { if (retailerPage > retailerPageCount) setRetailerPage(retailerPageCount) }, [retailerPage, retailerPageCount])
+  useEffect(() => { setCandidatePage(1) }, [matchResult])
 
   const selectedRetailerConfig = useMemo(
     () => retailers.find((retailer) => retailer.retailer_code === selectedRetailer) || retailers[0] || null,
@@ -174,6 +183,10 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
+  const candidatePageCount = Math.max(1, Math.ceil(candidates.length / 10))
+  const currentCandidatePage = Math.min(candidatePage, candidatePageCount)
+  const pageCandidates = candidates.slice((currentCandidatePage - 1) * 10, currentCandidatePage * 10)
+  useEffect(() => { if (candidatePage > candidatePageCount) setCandidatePage(candidatePageCount) }, [candidatePage, candidatePageCount])
   const offQueryTerms = Array.isArray(matchResult?.off_query_terms) ? matchResult.off_query_terms : []
 
   function renderTabContent(tab) {
@@ -263,8 +276,9 @@ export default function ExternalDatabasesPage() {
             <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table" resizableColumns>
               <colgroup><col className="rz-external-databases-col-candidate" /><col className="rz-external-databases-col-brand" /><col className="rz-external-databases-col-code" /><col className="rz-external-databases-col-variant" /><col className="rz-external-databases-col-score" /><col className="rz-external-databases-col-status" /></colgroup>
               <thead><tr className="rz-table-header"><th>Kandidaat</th><th>Merk</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead>
-              <tbody>{candidates.length ? candidates.map((candidate) => <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}><td>{candidate.candidate_name}</td><td>{candidate.candidate_brand}</td><td>{candidate.retailer_article_number}</td><td>{candidate.variant || '-'}</td><td className="rz-num">{formatScore(candidate.score)}</td><td><StatusBadge status={candidate.candidate_status} /></td></tr>) : <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>}</tbody>
+              <tbody>{candidates.length ? pageCandidates.map((candidate) => <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}><td>{candidate.candidate_name}</td><td>{candidate.candidate_brand}</td><td>{candidate.retailer_article_number}</td><td>{candidate.variant || '-'}</td><td className="rz-num">{formatScore(candidate.score)}</td><td><StatusBadge status={candidate.candidate_status} /></td></tr>) : <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>}</tbody>
             </Table>
+            {candidatePageCount > 1 ? <Pagination page={currentCandidatePage} pageCount={candidatePageCount} onPageChange={setCandidatePage} /> : null}
           ) : null}
         </div>
       )
@@ -274,8 +288,9 @@ export default function ExternalDatabasesPage() {
       <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table" resizableColumns>
         <colgroup><col className="rz-external-databases-col-retailer" /><col className="rz-external-databases-col-retailer-status" /><col className="rz-external-databases-col-retailer-threshold" /><col className="rz-external-databases-col-retailer-examples" /></colgroup>
         <thead><tr className="rz-table-header"><th>Winkelketen</th><th>Status</th><th className="rz-num">Drempel</th><th>Voorbeelden</th></tr></thead>
-        <tbody>{retailers.length ? retailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
+        <tbody>{retailers.length ? pageRetailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
       </Table>
+      {retailerPageCount > 1 ? <Pagination page={currentRetailerPage} pageCount={retailerPageCount} onPageChange={setRetailerPage} /> : null}
     )
   }
 
