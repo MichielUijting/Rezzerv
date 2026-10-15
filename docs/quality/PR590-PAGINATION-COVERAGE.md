@@ -15,11 +15,11 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is n
 | `features/stores/StoreBatchDetailPage.jsx` | Eigen Table + mobiele paginering | Gedeeltelijk | Desktop en bonregels toetsen |
 | `features/productGroups/ProductGroupsPage.jsx` | Eigen Table | Aangepast | UI-test en filters toetsen |
 | `features/storeConnections/StoreConnectionsPage.jsx` | DataTable | Centrale default | Gedrag toetsen |
-| `features/settings/SettingsLocationsPage.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
+| `features/settings/SettingsLocationsPage.jsx` | Twee eigen Tables | Geïmplementeerd | UI-test, selectie en locatieafhankelijke filtering toetsen |
 | `features/settings/SettingsLocationsManagementPage.jsx` | Twee DataTables | Centrale default | Gedrag toetsen |
-| `features/settings/SettingsArticleGroupsPage.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
+| `features/settings/SettingsArticleGroupsPage.jsx` | Twee eigen Tables | Geïmplementeerd | UI-test, selecties en mutaties toetsen |
 | `features/settings/SettingsSublocationsPage.jsx` | Eigen Table | Geïmplementeerd in PR #590 | Selectie en UI-test toetsen |
-| `features/settings/SettingsSpacesPage.jsx` | Eigen Table | Niet afgedekt | Pagineren |
+| `features/settings/SettingsSpacesPage.jsx` | Eigen Table | Geïmplementeerd | UI-test en bulkselectie toetsen |
 | `features/settings/SettingsAuthorizationPage.jsx` | Eigen Table | Niet afgedekt | Pagineren indien lijst langer dan 10 |
 | `features/externalDatabases/ExternalDatabasesPage.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
 | `features/externalDatabases/ReceiptItemsOverview.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
