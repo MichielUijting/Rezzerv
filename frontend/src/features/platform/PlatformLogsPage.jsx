@@ -2,6 +2,7 @@ import React from 'react'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 
 
@@ -35,6 +36,11 @@ async function fetchPlatformLogs(level, signal) {
 
 export default function PlatformLogsPage() {
   const [items, setItems] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(items.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = items.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [levels, setLevels] = React.useState(FALLBACK_LEVELS)
   const [level, setLevel] = React.useState('')
   const [retention, setRetention] = React.useState('runtime_memory')
@@ -54,6 +60,7 @@ export default function PlatformLogsPage() {
         const payload = await fetchPlatformLogs(level, controller.signal)
         if (!active) return
         setItems(Array.isArray(payload?.items) ? payload.items : [])
+        setPage(1)
         setLevels(Array.isArray(payload?.levels) && payload.levels.length ? payload.levels : FALLBACK_LEVELS)
         setRetention(payload?.retention || 'runtime_memory')
         setMaxEntries(Number(payload?.max_entries) || 500)
@@ -117,7 +124,7 @@ export default function PlatformLogsPage() {
 
             {!loading && !error && items.length > 0 ? (
               <div data-testid="platform-logs-items">
-                {items.map((item) => (
+                {visibleItems.map((item) => (
                   <div key={item.id} data-testid={`platform-log-item-${item.id}`}>
                     <Card className="rz-card-home">
                       <h3>{displayValue(item.level, 'INFO')} — {displayValue(item.logger, 'rezzerv')}</h3>
@@ -129,6 +136,7 @@ export default function PlatformLogsPage() {
                 ))}
               </div>
             ) : null}
+            {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
             <div>
               <Button type="button" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
