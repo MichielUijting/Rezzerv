@@ -10,9 +10,9 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is n
 | `features/shopping/ShoppingPage.jsx` | DataTable | Centrale default | Selectie toetsen |
 | `features/catalog/CatalogPage.jsx` | Server-side limit/offset van 10 en eigen knoppen | Bestaande paginering; knoppen nu verborgen bij één pagina | Selectie over pagina's en server-total toetsen |
 | `features/catalog/MobileCatalogPage.jsx` | Pagination | Bestaand | Gedrag toetsen |
-| `features/receipts/KassaPage.jsx` | DataTable én eigen Table | Gedeeltelijk | Alle deeloverzichten toetsen |
+| `features/receipts/KassaPage.jsx` | DataTable én eigen Table | Inbox gepagineerd; bonregels via DataTable | Selecties, scrollhoogte en bonregel-details toetsen |
 | `features/receipts/ReceiptsPage.jsx` | Eigen Table + mobiele paginering | Gedeeltelijk | Desktop en selectie toetsen |
-| `features/stores/StoreBatchDetailPage.jsx` | Eigen Table + mobiele paginering | Gedeeltelijk | Desktop en bonregels toetsen |
+| `features/stores/StoreBatchDetailPage.jsx` | Eigen Table + mobiele paginering | Desktop nu gepagineerd, mobiel bestaand | Selectie en verwerking van bonregels toetsen |
 | `features/productGroups/ProductGroupsPage.jsx` | Eigen Table | Aangepast | UI-test en filters toetsen |
 | `features/storeConnections/StoreConnectionsPage.jsx` | DataTable | Centrale default | Gedrag toetsen |
 | `features/settings/SettingsLocationsPage.jsx` | Twee eigen Tables | Geïmplementeerd | UI-test, selectie en locatieafhankelijke filtering toetsen |
