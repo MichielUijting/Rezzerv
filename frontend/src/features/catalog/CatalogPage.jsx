@@ -361,14 +361,14 @@ export default function CatalogPage() {
                 </tbody>
             </Table>
 
-            <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
+            {pageCount > 1 ? <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
               <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(1)}>Eerste</Button>
               <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
               <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
               <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
               <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(pageCount)}>Laatste</Button>
               <span className="rz-external-databases-muted">{total} artikelen</span>
-            </div>
+            </div> : null}
           </div>
         </ScreenCard>
       </div>
