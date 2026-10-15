@@ -26,6 +26,7 @@ export default function ReceiptsPage() {
   ))
   const [deleteChoiceOpen, setDeleteChoiceOpen] = useState(false)
   const [isApplyingDeleteChoice, setIsApplyingDeleteChoice] = useState(false)
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
   const navigate = useNavigate()
@@ -156,6 +157,53 @@ export default function ReceiptsPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  async function handleBulkApprove() {
+    if (!selectedBatchIds.length || isBulkApproving) return
+    setIsBulkApproving(true)
+    const selected = listItems.filter((item) => selectedBatchIds.includes(item.batch_id))
+    const eligible = selected.filter((item) => String(item.statusLabel || '').trim().toLowerCase() === 'gecontroleerd')
+    const ineligible = selected.length - eligible.length
+    let processed = 0
+    let skipped = 0
+    let failed = 0
+    const errors = []
+    try {
+      for (const item of eligible) {
+        try {
+          // De bestaande backend beslist per bonregel over geschiktheid, locaties
+          // en idempotentie. 'ready_only' verwerkt ook bij een deels onvolledige bon.
+          const result = await fetchJson(`/api/purchase-import-batches/${encodeURIComponent(item.batch_id)}/process`, {
+            method: 'POST',
+            body: JSON.stringify({ processed_by: 'ui', mode: 'ready_only' }),
+          })
+          processed += Number(result?.processed_count || 0)
+          skipped += Number(result?.skipped_count || 0)
+          failed += Number(result?.failed_count || 0)
+        } catch (error) {
+          failed += 1
+          errors.push(normalizeErrorMessage(error?.message) || 'Verwerking mislukt')
+        }
+      }
+      const household = await fetchJson('/api/household')
+      const refreshed = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(household.id)}`)
+      setBatches(Array.isArray(refreshed?.items) ? refreshed.items : [])
+      setSelectedBatchIds([])
+      showFeedback({
+        variant: failed ? 'warning' : 'info',
+        message: `Voorraadcontrole toegepast: bij actieve voorraadlocaties is een geldige standaardlocatie per artikel vereist. Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden. Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`,
+        key: 'uitpakken-bulk-approve-result',
+      })
+    } catch (error) {
+      showFeedback({
+        variant: 'error',
+        message: normalizeErrorMessage(error?.message) || 'De Uitpakken-lijst kon niet worden vernieuwd.',
+        key: 'uitpakken-bulk-approve-error',
+      })
+    } finally {
+      setIsBulkApproving(false)
+    }
+  }
+
   function handleDeleteSelected() {
     if (selectedBatchIds.length === 0) return
     setDeleteChoiceOpen(true)
@@ -274,6 +322,7 @@ export default function ReceiptsPage() {
             >
               Exporteren
             </Button>
+            <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="mobile-unpack-approve">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
             <Button
               type="button"
               variant="secondary"
@@ -418,7 +467,8 @@ export default function ReceiptsPage() {
           </Table>
         <div className="rz-stock-table-actions">
           <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
-          <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0}>Verwijderen</Button>
+          <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="unpack-approve-selected-button">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
+          <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0 || isBulkApproving}>Verwijderen</Button>
           {openedBatchId ? <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')} data-testid="receipt-back-to-overview">Terug naar overzicht</Button> : null}
         </div>
         </ScreenCard>
