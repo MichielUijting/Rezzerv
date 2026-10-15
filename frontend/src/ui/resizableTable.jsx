@@ -111,6 +111,7 @@ export function ResizableHeaderCell({
       <div
         className="rz-column-resize-handle"
         role="separator"
+        onMouseDown={onStartResize ? (event) => onStartResize(columnKey, event) : undefined}
         aria-orientation="vertical"
         aria-label="Kolom breedte aanpassen"
         style={{
@@ -122,7 +123,7 @@ export function ResizableHeaderCell({
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
-          pointerEvents: 'none',
+          pointerEvents: onStartResize ? 'auto' : 'none',
           zIndex: 4,
         }}
       />
