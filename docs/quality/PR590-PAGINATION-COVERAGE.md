@@ -21,8 +21,8 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is n
 | `features/settings/SettingsSublocationsPage.jsx` | Eigen Table | Geïmplementeerd in PR #590 | Selectie en UI-test toetsen |
 | `features/settings/SettingsSpacesPage.jsx` | Eigen Table | Geïmplementeerd | UI-test en bulkselectie toetsen |
 | `features/settings/SettingsAuthorizationPage.jsx` | Eigen Table | Niet afgedekt | Pagineren indien lijst langer dan 10 |
-| `features/externalDatabases/ExternalDatabasesPage.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
-| `features/externalDatabases/ReceiptItemsOverview.jsx` | Twee eigen Tables | Niet afgedekt | Beide tabellen pagineren |
+| `features/externalDatabases/ExternalDatabasesPage.jsx` | Twee eigen Tables | Geïmplementeerd | JSX-build, kandidaatset en navigatie toetsen |
+| `features/externalDatabases/ReceiptItemsOverview.jsx` | Bestaande PAGE_SIZE=10, pageCount, visibleItems en paginawisseling | Bestaande paginering aangetroffen; detailrendering nog te controleren | Renderpad en eventuele tweede tabel afzonderlijk verifiëren |
 | `features/superuser/SuperuserUsersSection.jsx` | DataTable | Centrale default | Selectie toetsen |
 | `features/platform/PlatformUsersPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
 | `features/stores/StoresPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
