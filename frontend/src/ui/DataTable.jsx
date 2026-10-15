@@ -56,7 +56,7 @@ export default function DataTable({
   tableStyle = {},
   renderBodyAppend = null,
   renderFooter = null,
-  pagination = false,
+  pagination = true,
   pageSize = 10,
   paginationActions = null,
 }) {
@@ -254,10 +254,10 @@ export default function DataTable({
         </tbody>
         {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
       </Table>
-      {(effectivePagination || paginationActions) ? (
+      {(pageCount > 1 || paginationActions) ? (
         <div className="rz-data-table-controls">
           <span aria-hidden="true" />
-          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
+          {pageCount > 1 ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
           <div className="rz-data-table-actions">
             {paginationActions}
           </div>
