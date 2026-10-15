@@ -1064,3 +1064,14 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Deze headercorrectie is appbreed: individuele schermen plaatsen geen eigen afwijkend mobiel headerlogo.
 - In het mobiele Uitpakken-overzicht staan de bestaande bulkacties **Exporteren** en **Verwijderen** onder de paginering in de normale documentstroom. Het actiegebied is niet sticky/fixed en krijgt geen extra wit paneel, rand of aparte achtergrond.
 - Bestaande voorwaarden voor selectie, beschikbaarheid en autorisaties blijven van toepassing.
+
+## Uniforme paginering voor tabellen en lijsten — 15 oktober 2026
+
+Voor alle gebruikerszichtbare tabellen en lange, tabelachtige lijsten op desktop en mobiel geldt de uniforme pagineringsbaseline:
+
+- Per pagina worden maximaal **10 resultaten** getoond, na filtering en sortering over de volledige relevante resultaatset.
+- De pagineringsbediening staat **onder** de tabel of lijst in de normale documentstroom en verschijnt uitsluitend wanneer er meer dan 10 resultaten zijn; zij is niet sticky of zwevend.
+- Bij wijziging van filters of sortering wordt pagina 1 getoond; na verwijdering of mutatie wordt een inmiddels ongeldige paginapositie naar de laatste bestaande pagina teruggebracht.
+- Bestaande geselecteerde records blijven geselecteerd bij wisselen van pagina. Een actie **Alles selecteren** heeft uitsluitend betrekking op de zichtbare records van de huidige pagina; bulkacties respecteren de totale expliciete selectie.
+- Dezelfde regels gelden voor eigen tabelimplementaties, de gedeelde `DataTable` en mobiele kaartlijsten; reeds aanwezige paginering wordt hergebruikt en niet gedupliceerd.
+- Korte statische navigatiemenu's, formulieren en vaste configuratiekeuzes worden niet kunstmatig gepagineerd.
