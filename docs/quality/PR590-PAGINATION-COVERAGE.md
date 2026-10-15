@@ -4,11 +4,11 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is n
 
 | Bestand / scherm | Aangetroffen patroon | Paginering in PR #590 | Vervolg |
 |---|---|---|---|
-| `pages/Voorraad.jsx` | Eigen Table | Niet afgedekt | Desktop pagineren |
+| `pages/Voorraad.jsx` | Eigen Table | Geïmplementeerd in PR #590 | Desktop UI-test, paginering en selectie toetsen |
 | `pages/MobileVoorraad.jsx` | useMobilePagination | Bestaand | Gedrag toetsen |
-| `features/almostOut/AlmostOutPage.jsx` | Eigen Table | Niet afgedekt | Desktop pagineren |
+| `features/almostOut/AlmostOutPage.jsx` | Eigen Table | Geïmplementeerd in PR #590 | Desktop UI-test, filtering en sortering toetsen |
 | `features/shopping/ShoppingPage.jsx` | DataTable | Centrale default | Selectie toetsen |
-| `features/catalog/CatalogPage.jsx` | Eigen Table | Niet afgedekt | Desktop pagineren; selecties toetsen |
+| `features/catalog/CatalogPage.jsx` | Server-side limit/offset van 10 en eigen knoppen | Bestaande paginering; knoppen nu verborgen bij één pagina | Selectie over pagina's en server-total toetsen |
 | `features/catalog/MobileCatalogPage.jsx` | Pagination | Bestaand | Gedrag toetsen |
 | `features/receipts/KassaPage.jsx` | DataTable én eigen Table | Gedeeltelijk | Alle deeloverzichten toetsen |
 | `features/receipts/ReceiptsPage.jsx` | Eigen Table + mobiele paginering | Gedeeltelijk | Desktop en selectie toetsen |
