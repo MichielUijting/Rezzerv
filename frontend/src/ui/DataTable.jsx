@@ -170,8 +170,6 @@ export default function DataTable({
         tableClassName={tableClasses}
         tableStyle={mergedTableStyle}
         dataTestId={dataTestId}
-        resizableColumns
-        
       >
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
