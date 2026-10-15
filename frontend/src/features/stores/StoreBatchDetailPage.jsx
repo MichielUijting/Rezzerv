@@ -10,6 +10,7 @@ import Button from '../../ui/Button'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
@@ -1900,7 +1901,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     visibleLineUiStates,
     [searchValue, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, tableSort.key, tableSort.direction].join('|'),
   )
-  const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : visibleLineUiStates
+  const [desktopLinePage, setDesktopLinePage] = useState(1)
+  const desktopLinePageCount = Math.max(1, Math.ceil(visibleLineUiStates.length / 10))
+  const currentDesktopLinePage = Math.min(desktopLinePage, desktopLinePageCount)
+  const desktopPageLines = visibleLineUiStates.slice((currentDesktopLinePage - 1) * 10, currentDesktopLinePage * 10)
+  useEffect(() => { setDesktopLinePage(1) }, [searchValue, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, tableSort])
+  useEffect(() => { if (desktopLinePage > desktopLinePageCount) setDesktopLinePage(desktopLinePageCount) }, [desktopLinePage, desktopLinePageCount])
+  const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : desktopPageLines
 
   const activeDetailEntry = useMemo(() => (
     lineUiStates.find((entry) => String(entry.line.id) === String(receiptLineId || activeDetailLineId))
@@ -2219,7 +2226,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
-            {isMobileViewport ? <MobilePaginationControls {...mobileLinePagination} ariaLabel="Paginering Bonregels Uitpakken" /> : null}
+            {isMobileViewport ? <MobilePaginationControls {...mobileLinePagination} ariaLabel="Paginering Bonregels Uitpakken" /> : desktopLinePageCount > 1 ? <Pagination page={currentDesktopLinePage} pageCount={desktopLinePageCount} onPageChange={setDesktopLinePage} /> : null}
 
           </>) : null}
 
