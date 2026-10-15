@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
+import Pagination from '../../ui/Pagination.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import {
   batchStatusPillStyle,
@@ -32,6 +33,8 @@ export default function StoresPage() {
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
   const [openBatches, setOpenBatches] = useState([])
+  const [batchPage, setBatchPage] = useState(1)
+  const [storePage, setStorePage] = useState(1)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
 
@@ -96,6 +99,15 @@ export default function StoresPage() {
 
     return Array.from(itemsByCode.values()).sort((a, b) => a.name.localeCompare(b.name, 'nl'))
   }, [connections, connectionsByProviderCode, providers, providersByCode])
+
+  const batchPageCount = Math.max(1, Math.ceil(batchItems.length / 10))
+  const storePageCount = Math.max(1, Math.ceil(connectedStoreItems.length / 10))
+  const currentBatchPage = Math.min(batchPage, batchPageCount)
+  const currentStorePage = Math.min(storePage, storePageCount)
+  const visibleBatches = batchItems.slice((currentBatchPage - 1) * 10, currentBatchPage * 10)
+  const visibleStores = connectedStoreItems.slice((currentStorePage - 1) * 10, currentStorePage * 10)
+  useEffect(() => { if (batchPage > batchPageCount) setBatchPage(batchPageCount) }, [batchPage, batchPageCount])
+  useEffect(() => { if (storePage > storePageCount) setStorePage(storePageCount) }, [storePage, storePageCount])
 
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
@@ -313,7 +325,7 @@ export default function StoresPage() {
               <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
             ) : (
               <div style={{ display: 'grid', gap: '12px' }}>
-                {batchItems.map((batch) => (
+                {visibleBatches.map((batch) => (
                   <div
                     key={batch.batch_id}
                     data-testid={`open-batch-${batch.batch_id}`}
@@ -369,6 +381,7 @@ export default function StoresPage() {
                     </div>
                   </div>
                 ))}
+                {batchPageCount > 1 ? <Pagination page={currentBatchPage} pageCount={batchPageCount} onPageChange={setBatchPage} /> : null}
               </div>
             )}
           </div>
@@ -384,7 +397,7 @@ export default function StoresPage() {
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Verbonden winkels</h3>
                   <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier je gekoppelde winkels en haal nieuwe aankopen op.</div>
                 </div>
-                {connectedStoreItems.map((item) => {
+                {visibleStores.map((item) => {
                   const provider = item.provider
                   const connection = item.connection
                   const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
@@ -413,6 +426,7 @@ export default function StoresPage() {
                     </div>
                   )
                 })}
+                {storePageCount > 1 ? <Pagination page={currentStorePage} pageCount={storePageCount} onPageChange={setStorePage} /> : null}
               </div>
             )}
           </div>
