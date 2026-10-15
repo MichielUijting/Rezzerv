@@ -39,6 +39,14 @@ async function openReceipt(page, receiptId, expectedStore) {
 async function reviewUncertainLineThroughBrowser(page, receiptId, lineId) {
   await openReceipt(page, receiptId, 'L4 Onzekere Match')
   const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
+  // Bonregels worden per tien getoond; zoek de doelregel via de zichtbare pagina's.
+  const pagination = page.getByRole('navigation', { name: 'Paginering' })
+  for (let pageIndex = 0; pageIndex < 100 && await lineSelect.count() === 0; pageIndex += 1) {
+    if (await pagination.count() === 0) break
+    const nextPage = pagination.getByRole('button', { name: '+', exact: true })
+    if (await nextPage.isDisabled()) break
+    await nextPage.click()
+  }
   await expect(lineSelect).toBeVisible()
   await lineSelect.check()
 
