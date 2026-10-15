@@ -11744,7 +11744,18 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest, authorization: Optio
 
 
 @app.get("/api/unpack-start-batches")
-def list_unpack_start_batches(\n    householdId: str = Query(...),\n    page: Optional[int] = Query(None, ge=1),\n    page_size: int = Query(10, ge=1, le=100),\n    authorization: Optional[str] = Header(None),\n):
+def list_unpack_start_batches(
+    householdId: str = Query(...),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    winkel: str = Query(''),
+    datum: str = Query(''),
+    regels: str = Query(''),
+    status: str = Query(''),
+    sort_key: str = Query('datum'),
+    sort_direction: str = Query('desc'),
+    authorization: Optional[str] = Header(None),
+):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
     with engine.begin() as conn:
@@ -11886,7 +11897,27 @@ def list_unpack_start_batches(\n    householdId: str = Query(...),\n    page: Op
             })
 
     items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
-    if page is None:\n        return {'items': items}\n    total = len(items)\n    start = (page - 1) * page_size\n    return {'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size}
+    if page is None:
+        return {'items': items}
+    terms = (winkel.strip().casefold(), datum.strip().casefold(),
+             regels.strip().casefold(), status.strip().casefold())
+    items = [
+        item for item in items
+        if terms[0] in str(item.get('store_provider_name') or '').casefold()
+        and terms[1] in str(item.get('purchase_date') or '').casefold()
+        and terms[2] in str(item.get('summary', {}).get('total', 0)).casefold()
+        and terms[3] in str(item.get('inbox_status') or '').casefold()
+    ]
+    sort_fields = {
+        'winkel': lambda item: str(item.get('store_provider_name') or '').casefold(),
+        'datum': lambda item: str(item.get('purchase_date') or item.get('created_at') or ''),
+        'regels': lambda item: int(item.get('summary', {}).get('total', 0)),
+        'status': lambda item: str(item.get('inbox_status') or '').casefold(),
+    }
+    items.sort(key=sort_fields.get(sort_key, sort_fields['datum']), reverse=sort_direction != 'asc')
+    total = len(items)
+    start = (page - 1) * page_size
+    return {'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size}
 
 
 @app.get("/api/receipts")
