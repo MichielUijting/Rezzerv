@@ -47,7 +47,8 @@ assert.match(kassa, /Paginering Bonnen/)
 assert.match(kassa, /Paginering Bonregels/)
 
 assert.match(storeBatch, /const mobileLinePagination = useMobilePagination\(/)
-assert.match(storeBatch, /const renderedLineUiStates = isMobileViewport \? mobileLinePagination\.pageItems : visibleLineUiStates/)
+assert.match(storeBatch, /const desktopPageLines = visibleLineUiStates\.slice\(\(currentDesktopLinePage - 1\) \* 10, currentDesktopLinePage \* 10\)/)
+assert.match(storeBatch, /const renderedLineUiStates = isMobileViewport \? mobileLinePagination\.pageItems : desktopPageLines/)
 assert.match(storeBatch, /Paginering Bonregels Uitpakken/)
 
 assert.match(mobileCss, /\.rz-mobile-action-bar-icon\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/)
