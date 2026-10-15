@@ -11744,7 +11744,7 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest, authorization: Optio
 
 
 @app.get("/api/unpack-start-batches")
-def list_unpack_start_batches(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
+def list_unpack_start_batches(\n    householdId: str = Query(...),\n    page: Optional[int] = Query(None, ge=1),\n    page_size: int = Query(10, ge=1, le=100),\n    authorization: Optional[str] = Header(None),\n):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
     with engine.begin() as conn:
@@ -11886,7 +11886,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             })
 
     items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
-    return {'items': items}
+    if page is None:\n        return {'items': items}\n    total = len(items)\n    start = (page - 1) * page_size\n    return {'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size}
 
 
 @app.get("/api/receipts")
