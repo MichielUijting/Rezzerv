@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Pagination from '../../ui/Pagination.jsx'
 import { Navigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -98,6 +99,7 @@ export default function SettingsSpacesPage() {
   const [form, setForm] = useState(initialForm)
   const [filters, setFilters] = useState(initialFilters)
   const [selectedIds, setSelectedIds] = useState([])
+  const [paginationPage, setPaginationPage] = useState(1)
   const [showActionModal, setShowActionModal] = useState(false)
 
   async function loadSpaces() {
@@ -135,7 +137,12 @@ export default function SettingsSpacesPage() {
     })
   }, [sortedItems, filters])
 
-  const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedIds.includes(String(item.id)))
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / 10))
+  const currentPage = Math.min(paginationPage, pageCount)
+  const pageItems = filteredItems.slice((currentPage - 1) * 10, currentPage * 10)
+  useEffect(() => { setPaginationPage(1) }, [filters])
+  useEffect(() => { if (paginationPage > pageCount) setPaginationPage(pageCount) }, [paginationPage, pageCount])
+  const allFilteredSelected = pageItems.length > 0 && pageItems.every((item) => selectedIds.includes(String(item.id)))
 
   function openCreate() {
     setMessage('')
@@ -167,12 +174,12 @@ export default function SettingsSpacesPage() {
 
   function toggleAllFiltered() {
     if (allFilteredSelected) {
-      const filteredSet = new Set(filteredItems.map((item) => String(item.id)))
+      const filteredSet = new Set(pageItems.map((item) => String(item.id)))
       setSelectedIds((current) => current.filter((id) => !filteredSet.has(id)))
       return
     }
     const merged = new Set(selectedIds)
-    filteredItems.forEach((item) => merged.add(String(item.id)))
+    pageItems.forEach((item) => merged.add(String(item.id)))
     setSelectedIds(Array.from(merged))
   }
 
@@ -379,7 +386,7 @@ export default function SettingsSpacesPage() {
                   <tr><td colSpan={4}>Ruimtes laden…</td></tr>
                 ) : filteredItems.length === 0 ? (
                   <tr><td colSpan={4}>Nog geen ruimtes beschikbaar.</td></tr>
-                ) : filteredItems.map((item) => {
+                ) : pageItems.map((item) => {
                   const selected = selectedIds.includes(String(item.id))
                   return (
                     <tr key={item.id} className={selected ? 'rz-row-selected' : ''}>
@@ -412,6 +419,7 @@ export default function SettingsSpacesPage() {
                 })}
               </tbody>
             </Table>
+            {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPaginationPage} /> : null}
 
           <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
