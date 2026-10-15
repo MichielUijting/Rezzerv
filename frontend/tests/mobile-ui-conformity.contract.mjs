@@ -98,7 +98,7 @@ assert.match(
   /\.rz-mobile-module-header\s*\{[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
 assert.match(mobileModuleHeaderSource, /import BrandLogo from '\.\/BrandLogo\.jsx'/)
-assert.match(mobileModuleHeaderSource, /<BrandLogo variant="header" \/>/)
+assert.match(mobileModuleHeaderSource, /<BrandLogo variant="mobile" \/>/)
 assert.match(mobileAppChromeSource, /<MobileModuleHeader[\s\S]*className="rz-mobile-app-header"[\s\S]*showBack/)
 assert.match(mobileAppChromeSource, /mobileRouteTitle\(location\.pathname\)/)
 

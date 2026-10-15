@@ -82,11 +82,11 @@ const transient = {
   onSecondaryAction: null,
   showTechnicalToggle: false,
 }
-assert.equal(MAX_TRANSIENT_FEEDBACK_MS, 3000)
+assert.equal(MAX_TRANSIENT_FEEDBACK_MS, 4000)
 assert.equal(isTransientFeedback(transient), true)
-assert.equal(transientFeedbackDuration(transient), 3000)
-assert.equal(transientFeedbackDuration({ ...transient, autoDismissMs: 8000 }), 3000)
-assert.equal(transientFeedbackDuration({ ...transient, autoDismissMs: 1200 }), 1200)
+assert.equal(transientFeedbackDuration(transient), 4000)
+assert.equal(transientFeedbackDuration({ ...transient, autoDismissMs: 8000 }), 4000)
+assert.equal(transientFeedbackDuration({ ...transient, autoDismissMs: 1200 }), 4000)
 assert.equal(isTransientFeedback({ ...transient, variant: 'progress', dismissMode: 'blocked' }), false)
 assert.equal(isTransientFeedback({ ...transient, onPrimaryAction: () => true }), false)
 assert.equal(isTransientFeedback({ ...transient, showTechnicalToggle: true }), false)

@@ -153,12 +153,11 @@ export function AppFeedbackProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!mobileFeedbackViewport) return undefined
     const duration = transientFeedbackDuration(feedback)
     if (!feedback || duration <= 0) return undefined
     const timer = window.setTimeout(dismissFeedback, duration)
     return () => window.clearTimeout(timer)
-  }, [feedback, dismissFeedback, mobileFeedbackViewport])
+  }, [feedback, dismissFeedback])
 
   const value = useMemo(() => ({
     feedback,

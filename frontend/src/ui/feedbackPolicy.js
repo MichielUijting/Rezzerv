@@ -1,4 +1,4 @@
-export const MAX_TRANSIENT_FEEDBACK_MS = 3000
+export const MAX_TRANSIENT_FEEDBACK_MS = 4000
 
 export function isTransientFeedback(feedback) {
   if (!feedback) return false
@@ -13,5 +13,5 @@ export function transientFeedbackDuration(feedback) {
   if (!isTransientFeedback(feedback)) return 0
   const requested = Number(feedback?.autoDismissMs)
   if (!Number.isFinite(requested) || requested <= 0) return MAX_TRANSIENT_FEEDBACK_MS
-  return Math.min(MAX_TRANSIENT_FEEDBACK_MS, Math.max(250, requested))
+  return MAX_TRANSIENT_FEEDBACK_MS
 }
