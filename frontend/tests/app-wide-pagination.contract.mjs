@@ -15,12 +15,16 @@ assert.match(productGroups, /pageCount > 1 \? <Pagination/)
 const kassa = readFileSync(new URL('../src/features/receipts/KassaPage.jsx', import.meta.url), 'utf8')
 const unpacking = readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
 const mobilePagination = readFileSync(new URL('../src/ui/MobilePagination.jsx', import.meta.url), 'utf8')
-assert.match(kassa, /const inboxPageCount = Math\\.max\\(1, Math\\.ceil\\(listItems\\.length \\/ 10\\)\\)/)
-assert.match(kassa, /const pageInboxItems = listItems\\.slice\\(\\(currentInboxPage - 1\\) \\* 10, currentInboxPage \\* 10\\)/)
-assert.match(kassa, /const allVisibleSelected = pageInboxItems\\.length > 0/)
-assert.match(kassa, /inboxPageCount > 1 \\? <Pagination/)
-assert.match(unpacking, /const desktopPageLines = visibleLineUiStates\\.slice\\(\\(currentDesktopLinePage - 1\\) \\* 10, currentDesktopLinePage \\* 10\\)/)
-assert.match(unpacking, /const renderedLineUiStates = isMobileViewport \\? mobileLinePagination\\.pageItems : desktopPageLines/)
-assert.match(unpacking, /desktopLinePageCount > 1 \\? <Pagination/)
-assert.match(mobilePagination, /export const MOBILE_PAGE_SIZE = 10/)
+for (const [label, source, expected] of [
+  ['Kassa page count', kassa, 'const inboxPageCount = Math.max(1, Math.ceil(listItems.length / 10))'],
+  ['Kassa page slicing', kassa, 'const pageInboxItems = listItems.slice((currentInboxPage - 1) * 10, currentInboxPage * 10)'],
+  ['Kassa page selection', kassa, 'const allVisibleSelected = pageInboxItems.length > 0'],
+  ['Kassa controls', kassa, 'inboxPageCount > 1 ? <Pagination'],
+  ['Uitpakken desktop slicing', unpacking, 'const desktopPageLines = visibleLineUiStates.slice((currentDesktopLinePage - 1) * 10, currentDesktopLinePage * 10)'],
+  ['Uitpakken viewport', unpacking, 'const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : desktopPageLines'],
+  ['Uitpakken controls', unpacking, 'desktopLinePageCount > 1 ? <Pagination'],
+  ['Mobile page size', mobilePagination, 'export const MOBILE_PAGE_SIZE = 10'],
+]) {
+  assert.ok(source.includes(expected), label + ' ontbreekt')
+}
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
