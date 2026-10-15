@@ -2,6 +2,7 @@ import React from 'react'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 
 const INTEGRATIONS_ENDPOINT = '/api/platform/integrations'
@@ -37,6 +38,11 @@ export default function PlatformIntegrationsPage() {
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [items, setItems] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(items.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = items.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [error, setError] = React.useState('')
 
   const load = React.useCallback(async ({ refresh = false } = {}) => {
@@ -49,6 +55,7 @@ export default function PlatformIntegrationsPage() {
     try {
       const payload = await fetchPlatformIntegrations()
       setItems(Array.isArray(payload?.items) ? payload.items : [])
+        setPage(1)
     } catch (requestError) {
       setItems([])
       setError(requestError?.message || 'Integratiestatus ophalen is mislukt.')
@@ -88,7 +95,7 @@ export default function PlatformIntegrationsPage() {
               <p data-testid="platform-integrations-empty">Geen platformintegraties beschikbaar.</p>
             ) : null}
 
-            {!loading && !error ? items.map((item) => (
+            {!loading && !error ? visibleItems.map((item) => (
               <div key={item.key} data-testid={`platform-integration-${item.key}`}>
                 <Card className="rz-card-home">
                   <h3>{item.label || item.key}</h3>
@@ -112,6 +119,7 @@ export default function PlatformIntegrationsPage() {
                 </Card>
               </div>
             )) : null}
+            {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
           </Card>
         </div>
       </div>
