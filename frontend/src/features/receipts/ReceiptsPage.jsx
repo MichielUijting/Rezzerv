@@ -101,7 +101,7 @@ export default function ReceiptsPage() {
       regels: (item) => Number(item.totalLines ?? 0),
       status: (item) => item.statusLabel || '',
     })
-  }, [batches, filters, tableSort, isMobileViewport])
+  }, [batches, filters, tableSort])
 
   useEffect(() => {
     if (isLoading || hasLoadError) return
@@ -135,7 +135,9 @@ export default function ReceiptsPage() {
     if (!mobileVisibleItems.length) return
     const visibleIds = mobileVisibleItems.map((item) => item.batch_id)
     const allVisibleSelected = visibleIds.every((id) => selectedBatchIds.includes(id))
-    setSelectedBatchIds(allVisibleSelected ? [] : visibleIds)
+    setSelectedBatchIds((current) => allVisibleSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : [...new Set([...current, ...visibleIds])])
   }
 
   function handleExport() {
@@ -259,7 +261,7 @@ export default function ReceiptsPage() {
     listItems,
     [filters.winkel, filters.datum, filters.status, tableSort.key, tableSort.direction].join('|'),
   )
-  const mobileVisibleItems = isMobileViewport ? mobileReceiptPagination.pageItems : listItems
+  const mobileVisibleItems = mobileReceiptPagination.pageItems
   const allVisibleSelected = mobileVisibleItems.length > 0 && mobileVisibleItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   if (isMobileViewport) {
@@ -426,7 +428,7 @@ export default function ReceiptsPage() {
                 <tr><td colSpan={5}>Bonnen laden…</td></tr>
               ) : hasLoadError ? null : listItems.length === 0 ? (
                 <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
-              ) : listItems.map((item) => {
+              ) : mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
                   <tr
@@ -465,6 +467,7 @@ export default function ReceiptsPage() {
               })}
             </tbody>
           </Table>
+          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
         <div className="rz-stock-table-actions">
           <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
           <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="unpack-approve-selected-button">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
