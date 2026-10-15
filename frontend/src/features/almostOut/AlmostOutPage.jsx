@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
@@ -195,6 +196,12 @@ export default function AlmostOutPage() {
     })
   }, [filters, rows, tableSort])
 
+  const [paginationPage, setPaginationPage] = useState(1)
+  const paginationPageCount = Math.max(1, Math.ceil(filteredRows.length / 10))
+  const visibleAlmostOutRows = filteredRows.slice((Math.min(paginationPage, paginationPageCount) - 1) * 10, Math.min(paginationPage, paginationPageCount) * 10)
+  useEffect(() => { setPaginationPage(1) }, [filters, tableSort])
+  useEffect(() => { if (paginationPage > paginationPageCount) setPaginationPage(paginationPageCount) }, [paginationPage, paginationPageCount])
+
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
   }
@@ -245,7 +252,7 @@ export default function AlmostOutPage() {
                   <tr><td colSpan={9}>Bijna-op-artikelen laden…</td></tr>
                 ) : filteredRows.length === 0 ? (
                   <tr><td colSpan={9}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
-                ) : filteredRows.map((row) => (
+                ) : visibleAlmostOutRows.map((row) => (
                   <tr key={row.id}>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
@@ -265,6 +272,7 @@ export default function AlmostOutPage() {
                 ))}
               </tbody>
             </Table>
+            {paginationPageCount > 1 ? <Pagination page={Math.min(paginationPage, paginationPageCount)} pageCount={paginationPageCount} onPageChange={setPaginationPage} /> : null}
         </ScreenCard>
       </div>
     </AppShell>
