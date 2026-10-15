@@ -3421,7 +3421,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
+                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} aria-label="Geselecteerde bonnen goedkeuren" data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
