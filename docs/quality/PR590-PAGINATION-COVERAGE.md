@@ -1,6 +1,6 @@
 # PR #590 — controleerbare inventaris paginering
 
-Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is nadrukkelijk **niet** het bewijs dat alle frontend-schermen zijn afgedekt. De hieronder genoemde componenten zijn afzonderlijk via GitHub gelezen. `DataTable`-dekking betekent alleen dat de gedeelde component wordt gebruikt; selectie- en UI-tests zijn nog niet bewezen.
+Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026; aangevuld met paginering van platformoverzichten, meldingen en autorisatiematrix. Nog geen volledige functionele afdekking. Deze matrix is nadrukkelijk **niet** het bewijs dat alle frontend-schermen zijn afgedekt. De hieronder genoemde componenten zijn afzonderlijk via GitHub gelezen. `DataTable`-dekking betekent alleen dat de gedeelde component wordt gebruikt; selectie- en UI-tests zijn nog niet bewezen.
 
 | Bestand / scherm | Aangetroffen patroon | Paginering in PR #590 | Vervolg |
 |---|---|---|---|
@@ -20,18 +20,18 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026. Deze matrix is n
 | `features/settings/SettingsArticleGroupsPage.jsx` | Twee eigen Tables | Geïmplementeerd | UI-test, selecties en mutaties toetsen |
 | `features/settings/SettingsSublocationsPage.jsx` | Eigen Table | Geïmplementeerd in PR #590 | Selectie en UI-test toetsen |
 | `features/settings/SettingsSpacesPage.jsx` | Eigen Table | Geïmplementeerd | UI-test en bulkselectie toetsen |
-| `features/settings/SettingsAuthorizationPage.jsx` | Eigen Table | Niet afgedekt | Pagineren indien lijst langer dan 10 |
+| `features/settings/SettingsAuthorizationPage.jsx` | Eigen Table | Geïmplementeerd voor desktopmatrix en mobiele rolkaarten | UI-test met >10 permissies uitvoeren |
 | `features/externalDatabases/ExternalDatabasesPage.jsx` | Twee eigen Tables | Geïmplementeerd | JSX-build, kandidaatset en navigatie toetsen |
 | `features/externalDatabases/ReceiptItemsOverview.jsx` | Bestaande PAGE_SIZE=10, pageCount, visibleItems en paginawisseling | Bestaande paginering aangetroffen; detailrendering nog te controleren | Renderpad en eventuele tweede tabel afzonderlijk verifiëren |
 | `features/superuser/SuperuserUsersSection.jsx` | DataTable | Centrale default | Selectie toetsen |
-| `features/platform/PlatformUsersPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
+| `features/platform/PlatformUsersPage.jsx` | Eigen kaart-/lijstweergave | Gebruikerskaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/stores/StoresPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
-| `features/support/HouseholdSupportPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
-| `features/support/PlatformSupportPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
+| `features/support/HouseholdSupportPage.jsx` | Eigen kaart-/lijstweergave | Desktop-meldingenlijst: paginering 10 geïmplementeerd; mobiele inbox apart toetsen | Gedrag bij filters, refresh en detailselectie toetsen |
+| `features/support/PlatformSupportPage.jsx` | Eigen kaart-/lijstweergave | Meldingenlijst: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/home/DashboardDetailPage.jsx` | Geen directe Table/DataTable | Onbeslist | Drill-downlijsten beoordelen |
-| `features/platform/PlatformAuditPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
-| `features/platform/PlatformLogsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
-| `features/platform/PlatformSessionsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
+| `features/platform/PlatformAuditPage.jsx` | Eigen kaart-/lijstweergave | Auditkaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
+| `features/platform/PlatformLogsPage.jsx` | Eigen kaart-/lijstweergave | Logkaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
+| `features/platform/PlatformSessionsPage.jsx` | Eigen kaart-/lijstweergave | Sessiekaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/platform/PlatformBackgroundJobsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
 | `features/platform/PlatformIntegrationsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
 | `features/platform/PlatformFeatureFlagsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
