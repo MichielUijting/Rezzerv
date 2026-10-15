@@ -1,6 +1,7 @@
 import React from 'react'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
+import Pagination from '../../ui/Pagination.jsx'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
 
@@ -16,6 +17,11 @@ function formatDateTime(value) {
 
 export default function PlatformUsersPage() {
   const [users, setUsers] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(users.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = users.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
   const [result, setResult] = React.useState('')
@@ -37,6 +43,7 @@ export default function PlatformUsersPage() {
       }
       const payload = await response.json()
       setUsers(Array.isArray(payload?.items) ? payload.items : [])
+      setPage(1)
     } catch (err) {
       setError(err?.message || 'Gebruikers ophalen mislukt.')
     } finally {
@@ -112,7 +119,7 @@ export default function PlatformUsersPage() {
         <Card><p>Er zijn geen gebruikers gevonden.</p></Card>
       ) : null}
 
-      {!loading && users.map((user) => {
+      {!loading && visibleItems.map((user) => {
         const suspended = user.account_status === 'suspended'
         return (
           <Card key={user.user_id}>
@@ -138,6 +145,8 @@ export default function PlatformUsersPage() {
           </Card>
         )
       })}
+
+      {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
       {pendingUser ? (
         <Card>
