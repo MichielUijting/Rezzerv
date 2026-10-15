@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import DataTable from '../../ui/DataTable'
+import Pagination from '../../ui/Pagination.jsx'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import Tabs from '../../ui/Tabs'
@@ -2496,7 +2497,13 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     })
   }, [inboxItems, filters, inboxSort])
 
-  const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(String(item.receipt_table_id || '')))
+  const [inboxPage, setInboxPage] = useState(1)
+  const inboxPageCount = Math.max(1, Math.ceil(listItems.length / 10))
+  const currentInboxPage = Math.min(inboxPage, inboxPageCount)
+  const pageInboxItems = listItems.slice((currentInboxPage - 1) * 10, currentInboxPage * 10)
+  useEffect(() => { setInboxPage(1) }, [filters, inboxSort])
+  useEffect(() => { if (inboxPage > inboxPageCount) setInboxPage(inboxPageCount) }, [inboxPage, inboxPageCount])
+  const allVisibleSelected = pageInboxItems.length > 0 && pageInboxItems.every((item) => selectedReceiptIds.includes(String(item.receipt_table_id || '')))
 
   const inboxTableFilters = useMemo(() => ({
     store: filters.winkel,
@@ -2753,10 +2760,14 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   }
 
   function toggleSelectAllVisible() {
-    const visibleIds = listItems.map((item) => String(item.receipt_table_id || '')).filter(Boolean)
+    const visibleIds = pageInboxItems.map((item) => String(item.receipt_table_id || '')).filter(Boolean)
     if (!visibleIds.length) return
     const allSelected = visibleIds.every((id) => selectedReceiptIds.includes(id))
-    setSelectedReceiptIds(allSelected ? [] : visibleIds)
+    setSelectedReceiptIds((current) => {
+      const visibleSet = new Set(visibleIds)
+      const retained = current.filter((id) => !visibleSet.has(id))
+      return allSelected ? retained : [...retained, ...visibleIds]
+    })
   }
 
   function handleFilterChange(key, value) {
@@ -3532,7 +3543,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                     <tr><td colSpan={5}>Bonnen laden...</td></tr>
                   ) : listItems.length === 0 ? (
                     <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
-                  ) : listItems.map((item) => {
+                  ) : pageInboxItems.map((item) => {
                     const receiptId = String(item.receipt_table_id || '')
                     const selected = selectedReceiptIds.includes(receiptId)
                     return (
@@ -3576,6 +3587,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                 </tbody>
               </Table>
               </div>
+              {inboxPageCount > 1 ? <Pagination page={currentInboxPage} pageCount={inboxPageCount} onPageChange={setInboxPage} /> : null}
 
             </div>
           </ScreenCard>
