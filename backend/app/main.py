@@ -11842,22 +11842,20 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             # Use the same canonical unpacking lines as the batch detail screen.
             # Receipt-table line_count also includes discounts, payment and other
             # non-inventory lines filtered by sync_unpack_batch_lines_for_receipt.
-            unpack_line_count = conn.execute(
-                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
-                {'batch_id': batch_id},
-            ).scalar_one()
-            # Uitpakken is a work queue: only receipts with canonical lines still
-            # awaiting inventory processing belong in the overview. This is
-            # household-scoped through the authorized receipt/batch above.
-            remaining_line_count = conn.execute(
+            line_counts = conn.execute(
                 text("""
-                    SELECT COUNT(*)
+                    SELECT
+                        COUNT(*) AS total,
+                        COUNT(*) FILTER (
+                            WHERE COALESCE(processing_status, 'pending') <> 'processed'
+                        ) AS remaining
                     FROM purchase_import_lines
                     WHERE batch_id = :batch_id
-                      AND COALESCE(processing_status, 'pending') <> 'processed'
                 """),
                 {'batch_id': batch_id},
-            ).scalar_one()
+            ).mappings().one()
+            unpack_line_count = int(line_counts['total'])
+            remaining_line_count = int(line_counts['remaining'])
             if int(remaining_line_count) == 0:
                 continue
             seen_keys.add(dedupe_key)
