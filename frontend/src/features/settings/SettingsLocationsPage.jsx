@@ -5,6 +5,7 @@ import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import { buildTableWidth } from '../../ui/resizableTable'
 import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../lib/authSession'
 
 const initialLocationForm = { naam: '', active: true }
@@ -163,6 +164,8 @@ export default function SettingsLocationsPage() {
   const [sublocationFilters, setSublocationFilters] = useState(initialSublocationFilters)
   const [selectedLocationIds, setSelectedLocationIds] = useState([])
   const [selectedSublocationIds, setSelectedSublocationIds] = useState([])
+  const [locationPage, setLocationPage] = useState(1)
+  const [sublocationPage, setSublocationPage] = useState(1)
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [showLocationActionModal, setShowLocationActionModal] = useState(false)
   const [showSublocationActionModal, setShowSublocationActionModal] = useState(false)
@@ -283,8 +286,18 @@ export default function SettingsLocationsPage() {
       })
   }, [visibleSublocations, sublocationFilters, sublocationDrafts])
 
-  const allFilteredLocationsSelected = filteredLocations.length > 0 && filteredLocations.every((item) => selectedLocationIds.includes(String(item.id)))
-  const allFilteredSublocationsSelected = filteredSublocations.length > 0 && filteredSublocations.every((item) => selectedSublocationIds.includes(String(item.id)))
+  const locationPageCount = Math.max(1, Math.ceil(filteredLocations.length / 10))
+  const sublocationPageCount = Math.max(1, Math.ceil(filteredSublocations.length / 10))
+  const currentLocationPage = Math.min(locationPage, locationPageCount)
+  const currentSublocationPage = Math.min(sublocationPage, sublocationPageCount)
+  const pageLocations = filteredLocations.slice((currentLocationPage - 1) * 10, currentLocationPage * 10)
+  const pageSublocations = filteredSublocations.slice((currentSublocationPage - 1) * 10, currentSublocationPage * 10)
+  useEffect(() => { setLocationPage(1) }, [locationFilters])
+  useEffect(() => { setSublocationPage(1) }, [sublocationFilters, selectedLocationId])
+  useEffect(() => { if (locationPage > locationPageCount) setLocationPage(locationPageCount) }, [locationPage, locationPageCount])
+  useEffect(() => { if (sublocationPage > sublocationPageCount) setSublocationPage(sublocationPageCount) }, [sublocationPage, sublocationPageCount])
+  const allFilteredLocationsSelected = pageLocations.length > 0 && pageLocations.every((item) => selectedLocationIds.includes(String(item.id)))
+  const allFilteredSublocationsSelected = pageSublocations.length > 0 && pageSublocations.every((item) => selectedSublocationIds.includes(String(item.id)))
 
   function toggleSelectedLocation(id) {
     const key = String(id)
@@ -298,23 +311,23 @@ export default function SettingsLocationsPage() {
 
   function toggleAllFilteredLocations() {
     if (allFilteredLocationsSelected) {
-      const filteredSet = new Set(filteredLocations.map((item) => String(item.id)))
+      const filteredSet = new Set(pageLocations.map((item) => String(item.id)))
       setSelectedLocationIds((current) => current.filter((id) => !filteredSet.has(id)))
       return
     }
     const merged = new Set(selectedLocationIds)
-    filteredLocations.forEach((item) => merged.add(String(item.id)))
+    pageLocations.forEach((item) => merged.add(String(item.id)))
     setSelectedLocationIds(Array.from(merged))
   }
 
   function toggleAllFilteredSublocations() {
     if (allFilteredSublocationsSelected) {
-      const filteredSet = new Set(filteredSublocations.map((item) => String(item.id)))
+      const filteredSet = new Set(pageSublocations.map((item) => String(item.id)))
       setSelectedSublocationIds((current) => current.filter((id) => !filteredSet.has(id)))
       return
     }
     const merged = new Set(selectedSublocationIds)
-    filteredSublocations.forEach((item) => merged.add(String(item.id)))
+    pageSublocations.forEach((item) => merged.add(String(item.id)))
     setSelectedSublocationIds(Array.from(merged))
   }
 
@@ -678,7 +691,7 @@ export default function SettingsLocationsPage() {
                     <tr><td colSpan={4}>Locaties laden…</td></tr>
                   ) : filteredLocations.length === 0 ? (
                     <tr><td colSpan={4}>Nog geen locaties beschikbaar.</td></tr>
-                  ) : filteredLocations.map((item) => {
+                  ) : pageLocations.map((item) => {
                     const selected = selectedLocationIds.includes(String(item.id))
                     const detailSelected = String(selectedLocationId) === String(item.id)
                     const draft = locationDrafts[String(item.id)] || { naam: item.naam, active: item.active }
@@ -695,6 +708,7 @@ export default function SettingsLocationsPage() {
                   })}
                 </tbody>
               </Table>
+              {sublocationPageCount > 1 ? <Pagination page={currentSublocationPage} pageCount={sublocationPageCount} onPageChange={setSublocationPage} /> : null}
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={exportLocationsCsv} disabled={isLoading || selectedLocationIds.length === 0 || isSaving}>Exporteren</Button>
               <Button type="button" variant="secondary" onClick={() => setShowLocationActionModal(true)} disabled={isSaving || selectedLocationIds.length === 0}>Verwijderen</Button>
@@ -733,7 +747,7 @@ export default function SettingsLocationsPage() {
                     <tr><td colSpan={3}>Nog geen locatie beschikbaar.</td></tr>
                   ) : filteredSublocations.length === 0 ? (
                     <tr><td colSpan={3}>Nog geen sublocaties beschikbaar voor deze locatie.</td></tr>
-                  ) : filteredSublocations.map((item) => {
+                  ) : pageSublocations.map((item) => {
                     const selected = selectedSublocationIds.includes(String(item.id))
                     const draft = sublocationDrafts[String(item.id)] || { naam: item.naam, active: item.active }
                     return (
@@ -746,6 +760,7 @@ export default function SettingsLocationsPage() {
                   })}
                 </tbody>
               </Table>
+              {sublocationPageCount > 1 ? <Pagination page={currentSublocationPage} pageCount={sublocationPageCount} onPageChange={setSublocationPage} /> : null}
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={exportSublocationsCsv} disabled={isLoading || selectedSublocationIds.length === 0 || isSaving}>Exporteren</Button>
               <Button type="button" variant="secondary" onClick={() => setShowSublocationActionModal(true)} disabled={isSaving || selectedSublocationIds.length === 0}>Verwijderen</Button>
