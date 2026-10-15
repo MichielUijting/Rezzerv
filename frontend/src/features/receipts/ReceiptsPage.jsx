@@ -11,11 +11,14 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
-import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
+import { MobilePaginationControls } from '../../ui/MobilePagination.jsx'
 import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoadError, setHasLoadError] = useState(false)
@@ -56,9 +59,10 @@ export default function ReceiptsPage() {
         const householdData = await fetchJson('/api/household')
         if (cancelled) return
 
-        const unpackData = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdData.id)}`)
+        const unpackData = await fetchJson(`/api/unpack-start-batches?${new URLSearchParams({ householdId: householdData.id, page: String(page), page_size: '10', ...filters, sort_key: tableSort.key, sort_direction: tableSort.direction })}`)
         if (cancelled) return
         setBatches(Array.isArray(unpackData?.items) ? unpackData.items : [])
+        setTotal(Number(unpackData?.total || 0))
       } catch (err) {
         if (!cancelled) {
           setHasLoadError(true)
@@ -75,7 +79,7 @@ export default function ReceiptsPage() {
 
     loadData()
     return () => { cancelled = true }
-  }, [location.search, showFeedback])
+  }, [location.search, showFeedback, page, filters, tableSort, refreshVersion])
 
   const listItems = useMemo(() => {
     // Uitpakken is een werkvoorraad, geen bonarchief. Zodra de volledige bon
@@ -120,6 +124,7 @@ export default function ReceiptsPage() {
   }, [hasLoadError, isLoading, listItems, openedBatchId])
 
   function handleFilterChange(key, value) {
+    setPage(1)
     setFilters((current) => ({ ...current, [key]: value }))
   }
 
@@ -186,9 +191,7 @@ export default function ReceiptsPage() {
           errors.push(normalizeErrorMessage(error?.message) || 'Verwerking mislukt')
         }
       }
-      const household = await fetchJson('/api/household')
-      const refreshed = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(household.id)}`)
-      setBatches(Array.isArray(refreshed?.items) ? refreshed.items : [])
+      setRefreshVersion((current) => current + 1)
       setSelectedBatchIds([])
       showFeedback({
         variant: failed ? 'warning' : 'info',
@@ -241,6 +244,7 @@ export default function ReceiptsPage() {
       }
 
       setBatches((current) => current.filter((batch) => !selectedSet.has(batch.batch_id)))
+      setRefreshVersion((current) => current + 1)
       if (openedBatchId && selectedSet.has(openedBatchId)) {
         setOpenedBatchId('')
       }
@@ -257,11 +261,12 @@ export default function ReceiptsPage() {
     }
   }
 
-  const mobileReceiptPagination = useMobilePagination(
-    listItems,
-    [filters.winkel, filters.datum, filters.status, tableSort.key, tableSort.direction].join('|'),
-  )
-  const mobileVisibleItems = mobileReceiptPagination.pageItems
+  const mobileReceiptPagination = {
+    page,
+    pageCount: Math.max(1, Math.ceil(total / 10)),
+    setPage,
+  }
+  const mobileVisibleItems = listItems
   const allVisibleSelected = mobileVisibleItems.length > 0 && mobileVisibleItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   if (isMobileViewport) {
@@ -280,7 +285,7 @@ export default function ReceiptsPage() {
           </div>
 
           <div className="rz-mobile-inventory-summary-row">
-            <span className="rz-mobile-inventory-summary">{listItems.length} kassabon{listItems.length === 1 ? '' : 'nen'}</span>
+            <span className="rz-mobile-inventory-summary">{total} kassabon{total === 1 ? '' : 'nen'}</span>
             {listItems.length > 0 ? (
               <label className="rz-mobile-unpack-select-all">
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
@@ -378,10 +383,10 @@ export default function ReceiptsPage() {
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
                 </ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Winkel</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Datum</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Artikelen</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Status</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => { setPage(1); return nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }) })}>Winkel</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }) })}>Datum</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }) })}>Artikelen</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }) })}>Status</ResizableHeaderCell>
               </tr>
               <tr className="rz-table-filters">
                 <th />
