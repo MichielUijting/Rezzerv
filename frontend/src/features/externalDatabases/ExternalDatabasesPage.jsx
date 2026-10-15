@@ -285,12 +285,14 @@ export default function ExternalDatabasesPage() {
     }
 
     return (
+      <>
       <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table" resizableColumns>
         <colgroup><col className="rz-external-databases-col-retailer" /><col className="rz-external-databases-col-retailer-status" /><col className="rz-external-databases-col-retailer-threshold" /><col className="rz-external-databases-col-retailer-examples" /></colgroup>
         <thead><tr className="rz-table-header"><th>Winkelketen</th><th>Status</th><th className="rz-num">Drempel</th><th>Voorbeelden</th></tr></thead>
         <tbody>{retailers.length ? pageRetailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
       </Table>
       {retailerPageCount > 1 ? <Pagination page={currentRetailerPage} pageCount={retailerPageCount} onPageChange={setRetailerPage} /> : null}
+      </>
     )
   }
 
