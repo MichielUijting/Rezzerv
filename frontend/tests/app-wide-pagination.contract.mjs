@@ -27,4 +27,20 @@ for (const [label, source, expected] of [
 ]) {
   assert.ok(source.includes(expected), label + ' ontbreekt')
 }
+const newlyCovered = [
+  ['Stores', '../src/features/stores/StoresPage.jsx', ['visibleBatches.map(', 'visibleStores.map(', 'batchPageCount > 1 ? <Pagination', 'storePageCount > 1 ? <Pagination']],
+  ['Authorization', '../src/features/settings/SettingsAuthorizationPage.jsx', ['visibleRows.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform audit', '../src/features/platform/PlatformAuditPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform logs', '../src/features/platform/PlatformLogsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform users', '../src/features/platform/PlatformUsersPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform sessions', '../src/features/platform/PlatformSessionsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform integrations', '../src/features/platform/PlatformIntegrationsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Platform flags', '../src/features/platform/PlatformFeatureFlagsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  ['Household support', '../src/features/support/HouseholdSupportPage.jsx', ['visibleThreads.map(', 'threadPageCount > 1 ? <Pagination']],
+  ['Platform support', '../src/features/support/PlatformSupportPage.jsx', ['visibleThreads.map(', 'threadPageCount > 1 ? <Pagination']],
+]
+for (const [label, path, expectations] of newlyCovered) {
+  const source = readFileSync(new URL(path, import.meta.url), 'utf8')
+  for (const expected of expectations) assert.ok(source.includes(expected), label + ': missing ' + expected)
+}
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
