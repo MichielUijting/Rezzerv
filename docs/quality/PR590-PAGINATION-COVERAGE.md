@@ -25,16 +25,16 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026; aangevuld met pa
 | `features/externalDatabases/ReceiptItemsOverview.jsx` | Bestaande PAGE_SIZE=10, pageCount, visibleItems en paginawisseling | Bestaande paginering aangetroffen; detailrendering nog te controleren | Renderpad en eventuele tweede tabel afzonderlijk verifiëren |
 | `features/superuser/SuperuserUsersSection.jsx` | DataTable | Centrale default | Selectie toetsen |
 | `features/platform/PlatformUsersPage.jsx` | Eigen kaart-/lijstweergave | Gebruikerskaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
-| `features/stores/StoresPage.jsx` | Geen directe Table/DataTable | Onbeslist | Kaart-/lijstinhoud beoordelen |
+| `features/stores/StoresPage.jsx` | Eigen open-bonnen- en gekoppelde-winkellijsten | Bestaande paginering (10) aangetroffen | UI-test uitvoeren |
 | `features/support/HouseholdSupportPage.jsx` | Eigen kaart-/lijstweergave | Desktop-meldingenlijst: paginering 10 geïmplementeerd; mobiele inbox apart toetsen | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/support/PlatformSupportPage.jsx` | Eigen kaart-/lijstweergave | Meldingenlijst: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
-| `features/home/DashboardDetailPage.jsx` | Geen directe Table/DataTable | Onbeslist | Drill-downlijsten beoordelen |
+| `features/home/DashboardDetailPage.jsx` | Eigen uitklapbare bonnen-, groepen-, artikel- en herhaalaankopenlijsten | 10 per pagina toegevoegd aan vier soorten drill-downlijsten | UI-test, uitklappen en periodewissel controleren |
 | `features/platform/PlatformAuditPage.jsx` | Eigen kaart-/lijstweergave | Auditkaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/platform/PlatformLogsPage.jsx` | Eigen kaart-/lijstweergave | Logkaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
 | `features/platform/PlatformSessionsPage.jsx` | Eigen kaart-/lijstweergave | Sessiekaarten: paginering 10 geïmplementeerd; browsertest open | Gedrag bij filters, refresh en detailselectie toetsen |
-| `features/platform/PlatformBackgroundJobsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
-| `features/platform/PlatformIntegrationsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
-| `features/platform/PlatformFeatureFlagsPage.jsx` | Geen directe Table/DataTable | Onbeslist | Resultaatlijsten beoordelen |
+| `features/platform/PlatformBackgroundJobsPage.jsx` | Vier vaste technische acties, één lopend rapport per actie | Bewust uitgesloten: geen lange resultaatlijst; rapport geeft alleen tellingen en voortgang | Geen paginering nodig zolang rapport niet als lange lijst wordt gerenderd |
+| `features/platform/PlatformIntegrationsPage.jsx` | Integratiekaarten | Bestaande paginering (10) aangetroffen | UI-test uitvoeren |
+| `features/platform/PlatformFeatureFlagsPage.jsx` | Featureflag-/functionaliteitskaarten | Bestaande paginering (10) aangetroffen | UI-test met bevestigingsdialoog uitvoeren |
 
 ## Nog uit te voeren
 
