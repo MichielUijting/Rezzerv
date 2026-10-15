@@ -2,6 +2,7 @@ import React from 'react'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 
 
@@ -28,6 +29,11 @@ async function fetchPlatformAudit(signal) {
 
 export default function PlatformAuditPage() {
   const [items, setItems] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(items.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = items.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
   const [reloadKey, setReloadKey] = React.useState(0)
@@ -41,7 +47,10 @@ export default function PlatformAuditPage() {
       setError('')
       try {
         const payload = await fetchPlatformAudit(controller.signal)
-        if (active) setItems(Array.isArray(payload?.items) ? payload.items : [])
+        if (active) {
+          setItems(Array.isArray(payload?.items) ? payload.items : [])
+          setPage(1)
+        }
       } catch (err) {
         if (active && err?.name !== 'AbortError') {
           setItems([])
@@ -78,7 +87,7 @@ export default function PlatformAuditPage() {
 
             {!loading && !error && items.length > 0 ? (
               <div data-testid="platform-audit-items">
-                {items.map((item) => (
+                {visibleItems.map((item) => (
                   <div key={item.id} data-testid={`platform-audit-item-${item.id}`}>
                     <Card className="rz-card-home">
                       <h3>{displayValue(item.action, 'Onbekende actie')}</h3>
@@ -95,6 +104,7 @@ export default function PlatformAuditPage() {
                 ))}
               </div>
             ) : null}
+            {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
             <div>
               <Button type="button" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
