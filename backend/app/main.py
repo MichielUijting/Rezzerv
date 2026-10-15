@@ -11816,6 +11816,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
         items = []
+        candidates = []
         seen_keys = set()
         for row in rows:
             serialized = serialize_receipt_row(dict(row))
@@ -11839,27 +11840,37 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 continue
 
             batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
-            # Use the same canonical unpacking lines as the batch detail screen.
-            # Receipt-table line_count also includes discounts, payment and other
-            # non-inventory lines filtered by sync_unpack_batch_lines_for_receipt.
-            line_counts = conn.execute(
+            candidates.append((serialized, batch_id, inbox_status, dedupe_key))
+        # Aggregate all line counts in one query instead of one query per receipt.
+        # Batch creation/synchronization must complete before counts are read.
+        batch_ids = list({candidate[1] for candidate in candidates})
+        counts_by_batch = {}
+        if batch_ids:
+            count_rows = conn.execute(
                 text("""
-                    SELECT
-                        COUNT(*) AS total,
-                        COUNT(*) FILTER (
-                            WHERE COALESCE(processing_status, 'pending') <> 'processed'
-                        ) AS remaining
+                    SELECT batch_id,
+                           COUNT(*) AS total,
+                           COUNT(*) FILTER (
+                               WHERE COALESCE(processing_status, 'pending') <> 'processed'
+                           ) AS remaining
                     FROM purchase_import_lines
-                    WHERE batch_id = :batch_id
+                    WHERE batch_id = ANY(:batch_ids)
+                    GROUP BY batch_id
                 """),
-                {'batch_id': batch_id},
-            ).mappings().one()
-            unpack_line_count = int(line_counts['total'])
-            remaining_line_count = int(line_counts['remaining'])
-            if int(remaining_line_count) == 0:
+                {'batch_ids': batch_ids},
+            ).mappings().all()
+            counts_by_batch = {
+                str(row['batch_id']): (int(row['total']), int(row['remaining']))
+                for row in count_rows
+            }
+
+        for serialized, batch_id, inbox_status, dedupe_key in candidates:
+            if dedupe_key in seen_keys:
+                continue
+            unpack_line_count, remaining_line_count = counts_by_batch.get(str(batch_id), (0, 0))
+            if remaining_line_count == 0:
                 continue
             seen_keys.add(dedupe_key)
-
             purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
             purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
             store_label = serialized.get('store_name') or serialized.get('store_branch') or serialized.get('source_label') or 'Kassabon'
