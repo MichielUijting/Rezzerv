@@ -43,4 +43,17 @@ for (const [label, path, expectations] of newlyCovered) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
   for (const expected of expectations) assert.ok(source.includes(expected), label + ': missing ' + expected)
 }
+
+const dashboardDetail = readFileSync(new URL('../src/features/home/DashboardDetailPage.jsx', import.meta.url), 'utf8')
+for (const expected of [
+  'function useDashboardPagination(rows)',
+  'const pageCount = Math.max(1, Math.ceil(rows.length / 10))',
+  'rows.slice((currentPage - 1) * 10, currentPage * 10)',
+  'visibleRows.map((receipt)',
+  'visibleRows.map((group)',
+  'visibleRows.map((article)',
+  'visibleRows.map((item, index)',
+  'pageCount > 1 ? <Pagination',
+]) assert.ok(dashboardDetail.includes(expected), 'Dashboard detail: missing ' + expected)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
