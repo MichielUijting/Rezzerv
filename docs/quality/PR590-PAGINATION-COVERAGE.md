@@ -44,3 +44,11 @@ Status: **gedeeltelijke broncode-inventaris**, 15 oktober 2026; aangevuld met pa
 4. UI-styleguide-gate opnieuw controleren op nieuwe head, versie synchroniseren, lokale PO-test en vereiste CI-gates.
 
 Geen enkel item is als functioneel PO-goedgekeurd aangemerkt.
+
+## Uitpakken — gemeten performance, 16 oktober 2026
+
+PO-meting op `fb0545edbef0cb40f203d5471b3c4aa0d392ea8b`: zeven backendaanroepen, 83 bonnen/kandidaten per aanroep, circa 5,7–6,3 seconden totaal; synchronisatiefase 5,6–6,1 seconden. Dit bewijst de synchronisatiebottleneck, niet de exacte bijdrage van elke afzonderlijke SQL-query.
+
+Gerichte reparatie: in `sync_unpack_batch_lines_for_receipt` wordt `get_prior_processed_line_fact` uitsluitend nog aangeroepen bij het **invoegen van een nieuwe** importregel. Voor al bestaande regels was die uitkomst ongebruikt. Sync van brongegevens, historie van nieuwe regels, huishoudisolatie en Kassa-/Uitpakken-statuscontracten blijven inhoudelijk ongewijzigd. Contractguard in `frontend/tests/app-wide-pagination.contract.mjs` toegevoegd.
+
+**Nog te bewijzen:** nieuwe gemeten laadtijden op de definitieve kandidaat met dezelfde data; functionele backendregressie; relevante CI-gates en PO-acceptatie. De gemeten verbetering is nog niet bekend.
