@@ -52,3 +52,9 @@ PO-meting op `fb0545edbef0cb40f203d5471b3c4aa0d392ea8b`: zeven backendaanroepen,
 Gerichte reparatie: in `sync_unpack_batch_lines_for_receipt` wordt `get_prior_processed_line_fact` uitsluitend nog aangeroepen bij het **invoegen van een nieuwe** importregel. Voor al bestaande regels was die uitkomst ongebruikt. Sync van brongegevens, historie van nieuwe regels, huishoudisolatie en Kassa-/Uitpakken-statuscontracten blijven inhoudelijk ongewijzigd. Contractguard in `frontend/tests/app-wide-pagination.contract.mjs` toegevoegd.
 
 **Nog te bewijzen:** nieuwe gemeten laadtijden op de definitieve kandidaat met dezelfde data; functionele backendregressie; relevante CI-gates en PO-acceptatie. De gemeten verbetering is nog niet bekend.
+
+### Uitpakken — vervolgcorrectie na PO-hertest
+
+De eerste optimalisatie van `get_prior_processed_line_fact` gaf volgens de PO geen merkbare verbetering. De overzichtsroute identificeert nu bestaande batches met één SQL-query en synchroniseert hun bonregels niet langer opnieuw bij iedere paginawissel. Bonnen zonder batch behouden het bestaande voorbereidingspad. Het openen van een specifieke batch synchroniseert nog steeds de bonregels, evenals de relevante mutatiepaden. Een contracttest borgt deze scheiding.
+
+Nog niet bewezen: lokale tijdmeting na deze wijziging en volledige functionele regressie; geen geclaimde snelheidswinst vóór bewijs.
