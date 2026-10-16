@@ -134,7 +134,7 @@ export default function CatalogPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => Boolean(selectedRows[id]))
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
-  const occupiedBodyRows = isLoading || items.length === 0 ? 1 : items.length
+  const occupiedBodyRows = items.length === 0 ? 1 : items.length
   const fillerRowCount = Math.max(0, PAGE_SIZE - occupiedBodyRows)
 
   useEffect(() => {
@@ -337,7 +337,7 @@ export default function CatalogPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? <tr><td colSpan="11">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
+                  {items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>
@@ -352,12 +352,12 @@ export default function CatalogPage() {
                       <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
-                  )) : <tr><td colSpan="11">Geen universele artikelen gevonden.</td></tr>}
-                  {!isLoading ? Array.from({ length: fillerRowCount }, (_, index) => (
+                  )) : <tr><td colSpan="11">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
+                  {Array.from({ length: fillerRowCount }, (_, index) => (
                     <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
                       <td colSpan="11">&nbsp;</td>
                     </tr>
-                  )) : null}
+                  ))}
                 </tbody>
             </Table>
 
