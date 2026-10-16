@@ -102,13 +102,13 @@ export default function PlatformSessionsPage() {
 
       {error ? <Card><p role="alert">{error}</p></Card> : null}
       {result ? <Card><p role="status">{result}</p></Card> : null}
-      {loading ? <Card><p>Actieve sessies laden...</p></Card> : null}
+      {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !sessions.length ? (
         <Card><p>Er zijn geen actieve sessies om te beheren.</p></Card>
       ) : null}
 
-      {!loading && visibleItems.map((session) => (
+      {visibleItems.map((session) => (
         <Card key={session.session_id}>
           <div data-testid={`platform-session-${session.session_id}`}>
             <h3>{session.email}</h3>
