@@ -423,7 +423,7 @@ export default function StoresPage() {
                 })}
                 {storePageCount > 1 ? <Pagination page={currentStorePage} pageCount={storePageCount} onPageChange={setStorePage} /> : null}
               </div>
-            )}
+
           </div>
         </Card>
       </div>
