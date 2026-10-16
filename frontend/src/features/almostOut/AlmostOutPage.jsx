@@ -249,8 +249,7 @@ export default function AlmostOutPage() {
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr><td colSpan={9}>{isLoading ? 'Bijna-op-artikelen laden…' : 'Er zijn op dit moment geen artikelen die aangevuld moeten worden.'}</td></tr>
-                ) : (
-                  visibleAlmostOutRows.map((row) => (
+                ) : visibleAlmostOutRows.map((row) => (
                   <tr key={row.id}>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
