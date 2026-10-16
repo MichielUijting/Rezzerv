@@ -64,7 +64,7 @@ export default function DataTable({
   const effectivePagination = Boolean(pagination || isMobileViewport)
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
-  const { widths, startResize } = useResizableColumnWidths(defaultWidths)
+  const { widths, startResize, setColumnWidth } = useResizableColumnWidths(defaultWidths)
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
@@ -170,6 +170,11 @@ export default function DataTable({
         tableClassName={tableClasses}
         tableStyle={mergedTableStyle}
         dataTestId={dataTestId}
+        resizableColumns
+        onColumnResize={(columnIndex, width) => {
+          const columnKey = visibleColumns[columnIndex]?.key
+          if (columnKey) setColumnWidth(columnKey, width)
+        }}
       >
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
