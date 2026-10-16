@@ -70,4 +70,17 @@ for (const expected of [
 assert.doesNotMatch(receiptsPage, /setSelectedBatchIds\(\(current\) => current\.filter\(\(id\) => visibleIds\.has\(id\)\)\)/)
 assert.doesNotMatch(receiptsPage, /listItems\.filter\(\(item\) => selectedBatchIds\.includes\(item\.batch_id\)\)/)
 
+// Existing Uitpakken lines must not trigger an unused historic-processing lookup.
+const backend = readFileSync(new URL('../../backend/app/main.py', import.meta.url), 'utf8')
+const syncStart = backend.indexOf('def sync_unpack_batch_lines_for_receipt(')
+const syncEnd = backend.indexOf('def ensure_unpack_batch_for_receipt(', syncStart)
+assert.ok(syncStart >= 0 && syncEnd > syncStart, 'Uitpakken synchronization function missing')
+const syncBody = backend.slice(syncStart, syncEnd)
+const existingBranch = syncBody.indexOf('if existing_line:')
+const insertLookup = syncBody.indexOf('prior_processed = get_prior_processed_line_fact(')
+const insertStatement = syncBody.indexOf('INSERT INTO purchase_import_lines (')
+assert.ok(existingBranch >= 0 && insertLookup > existingBranch && insertStatement > insertLookup,
+  'Prior processing lookup must occur only for newly imported lines')
+assert.equal(syncBody.match(/prior_processed = get_prior_processed_line_fact\(/g)?.length, 1)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
