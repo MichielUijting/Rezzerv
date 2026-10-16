@@ -126,7 +126,7 @@ export default function SettingsAuthorizationPage() {
             <p>Bekijk per rol welke mogelijkheden binnen het huishouden beschikbaar zijn.</p>
           </div>
 
-          {loading ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
+          {loading && overview.roles.length === 0 ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
             <>
               <p className="rz-authorization-explanation">
                 De rollen zijn vaste profielen. Wijs een rol aan een gebruiker toe in het scherm Huishouden.
