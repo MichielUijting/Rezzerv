@@ -107,6 +107,13 @@ const retainedRows = [
   ['../src/features/platform/PlatformUsersPage.jsx', 'visibleItems.map((user)', 'setLoading(true)'],
   ['../src/features/platform/PlatformSessionsPage.jsx', 'visibleItems.map((session)', 'setLoading(true)'],
   ['../src/features/stores/StoresPage.jsx', 'batchItems.length === 0 ?', 'aria-busy={isLoading}'],
+  ['../src/features/almostOut/AlmostOutPage.jsx', 'filteredRows.length === 0 ?', 'visibleAlmostOutRows.map((row)'],
+  ['../src/features/settings/SettingsArticleGroupsPage.jsx', 'filteredGroups.length === 0 ?', 'pageArticles.map((article)'],
+  ['../src/features/settings/SettingsSpacesPage.jsx', 'filteredItems.length === 0 ?', 'pageItems.map((item)'],
+  ['../src/features/settings/SettingsSublocationsPage.jsx', 'filteredItems.length === 0 ?', 'pageItems.map((item)'],
+  ['../src/features/settings/SettingsAuthorizationPage.jsx', 'loading && overview.roles.length === 0', 'authorization-role-matrix'],
+  ['../src/features/platform/PlatformIntegrationsPage.jsx', '!error ? visibleItems.map((item)', 'setLoading(true)'],
+  ['../src/features/stores/StoreBatchDetailPage.jsx', 'batch ? (', 'tabContent.Bonregels'],
 ]
 for (const [relative, renderGuard, loadingIndicator] of retainedRows) {
   const content = readFileSync(new URL(relative, import.meta.url), 'utf8')
