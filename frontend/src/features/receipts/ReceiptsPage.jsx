@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -24,6 +24,8 @@ export default function ReceiptsPage() {
   const [hasLoadError, setHasLoadError] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
+  const [selectedBatchesById, setSelectedBatchesById] = useState({})
+  const lastHouseholdId = useRef(null)
   const [openedBatchId, setOpenedBatchId] = useState(() => (
     new URLSearchParams(window.location.search).get('batch') || ''
   ))
@@ -61,6 +63,13 @@ export default function ReceiptsPage() {
 
         const unpackData = await fetchJson(`/api/unpack-start-batches?${new URLSearchParams({ householdId: householdData.id, page: String(page), page_size: '10', ...filters, sort_key: tableSort.key, sort_direction: tableSort.direction })}`)
         if (cancelled) return
+        const householdId = String(householdData.id)
+        if (lastHouseholdId.current !== null && lastHouseholdId.current !== householdId) {
+          setSelectedBatchIds([])
+          setSelectedBatchesById({})
+          setOpenedBatchId('')
+        }
+        lastHouseholdId.current = householdId
         setBatches(Array.isArray(unpackData?.items) ? unpackData.items : [])
         setTotal(Number(unpackData?.total || 0))
       } catch (err) {
@@ -107,21 +116,10 @@ export default function ReceiptsPage() {
     })
   }, [batches, filters, tableSort])
 
-  useEffect(() => {
-    if (isLoading || hasLoadError) return
-
-    if (!listItems.length) {
-      setSelectedBatchIds([])
-      setOpenedBatchId('')
-      return
-    }
-
-    const visibleIds = new Set(listItems.map((item) => item.batch_id))
-    setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)))
-    if (openedBatchId && !visibleIds.has(openedBatchId)) {
-      setOpenedBatchId('')
-    }
-  }, [hasLoadError, isLoading, listItems, openedBatchId])
+  // Selection must outlive server-side page changes.
+  const selectedBatches = selectedBatchIds
+    .map((id) => selectedBatchesById[id])
+    .filter(Boolean)
 
   function handleFilterChange(key, value) {
     setPage(1)
@@ -129,11 +127,18 @@ export default function ReceiptsPage() {
   }
 
   function toggleSelectedBatch(batchId) {
-    setSelectedBatchIds((current) => (
-      current.includes(batchId)
-        ? current.filter((id) => id !== batchId)
-        : [...current, batchId]
-    ))
+    const row = listItems.find((item) => item.batch_id === batchId)
+    if (!row) return
+    const wasSelected = selectedBatchIds.includes(batchId)
+    setSelectedBatchIds((current) => wasSelected
+      ? current.filter((id) => id !== batchId)
+      : [...current, batchId])
+    setSelectedBatchesById((current) => {
+      const next = { ...current }
+      if (wasSelected) delete next[batchId]
+      else next[batchId] = row
+      return next
+    })
   }
 
   function toggleSelectAllVisible() {
@@ -143,11 +148,16 @@ export default function ReceiptsPage() {
     setSelectedBatchIds((current) => allVisibleSelected
       ? current.filter((id) => !visibleIds.includes(id))
       : [...new Set([...current, ...visibleIds])])
+    setSelectedBatchesById((current) => {
+      const next = { ...current }
+      if (allVisibleSelected) visibleIds.forEach((id) => { delete next[id] })
+      else mobileVisibleItems.forEach((item) => { next[item.batch_id] = item })
+      return next
+    })
   }
 
   function handleExport() {
-    const selectedIds = selectedBatchIds.length ? new Set(selectedBatchIds) : null
-    const rows = listItems.filter((item) => !selectedIds || selectedIds.has(item.batch_id))
+    const rows = selectedBatches
     const header = ['Winkel', 'Datum', 'Regels', 'Status']
     const csvRows = rows.map((item) => [item.providerName, item.dateLabel, String(item.totalLines), item.statusLabel])
     const csv = [header, ...csvRows]
@@ -167,7 +177,7 @@ export default function ReceiptsPage() {
   async function handleBulkApprove() {
     if (!selectedBatchIds.length || isBulkApproving) return
     setIsBulkApproving(true)
-    const selected = listItems.filter((item) => selectedBatchIds.includes(item.batch_id))
+    const selected = selectedBatches
     const eligible = selected.filter((item) => String(item.statusLabel || '').trim().toLowerCase() === 'gecontroleerd')
     const ineligible = selected.length - eligible.length
     let processed = 0
@@ -193,6 +203,7 @@ export default function ReceiptsPage() {
       }
       setRefreshVersion((current) => current + 1)
       setSelectedBatchIds([])
+      setSelectedBatchesById({})
       showFeedback({
         variant: failed ? 'warning' : 'info',
         message: `Voorraadcontrole toegepast: bij actieve voorraadlocaties is een geldige standaardlocatie per artikel vereist. Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden. Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`,
@@ -217,8 +228,7 @@ export default function ReceiptsPage() {
   async function applyDeleteChoice(action) {
     if (selectedBatchIds.length === 0 || isApplyingDeleteChoice) return
     const selectedSet = new Set(selectedBatchIds)
-    const selectedBatches = listItems.filter((item) => selectedSet.has(item.batch_id))
-    if (!selectedBatches.length) return
+    if (selectedBatches.length !== selectedBatchIds.length) return
 
     setIsApplyingDeleteChoice(true)
     try {
@@ -249,6 +259,7 @@ export default function ReceiptsPage() {
         setOpenedBatchId('')
       }
       setSelectedBatchIds([])
+      setSelectedBatchesById({})
       setDeleteChoiceOpen(false)
     } catch (err) {
       showFeedback({
@@ -474,7 +485,7 @@ export default function ReceiptsPage() {
           </Table>
           <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
         <div className="rz-stock-table-actions">
-          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || selectedBatchIds.length === 0}>Exporteren</Button>
           <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="unpack-approve-selected-button">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
           <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0 || isBulkApproving}>Verwijderen</Button>
           {openedBatchId ? <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')} data-testid="receipt-back-to-overview">Terug naar overzicht</Button> : null}
