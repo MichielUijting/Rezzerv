@@ -95,4 +95,23 @@ const batchDetailStart = backend.indexOf('@app.get("/api/purchase-import-batches
 const batchDetail = backend.slice(batchDetailStart, batchDetailStart + 2400)
 assert.ok(batchDetail.includes('sync_unpack_batch_lines_for_receipt(conn, batch_id, dict(receipt_header))'))
 
+// Stale-while-revalidate contract for paginated UI: keep previously
+// received rows visible until the next response has been committed.
+const retainedRows = [
+  ['../src/features/receipts/ReceiptsPage.jsx', 'listItems.length === 0 ?', 'aria-busy={isLoading}'],
+  ['../src/features/receipts/KassaPage.jsx', 'listItems.length === 0 ?', 'pageInboxItems.map((item)'],
+  ['../src/features/catalog/CatalogPage.jsx', 'items.length ? items.map((item)', 'DelayedTableLoadingOverlay'],
+  ['../src/features/catalog/MobileCatalogPage.jsx', 'items.length > 0 ? (', 'aria-busy={isLoading}'],
+  ['../src/features/platform/PlatformAuditPage.jsx', '!error && items.length > 0 ?', 'aria-busy={loading}'],
+  ['../src/features/platform/PlatformLogsPage.jsx', '!error && items.length > 0 ?', 'aria-busy={loading}'],
+  ['../src/features/platform/PlatformUsersPage.jsx', 'visibleItems.map((user)', 'setLoading(true)'],
+  ['../src/features/platform/PlatformSessionsPage.jsx', 'visibleItems.map((session)', 'setLoading(true)'],
+  ['../src/features/stores/StoresPage.jsx', 'batchItems.length === 0 ?', 'aria-busy={isLoading}'],
+]
+for (const [relative, renderGuard, loadingIndicator] of retainedRows) {
+  const content = readFileSync(new URL(relative, import.meta.url), 'utf8')
+  assert.ok(content.includes(renderGuard), `Rows not retained while fetching: ${relative}`)
+  assert.ok(content.includes(loadingIndicator), `Loading feedback missing: ${relative}`)
+}
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
