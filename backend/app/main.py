@@ -11908,7 +11908,7 @@ def list_unpack_start_batches(
     def log_unpack_timing():
         elapsed = perf_counter() - perf_started
         if elapsed >= 0.5:
-            logging.getLogger(__name__).info(
+            logging.getLogger('uvicorn.error').info(
                 'unpack_list_timing total_ms=%.0f sources_ms=%.0f receipts_ms=%.0f sync_ms=%.0f counts_ms=%.0f final_ms=%.0f receipts=%d candidates=%d',
                 elapsed * 1000,
                 (perf_after_sources - perf_started) * 1000,
