@@ -66,7 +66,6 @@ export default function PlatformLogsPage() {
         setMaxEntries(Number(payload?.max_entries) || 500)
       } catch (err) {
         if (active && err?.name !== 'AbortError') {
-          setItems([])
           setError(err?.message || 'Platformlogs konden niet worden geladen.')
         }
       } finally {
@@ -115,15 +114,15 @@ export default function PlatformLogsPage() {
               ))}
             </select>
 
-            {loading ? <p data-testid="platform-logs-loading">Logs laden…</p> : null}
+            {loading ? <p data-testid="platform-logs-loading">Nieuwe logs laden…</p> : null}
             {error ? <p role="alert" data-testid="platform-logs-error">{error}</p> : null}
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-logs-empty">Er zijn voor deze runtime geen passende logrecords beschikbaar.</p>
             ) : null}
 
-            {!loading && !error && items.length > 0 ? (
-              <div data-testid="platform-logs-items">
+            {!error && items.length > 0 ? (
+              <div data-testid="platform-logs-items" aria-busy={loading} style={{ pointerEvents: loading ? 'none' : undefined }}>
                 {visibleItems.map((item) => (
                   <div key={item.id} data-testid={`platform-log-item-${item.id}`}>
                     <Card className="rz-card-home">
