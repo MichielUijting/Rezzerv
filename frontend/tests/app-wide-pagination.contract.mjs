@@ -128,4 +128,24 @@ for (const [relative, renderGuard, loadingIndicator] of retainedRows) {
   assert.ok(content.includes(loadingIndicator), `Loading feedback missing: ${relative}`)
 }
 
+// Coverage of nested detail lists and less frequently used management screens.
+const longListSources = [
+  ['../src/features/catalog/CatalogDetailPageV2.jsx', 'identityPagination.pageItems.map(', 'receiptPagination.pageItems.map('],
+  ['../src/features/platform/PlatformAuthorizationsPage.jsx', 'visibleUsers.map(', 'pageCount > 1 ? <Pagination'],
+  ['../src/features/platform/IpOwnerSuperusersPage.jsx', 'visibleUsers.map(', 'pageCount > 1 ? <Pagination'],
+  ['../src/features/settings/SettingsMyHouseholdsPage.jsx', 'visibleHouseholds.map(', 'pageCount > 1 ? <Pagination'],
+  ['../src/features/settings/SettingsHouseholdPage.jsx', 'visibleMembers.map(', 'visibleInvitations.map('],
+]
+for (const [relative, rows, pagination] of longListSources) {
+  const source = readFileSync(new URL(relative, import.meta.url), 'utf8')
+  assert.ok(source.includes(rows), `Missing paginated rows: ${relative}`)
+  assert.ok(source.includes(pagination), `Missing paginator: ${relative}`)
+}
+const catalogDetail = readFileSync(new URL('../src/features/catalog/CatalogDetailPageV2.jsx', import.meta.url), 'utf8')
+for (const pager of ['identityPagination', 'articlePagination', 'receiptPagination']) {
+  assert.ok(catalogDetail.includes(`useMobilePagination(`))
+  assert.ok(catalogDetail.includes(`<MobilePaginationControls {...${pager}}`))
+  assert.ok(catalogDetail.includes(`page={${pager}.page}`))
+}
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
