@@ -113,13 +113,13 @@ export default function PlatformUsersPage() {
 
       {error ? <Card><p role="alert">{error}</p></Card> : null}
       {result ? <Card><p role="status">{result}</p></Card> : null}
-      {loading ? <Card><p>Gebruikers laden...</p></Card> : null}
+      {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !users.length ? (
         <Card><p>Er zijn geen gebruikers gevonden.</p></Card>
       ) : null}
 
-      {!loading && visibleItems.map((user) => {
+      {visibleItems.map((user) => {
         const suspended = user.account_status === 'suspended'
         return (
           <Card key={user.user_id}>
