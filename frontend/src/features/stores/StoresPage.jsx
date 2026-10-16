@@ -319,12 +319,10 @@ export default function StoresPage() {
               <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
             </div>
 
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : batchItems.length === 0 ? (
-              <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
+            {batchItems.length === 0 ? (
+              <div>{isLoading ? 'Winkelgegevens laden…' : 'Geen open bonnen'}</div>
             ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ display: 'grid', gap: '12px' }} aria-busy={isLoading}>
                 {visibleBatches.map((batch) => (
                   <div
                     key={batch.batch_id}
@@ -389,10 +387,7 @@ export default function StoresPage() {
 
         <Card>
           <div data-testid="connected-stores-section">
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '14px' }}>
+            <div style={{ display: 'grid', gap: '14px' }} aria-busy={isLoading}>
                 <div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Verbonden winkels</h3>
                   <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier je gekoppelde winkels en haal nieuwe aankopen op.</div>
