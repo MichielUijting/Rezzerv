@@ -514,7 +514,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       ) : null}
 
       {mode === 'list' ? (
-        <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list">
+        <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list" aria-busy={receiptsLoading}>
           <div className="rz-mobile-kassa-list-actions"><input type="file" accept="image/*,application/pdf" hidden ref={uploadRef} aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} /><Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
           <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
           <div className="rz-mobile-kassa-bulk">
@@ -524,7 +524,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
             </div>
           </div>
-          {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
+          {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
           {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receiptPagination.pageItems.map((item) => (
             <div key={receiptId(item)} className="rz-mobile-kassa-receipt-card">
