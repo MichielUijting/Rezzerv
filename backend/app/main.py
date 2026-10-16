@@ -9126,9 +9126,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     {'id': existing_line.get('id'), 'batch_id': batch_id},
                 )
             continue
-        prior_processed = get_prior_processed_line_fact(
-            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
-        )
         try:
             quantity_value = float(line.get('quantity')) if line.get('quantity') is not None else 1.0
         except Exception:
@@ -9199,6 +9196,11 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             )
             continue
 
+        # Only new import lines need a prior processing lookup. Existing lines
+        # already preserve their processing identity and do not use this result.
+        prior_processed = get_prior_processed_line_fact(
+            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
+        )
         conn.execute(
             text("""
             INSERT INTO purchase_import_lines (
