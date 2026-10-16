@@ -413,7 +413,7 @@ export default function SettingsArticleGroupsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={4}>Artikelgroepen laden…</td></tr> : filteredGroups.length === 0 ? <tr><td colSpan={4}>Geen Artikelgroepen gevonden.</td></tr> : pageGroups.map((group) => {
+                {filteredGroups.length === 0 ? <tr><td colSpan={4}>{loading ? 'Artikelgroepen laden…' : 'Geen Artikelgroepen gevonden.'}</td></tr> : pageGroups.map((group) => {
                   const groupArticles = articles.filter((article) => String(article.article_group_id || '') === String(group.id))
                   const directChecked = groupArticles.length > 0 && groupArticles.every((article) => normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION)
                   const deletable = groupArticles.length === 0
@@ -462,7 +462,7 @@ export default function SettingsArticleGroupsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={4}>Huishoudartikelen laden…</td></tr> : visibleArticles.length === 0 ? <tr><td colSpan={4}>Geen huishoudartikelen gevonden.</td></tr> : pageArticles.map((article) => (
+                {visibleArticles.length === 0 ? <tr><td colSpan={4}>{loading ? 'Huishoudartikelen laden…' : 'Geen huishoudartikelen gevonden.'}</td></tr> : pageArticles.map((article) => (
                   <tr key={article.id} className={selectedArticleIds.includes(String(article.id)) ? 'rz-row-selected' : ''}>
                     <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedArticleIds.includes(String(article.id))} onChange={() => setSelectedArticleIds((current) => current.includes(String(article.id)) ? current.filter((id) => id !== String(article.id)) : [...current, String(article.id)])} /></td>
                     <td>{article.article_name || 'Onbekend artikel'}</td>
