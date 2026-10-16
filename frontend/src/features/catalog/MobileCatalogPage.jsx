@@ -66,7 +66,7 @@ export default function MobileCatalogPage() {
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
-  const summary = isLoading ? 'Catalogus laden…' : `${total} artikelen`
+  const summary = isLoading && items.length === 0 ? 'Catalogus laden…' : `${total} artikelen`
   const hasFilters = Boolean(query || kind)
 
   useEffect(() => {
@@ -131,11 +131,12 @@ export default function MobileCatalogPage() {
 
         <div className="rz-mobile-catalog-summary" aria-live="polite">{summary}</div>
 
+        {isLoading && items.length > 0 ? <section className="rz-mobile-catalog-state" role="status">Nieuwe pagina laden… Vorige resultaten blijven zichtbaar.</section> : null}
         {error ? <section className="rz-mobile-catalog-state" role="alert">{error}</section> : null}
         {!error && !isLoading && items.length === 0 ? <section className="rz-mobile-catalog-state">Geen catalogusartikelen gevonden.</section> : null}
 
         {!error && items.length > 0 ? (
-          <section className="rz-mobile-catalog-list" aria-label="Catalogusartikelen">
+          <section className="rz-mobile-catalog-list" aria-label="Catalogusartikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {items.map((item) => (
               <button
                 key={item.id}
