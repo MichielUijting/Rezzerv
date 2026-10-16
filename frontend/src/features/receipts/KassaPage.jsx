@@ -3539,11 +3539,10 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (
-                    <tr><td colSpan={5}>Bonnen laden...</td></tr>
-                  ) : listItems.length === 0 ? (
-                    <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
-                  ) : pageInboxItems.map((item) => {
+                  {listItems.length === 0 ? (
+                    <tr><td colSpan={5}>{isLoading ? 'Bonnen laden…' : 'Er zijn nog geen bonnen in de inbox beschikbaar.'}</td></tr>
+                  ) : (
+                    pageInboxItems.map((item) => {
                     const receiptId = String(item.receipt_table_id || '')
                     const selected = selectedReceiptIds.includes(receiptId)
                     return (
