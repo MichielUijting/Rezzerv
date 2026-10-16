@@ -83,4 +83,16 @@ assert.ok(existingBranch >= 0 && insertLookup > existingBranch && insertStatemen
   'Prior processing lookup must occur only for newly imported lines')
 assert.equal(syncBody.match(/prior_processed = get_prior_processed_line_fact\(/g)?.length, 1)
 
+// List requests must not synchronize every existing receipt; detail requests still do.
+const unpackStart = backend.indexOf('@app.get("/api/unpack-start-batches")')
+const unpackEnd = backend.indexOf('@app.get("/api/receipts")', unpackStart)
+const unpackList = backend.slice(unpackStart, unpackEnd)
+assert.ok(unpackList.includes('batch_by_reference.get(receipt_reference)'))
+assert.ok(unpackList.includes('if not batch_id:'))
+assert.ok(unpackList.includes('batch_id = ensure_unpack_batch_for_receipt(conn, serialized)'))
+assert.ok(!unpackList.includes('sync_unpack_batch_lines_for_receipt(conn,'))
+const batchDetailStart = backend.indexOf('@app.get("/api/purchase-import-batches/{batch_id}")')
+const batchDetail = backend.slice(batchDetailStart, batchDetailStart + 2400)
+assert.ok(batchDetail.includes('sync_unpack_batch_lines_for_receipt(conn, batch_id, dict(receipt_header))'))
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
