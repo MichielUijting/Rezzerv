@@ -2752,9 +2752,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       <div data-testid="receipt-detail-title" style={{ display: 'none' }}>
         {batch ? buildBatchTitle(batch) : 'Kassabon'}
       </div>
-      {isLoading ? (
-        <div>Bongegevens laden…</div>
-      ) : batch ? (
+      {batch ? (
         isMobileViewport
           ? tabContent.Bonregels
           : (
@@ -2763,7 +2761,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </Tabs>
           )
       ) : (
-        <div>Geen kassabon beschikbaar.</div>
+        <div>{isLoading ? 'Bongegevens laden…' : 'Geen kassabon beschikbaar.'}</div>
       )}
     </ScreenCard>
   )
