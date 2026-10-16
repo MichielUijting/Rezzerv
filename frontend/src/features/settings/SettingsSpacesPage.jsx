@@ -382,10 +382,8 @@ export default function SettingsSpacesPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={4}>Ruimtes laden…</td></tr>
-                ) : filteredItems.length === 0 ? (
-                  <tr><td colSpan={4}>Nog geen ruimtes beschikbaar.</td></tr>
+                {filteredItems.length === 0 ? (
+                  <tr><td colSpan={4}>{isLoading ? 'Ruimtes laden…' : 'Nog geen ruimtes beschikbaar.'}</td></tr>
                 ) : pageItems.map((item) => {
                   const selected = selectedIds.includes(String(item.id))
                   return (
