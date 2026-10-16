@@ -139,7 +139,6 @@ export default function AlmostOutPage() {
       } catch (err) {
         if (!cancelled) {
           setError(String(err?.message || 'Bijna-op-artikelen konden niet worden geladen'))
-          setItems([])
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -248,11 +247,10 @@ export default function AlmostOutPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={9}>Bijna-op-artikelen laden…</td></tr>
-                ) : filteredRows.length === 0 ? (
-                  <tr><td colSpan={9}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
-                ) : visibleAlmostOutRows.map((row) => (
+                {filteredRows.length === 0 ? (
+                  <tr><td colSpan={9}>{isLoading ? 'Bijna-op-artikelen laden…' : 'Er zijn op dit moment geen artikelen die aangevuld moeten worden.'}</td></tr>
+                ) : (
+                  visibleAlmostOutRows.map((row) => (
                   <tr key={row.id}>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
