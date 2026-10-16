@@ -139,7 +139,7 @@ export default function DataTable({
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
   const pageCount = effectivePagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
 
-  useEffect(() => { setPage(1) }, [activeFilters, activeSort, data, normalizedPageSize, effectivePagination])
+  useEffect(() => { setPage(1) }, [activeFilters, activeSort, normalizedPageSize, effectivePagination])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const displayData = useMemo(() => {
