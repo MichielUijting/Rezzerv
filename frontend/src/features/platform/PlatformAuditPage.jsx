@@ -53,7 +53,6 @@ export default function PlatformAuditPage() {
         }
       } catch (err) {
         if (active && err?.name !== 'AbortError') {
-          setItems([])
           setError(err?.message || 'Audit kon niet worden geladen.')
         }
       } finally {
@@ -78,15 +77,15 @@ export default function PlatformAuditPage() {
             <p>Bekijk recente autorisatiegebeurtenissen van het platform.</p>
             <p>Gevoelige auditpayloads, redenen en ticketreferenties worden hier niet getoond.</p>
 
-            {loading ? <p data-testid="platform-audit-loading">Audit laden…</p> : null}
+            {loading ? <p data-testid="platform-audit-loading">Nieuwe auditgegevens laden…</p> : null}
             {error ? <p role="alert" data-testid="platform-audit-error">{error}</p> : null}
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-audit-empty">Er zijn geen auditgebeurtenissen beschikbaar.</p>
             ) : null}
 
-            {!loading && !error && items.length > 0 ? (
-              <div data-testid="platform-audit-items">
+            {!error && items.length > 0 ? (
+              <div data-testid="platform-audit-items" aria-busy={loading} style={{ pointerEvents: loading ? 'none' : undefined }}>
                 {visibleItems.map((item) => (
                   <div key={item.id} data-testid={`platform-audit-item-${item.id}`}>
                     <Card className="rz-card-home">
