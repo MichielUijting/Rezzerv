@@ -305,7 +305,6 @@ export default function ReceiptsPage() {
             ) : null}
           </div>
 
-          {isLoading ? <div className="rz-mobile-inventory-state" role="status">Nieuwe pagina laden… Vorige resultaten blijven zichtbaar.</div> : null}
           {!isLoading && hasLoadError ? <div className="rz-mobile-inventory-state rz-mobile-inventory-state--error">Kassabonnen konden niet worden geladen.</div> : null}
           {!isLoading && !hasLoadError && listItems.length === 0 ? <div className="rz-mobile-inventory-state">Er zijn nog geen kassabonnen.</div> : null}
 
