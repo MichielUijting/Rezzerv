@@ -305,12 +305,12 @@ export default function ReceiptsPage() {
             ) : null}
           </div>
 
-          {isLoading ? <div className="rz-mobile-inventory-state">Bonnen laden…</div> : null}
+          {isLoading ? <div className="rz-mobile-inventory-state" role="status">Nieuwe pagina laden… Vorige resultaten blijven zichtbaar.</div> : null}
           {!isLoading && hasLoadError ? <div className="rz-mobile-inventory-state rz-mobile-inventory-state--error">Kassabonnen konden niet worden geladen.</div> : null}
           {!isLoading && !hasLoadError && listItems.length === 0 ? <div className="rz-mobile-inventory-state">Er zijn nog geen kassabonnen.</div> : null}
 
-          {!isLoading && !hasLoadError && listItems.length > 0 ? (
-            <div className="rz-mobile-inventory-list rz-mobile-unpack-list">
+          {!hasLoadError && listItems.length > 0 ? (
+            <div className="rz-mobile-inventory-list rz-mobile-unpack-list" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
               {mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
@@ -328,7 +328,7 @@ export default function ReceiptsPage() {
               })}
             </div>
           ) : null}
-          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
+          <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" /></div>
 
           <div className="rz-mobile-unpack-actions" data-testid="mobile-unpack-bulk-actions">
             <Button
@@ -439,11 +439,9 @@ export default function ReceiptsPage() {
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {isLoading ? (
-                <tr><td colSpan={5}>Bonnen laden…</td></tr>
-              ) : hasLoadError ? null : listItems.length === 0 ? (
-                <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
+            <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
+              {hasLoadError ? null : listItems.length === 0 ? (
+                <tr><td colSpan={5}>{isLoading ? 'Bonnen laden…' : 'Er zijn nog geen kassabonnen.'}</td></tr>
               ) : mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
