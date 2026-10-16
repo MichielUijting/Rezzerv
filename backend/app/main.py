@@ -11834,6 +11834,26 @@ def list_unpack_start_batches(
         def normalize_key_part(value):
             return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
+        # Existing batches are read in one query. Syncing every receipt here
+        # rewrites all existing import lines on each page navigation; details
+        # and receipt mutation routes already synchronize individual receipts.
+        existing_batch_rows = conn.execute(
+            text("""
+                SELECT id, source_reference
+                FROM purchase_import_batches
+                WHERE household_id = :household_id
+                  AND source_type = 'receipt'
+                ORDER BY created_at DESC, id DESC
+            """),
+            {'household_id': effective_household_id},
+        ).mappings().all()
+        batch_by_reference = {}
+        for existing_batch in existing_batch_rows:
+            batch_by_reference.setdefault(
+                str(existing_batch['source_reference']),
+                str(existing_batch['id']),
+            )
+
         items = []
         candidates = []
         seen_keys = set()
@@ -11858,7 +11878,16 @@ def list_unpack_start_batches(
             if inbox_status not in {'Gecontroleerd', 'Controle nodig'}:
                 continue
 
-            batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
+            receipt_reference = f"receipt:{serialized['receipt_table_id']}"
+            batch_id = batch_by_reference.get(receipt_reference)
+            if not batch_id:
+                # Legacy/first-time receipt: retain the original preparation
+                # path; only already prepared receipts take the read-only path.
+                batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
+                if batch_id:
+                    batch_by_reference[receipt_reference] = batch_id
+            if not batch_id:
+                continue
             candidates.append((serialized, batch_id, inbox_status, dedupe_key))
         perf_after_batch_sync = perf_counter()
         # Aggregate all line counts in one query instead of one query per receipt.
