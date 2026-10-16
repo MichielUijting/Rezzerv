@@ -320,10 +320,8 @@ export default function SettingsSublocationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={4}>Sublocaties laden…</td></tr>
-                ) : filteredItems.length === 0 ? (
-                  <tr><td colSpan={4}>Nog geen sublocaties beschikbaar.</td></tr>
+                {filteredItems.length === 0 ? (
+                  <tr><td colSpan={4}>{isLoading ? 'Sublocaties laden…' : 'Nog geen sublocaties beschikbaar.'}</td></tr>
                 ) : pageItems.map((item) => {
                   const selected = selectedIds.includes(String(item.id))
                   return (
