@@ -56,4 +56,18 @@ for (const expected of [
   'pageCount > 1 ? <Pagination',
 ]) assert.ok(dashboardDetail.includes(expected), 'Dashboard detail: missing ' + expected)
 
+const receiptsPage = readFileSync(new URL('../src/features/receipts/ReceiptsPage.jsx', import.meta.url), 'utf8')
+for (const expected of [
+  'const [selectedBatchesById, setSelectedBatchesById] = useState({})',
+  '.map((id) => selectedBatchesById[id])',
+  'const selected = selectedBatches',
+  'const rows = selectedBatches',
+  'else mobileVisibleItems.forEach((item) => { next[item.batch_id] = item })',
+  'if (allVisibleSelected) visibleIds.forEach((id) => { delete next[id] })',
+  'setSelectedBatchesById({})',
+  'if (selectedBatches.length !== selectedBatchIds.length) return',
+]) assert.ok(receiptsPage.includes(expected), 'Uitpakken cross-page selection: missing ' + expected)
+assert.doesNotMatch(receiptsPage, /setSelectedBatchIds\(\(current\) => current\.filter\(\(id\) => visibleIds\.has\(id\)\)\)/)
+assert.doesNotMatch(receiptsPage, /listItems\.filter\(\(item\) => selectedBatchIds\.includes\(item\.batch_id\)\)/)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
