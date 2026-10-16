@@ -380,7 +380,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         ) : null}
 
         {!error && filteredRows.length > 0 ? (
-          <section className="rz-mobile-inventory-list" aria-label="Voorraadartikelen">
+          <section className="rz-mobile-inventory-list" aria-label="Voorraadartikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {inventoryPagination.pageItems.map((row) => {
               const detailTarget = row.detailId
                 ? `/voorraad/${encodeURIComponent(row.detailId)}?artikel=${encodeURIComponent(row.articleName || row.householdName)}`
