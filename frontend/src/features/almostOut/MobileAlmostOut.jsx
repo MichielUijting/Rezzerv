@@ -175,7 +175,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
         </section>
 
         <div className="rz-mobile-inventory-summary" aria-live="polite">
-          {isLoading ? 'Bijna-op-artikelen laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
+          {isLoading && rows.length === 0 ? 'Bijna-op-artikelen laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
         </div>
 
         {error ? (
@@ -197,7 +197,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
         ) : null}
 
         {!error && filteredRows.length > 0 ? (
-          <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen">
+          <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {almostOutPagination.pageItems.map((row) => {
               const title = row.householdName || row.primaryName
               const contextParts = []
