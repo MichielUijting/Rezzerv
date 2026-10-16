@@ -68,3 +68,19 @@ Gecorrigeerde renderpaden: Uitpakken desktop/mobiel; Kassa-inbox; Catalogus desk
 Verificatie: tekstuele broncodecontracten toegevoegd. GitHub-frontendbuild, UI-/regressiechecks en lokale PO-proef op de definitieve head blijven voor Ready verplicht. Bij fouten blijft bestaande data bewaard; uitzonderingen gelden voor nieuwe autorisatiescope of huishouden.
 
 Veiligheidsgrens: de detailweergave van een individuele bon blijft tijdens het ophalen van een andere bon bewust afgeschermd; het verzoek om stabiele regels betreft de gepagineerde overzichten, niet het tonen van mogelijk verouderde details bij een andere bonidentiteit.
+
+## Routegebaseerde aanvullende inventaris (16 oktober 2026)
+
+De actieve routes in `frontend/src/app/router/AppRouter.jsx` en `frontend/src/features/platform/platformNavigation.js` zijn gecontroleerd naast de eerdere dekkingsmatrix. Daarbij zijn ook minder gebruikte schermen met potentieel lange lijsten geïdentificeerd en opgenomen:
+
+- Platformautorisaties: gebruikerskaarten nu 10 per pagina; rolmatrix is een kleine vaste set.
+- IP-eigenaar / Superusers: actieve Superusers nu 10 per pagina.
+- Instellingen / Mijn huishoudens: maximaal 10 huishoudkaarten per pagina.
+- Instellingen / Huishouden: aparte paginering per 10 leden en per 10 uitnodigingen, zonder rolacties te verplaatsen.
+- Catalogusdetail desktop en mobiel: drie afzonderlijke deeloverzichten (identiteiten, gekoppelde huishoudartikelen, gekoppelde kassabonregels) elk maximaal 10 per pagina.
+- Spaartegoeden en Superuser-overzichten: gebruiken bestaande centrale `DataTable` met 10-regelsstandaard.
+- Kassa/Uitpakken/Winkelen/Voorraad/Bijna op inclusief mobiele routes: paginerings- en vernieuwingscontracten gecontroleerd en waar nodig gecorrigeerd.
+
+Korte invoerformulieren, vaste navigatiekaarten, rapporten zonder lange lijst en de detailweergave van één bon zijn geen tabellen/lange resultaatlijsten en krijgen dus geen kunstmatige paginering. Identiteitswisseling bij een detailroute blijft expliciet afgeschermd.
+
+**Bewijslimiet:** broncode-inventaris plus contractchecks, CI en lokale PO-feedback voor de eerdere kandidaat; niet ieder denkbaar autorisatietype of scherm met 11+ echte records is daadwerkelijk in een browser getest. Voor definitieve PO-acceptatie blijven gerichte checks op de laatste SHA nodig.
