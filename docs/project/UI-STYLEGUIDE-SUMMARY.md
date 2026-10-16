@@ -1075,3 +1075,7 @@ Voor alle gebruikerszichtbare tabellen en lange, tabelachtige lijsten op desktop
 - Bestaande geselecteerde records blijven geselecteerd bij wisselen van pagina. Een actie **Alles selecteren** heeft uitsluitend betrekking op de zichtbare records van de huidige pagina; bulkacties respecteren de totale expliciete selectie.
 - Dezelfde regels gelden voor eigen tabelimplementaties, de gedeelde `DataTable` en mobiele kaartlijsten; reeds aanwezige paginering wordt hergebruikt en niet gedupliceerd.
 - Korte statische navigatiemenu's, formulieren en vaste configuratiekeuzes worden niet kunstmatig gepagineerd.
+
+## Rustige paginawisseling (desktop en mobiel)
+
+Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobiele kaarten zichtbaar totdat de nieuwe set succesvol beschikbaar is (stale-while-revalidate). Alleen de records/kaarten en totalen voor de nieuwe pagina worden daarna tegelijk vervangen. Gebruik een bescheiden voortgangsindicatie zonder lege tussenweergave en blokkeer tijdelijk acties op nog zichtbare regels van de vorige pagina. Bij een eerste bezoek zonder eerdere resultaten blijft de normale laadmelding gelden. Bij wisseling van huishouden, autorisatiescope of andere gevoelige dataset mogen oude records niet zichtbaar blijven. Lokale paginering over al aanwezige gegevens wisselt direct, zonder laadstatus.
