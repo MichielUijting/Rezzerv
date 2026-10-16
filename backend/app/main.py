@@ -11756,8 +11756,13 @@ def list_unpack_start_batches(
     sort_direction: str = Query('desc'),
     authorization: Optional[str] = Header(None),
 ):
+    # Timings are aggregate only: no identifiers, receipt content or household data.
+    from time import perf_counter
+    import logging
+    perf_started = perf_counter()
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    perf_after_sources = perf_counter()
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -11823,6 +11828,7 @@ def list_unpack_start_batches(
             {'household_id': effective_household_id},
         ).mappings().all()
 
+        perf_after_receipt_query = perf_counter()
         def normalize_key_part(value):
             return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
@@ -11852,6 +11858,7 @@ def list_unpack_start_batches(
 
             batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
             candidates.append((serialized, batch_id, inbox_status, dedupe_key))
+        perf_after_batch_sync = perf_counter()
         # Aggregate all line counts in one query instead of one query per receipt.
         # Batch creation/synchronization must complete before counts are read.
         batch_ids = list({candidate[1] for candidate in candidates})
@@ -11875,6 +11882,7 @@ def list_unpack_start_batches(
                 for row in count_rows
             }
 
+        perf_after_line_counts = perf_counter()
         for serialized, batch_id, inbox_status, dedupe_key in candidates:
             if dedupe_key in seen_keys:
                 continue
@@ -11897,7 +11905,21 @@ def list_unpack_start_batches(
             })
 
     items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
+    def log_unpack_timing():
+        elapsed = perf_counter() - perf_started
+        if elapsed >= 0.5:
+            logging.getLogger(__name__).info(
+                'unpack_list_timing total_ms=%.0f sources_ms=%.0f receipts_ms=%.0f sync_ms=%.0f counts_ms=%.0f final_ms=%.0f receipts=%d candidates=%d',
+                elapsed * 1000,
+                (perf_after_sources - perf_started) * 1000,
+                (perf_after_receipt_query - perf_after_sources) * 1000,
+                (perf_after_batch_sync - perf_after_receipt_query) * 1000,
+                (perf_after_line_counts - perf_after_batch_sync) * 1000,
+                (perf_counter() - perf_after_line_counts) * 1000,
+                len(rows), len(candidates),
+            )
     if page is None:
+        log_unpack_timing()
         return {'items': items}
     terms = (winkel.strip().casefold(), datum.strip().casefold(),
              regels.strip().casefold(), status.strip().casefold())
@@ -11917,6 +11939,7 @@ def list_unpack_start_batches(
     items.sort(key=sort_fields.get(sort_key, sort_fields['datum']), reverse=sort_direction != 'asc')
     total = len(items)
     start = (page - 1) * page_size
+    log_unpack_timing()
     return {'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size}
 
 
