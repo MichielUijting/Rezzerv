@@ -58,3 +58,11 @@ Gerichte reparatie: in `sync_unpack_batch_lines_for_receipt` wordt `get_prior_pr
 De eerste optimalisatie van `get_prior_processed_line_fact` gaf volgens de PO geen merkbare verbetering. De overzichtsroute identificeert nu bestaande batches met één SQL-query en synchroniseert hun bonregels niet langer opnieuw bij iedere paginawissel. Bonnen zonder batch behouden het bestaande voorbereidingspad. Het openen van een specifieke batch synchroniseert nog steeds de bonregels, evenals de relevante mutatiepaden. Een contracttest borgt deze scheiding.
 
 Nog niet bewezen: lokale tijdmeting na deze wijziging en volledige functionele regressie; geen geclaimde snelheidswinst vóór bewijs.
+
+## Rustig schakelen tussen pagina's (desktop en mobiel)
+
+PO-acceptatie van de Uitpakken-performancefix: pagina's laden volgens de PO nu veel sneller. Nieuwe UX-eis: geen tijdelijk lege tabel tijdens het ophalen van nieuwe data. Op bestaande gedeelde DataTables en in-memory paginering verandert de pagina direct zonder tussentijdse serveraanroep. Voor servergeladen schermen is de vorige dataset tijdens verversen zichtbaar gebleven totdat de nieuwe respons is toegepast.
+
+Gecorrigeerde renderpaden: Uitpakken desktop/mobiel; Kassa-inbox; Catalogus desktop/mobiel; Bijna op; artikelgroepen, ruimtes, sublocaties en autorisatiematrix bij Instellingen; Uitpakken-bondetail; open bonnen en winkeloverzicht; platform Audit, Logs, Gebruikers, Sessies en Integraties. Platform-featureflags wisselen tussen verschillende autorisatiescopes en mogen geen gegevens uit een andere scope tonen; daar blijft de bestaande scopewissel leidend. Bij servergeladen tabellen blijven oude regels tijdens de fetch zichtbaar maar mogen ze niet als nieuwe resultaten worden bediend.
+
+Verificatie: tekstuele broncodecontracten toegevoegd. GitHub-frontendbuild, UI-/regressiechecks en lokale PO-proef op de definitieve head blijven voor Ready verplicht. Bij fouten blijft bestaande data bewaard; uitzonderingen gelden voor nieuwe autorisatiescope of huishouden.
