@@ -481,7 +481,7 @@ export default function ReceiptsPage() {
               })}
             </tbody>
           </Table>
-          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
+          <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" /></div>
         <div className="rz-stock-table-actions">
           <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || selectedBatchIds.length === 0}>Exporteren</Button>
           <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="unpack-approve-selected-button">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
