@@ -3538,7 +3538,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
                   {listItems.length === 0 ? (
                     <tr><td colSpan={5}>{isLoading ? 'Bonnen laden…' : 'Er zijn nog geen bonnen in de inbox beschikbaar.'}</td></tr>
                   ) : pageInboxItems.map((item) => {
