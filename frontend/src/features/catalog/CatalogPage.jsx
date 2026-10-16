@@ -336,7 +336,7 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
                   {items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
