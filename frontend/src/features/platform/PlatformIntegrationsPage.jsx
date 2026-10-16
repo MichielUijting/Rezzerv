@@ -57,7 +57,6 @@ export default function PlatformIntegrationsPage() {
       setItems(Array.isArray(payload?.items) ? payload.items : [])
         setPage(1)
     } catch (requestError) {
-      setItems([])
       setError(requestError?.message || 'Integratiestatus ophalen is mislukt.')
     } finally {
       setLoading(false)
@@ -95,7 +94,7 @@ export default function PlatformIntegrationsPage() {
               <p data-testid="platform-integrations-empty">Geen platformintegraties beschikbaar.</p>
             ) : null}
 
-            {!loading && !error ? visibleItems.map((item) => (
+            {!error ? visibleItems.map((item) => (
               <div key={item.key} data-testid={`platform-integration-${item.key}`}>
                 <Card className="rz-card-home">
                   <h3>{item.label || item.key}</h3>
