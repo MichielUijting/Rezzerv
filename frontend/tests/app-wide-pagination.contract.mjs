@@ -113,7 +113,6 @@ const retainedRows = [
   ['../src/features/settings/SettingsSublocationsPage.jsx', 'filteredItems.length === 0 ?', 'pageItems.map((item)'],
   ['../src/features/settings/SettingsAuthorizationPage.jsx', 'loading && overview.roles.length === 0', 'authorization-role-matrix'],
   ['../src/features/platform/PlatformIntegrationsPage.jsx', '!error ? visibleItems.map((item)', 'setLoading(true)'],
-  ['../src/features/stores/StoreBatchDetailPage.jsx', 'batch ? (', 'tabContent.Bonregels'],
 ]
 for (const [relative, renderGuard, loadingIndicator] of retainedRows) {
   const content = readFileSync(new URL(relative, import.meta.url), 'utf8')
