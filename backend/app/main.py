@@ -4451,6 +4451,16 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     if not article_rows:
         return []
 
+    # Without prediction, an article with no minimum stock can never appear
+    # in Bijna op. Avoid expensive inventory/event lookups for those rows.
+    if not bool(household_settings.get('prediction_enabled')):
+        article_rows = [
+            row for row in article_rows
+            if normalize_optional_numeric_field(row.get('min_stock')) is not None
+        ]
+        if not article_rows:
+            return []
+
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
     gpc_by_article = dutch_gpc_by_household_article(
         conn,
