@@ -489,8 +489,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     return <main className="rz-mobile-home" data-testid="mobile-home-page">
       <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
       <section className="rz-mobile-home-inner">
-        <h1 className="rz-mobile-home-welcome">Welkom {name}</h1>
-        <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+        <div className="rz-mobile-home-greeting">
+          <h1 className="rz-mobile-home-welcome">Welkom {name}</h1>
+          <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+        </div>
         <div className="rz-dashboard-error" role="status">
           Het huishoud-dashboard is alleen beschikbaar wanneer je een huishouden hebt geselecteerd.
           Er worden geen huishoudtellingen van een andere gebruikerscontext getoond.
@@ -502,8 +504,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   return <main className="rz-mobile-home" data-testid="mobile-home-page">
     <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
     <section className="rz-mobile-home-inner">
-      <h1 className="rz-mobile-home-welcome">Welkom {name} </h1>
-      <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+      <div className="rz-mobile-home-greeting">
+        <h1 className="rz-mobile-home-welcome">Welkom {name}</h1>
+        <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+      </div>
 
       {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
 
