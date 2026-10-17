@@ -148,4 +148,31 @@ for (const pager of ['identityPagination', 'articlePagination', 'receiptPaginati
   assert.ok(catalogDetail.includes(`page={${pager}.page}`))
 }
 
+// PR590 follow-up: central numeric pagination and first-screen UX.
+const paginationUi = readFileSync(new URL('../src/ui/Pagination.jsx', import.meta.url), 'utf8')
+assert.match(paginationUi, /\{currentPage\}/)
+assert.doesNotMatch(paginationUi, /Pagina \{currentPage\} van \{totalPages\}/)
+const loadingOverlay = readFileSync(new URL('../src/ui/DelayedTableLoadingOverlay.jsx', import.meta.url), 'utf8')
+assert.doesNotMatch(loadingOverlay, /inhuis-loading-mark\.svg|table-loading-logo/)
+const catalogPage = readFileSync(new URL('../src/features/catalog/CatalogPage.jsx', import.meta.url), 'utf8')
+assert.match(catalogPage, /<Pagination page=\{currentPage\}/)
+assert.doesNotMatch(catalogPage, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
+assert.match(catalogPage, /hasRequestedCatalogRef/)
+const kassaPage = readFileSync(new URL('../src/features/receipts/KassaPage.jsx', import.meta.url), 'utf8')
+assert.match(kassaPage, /height: '100%'/)
+const shoppingPage = readFileSync(new URL('../src/features/shopping/ShoppingPage.jsx', import.meta.url), 'utf8')
+assert.match(shoppingPage, /paddingTop: '26px', alignSelf: 'start'/)
+const almostOutPage = readFileSync(new URL('../src/features/almostOut/AlmostOutPage.jsx', import.meta.url), 'utf8')
+const mobileAlmostOutPage = readFileSync(new URL('../src/features/almostOut/MobileAlmostOut.jsx', import.meta.url), 'utf8')
+for (const [screen, source] of [['desktop', almostOutPage], ['mobiel', mobileAlmostOutPage]]) {
+  assert.match(source, /toggleSelected|selectedIds/, screen)
+  assert.match(source, /handleBulkAction\('export'\)/, screen)
+  assert.match(source, /handleBulkAction\('hide'\)/, screen)
+  assert.match(source, /handleBulkAction\('shopping'\)/, screen)
+  assert.match(source, /handleBulkAction\('restore'\)/, screen)
+}
+const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
+assert.match(inventoryPage, /const inventoryPromise = Promise\.all\(/)
+assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
