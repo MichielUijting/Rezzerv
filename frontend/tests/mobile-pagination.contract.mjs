@@ -19,7 +19,7 @@ assert.match(pagination, /slice\(start, start \+ MOBILE_PAGE_SIZE\)/)
 assert.match(pagination, /<Pagination[\s\S]*page=\{page\}[\s\S]*pageCount=\{pageCount\}/)
 assert.match(pagination, /<Pagination page=\{page\} pageCount=\{pageCount\} onPageChange=\{setPage\} \/>/)
 assert.match(centralPagination, /first: labels\?\.first \?\? '1'/)
-assert.match(centralPagination, /previous: labels\?\.previous \?\? '−'/)
+assert.match(centralPagination, /previous: labels\?\.previous \?\? '-'/)
 assert.match(centralPagination, /next: labels\?\.next \?\? '\+'/)
 assert.match(centralPagination, /last: labels\?\.last \?\? \(Number\.isFinite/)
 
