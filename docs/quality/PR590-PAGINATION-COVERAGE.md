@@ -101,3 +101,17 @@ Uitgevoerde correcties:
 - Boodschappen: toevoegknop uitgelijnd met het artikelinvoerveld.
 
 **Nog vereist:** frontendbuild en gerichte regressies voor nieuwe bulkacties, autorisatie, statusfilters, handmatige/nulregels/10/11, plus performancebewijs van dezelfde lokale data uit de nieuwe vier backendmetingen. Zonder dit bewijs mag geen gegarandeerde eindlaadtijd of complete acceptatie worden geclaimd. Na aanvullende codewijzigingen wordt patchversie gesynchroniseerd en exact-candidate F7-bewijs opnieuw vastgesteld.
+
+## PO-meting 17 oktober 2026 — oorzaak eerste Catalogus-pagina bevestigd
+
+Read-only rapport `Inhuis_PR590_V281_Eerste_Laadtijden_Meting.txt` op commit `14c49a46c65a16568411469b54bed2d2eddd4445`:
+
+- `catalog_list_timing total_ms=4429.4 backfill_ms=4291.7 count_ms=112.6 page_ms=25.1 products=38 items=10`
+- `catalog_list_timing total_ms=3584.0 backfill_ms=3450.4 count_ms=105.1 page_ms=28.6 products=38 items=10`
+- `catalog_list_timing total_ms=3790.9 backfill_ms=3659.4 count_ms=106.4 page_ms=25.0 products=38 items=10`
+
+Objectief: minstens 96% van de Catalogus-responstijd zat in de per-GET uitgevoerde GPC-backfill; de page-SQL zelf duurde 25–29 ms. Wijziging: de `GET /api/catalog` is nu een zuiver read-only gepagineerd overzicht; de bestaande GPC-assignments en de aparte classificatie-/onderhoudsflows blijven ongemoeid. **Let op:** automatisch achteraf toekennen op uitsluitend een pagina-GET is bewust vervallen; ontbrekende classificaties moeten via de hiervoor bedoelde write-/onderhoudsroute worden behandeld. Hiervoor blijft afzonderlijke regressie op retrospectieve classificatie nodig.
+
+Kassa-screenshot: linker bonvoorbeeldpaneel is op gelijke hoogte als rechts, maar toont geen bon. De status `error` en onbekend bestandsformaat maakten eerder lege containers. Deze krijgen nu zichtbare tekst. Dit bewijst nog niet dat de bonbron daadwerkelijk ontbreekt of dat de browser de afbeelding niet kan laden; vervolgdiagnose alleen indien de statusmelding dat aangeeft.
+
+De aangeleverde meetfile bevatte geen `kassa_list_timing`, `inventory_preview_timing` of `almost_out_timing` regels. Oorzaken/doorlooptijden voor die drie schermen blijven daarom onbewezen en moeten indien nodig op de nieuwste kandidaat gericht worden uitgelezen. Geen claim over gegarandeerde uiteindelijke milliseconden zonder nieuwe meting.
