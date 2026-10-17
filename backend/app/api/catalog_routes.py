@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
+from time import perf_counter
 import re
 from typing import Any
 
@@ -407,6 +409,7 @@ def list_catalog(
     limit: int = Query(default=10, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
 ):
+    started = perf_counter()
     if "global_products" not in _tables():
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
@@ -421,6 +424,7 @@ def list_catalog(
             if str(row.get("id") or "").strip()
         ]
         ensure_dutch_gpc_assignments(conn, product_ids)
+    gpc_done = perf_counter()
 
     select_parts, joins, expressions = _catalog_projection()
     where_sql, params = _catalog_where(
@@ -462,10 +466,18 @@ def list_catalog(
     page_params = {**params, "limit": normalized_limit, "offset": normalized_offset}
     with engine.begin() as conn:
         total = int(conn.execute(text(count_sql), params).scalar() or 0)
+        count_done = perf_counter()
         items = [
             dict(row)
             for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
+    page_done = perf_counter()
+    if page_done - started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "catalog_list_timing total_ms=%.1f backfill_ms=%.1f count_ms=%.1f page_ms=%.1f products=%d items=%d",
+            (page_done-started)*1000, (gpc_done-started)*1000, (count_done-gpc_done)*1000,
+            (page_done-count_done)*1000, len(product_ids), len(items),
+        )
     return {
         "items": items,
         "total": total,
