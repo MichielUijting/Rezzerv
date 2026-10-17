@@ -724,8 +724,8 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
 
   return (
         <ScreenCard style={{
-      height: 'calc(var(--rz-kassa-review-panel-height) + var(--rz-kassa-preview-card-overhead))',
-      minHeight: 'calc(var(--rz-kassa-review-panel-height) + var(--rz-kassa-preview-card-overhead))',
+      height: '100%',
+      minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px`,
     }}>
       {isCollapsed ? (
         <div
