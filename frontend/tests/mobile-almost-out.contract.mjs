@@ -81,6 +81,9 @@ const actionPanel = mobileSource.indexOf('aria-label="Overige Bijna op bulkactie
 const moveAction = mobileSource.indexOf('>Naar Boodschappenlijst</Button>', actionPanel)
 const deleteAction = mobileSource.indexOf('>Verwijderen</Button>', actionPanel)
 assert.ok(selectToolbar > 0 && listView > selectToolbar, 'Selectie moet boven de lijst staan')
+assert.match(mobileSource.slice(selectToolbar, listView), /className="rz-mobile-table-select-row"/) // normalized top-right
+assert.match(mobileSource.slice(selectToolbar, listView), /> Alles<\/label>/)
+assert.match(mobileSource.slice(actionPanel, actionPanel + 160), /rz-mobile-table-bulk-actions/) // normalized bottom-right
 assert.ok(actionPanel > listView && moveAction > actionPanel && deleteAction > moveAction, 'Verwijderen moet rechts van Naar Boodschappenlijst in het onderste actiepaneel staan')
 assert.ok(!mobileSource.slice(selectToolbar, listView).includes('>Verwijderen</Button>'), 'Verwijderen mag niet in de bovenste selectieregel staan')
 assert.match(mobileSource, /Verwijderingen ongedaan maken/)
