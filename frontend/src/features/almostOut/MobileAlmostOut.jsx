@@ -265,8 +265,8 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
 
-        <section className="rz-mobile-inventory-toolbar rz-mobile-almost-out-bulk-top" aria-label="Bijna op selectie" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ display: 'inline-flex', gap: 7, alignItems: 'center' }}><input type="checkbox" checked={pageSelected} onChange={togglePageSelection} disabled={bulkBusy || !currentPageIds.length} /> Alles op pagina</label>
+        <section className="rz-mobile-table-select-row" aria-label="Bijna op selectie">
+          <label><input type="checkbox" checked={pageSelected} onChange={togglePageSelection} disabled={bulkBusy || !currentPageIds.length} /> Alles</label>
         </section>
         {!error && filteredRows.length > 0 ? (
           <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
@@ -337,12 +337,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
         <MobilePaginationControls {...almostOutPagination} ariaLabel="Paginering Bijna op" />
-        <section className="rz-mobile-inventory-state" aria-label="Overige Bijna op bulkacties" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <section className="rz-mobile-inventory-state rz-mobile-table-bulk-actions" aria-label="Overige Bijna op bulkacties">
           <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
           <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
-          <div style={{ marginLeft: 'auto' }}>
-            <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
-          </div>
+          <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
         </section>
       </main>
       <div className="rz-mobile-almost-out-undo" style={{ padding: '8px 12px 16px', display: 'flex', justifyContent: 'flex-end' }}>
