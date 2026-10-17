@@ -43,7 +43,7 @@ export default function MobileCatalogPage() {
           sort_by: sortBy,
           sort_direction: direction,
         })
-        if (query.trim()) params.set('name', query.trim())
+        if (query.trim()) params.set('search', query.trim())
         if (kind) params.set('catalog_kind', kind)
         const response = await fetchJsonWithAuth(`/api/catalog?${params.toString()}`, { method: 'GET' })
         const data = await response.json().catch(() => ({}))
@@ -97,7 +97,7 @@ export default function MobileCatalogPage() {
               type="search"
               value={query}
               onChange={(event) => { setQuery(event.target.value); setPage(1) }}
-              placeholder="Zoek artikel"
+              placeholder="Zoek artikel, merk, GTIN of brick-code"
               autoComplete="off"
             />
           </label>
