@@ -184,6 +184,7 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 import logging
+from time import perf_counter
 from sqlalchemy import inspect as sa_inspect, text, bindparam
 
 app = FastAPI()
@@ -251,6 +252,7 @@ def _dev_inventory_preview_row(row):
 
 @app.get("/api/dev/inventory-preview")
 def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+    timing_started = perf_counter()
     runtime_context = require_household_context(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     effective_household_id = household_context.active_household_id
@@ -275,6 +277,7 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
         ), {"household_id": effective_household_id}).mappings().all()
+        inventory_query_done = perf_counter()
         gpc_by_article = dutch_gpc_by_household_article(
             conn,
             effective_household_id,
@@ -288,7 +291,15 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             for row in rows
         ]
 
-    return {"rows": [_dev_inventory_preview_row(row) for row in projected_rows]}
+    result_rows = [_dev_inventory_preview_row(row) for row in projected_rows]
+    timing_done = perf_counter()
+    if timing_done - timing_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "inventory_preview_timing total_ms=%.1f inventory_sql_ms=%.1f gpc_and_project_ms=%.1f rows=%d",
+            (timing_done-timing_started)*1000, (inventory_query_done-timing_started)*1000,
+            (timing_done-inventory_query_done)*1000, len(result_rows),
+        )
+    return {"rows": result_rows}
 
 
 def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, space_name: str | None):
@@ -4438,9 +4449,23 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         {'household_id': str(household_id)},
     ).mappings().all()
 
+    total_active = len(article_rows)
     if not article_rows:
+        logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
 
+    # Without prediction, an article with no minimum stock can never appear
+    # in Bijna op. Avoid expensive inventory/event lookups for those rows.
+    if not bool(household_settings.get('prediction_enabled')):
+        article_rows = [
+            row for row in article_rows
+            if normalize_optional_numeric_field(row.get('min_stock')) is not None
+        ]
+        if not article_rows:
+            return []
+
+    eligible_count = len(article_rows)
+    hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
     gpc_by_article = dutch_gpc_by_household_article(
         conn,
@@ -4470,6 +4495,9 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     items: list[dict] = []
     for article_row in article_rows:
         article_id = str(article_row.get('id') or '').strip()
+        if settings_map_by_article.get(article_id, {}).get('almost_out_hidden') is True:
+            hidden_count += 1
+            continue
         evaluation = evaluate_household_article_almost_out(
             conn,
             household_id,
@@ -4481,6 +4509,10 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         if evaluation.get('include_in_almost_out'):
             items.append(evaluation)
 
+    logging.getLogger("uvicorn.error").info(
+        "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
+        total_active, eligible_count, hidden_count, len(items),
+    )
     return items
 
 
@@ -9126,9 +9158,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     {'id': existing_line.get('id'), 'batch_id': batch_id},
                 )
             continue
-        prior_processed = get_prior_processed_line_fact(
-            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
-        )
         try:
             quantity_value = float(line.get('quantity')) if line.get('quantity') is not None else 1.0
         except Exception:
@@ -9199,6 +9228,11 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             )
             continue
 
+        # Only new import lines need a prior processing lookup. Existing lines
+        # already preserve their processing identity and do not use this result.
+        prior_processed = get_prior_processed_line_fact(
+            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
+        )
         conn.execute(
             text("""
             INSERT INTO purchase_import_lines (
@@ -11744,9 +11778,25 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest, authorization: Optio
 
 
 @app.get("/api/unpack-start-batches")
-def list_unpack_start_batches(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
+def list_unpack_start_batches(
+    householdId: str = Query(...),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    winkel: str = Query(''),
+    datum: str = Query(''),
+    regels: str = Query(''),
+    status: str = Query(''),
+    sort_key: str = Query('datum'),
+    sort_direction: str = Query('desc'),
+    authorization: Optional[str] = Header(None),
+):
+    # Timings are aggregate only: no identifiers, receipt content or household data.
+    from time import perf_counter
+    import logging
+    perf_started = perf_counter()
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    perf_after_sources = perf_counter()
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -11812,10 +11862,32 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             {'household_id': effective_household_id},
         ).mappings().all()
 
+        perf_after_receipt_query = perf_counter()
         def normalize_key_part(value):
             return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
+        # Existing batches are read in one query. Syncing every receipt here
+        # rewrites all existing import lines on each page navigation; details
+        # and receipt mutation routes already synchronize individual receipts.
+        existing_batch_rows = conn.execute(
+            text("""
+                SELECT id, source_reference
+                FROM purchase_import_batches
+                WHERE household_id = :household_id
+                  AND source_type = 'receipt'
+                ORDER BY created_at DESC, id DESC
+            """),
+            {'household_id': effective_household_id},
+        ).mappings().all()
+        batch_by_reference = {}
+        for existing_batch in existing_batch_rows:
+            batch_by_reference.setdefault(
+                str(existing_batch['source_reference']),
+                str(existing_batch['id']),
+            )
+
         items = []
+        candidates = []
         seen_keys = set()
         for row in rows:
             serialized = serialize_receipt_row(dict(row))
@@ -11838,30 +11910,49 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             if inbox_status not in {'Gecontroleerd', 'Controle nodig'}:
                 continue
 
-            batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
-            # Use the same canonical unpacking lines as the batch detail screen.
-            # Receipt-table line_count also includes discounts, payment and other
-            # non-inventory lines filtered by sync_unpack_batch_lines_for_receipt.
-            unpack_line_count = conn.execute(
-                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
-                {'batch_id': batch_id},
-            ).scalar_one()
-            # Uitpakken is a work queue: only receipts with canonical lines still
-            # awaiting inventory processing belong in the overview. This is
-            # household-scoped through the authorized receipt/batch above.
-            remaining_line_count = conn.execute(
+            receipt_reference = f"receipt:{serialized['receipt_table_id']}"
+            batch_id = batch_by_reference.get(receipt_reference)
+            if not batch_id:
+                # Legacy/first-time receipt: retain the original preparation
+                # path; only already prepared receipts take the read-only path.
+                batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
+                if batch_id:
+                    batch_by_reference[receipt_reference] = batch_id
+            if not batch_id:
+                continue
+            candidates.append((serialized, batch_id, inbox_status, dedupe_key))
+        perf_after_batch_sync = perf_counter()
+        # Aggregate all line counts in one query instead of one query per receipt.
+        # Batch creation/synchronization must complete before counts are read.
+        batch_ids = list({candidate[1] for candidate in candidates})
+        counts_by_batch = {}
+        if batch_ids:
+            count_rows = conn.execute(
                 text("""
-                    SELECT COUNT(*)
+                    SELECT batch_id,
+                           COUNT(*) AS total,
+                           COUNT(*) FILTER (
+                               WHERE COALESCE(processing_status, 'pending') <> 'processed'
+                           ) AS remaining
                     FROM purchase_import_lines
-                    WHERE batch_id = :batch_id
-                      AND COALESCE(processing_status, 'pending') <> 'processed'
+                    WHERE batch_id = ANY(:batch_ids)
+                    GROUP BY batch_id
                 """),
-                {'batch_id': batch_id},
-            ).scalar_one()
-            if int(remaining_line_count) == 0:
+                {'batch_ids': batch_ids},
+            ).mappings().all()
+            counts_by_batch = {
+                str(row['batch_id']): (int(row['total']), int(row['remaining']))
+                for row in count_rows
+            }
+
+        perf_after_line_counts = perf_counter()
+        for serialized, batch_id, inbox_status, dedupe_key in candidates:
+            if dedupe_key in seen_keys:
+                continue
+            unpack_line_count, remaining_line_count = counts_by_batch.get(str(batch_id), (0, 0))
+            if remaining_line_count == 0:
                 continue
             seen_keys.add(dedupe_key)
-
             purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
             purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
             store_label = serialized.get('store_name') or serialized.get('store_branch') or serialized.get('source_label') or 'Kassabon'
@@ -11877,14 +11968,52 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             })
 
     items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
-    return {'items': items}
+    def log_unpack_timing():
+        elapsed = perf_counter() - perf_started
+        if elapsed >= 0.5:
+            logging.getLogger('uvicorn.error').info(
+                'unpack_list_timing total_ms=%.0f sources_ms=%.0f receipts_ms=%.0f sync_ms=%.0f counts_ms=%.0f final_ms=%.0f receipts=%d candidates=%d',
+                elapsed * 1000,
+                (perf_after_sources - perf_started) * 1000,
+                (perf_after_receipt_query - perf_after_sources) * 1000,
+                (perf_after_batch_sync - perf_after_receipt_query) * 1000,
+                (perf_after_line_counts - perf_after_batch_sync) * 1000,
+                (perf_counter() - perf_after_line_counts) * 1000,
+                len(rows), len(candidates),
+            )
+    if page is None:
+        log_unpack_timing()
+        return {'items': items}
+    terms = (winkel.strip().casefold(), datum.strip().casefold(),
+             regels.strip().casefold(), status.strip().casefold())
+    items = [
+        item for item in items
+        if terms[0] in str(item.get('store_provider_name') or '').casefold()
+        and terms[1] in str(item.get('purchase_date') or '').casefold()
+        and terms[2] in str(item.get('summary', {}).get('total', 0)).casefold()
+        and terms[3] in str(item.get('inbox_status') or '').casefold()
+    ]
+    sort_fields = {
+        'winkel': lambda item: str(item.get('store_provider_name') or '').casefold(),
+        'datum': lambda item: str(item.get('purchase_date') or item.get('created_at') or ''),
+        'regels': lambda item: int(item.get('summary', {}).get('total', 0)),
+        'status': lambda item: str(item.get('inbox_status') or '').casefold(),
+    }
+    items.sort(key=sort_fields.get(sort_key, sort_fields['datum']), reverse=sort_direction != 'asc')
+    total = len(items)
+    start = (page - 1) * page_size
+    log_unpack_timing()
+    return {'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size}
 
 
 @app.get("/api/receipts")
 def list_receipts(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
+    timing_started = perf_counter()
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    sources_done = perf_counter()
     _auto_approve_pending_receipts_for_household(effective_household_id)
+    approvals_done = perf_counter()
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -11952,6 +12081,8 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
             {"household_id": effective_household_id},
         ).mappings().all()
 
+    query_done = perf_counter()
+
     def normalize_key_part(value):
         return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
@@ -11978,6 +12109,17 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
         deduped_items.append(serialized)
+    final_done = perf_counter()
+    if final_done - timing_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "kassa_list_timing total_ms=%.1f sources_ms=%.1f approvals_ms=%.1f query_ms=%.1f serialize_ms=%.1f rows=%d",
+            (final_done - timing_started) * 1000,
+            (sources_done - timing_started) * 1000,
+            (approvals_done - sources_done) * 1000,
+            (query_done - approvals_done) * 1000,
+            (final_done - query_done) * 1000,
+            len(deduped_items),
+        )
     return {"items": deduped_items}
 
 
@@ -13389,13 +13531,116 @@ def delete_household_article_endpoint(household_article_id: str, payload: Househ
         return delete_household_article_by_id(conn, household_id, str(household_article_id or '').strip(), (payload.reason if payload else None), bool(payload.force) if payload else False)
 
 
+class AlmostOutVisibilityRequest(BaseModel):
+    article_ids: list[str] = []
+
+
+@app.post("/api/households/{household_id}/almost-out/hide")
+def hide_household_almost_out_items(
+    household_id: str,
+    payload: AlmostOutVisibilityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization, str(household_id or '').strip())
+    effective_household_id = str(context['active_household_id'])
+    article_ids = list(dict.fromkeys(str(value or '').strip() for value in payload.article_ids))
+    article_ids = [value for value in article_ids if value]
+    if len(article_ids) > 100:
+        raise HTTPException(status_code=400, detail='Verwerk maximaal 100 Bijna op-artikelen per keer')
+    if not article_ids:
+        raise HTTPException(status_code=400, detail='Selecteer eerst artikelen in Bijna op')
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id FROM household_articles
+                WHERE household_id = :household_id AND id IN :ids
+                  AND COALESCE(status, 'active') = 'active'
+            """).bindparams(bindparam('ids', expanding=True)),
+            {'household_id': effective_household_id, 'ids': article_ids},
+        ).mappings().all()
+        valid_ids = {str(row['id']) for row in rows}
+        if len(valid_ids) != len(article_ids):
+            raise HTTPException(status_code=404, detail='Een geselecteerd artikel hoort niet bij dit huishouden')
+        for article_id in article_ids:
+            conn.execute(text("""
+                INSERT INTO household_article_settings
+                    (id, household_article_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:id, :article_id, 'almost_out_hidden', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(household_article_id, setting_key)
+                DO UPDATE SET setting_value = 'true', updated_at = CURRENT_TIMESTAMP
+            """), {'id': str(uuid.uuid4()), 'article_id': article_id})
+    return {'hidden': len(article_ids)}
+
+
+@app.post("/api/households/{household_id}/almost-out/mark-in-shopping")
+def mark_household_almost_out_items_in_shopping(
+    household_id: str,
+    payload: AlmostOutVisibilityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    # Moving a household article into Shopping is permitted for household
+    # members; unlike manual "Verwijderen", it must not require admin rights.
+    context = require_household_context(authorization, str(household_id or '').strip())
+    if str(context.get('display_role') or '').strip().lower() not in {'admin', 'lid'}:
+        raise HTTPException(status_code=403, detail='Geen toestemming om Bijna op te verwerken')
+    active_household_id = str(context['active_household_id'])
+    article_ids = list(dict.fromkeys(str(value or '').strip() for value in payload.article_ids))
+    article_ids = [value for value in article_ids if value]
+    if not article_ids or len(article_ids) > 100:
+        raise HTTPException(status_code=400, detail='Kies 1 tot 100 artikelen')
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id FROM household_articles
+                WHERE household_id = :household_id AND id IN :ids
+                  AND COALESCE(status, 'active') = 'active'
+            """).bindparams(bindparam('ids', expanding=True)),
+            {'household_id': active_household_id, 'ids': article_ids},
+        ).mappings().all()
+        if {str(row['id']) for row in rows} != set(article_ids):
+            raise HTTPException(status_code=404, detail='Artikel niet beschikbaar in dit huishouden')
+        for article_id in article_ids:
+            conn.execute(text("""
+                INSERT INTO household_article_settings
+                  (id, household_article_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:id, :article_id, 'almost_out_hidden', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(household_article_id, setting_key)
+                DO UPDATE SET setting_value = 'true', updated_at = CURRENT_TIMESTAMP
+            """), {'id': str(uuid.uuid4()), 'article_id': article_id})
+    return {'hidden': len(article_ids)}
+
+
+@app.post("/api/households/{household_id}/almost-out/restore")
+def restore_household_almost_out_items(household_id: str, authorization: Optional[str] = Header(None)):
+    context = require_household_admin_context(authorization, str(household_id or '').strip())
+    effective_household_id = str(context['active_household_id'])
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            DELETE FROM household_article_settings
+            WHERE setting_key = 'almost_out_hidden'
+              AND household_article_id IN (
+                SELECT id FROM household_articles WHERE household_id = :household_id
+              )
+        """), {'household_id': effective_household_id})
+    return {'restored': max(0, int(result.rowcount or 0))}
+
+
 @app.get("/api/households/{household_id}/almost-out")
 def get_household_almost_out_endpoint(household_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization, str(household_id or '').strip())
     resolved_household_id = str(context.get('active_household_id') or household_id or '').strip()
+    timing_started = perf_counter()
     with engine.begin() as conn:
         settings = get_household_almost_out_settings(conn, resolved_household_id)
+        settings_done = perf_counter()
         items = build_almost_out_items(conn, resolved_household_id)
+        completed = perf_counter()
+        if completed - timing_started >= 0.5:
+            logging.getLogger("uvicorn.error").info(
+                "almost_out_timing total_ms=%.1f settings_ms=%.1f evaluate_ms=%.1f items=%d",
+                (completed-timing_started)*1000, (settings_done-timing_started)*1000,
+                (completed-settings_done)*1000, len(items),
+            )
         return {
             'household_id': resolved_household_id,
             'settings': settings,

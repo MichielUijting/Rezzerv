@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
+import Button from '../../ui/Button.jsx'
+import { exportAlmostOutRows, moveAlmostOutToShopping, hideAlmostOutRows, restoreAlmostOutRows } from './almostOutBulk.js'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
@@ -93,6 +96,9 @@ export default function AlmostOutPage() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedIds, setSelectedIds] = useState([])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState('')
   const [filters, setFilters] = useState({
     householdName: '',
     productName: '',
@@ -106,6 +112,7 @@ export default function AlmostOutPage() {
   })
   const [tableSort, setTableSort] = useState({ key: 'householdName', direction: 'asc' })
   const almostOutTableColumns = useMemo(() => ([
+    { key: 'select', width: 52 },
     { key: 'huishoudnaam', width: 220 },
     { key: 'productnaam', width: 260 },
     { key: 'gpc', width: 360 },
@@ -138,7 +145,6 @@ export default function AlmostOutPage() {
       } catch (err) {
         if (!cancelled) {
           setError(String(err?.message || 'Bijna-op-artikelen konden niet worden geladen'))
-          setItems([])
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -195,6 +201,73 @@ export default function AlmostOutPage() {
     })
   }, [filters, rows, tableSort])
 
+  const [paginationPage, setPaginationPage] = useState(1)
+  const paginationPageCount = Math.max(1, Math.ceil(filteredRows.length / 10))
+  const visibleAlmostOutRows = filteredRows.slice((Math.min(paginationPage, paginationPageCount) - 1) * 10, Math.min(paginationPage, paginationPageCount) * 10)
+  useEffect(() => { setPaginationPage(1) }, [filters, tableSort])
+  useEffect(() => { if (paginationPage > paginationPageCount) setPaginationPage(paginationPageCount) }, [paginationPage, paginationPageCount])
+
+  const visiblePageIds = visibleAlmostOutRows.map((row) => row.id)
+  const selectedRows = rows.filter((row) => selectedIds.includes(row.id))
+  const pageSelected = visiblePageIds.length > 0 && visiblePageIds.every((id) => selectedIds.includes(id))
+
+  function toggleSelected(id) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+  function toggleVisible() {
+    setSelectedIds((current) => pageSelected
+      ? current.filter((id) => !visiblePageIds.includes(id))
+      : [...new Set([...current, ...visiblePageIds])])
+  }
+
+  async function handleBulkAction(action) {
+    if (bulkBusy || (action !== 'restore' && !selectedRows.length)) return
+    if (action === 'export') {
+      exportAlmostOutRows(selectedRows)
+      return
+    }
+    if (action === 'hide' && !window.confirm(`Verwijder ${selectedRows.length} melding(en) uit Bijna op? De voorraadartikelen blijven bestaan en verborgen meldingen kunnen worden hersteld.`)) return
+    setBulkBusy(true)
+    setError('')
+    setBulkMessage('')
+    try {
+      if (action === 'shopping') {
+        const count = await moveAlmostOutToShopping(selectedRows)
+        setBulkMessage(`${count} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
+      } else {
+        if (action === 'hide') await hideAlmostOutRows(selectedRows)
+        else await restoreAlmostOutRows()
+        const householdId = await resolveHouseholdId()
+        const response = await fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/almost-out`)
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Bijna op kon niet worden bijgewerkt')
+        setItems(Array.isArray(payload.items) ? payload.items : [])
+        setSelectedIds([])
+        setBulkMessage(action === 'hide' ? 'Geselecteerde meldingen verborgen. Voorraad is ongewijzigd.' : 'Verwijderingen ongedaan gemaakt.')
+      }
+    } catch (err) {
+      setError(String(err?.message || 'Bulkverwerking mislukt'))
+    } finally {
+      // A partial transfer may already have succeeded before an error.
+      // Re-read the authoritative list rather than leaving transferred
+      // rows visible or silently discarding a user's selection.
+      if (action === 'shopping') {
+        try {
+          const householdId = await resolveHouseholdId()
+          const response = await fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/almost-out`)
+          if (response.ok) {
+            const payload = await response.json()
+            setItems(Array.isArray(payload.items) ? payload.items : [])
+            setSelectedIds([])
+          }
+        } catch {
+          // Keep the original transfer error; a later refresh reconciles.
+        }
+      }
+      setBulkBusy(false)
+    }
+  }
+
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
   }
@@ -203,9 +276,11 @@ export default function AlmostOutPage() {
     <AppShell title="Bijna op" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="almost-out-page">
         <ScreenCard>
+          {bulkMessage ? <div className="rz-inline-feedback" role="status">{bulkMessage}</div> : null}
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
           <Table tableClassName="rz-stock-table" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
               <colgroup>
+                <col style={{ width: `${tableWidths.select}px` }} />
                 <col style={{ width: `${tableWidths.huishoudnaam}px` }} />
                 <col style={{ width: `${tableWidths.productnaam}px` }} />
                 <col style={{ width: `${tableWidths.gpc}px` }} />
@@ -218,6 +293,7 @@ export default function AlmostOutPage() {
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
+                  <th><input type="checkbox" aria-label="Selecteer alle zichtbare Bijna op-artikelen" checked={pageSelected} onChange={toggleVisible} disabled={bulkBusy || !visiblePageIds.length} /></th>
                   <ResizableHeaderCell columnKey="huishoudnaam" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'householdName'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'householdName', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Huishoudnaam</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="productnaam" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'productName'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'productName', { householdName: 'asc', productName: 'asc', gpc: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Productnaam</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gpc" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'gpc'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'gpc', { householdName: 'asc', productName: 'asc', gpc: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>GPC: Brick · Groep · Familie</ResizableHeaderCell>
@@ -229,6 +305,7 @@ export default function AlmostOutPage() {
                   <ResizableHeaderCell columnKey="locatie" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'location'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'location', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Locatie</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
+                  <th />
                   <th><input value={filters.householdName} onChange={(event) => handleFilterChange('householdName', event.target.value)} placeholder="Filter" /></th>
                   <th><input value={filters.productName} onChange={(event) => handleFilterChange('productName', event.target.value)} placeholder="Filter" /></th>
                   <th><input value={filters.gpc} onChange={(event) => handleFilterChange('gpc', event.target.value)} placeholder="Filter" aria-label="Filter op GPC" /></th>
@@ -241,12 +318,11 @@ export default function AlmostOutPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={9}>Bijna-op-artikelen laden…</td></tr>
-                ) : filteredRows.length === 0 ? (
-                  <tr><td colSpan={9}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
-                ) : filteredRows.map((row) => (
+                {filteredRows.length === 0 ? (
+                  <tr><td colSpan={10}>{isLoading ? 'Bijna-op-artikelen laden…' : 'Er zijn op dit moment geen artikelen die aangevuld moeten worden.'}</td></tr>
+                ) : visibleAlmostOutRows.map((row) => (
                   <tr key={row.id}>
+                    <td><input type="checkbox" aria-label={`Selecteer ${row.householdName || row.primaryName}`} checked={selectedIds.includes(row.id)} onChange={() => toggleSelected(row.id)} disabled={bulkBusy} /></td>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
                         <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
@@ -265,7 +341,16 @@ export default function AlmostOutPage() {
                 ))}
               </tbody>
             </Table>
+            {paginationPageCount > 1 ? <Pagination page={Math.min(paginationPage, paginationPageCount)} pageCount={paginationPageCount} onPageChange={setPaginationPage} /> : null}
+            <div className="rz-stock-table-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
+              <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
+              <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
+            </div>
         </ScreenCard>
+        <div className="rz-stock-table-actions" style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px' }}>
+          <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verwijderingen ongedaan maken</Button>
+        </div>
       </div>
     </AppShell>
   )

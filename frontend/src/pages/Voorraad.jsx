@@ -3,6 +3,7 @@ import useBarcodeScanner from "../lib/useBarcodeScanner.js";
 import { useBlocker, useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import Table from "../ui/Table";
+import Pagination from "../ui/Pagination.jsx";
 import Button from "../ui/Button";
 import { useAppFeedback } from "../ui/AppFeedbackProvider.jsx";
 import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
@@ -841,34 +842,52 @@ export default function Voorraad() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchInventoryRows(), fetchArticleGroupAssignments(), fetchArticleGroupOptions(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
-      .then(([loadedRows, articleGroupAssignments, loadedArticleGroups, loadedOptions]) => {
-        if (!cancelled) {
-          const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
-          const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
-          setLocalZeroRows([]);
-          setRows(rowsWithArticleGroups);
-          setArticleGroupOptions(loadedArticleGroups);
-          setLocationOptions(mergedLocationOptions);
-        }
+    // Only the inventory rows and article assignments are on the initial
+    // display's critical path. Editor dropdown options can arrive afterwards.
+    const inventoryPromise = Promise.all([
+      fetchInventoryRows(),
+      fetchArticleGroupAssignments(),
+    ]);
+    const articleOptionsPromise = fetchArticleGroupOptions();
+    const locationsPromise = fetchLocationOptions().catch(() => buildLocationOptionState([]));
+
+    inventoryPromise
+      .then(([loadedRows, assignments]) => {
+        if (cancelled) return;
+        const projected = applyArticleGroupsToRows(loadedRows, assignments);
+        setLocalZeroRows([]);
+        setRows(projected);
+        setLocationOptions((current) => mergeLocationOptionStates(current, buildLocationOptionStateFromRows(projected)));
       })
       .catch((error) => {
-        if (!cancelled) {
-          setLocalZeroRows([]);
-          setRows([]);
-          showFeedback({
-            variant: "error",
-            message: "Live voorraad kon niet worden geladen.",
-            technicalDetail: error?.message || String(error || ""),
-            showTechnicalToggle: true,
-            key: "inventory-load-error",
-          });
-        }
+        if (cancelled) return;
+        setLocalZeroRows([]);
+        setRows([]);
+        showFeedback({
+          variant: "error",
+          message: "Live voorraad kon niet worden geladen.",
+          technicalDetail: error?.message || String(error || ""),
+          showTechnicalToggle: true,
+          key: "inventory-load-error",
+        });
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+
+    articleOptionsPromise
+      .then((options) => { if (!cancelled) setArticleGroupOptions(options); })
+      .catch((error) => {
+        if (!cancelled) showFeedback({
+          variant: "warning",
+          message: "Artikelgroepopties zijn nog niet beschikbaar.",
+          technicalDetail: error?.message || String(error || ""),
+          showTechnicalToggle: true,
+          key: "inventory-article-group-options",
+        });
+      });
+    locationsPromise.then((options) => {
+      if (!cancelled) setLocationOptions((current) => mergeLocationOptionStates(options, current));
+    });
+    return () => { cancelled = true; };
+  }, []);;
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -922,9 +941,15 @@ export default function Voorraad() {
     });
   }, [rows, localZeroRows, filters, tableSort]);
 
+  const [paginationPage, setPaginationPage] = useState(1);
+  const paginationPageCount = Math.max(1, Math.ceil(filteredRows.length / 10));
+  const visibleInventoryRows = filteredRows.slice((Math.min(paginationPage, paginationPageCount) - 1) * 10, Math.min(paginationPage, paginationPageCount) * 10);
+  useEffect(() => { setPaginationPage(1); }, [filters, tableSort]);
+  useEffect(() => { if (paginationPage > paginationPageCount) setPaginationPage(paginationPageCount); }, [paginationPage, paginationPageCount]);
+
   const inventoryFillerRowCount = Math.max(
     0,
-    INVENTORY_VISIBLE_ROW_COUNT - (filteredRows.length || 1),
+    INVENTORY_VISIBLE_ROW_COUNT - (visibleInventoryRows.length || 1),
   );
 
   const setRowValue = (rowId, key, value) => {
@@ -947,11 +972,11 @@ export default function Voorraad() {
   };
 
   const allFilteredChecked =
-    filteredRows.length > 0 && filteredRows.every((row) => row.checked);
+    visibleInventoryRows.length > 0 && visibleInventoryRows.every((row) => row.checked);
 
   const toggleAllFiltered = () => {
     const nextValue = !allFilteredChecked;
-    const filteredIds = new Set(filteredRows.map((row) => row.id));
+    const filteredIds = new Set(visibleInventoryRows.map((row) => row.id));
 
     setRows((prev) =>
       prev.map((row) =>
@@ -1507,7 +1532,7 @@ export default function Voorraad() {
                 </thead>
 
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {visibleInventoryRows.map((row) => (
                     <tr
                       key={row.id}
                       data-testid={`inventory-row-${row.detailId || row.id}`}
@@ -1561,6 +1586,7 @@ export default function Voorraad() {
                   ))}
                 </tbody>
               </Table>
+              {paginationPageCount > 1 ? <Pagination page={Math.min(paginationPage, paginationPageCount)} pageCount={paginationPageCount} onPageChange={setPaginationPage} /> : null}
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <Button type="button" variant="primary" onClick={() => navigate('/voorraad/incidentele-aankoop')} data-testid="inventory-add-incidental-purchase">Incidentele aankoop toevoegen</Button>

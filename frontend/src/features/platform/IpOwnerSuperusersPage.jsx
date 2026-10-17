@@ -4,9 +4,15 @@ import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
 import Header from '../../ui/Header.jsx'
 import Input from '../../ui/Input.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 
 export default function IpOwnerSuperusersPage() {
   const [users, setUsers] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(users.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleUsers = users.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [email, setEmail] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
@@ -116,9 +122,9 @@ export default function IpOwnerSuperusersPage() {
           <h2>Actieve Superusers</h2>
           {loading && <p role="status">Superusers inlezen.</p>}
           {!loading && users.length === 0 && <p>Er zijn geen actieve Superusers.</p>}
-          {!loading && users.length > 0 && (
+          {users.length > 0 && (
             <div style={{ display: 'grid', gap: '10px' }}>
-              {users.map((user) => (
+              {visibleUsers.map((user) => (
                 <div
                   key={user.user_id}
                   data-testid={`ip-owner-superuser-${user.user_id}`}
@@ -144,6 +150,7 @@ export default function IpOwnerSuperusersPage() {
                   )}
                 </div>
               ))}
+              {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} disabled={loading} /> : null}
             </div>
           )}
         </Card>

@@ -559,11 +559,12 @@ export default function ShoppingPage() {
           <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
             <h2 style={{ margin: 0 }}>Boodschappen — {Number(list.item_count || 0)} artikelen</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'end' }}>
+            <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12 }}>
                 <div className="rz-input-field">
                   <label className="rz-label" htmlFor="shopping-catalog-query">Artikel toevoegen</label>
-                  <input
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'end' }}>
+                    <input
                     id="shopping-catalog-query"
                     className="rz-input"
                     value={catalogQuery}
@@ -573,7 +574,9 @@ export default function ShoppingPage() {
                     aria-controls="shopping-candidate-list"
                     aria-expanded={catalogResults.length > 0}
                     autoComplete="off"
-                  />
+                    />
+                    <Button type="button" onClick={addSelectedResult} disabled={saving || !selectedResult}>Toevoegen</Button>
+                  </div>
                   <SearchCandidateList
                     items={catalogResults}
                     selectedKey={selectedResultId}
@@ -605,13 +608,6 @@ export default function ShoppingPage() {
                 </div>
               </div>
 
-              <Button
-                type="button"
-                onClick={addSelectedResult}
-                disabled={saving || !selectedResult}
-              >
-                Toevoegen
-              </Button>
             </div>
 
             {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}

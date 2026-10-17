@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Pagination from '../../ui/Pagination.jsx'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -130,6 +131,8 @@ export default function SettingsArticleGroupsPage() {
   const [articleGroupFilter, setArticleGroupFilter] = useState('')
   const [selectedGroupIds, setSelectedGroupIds] = useState([])
   const [selectedArticleIds, setSelectedArticleIds] = useState([])
+  const [groupPage, setGroupPage] = useState(1)
+  const [articlePage, setArticlePage] = useState(1)
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -198,15 +201,26 @@ export default function SettingsArticleGroupsPage() {
       })
   }, [articles, groups, selectedGroupId, articleFilter, articleGroupFilter])
 
+  const groupPageCount = Math.max(1, Math.ceil(filteredGroups.length / 10))
+  const articlePageCount = Math.max(1, Math.ceil(visibleArticles.length / 10))
+  const currentGroupPage = Math.min(groupPage, groupPageCount)
+  const currentArticlePage = Math.min(articlePage, articlePageCount)
+  const pageGroups = filteredGroups.slice((currentGroupPage - 1) * 10, currentGroupPage * 10)
+  const pageArticles = visibleArticles.slice((currentArticlePage - 1) * 10, currentArticlePage * 10)
+  useEffect(() => { setGroupPage(1) }, [groupFilter])
+  useEffect(() => { setArticlePage(1) }, [articleFilter, articleGroupFilter, selectedGroupId])
+  useEffect(() => { if (groupPage > groupPageCount) setGroupPage(groupPageCount) }, [groupPage, groupPageCount])
+  useEffect(() => { if (articlePage > articlePageCount) setArticlePage(articlePageCount) }, [articlePage, articlePageCount])
+
   const selectableVisibleGroupIds = useMemo(
-    () => filteredGroups
+    () => pageGroups
       .filter((group) => Number(articleCounts[String(group.id)] || 0) === 0)
       .map((group) => String(group.id)),
-    [filteredGroups, articleCounts],
+    [pageGroups, articleCounts],
   )
   const visibleArticleIds = useMemo(
-    () => visibleArticles.map((article) => String(article.id)),
-    [visibleArticles],
+    () => pageArticles.map((article) => String(article.id)),
+    [pageArticles],
   )
   const allVisibleGroupsSelected = selectableVisibleGroupIds.length > 0
     && selectableVisibleGroupIds.every((id) => selectedGroupIds.includes(id))
@@ -399,7 +413,7 @@ export default function SettingsArticleGroupsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={4}>Artikelgroepen laden…</td></tr> : filteredGroups.length === 0 ? <tr><td colSpan={4}>Geen Artikelgroepen gevonden.</td></tr> : filteredGroups.map((group) => {
+                {filteredGroups.length === 0 ? <tr><td colSpan={4}>{loading ? 'Artikelgroepen laden…' : 'Geen Artikelgroepen gevonden.'}</td></tr> : pageGroups.map((group) => {
                   const groupArticles = articles.filter((article) => String(article.article_group_id || '') === String(group.id))
                   const directChecked = groupArticles.length > 0 && groupArticles.every((article) => normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION)
                   const deletable = groupArticles.length === 0
@@ -414,6 +428,7 @@ export default function SettingsArticleGroupsPage() {
                 })}
               </tbody>
             </Table>
+            {groupPageCount > 1 ? <Pagination page={currentGroupPage} pageCount={groupPageCount} onPageChange={setGroupPage} /> : null}
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12 }}>
               <Button type="button" variant="secondary" onClick={deleteSelectedGroups} disabled={saving || selectedGroupIds.length === 0}>Verwijderen</Button>
               <Button type="button" onClick={() => setGroupModalOpen(true)} disabled={saving}>Toevoegen Artikelgroep</Button>
@@ -447,7 +462,7 @@ export default function SettingsArticleGroupsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={4}>Huishoudartikelen laden…</td></tr> : visibleArticles.length === 0 ? <tr><td colSpan={4}>Geen huishoudartikelen gevonden.</td></tr> : visibleArticles.map((article) => (
+                {visibleArticles.length === 0 ? <tr><td colSpan={4}>{loading ? 'Huishoudartikelen laden…' : 'Geen huishoudartikelen gevonden.'}</td></tr> : pageArticles.map((article) => (
                   <tr key={article.id} className={selectedArticleIds.includes(String(article.id)) ? 'rz-row-selected' : ''}>
                     <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedArticleIds.includes(String(article.id))} onChange={() => setSelectedArticleIds((current) => current.includes(String(article.id)) ? current.filter((id) => id !== String(article.id)) : [...current, String(article.id)])} /></td>
                     <td>{article.article_name || 'Onbekend artikel'}</td>
@@ -457,6 +472,7 @@ export default function SettingsArticleGroupsPage() {
                 ))}
               </tbody>
             </Table>
+            {articlePageCount > 1 ? <Pagination page={currentArticlePage} pageCount={articlePageCount} onPageChange={setArticlePage} /> : null}
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={exportArticles} disabled={loading}>Exporteren</Button>
               <Button type="button" variant="secondary" onClick={() => setBulkModalOpen(true)} disabled={saving || selectedArticleIds.length === 0}>Toewijzen aan Artikelgroep</Button>

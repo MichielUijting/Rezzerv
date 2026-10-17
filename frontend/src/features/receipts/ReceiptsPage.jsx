@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -11,16 +11,21 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
-import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
+import { MobilePaginationControls } from '../../ui/MobilePagination.jsx'
 import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoadError, setHasLoadError] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
+  const [selectedBatchesById, setSelectedBatchesById] = useState({})
+  const lastHouseholdId = useRef(null)
   const [openedBatchId, setOpenedBatchId] = useState(() => (
     new URLSearchParams(window.location.search).get('batch') || ''
   ))
@@ -56,9 +61,17 @@ export default function ReceiptsPage() {
         const householdData = await fetchJson('/api/household')
         if (cancelled) return
 
-        const unpackData = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdData.id)}`)
+        const unpackData = await fetchJson(`/api/unpack-start-batches?${new URLSearchParams({ householdId: householdData.id, page: String(page), page_size: '10', ...filters, sort_key: tableSort.key, sort_direction: tableSort.direction })}`)
         if (cancelled) return
+        const householdId = String(householdData.id)
+        if (lastHouseholdId.current !== null && lastHouseholdId.current !== householdId) {
+          setSelectedBatchIds([])
+          setSelectedBatchesById({})
+          setOpenedBatchId('')
+        }
+        lastHouseholdId.current = householdId
         setBatches(Array.isArray(unpackData?.items) ? unpackData.items : [])
+        setTotal(Number(unpackData?.total || 0))
       } catch (err) {
         if (!cancelled) {
           setHasLoadError(true)
@@ -75,7 +88,7 @@ export default function ReceiptsPage() {
 
     loadData()
     return () => { cancelled = true }
-  }, [location.search, showFeedback])
+  }, [location.search, showFeedback, page, filters, tableSort, refreshVersion])
 
   const listItems = useMemo(() => {
     // Uitpakken is een werkvoorraad, geen bonarchief. Zodra de volledige bon
@@ -103,32 +116,29 @@ export default function ReceiptsPage() {
     })
   }, [batches, filters, tableSort])
 
-  useEffect(() => {
-    if (isLoading || hasLoadError) return
-
-    if (!listItems.length) {
-      setSelectedBatchIds([])
-      setOpenedBatchId('')
-      return
-    }
-
-    const visibleIds = new Set(listItems.map((item) => item.batch_id))
-    setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)))
-    if (openedBatchId && !visibleIds.has(openedBatchId)) {
-      setOpenedBatchId('')
-    }
-  }, [hasLoadError, isLoading, listItems, openedBatchId])
+  // Selection must outlive server-side page changes.
+  const selectedBatches = selectedBatchIds
+    .map((id) => selectedBatchesById[id])
+    .filter(Boolean)
 
   function handleFilterChange(key, value) {
+    setPage(1)
     setFilters((current) => ({ ...current, [key]: value }))
   }
 
   function toggleSelectedBatch(batchId) {
-    setSelectedBatchIds((current) => (
-      current.includes(batchId)
-        ? current.filter((id) => id !== batchId)
-        : [...current, batchId]
-    ))
+    const row = listItems.find((item) => item.batch_id === batchId)
+    if (!row) return
+    const wasSelected = selectedBatchIds.includes(batchId)
+    setSelectedBatchIds((current) => wasSelected
+      ? current.filter((id) => id !== batchId)
+      : [...current, batchId])
+    setSelectedBatchesById((current) => {
+      const next = { ...current }
+      if (wasSelected) delete next[batchId]
+      else next[batchId] = row
+      return next
+    })
   }
 
   function toggleSelectAllVisible() {
@@ -138,11 +148,16 @@ export default function ReceiptsPage() {
     setSelectedBatchIds((current) => allVisibleSelected
       ? current.filter((id) => !visibleIds.includes(id))
       : [...new Set([...current, ...visibleIds])])
+    setSelectedBatchesById((current) => {
+      const next = { ...current }
+      if (allVisibleSelected) visibleIds.forEach((id) => { delete next[id] })
+      else mobileVisibleItems.forEach((item) => { next[item.batch_id] = item })
+      return next
+    })
   }
 
   function handleExport() {
-    const selectedIds = selectedBatchIds.length ? new Set(selectedBatchIds) : null
-    const rows = listItems.filter((item) => !selectedIds || selectedIds.has(item.batch_id))
+    const rows = selectedBatches
     const header = ['Winkel', 'Datum', 'Regels', 'Status']
     const csvRows = rows.map((item) => [item.providerName, item.dateLabel, String(item.totalLines), item.statusLabel])
     const csv = [header, ...csvRows]
@@ -162,7 +177,7 @@ export default function ReceiptsPage() {
   async function handleBulkApprove() {
     if (!selectedBatchIds.length || isBulkApproving) return
     setIsBulkApproving(true)
-    const selected = listItems.filter((item) => selectedBatchIds.includes(item.batch_id))
+    const selected = selectedBatches
     const eligible = selected.filter((item) => String(item.statusLabel || '').trim().toLowerCase() === 'gecontroleerd')
     const ineligible = selected.length - eligible.length
     let processed = 0
@@ -186,10 +201,9 @@ export default function ReceiptsPage() {
           errors.push(normalizeErrorMessage(error?.message) || 'Verwerking mislukt')
         }
       }
-      const household = await fetchJson('/api/household')
-      const refreshed = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(household.id)}`)
-      setBatches(Array.isArray(refreshed?.items) ? refreshed.items : [])
+      setRefreshVersion((current) => current + 1)
       setSelectedBatchIds([])
+      setSelectedBatchesById({})
       showFeedback({
         variant: failed ? 'warning' : 'info',
         message: `Voorraadcontrole toegepast: bij actieve voorraadlocaties is een geldige standaardlocatie per artikel vereist. Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden. Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`,
@@ -214,8 +228,7 @@ export default function ReceiptsPage() {
   async function applyDeleteChoice(action) {
     if (selectedBatchIds.length === 0 || isApplyingDeleteChoice) return
     const selectedSet = new Set(selectedBatchIds)
-    const selectedBatches = listItems.filter((item) => selectedSet.has(item.batch_id))
-    if (!selectedBatches.length) return
+    if (selectedBatches.length !== selectedBatchIds.length) return
 
     setIsApplyingDeleteChoice(true)
     try {
@@ -241,10 +254,12 @@ export default function ReceiptsPage() {
       }
 
       setBatches((current) => current.filter((batch) => !selectedSet.has(batch.batch_id)))
+      setRefreshVersion((current) => current + 1)
       if (openedBatchId && selectedSet.has(openedBatchId)) {
         setOpenedBatchId('')
       }
       setSelectedBatchIds([])
+      setSelectedBatchesById({})
       setDeleteChoiceOpen(false)
     } catch (err) {
       showFeedback({
@@ -257,11 +272,12 @@ export default function ReceiptsPage() {
     }
   }
 
-  const mobileReceiptPagination = useMobilePagination(
-    listItems,
-    [filters.winkel, filters.datum, filters.status, tableSort.key, tableSort.direction].join('|'),
-  )
-  const mobileVisibleItems = mobileReceiptPagination.pageItems
+  const mobileReceiptPagination = {
+    page,
+    pageCount: Math.max(1, Math.ceil(total / 10)),
+    setPage,
+  }
+  const mobileVisibleItems = listItems
   const allVisibleSelected = mobileVisibleItems.length > 0 && mobileVisibleItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   if (isMobileViewport) {
@@ -280,7 +296,7 @@ export default function ReceiptsPage() {
           </div>
 
           <div className="rz-mobile-inventory-summary-row">
-            <span className="rz-mobile-inventory-summary">{listItems.length} kassabon{listItems.length === 1 ? '' : 'nen'}</span>
+            <span className="rz-mobile-inventory-summary">{total} kassabon{total === 1 ? '' : 'nen'}</span>
             {listItems.length > 0 ? (
               <label className="rz-mobile-unpack-select-all">
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
@@ -289,12 +305,11 @@ export default function ReceiptsPage() {
             ) : null}
           </div>
 
-          {isLoading ? <div className="rz-mobile-inventory-state">Bonnen laden…</div> : null}
           {!isLoading && hasLoadError ? <div className="rz-mobile-inventory-state rz-mobile-inventory-state--error">Kassabonnen konden niet worden geladen.</div> : null}
           {!isLoading && !hasLoadError && listItems.length === 0 ? <div className="rz-mobile-inventory-state">Er zijn nog geen kassabonnen.</div> : null}
 
-          {!isLoading && !hasLoadError && listItems.length > 0 ? (
-            <div className="rz-mobile-inventory-list rz-mobile-unpack-list">
+          {!hasLoadError && listItems.length > 0 ? (
+            <div className="rz-mobile-inventory-list rz-mobile-unpack-list" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
               {mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
@@ -312,9 +327,9 @@ export default function ReceiptsPage() {
               })}
             </div>
           ) : null}
-          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
+          <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" /></div>
 
-          <div className="rz-mobile-unpack-actions" data-testid="mobile-unpack-bulk-actions">
+          <div className="rz-mobile-unpack-actions rz-mobile-table-bulk-actions" data-testid="mobile-unpack-bulk-actions">
             <Button
               type="button"
               variant="secondary"
@@ -378,10 +393,10 @@ export default function ReceiptsPage() {
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
                 </ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Winkel</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Datum</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Artikelen</ResizableHeaderCell>
-                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Status</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => { setPage(1); setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' })) }}>Winkel</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => { setPage(1); setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' })) }}>Datum</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => { setPage(1); setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' })) }}>Artikelen</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => { setPage(1); setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' })) }}>Status</ResizableHeaderCell>
               </tr>
               <tr className="rz-table-filters">
                 <th />
@@ -423,11 +438,9 @@ export default function ReceiptsPage() {
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {isLoading ? (
-                <tr><td colSpan={5}>Bonnen laden…</td></tr>
-              ) : hasLoadError ? null : listItems.length === 0 ? (
-                <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
+            <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
+              {hasLoadError ? null : listItems.length === 0 ? (
+                <tr><td colSpan={5}>{isLoading ? 'Bonnen laden…' : 'Er zijn nog geen kassabonnen.'}</td></tr>
               ) : mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
@@ -467,9 +480,9 @@ export default function ReceiptsPage() {
               })}
             </tbody>
           </Table>
-          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
+          <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" /></div>
         <div className="rz-stock-table-actions">
-          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || selectedBatchIds.length === 0}>Exporteren</Button>
           <Button type="button" onClick={handleBulkApprove} disabled={selectedBatchIds.length === 0 || isBulkApproving} data-testid="unpack-approve-selected-button">{isBulkApproving ? "Goedkeuren…" : "Goedkeuren"}</Button>
           <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0 || isBulkApproving}>Verwijderen</Button>
           {openedBatchId ? <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')} data-testid="receipt-back-to-overview">Terug naar overzicht</Button> : null}

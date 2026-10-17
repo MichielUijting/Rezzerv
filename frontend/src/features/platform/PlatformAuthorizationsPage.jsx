@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
+import Pagination from '../../ui/Pagination.jsx'
 
 const SPECIAL_ROLES = [
   { roleKey: 'platform.superuser', slug: 'superuser', label: 'Superuser' },
@@ -16,6 +17,11 @@ function roleLabel(roleKey, roles) {
 
 export default function PlatformAuthorizationsPage() {
   const [users, setUsers] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(users.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleUsers = users.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [roles, setRoles] = React.useState([])
   const [canManageSpecialRoles, setCanManageSpecialRoles] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
@@ -39,6 +45,7 @@ export default function PlatformAuthorizationsPage() {
       }
       const payload = await response.json()
       setUsers(Array.isArray(payload?.users) ? payload.users : [])
+      setPage(1)
       setRoles(Array.isArray(payload?.roles) ? payload.roles : [])
       setCanManageSpecialRoles(payload?.can_manage_special_roles === true)
     } catch (err) {
@@ -125,7 +132,7 @@ export default function PlatformAuthorizationsPage() {
 
       {!loading && !users.length ? <Card><p>Er zijn geen gebruikers gevonden.</p></Card> : null}
 
-      {!loading && users.map((user) => {
+      {visibleUsers.map((user) => {
         const roleKeys = Array.isArray(user.platform_role_keys) ? user.platform_role_keys : []
         const permissionCount = Array.isArray(user.effective_platform_permissions)
           ? user.effective_platform_permissions.length
@@ -185,6 +192,8 @@ export default function PlatformAuthorizationsPage() {
           </Card>
         )
       })}
+
+      {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} disabled={loading} /> : null}
 
       {!loading && roles.length ? (
         <Card>

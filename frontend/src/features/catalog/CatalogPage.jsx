@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
+import Pagination from '../../ui/Pagination.jsx'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import CatalogProductImage from './CatalogProductImage'
@@ -70,6 +71,7 @@ export default function CatalogPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const hasRequestedCatalogRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -122,7 +124,8 @@ export default function CatalogPage() {
       } finally {
         if (!cancelled) setIsLoading(false)
       }
-    }, 250)
+    }, hasRequestedCatalogRef.current ? 250 : 0)
+    hasRequestedCatalogRef.current = true
     return () => {
       cancelled = true
       window.clearTimeout(timer)
@@ -134,7 +137,7 @@ export default function CatalogPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => Boolean(selectedRows[id]))
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
-  const occupiedBodyRows = isLoading || items.length === 0 ? 1 : items.length
+  const occupiedBodyRows = items.length === 0 ? 1 : items.length
   const fillerRowCount = Math.max(0, PAGE_SIZE - occupiedBodyRows)
 
   useEffect(() => {
@@ -336,8 +339,8 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                   </tr>
                 </thead>
-                <tbody>
-                  {isLoading ? <tr><td colSpan="11">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
+                <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
+                  {items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>
@@ -352,23 +355,19 @@ export default function CatalogPage() {
                       <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
-                  )) : <tr><td colSpan="11">Geen universele artikelen gevonden.</td></tr>}
-                  {!isLoading ? Array.from({ length: fillerRowCount }, (_, index) => (
+                  )) : <tr><td colSpan="11">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
+                  {Array.from({ length: fillerRowCount }, (_, index) => (
                     <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
                       <td colSpan="11">&nbsp;</td>
                     </tr>
-                  )) : null}
+                  ))}
                 </tbody>
             </Table>
 
-            <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
-              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(1)}>Eerste</Button>
-              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
-              <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(pageCount)}>Laatste</Button>
+            {pageCount > 1 ? <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
+              <Pagination page={currentPage} pageCount={pageCount} onPageChange={goToPage} disabled={isLoading} />
               <span className="rz-external-databases-muted">{total} artikelen</span>
-            </div>
+            </div> : null}
           </div>
         </ScreenCard>
       </div>

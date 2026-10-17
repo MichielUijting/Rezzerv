@@ -5,6 +5,7 @@ import MobileSupportInbox from './MobileSupportInbox.jsx'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { canCurrentUserPerform, fetchAuthContext, isPlatformSuperuserFromContext, readStoredAuthContext } from '../../lib/authSession.js'
@@ -34,6 +35,11 @@ export default function HouseholdSupportPage() {
   const canOpenPlatformSupport = canCurrentUserPerform('platform.support_access.read', authContext)
 
   const [threads, setThreads] = useState([])
+  const [threadPage, setThreadPage] = useState(1)
+  const threadPageCount = Math.max(1, Math.ceil(threads.length / 10))
+  const currentThreadPage = Math.min(threadPage, threadPageCount)
+  const visibleThreads = threads.slice((currentThreadPage - 1) * 10, currentThreadPage * 10)
+  useEffect(() => { if (threadPage > threadPageCount) setThreadPage(threadPageCount) }, [threadPage, threadPageCount])
   const [selected, setSelected] = useState(null)
   const [status, setStatus] = useState('Open')
   const [subject, setSubject] = useState('')
@@ -66,6 +72,7 @@ export default function HouseholdSupportPage() {
       const data = await listHouseholdThreads(status)
       const ownThreads = data?.items || []
       setThreads(ownThreads)
+      if (showBusy) setThreadPage(1)
       if (selected?.thread?.id && ownThreads.some((thread) => thread.id === selected.thread.id)) {
         setSelected(await readHouseholdThread(selected.thread.id))
       }
@@ -191,7 +198,7 @@ export default function HouseholdSupportPage() {
           <p>Je ziet uitsluitend meldingen die je zelf vanuit het actieve huishouden hebt verzonden.</p>
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
-            {threads.map((thread) => (
+            {visibleThreads.map((thread) => (
               <div key={thread.id} className={`rz-support-thread-row ${isUnread(thread) ? 'rz-support-thread-row--unread' : ''}`}>
                 <button type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
                   <strong>{thread.subject}</strong>
@@ -202,6 +209,7 @@ export default function HouseholdSupportPage() {
               </div>
             ))}
           </div>
+          {threadPageCount > 1 ? <Pagination page={currentThreadPage} pageCount={threadPageCount} onPageChange={setThreadPage} /> : null}
         </Card>
 
         <Card>

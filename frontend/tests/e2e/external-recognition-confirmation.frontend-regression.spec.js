@@ -138,11 +138,15 @@ test.describe('Externe herkenning bevestigen geïntegreerde regressie', () => {
     expect(Math.abs((filterAfter?.y || 0) - (filterBefore?.y || 0))).toBeLessThan(2)
     await scrollRegion.evaluate((element) => { element.scrollTop = 0 })
 
-    await expect(page.getByText('Pagina 1 van 2')).toBeVisible()
-    await page.getByRole('button', { name: 'Volgende', exact: true }).click()
-    await expect(page.getByText('Pagina 2 van 2')).toBeVisible()
-    await page.getByRole('button', { name: 'Eerste', exact: true }).click()
-    await expect(page.getByText('Pagina 1 van 2')).toBeVisible()
+    // Het centrale numerieke paginatiecontract toont een paginanummer met
+    // toegankelijke paginastatus, plus de knoppen 1, -, + en laatste pagina.
+    const pagination = page.getByRole('navigation', { name: 'Paginering' })
+    const pageIndicator = pagination.locator('[aria-current="page"]')
+    await expect(pageIndicator).toHaveAttribute('aria-label', 'Pagina 1 van 2')
+    await pagination.getByRole('button', { name: '+', exact: true }).click()
+    await expect(pageIndicator).toHaveAttribute('aria-label', 'Pagina 2 van 2')
+    await pagination.getByRole('button', { name: '1', exact: true }).click()
+    await expect(pageIndicator).toHaveAttribute('aria-label', 'Pagina 1 van 2')
 
     const receiptFilter = table.getByRole('textbox', { name: 'Filter op Bonartikel' })
     await receiptFilter.fill('Veldsla')

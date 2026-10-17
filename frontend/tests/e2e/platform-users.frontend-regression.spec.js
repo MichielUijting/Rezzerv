@@ -191,3 +191,15 @@ test('users direct route stays closed without permission and performs no user-ma
   expect(reads).toBe(0)
   expect(suspends).toBe(0)
 })
+
+test('pagination supports eleven users across two pages', async ({ page }) => {
+  await mockSession(page, noneSession)
+  const manyUsers = Array.from({ length: 11 }, (_, i) => ({ user_id: 'page-user-' + i, email: 'user' + i + '@example.test', account_status: 'active', active_session_count: 0 }))
+  await page.route(USERS_ENDPOINT, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: manyUsers }) }))
+  await page.goto('/platform/gebruikers')
+  await expect(page.getByText('Pagina 1 van 2')).toBeVisible()
+  await expect(page.locator('[data-testid^="platform-user-page-user-"]')).toHaveCount(10)
+  await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
+  await expect(page.getByText('Pagina 2 van 2')).toBeVisible()
+  await expect(page.locator('[data-testid^="platform-user-page-user-"]')).toHaveCount(1)
+})

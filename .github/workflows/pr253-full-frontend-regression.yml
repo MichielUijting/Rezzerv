@@ -238,6 +238,7 @@ jobs:
             -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
             -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -v "$GITHUB_WORKSPACE/backend:/backend:ro" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
             bash -lc "npm ci && npm run test:e2e:frontend-regression"

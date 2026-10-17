@@ -107,24 +107,22 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
 }
 
 async function loadMobileInventory() {
-  const [inventoryResponse, articleGroupsResponse] = await Promise.all([
-    fetchJsonWithAuth(`/api/dev/inventory-preview?_ts=${Date.now()}`, { method: 'GET', cache: 'no-store' }),
-    fetchJsonWithAuth(`/api/article-groups/household-articles?_ts=${Date.now()}`, { method: 'GET', cache: 'no-store' }),
-  ])
-
+  // Rendering the first page must wait for inventory, not for a separate
+  // article-group dropdown/assignment service.
+  const groupPromise = fetchJsonWithAuth(
+    `/api/article-groups/household-articles?_ts=${Date.now()}`,
+    { method: 'GET', cache: 'no-store' },
+  ).then(async (response) => response.ok ? (await response.json().catch(() => ({}))) : {}).catch(() => ({}))
+  const inventoryResponse = await fetchJsonWithAuth(
+    `/api/dev/inventory-preview?_ts=${Date.now()}`,
+    { method: 'GET', cache: 'no-store' },
+  )
   const inventoryData = await inventoryResponse.json().catch(() => ({}))
   if (!inventoryResponse.ok) {
     throw new Error(inventoryData?.detail || 'Voorraad kon niet worden geladen')
   }
-
-  const articleGroupsData = articleGroupsResponse.ok
-    ? await articleGroupsResponse.json().catch(() => ({}))
-    : {}
-
-  return buildMobileInventoryRows(
-    Array.isArray(inventoryData?.rows) ? inventoryData.rows : [],
-    Array.isArray(articleGroupsData?.items) ? articleGroupsData.items : [],
-  )
+  const liveRows = Array.isArray(inventoryData?.rows) ? inventoryData.rows : []
+  return { initialRows: buildMobileInventoryRows(liveRows), liveRows, groupPromise }
 }
 
 export default function MobileVoorraad({ locationTrackingEnabled = true }) {
@@ -138,14 +136,24 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [sortKey, setSortKey] = useState('name-asc')
   const [mutatingRowId, setMutatingRowId] = useState('')
   const mutationLockRef = useRef(false)
+  const loadGenerationRef = useRef(0)
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
   async function reload() {
     setIsLoading(true)
     setError('')
+    const generation = ++loadGenerationRef.current
     try {
-      setRows(await loadMobileInventory())
+      const { initialRows, liveRows, groupPromise } = await loadMobileInventory()
+      if (generation !== loadGenerationRef.current) return
+      setRows(initialRows)
+      // Enrich labels after the first page is visible. Ignore stale responses.
+      groupPromise.then((groups) => {
+        if (generation !== loadGenerationRef.current || mutationLockRef.current) return
+        const assignments = Array.isArray(groups?.items) ? groups.items : []
+        setRows(buildMobileInventoryRows(liveRows, assignments))
+      })
     } catch (err) {
       setRows([])
       setError(String(err?.message || 'Voorraad kon niet worden geladen'))
@@ -380,7 +388,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         ) : null}
 
         {!error && filteredRows.length > 0 ? (
-          <section className="rz-mobile-inventory-list" aria-label="Voorraadartikelen">
+          <section className="rz-mobile-inventory-list" aria-label="Voorraadartikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {inventoryPagination.pageItems.map((row) => {
               const detailTarget = row.detailId
                 ? `/voorraad/${encodeURIComponent(row.detailId)}?artikel=${encodeURIComponent(row.articleName || row.householdName)}`

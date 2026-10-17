@@ -75,4 +75,16 @@ assert.doesNotMatch(mobileSource, /Alles naar Winkelen/i)
 assert.doesNotMatch(mobileSource, /Naar Winkelen/i)
 
 
+const selectToolbar = mobileSource.indexOf('aria-label="Bijna op selectie"')
+const listView = mobileSource.indexOf('aria-label="Bijna-op-artikelen"')
+const actionPanel = mobileSource.indexOf('aria-label="Overige Bijna op bulkacties"')
+const moveAction = mobileSource.indexOf('>Naar Boodschappenlijst</Button>', actionPanel)
+const deleteAction = mobileSource.indexOf('>Verwijderen</Button>', actionPanel)
+assert.ok(selectToolbar > 0 && listView > selectToolbar, 'Selectie moet boven de lijst staan')
+assert.match(mobileSource.slice(selectToolbar - 75, selectToolbar), /className="rz-mobile-table-select-row"/) // normalized top-right
+assert.match(mobileSource.slice(selectToolbar, listView), /> Alles<\/label>/)
+assert.match(mobileSource.slice(actionPanel - 115, actionPanel), /rz-mobile-table-bulk-actions/) // normalized bottom-right
+assert.ok(actionPanel > listView && moveAction > actionPanel && deleteAction > moveAction, 'Verwijderen moet rechts van Naar Boodschappenlijst in het onderste actiepaneel staan')
+assert.ok(!mobileSource.slice(selectToolbar, listView).includes('>Verwijderen</Button>'), 'Verwijderen mag niet in de bovenste selectieregel staan')
+assert.match(mobileSource, /Verwijderingen ongedaan maken/)
 console.log('MOBILE_ALMOST_OUT_CONTRACT_GREEN')

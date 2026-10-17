@@ -5,6 +5,8 @@ import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
+import { useMobilePagination, MobilePaginationControls } from '../../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import CatalogCameraModal from './CatalogCameraModal'
@@ -119,6 +121,9 @@ export default function CatalogDetailPageV2() {
   const identities = Array.isArray(detail?.identities) ? detail.identities : []
   const householdArticles = Array.isArray(detail?.household_articles) ? detail.household_articles : []
   const receiptLines = Array.isArray(detail?.receipt_lines) ? detail.receipt_lines : []
+  const identityPagination = useMobilePagination(identities, globalProductId)
+  const articlePagination = useMobilePagination(householdArticles, globalProductId)
+  const receiptPagination = useMobilePagination(receiptLines, globalProductId)
   const productType = confirmedProductType || product.product_type
 
   function handleGpcAssignmentChange(assignment) {
@@ -341,37 +346,40 @@ export default function CatalogDetailPageV2() {
               <section className="rz-mobile-catalog-detail-card">
                 <h3>Identiteiten</h3>
                 <div className="rz-mobile-catalog-detail-list">
-                  {identities.length ? identities.map((identity, index) => (
+                  {identities.length ? identityPagination.pageItems.map((identity, index) => (
                     <div className="rz-mobile-catalog-detail-item" key={identity.id || `${identity.identity_type}-${identity.identity_value}-${index}`}>
                       <strong>{identityTypeLabel(identity.identity_type)} · {text(identity.identity_value)}</strong>
                       <span>{identity.is_primary ? 'Primair' : 'Niet primair'} · {sourceLabel(identity.source)}</span>
                     </div>
                   )) : <span>Geen aanvullende identiteiten gevonden.</span>}
                 </div>
+                <MobilePaginationControls {...identityPagination} ariaLabel="Paginering Identiteiten" />
               </section>
 
               <section className="rz-mobile-catalog-detail-card">
                 <h3>Gekoppelde huishoudartikelen</h3>
                 <div className="rz-mobile-catalog-detail-list">
-                  {householdArticles.length ? householdArticles.map((article, index) => (
+                  {householdArticles.length ? articlePagination.pageItems.map((article, index) => (
                     <div className="rz-mobile-catalog-detail-item" key={article.id || index}>
                       <strong>{text(article.name || article.article_name)}</strong>
                       <span>Minimum {text(article.minimum_stock)} · Ideaal {text(article.ideal_stock)}</span>
                     </div>
                   )) : <span>Geen gekoppelde huishoudartikelen gevonden.</span>}
                 </div>
+                <MobilePaginationControls {...articlePagination} ariaLabel="Paginering Gekoppelde huishoudartikelen" />
               </section>
 
               <section className="rz-mobile-catalog-detail-card">
                 <h3>Gekoppelde kassabonregels</h3>
                 <div className="rz-mobile-catalog-detail-list">
-                  {receiptLines.length ? receiptLines.map((line, index) => (
+                  {receiptLines.length ? receiptPagination.pageItems.map((line, index) => (
                     <div className="rz-mobile-catalog-detail-item" key={line.id || index}>
                       <strong>{text(line.article_name_raw)}</strong>
                       <span>{text(line.household_article_name)} · GTIN {text(line.gtin)}</span>
                     </div>
                   )) : <span>Geen gekoppelde kassabonregels gevonden.</span>}
                 </div>
+                <MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Gekoppelde kassabonregels" />
               </section>
             </>
           ) : null}
@@ -462,7 +470,7 @@ export default function CatalogDetailPageV2() {
                     </tr>
                   </thead>
                   <tbody>
-                    {identities.length ? identities.map((identity, index) => (
+                    {identities.length ? identityPagination.pageItems.map((identity, index) => (
                       <tr key={identity.id || `${identity.identity_type}-${identity.identity_value}-${index}`}>
                         <td>{identityTypeLabel(identity.identity_type)}</td>
                         <td>{text(identity.identity_value)}</td>
@@ -474,6 +482,7 @@ export default function CatalogDetailPageV2() {
                     )}
                   </tbody>
                 </Table>
+                {identityPagination.pageCount > 1 ? <Pagination page={identityPagination.page} pageCount={identityPagination.pageCount} onPageChange={identityPagination.setPage} /> : null}
               </section>
 
               <section className="rz-catalog-detail-section">
@@ -486,7 +495,7 @@ export default function CatalogDetailPageV2() {
                     </tr>
                   </thead>
                   <tbody>
-                    {householdArticles.length ? householdArticles.map((article, index) => (
+                    {householdArticles.length ? articlePagination.pageItems.map((article, index) => (
                       <tr key={article.id || index}>
                         <td>{text(article.household_id)}</td>
                         <td>{text(article.name || article.article_name)}</td>
@@ -498,6 +507,7 @@ export default function CatalogDetailPageV2() {
                     )}
                   </tbody>
                 </Table>
+                {articlePagination.pageCount > 1 ? <Pagination page={articlePagination.page} pageCount={articlePagination.pageCount} onPageChange={articlePagination.setPage} /> : null}
               </section>
 
               <section className="rz-catalog-detail-section">
@@ -510,7 +520,7 @@ export default function CatalogDetailPageV2() {
                     </tr>
                   </thead>
                   <tbody>
-                    {receiptLines.length ? receiptLines.map((line, index) => (
+                    {receiptLines.length ? receiptPagination.pageItems.map((line, index) => (
                       <tr key={line.id || index}>
                         <td>{text(line.article_name_raw)}</td>
                         <td>{text(line.household_article_name)}</td>
@@ -521,6 +531,7 @@ export default function CatalogDetailPageV2() {
                     )}
                   </tbody>
                 </Table>
+                {receiptPagination.pageCount > 1 ? <Pagination page={receiptPagination.page} pageCount={receiptPagination.pageCount} onPageChange={receiptPagination.setPage} /> : null}
               </section>
             </div>
           ) : null}

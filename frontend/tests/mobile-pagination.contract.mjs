@@ -19,7 +19,7 @@ assert.match(pagination, /slice\(start, start \+ MOBILE_PAGE_SIZE\)/)
 assert.match(pagination, /<Pagination[\s\S]*page=\{page\}[\s\S]*pageCount=\{pageCount\}/)
 assert.match(pagination, /<Pagination page=\{page\} pageCount=\{pageCount\} onPageChange=\{setPage\} \/>/)
 assert.match(centralPagination, /first: labels\?\.first \?\? '1'/)
-assert.match(centralPagination, /previous: labels\?\.previous \?\? '−'/)
+assert.match(centralPagination, /previous: labels\?\.previous \?\? '-'/)
 assert.match(centralPagination, /next: labels\?\.next \?\? '\+'/)
 assert.match(centralPagination, /last: labels\?\.last \?\? \(Number\.isFinite/)
 
@@ -31,11 +31,16 @@ for (const [name, source] of [
   ['Bijna op', almostOut],
   ['Boodschappen', shopping],
   ['Meldingen', support],
-  ['Uitpakken', receipts],
 ]) {
   assert.match(source, /useMobilePagination\(/, name + ' moet mobiele paginering gebruiken')
   assert.match(source, /MobilePaginationControls/, name + ' moet de centrale pagineringscomponent tonen')
 }
+
+// Uitpakken gebruikt bewust server-side paginering: uitsluitend de actuele
+// tien bonnen ophalen, maar wel dezelfde centrale mobiele paginering tonen.
+assert.match(receipts, /pageCount: Math\.max\(1, Math\.ceil\(total \/ 10\)\)/)
+assert.match(receipts, /const mobileVisibleItems = listItems/)
+assert.match(receipts, /<MobilePaginationControls \{\.\.\.mobileReceiptPagination\}/)
 
 assert.match(catalog, /const PAGE_SIZE = 10/)
 assert.match(catalog, /<Pagination page=\{currentPage\} pageCount=\{pageCount\}/)
@@ -47,11 +52,23 @@ assert.match(kassa, /Paginering Bonnen/)
 assert.match(kassa, /Paginering Bonregels/)
 
 assert.match(storeBatch, /const mobileLinePagination = useMobilePagination\(/)
-assert.match(storeBatch, /const renderedLineUiStates = isMobileViewport \? mobileLinePagination\.pageItems : visibleLineUiStates/)
+assert.match(storeBatch, /const desktopPageLines = visibleLineUiStates\.slice\(\(currentDesktopLinePage - 1\) \* 10, currentDesktopLinePage \* 10\)/)
+assert.match(storeBatch, /const renderedLineUiStates = isMobileViewport \? mobileLinePagination\.pageItems : desktopPageLines/)
 assert.match(storeBatch, /Paginering Bonregels Uitpakken/)
 
 assert.match(mobileCss, /\.rz-mobile-action-bar-icon\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/)
 assert.match(mobileCss, /\.rz-mobile-action-bar-icon svg\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/)
 assert.match(mobileCss, /\.rz-mobile-action-bar-desktop-icon\s*\{[\s\S]*transform:\s*scale\(2\);/)
 
+// Alle mobiele selecteerbare tabellen gebruiken Uitpakken als visuele standaard.
+const selectAllTargets = [receipts, kassa, almostOut, storeBatch]
+for (const source of selectAllTargets) {
+  assert.match(source, /rz-mobile-table-select-row|rz-mobile-inventory-summary-row/, 'Alles-selectie ontbreekt boven tabel')
+  assert.match(source, /rz-mobile-table-bulk-actions/, 'Bulkacties ontbreken onder de tabel')
+}
+assert.match(receipts, /mobile-unpack-bulk-actions/)
+assert.match(storeBatch, /mobile-unpack-detail-bulk-actions/)
+assert.match(storeBatch, /mobileLinePagination\.pageItems\.filter/, 'Uitpakken moet alleen zichtbare regels selecteren')
+assert.match(mobileCss, /\.rz-mobile-table-select-row\s*\{[\s\S]*justify-content:\s*flex-end/)
+assert.match(mobileCss, /\.rz-mobile-table-bulk-actions\s*\{[\s\S]*justify-content:\s*flex-end/)
 console.log('MOBILE_PAGINATION_CONTRACT_GREEN')

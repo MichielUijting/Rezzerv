@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchHouseholdDashboard, fetchHouseholdDashboardDrilldown } from './dashboardApi.js'
 import './mobileHome.css'
 
@@ -223,9 +224,18 @@ function StackedFamilyBars({ view = null, currency = true }) {
   </div>
 }
 
+function useDashboardPagination(rows) {
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(rows.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+  return { pageCount, currentPage, setPage, visibleRows: rows.slice((currentPage - 1) * 10, currentPage * 10) }
+}
+
 function ReceiptList({ receipts = [], showArticleCount = true }) {
   const navigate = useNavigate()
   const [openIds, setOpenIds] = useState(() => new Set())
+  const { pageCount, currentPage, setPage, visibleRows } = useDashboardPagination(receipts)
 
   function toggle(receiptId) {
     setOpenIds((current) => {
@@ -245,7 +255,7 @@ function ReceiptList({ receipts = [], showArticleCount = true }) {
   }
 
   return <div className="rz-dashboard-receipts">
-    {receipts.map((receipt) => {
+    {visibleRows.map((receipt) => {
       const isOpen = openIds.has(receipt.receipt_id)
       return <article className="rz-dashboard-receipt" key={receipt.receipt_id}>
         <button
@@ -293,15 +303,17 @@ function ReceiptList({ receipts = [], showArticleCount = true }) {
         </div> : null}
       </article>
     })}
+    {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
   </div>
 }
 
 function ReceiptGroupList({ groups = [], metric = 'spend' }) {
+  const { pageCount, currentPage, setPage, visibleRows } = useDashboardPagination(groups)
   if (!groups.length) {
     return <p className="rz-dashboard-empty">Geen onderliggende gegevens in deze periode.</p>
   }
   return <div className="rz-dashboard-group-list">
-    {groups.map((group) => <details className="rz-dashboard-group" key={group.key}>
+    {visibleRows.map((group) => <details className="rz-dashboard-group" key={group.key}>
       <summary>
         <span>
           <strong>{group.label}</strong>
@@ -314,6 +326,7 @@ function ReceiptGroupList({ groups = [], metric = 'spend' }) {
       </summary>
       <ReceiptList receipts={group.receipts} />
     </details>)}
+    {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
   </div>
 }
 
@@ -349,11 +362,12 @@ function CategoryTotals({ receipts = [] }) {
 function ArticleTotals({ receipts = [] }) {
   const navigate = useNavigate()
   const rows = useMemo(() => aggregateArticles(receipts), [receipts])
+  const { pageCount, currentPage, setPage, visibleRows } = useDashboardPagination(rows)
   if (!rows.length) {
     return <p className="rz-dashboard-empty">Geen artikelen gevonden in deze periode.</p>
   }
   return <div className="rz-dashboard-article-totals">
-    {rows.map((article) => {
+    {visibleRows.map((article) => {
       const canOpen = Boolean(article.household_article_id || article.global_product_id)
       return <button
         type="button"
@@ -369,16 +383,18 @@ function ArticleTotals({ receipts = [] }) {
         <span>{euro(article.total)}</span>
       </button>
     })}
+    {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
   </div>
 }
 
 function RepeatPurchaseList({ items = [] }) {
   const navigate = useNavigate()
+  const { pageCount, currentPage, setPage, visibleRows } = useDashboardPagination(items)
   if (!items.length) {
     return <p className="rz-dashboard-empty">Nog onvoldoende herhalingskoop gevonden om aankopen te begroten.</p>
   }
   return <div className="rz-dashboard-repeat-list">
-    {items.map((item, index) => {
+    {visibleRows.map((item, index) => {
       const canOpen = Boolean(item.household_article_id || item.global_product_id)
       return <button
         type="button"
@@ -397,6 +413,7 @@ function RepeatPurchaseList({ items = [] }) {
         </span>
       </button>
     })}
+    {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
   </div>
 }
 

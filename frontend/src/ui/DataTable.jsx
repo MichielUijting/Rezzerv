@@ -56,7 +56,7 @@ export default function DataTable({
   tableStyle = {},
   renderBodyAppend = null,
   renderFooter = null,
-  pagination = false,
+  pagination = true,
   pageSize = 10,
   paginationActions = null,
 }) {
@@ -64,7 +64,7 @@ export default function DataTable({
   const effectivePagination = Boolean(pagination || isMobileViewport)
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
-  const { widths, setColumnWidth } = useResizableColumnWidths(defaultWidths)
+  const { widths, startResize, setColumnWidth } = useResizableColumnWidths(defaultWidths)
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
@@ -111,12 +111,6 @@ export default function DataTable({
     setInternalSort(next)
   }
 
-  function handleColumnResize(columnIndex, nextWidth) {
-    const column = visibleColumns[columnIndex]
-    if (!column?.key) return
-    setColumnWidth(column.key, nextWidth)
-  }
-
   const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
     if (!column.filterable) return true
     const activeFilterValue = activeFilters[column.key]
@@ -145,7 +139,7 @@ export default function DataTable({
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
   const pageCount = effectivePagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
 
-  useEffect(() => { setPage(1) }, [activeFilters, activeSort, data, normalizedPageSize, effectivePagination])
+  useEffect(() => { setPage(1) }, [activeFilters, activeSort, normalizedPageSize, effectivePagination])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const displayData = useMemo(() => {
@@ -177,7 +171,10 @@ export default function DataTable({
         tableStyle={mergedTableStyle}
         dataTestId={dataTestId}
         resizableColumns
-        onColumnResize={handleColumnResize}
+        onColumnResize={(columnIndex, width) => {
+          const columnKey = visibleColumns[columnIndex]?.key
+          if (columnKey) setColumnWidth(columnKey, width)
+        }}
       >
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
@@ -189,6 +186,7 @@ export default function DataTable({
                 key={column.key}
                 columnKey={column.key}
                 widths={widths}
+                onStartResize={startResize}
                 className={column.align === 'right' ? 'rz-num' : column.className || ''}
                 sortable={Boolean(column.sortable)}
                 isSorted={activeSort?.key === column.key}
@@ -254,10 +252,10 @@ export default function DataTable({
         </tbody>
         {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
       </Table>
-      {(effectivePagination || paginationActions) ? (
+      {(pageCount > 1 || paginationActions) ? (
         <div className="rz-data-table-controls">
           <span aria-hidden="true" />
-          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
+          {pageCount > 1 ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
           <div className="rz-data-table-actions">
             {paginationActions}
           </div>

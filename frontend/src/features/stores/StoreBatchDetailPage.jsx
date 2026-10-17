@@ -10,6 +10,7 @@ import Button from '../../ui/Button'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
@@ -1900,7 +1901,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     visibleLineUiStates,
     [searchValue, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, tableSort.key, tableSort.direction].join('|'),
   )
-  const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : visibleLineUiStates
+  const [desktopLinePage, setDesktopLinePage] = useState(1)
+  const desktopLinePageCount = Math.max(1, Math.ceil(visibleLineUiStates.length / 10))
+  const currentDesktopLinePage = Math.min(desktopLinePage, desktopLinePageCount)
+  const desktopPageLines = visibleLineUiStates.slice((currentDesktopLinePage - 1) * 10, currentDesktopLinePage * 10)
+  useEffect(() => { setDesktopLinePage(1) }, [searchValue, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, tableSort])
+  useEffect(() => { if (desktopLinePage > desktopLinePageCount) setDesktopLinePage(desktopLinePageCount) }, [desktopLinePage, desktopLinePageCount])
+  const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : desktopPageLines
 
   const activeDetailEntry = useMemo(() => (
     lineUiStates.find((entry) => String(entry.line.id) === String(receiptLineId || activeDetailLineId))
@@ -1990,7 +1997,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const allVisibleSelected = renderedLineUiStates.length > 0 && renderedLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
   const mobileSelectableLineIds = isMobileViewport
-    ? lineUiStates.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
+    ? mobileLinePagination.pageItems.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
     : []
   const allMobileLinesSelected = mobileSelectableLineIds.length > 0 && mobileSelectableLineIds.every((id) => selectedLineIds.includes(id))
 
@@ -2019,11 +2026,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
               </div>
             )}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              {!isMobileViewport ? <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button> : null}
-              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">{isMobileViewport ? 'Pas standaardlocatie toe' : 'Locatie toepassen'}</Button>
-              <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
-            </div>
+            {!isMobileViewport ? (
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
+                <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Locatie toepassen</Button>
+                <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
+              </div>
+            ) : null}
           </div>
 
           {!isMobileViewport ? (
@@ -2032,26 +2041,28 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {isMobileViewport ? (
             <>
-              <label className="rz-mobile-unpack-select-all-lines" data-testid="mobile-unpack-select-all-lines">
-                <input
-                  type="checkbox"
-                  checked={allMobileLinesSelected}
-                  onChange={toggleSelectAllMobileLines}
-                  aria-label="Selecteer alle artikelregels"
-                />
-                <span>Alle artikelen</span>
-              </label>
               <section className="rz-mobile-unpack-search-filter" aria-label="Bonregels zoeken en filteren" data-testid="mobile-unpack-search-filter">
-              <input
-                className="rz-input"
-                type="search"
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="Zoek of filter bonregels"
-                aria-label="Zoek of filter bonregels"
-                data-testid="mobile-unpack-search-filter-input"
-              />
+                <input
+                  className="rz-input"
+                  type="search"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  placeholder="Zoek of filter bonregels"
+                  aria-label="Zoek of filter bonregels"
+                  data-testid="mobile-unpack-search-filter-input"
+                />
               </section>
+              <div className="rz-mobile-table-select-row">
+                <label className="rz-mobile-unpack-select-all-lines" data-testid="mobile-unpack-select-all-lines">
+                  <input
+                    type="checkbox"
+                    checked={allMobileLinesSelected}
+                    onChange={toggleSelectAllMobileLines}
+                    aria-label="Selecteer alle artikelregels"
+                  />
+                  <span>Alles</span>
+                </label>
+              </div>
             </>
           ) : null}
 
@@ -2066,7 +2077,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
-                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
+                    {!isMobileViewport ? <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" /> : null}
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
@@ -2219,7 +2230,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
-            {isMobileViewport ? <MobilePaginationControls {...mobileLinePagination} ariaLabel="Paginering Bonregels Uitpakken" /> : null}
+            {isMobileViewport ? <MobilePaginationControls {...mobileLinePagination} ariaLabel="Paginering Bonregels Uitpakken" /> : desktopLinePageCount > 1 ? <Pagination page={currentDesktopLinePage} pageCount={desktopLinePageCount} onPageChange={setDesktopLinePage} /> : null}
+            {isMobileViewport ? (
+              <div className="rz-mobile-table-bulk-actions" data-testid="mobile-unpack-detail-bulk-actions">
+                <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Pas standaardlocatie toe</Button>
+                <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
+              </div>
+            ) : null}
 
           </>) : null}
 

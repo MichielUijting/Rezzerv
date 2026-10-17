@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
@@ -26,6 +27,11 @@ export default function PlatformSupportPage() {
   const initialHouseholdId = searchParams.get('householdId') || ''
   const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
   const [threads, setThreads] = useState([])
+  const [threadPage, setThreadPage] = useState(1)
+  const threadPageCount = Math.max(1, Math.ceil(threads.length / 10))
+  const currentThreadPage = Math.min(threadPage, threadPageCount)
+  const visibleThreads = threads.slice((currentThreadPage - 1) * 10, currentThreadPage * 10)
+  useEffect(() => { if (threadPage > threadPageCount) setThreadPage(threadPageCount) }, [threadPage, threadPageCount])
   const [selected, setSelected] = useState(null)
   const [status, setStatus] = useState('Open')
   const [householdId, setHouseholdId] = useState(initialHouseholdId)
@@ -60,6 +66,7 @@ export default function PlatformSupportPage() {
       const data = await listPlatformThreads({ status, householdId })
       const items = data?.items || []
       setThreads(items)
+      if (showBusy) setThreadPage(1)
       if (selected?.thread?.id) {
         const stillVisible = items.some((thread) => thread.id === selected.thread.id)
         setSelected(stillVisible ? await readPlatformThread(selected.thread.id) : null)
@@ -216,7 +223,7 @@ export default function PlatformSupportPage() {
           {busy && !threads.length ? <p>Bezig met laden…</p> : null}
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
-            {threads.map((thread) => (
+            {visibleThreads.map((thread) => (
               <div key={thread.id} className={`rz-support-thread-row ${isUnread(thread) ? 'rz-support-thread-row--unread' : ''}`}>
                 <button type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
                   <strong>{thread.subject}</strong>
@@ -227,6 +234,7 @@ export default function PlatformSupportPage() {
               </div>
             ))}
           </div>
+          {threadPageCount > 1 ? <Pagination page={currentThreadPage} pageCount={threadPageCount} onPageChange={setThreadPage} /> : null}
         </Card>
 
         <Card>
