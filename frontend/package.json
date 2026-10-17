@@ -1,7 +1,7 @@
 {
   "name": "rezzerv-frontend",
   "private": true,
-  "version": "1.12.278",
+  "version": "1.12.279",
   "type": "module",
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
