@@ -75,4 +75,8 @@ assert.doesNotMatch(mobileSource, /Alles naar Winkelen/i)
 assert.doesNotMatch(mobileSource, /Naar Winkelen/i)
 
 
+const selectToolbar = mobileSource.indexOf('aria-label="Bijna op selectie en verwijderen"')
+const listView = mobileSource.indexOf('aria-label="Bijna-op-artikelen"')
+assert.ok(selectToolbar > 0 && listView > selectToolbar, 'Selectie en verwijderen moeten boven de lijst staan')
+assert.match(mobileSource, /Verborgen meldingen herstellen/)
 console.log('MOBILE_ALMOST_OUT_CONTRACT_GREEN')
