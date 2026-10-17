@@ -255,7 +255,8 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     let active = true
     setDashboard(null)
     setError('')
-    if (!String(context?.active_household_id || '').trim()) {
+    if (!String(context?.active_household_id || '').trim()
+      || (!dashboard && /alleen beschikbaar binnen een huishouden/i.test(error))) {
       return () => { active = false }
     }
     fetchHouseholdDashboard()
