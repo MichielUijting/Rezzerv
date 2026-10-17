@@ -238,6 +238,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
 
+        <section className="rz-mobile-inventory-toolbar rz-mobile-almost-out-bulk-top" aria-label="Bijna op selectie en verwijderen" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <label style={{ display: 'inline-flex', gap: 7, alignItems: 'center' }}><input type="checkbox" checked={pageSelected} onChange={togglePageSelection} disabled={bulkBusy || !currentPageIds.length} /> Alles op pagina</label>
+          <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
+        </section>
         {!error && filteredRows.length > 0 ? (
           <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {almostOutPagination.pageItems.map((row) => {
@@ -307,12 +311,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
         <MobilePaginationControls {...almostOutPagination} ariaLabel="Paginering Bijna op" />
-        <section className="rz-mobile-inventory-state" aria-label="Bijna op bulkacties" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <label><input type="checkbox" checked={pageSelected} onChange={togglePageSelection} disabled={bulkBusy || !currentPageIds.length} /> Alles op pagina</label>
+        <section className="rz-mobile-inventory-state" aria-label="Overige Bijna op bulkacties" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
-          <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
           <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
-          <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verborgen herstellen</Button>
+          <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verborgen meldingen herstellen</Button>
         </section>
       </main>
     </div>
