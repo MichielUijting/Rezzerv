@@ -125,3 +125,13 @@ De aangeleverde meetfile bevatte geen `kassa_list_timing`, `inventory_preview_ti
 - Mobiele Voorraad: initiële voorraad-GET is niet meer afhankelijk van volledige artikelgroepassignments. Groepslabels volgen asynchroon zodra beschikbaar; een toekomstige/oudere request mag een nieuwere pagina of mutatie niet stil overschrijven.
 
 Openstaande verificatie: mobiele PO-test op de nieuwste head, gerichte normale backend-/frontendchecks, en eventueel frontend/backend prestatiemetingen indien de initiële voorraadweergave toch traag blijft. Superuser en regulier huishouden moeten beide afzonderlijk getest worden. Voor Ready blijven definitieve kandidaat-SHA, zesvoudige patchsync en F7-gates vereist.
+
+## Bijna op — herstelknop en overdracht (PO-feedback)
+
+- De herstelknop heet **Verwijderingen ongedaan maken** en staat in zowel desktop- als mobiele weergave **buiten, onder** het tabel-/lijstpaneel, op de lichtgroene schermachtergrond.
+- Een artikel wordt pas uit Bijna op verborgen **nadat** de afzonderlijke toevoeging aan Boodschappen succesvol is afgerond. Hiervoor is een huishoudgescopeerde endpoint `POST /api/households/{household_id}/almost-out/mark-in-shopping` toegevoegd voor toegestane huishoudleden. Het betreft een reversibele zichtbaarheidstoestand `almost_out_hidden`, **geen** verwijdering van huishoudartikel of voorraaddata.
+- Zowel op desktop als mobiel wordt de Bijna op-lijst na de transfer opnieuw van de backend opgehaald, ook als een bulkoverdracht gedeeltelijk is geslaagd. Hierdoor blijven al overgezette artikelen niet als oude regels staan.
+- De herstelknop herstelt nog steeds alle verborgen Bijna op-signalen van het betreffende huishouden wanneer zij aan de normale criteria voldoen. Dit kan dus ook een eerder naar Boodschappen overgezet artikel opnieuw zichtbaar maken; het artikel wordt hierdoor niet uit Boodschappen verwijderd.
+- Gerichte broncodecontracttest controleert de volgorde: eerst Shopping-toevoeging, pas daarna verbergen; en positionering van de herstelknop.
+
+Nog te bewijzen: nieuwe CI-checks, functionele PO-test op desktop/mobiel en vereiste definitieve F7-kandidaatcontrole.
