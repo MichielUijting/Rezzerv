@@ -605,13 +605,9 @@ export default function ShoppingPage() {
                 </div>
               </div>
 
-              <Button
-                type="button"
-                onClick={addSelectedResult}
-                disabled={saving || !selectedResult}
-              >
-                Toevoegen
-              </Button>
+              <div style={{ paddingTop: '26px', alignSelf: 'start' }}>
+                <Button type="button" onClick={addSelectedResult} disabled={saving || !selectedResult}>Toevoegen</Button>
+              </div>
             </div>
 
             {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
