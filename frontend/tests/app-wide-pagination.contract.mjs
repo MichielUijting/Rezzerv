@@ -171,6 +171,9 @@ for (const [screen, source] of [['desktop', almostOutPage], ['mobiel', mobileAlm
   assert.match(source, /handleBulkAction\('shopping'\)/, screen)
   assert.match(source, /handleBulkAction\('restore'\)/, screen)
 }
+const externalReceiptItems = readFileSync(new URL('../src/features/externalDatabases/ReceiptItemsOverview.jsx', import.meta.url), 'utf8')
+assert.match(externalReceiptItems, /<Pagination page=\{currentPage\}/)
+assert.doesNotMatch(externalReceiptItems, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
 const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
 assert.match(inventoryPage, /const inventoryPromise = Promise\.all\(/)
 assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
