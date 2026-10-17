@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
+import Pagination from '../../ui/Pagination.jsx'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import CatalogProductImage from './CatalogProductImage'
@@ -362,11 +363,7 @@ export default function CatalogPage() {
             </Table>
 
             {pageCount > 1 ? <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
-              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(1)}>Eerste</Button>
-              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
-              <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(pageCount)}>Laatste</Button>
+              <Pagination page={currentPage} pageCount={pageCount} onPageChange={goToPage} disabled={isLoading} />
               <span className="rz-external-databases-muted">{total} artikelen</span>
             </div> : null}
           </div>
