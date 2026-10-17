@@ -11977,8 +11977,11 @@ def list_unpack_start_batches(
 @app.get("/api/receipts")
 def list_receipts(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
+    timing_started = perf_counter()
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    sources_done = perf_counter()
     _auto_approve_pending_receipts_for_household(effective_household_id)
+    approvals_done = perf_counter()
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -12046,6 +12049,8 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
             {"household_id": effective_household_id},
         ).mappings().all()
 
+    query_done = perf_counter()
+
     def normalize_key_part(value):
         return re.sub(r'\s+', ' ', str(value or '').strip().lower())
 
@@ -12072,6 +12077,17 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
         deduped_items.append(serialized)
+    final_done = perf_counter()
+    if final_done - timing_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "kassa_list_timing total_ms=%.1f sources_ms=%.1f approvals_ms=%.1f query_ms=%.1f serialize_ms=%.1f rows=%d",
+            (final_done - timing_started) * 1000,
+            (sources_done - timing_started) * 1000,
+            (approvals_done - sources_done) * 1000,
+            (query_done - approvals_done) * 1000,
+            (final_done - query_done) * 1000,
+            len(deduped_items),
+        )
     return {"items": deduped_items}
 
 
