@@ -31,11 +31,16 @@ for (const [name, source] of [
   ['Bijna op', almostOut],
   ['Boodschappen', shopping],
   ['Meldingen', support],
-  ['Uitpakken', receipts],
 ]) {
   assert.match(source, /useMobilePagination\(/, name + ' moet mobiele paginering gebruiken')
   assert.match(source, /MobilePaginationControls/, name + ' moet de centrale pagineringscomponent tonen')
 }
+
+// Uitpakken gebruikt bewust server-side paginering: uitsluitend de actuele
+// tien bonnen ophalen, maar wel dezelfde centrale mobiele paginering tonen.
+assert.match(receipts, /pageCount: Math\.max\(1, Math\.ceil\(total \/ 10\)\)/)
+assert.match(receipts, /const mobileVisibleItems = listItems/)
+assert.match(receipts, /<MobilePaginationControls \{\.\.\.mobileReceiptPagination\}/)
 
 assert.match(catalog, /const PAGE_SIZE = 10/)
 assert.match(catalog, /<Pagination page=\{currentPage\} pageCount=\{pageCount\}/)
