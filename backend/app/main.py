@@ -251,6 +251,7 @@ def _dev_inventory_preview_row(row):
 
 @app.get("/api/dev/inventory-preview")
 def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+    timing_started = perf_counter()
     runtime_context = require_household_context(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     effective_household_id = household_context.active_household_id
@@ -275,6 +276,7 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
         ), {"household_id": effective_household_id}).mappings().all()
+        inventory_query_done = perf_counter()
         gpc_by_article = dutch_gpc_by_household_article(
             conn,
             effective_household_id,
@@ -288,7 +290,15 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             for row in rows
         ]
 
-    return {"rows": [_dev_inventory_preview_row(row) for row in projected_rows]}
+    result_rows = [_dev_inventory_preview_row(row) for row in projected_rows]
+    timing_done = perf_counter()
+    if timing_done - timing_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "inventory_preview_timing total_ms=%.1f inventory_sql_ms=%.1f gpc_and_project_ms=%.1f rows=%d",
+            (timing_done-timing_started)*1000, (inventory_query_done-timing_started)*1000,
+            (timing_done-inventory_query_done)*1000, len(result_rows),
+        )
+    return {"rows": result_rows}
 
 
 def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, space_name: str | None):
@@ -13503,9 +13513,18 @@ def delete_household_article_endpoint(household_article_id: str, payload: Househ
 def get_household_almost_out_endpoint(household_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization, str(household_id or '').strip())
     resolved_household_id = str(context.get('active_household_id') or household_id or '').strip()
+    timing_started = perf_counter()
     with engine.begin() as conn:
         settings = get_household_almost_out_settings(conn, resolved_household_id)
+        settings_done = perf_counter()
         items = build_almost_out_items(conn, resolved_household_id)
+        completed = perf_counter()
+        if completed - timing_started >= 0.5:
+            logging.getLogger("uvicorn.error").info(
+                "almost_out_timing total_ms=%.1f settings_ms=%.1f evaluate_ms=%.1f items=%d",
+                (completed-timing_started)*1000, (settings_done-timing_started)*1000,
+                (completed-settings_done)*1000, len(items),
+            )
         return {
             'household_id': resolved_household_id,
             'settings': settings,
