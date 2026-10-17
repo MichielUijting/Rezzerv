@@ -325,6 +325,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
 def _catalog_where(
     expressions: dict[str, str],
     name: str,
+    search: str,
     brand: str,
     primary_gtin: str,
     catalog_kind: str,
@@ -355,6 +356,20 @@ def _catalog_where(
         if value:
             conditions.append(f"LOWER({expressions[key]}) LIKE :{key}")
             params[key] = f"%{value}%"
+    # Free text search across all visible catalog attributes, not just name.
+    # Explicit per-column filters above continue to work independently.
+    normalized_search = (search if isinstance(search, str) else "").strip().lower()
+    if normalized_search:
+        searchable_keys = (
+            "name", "brand", "primary_gtin", "catalog_kind",
+            "product_type", "gpc_brick_code", "gpc_brick_name",
+            "gpc_class_name", "gpc_family_name", "source",
+        )
+        conditions.append("(" + " OR ".join(
+            f"LOWER(CAST({expressions[key]} AS TEXT)) LIKE :search"
+            for key in searchable_keys
+        ) + ")")
+        params["search"] = f"%{normalized_search}%"
     household_value = (
         household_article_count if isinstance(household_article_count, str) else ""
     ).strip()
@@ -394,6 +409,7 @@ def _catalog_row(global_product_id: str) -> dict[str, Any] | None:
 @router.get("")
 def list_catalog(
     name: str = Query(default="", max_length=200),
+    search: str = Query(default="", max_length=200),
     brand: str = Query(default="", max_length=200),
     primary_gtin: str = Query(default="", max_length=200),
     catalog_kind: str = Query(default="", max_length=50),
@@ -421,6 +437,7 @@ def list_catalog(
     where_sql, params = _catalog_where(
         expressions,
         name,
+        search,
         brand,
         primary_gtin,
         catalog_kind,
