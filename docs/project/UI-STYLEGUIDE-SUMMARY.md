@@ -1087,3 +1087,9 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - Gebruik waar toepasselijk de gedeelde CSS-klassen `rz-mobile-table-select-row` en `rz-mobile-table-bulk-actions`, niet per scherm verschillende selectiebalken.
 - Toepassing op de mobiele bulkoverzichten Uitpakken (zowel bonnenlijst als bonregels in het detail), Kassa-bonnen, Kassa-bonregels en Bijna op. De bonregels in Uitpakken selecteren met **Alles** alleen de huidige pagina; selectie op andere pagina's blijft intact. Schermen zonder bulkselectie (zoals mobiele Voorraad en Boodschappen) krijgen niet kunstmatig een selectievakje.
 - **Bijna op** behoudt de aparte handeling **Verwijderingen ongedaan maken** onder het tabelpaneel op de groene schermachtergrond; deze handeling valt niet onder geselecteerde-rijen-bulkacties.
+
+## PR #590 — compact mobiel Dashboard (17 oktober 2026)
+
+- In de vijf bovenste status-/navigatietegels staat de **telling bovenaan** en de omschrijving **onderaan** in de tegel, gecentreerd; kleuren, tellerbronnen en navigatie blijven gelijk.
+- In iedere mobiele dashboardgrafiek staan de **titel links en de bijbehorende waarde rechts op dezelfde eerste regel**. De bestaande toelichting volgt er direct onder in **zwart**. De grafiek zelf en de vier periode-/drilldowncontracten blijven ongewijzigd.
+- De gedeelde `mobileHome.css`-grid gebruikt `title value` gevolgd door `detail detail` en `chart chart`. Er wordt geen afzonderlijke mobiele datalogica of tweede bron voor bedragen toegevoegd.
