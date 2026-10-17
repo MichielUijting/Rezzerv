@@ -71,6 +71,14 @@ assert.match(homeCss, /\.rz-dashboard-status\s*\{[\s\S]*grid-template-columns:re
 assert.match(homeCss, /\.rz-dashboard-grid\s*\{/)
 assert.match(homeCss, /\.rz-dashboard-card\s*\{/)
 assert.match(homeCss, /\.rz-dashboard-period-switch\s*\{/)
+// Extra verdichting: geen omliggend wit paneel, wel afzonderlijke interactieve tegels.
+assert.match(homeCss, /\.rz-dashboard-status\s*\{[^}]*background:transparent/)
+assert.match(homeCss, /\.rz-dashboard-period-switch\s*\{[^}]*background:transparent/)
+assert.match(homeCss, /\.rz-dashboard-comparison-chart\s*\{[^}]*margin-top:0/)
+assert.match(homeCss, /\.rz-dashboard-card\s*\{[^}]*padding:8px 10px/)
+assert.match(homeCss, /\.rz-mobile-home-greeting\{[^}]*display:flex/)
+assert.equal((home.match(/className="rz-mobile-home-greeting"/g) || []).length, 2)
+assert.match(home, /<h1 className="rz-mobile-home-welcome">Welkom \{name\}<\/h1>\s*<p className="rz-mobile-home-subtitle">\{welcomeText\}<\/p>/)
 // Compacte mobiele dashboardpresentatie: cijfers boven labels, grafiekwaarde naast titel.
 assert.match(homeCss, /\.rz-dashboard-status button\s*\{[\s\S]*align-content:space-between/)
 assert.match(homeCss, /\.rz-dashboard-status strong\{[^}]*align-self:start/)
