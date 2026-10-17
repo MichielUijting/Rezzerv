@@ -689,5 +689,15 @@ def complete_active_shopping_list(conn: Connection, household_id: str, completed
         SET status = 'completed', completed_at = :completed_at, completed_by = :completed_by
         WHERE id = :id AND household_id = :household_id AND status = 'active'
     """), {"completed_at": completed_at, "completed_by": str(completed_by or ""), "id": active["id"], "household_id": str(household_id)})
+    # Bijna op-meldingen die tijdens deze boodschappenronde zijn verborgen,
+    # worden pas bij afronden weer zichtbaar (mits de voorraadregel dat toestaat).
+    # De subquery begrenst dit tot canonieke artikelen van het actieve huishouden.
+    conn.execute(text("""
+        DELETE FROM household_article_settings
+        WHERE setting_key = 'almost_out_hidden'
+          AND household_article_id IN (
+              SELECT id FROM household_articles WHERE household_id = :household_id
+          )
+    """), {"household_id": str(household_id)})
     next_active = get_or_create_active_list(conn, household_id)
     return {"status": "completed", "completed_list_id": active["id"], "completed_at": completed_at, "completed_item_count": item_count, "active_list_id": next_active["id"], "items": []}
