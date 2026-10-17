@@ -13534,7 +13534,9 @@ def hide_household_almost_out_items(
     context = require_household_admin_context(authorization, str(household_id or '').strip())
     effective_household_id = str(context['active_household_id'])
     article_ids = list(dict.fromkeys(str(value or '').strip() for value in payload.article_ids))
-    article_ids = [value for value in article_ids if value][:100]
+    article_ids = [value for value in article_ids if value]
+    if len(article_ids) > 100:
+        raise HTTPException(status_code=400, detail='Verwerk maximaal 100 Bijna op-artikelen per keer')
     if not article_ids:
         raise HTTPException(status_code=400, detail='Selecteer eerst artikelen in Bijna op')
     with engine.begin() as conn:
