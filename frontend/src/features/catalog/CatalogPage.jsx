@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -71,6 +71,7 @@ export default function CatalogPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const hasRequestedCatalogRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -123,7 +124,8 @@ export default function CatalogPage() {
       } finally {
         if (!cancelled) setIsLoading(false)
       }
-    }, 250)
+    }, hasRequestedCatalogRef.current ? 250 : 0)
+    hasRequestedCatalogRef.current = true
     return () => {
       cancelled = true
       window.clearTimeout(timer)
