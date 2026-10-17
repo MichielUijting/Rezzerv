@@ -6,7 +6,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
   const navigationDisabled = disabled || totalPages <= 1
   const resolvedLabels = {
     first: labels?.first ?? '1',
-    previous: labels?.previous ?? '−',
+    previous: labels?.previous ?? '-',
     next: labels?.next ?? '+',
     last: labels?.last ?? (Number.isFinite(Number(pageCount)) && Number(pageCount) > 0 ? String(totalPages) : 'Einde'),
   }
@@ -33,8 +33,8 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
       >
         {resolvedLabels.previous}
       </Button>
-      <span className="rz-pagination-page-indicator" aria-current="page">
-        Pagina {currentPage} van {totalPages}
+      <span className="rz-pagination-page-indicator" aria-current="page" aria-label={`Pagina ${currentPage} van ${totalPages}`}>
+        {currentPage}
       </span>
       <Button
         type="button"
