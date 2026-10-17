@@ -4448,7 +4448,9 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         {'household_id': str(household_id)},
     ).mappings().all()
 
+    total_active = len(article_rows)
     if not article_rows:
+        logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
 
     # Without prediction, an article with no minimum stock can never appear
@@ -4461,6 +4463,8 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         if not article_rows:
             return []
 
+    eligible_count = len(article_rows)
+    hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
     gpc_by_article = dutch_gpc_by_household_article(
         conn,
@@ -4491,6 +4495,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     for article_row in article_rows:
         article_id = str(article_row.get('id') or '').strip()
         if settings_map_by_article.get(article_id, {}).get('almost_out_hidden') is True:
+            hidden_count += 1
             continue
         evaluation = evaluate_household_article_almost_out(
             conn,
@@ -4503,6 +4508,10 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         if evaluation.get('include_in_almost_out'):
             items.append(evaluation)
 
+    logging.getLogger("uvicorn.error").info(
+        "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
+        total_active, eligible_count, hidden_count, len(items),
+    )
     return items
 
 
