@@ -52,21 +52,26 @@ export async function moveAlmostOutToShopping(rows) {
   return transferred
 }
 
-function householdId() {
-  const id = String(readStoredAuthContext()?.active_household_id || '').trim()
-  if (!id) throw new Error('Het actieve huishouden ontbreekt')
-  return encodeURIComponent(id)
+async function householdId() {
+  const storedId = String(readStoredAuthContext()?.active_household_id || '').trim()
+  if (storedId) return encodeURIComponent(storedId)
+  const response = await almostOutRequest('/api/household', { method: 'GET' })
+  const resolvedId = String(response?.active_household_id || response?.id || '').trim()
+  if (!resolvedId) throw new Error('Het actieve huishouden ontbreekt')
+  return encodeURIComponent(resolvedId)
 }
 
-export function hideAlmostOutRows(rows) {
-  return almostOutRequest('/api/households/' + householdId() + '/almost-out/hide', {
+export async function hideAlmostOutRows(rows) {
+  const id = await householdId()
+  return almostOutRequest('/api/households/' + id + '/almost-out/hide', {
     method: 'POST',
     body: JSON.stringify({ article_ids: rows.map((row) => row.id) }),
   })
 }
 
-export function restoreAlmostOutRows() {
-  return almostOutRequest('/api/households/' + householdId() + '/almost-out/restore', {
+export async function restoreAlmostOutRows() {
+  const id = await householdId()
+  return almostOutRequest('/api/households/' + id + '/almost-out/restore', {
     method: 'POST',
   })
 }
