@@ -319,3 +319,13 @@
   gap: 8px;
   margin-top: 12px;
 }
+
+/* Existing screen wrappers must not override the shared alignment. */
+.rz-mobile-unpack-actions.rz-mobile-table-bulk-actions,
+.rz-mobile-inventory-state.rz-mobile-table-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
