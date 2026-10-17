@@ -47,6 +47,13 @@ export async function moveAlmostOutToShopping(rows) {
         source_id: row.id,
       }),
     })
+    // Only hide a Bijna op row AFTER Shopping has accepted this article.
+    // Persist the state so it stays hidden after refresh/navigation.
+    const id = await householdId()
+    await almostOutRequest('/api/households/' + id + '/almost-out/mark-in-shopping', {
+      method: 'POST',
+      body: JSON.stringify({ article_ids: [row.id] }),
+    })
     transferred += 1
   }
   return transferred
