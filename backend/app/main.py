@@ -13572,6 +13572,44 @@ def hide_household_almost_out_items(
     return {'hidden': len(article_ids)}
 
 
+@app.post("/api/households/{household_id}/almost-out/mark-in-shopping")
+def mark_household_almost_out_items_in_shopping(
+    household_id: str,
+    payload: AlmostOutVisibilityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    # Moving a household article into Shopping is permitted for household
+    # members; unlike manual "Verwijderen", it must not require admin rights.
+    context = require_household_context(authorization, str(household_id or '').strip())
+    if str(context.get('display_role') or '').strip().lower() not in {'admin', 'lid'}:
+        raise HTTPException(status_code=403, detail='Geen toestemming om Bijna op te verwerken')
+    active_household_id = str(context['active_household_id'])
+    article_ids = list(dict.fromkeys(str(value or '').strip() for value in payload.article_ids))
+    article_ids = [value for value in article_ids if value]
+    if not article_ids or len(article_ids) > 100:
+        raise HTTPException(status_code=400, detail='Kies 1 tot 100 artikelen')
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id FROM household_articles
+                WHERE household_id = :household_id AND id IN :ids
+                  AND COALESCE(status, 'active') = 'active'
+            """).bindparams(bindparam('ids', expanding=True)),
+            {'household_id': active_household_id, 'ids': article_ids},
+        ).mappings().all()
+        if {str(row['id']) for row in rows} != set(article_ids):
+            raise HTTPException(status_code=404, detail='Artikel niet beschikbaar in dit huishouden')
+        for article_id in article_ids:
+            conn.execute(text("""
+                INSERT INTO household_article_settings
+                  (id, household_article_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:id, :article_id, 'almost_out_hidden', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(household_article_id, setting_key)
+                DO UPDATE SET setting_value = 'true', updated_at = CURRENT_TIMESTAMP
+            """), {'id': str(uuid.uuid4()), 'article_id': article_id})
+    return {'hidden': len(article_ids)}
+
+
 @app.post("/api/households/{household_id}/almost-out/restore")
 def restore_household_almost_out_items(household_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_admin_context(authorization, str(household_id or '').strip())
