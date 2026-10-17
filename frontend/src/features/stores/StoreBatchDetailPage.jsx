@@ -1997,7 +1997,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const allVisibleSelected = renderedLineUiStates.length > 0 && renderedLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
   const mobileSelectableLineIds = isMobileViewport
-    ? lineUiStates.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
+    ? mobileLinePagination.pageItems.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
     : []
   const allMobileLinesSelected = mobileSelectableLineIds.length > 0 && mobileSelectableLineIds.every((id) => selectedLineIds.includes(id))
 
