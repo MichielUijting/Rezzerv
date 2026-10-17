@@ -233,7 +233,7 @@ export default function AlmostOutPage() {
     try {
       if (action === 'shopping') {
         const count = await moveAlmostOutToShopping(selectedRows)
-        setBulkMessage(`${count} artikel(en) toegevoegd aan Boodschappen.`)
+        setBulkMessage(`${count} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
       } else {
         if (action === 'hide') await hideAlmostOutRows(selectedRows)
         else await restoreAlmostOutRows()
@@ -243,11 +243,27 @@ export default function AlmostOutPage() {
         if (!response.ok) throw new Error(payload?.detail || 'Bijna op kon niet worden bijgewerkt')
         setItems(Array.isArray(payload.items) ? payload.items : [])
         setSelectedIds([])
-        setBulkMessage(action === 'hide' ? 'Geselecteerde meldingen verborgen. Voorraad is ongewijzigd.' : 'Verborgen meldingen zijn hersteld.')
+        setBulkMessage(action === 'hide' ? 'Geselecteerde meldingen verborgen. Voorraad is ongewijzigd.' : 'Verwijderingen ongedaan gemaakt.')
       }
     } catch (err) {
       setError(String(err?.message || 'Bulkverwerking mislukt'))
     } finally {
+      // A partial transfer may already have succeeded before an error.
+      // Re-read the authoritative list rather than leaving transferred
+      // rows visible or silently discarding a user's selection.
+      if (action === 'shopping') {
+        try {
+          const householdId = await resolveHouseholdId()
+          const response = await fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/almost-out`)
+          if (response.ok) {
+            const payload = await response.json()
+            setItems(Array.isArray(payload.items) ? payload.items : [])
+            setSelectedIds([])
+          }
+        } catch {
+          // Keep the original transfer error; a later refresh reconciles.
+        }
+      }
       setBulkBusy(false)
     }
   }
@@ -330,9 +346,11 @@ export default function AlmostOutPage() {
               <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
               <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
               <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
-              <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verborgen meldingen herstellen</Button>
             </div>
         </ScreenCard>
+        <div className="rz-stock-table-actions" style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px' }}>
+          <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verwijderingen ongedaan maken</Button>
+        </div>
       </div>
     </AppShell>
   )
