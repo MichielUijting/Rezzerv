@@ -67,6 +67,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   }
 
   useEffect(() => {
+    if (readStoredAuthContext()?.context_type !== 'regular') {
+      setIsLoading(false)
+      return
+    }
     reload()
   }, [])
 
@@ -152,6 +156,20 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   function clearFilters() {
     setQuery('')
     setLocationFilter('')
+  }
+
+  // Platform/Superuser sessions have no household inventory scope.
+  if (readStoredAuthContext()?.context_type !== 'regular') {
+    return (
+      <div className="rz-screen rz-mobile-inventory-screen" data-testid="mobile-almost-out-page">
+        <MobileModuleHeader title="Bijna op" testId="mobile-almost-out-header" />
+        <main className="rz-mobile-inventory-content">
+          <section className="rz-mobile-inventory-state" role="status">
+            Bijna op is alleen beschikbaar binnen een geselecteerd huishouden.
+          </section>
+        </main>
+      </div>
+    )
   }
 
   return (
