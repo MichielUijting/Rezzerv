@@ -184,6 +184,7 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 import logging
+from time import perf_counter
 from sqlalchemy import inspect as sa_inspect, text, bindparam
 
 app = FastAPI()
