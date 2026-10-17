@@ -106,25 +106,27 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
     .sort((a, b) => a.firstSeenIndex - b.firstSeenIndex)
 }
 
-async function loadMobileInventory() {
-  const [inventoryResponse, articleGroupsResponse] = await Promise.all([
-    fetchJsonWithAuth(`/api/dev/inventory-preview?_ts=${Date.now()}`, { method: 'GET', cache: 'no-store' }),
-    fetchJsonWithAuth(`/api/article-groups/household-articles?_ts=${Date.now()}`, { method: 'GET', cache: 'no-store' }),
-  ])
-
+async function loadMobileInventory(onArticleGroupsLoaded = () => {}) {
+  // Rendering the first page must wait for inventory, not for a separate
+  // article-group dropdown/assignment service.
+  const groupPromise = fetchJsonWithAuth(
+    `/api/article-groups/household-articles?_ts=${Date.now()}`,
+    { method: 'GET', cache: 'no-store' },
+  ).then(async (response) => response.ok ? (await response.json().catch(() => ({}))) : {}).catch(() => ({}))
+  const inventoryResponse = await fetchJsonWithAuth(
+    `/api/dev/inventory-preview?_ts=${Date.now()}`,
+    { method: 'GET', cache: 'no-store' },
+  )
   const inventoryData = await inventoryResponse.json().catch(() => ({}))
   if (!inventoryResponse.ok) {
     throw new Error(inventoryData?.detail || 'Voorraad kon niet worden geladen')
   }
-
-  const articleGroupsData = articleGroupsResponse.ok
-    ? await articleGroupsResponse.json().catch(() => ({}))
-    : {}
-
-  return buildMobileInventoryRows(
-    Array.isArray(inventoryData?.rows) ? inventoryData.rows : [],
-    Array.isArray(articleGroupsData?.items) ? articleGroupsData.items : [],
-  )
+  const liveRows = Array.isArray(inventoryData?.rows) ? inventoryData.rows : []
+  groupPromise.then((groups) => {
+    const assignmentItems = Array.isArray(groups?.items) ? groups.items : []
+    onArticleGroupsLoaded(buildMobileInventoryRows(liveRows, assignmentItems))
+  })
+  return buildMobileInventoryRows(liveRows)
 }
 
 export default function MobileVoorraad({ locationTrackingEnabled = true }) {
@@ -145,7 +147,11 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setIsLoading(true)
     setError('')
     try {
-      setRows(await loadMobileInventory())
+      setRows(await loadMobileInventory((updatedRows) => {
+        // Secondary enrichment may arrive after first render. Never replace
+        // current inventory after the user has started an in-flight mutation.
+        if (!mutationLockRef.current) setRows(updatedRows)
+      }))
     } catch (err) {
       setRows([])
       setError(String(err?.message || 'Voorraad kon niet worden geladen'))
