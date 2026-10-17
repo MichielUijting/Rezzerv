@@ -67,31 +67,8 @@ def main() -> int:
 
     with test_engine.begin() as conn:
         _create_shopping_list_fixture(conn)
-        # Bijna op is huishoudartikel-gebonden; test dat afronden uitsluitend
-        # de verborgen meldingen van het afgeronde huishouden vrijgeeft.
-        conn.execute(text("""
-            CREATE TABLE household_articles (
-                id TEXT PRIMARY KEY, household_id TEXT NOT NULL
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_article_settings (
-                id TEXT PRIMARY KEY,
-                household_article_id TEXT NOT NULL,
-                setting_key TEXT NOT NULL,
-                setting_value TEXT NOT NULL
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO household_articles (id, household_id) VALUES
-              ('article-hh0', '0'), ('article-hh1', '1')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_article_settings (id, household_article_id, setting_key, setting_value) VALUES
-              ('hide-hh0', 'article-hh0', 'almost_out_hidden', 'true'),
-              ('hide-hh1', 'article-hh1', 'almost_out_hidden', 'true'),
-              ('other-hh0', 'article-hh0', 'min_stock', '2')
-        """))
+        # Bijna op blijft huishoudartikel-gebonden; de instellingen worden
+        # na de bestaande canonieke household_articles-fixture aangemaakt.
         conn.execute(text("""
             CREATE TABLE inventory (
                 id TEXT PRIMARY KEY,
@@ -179,6 +156,25 @@ def main() -> int:
             ) VALUES (
                 'household-article-melk', '0', 'Melk', 'Zuivel', 'Halfvolle melk', 'global-product-melk'
             )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_articles(id, household_id, article_name) VALUES
+              ('article-hh0', '0', 'Testartikel A'),
+              ('article-hh1', '1', 'Testartikel B')
+        """))
+        conn.execute(text("""
+            CREATE TABLE household_article_settings (
+                id TEXT PRIMARY KEY,
+                household_article_id TEXT NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_article_settings (id, household_article_id, setting_key, setting_value) VALUES
+              ('hide-hh0', 'article-hh0', 'almost_out_hidden', 'true'),
+              ('hide-hh1', 'article-hh1', 'almost_out_hidden', 'true'),
+              ('other-hh0', 'article-hh0', 'min_stock', '2')
         """))
         conn.execute(text("""
             CREATE TABLE article_groups (
