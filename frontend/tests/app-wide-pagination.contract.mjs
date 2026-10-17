@@ -178,4 +178,14 @@ const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.m
 assert.match(inventoryPage, /const inventoryPromise = Promise\.all\(/)
 assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
 
+// Regression: catalog page reads never launch a full write/backfill of all
+// products, and unavailable receipt previews must not render as blank panels.
+const catalogRouteSource = readFileSync(new URL('../../backend/app/api/catalog_routes.py', import.meta.url), 'utf8')
+const listCatalogBody = catalogRouteSource.split('def list_catalog(', 2)[1]?.split('\ndef ', 1)[0] || ''
+assert.ok(listCatalogBody, 'Catalog list route missing')
+assert.doesNotMatch(listCatalogBody, /ensure_dutch_gpc_assignments\(/)
+assert.match(listCatalogBody, /LIMIT :limit OFFSET :offset/)
+assert.match(kassaPage, /previewState\.error \|\| 'De originele kassabon kon niet worden geladen\.'/)
+assert.match(kassaPage, /Van deze kassabon is geen ondersteund voorbeeld beschikbaar/)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
