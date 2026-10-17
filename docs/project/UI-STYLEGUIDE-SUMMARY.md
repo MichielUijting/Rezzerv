@@ -1093,3 +1093,10 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - In de vijf bovenste status-/navigatietegels staat de **telling bovenaan** en de omschrijving **onderaan** in de tegel, gecentreerd; kleuren, tellerbronnen en navigatie blijven gelijk.
 - In iedere mobiele dashboardgrafiek staan de **titel links en de bijbehorende waarde rechts op dezelfde eerste regel**. De bestaande toelichting volgt er direct onder in **zwart**. De grafiek zelf en de vier periode-/drilldowncontracten blijven ongewijzigd.
 - De gedeelde `mobileHome.css`-grid gebruikt `title value` gevolgd door `detail detail` en `chart chart`. Er wordt geen afzonderlijke mobiele datalogica of tweede bron voor bedragen toegevoegd.
+
+## PR #590 — verdere verdichting mobiel Dashboard (17 oktober 2026)
+
+- Verwijder de **gezamenlijke witte achtergrond en omlijsting** achter de vijf status-tegels en achter de periodeknoppen Dagen/Weken/Maanden. Behoud de vijf afzonderlijke gekleurde klikbare tegels en de zichtbare actieve periodeknop.
+- Toon de welkomtekst en de gepersonaliseerde subtitel op dezelfde regel waar voldoende ruimte is; regelomloop blijft mogelijk op smalle mobiele schermen.
+- Maak de grafiekkaarten compacter met minder verticale kaartpadding en tussenruimte. Behoud de bestaande grafiekhoogte, aslabels, klikbare staven en toegankelijke focusstijlen: verkleinen mag geen gegevens of assen afsnijden.
+- Deze wijziging raakt alleen de mobiele dashboardpresentatie; waarden, periodefilters, grafiekgegevens en drilldowns blijven ongewijzigd.
