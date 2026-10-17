@@ -842,34 +842,52 @@ export default function Voorraad() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchInventoryRows(), fetchArticleGroupAssignments(), fetchArticleGroupOptions(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
-      .then(([loadedRows, articleGroupAssignments, loadedArticleGroups, loadedOptions]) => {
-        if (!cancelled) {
-          const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
-          const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
-          setLocalZeroRows([]);
-          setRows(rowsWithArticleGroups);
-          setArticleGroupOptions(loadedArticleGroups);
-          setLocationOptions(mergedLocationOptions);
-        }
+    // Only the inventory rows and article assignments are on the initial
+    // display's critical path. Editor dropdown options can arrive afterwards.
+    const inventoryPromise = Promise.all([
+      fetchInventoryRows(),
+      fetchArticleGroupAssignments(),
+    ]);
+    const articleOptionsPromise = fetchArticleGroupOptions();
+    const locationsPromise = fetchLocationOptions().catch(() => buildLocationOptionState([]));
+
+    inventoryPromise
+      .then(([loadedRows, assignments]) => {
+        if (cancelled) return;
+        const projected = applyArticleGroupsToRows(loadedRows, assignments);
+        setLocalZeroRows([]);
+        setRows(projected);
+        setLocationOptions((current) => mergeLocationOptionStates(current, buildLocationOptionStateFromRows(projected)));
       })
       .catch((error) => {
-        if (!cancelled) {
-          setLocalZeroRows([]);
-          setRows([]);
-          showFeedback({
-            variant: "error",
-            message: "Live voorraad kon niet worden geladen.",
-            technicalDetail: error?.message || String(error || ""),
-            showTechnicalToggle: true,
-            key: "inventory-load-error",
-          });
-        }
+        if (cancelled) return;
+        setLocalZeroRows([]);
+        setRows([]);
+        showFeedback({
+          variant: "error",
+          message: "Live voorraad kon niet worden geladen.",
+          technicalDetail: error?.message || String(error || ""),
+          showTechnicalToggle: true,
+          key: "inventory-load-error",
+        });
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+
+    articleOptionsPromise
+      .then((options) => { if (!cancelled) setArticleGroupOptions(options); })
+      .catch((error) => {
+        if (!cancelled) showFeedback({
+          variant: "warning",
+          message: "Artikelgroepopties zijn nog niet beschikbaar.",
+          technicalDetail: error?.message || String(error || ""),
+          showTechnicalToggle: true,
+          key: "inventory-article-group-options",
+        });
+      });
+    locationsPromise.then((options) => {
+      if (!cancelled) setLocationOptions((current) => mergeLocationOptionStates(options, current));
+    });
+    return () => { cancelled = true; };
+  }, []);;
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
