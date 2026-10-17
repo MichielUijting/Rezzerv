@@ -27,7 +27,8 @@
 .rz-mobile-catalog-pagination { display: flex; justify-content: center; align-items: center; width: 100%; margin-top: 12px; color: #000; font-size: var(--font-size-ui-body); }
 .rz-mobile-catalog-pagination .rz-pagination { flex-wrap: nowrap !important; gap: 5px !important; width: 100%; }
 .rz-mobile-catalog-pagination .rz-pagination > * { flex: 0 0 auto; }
-.rz-mobile-catalog-pagination .rz-pagination .rz-button { min-width: 38px; padding-left: 8px; padding-right: 8px; }
+.rz-mobile-catalog-pagination .rz-pagination > button { min-width: 38px; min-height: 44px; padding: 8px; margin: 0; box-sizing: border-box; }
+.rz-mobile-catalog-pagination .rz-pagination-page-indicator { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin: 0; font-variant-numeric: tabular-nums; }
 .rz-mobile-catalog-pagination .rz-button-secondary { min-height: 44px; color: #ffffff !important; }
 @media (max-width: 430px) { .rz-mobile-catalog-content { padding-right: 10px; padding-left: 10px; } }
 
