@@ -84,3 +84,20 @@ De actieve routes in `frontend/src/app/router/AppRouter.jsx` en `frontend/src/fe
 Korte invoerformulieren, vaste navigatiekaarten, rapporten zonder lange lijst en de detailweergave van één bon zijn geen tabellen/lange resultaatlijsten en krijgen dus geen kunstmatige paginering. Identiteitswisseling bij een detailroute blijft expliciet afgeschermd.
 
 **Bewijslimiet:** broncode-inventaris plus contractchecks, CI en lokale PO-feedback voor de eerdere kandidaat; niet ieder denkbaar autorisatietype of scherm met 11+ echte records is daadwerkelijk in een browser getest. Voor definitieve PO-acceptatie blijven gerichte checks op de laatste SHA nodig.
+
+## PO-feedback 17 oktober 2026 — eerste laadtijd en tabelconformiteit
+
+Gemelde observaties (lokale data, nog geen reproduceerbaar timingrapport): eerste scherm van Kassa, Voorraad, Bijna op en Catalogus duurt merkbaar langer dan paginawisselingen; Boodschappen en Externe databases laden wel snel. Bijna op is lokaal leeg. Code-inventaris bevestigt dat de eerste Kassa-lijst eerst broninitialisatie en automatische goedkeuring uitvoert, Voorraad op vier API-bronnen wachtte, Bijna op per actief artikel voorraad-/eventgegevens kan opvragen, en Catalogus vooraf GPC-toekenningen voor alle actieve producten doorloopt. Dit zijn **codepaden**, nog geen bewezen verdeling van de lokale wachttijd.
+
+Uitgevoerde correcties:
+
+- Kassa: bonvoorbeeld-paneel schaalt qua hoogte met het rechterpaneel; beveiligde backendmeting `kassa_list_timing` geeft afzonderlijk bron-, automatische goedkeurings-, SQL- en serialisatiefases weer zonder data te loggen.
+- Voorraad: eerste tabelweergave wacht alleen op voorraadregels en artikelgroeptoewijzingen; locatie- en dropdownopties worden later ingeladen. `inventory_preview_timing` meet SQL en GPC-projectie.
+- Bijna op: artikelen zonder minimumvoorraad worden overgeslagen wanneer voorspellingen uitstaan; `almost_out_timing` meet instellingen en evaluatie. Empty-response blijft semantisch intact; lokaal te controleren waarom geen signalen aanwezig zijn.
+- Bijna op: selectie, export, toevoegen aan Boodschappen en verwijderen/hervatten in desktop en mobiel. Verwijderen **verbergt uitsluitend de waarschuwing** via household-scoped `almost_out_hidden` en verwijdert geen huishoudartikel of voorraad; herstelknop wist uitsluitend deze visibility-override. Hide/restore vergen Beheerder; backend controleert alle artikelidentiteiten voor writes.
+- Catalogus: eerste 250 ms debounce weggenomen, filterdebounce behouden. `catalog_list_timing` onderscheidt wereldwijde GPC-backfill, telling en paginaselectie. Backfill zelf bewust niet weggenomen wegens classificatiecontract.
+- Centrale laad-overlay: historisch `inhuis-loading-mark.svg` niet meer gerenderd; geldt ook voor Externe databases.
+- Paginering: centrale component toont `1, -, huidig paginanummer, +, N`; handmatige Catalogus- en Externe databases/Bonartikelen-bediening naar de gedeelde component omgezet.
+- Boodschappen: toevoegknop uitgelijnd met het artikelinvoerveld.
+
+**Nog vereist:** frontendbuild en gerichte regressies voor nieuwe bulkacties, autorisatie, statusfilters, handmatige/nulregels/10/11, plus performancebewijs van dezelfde lokale data uit de nieuwe vier backendmetingen. Zonder dit bewijs mag geen gegarandeerde eindlaadtijd of complete acceptatie worden geclaimd. Na aanvullende codewijzigingen wordt patchversie gesynchroniseerd en exact-candidate F7-bewijs opnieuw vastgesteld.
