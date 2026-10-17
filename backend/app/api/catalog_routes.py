@@ -313,6 +313,9 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "product_type": f"COALESCE({product_type_expression}, '')",
         "gpc_brick_code": f"COALESCE({gpc_brick_code}, '')",
         "gpc_brick_name": f"COALESCE({gpc_brick_name}, '')",
+        "gpc_class_code": f"COALESCE({gpc_class_code}, '')",
+        "gpc_family_code": f"COALESCE({gpc_family_code}, '')",
+        "id": "CAST(gp.id AS TEXT)",
         "gpc_class_name": f"COALESCE({gpc_class_name}, '')",
         "gpc_family_name": f"COALESCE({gpc_family_name}, '')",
         "source": source_expression,
@@ -361,9 +364,10 @@ def _catalog_where(
     normalized_search = (search if isinstance(search, str) else "").strip().lower()
     if normalized_search:
         searchable_keys = (
-            "name", "brand", "primary_gtin", "catalog_kind",
+            "id", "name", "brand", "primary_gtin", "catalog_kind",
             "product_type", "gpc_brick_code", "gpc_brick_name",
-            "gpc_class_name", "gpc_family_name", "source",
+            "gpc_class_code", "gpc_class_name", "gpc_family_code",
+            "gpc_family_name", "source", "household_article_count",
         )
         conditions.append("(" + " OR ".join(
             f"LOWER(CAST({expressions[key]} AS TEXT)) LIKE :search"
