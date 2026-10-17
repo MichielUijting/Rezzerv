@@ -55,4 +55,15 @@ assert.match(mobileCss, /\.rz-mobile-action-bar-icon\s*\{[\s\S]*width:\s*44px;[\
 assert.match(mobileCss, /\.rz-mobile-action-bar-icon svg\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/)
 assert.match(mobileCss, /\.rz-mobile-action-bar-desktop-icon\s*\{[\s\S]*transform:\s*scale\(2\);/)
 
+// Alle mobiele selecteerbare tabellen gebruiken Uitpakken als visuele standaard.
+const selectAllTargets = [receipts, kassa, almostOut, storeBatch]
+for (const source of selectAllTargets) {
+  assert.match(source, /rz-mobile-table-select-row|rz-mobile-inventory-summary-row/, 'Alles-selectie ontbreekt boven tabel')
+  assert.match(source, /rz-mobile-table-bulk-actions/, 'Bulkacties ontbreken onder de tabel')
+}
+assert.match(receipts, /mobile-unpack-bulk-actions/)
+assert.match(storeBatch, /mobile-unpack-detail-bulk-actions/)
+assert.match(storeBatch, /mobileLinePagination\.pageItems\.filter/, 'Uitpakken moet alleen zichtbare regels selecteren')
+assert.match(mobileCss, /\.rz-mobile-table-select-row\s*\{[\s\S]*justify-content:\s*flex-end/)
+assert.match(mobileCss, /\.rz-mobile-table-bulk-actions\s*\{[\s\S]*justify-content:\s*flex-end/)
 console.log('MOBILE_PAGINATION_CONTRACT_GREEN')
