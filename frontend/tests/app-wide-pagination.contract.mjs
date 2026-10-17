@@ -199,4 +199,22 @@ assert.match(mobileInventoryPage, /setRows\(initialRows\)/)
 const mobileHomePage = readFileSync(new URL('../src/features/home/MobileHomePage.jsx', import.meta.url), 'utf8')
 assert.match(mobileHomePage, /huishoud-dashboard is alleen beschikbaar/)
 assert.match(mobileHomePage, /pendingReceipts\.pending_downloads \?\? 0/)
+// Bijna op: only a confirmed Shopping transfer may hide the source alert.
+const almostOutBulk = readFileSync(new URL('../src/features/almostOut/almostOutBulk.js', import.meta.url), 'utf8')
+const addToShopping = almostOutBulk.indexOf("await almostOutRequest('/api/shopping-list/items'")
+const markTransferred = almostOutBulk.indexOf("await almostOutRequest('/api/households/' + id + '/almost-out/mark-in-shopping'")
+assert.ok(addToShopping >= 0 && markTransferred > addToShopping, 'Do not hide Bijna op items before Shopping accepts them')
+const backendMain = readFileSync(new URL('../../backend/app/main.py', import.meta.url), 'utf8')
+assert.match(backendMain, /@app\.post\("\/api\/households\/\{household_id\}\/almost-out\/mark-in-shopping"\)/)
+for (const [name, component, containerClose] of [
+  ['desktop', almostOutPage, '</ScreenCard>'],
+  ['mobile', mobileAlmostOutPage, '</main>'],
+]) {
+  const restoreButton = component.indexOf('>Verwijderingen ongedaan maken</Button>')
+  const panelEnd = component.lastIndexOf(containerClose)
+  assert.ok(restoreButton > panelEnd, `The undo action must be below the table panel on ${name}`)
+  assert.ok(component.includes("action === 'shopping'"), `Refresh transferred rows on ${name}`)
+  assert.ok(!component.includes('>Verborgen meldingen herstellen</Button>'), `Old undo label remains on ${name}`)
+}
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
