@@ -1079,3 +1079,11 @@ Voor alle gebruikerszichtbare tabellen en lange, tabelachtige lijsten op desktop
 ## Rustige paginawisseling (desktop en mobiel)
 
 Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobiele kaarten zichtbaar totdat de nieuwe set succesvol beschikbaar is (stale-while-revalidate). Alleen de records/kaarten en totalen voor de nieuwe pagina worden daarna tegelijk vervangen. Gebruik een bescheiden voortgangsindicatie zonder lege tussenweergave en blokkeer tijdelijk acties op nog zichtbare regels van de vorige pagina. Bij een eerste bezoek zonder eerdere resultaten blijft de normale laadmelding gelden. Bij wisseling van huishouden, autorisatiescope of andere gevoelige dataset mogen oude records niet zichtbaar blijven. Lokale paginering over al aanwezige gegevens wisselt direct, zonder laadstatus.
+
+## PR #590 — uniforme mobiele tabelselectie en bulkacties (17 oktober 2026)
+
+- **Uitpakken mobiel is de referentie**: de checkbox **Alles** staat bovenaan, rechts uitgelijnd direct boven iedere selecteerbare lijst/tabel. De selectie geldt voor de zichtbare pagina en bewaart een eerder geselecteerde andere pagina waar het scherm die selectie ondersteunt.
+- Bulkknoppen staan **rechts onder de tabel en onder de paginering**, in de normale documentstroom (geen sticky of zwevend actieblok). Dit geldt ook wanneer meerdere knoppen over regels moeten afbreken op smalle schermen.
+- Gebruik waar toepasselijk de gedeelde CSS-klassen `rz-mobile-table-select-row` en `rz-mobile-table-bulk-actions`, niet per scherm verschillende selectiebalken.
+- Toepassing op de mobiele bulkoverzichten Uitpakken, Kassa-bonnen, Kassa-bonregels en Bijna op. Schermen zonder bulkselectie (zoals mobiele Voorraad en Boodschappen) krijgen niet kunstmatig een selectievakje.
+- **Bijna op** behoudt de aparte handeling **Verwijderingen ongedaan maken** onder het tabelpaneel op de groene schermachtergrond; deze handeling valt niet onder geselecteerde-rijen-bulkacties.
