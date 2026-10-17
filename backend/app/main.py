@@ -4490,6 +4490,8 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     items: list[dict] = []
     for article_row in article_rows:
         article_id = str(article_row.get('id') or '').strip()
+        if settings_map_by_article.get(article_id, {}).get('almost_out_hidden') is True:
+            continue
         evaluation = evaluate_household_article_almost_out(
             conn,
             household_id,
@@ -13517,6 +13519,60 @@ def delete_household_article_endpoint(household_article_id: str, payload: Househ
     household_id = str(context['active_household_id'])
     with engine.begin() as conn:
         return delete_household_article_by_id(conn, household_id, str(household_article_id or '').strip(), (payload.reason if payload else None), bool(payload.force) if payload else False)
+
+
+class AlmostOutVisibilityRequest(BaseModel):
+    article_ids: list[str] = []
+
+
+@app.post("/api/households/{household_id}/almost-out/hide")
+def hide_household_almost_out_items(
+    household_id: str,
+    payload: AlmostOutVisibilityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization, str(household_id or '').strip())
+    effective_household_id = str(context['active_household_id'])
+    article_ids = list(dict.fromkeys(str(value or '').strip() for value in payload.article_ids))
+    article_ids = [value for value in article_ids if value][:100]
+    if not article_ids:
+        raise HTTPException(status_code=400, detail='Selecteer eerst artikelen in Bijna op')
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id FROM household_articles
+                WHERE household_id = :household_id AND id IN :ids
+                  AND COALESCE(status, 'active') = 'active'
+            """).bindparams(bindparam('ids', expanding=True)),
+            {'household_id': effective_household_id, 'ids': article_ids},
+        ).mappings().all()
+        valid_ids = {str(row['id']) for row in rows}
+        if len(valid_ids) != len(article_ids):
+            raise HTTPException(status_code=404, detail='Een geselecteerd artikel hoort niet bij dit huishouden')
+        for article_id in article_ids:
+            conn.execute(text("""
+                INSERT INTO household_article_settings
+                    (id, household_article_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:id, :article_id, 'almost_out_hidden', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(household_article_id, setting_key)
+                DO UPDATE SET setting_value = 'true', updated_at = CURRENT_TIMESTAMP
+            """), {'id': str(uuid.uuid4()), 'article_id': article_id})
+    return {'hidden': len(article_ids)}
+
+
+@app.post("/api/households/{household_id}/almost-out/restore")
+def restore_household_almost_out_items(household_id: str, authorization: Optional[str] = Header(None)):
+    context = require_household_admin_context(authorization, str(household_id or '').strip())
+    effective_household_id = str(context['active_household_id'])
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            DELETE FROM household_article_settings
+            WHERE setting_key = 'almost_out_hidden'
+              AND household_article_id IN (
+                SELECT id FROM household_articles WHERE household_id = :household_id
+              )
+        """), {'household_id': effective_household_id})
+    return {'restored': max(0, int(result.rowcount or 0))}
 
 
 @app.get("/api/households/{household_id}/almost-out")
