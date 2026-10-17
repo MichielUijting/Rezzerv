@@ -32,13 +32,7 @@ export default function DelayedTableLoadingOverlay({
       aria-busy="true"
       data-testid="table-loading-overlay"
     >
-      <img
-        className="rz-table-loading-logo"
-        src="/inhuis-loading-mark.svg"
-        alt=""
-        aria-hidden="true"
-        data-testid="table-loading-logo"
-      />
+      <span className="rz-table-loading-message">{label}</span>
     </div>
   )
 }
