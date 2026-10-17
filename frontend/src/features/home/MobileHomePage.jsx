@@ -278,11 +278,12 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     setPendingReceipts(null)
 
     const householdId = String(context?.active_household_id || '').trim()
-    if (householdId) {
-      fetchAlmostOutCount(householdId)
-        .then((count) => { if (active) setAlmostOutCount(count) })
-        .catch(() => { if (active) setAlmostOutCount(null) })
+    if (!householdId || context?.context_type === 'system') {
+      return () => { active = false }
     }
+    fetchAlmostOutCount(householdId)
+      .then((count) => { if (active) setAlmostOutCount(count) })
+      .catch(() => { if (active) setAlmostOutCount(null) })
 
     fetchRetailerPendingReceiptSummary()
       .then((summary) => { if (active) setPendingReceipts(summary) })
