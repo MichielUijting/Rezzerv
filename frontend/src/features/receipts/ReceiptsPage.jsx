@@ -329,7 +329,7 @@ export default function ReceiptsPage() {
           ) : null}
           <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" /></div>
 
-          <div className="rz-mobile-unpack-actions" data-testid="mobile-unpack-bulk-actions">
+          <div className="rz-mobile-unpack-actions rz-mobile-table-bulk-actions" data-testid="mobile-unpack-bulk-actions">
             <Button
               type="button"
               variant="secondary"
