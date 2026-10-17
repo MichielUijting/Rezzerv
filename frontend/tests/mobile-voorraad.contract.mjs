@@ -188,7 +188,11 @@ assert.match(mobileSource, /setRows\(\(current\) => applyInventoryRowQuantity/)
 assert.match(mobileSource, /setRows\(previousRows\)/)
 // Initial page load and explicit retry must still fetch authoritative inventory.
 // Quick +/- and exact mutations must never trigger that expensive full reload.
-assert.match(mobileSource, /async function reload\(\) \{[\s\S]*setRows\(await loadMobileInventory\(\)\)/)
+assert.match(mobileSource, /async function reload\(\) \{[\s\S]*await loadMobileInventory\(\)/)
+assert.match(mobileSource, /setRows\(initialRows\)/)
+assert.match(mobileSource, /groupPromise\.then\(\(groups\) => \{/)
+assert.match(mobileSource, /generation !== loadGenerationRef\.current/)
+assert.match(mobileSource, /setRows\(buildMobileInventoryRows\(liveRows, assignments\)\)/)
 const mutationBlock = mobileSource.slice(
   mobileSource.indexOf('  async function submitInventoryMutation('),
   mobileSource.indexOf('  async function mutateQuickInventory('),
