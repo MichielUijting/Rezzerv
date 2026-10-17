@@ -138,17 +138,26 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
     try {
       if (action === 'shopping') {
         const total = await moveAlmostOutToShopping(selectedRows)
-        setBulkMessage(`${total} artikel(en) toegevoegd aan Boodschappen.`)
+        setBulkMessage(`${total} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
       } else {
         if (action === 'hide') await hideAlmostOutRows(selectedRows)
         else await restoreAlmostOutRows()
         setRows(await loadMobileAlmostOut())
         setSelectedIds([])
-        setBulkMessage(action === 'hide' ? 'Meldingen verborgen, voorraad behouden.' : 'Verborgen meldingen hersteld.')
+        setBulkMessage(action === 'hide' ? 'Meldingen verborgen, voorraad behouden.' : 'Verwijderingen ongedaan gemaakt.')
       }
     } catch (err) {
       setError(String(err?.message || 'Bulkverwerking mislukt'))
     } finally {
+      // Reconcile the view also when part of a batch transfer succeeded.
+      if (action === 'shopping') {
+        try {
+          setRows(await loadMobileAlmostOut())
+          setSelectedIds([])
+        } catch {
+          // Preserve the actionable transfer error.
+        }
+      }
       setBulkBusy(false)
     }
   }
@@ -332,9 +341,11 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
         <section className="rz-mobile-inventory-state" aria-label="Overige Bijna op bulkacties" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
           <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
-          <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verborgen meldingen herstellen</Button>
         </section>
       </main>
+      <div className="rz-mobile-almost-out-undo" style={{ padding: '8px 12px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verwijderingen ongedaan maken</Button>
+      </div>
     </div>
   )
 }
