@@ -788,8 +788,9 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'error' ? (
-              <div style={{ maxWidth: '560px', margin: '16px' }}>
-</div>
+              <div role="alert" style={{ maxWidth: '560px', margin: '16px', color: '#B42318' }}>
+                {previewState.error || 'De originele kassabon kon niet worden geladen.'}
+              </div>
             ) : null}
 
             {previewState.status === 'ready' && previewState.isPdf ? (
@@ -838,8 +839,9 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div style={{ maxWidth: '560px', margin: '16px' }}>
-</div>
+              <div role="status" style={{ maxWidth: '560px', margin: '16px', color: '#475467' }}>
+                Van deze kassabon is geen ondersteund voorbeeld beschikbaar.
+              </div>
             ) : null}
           </div>
         </div>
