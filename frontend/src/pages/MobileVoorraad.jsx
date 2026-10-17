@@ -106,7 +106,7 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
     .sort((a, b) => a.firstSeenIndex - b.firstSeenIndex)
 }
 
-async function loadMobileInventory(onArticleGroupsLoaded = () => {}) {
+async function loadMobileInventory() {
   // Rendering the first page must wait for inventory, not for a separate
   // article-group dropdown/assignment service.
   const groupPromise = fetchJsonWithAuth(
@@ -122,11 +122,7 @@ async function loadMobileInventory(onArticleGroupsLoaded = () => {}) {
     throw new Error(inventoryData?.detail || 'Voorraad kon niet worden geladen')
   }
   const liveRows = Array.isArray(inventoryData?.rows) ? inventoryData.rows : []
-  groupPromise.then((groups) => {
-    const assignmentItems = Array.isArray(groups?.items) ? groups.items : []
-    onArticleGroupsLoaded(buildMobileInventoryRows(liveRows, assignmentItems))
-  })
-  return buildMobileInventoryRows(liveRows)
+  return { initialRows: buildMobileInventoryRows(liveRows), liveRows, groupPromise }
 }
 
 export default function MobileVoorraad({ locationTrackingEnabled = true }) {
@@ -140,18 +136,24 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [sortKey, setSortKey] = useState('name-asc')
   const [mutatingRowId, setMutatingRowId] = useState('')
   const mutationLockRef = useRef(false)
+  const loadGenerationRef = useRef(0)
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
   async function reload() {
     setIsLoading(true)
     setError('')
+    const generation = ++loadGenerationRef.current
     try {
-      setRows(await loadMobileInventory((updatedRows) => {
-        // Secondary enrichment may arrive after first render. Never replace
-        // current inventory after the user has started an in-flight mutation.
-        if (!mutationLockRef.current) setRows(updatedRows)
-      }))
+      const { initialRows, liveRows, groupPromise } = await loadMobileInventory()
+      if (generation !== loadGenerationRef.current) return
+      setRows(initialRows)
+      // Enrich labels after the first page is visible. Ignore stale responses.
+      groupPromise.then((groups) => {
+        if (generation !== loadGenerationRef.current || mutationLockRef.current) return
+        const assignments = Array.isArray(groups?.items) ? groups.items : []
+        setRows(buildMobileInventoryRows(liveRows, assignments))
+      })
     } catch (err) {
       setRows([])
       setError(String(err?.message || 'Voorraad kon niet worden geladen'))
