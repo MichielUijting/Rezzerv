@@ -413,17 +413,8 @@ def list_catalog(
     if "global_products" not in _tables():
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
-    with engine.begin() as conn:
-        product_ids = [
-            str(row.get("id") or "").strip()
-            for row in conn.execute(text("""
-                SELECT id
-                FROM global_products
-                WHERE LOWER(TRIM(COALESCE(status, 'active'))) <> 'deleted'
-            """)).mappings().all()
-            if str(row.get("id") or "").strip()
-        ]
-        ensure_dutch_gpc_assignments(conn, product_ids)
+    # Listing must be read-only and page-sized. GPC repair is performed by
+    # its dedicated write flows, not on every page view.
     gpc_done = perf_counter()
 
     select_parts, joins, expressions = _catalog_projection()
@@ -474,9 +465,9 @@ def list_catalog(
     page_done = perf_counter()
     if page_done - started >= 0.5:
         logging.getLogger("uvicorn.error").info(
-            "catalog_list_timing total_ms=%.1f backfill_ms=%.1f count_ms=%.1f page_ms=%.1f products=%d items=%d",
+            "catalog_list_timing total_ms=%.1f setup_ms=%.1f count_ms=%.1f page_ms=%.1f items=%d",
             (page_done-started)*1000, (gpc_done-started)*1000, (count_done-gpc_done)*1000,
-            (page_done-count_done)*1000, len(product_ids), len(items),
+            (page_done-count_done)*1000, len(items),
         )
     return {
         "items": items,
