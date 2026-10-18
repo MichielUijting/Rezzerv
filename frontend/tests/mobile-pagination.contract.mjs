@@ -91,4 +91,11 @@ assert.match(kassaCardCss, /\.rz-mobile-kassa \.rz-mobile-kassa-receipt-card\.rz
 assert.doesNotMatch(receipts, /<span>\{item\.statusLabel\}<\/span>/)
 assert.doesNotMatch(kassa, /<span>\{item\.po_norm_status_label \|\| item\.inbox_status/)
 
+
+assert.match(unpackCardCss, /\.rz-mobile-unpack-list\.rz-mobile-inventory-list\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/)
+assert.match(unpackCardCss, /\.rz-mobile-unpack-list\s*\.rz-mobile-unpack-main\s*\{[^}]*background:\s*#fff;/)
+assert.match(unpackCardCss, /\.rz-mobile-unpack-list\s*\.rz-mobile-unpack-card--needs-review\s*\.rz-mobile-unpack-main\s*\{[^}]*background:\s*#fff1dc;/)
+assert.match(unpackCardCss, /\.rz-mobile-unpack-list\s*\.rz-mobile-unpack-card--checked\s*\.rz-mobile-unpack-main\s*\{[^}]*background:\s*#eef7f0;/)
+assert.match(kassaCardCss, /\.rz-mobile-kassa \.rz-mobile-kassa-receipt-card\.rz-mobile-unpack-card\s*\{[^}]*padding:\s*0;[^}]*background:\s*transparent;/)
+
 console.log('MOBILE_PAGINATION_CONTRACT_GREEN')
