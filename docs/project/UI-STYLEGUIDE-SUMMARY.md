@@ -1108,3 +1108,10 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - In Kassa desktop is het paneel met de afbeelding/preview van de kassabon **standaard ingeklapt** bij openen of wisselen van bon. De gebruiker kan het paneel altijd weer uitklappen; de inhoud en bonregels blijven beschikbaar.
 - Voorraad presenteert aanwezige artikelregels zodra de primaire voorraadrespons arriveert; optionele artikelgroeplabels mogen later worden aangevuld, zonder wijzigingen van bewerkte artikelwaarden of huishoudencontext.
 - De bestaande pagineringsstandaard blijft **10 resultaten per pagina**; een eventuele appbrede wijziging naar 8 vereist een apart expliciet PO-besluit en daarop aansluitende contractaanpassing.
+
+## PR #591 — mobiele kassabonkaarten en uniforme actiebalk (18 oktober 2026)
+
+- De mobiele bonnenlijsten van **Uitpakken** en **Kassa** gebruiken dezelfde compacte kaartstructuur: selectiecheckbox links, winkelnaam bovenaan, daaronder datum en aantal artikelen. De statusnaam wordt **niet als zichtbare tekst** op de kaart herhaald.
+- Een bon met de status **Controle nodig** krijgt als volledig kaartvlak lichtoranje (`#FFF1DC`); **Gecontroleerd** krijgt een volledig lichtgroen kaartvlak (`#EEF7F0`). Deze achtergrond blijft zichtbaar bij selectie, hover en aanraking. Andere statussen behouden hun neutrale weergave; de feitelijke status, filters en verwerkingsregels blijven ongewijzigd.
+- De niet-zichtbare status blijft via de toegankelijke naam van de openknop beschikbaar voor ondersteunende technologie.
+- In de vaste mobiele actiebalk is **Meer** een ongekaderde actie, met dezelfde iconhoogte (44 px), totaalhoogte, tekstpositie en focusbehandeling als de andere acties. Geen extra knoprand of afwijkende knopachtergrond.
