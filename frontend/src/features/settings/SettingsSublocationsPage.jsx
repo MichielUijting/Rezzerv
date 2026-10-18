@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Pagination from '../../ui/Pagination.jsx'
 import { Navigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -89,6 +90,7 @@ export default function SettingsSublocationsPage() {
   const [form, setForm] = useState(initialForm)
   const [filters, setFilters] = useState(initialFilters)
   const [selectedIds, setSelectedIds] = useState([])
+  const [paginationPage, setPaginationPage] = useState(1)
   const [showActionModal, setShowActionModal] = useState(false)
 
   async function loadData() {
@@ -126,7 +128,12 @@ export default function SettingsSublocationsPage() {
     return naamOk && ruimteOk && actiefOk
   }), [sortedItems, filters])
 
-  const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedIds.includes(String(item.id)))
+  const paginationPageCount = Math.max(1, Math.ceil(filteredItems.length / 10))
+  const currentPage = Math.min(paginationPage, paginationPageCount)
+  const pageItems = filteredItems.slice((currentPage - 1) * 10, currentPage * 10)
+  useEffect(() => { setPaginationPage(1) }, [filters])
+  useEffect(() => { if (paginationPage > paginationPageCount) setPaginationPage(paginationPageCount) }, [paginationPage, paginationPageCount])
+  const allFilteredSelected = pageItems.length > 0 && pageItems.every((item) => selectedIds.includes(String(item.id)))
 
   function openCreate() {
     setMessage('')
@@ -158,12 +165,12 @@ export default function SettingsSublocationsPage() {
 
   function toggleAllFiltered() {
     if (allFilteredSelected) {
-      const filteredSet = new Set(filteredItems.map((item) => String(item.id)))
+      const filteredSet = new Set(pageItems.map((item) => String(item.id)))
       setSelectedIds((current) => current.filter((id) => !filteredSet.has(id)))
       return
     }
     const merged = new Set(selectedIds)
-    filteredItems.forEach((item) => merged.add(String(item.id)))
+    pageItems.forEach((item) => merged.add(String(item.id)))
     setSelectedIds(Array.from(merged))
   }
 
@@ -313,11 +320,9 @@ export default function SettingsSublocationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={4}>Sublocaties laden…</td></tr>
-                ) : filteredItems.length === 0 ? (
-                  <tr><td colSpan={4}>Nog geen sublocaties beschikbaar.</td></tr>
-                ) : filteredItems.map((item) => {
+                {filteredItems.length === 0 ? (
+                  <tr><td colSpan={4}>{isLoading ? 'Sublocaties laden…' : 'Nog geen sublocaties beschikbaar.'}</td></tr>
+                ) : pageItems.map((item) => {
                   const selected = selectedIds.includes(String(item.id))
                   return (
                     <tr key={item.id} className={selected ? 'rz-row-selected' : ''}>
@@ -332,6 +337,7 @@ export default function SettingsSublocationsPage() {
                 })}
               </tbody>
             </Table>
+          {paginationPageCount > 1 ? <Pagination page={currentPage} pageCount={paginationPageCount} onPageChange={setPaginationPage} /> : null}
           <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={exportCsv} disabled={isLoading || selectedIds.length === 0 || isSaving}>Exporteren</Button>

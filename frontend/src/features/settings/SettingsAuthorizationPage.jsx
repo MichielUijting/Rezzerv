@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
+import Pagination from '../../ui/Pagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchAuthorizationOverview } from './services/authorizationMembershipService'
 import './settingsAuthorization.css'
@@ -67,6 +68,7 @@ export default function SettingsAuthorizationPage() {
   const { showFeedback } = useAppFeedback()
   const [overview, setOverview] = useState({ roles: [], permissions: [] })
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     let active = true
@@ -110,6 +112,11 @@ export default function SettingsAuthorizationPage() {
     [availablePermissions],
   )
 
+  const pageCount = Math.max(1, Math.ceil(rows.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleRows = rows.slice((currentPage - 1) * 10, currentPage * 10)
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+
   return (
     <AppShell title="Instellingen" showExit={false}>
       <div className="rz-authorization-page" data-testid="authorization-settings-page">
@@ -119,7 +126,7 @@ export default function SettingsAuthorizationPage() {
             <p>Bekijk per rol welke mogelijkheden binnen het huishouden beschikbaar zijn.</p>
           </div>
 
-          {loading ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
+          {loading && overview.roles.length === 0 ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
             <>
               <p className="rz-authorization-explanation">
                 De rollen zijn vaste profielen. Wijs een rol aan een gebruiker toe in het scherm Huishouden.
@@ -129,7 +136,7 @@ export default function SettingsAuthorizationPage() {
                   <section className="rz-authorization-role-card" key={role.role_key}>
                     <h3>{role.label}</h3>
                     <div className="rz-authorization-permission-list">
-                      {rows.map(([permissionKey, label]) => (
+                      {visibleRows.map(([permissionKey, label]) => (
                         <div className="rz-authorization-permission-row" key={permissionKey}>
                           <span>{label}</span>
                           <strong aria-label={role.granted.has(permissionKey) ? 'Toegestaan' : 'Niet toegestaan'}>
@@ -150,7 +157,7 @@ export default function SettingsAuthorizationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(([permissionKey, label]) => (
+                    {visibleRows.map(([permissionKey, label]) => (
                       <tr key={permissionKey}>
                         <th scope="row">{label}</th>
                         {roleColumns.map((role) => {
@@ -173,6 +180,7 @@ export default function SettingsAuthorizationPage() {
                   </tbody>
                 </table>
               </div>
+              {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
             </>
           )}
         </Card>

@@ -67,6 +67,8 @@ def main() -> int:
 
     with test_engine.begin() as conn:
         _create_shopping_list_fixture(conn)
+        # Bijna op blijft huishoudartikel-gebonden; de instellingen worden
+        # na de bestaande canonieke household_articles-fixture aangemaakt.
         conn.execute(text("""
             CREATE TABLE inventory (
                 id TEXT PRIMARY KEY,
@@ -154,6 +156,25 @@ def main() -> int:
             ) VALUES (
                 'household-article-melk', '0', 'Melk', 'Zuivel', 'Halfvolle melk', 'global-product-melk'
             )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_articles(id, household_id, article_name) VALUES
+              ('article-hh0', '0', 'Testartikel A'),
+              ('article-hh1', '1', 'Testartikel B')
+        """))
+        conn.execute(text("""
+            CREATE TABLE household_article_settings (
+                id TEXT PRIMARY KEY,
+                household_article_id TEXT NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_article_settings (id, household_article_id, setting_key, setting_value) VALUES
+              ('hide-hh0', 'article-hh0', 'almost_out_hidden', 'true'),
+              ('hide-hh1', 'article-hh1', 'almost_out_hidden', 'true'),
+              ('other-hh0', 'article-hh0', 'min_stock', '2')
         """))
         conn.execute(text("""
             CREATE TABLE article_groups (
@@ -282,6 +303,15 @@ def main() -> int:
         assert completed["active_list_id"] != first_list_id, completed
         assert completed["items"] == [], completed
 
+        hidden_settings = conn.execute(text("""
+            SELECT household_article_id, setting_key
+            FROM household_article_settings ORDER BY id
+        """)).all()
+        assert {tuple(row) for row in hidden_settings} == {
+            ("article-hh1", "almost_out_hidden"),
+            ("article-hh0", "min_stock"),
+        }, hidden_settings
+
         next_active = get_active_shopping_list(conn, "0")
         assert next_active["id"] == completed["active_list_id"], next_active
         assert next_active["items"] == [], next_active
@@ -314,6 +344,7 @@ def main() -> int:
     print("crud_and_checked=PASS")
     print("household_isolation=PASS")
     print("complete_creates_empty_active_list=PASS")
+    print("complete_restores_only_own_household_almost_out=PASS")
     print("inventory_unchanged=PASS")
     return 0
 

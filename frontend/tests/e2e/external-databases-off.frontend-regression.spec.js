@@ -400,7 +400,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(householdProductTypesCalled).toBe(false);
   });
 
-  test('Langdurig laden van bonartikeltabel toont pas na één seconde het Inhuis-logo', async ({ page }) => {
+  test('Langdurig laden van bonartikeltabel toont pas na één seconde een toegankelijke laadstatus', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseItems;
     let markItemsStarted;
@@ -443,10 +443,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute('aria-busy', 'true');
 
-    const logo = page.getByTestId('table-loading-logo');
-    await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('src', '/inhuis-loading-mark.svg');
-    await expect(logo).toHaveCSS('width', '420px');
+    await expect(overlay).toContainText('Gegevens worden geladen');
+    await expect(page.getByTestId('table-loading-logo')).toHaveCount(0);
     await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
 
     releaseItems();
@@ -456,7 +454,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Langdurige OFF-zoekactie toont na één seconde het Inhuis-logo en verwijdert dit direct na een fout', async ({ page }) => {
+  test('Langdurige OFF-zoekactie toont na één seconde een toegankelijke laadstatus en verwijdert die na een fout', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseSearch;
     const searchGate = new Promise((resolve) => {
@@ -498,10 +496,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await page.waitForTimeout(1100);
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute('aria-busy', 'true');
-    const logo = page.getByTestId('table-loading-logo');
-    await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('src', '/inhuis-loading-mark.svg');
-    await expect(logo).toHaveCSS('width', '420px');
+    await expect(overlay).toContainText('Gegevens worden geladen');
+    await expect(page.getByTestId('table-loading-logo')).toHaveCount(0);
     await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
 
     releaseSearch();

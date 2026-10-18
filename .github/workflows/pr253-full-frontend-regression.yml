@@ -237,8 +237,9 @@ jobs:
             -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
             -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
             -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
-            -v "$GITHUB_WORKSPACE/frontend:/work" \
-            -w /work \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -v "$GITHUB_WORKSPACE/frontend:/repo/frontend" \
+            -w /repo/frontend \
             mcr.microsoft.com/playwright:v1.58.2-noble \
             bash -lc "npm ci && npm run test:e2e:frontend-regression"
 
@@ -269,8 +270,9 @@ jobs:
             -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
             -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
             -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
-            -v "$GITHUB_WORKSPACE/frontend:/work" \
-            -w /work \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -v "$GITHUB_WORKSPACE/frontend:/repo/frontend" \
+            -w /repo/frontend \
             mcr.microsoft.com/playwright:v1.58.2-noble \
             bash -lc "npm ci && npx playwright test$spec_args"
           {

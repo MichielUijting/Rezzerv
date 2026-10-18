@@ -253,6 +253,12 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
 
   useEffect(() => {
     let active = true
+    setDashboard(null)
+    setError('')
+    if (!String(context?.active_household_id || '').trim()
+      || (!dashboard && /alleen beschikbaar binnen een huishouden/i.test(error))) {
+      return () => { active = false }
+    }
     fetchHouseholdDashboard()
       .then((payload) => {
         if (!active) return
@@ -272,11 +278,12 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     setPendingReceipts(null)
 
     const householdId = String(context?.active_household_id || '').trim()
-    if (householdId) {
-      fetchAlmostOutCount(householdId)
-        .then((count) => { if (active) setAlmostOutCount(count) })
-        .catch(() => { if (active) setAlmostOutCount(null) })
+    if (!householdId || context?.context_type === 'system') {
+      return () => { active = false }
     }
+    fetchAlmostOutCount(householdId)
+      .then((count) => { if (active) setAlmostOutCount(count) })
+      .catch(() => { if (active) setAlmostOutCount(null) })
 
     fetchRetailerPendingReceiptSummary()
       .then((summary) => { if (active) setPendingReceipts(summary) })
@@ -478,25 +485,43 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     return undefined
   }
 
+  if (!String(context?.active_household_id || '').trim()) {
+    return <main className="rz-mobile-home" data-testid="mobile-home-page">
+      <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
+      <section className="rz-mobile-home-inner">
+        <div className="rz-mobile-home-greeting">
+          <h1 className="rz-mobile-home-welcome">Welkom {name}</h1>
+          <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+        </div>
+        <div className="rz-dashboard-error" role="status">
+          Het huishoud-dashboard is alleen beschikbaar wanneer je een huishouden hebt geselecteerd.
+          Er worden geen huishoudtellingen van een andere gebruikerscontext getoond.
+        </div>
+      </section>
+    </main>
+  }
+
   return <main className="rz-mobile-home" data-testid="mobile-home-page">
     <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
     <section className="rz-mobile-home-inner">
-      <h1 className="rz-mobile-home-welcome">Welkom {name} </h1>
-      <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+      <div className="rz-mobile-home-greeting">
+        <h1 className="rz-mobile-home-welcome">Welkom {name}</h1>
+        <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+      </div>
 
       {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
 
       <div className="rz-dashboard-status" aria-label="Actuele status">
         <button type="button" onClick={() => openStatus('meldingen')} className="rz-dashboard-status--notifications" data-testid="dashboard-status-notifications">
-          <strong>{dashboard?.status?.notifications ?? '–'}</strong>
+          <strong>{dashboard?.status?.notifications ?? '…'}</strong>
           <span>Meldingen</span>
         </button>
         <button type="button" onClick={() => openStatus('winkelen')} className="rz-dashboard-status--shopping" data-testid="dashboard-status-shopping">
-          <strong>{dashboard?.status?.shopping ?? '–'}</strong>
+          <strong>{dashboard?.status?.shopping ?? '…'}</strong>
           <span>Boodschappen</span>
         </button>
         <button type="button" onClick={() => openStatus('bonnen-open')} className="rz-dashboard-status--open-receipts" data-testid="dashboard-status-open-receipts">
-          <strong>{dashboard?.status?.put_away ?? '–'}</strong>
+          <strong>{dashboard?.status?.put_away ?? '…'}</strong>
           <span>Bonnen open</span>
         </button>
         <button
@@ -505,11 +530,11 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
           className="rz-dashboard-status--downloadable-receipts" data-testid="dashboard-status-downloadable-receipts"
           title={pendingReceipts?.count_available === false ? 'Aantal kon niet live worden opgehaald' : 'Nog te downloaden bonnen uit automatisch telbare winkelkoppelingen'}
         >
-          <strong>{pendingReceipts?.count_available === false ? '–' : (pendingReceipts?.pending_downloads ?? '–')}</strong>
+          <strong>{pendingReceipts == null ? '…' : pendingReceipts.count_available === false ? 'n/b' : (pendingReceipts.pending_downloads ?? 0)}</strong>
           <span>Bonnen downloaden</span>
         </button>
         <button type="button" onClick={() => openStatus('bijna-op')} className="rz-dashboard-status--almost-out" data-testid="dashboard-status-almost-out">
-          <strong>{almostOutCount ?? '–'}</strong>
+          <strong>{almostOutCount ?? '…'}</strong>
           <span>Bijna op</span>
         </button>
       </div>

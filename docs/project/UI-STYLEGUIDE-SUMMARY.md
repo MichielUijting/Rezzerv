@@ -1064,3 +1064,39 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Deze headercorrectie is appbreed: individuele schermen plaatsen geen eigen afwijkend mobiel headerlogo.
 - In het mobiele Uitpakken-overzicht staan de bestaande bulkacties **Exporteren** en **Verwijderen** onder de paginering in de normale documentstroom. Het actiegebied is niet sticky/fixed en krijgt geen extra wit paneel, rand of aparte achtergrond.
 - Bestaande voorwaarden voor selectie, beschikbaarheid en autorisaties blijven van toepassing.
+
+## Uniforme paginering voor tabellen en lijsten — 15 oktober 2026
+
+Voor alle gebruikerszichtbare tabellen en lange, tabelachtige lijsten op desktop en mobiel geldt de uniforme pagineringsbaseline:
+
+- Per pagina worden maximaal **10 resultaten** getoond, na filtering en sortering over de volledige relevante resultaatset.
+- De pagineringsbediening staat **onder** de tabel of lijst in de normale documentstroom en verschijnt uitsluitend wanneer er meer dan 10 resultaten zijn; zij is niet sticky of zwevend.
+- Bij wijziging van filters of sortering wordt pagina 1 getoond; na verwijdering of mutatie wordt een inmiddels ongeldige paginapositie naar de laatste bestaande pagina teruggebracht.
+- Bestaande geselecteerde records blijven geselecteerd bij wisselen van pagina. Een actie **Alles selecteren** heeft uitsluitend betrekking op de zichtbare records van de huidige pagina; bulkacties respecteren de totale expliciete selectie.
+- Dezelfde regels gelden voor eigen tabelimplementaties, de gedeelde `DataTable` en mobiele kaartlijsten; reeds aanwezige paginering wordt hergebruikt en niet gedupliceerd.
+- Korte statische navigatiemenu's, formulieren en vaste configuratiekeuzes worden niet kunstmatig gepagineerd.
+
+## Rustige paginawisseling (desktop en mobiel)
+
+Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobiele kaarten zichtbaar totdat de nieuwe set succesvol beschikbaar is (stale-while-revalidate). Alleen de records/kaarten en totalen voor de nieuwe pagina worden daarna tegelijk vervangen. Gebruik een bescheiden voortgangsindicatie zonder lege tussenweergave en blokkeer tijdelijk acties op nog zichtbare regels van de vorige pagina. Bij een eerste bezoek zonder eerdere resultaten blijft de normale laadmelding gelden. Bij wisseling van huishouden, autorisatiescope of andere gevoelige dataset mogen oude records niet zichtbaar blijven. Lokale paginering over al aanwezige gegevens wisselt direct, zonder laadstatus.
+
+## PR #590 — uniforme mobiele tabelselectie en bulkacties (17 oktober 2026)
+
+- **Uitpakken mobiel is de referentie**: de checkbox **Alles** staat bovenaan, rechts uitgelijnd direct boven iedere selecteerbare lijst/tabel. De selectie geldt voor de zichtbare pagina en bewaart een eerder geselecteerde andere pagina waar het scherm die selectie ondersteunt.
+- Bulkknoppen staan **rechts onder de tabel en onder de paginering**, in de normale documentstroom (geen sticky of zwevend actieblok). Dit geldt ook wanneer meerdere knoppen over regels moeten afbreken op smalle schermen.
+- Gebruik waar toepasselijk de gedeelde CSS-klassen `rz-mobile-table-select-row` en `rz-mobile-table-bulk-actions`, niet per scherm verschillende selectiebalken.
+- Toepassing op de mobiele bulkoverzichten Uitpakken (zowel bonnenlijst als bonregels in het detail), Kassa-bonnen, Kassa-bonregels en Bijna op. De bonregels in Uitpakken selecteren met **Alles** alleen de huidige pagina; selectie op andere pagina's blijft intact. Schermen zonder bulkselectie (zoals mobiele Voorraad en Boodschappen) krijgen niet kunstmatig een selectievakje.
+- **Bijna op** behoudt de aparte handeling **Verwijderingen ongedaan maken** onder het tabelpaneel op de groene schermachtergrond; deze handeling valt niet onder geselecteerde-rijen-bulkacties.
+
+## PR #590 — compact mobiel Dashboard (17 oktober 2026)
+
+- In de vijf bovenste status-/navigatietegels staat de **telling bovenaan** en de omschrijving **onderaan** in de tegel, gecentreerd; kleuren, tellerbronnen en navigatie blijven gelijk.
+- In iedere mobiele dashboardgrafiek staan de **titel links en de bijbehorende waarde rechts op dezelfde eerste regel**. De bestaande toelichting volgt er direct onder in **zwart**. De grafiek zelf en de vier periode-/drilldowncontracten blijven ongewijzigd.
+- De gedeelde `mobileHome.css`-grid gebruikt `title value` gevolgd door `detail detail` en `chart chart`. Er wordt geen afzonderlijke mobiele datalogica of tweede bron voor bedragen toegevoegd.
+
+## PR #590 — verdere verdichting mobiel Dashboard (17 oktober 2026)
+
+- Verwijder de **gezamenlijke witte achtergrond en omlijsting** achter de vijf status-tegels en achter de periodeknoppen Dagen/Weken/Maanden. Behoud de vijf afzonderlijke gekleurde klikbare tegels en de zichtbare actieve periodeknop.
+- Toon de welkomtekst en de gepersonaliseerde subtitel op dezelfde regel waar voldoende ruimte is; regelomloop blijft mogelijk op smalle mobiele schermen.
+- Maak de grafiekkaarten compacter met minder verticale kaartpadding en tussenruimte. Behoud de bestaande grafiekhoogte, aslabels, klikbare staven en toegankelijke focusstijlen: verkleinen mag geen gegevens of assen afsnijden.
+- Deze wijziging raakt alleen de mobiele dashboardpresentatie; waarden, periodefilters, grafiekgegevens en drilldowns blijven ongewijzigd.

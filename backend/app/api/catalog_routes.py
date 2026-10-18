@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
+from time import perf_counter
 import re
 from typing import Any
 
@@ -311,6 +313,9 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "product_type": f"COALESCE({product_type_expression}, '')",
         "gpc_brick_code": f"COALESCE({gpc_brick_code}, '')",
         "gpc_brick_name": f"COALESCE({gpc_brick_name}, '')",
+        "gpc_class_code": f"COALESCE({gpc_class_code}, '')",
+        "gpc_family_code": f"COALESCE({gpc_family_code}, '')",
+        "id": "CAST(gp.id AS TEXT)",
         "gpc_class_name": f"COALESCE({gpc_class_name}, '')",
         "gpc_family_name": f"COALESCE({gpc_family_name}, '')",
         "source": source_expression,
@@ -323,6 +328,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
 def _catalog_where(
     expressions: dict[str, str],
     name: str,
+    search: str,
     brand: str,
     primary_gtin: str,
     catalog_kind: str,
@@ -353,6 +359,21 @@ def _catalog_where(
         if value:
             conditions.append(f"LOWER({expressions[key]}) LIKE :{key}")
             params[key] = f"%{value}%"
+    # Free text search across all visible catalog attributes, not just name.
+    # Explicit per-column filters above continue to work independently.
+    normalized_search = (search if isinstance(search, str) else "").strip().lower()
+    if normalized_search:
+        searchable_keys = (
+            "id", "name", "brand", "primary_gtin", "catalog_kind",
+            "product_type", "gpc_brick_code", "gpc_brick_name",
+            "gpc_class_code", "gpc_class_name", "gpc_family_code",
+            "gpc_family_name", "source", "household_article_count",
+        )
+        conditions.append("(" + " OR ".join(
+            f"LOWER(CAST({expressions[key]} AS TEXT)) LIKE :search"
+            for key in searchable_keys
+        ) + ")")
+        params["search"] = f"%{normalized_search}%"
     household_value = (
         household_article_count if isinstance(household_article_count, str) else ""
     ).strip()
@@ -392,6 +413,7 @@ def _catalog_row(global_product_id: str) -> dict[str, Any] | None:
 @router.get("")
 def list_catalog(
     name: str = Query(default="", max_length=200),
+    search: str = Query(default="", max_length=200),
     brand: str = Query(default="", max_length=200),
     primary_gtin: str = Query(default="", max_length=200),
     catalog_kind: str = Query(default="", max_length=50),
@@ -407,25 +429,19 @@ def list_catalog(
     limit: int = Query(default=10, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
 ):
+    started = perf_counter()
     if "global_products" not in _tables():
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
-    with engine.begin() as conn:
-        product_ids = [
-            str(row.get("id") or "").strip()
-            for row in conn.execute(text("""
-                SELECT id
-                FROM global_products
-                WHERE LOWER(TRIM(COALESCE(status, 'active'))) <> 'deleted'
-            """)).mappings().all()
-            if str(row.get("id") or "").strip()
-        ]
-        ensure_dutch_gpc_assignments(conn, product_ids)
+    # Listing must be read-only and page-sized. GPC repair is performed by
+    # its dedicated write flows, not on every page view.
+    gpc_done = perf_counter()
 
     select_parts, joins, expressions = _catalog_projection()
     where_sql, params = _catalog_where(
         expressions,
         name,
+        search,
         brand,
         primary_gtin,
         catalog_kind,
@@ -462,10 +478,18 @@ def list_catalog(
     page_params = {**params, "limit": normalized_limit, "offset": normalized_offset}
     with engine.begin() as conn:
         total = int(conn.execute(text(count_sql), params).scalar() or 0)
+        count_done = perf_counter()
         items = [
             dict(row)
             for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
+    page_done = perf_counter()
+    if page_done - started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "catalog_list_timing total_ms=%.1f setup_ms=%.1f count_ms=%.1f page_ms=%.1f items=%d",
+            (page_done-started)*1000, (gpc_done-started)*1000, (count_done-gpc_done)*1000,
+            (page_done-count_done)*1000, len(items),
+        )
     return {
         "items": items,
         "total": total,

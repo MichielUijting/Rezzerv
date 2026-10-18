@@ -514,17 +514,13 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       ) : null}
 
       {mode === 'list' ? (
-        <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list">
+        <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list" aria-busy={receiptsLoading}>
           <div className="rz-mobile-kassa-list-actions"><input type="file" accept="image/*,application/pdf" hidden ref={uploadRef} aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} /><Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
           <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
-          <div className="rz-mobile-kassa-bulk">
-            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receiptPagination.pageItems.map(receiptId) : [])} /> Alles</label>
-            <div className="rz-mobile-kassa-bulk-actions">
-              <Button type="button" disabled={!selectedReceiptIds.length || busy} onClick={approveSelectedReceipts}>Goedkeuren</Button>
-              <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
-            </div>
+          <div className="rz-mobile-table-select-row" aria-label="Selectie Kassa-bonnen">
+            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...new Set([...current, ...receiptPagination.pageItems.map(receiptId)])] : current.filter((id) => !receiptPagination.pageItems.some((item) => receiptId(item) === id)))} disabled={busy || !receiptPagination.pageItems.length} /> Alles</label>
           </div>
-          {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
+          {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
           {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receiptPagination.pageItems.map((item) => (
             <div key={receiptId(item)} className="rz-mobile-kassa-receipt-card">
@@ -537,6 +533,10 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
             </div>
           ))}
           <MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Bonnen" />
+          <div className="rz-mobile-kassa-bulk-actions rz-mobile-table-bulk-actions" data-testid="mobile-kassa-bulk-actions">
+            <Button type="button" disabled={!selectedReceiptIds.length || busy} onClick={approveSelectedReceipts}>Goedkeuren</Button>
+            <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
+          </div>
         </main>
       ) : null}
 
@@ -564,9 +564,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               </section>
             ) : (
               <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
-                <div className="rz-mobile-kassa-bulk">
-                  <label><input type="checkbox" checked={lines.length > 0 && lines.filter((line) => !line.is_deleted).every((line) => selectedLineIds.includes(String(line.id || line.receipt_line_id)))} onChange={(event) => setSelectedLineIds(event.target.checked ? lines.filter((line) => !line.is_deleted).map((line) => String(line.id || line.receipt_line_id)) : [])} /> Alles</label>
-                  <Button type="button" variant="secondary" onClick={() => setAddingLine((value) => !value)}>Artikel toevoegen</Button>
+                <div className="rz-mobile-table-select-row" aria-label="Selectie Kassa-bonregels">
+                  <Button type="button" variant="secondary" onClick={() => setAddingLine((value) => !value)} style={{ marginRight: 'auto' }}>Artikel toevoegen</Button>
+                  <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonregels" checked={linePagination.pageItems.some((line) => !line.is_deleted) && linePagination.pageItems.filter((line) => !line.is_deleted).every((line) => selectedLineIds.includes(String(line.id || line.receipt_line_id)))} onChange={(event) => { const pageIds = linePagination.pageItems.filter((line) => !line.is_deleted).map((line) => String(line.id || line.receipt_line_id)); setSelectedLineIds((current) => event.target.checked ? [...new Set([...current, ...pageIds])] : current.filter((id) => !pageIds.includes(id))) }} disabled={busy || !linePagination.pageItems.some((line) => !line.is_deleted)} /> Alles</label>
                 </div>
                 {addingLine ? (
                   <div className="rz-mobile-kassa-fields">
@@ -591,7 +591,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
                   </div>
                 ))}
                 <MobilePaginationControls {...linePagination} ariaLabel="Paginering Bonregels" />
-                <div className="rz-mobile-kassa-bulk">
+                <div className="rz-mobile-kassa-bulk-actions rz-mobile-table-bulk-actions" data-testid="mobile-kassa-line-bulk-actions">
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={exportLines}>Exporteren</Button>
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={confirmDeleteLines}>Verwijderen</Button>
                 </div>

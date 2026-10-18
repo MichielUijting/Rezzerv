@@ -377,7 +377,7 @@ export default function MobileShopping() {
           <div>
             <div className="rz-mobile-shopping-summary-title">Mijn boodschappen</div>
             <div className="rz-mobile-shopping-summary-meta">
-              {loading ? 'Boodschappen laden…' : `${Number(list.item_count || 0)} artikelen • ${toBuyItems.length} nog te kopen • ${cartItems.length} in winkelwagen`}
+              {loading && !(list.items || []).length ? 'Boodschappen laden…' : `${Number(list.item_count || 0)} artikelen • ${toBuyItems.length} nog te kopen • ${cartItems.length} in winkelwagen`}
             </div>
           </div>
           <span className="rz-mobile-shopping-count" aria-label={`${toBuyItems.length} nog te kopen`}>{toBuyItems.length}</span>
@@ -386,8 +386,8 @@ export default function MobileShopping() {
         {error ? <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert"><div>{error}</div><Button type="button" variant="secondary" onClick={loadList}>Opnieuw proberen</Button></section> : null}
         {!error && !loading && (list.items || []).length === 0 ? <section className="rz-mobile-inventory-state"><strong>Nog geen artikelen bij Boodschappen.</strong></section> : null}
 
-        {!error && !loading && (list.items || []).length > 0 ? (
-          <div className="rz-mobile-shopping-groups">
+        {!error && (list.items || []).length > 0 ? (
+          <div className="rz-mobile-shopping-groups" aria-busy={loading} style={{ pointerEvents: loading ? 'none' : undefined }}>
             <section className="rz-mobile-shopping-group" aria-label="Nog te kopen" data-testid="mobile-shopping-to-buy">
               <div className="rz-mobile-shopping-group-header">
                 <div className="rz-mobile-shopping-group-title">Nog te kopen</div>

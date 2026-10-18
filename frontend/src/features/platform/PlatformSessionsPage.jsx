@@ -1,6 +1,7 @@
 import React from 'react'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
+import Pagination from '../../ui/Pagination.jsx'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
 
@@ -16,6 +17,11 @@ function formatDateTime(value) {
 
 export default function PlatformSessionsPage() {
   const [sessions, setSessions] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(sessions.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = sessions.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
   const [pendingSession, setPendingSession] = React.useState(null)
@@ -37,6 +43,7 @@ export default function PlatformSessionsPage() {
       }
       const payload = await response.json()
       setSessions(Array.isArray(payload?.items) ? payload.items : [])
+      setPage(1)
     } catch (err) {
       setError(err?.message || 'Sessies ophalen mislukt.')
     } finally {
@@ -95,13 +102,13 @@ export default function PlatformSessionsPage() {
 
       {error ? <Card><p role="alert">{error}</p></Card> : null}
       {result ? <Card><p role="status">{result}</p></Card> : null}
-      {loading ? <Card><p>Actieve sessies laden...</p></Card> : null}
+      {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !sessions.length ? (
         <Card><p>Er zijn geen actieve sessies om te beheren.</p></Card>
       ) : null}
 
-      {!loading && sessions.map((session) => (
+      {visibleItems.map((session) => (
         <Card key={session.session_id}>
           <div data-testid={`platform-session-${session.session_id}`}>
             <h3>{session.email}</h3>
@@ -122,6 +129,8 @@ export default function PlatformSessionsPage() {
           </div>
         </Card>
       ))}
+
+      {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
       {pendingSession ? (
         <Card>

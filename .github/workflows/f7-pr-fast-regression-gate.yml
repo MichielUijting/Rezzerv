@@ -2,6 +2,7 @@ name: F7-02 PR Fast Regression aggregate gate
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
   workflow_dispatch:
     inputs:
       candidate_sha:

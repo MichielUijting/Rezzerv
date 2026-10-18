@@ -361,6 +361,10 @@ def get_retailer_pending_receipt_summary(
             "receipts_found": None,
         }
 
+    # No connected AH account means zero AH downloads, not an unknown count.
+    # Connection failures of a connected account remain explicitly unavailable.
+    if not ah.get("connected"):
+        ah = {**ah, "pending_downloads": 0, "count_available": True}
     return {
         "pending_downloads": ah.get("pending_downloads"),
         "count_available": bool(ah.get("count_available")),

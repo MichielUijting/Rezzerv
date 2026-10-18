@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import Pagination from '../../ui/Pagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   deleteHouseholdMember,
@@ -120,6 +121,17 @@ export default function SettingsHouseholdPage() {
   const [data, setData] = useState(null)
   const [authorization, setAuthorization] = useState({ members: [], roles: [] })
   const [invitations, setInvitations] = useState([])
+  const [memberPage, setMemberPage] = useState(1)
+  const [invitationPage, setInvitationPage] = useState(1)
+  const memberCount = data?.members?.length || 0
+  const memberPageCount = Math.max(1, Math.ceil(memberCount / 10))
+  const invitationPageCount = Math.max(1, Math.ceil(invitations.length / 10))
+  const currentMemberPage = Math.min(memberPage, memberPageCount)
+  const currentInvitationPage = Math.min(invitationPage, invitationPageCount)
+  const visibleMembers = (data?.members || []).slice((currentMemberPage - 1) * 10, currentMemberPage * 10)
+  const visibleInvitations = invitations.slice((currentInvitationPage - 1) * 10, currentInvitationPage * 10)
+  useEffect(() => { if (memberPage > memberPageCount) setMemberPage(memberPageCount) }, [memberPage, memberPageCount])
+  useEffect(() => { if (invitationPage > invitationPageCount) setInvitationPage(invitationPageCount) }, [invitationPage, invitationPageCount])
   const [invitationForm, setInvitationForm] = useState(initialInvitationForm)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -324,7 +336,7 @@ export default function SettingsHouseholdPage() {
                     <p className="rz-household-section-copy">Kies hier de rol van iedere gebruiker. Bekijk de betekenis van de rollen via Autorisaties.</p>
                   </div>
                   <div className="rz-household-members-list">
-                    {(data?.members || []).map((member) => {
+                    {visibleMembers.map((member) => {
                       const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
                       const currentRoleKey = linkedAuthorization?.role_key || ''
                       const assignableRoles = authorization.roles.filter((role) => ASSIGNABLE_ROLE_KEYS.has(role.role_key))
@@ -359,6 +371,7 @@ export default function SettingsHouseholdPage() {
                       )
                     })}
                   </div>
+                  {memberPageCount > 1 ? <Pagination page={currentMemberPage} pageCount={memberPageCount} onPageChange={setMemberPage} /> : null}
                 </section>
 
                 <section className="rz-household-form-section" data-testid="household-invitations-section">
@@ -390,7 +403,7 @@ export default function SettingsHouseholdPage() {
                     <div className="rz-household-invitations-list" data-testid="household-invitations-list">
                       <h4 className="rz-household-invitations-title">Uitnodigingen</h4>
                       {invitations.length === 0 ? <p className="rz-household-section-copy">Er zijn nog geen uitnodigingen voor dit huishouden.</p> : null}
-                      {invitations.map((invitation) => {
+                      {visibleInvitations.map((invitation) => {
                         const lifecycleStatus = String(invitation.status || '')
                         const deliveryStatus = String(invitation.delivery_status || 'not_sent')
                         const isPending = lifecycleStatus === 'pending'
@@ -421,6 +434,7 @@ export default function SettingsHouseholdPage() {
                           </div>
                         )
                       })}
+                      {invitationPageCount > 1 ? <Pagination page={currentInvitationPage} pageCount={invitationPageCount} onPageChange={setInvitationPage} /> : null}
                     </div>
                   ) : null}
                 </section>

@@ -2,6 +2,7 @@ import React from 'react'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 
 const FEATURE_FLAGS_ENDPOINT = '/api/platform/feature-flags'
@@ -41,6 +42,11 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
   const endpoint = functional ? '/api/platform/functional-features' : FEATURE_FLAGS_ENDPOINT
   const [loading, setLoading] = React.useState(true)
   const [items, setItems] = React.useState([])
+  const [page, setPage] = React.useState(1)
+  const pageCount = Math.max(1, Math.ceil(items.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = items.slice((currentPage - 1) * 10, currentPage * 10)
+  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [error, setError] = React.useState('')
   const [pendingChange, setPendingChange] = React.useState(null)
   const [updating, setUpdating] = React.useState(false)
@@ -54,6 +60,7 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
       .then((payload) => {
         if (!active) return
         setItems(Array.isArray(payload?.items) ? payload.items : [])
+        setPage(1)
         setError('')
       })
       .catch((requestError) => {
@@ -118,7 +125,7 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
               <p data-testid="platform-feature-flags-empty">Geen featureflags geregistreerd.</p>
             ) : null}
 
-            {!loading ? items.map((item) => (
+            {!loading ? visibleItems.map((item) => (
               <div key={item.key} data-testid={`platform-feature-flag-${item.key}`}>
                 <Card className="rz-card-home">
                   <h3>{item.label || item.key}</h3>
@@ -138,6 +145,8 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
                 </Card>
               </div>
             )) : null}
+
+            {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
             {pendingChange ? (
               <Card className="rz-card-home">

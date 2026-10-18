@@ -285,3 +285,47 @@
   stroke: currentColor;
   stroke-width: 1.9;
 }
+
+/* Uitpakken is de mobile bulk layout authority: select-all top right,
+   actions bottom right after pagination (never sticky). */
+.rz-mobile-table-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 44px;
+}
+.rz-mobile-table-select-row > label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--color-mobile-ui-primary);
+  cursor: pointer;
+}
+.rz-mobile-table-select-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-ui-primary);
+}
+.rz-mobile-table-bulk-actions {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Existing screen wrappers must not override the shared alignment. */
+.rz-mobile-unpack-actions.rz-mobile-table-bulk-actions,
+.rz-mobile-inventory-state.rz-mobile-table-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

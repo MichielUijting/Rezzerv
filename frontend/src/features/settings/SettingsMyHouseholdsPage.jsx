@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
 import Input from '../../ui/Input'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
@@ -24,6 +25,11 @@ export default function SettingsMyHouseholdsPage() {
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const [payload, setPayload] = useState({ items: [], can_create_household: false })
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(payload.items.length / 10))
+  const currentPage = Math.min(page, pageCount)
+  const visibleHouseholds = payload.items.slice((currentPage - 1) * 10, currentPage * 10)
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -131,7 +137,7 @@ export default function SettingsMyHouseholdsPage() {
 
           {loading ? <p>Huishoudens laden…</p> : (
             <div style={{ display: 'grid', gap: 12 }} data-testid="my-households-list">
-              {payload.items.map((item) => (
+              {visibleHouseholds.map((item) => (
                 <div
                   key={item.household_id}
                   style={{ border: '1px solid #dfe4ea', borderRadius: 12, padding: 14 }}
@@ -155,6 +161,7 @@ export default function SettingsMyHouseholdsPage() {
                   ) : null}
                 </div>
               ))}
+              {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
             </div>
           )}
         </Card>

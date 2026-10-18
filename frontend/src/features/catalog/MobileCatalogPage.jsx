@@ -43,7 +43,7 @@ export default function MobileCatalogPage() {
           sort_by: sortBy,
           sort_direction: direction,
         })
-        if (query.trim()) params.set('name', query.trim())
+        if (query.trim()) params.set('search', query.trim())
         if (kind) params.set('catalog_kind', kind)
         const response = await fetchJsonWithAuth(`/api/catalog?${params.toString()}`, { method: 'GET' })
         const data = await response.json().catch(() => ({}))
@@ -66,7 +66,7 @@ export default function MobileCatalogPage() {
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
-  const summary = isLoading ? 'Catalogus laden…' : `${total} artikelen`
+  const summary = isLoading && items.length === 0 ? 'Catalogus laden…' : `${total} artikelen`
   const hasFilters = Boolean(query || kind)
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function MobileCatalogPage() {
               type="search"
               value={query}
               onChange={(event) => { setQuery(event.target.value); setPage(1) }}
-              placeholder="Zoek artikel"
+              placeholder="Zoek artikel, merk, GTIN of brick-code"
               autoComplete="off"
             />
           </label>
@@ -135,7 +135,7 @@ export default function MobileCatalogPage() {
         {!error && !isLoading && items.length === 0 ? <section className="rz-mobile-catalog-state">Geen catalogusartikelen gevonden.</section> : null}
 
         {!error && items.length > 0 ? (
-          <section className="rz-mobile-catalog-list" aria-label="Catalogusartikelen">
+          <section className="rz-mobile-catalog-list" aria-label="Catalogusartikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {items.map((item) => (
               <button
                 key={item.id}

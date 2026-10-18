@@ -12,6 +12,7 @@ import {
   normalizeAlmostOutText,
 } from './mobileAlmostOutModel.js'
 import '../../pages/mobileVoorraad.css'
+import { exportAlmostOutRows, moveAlmostOutToShopping, hideAlmostOutRows, restoreAlmostOutRows } from './almostOutBulk.js'
 
 async function resolveHouseholdId() {
   const storedContext = readStoredAuthContext()
@@ -43,6 +44,9 @@ async function loadMobileAlmostOut() {
 
 export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   const [rows, setRows] = useState([])
+  const [selectedIds, setSelectedIds] = useState([])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
@@ -63,6 +67,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   }
 
   useEffect(() => {
+    if (readStoredAuthContext()?.context_type !== 'regular') {
+      setIsLoading(false)
+      return
+    }
     reload()
   }, [])
 
@@ -108,9 +116,69 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   )
   const hasActiveFilters = Boolean(query || (locationTrackingEnabled && locationFilter))
 
+  const currentPageIds = almostOutPagination.pageItems.map((row) => row.id)
+  const pageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.includes(id))
+  const selectedRows = rows.filter((row) => selectedIds.includes(row.id))
+  function toggleSelected(id) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  }
+  function togglePageSelection() {
+    setSelectedIds((current) => pageSelected
+      ? current.filter((id) => !currentPageIds.includes(id))
+      : [...new Set([...current, ...currentPageIds])])
+  }
+
+  async function handleBulkAction(action) {
+    if (bulkBusy || (action !== 'restore' && !selectedRows.length)) return
+    if (action === 'export') return exportAlmostOutRows(selectedRows)
+    if (action === 'hide' && !window.confirm(`Verwijder ${selectedRows.length} melding(en) uit Bijna op? De voorraad blijft bewaard. Verborgen meldingen zijn herstelbaar.`)) return
+    setBulkBusy(true)
+    setError('')
+    setBulkMessage('')
+    try {
+      if (action === 'shopping') {
+        const total = await moveAlmostOutToShopping(selectedRows)
+        setBulkMessage(`${total} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
+      } else {
+        if (action === 'hide') await hideAlmostOutRows(selectedRows)
+        else await restoreAlmostOutRows()
+        setRows(await loadMobileAlmostOut())
+        setSelectedIds([])
+        setBulkMessage(action === 'hide' ? 'Meldingen verborgen, voorraad behouden.' : 'Verwijderingen ongedaan gemaakt.')
+      }
+    } catch (err) {
+      setError(String(err?.message || 'Bulkverwerking mislukt'))
+    } finally {
+      // Reconcile the view also when part of a batch transfer succeeded.
+      if (action === 'shopping') {
+        try {
+          setRows(await loadMobileAlmostOut())
+          setSelectedIds([])
+        } catch {
+          // Preserve the actionable transfer error.
+        }
+      }
+      setBulkBusy(false)
+    }
+  }
+
   function clearFilters() {
     setQuery('')
     setLocationFilter('')
+  }
+
+  // Platform/Superuser sessions have no household inventory scope.
+  if (readStoredAuthContext()?.context_type !== 'regular') {
+    return (
+      <div className="rz-screen rz-mobile-inventory-screen" data-testid="mobile-almost-out-page">
+        <MobileModuleHeader title="Bijna op" testId="mobile-almost-out-header" />
+        <main className="rz-mobile-inventory-content">
+          <section className="rz-mobile-inventory-state" role="status">
+            Bijna op is alleen beschikbaar binnen een geselecteerd huishouden.
+          </section>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -175,9 +243,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
         </section>
 
         <div className="rz-mobile-inventory-summary" aria-live="polite">
-          {isLoading ? 'Bijna-op-artikelen laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
+          {isLoading && rows.length === 0 ? 'Bijna-op-artikelen laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
         </div>
 
+        {bulkMessage ? <div role="status" className="rz-mobile-inventory-state">{bulkMessage}</div> : null}
         {error ? (
           <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
             <div>{error}</div>
@@ -196,8 +265,11 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
 
+        <section className="rz-mobile-table-select-row" aria-label="Bijna op selectie">
+          <label><input type="checkbox" checked={pageSelected} onChange={togglePageSelection} disabled={bulkBusy || !currentPageIds.length} /> Alles</label>
+        </section>
         {!error && filteredRows.length > 0 ? (
-          <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen">
+          <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen" aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
             {almostOutPagination.pageItems.map((row) => {
               const title = row.householdName || row.primaryName
               const contextParts = []
@@ -242,9 +314,13 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
                 ? `/voorraad/${encodeURIComponent(row.detailId)}?artikel=${encodeURIComponent(title)}`
                 : ''
 
-              return detailTarget ? (
+              return <div key={row.id} style={{ display: 'grid', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px' }}>
+                  <input type="checkbox" aria-label={`Selecteer ${title}`} checked={selectedIds.includes(row.id)} disabled={bulkBusy} onChange={() => toggleSelected(row.id)} />
+                  Selecteren
+                </label>
+                {detailTarget ? (
                 <Link
-                  key={row.id}
                   to={detailTarget}
                   className="rz-mobile-inventory-card"
                   data-testid={`mobile-almost-out-open-detail-${row.detailId}`}
@@ -252,15 +328,24 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
                   {content}
                 </Link>
               ) : (
-                <div key={row.id} className="rz-mobile-inventory-card rz-mobile-inventory-card--disabled">
+                <div className="rz-mobile-inventory-card rz-mobile-inventory-card--disabled">
                   {content}
                 </div>
-              )
+              )}
+              </div>
             })}
           </section>
         ) : null}
         <MobilePaginationControls {...almostOutPagination} ariaLabel="Paginering Bijna op" />
+        <section className="rz-mobile-inventory-state rz-mobile-table-bulk-actions" aria-label="Overige Bijna op bulkacties">
+          <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('export')}>Exporteren</Button>
+          <Button type="button" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('shopping')}>Naar Boodschappenlijst</Button>
+          <Button type="button" variant="secondary" disabled={!selectedRows.length || bulkBusy} onClick={() => handleBulkAction('hide')}>Verwijderen</Button>
+        </section>
       </main>
+      <div className="rz-mobile-almost-out-undo" style={{ padding: '8px 12px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <Button type="button" variant="secondary" disabled={bulkBusy} onClick={() => handleBulkAction('restore')}>Verwijderingen ongedaan maken</Button>
+      </div>
     </div>
   )
 }
