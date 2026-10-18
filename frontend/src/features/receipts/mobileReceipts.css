@@ -302,3 +302,17 @@
 .rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr.rz-mobile-unpack-row--processed {
   background: #fff;
 }
+
+/* Kassa and Uitpakken share one full-card receipt status treatment. */
+.rz-mobile-unpack-card.rz-mobile-unpack-card--needs-review,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--needs-review:hover,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--needs-review:active,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--needs-review.rz-mobile-unpack-card--selected {
+  background: #fff1dc;
+}
+.rz-mobile-unpack-card.rz-mobile-unpack-card--checked,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--checked:hover,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--checked:active,
+.rz-mobile-unpack-card.rz-mobile-unpack-card--checked.rz-mobile-unpack-card--selected {
+  background: #eef7f0;
+}
