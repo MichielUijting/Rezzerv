@@ -71,4 +71,24 @@ assert.match(storeBatch, /mobile-unpack-detail-bulk-actions/)
 assert.match(storeBatch, /mobileLinePagination\.pageItems\.filter/, 'Uitpakken moet alleen zichtbare regels selecteren')
 assert.match(mobileCss, /\.rz-mobile-table-select-row\s*\{[\s\S]*justify-content:\s*flex-end/)
 assert.match(mobileCss, /\.rz-mobile-table-bulk-actions\s*\{[\s\S]*justify-content:\s*flex-end/)
+
+// Kassa en Uitpakken delen kaartstructuur en dezelfde statuskleuren.
+const mobileReceiptStatus = readFileSync(new URL('../src/features/receipts/mobileReceiptStatus.js', import.meta.url), 'utf8')
+const unpackCardCss = readFileSync(new URL('../src/features/receipts/mobileReceipts.css', import.meta.url), 'utf8')
+const kassaCardCss = readFileSync(new URL('../src/features/kassa/mobileKassa.css', import.meta.url), 'utf8')
+for (const source of [receipts, kassa]) {
+  assert.match(source, /mobileReceiptStatusClass\(/)
+  assert.match(source, /rz-mobile-inventory-card rz-mobile-unpack-card/)
+  assert.match(source, /rz-mobile-inventory-card-title/)
+  assert.match(source, /rz-mobile-inventory-card-meta/)
+  assert.match(source, /artikelen<\/span>/)
+}
+assert.match(mobileReceiptStatus, /normalized === 'controle nodig'/)
+assert.match(mobileReceiptStatus, /normalized === 'gecontroleerd'/)
+assert.match(unpackCardCss, /rz-mobile-unpack-card--needs-review[\s\S]*background:\s*#fff1dc;/)
+assert.match(unpackCardCss, /rz-mobile-unpack-card--checked[\s\S]*background:\s*#eef7f0;/)
+assert.match(kassaCardCss, /\.rz-mobile-kassa \.rz-mobile-kassa-receipt-card\.rz-mobile-unpack-card/)
+assert.doesNotMatch(receipts, /<span>\{item\.statusLabel\}<\/span>/)
+assert.doesNotMatch(kassa, /<span>\{item\.po_norm_status_label \|\| item\.inbox_status/)
+
 console.log('MOBILE_PAGINATION_CONTRACT_GREEN')
