@@ -82,7 +82,7 @@ assert.doesNotMatch(mobile,/onClick=\{\(\) => changeSelectedLines\(false\)\}>All
 assert.match(mobile,/onClick=\{showReceiptList\}>Bonnen<\/Button>/)
 assert.match(mobile,/const requestedReceiptId = searchParams\.get\('receipt'\) \|\| ''/)
 assert.match(mobile,/if \(requestedReceiptId\) \{[\s\S]*await openReceipt\(requestedReceiptId\)[\s\S]*return/)
-assert.match(mobile,/if \(requestedView === 'bonnen'\) \{[\s\S]*setMode\('list'\)/)
+assert.match(mobile,/if \(requestedView === 'bonnen' \|\| manualReceiptListRef\.current\) \{[\s\S]*setMode\('list'\)/)
 assert.doesNotMatch(mobile,/variant=\"secondary\" onClick=\{showReceiptList\}>Bonnen/)
 assert.match(mobile,/Vul eerst de winkel in bij Bonkop/)
 assert.doesNotMatch(mobile,/return fileRef\.current\?\.click\(\)/)
@@ -99,6 +99,9 @@ const fallbackTrack = {
 }
 assert.equal(cameraPixelCapacity(highResTrack), 3840 * 2160)
 assert.equal(cameraPixelCapacity(fallbackTrack), 1920 * 1080)
+assert.match(desktop, /const \[isPreviewCollapsed, setIsPreviewCollapsed\] = useState\(true\)/)
+assert.match(desktop, /setIsPreviewCollapsed\(true\)\s*\}, \[receipt\?\.id, transientPreview\?\.originalUrl\]\)/)
+
 console.log('CAMERA_RESOLUTION_SELECTION_GREEN')
 
 assert.match(mobile, /requestedView === 'bonnen' \? 'list' : 'camera'/)
@@ -116,3 +119,10 @@ assert.match(mobile, /rz-mobile-table-select-row/)
 assert.match(mobile, /rz-mobile-table-bulk-actions/)
 assert.match(mobile, />Goedkeuren<\/Button>/)
 assert.match(mobile, />Verwijderen<\/Button>/)
+
+
+assert.match(mobile, /const manualReceiptListRef = useRef\(false\)/)
+assert.match(mobile, /function showReceiptList\(\)\s*\{\s*manualReceiptListRef\.current = true/)
+assert.match(mobile, /if \(requestedView === 'bonnen' \|\| manualReceiptListRef\.current\)/)
+assert.match(mobile, /async function startCamera\(\)\s*\{\s*if \(manualReceiptListRef\.current\) return/)
+assert.match(mobile, /if \(manualReceiptListRef\.current\) return\s*if \(granted\) return openCamera\(\)/)

@@ -176,7 +176,7 @@ const externalReceiptItems = readFileSync(new URL('../src/features/externalDatab
 assert.match(externalReceiptItems, /<Pagination page=\{currentPage\}/)
 assert.doesNotMatch(externalReceiptItems, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
 const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
-assert.match(inventoryPage, /const inventoryPromise = Promise\.all\(/)
+assert.match(inventoryPage, /const inventoryPromise = fetchInventoryRows\(\)/)
 assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
 
 // Regression: catalog page reads never launch a full write/backfill of all
@@ -216,5 +216,10 @@ for (const [name, component, containerClose] of [
   assert.ok(component.includes("action === 'shopping'"), `Refresh transferred rows on ${name}`)
   assert.ok(!component.includes('>Verborgen meldingen herstellen</Button>'), `Old undo label remains on ${name}`)
 }
+
+const voorraadFirstPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
+assert.match(voorraadFirstPage, /const inventoryPromise = fetchInventoryRows\(\)/)
+assert.match(voorraadFirstPage, /assignmentPromise\.then\(\(assignments\) =>/)
+assert.doesNotMatch(voorraadFirstPage, /const inventoryPromise = Promise\.all\(\[/)
 
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')

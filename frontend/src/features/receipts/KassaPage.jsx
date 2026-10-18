@@ -1575,10 +1575,10 @@ async function saveLine(lineId, overrides = null) {
 }
 
 function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback, onDeleteReceipt }) {
-  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(true)
 
   useEffect(() => {
-    setIsPreviewCollapsed(false)
+    setIsPreviewCollapsed(true)
   }, [receipt?.id, transientPreview?.originalUrl])
 
   return (

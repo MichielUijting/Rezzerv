@@ -1100,3 +1100,24 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - Toon de welkomtekst en de gepersonaliseerde subtitel op dezelfde regel waar voldoende ruimte is; regelomloop blijft mogelijk op smalle mobiele schermen.
 - Maak de grafiekkaarten compacter met minder verticale kaartpadding en tussenruimte. Behoud de bestaande grafiekhoogte, aslabels, klikbare staven en toegankelijke focusstijlen: verkleinen mag geen gegevens of assen afsnijden.
 - Deze wijziging raakt alleen de mobiele dashboardpresentatie; waarden, periodefilters, grafiekgegevens en drilldowns blijven ongewijzigd.
+
+## PR #591 — heldere huishoudwissel en rustige Kassa-start (18 oktober 2026)
+
+- Keuzevelden en dropdowns in de header tonen **donkergroene tekst op een witte of lichtgroene achtergrond**, of **witte tekst op een donkergroene achtergrond**. Witte tekst op grijs en andere onvoldoende contrasterende combinaties zijn niet toegestaan. Deze norm geldt ook voor de zichtbare opties van de huishoudwisselaar.
+- De huishoudwisselaar blijft een bestaande toegankelijke select, met de actuele huishoudnaam, bestaande autorisatievoorwaarden en zichtbare toetsenbordfocus. Er worden geen nieuwe rollen of wisselroutes ingevoerd.
+- In Kassa desktop is het paneel met de afbeelding/preview van de kassabon **standaard ingeklapt** bij openen of wisselen van bon. De gebruiker kan het paneel altijd weer uitklappen; de inhoud en bonregels blijven beschikbaar.
+- Voorraad presenteert aanwezige artikelregels zodra de primaire voorraadrespons arriveert; optionele artikelgroeplabels mogen later worden aangevuld, zonder wijzigingen van bewerkte artikelwaarden of huishoudencontext.
+- De bestaande pagineringsstandaard blijft **10 resultaten per pagina**; een eventuele appbrede wijziging naar 8 vereist een apart expliciet PO-besluit en daarop aansluitende contractaanpassing.
+
+## PR #591 — mobiele kassabonkaarten en uniforme actiebalk (18 oktober 2026)
+
+- De mobiele bonnenlijsten van **Uitpakken** en **Kassa** gebruiken dezelfde compacte kaartstructuur: selectiecheckbox links, winkelnaam bovenaan, daaronder datum en aantal artikelen. De statusnaam wordt **niet als zichtbare tekst** op de kaart herhaald.
+- Een bon met de status **Controle nodig** krijgt als volledig kaartvlak lichtoranje (`#FFF1DC`); **Gecontroleerd** krijgt een volledig lichtgroen kaartvlak (`#EEF7F0`). Deze achtergrond blijft zichtbaar bij selectie, hover en aanraking. Andere statussen behouden hun neutrale weergave; de feitelijke status, filters en verwerkingsregels blijven ongewijzigd.
+- De niet-zichtbare status blijft via de toegankelijke naam van de openknop beschikbaar voor ondersteunende technologie.
+- In de vaste mobiele actiebalk is **Meer** een ongekaderde actie, met dezelfde iconhoogte (44 px), totaalhoogte, tekstpositie en focusbehandeling als de andere acties. Geen extra knoprand of afwijkende knopachtergrond.
+
+## PR #591 — bonnenlijsten zonder omvattend paneel (18 oktober 2026)
+
+- In de mobiele bonnenlijsten van **Kassa** en **Uitpakken** staat **geen wit of ander omvattend paneel** achter de afzonderlijke bonkaarten. De lijstcontainer is transparant, zonder eigen rand of afronding; de lichtgroene schermachtergrond blijft tussen de kaarten zichtbaar.
+- De checkbox voor selectie staat **naast en buiten de eigenlijke bonkaart**, rechtstreeks op de lichtgroene schermachtergrond.
+- Alleen het klikbare individuele bonpaneel heeft een eigen afgeronde achtergrond en een subtiele schaduw. De kleur blijft oranje bij **Controle nodig**, lichtgroen bij **Gecontroleerd**, en wit bij overige statussen. Dit betreft uitsluitend de visuele presentatie; status, bonselectie en verwerking blijven ongewijzigd.

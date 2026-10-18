@@ -105,9 +105,10 @@ export default function Header({ title }) {
             <div className="rz-header-subtitle">Huishouden: {household}</div>
           )}
           {canSwitchHouseholds && (
-            <label className="rz-header-subtitle" style={{ display: "block", marginTop: 4 }}>
+            <label className="rz-header-household-switch">
               <span className="sr-only">Wissel huishouden</span>
               <select
+                className="rz-header-household-select"
                 value={activeHouseholdId}
                 onChange={switchHousehold}
                 disabled={switching}

@@ -12,6 +12,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { MobilePaginationControls } from '../../ui/MobilePagination.jsx'
+import { mobileReceiptStatusClass } from './mobileReceiptStatus.js'
 import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
@@ -313,13 +314,13 @@ export default function ReceiptsPage() {
               {mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
-                  <div key={item.batch_id} className={`rz-mobile-inventory-card rz-mobile-unpack-card${selected ? ' rz-mobile-unpack-card--selected' : ''}`} data-testid={`mobile-receipt-batch-${item.batch_id}`} onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)}>
+                  <div key={item.batch_id} className={`rz-mobile-inventory-card rz-mobile-unpack-card ${mobileReceiptStatusClass(item.statusLabel)}${selected ? ' rz-mobile-unpack-card--selected' : ''}`} data-testid={`mobile-receipt-batch-${item.batch_id}`} onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)}>
                     <label className="rz-mobile-article-row-leading" onClick={(event) => event.stopPropagation()}>
                       <input type="checkbox" checked={selected} onChange={() => toggleSelectedBatch(item.batch_id)} aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`} />
                     </label>
-                    <button type="button" className="rz-mobile-unpack-main" onClick={(event) => { event.stopPropagation(); navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`) }} data-testid={`mobile-receipt-open-${item.batch_id}`}>
+                    <button type="button" className="rz-mobile-unpack-main" onClick={(event) => { event.stopPropagation(); navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`) }} data-testid={`mobile-receipt-open-${item.batch_id}`} aria-label={`${item.providerName}, ${item.dateLabel}, ${item.totalLines} artikelen, ${item.statusLabel}`}>
                       <span className="rz-mobile-inventory-card-title">{item.providerName}</span>
-                      <span className="rz-mobile-inventory-card-meta"><span>{item.dateLabel}</span><span>{item.totalLines} artikelen</span><span>{item.statusLabel}</span></span>
+                      <span className="rz-mobile-inventory-card-meta"><span>{item.dateLabel}</span><span>{item.totalLines} artikelen</span></span>
                     </button>
 
                   </div>

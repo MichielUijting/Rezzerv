@@ -842,22 +842,25 @@ export default function Voorraad() {
 
   useEffect(() => {
     let cancelled = false;
-    // Only the inventory rows and article assignments are on the initial
-    // display's critical path. Editor dropdown options can arrive afterwards.
-    const inventoryPromise = Promise.all([
-      fetchInventoryRows(),
-      fetchArticleGroupAssignments(),
-    ]);
+    // The first inventory page needs only the inventory response. Assignment
+    // labels and editor options can arrive afterwards without blocking rows.
+    const inventoryPromise = fetchInventoryRows();
+    const assignmentPromise = fetchArticleGroupAssignments().catch(() => ({ byId: new Map(), byName: new Map() }));
     const articleOptionsPromise = fetchArticleGroupOptions();
     const locationsPromise = fetchLocationOptions().catch(() => buildLocationOptionState([]));
 
     inventoryPromise
-      .then(([loadedRows, assignments]) => {
+      .then((loadedRows) => {
         if (cancelled) return;
-        const projected = applyArticleGroupsToRows(loadedRows, assignments);
         setLocalZeroRows([]);
-        setRows(projected);
-        setLocationOptions((current) => mergeLocationOptionStates(current, buildLocationOptionStateFromRows(projected)));
+        setRows(loadedRows);
+        setLocationOptions((current) => mergeLocationOptionStates(current, buildLocationOptionStateFromRows(loadedRows)));
+        // Enrich the already visible rows when assignments are available.
+        // Apply to current rows to retain edits made while the request was in flight.
+        assignmentPromise.then((assignments) => {
+          if (cancelled) return;
+          setRows((current) => applyArticleGroupsToRows(current, assignments));
+        });
       })
       .catch((error) => {
         if (cancelled) return;
