@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 
 async function mockUitpakkenLifecycle(page, { actionResult = {} } = {}) {
   const calls = []
+  let batchPresent = true
 
   await page.route('**/api/household', async (route) => {
     await route.fulfill({
@@ -22,7 +23,7 @@ async function mockUitpakkenLifecycle(page, { actionResult = {} } = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        items: [{
+        items: batchPresent ? [{
           batch_id: 'release-b-batch',
           receipt_table_id: 'release-b-receipt',
           store_provider_code: 'lidl',
@@ -30,7 +31,8 @@ async function mockUitpakkenLifecycle(page, { actionResult = {} } = {}) {
           purchase_date: '2026-08-14',
           inbox_status: 'Gecontroleerd',
           summary: { total: 2 },
-        }],
+        }] : [],
+        total: batchPresent ? 1 : 0,
       }),
     })
   })
@@ -41,6 +43,7 @@ async function mockUitpakkenLifecycle(page, { actionResult = {} } = {}) {
       method: route.request().method(),
       body: route.request().postDataJSON(),
     })
+    batchPresent = false
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -54,6 +57,7 @@ async function mockUitpakkenLifecycle(page, { actionResult = {} } = {}) {
       method: route.request().method(),
       body: route.request().postDataJSON(),
     })
+    batchPresent = false
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
