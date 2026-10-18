@@ -76,6 +76,14 @@
   min-width: 0;
   min-height: 72px;
   padding: 3px 2px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  appearance: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  cursor: pointer;
   color: #626a65;
   font-size: var(--font-size-ui-body);
   font-weight: 500;
