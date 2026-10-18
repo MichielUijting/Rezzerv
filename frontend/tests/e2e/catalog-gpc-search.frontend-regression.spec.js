@@ -578,7 +578,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
   });
 
 
-  test('langdurig zoeken naar GPC Bricks toont pas na één seconde het grote Inhuis-logo', async ({ page }) => {
+  test('langdurig zoeken naar GPC Bricks toont pas na één seconde een toegankelijke laadstatus', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseBrickSearch;
     let markBrickSearchStarted;
@@ -644,8 +644,8 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(overlay).toHaveCount(0);
     await page.waitForTimeout(300);
     await expect(overlay).toBeVisible();
-    await expect(page.getByTestId('table-loading-logo')).toHaveAttribute('src', '/inhuis-loading-mark.svg');
-    await expect(page.getByTestId('table-loading-logo')).toHaveCSS('width', '420px');
+    await expect(overlay).toContainText('Gegevens worden geladen');
+    await expect(page.getByTestId('table-loading-logo')).toHaveCount(0);
 
     releaseBrickSearch();
 
