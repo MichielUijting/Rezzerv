@@ -1115,3 +1115,9 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - Een bon met de status **Controle nodig** krijgt als volledig kaartvlak lichtoranje (`#FFF1DC`); **Gecontroleerd** krijgt een volledig lichtgroen kaartvlak (`#EEF7F0`). Deze achtergrond blijft zichtbaar bij selectie, hover en aanraking. Andere statussen behouden hun neutrale weergave; de feitelijke status, filters en verwerkingsregels blijven ongewijzigd.
 - De niet-zichtbare status blijft via de toegankelijke naam van de openknop beschikbaar voor ondersteunende technologie.
 - In de vaste mobiele actiebalk is **Meer** een ongekaderde actie, met dezelfde iconhoogte (44 px), totaalhoogte, tekstpositie en focusbehandeling als de andere acties. Geen extra knoprand of afwijkende knopachtergrond.
+
+## PR #591 — bonnenlijsten zonder omvattend paneel (18 oktober 2026)
+
+- In de mobiele bonnenlijsten van **Kassa** en **Uitpakken** staat **geen wit of ander omvattend paneel** achter de afzonderlijke bonkaarten. De lijstcontainer is transparant, zonder eigen rand of afronding; de lichtgroene schermachtergrond blijft tussen de kaarten zichtbaar.
+- De checkbox voor selectie staat **naast en buiten de eigenlijke bonkaart**, rechtstreeks op de lichtgroene schermachtergrond.
+- Alleen het klikbare individuele bonpaneel heeft een eigen afgeronde achtergrond en een subtiele schaduw. De kleur blijft oranje bij **Controle nodig**, lichtgroen bij **Gecontroleerd**, en wit bij overige statussen. Dit betreft uitsluitend de visuele presentatie; status, bonselectie en verwerking blijven ongewijzigd.
