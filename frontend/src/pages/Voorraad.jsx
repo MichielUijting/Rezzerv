@@ -845,7 +845,7 @@ export default function Voorraad() {
     // The first inventory page needs only the inventory response. Assignment
     // labels and editor options can arrive afterwards without blocking rows.
     const inventoryPromise = fetchInventoryRows();
-    const assignmentPromise = fetchArticleGroupAssignments();
+    const assignmentPromise = fetchArticleGroupAssignments().catch(() => ({ byId: new Map(), byName: new Map() }));
     const articleOptionsPromise = fetchArticleGroupOptions();
     const locationsPromise = fetchLocationOptions().catch(() => buildLocationOptionState([]));
 
