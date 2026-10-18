@@ -7,6 +7,8 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import LiveReceiptCornerGuide from './components/LiveReceiptCornerGuide.jsx'
 import { openReceiptCamera, rememberPreferredReceiptCamera, stopReceiptCameraStream } from './receiptCamera.js'
+import { mobileReceiptStatusClass } from '../receipts/mobileReceiptStatus.js'
+import '../receipts/mobileReceipts.css'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -522,16 +524,30 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
           </div>
           {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
-          {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receiptPagination.pageItems.map((item) => (
-            <div key={receiptId(item)} className="rz-mobile-kassa-receipt-card">
-              <label className="rz-mobile-kassa-select"><input type="checkbox" checked={selectedReceiptIds.includes(receiptId(item))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...current, receiptId(item)] : current.filter((id) => id !== receiptId(item)))} /> Selecteer bon</label>
-              <button type="button" className="rz-mobile-kassa-open" onClick={() => openReceipt(receiptId(item))}>
-                <strong>{item.store_name || 'Onbekende winkel'}</strong>
-                <span>{dateLabel(item.purchase_at)} · {money(item.total_amount, item.currency)} · {item.line_count ?? 0} regels</span>
-                <span>{item.po_norm_status_label || item.inbox_status || 'Controle nodig'} ›</span>
-              </button>
+          {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? (
+            <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div>
+          ) : !receiptsLoadError && receiptPagination.pageItems.length > 0 ? (
+            <div className="rz-mobile-inventory-list rz-mobile-unpack-list">
+              {receiptPagination.pageItems.map((item) => {
+                const statusLabel = item.po_norm_status_label || item.inbox_status || 'Controle nodig'
+                const selected = selectedReceiptIds.includes(receiptId(item))
+                const storeName = item.store_name || 'Onbekende winkel'
+                const purchaseDate = dateLabel(item.purchase_at)
+                const lineCount = item.line_count ?? 0
+                return (
+                  <div key={receiptId(item)} className={`rz-mobile-inventory-card rz-mobile-unpack-card rz-mobile-kassa-receipt-card ${mobileReceiptStatusClass(statusLabel)}${selected ? ' rz-mobile-unpack-card--selected' : ''}`} data-testid={`mobile-kassa-receipt-${receiptId(item)}`}>
+                    <label className="rz-mobile-article-row-leading">
+                      <input type="checkbox" checked={selected} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...current, receiptId(item)] : current.filter((id) => id !== receiptId(item)))} aria-label={`Selecteer ${storeName} van ${purchaseDate}`} />
+                    </label>
+                    <button type="button" className="rz-mobile-unpack-main" onClick={() => openReceipt(receiptId(item))} aria-label={`${storeName}, ${purchaseDate}, ${lineCount} artikelen, ${statusLabel}`}>
+                      <span className="rz-mobile-inventory-card-title">{storeName}</span>
+                      <span className="rz-mobile-inventory-card-meta"><span>{purchaseDate}</span><span>{lineCount} artikelen</span></span>
+                    </button>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          ) : null}
           <MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Bonnen" />
           <div className="rz-mobile-kassa-bulk-actions rz-mobile-table-bulk-actions" data-testid="mobile-kassa-bulk-actions">
             <Button type="button" disabled={!selectedReceiptIds.length || busy} onClick={approveSelectedReceipts}>Goedkeuren</Button>
