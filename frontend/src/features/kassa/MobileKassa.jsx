@@ -46,6 +46,8 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const [receiptsLoading, setReceiptsLoading] = useState(false)
   const [receiptsLoadError, setReceiptsLoadError] = useState('')
   const receiptRequestRef = useRef(0)
+  // A user's first tap on Bonnen must win over the asynchronous initial camera startup.
+  const manualReceiptListRef = useRef(false)
   const [receipt, setReceipt] = useState(null)
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
@@ -100,6 +102,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   }
 
   function showReceiptList() {
+    manualReceiptListRef.current = true
     stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
     activeCameraIdRef.current = ''
@@ -110,6 +113,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   }
 
   async function openCamera(deviceId = '') {
+    manualReceiptListRef.current = false
     setMode('camera')
     setReceipt(null)
     setMessage('')
@@ -147,6 +151,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   }
 
   async function startCamera() {
+    if (manualReceiptListRef.current) return
     setMode('camera')
     setReceipt(null)
     setCameraError('')
@@ -155,6 +160,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       const permission = await navigator.permissions?.query?.({ name: 'camera' })
       granted = permission?.state === 'granted'
     } catch { /* Niet iedere browser ondersteunt de camera-permissionquery. */ }
+    if (manualReceiptListRef.current) return
     if (granted) return openCamera()
     showFeedback({
       variant: 'info',
@@ -183,7 +189,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
         await openReceipt(requestedReceiptId)
         return
       }
-      if (requestedView === 'bonnen') {
+      if (requestedView === 'bonnen' || manualReceiptListRef.current) {
         setMode('list')
         return
       }
