@@ -176,7 +176,7 @@ const externalReceiptItems = readFileSync(new URL('../src/features/externalDatab
 assert.match(externalReceiptItems, /<Pagination page=\{currentPage\}/)
 assert.doesNotMatch(externalReceiptItems, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
 const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
-assert.match(inventoryPage, /const inventoryPromise = Promise\.all\(/)
+assert.match(inventoryPage, /const inventoryPromise = fetchInventoryRows\(\)/)
 assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
 
 // Regression: catalog page reads never launch a full write/backfill of all
