@@ -99,6 +99,9 @@ const fallbackTrack = {
 }
 assert.equal(cameraPixelCapacity(highResTrack), 3840 * 2160)
 assert.equal(cameraPixelCapacity(fallbackTrack), 1920 * 1080)
+assert.match(desktop, /const \[isPreviewCollapsed, setIsPreviewCollapsed\] = useState\(true\)/)
+assert.match(desktop, /setIsPreviewCollapsed\(true\)\s*\}, \[receipt\?\.id, transientPreview\?\.originalUrl\]\)/)
+
 console.log('CAMERA_RESOLUTION_SELECTION_GREEN')
 
 assert.match(mobile, /requestedView === 'bonnen' \? 'list' : 'camera'/)
