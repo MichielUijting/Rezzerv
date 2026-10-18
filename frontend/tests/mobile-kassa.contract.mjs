@@ -119,3 +119,10 @@ assert.match(mobile, /rz-mobile-table-select-row/)
 assert.match(mobile, /rz-mobile-table-bulk-actions/)
 assert.match(mobile, />Goedkeuren<\/Button>/)
 assert.match(mobile, />Verwijderen<\/Button>/)
+
+
+assert.match(mobile, /const manualReceiptListRef = useRef\(false\)/)
+assert.match(mobile, /function showReceiptList\(\)\s*\{\s*manualReceiptListRef\.current = true/)
+assert.match(mobile, /if \(requestedView === 'bonnen' \|\| manualReceiptListRef\.current\)/)
+assert.match(mobile, /async function startCamera\(\)\s*\{\s*if \(manualReceiptListRef\.current\) return/)
+assert.match(mobile, /if \(manualReceiptListRef\.current\) return\s*if \(granted\) return openCamera\(\)/)
