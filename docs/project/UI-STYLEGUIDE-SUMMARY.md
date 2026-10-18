@@ -1100,3 +1100,11 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - Toon de welkomtekst en de gepersonaliseerde subtitel op dezelfde regel waar voldoende ruimte is; regelomloop blijft mogelijk op smalle mobiele schermen.
 - Maak de grafiekkaarten compacter met minder verticale kaartpadding en tussenruimte. Behoud de bestaande grafiekhoogte, aslabels, klikbare staven en toegankelijke focusstijlen: verkleinen mag geen gegevens of assen afsnijden.
 - Deze wijziging raakt alleen de mobiele dashboardpresentatie; waarden, periodefilters, grafiekgegevens en drilldowns blijven ongewijzigd.
+
+## PR #591 — heldere huishoudwissel en rustige Kassa-start (18 oktober 2026)
+
+- Keuzevelden en dropdowns in de header tonen **donkergroene tekst op een witte of lichtgroene achtergrond**, of **witte tekst op een donkergroene achtergrond**. Witte tekst op grijs en andere onvoldoende contrasterende combinaties zijn niet toegestaan. Deze norm geldt ook voor de zichtbare opties van de huishoudwisselaar.
+- De huishoudwisselaar blijft een bestaande toegankelijke select, met de actuele huishoudnaam, bestaande autorisatievoorwaarden en zichtbare toetsenbordfocus. Er worden geen nieuwe rollen of wisselroutes ingevoerd.
+- In Kassa desktop is het paneel met de afbeelding/preview van de kassabon **standaard ingeklapt** bij openen of wisselen van bon. De gebruiker kan het paneel altijd weer uitklappen; de inhoud en bonregels blijven beschikbaar.
+- Voorraad presenteert aanwezige artikelregels zodra de primaire voorraadrespons arriveert; optionele artikelgroeplabels mogen later worden aangevuld, zonder wijzigingen van bewerkte artikelwaarden of huishoudencontext.
+- De bestaande pagineringsstandaard blijft **10 resultaten per pagina**; een eventuele appbrede wijziging naar 8 vereist een apart expliciet PO-besluit en daarop aansluitende contractaanpassing.
