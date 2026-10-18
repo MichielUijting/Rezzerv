@@ -316,3 +316,46 @@
 .rz-mobile-unpack-card.rz-mobile-unpack-card--checked.rz-mobile-unpack-card--selected {
   background: #eef7f0;
 }
+
+/* PR591: no enclosing list panel. The checkbox sits on the green screen,
+   while the individual receipt button is the only colored card. */
+.rz-mobile-unpack-list.rz-mobile-inventory-list {
+  display: grid;
+  gap: 9px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.rz-mobile-unpack-list > .rz-mobile-unpack-card.rz-mobile-inventory-card,
+.rz-mobile-unpack-list > .rz-mobile-unpack-card.rz-mobile-inventory-card:hover,
+.rz-mobile-unpack-list > .rz-mobile-unpack-card.rz-mobile-inventory-card:active,
+.rz-mobile-unpack-list > .rz-mobile-unpack-card.rz-mobile-inventory-card.rz-mobile-unpack-card--selected {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.rz-mobile-unpack-list .rz-mobile-unpack-main {
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.14);
+}
+.rz-mobile-unpack-list .rz-mobile-unpack-card--needs-review .rz-mobile-unpack-main {
+  background: #fff1dc;
+}
+.rz-mobile-unpack-list .rz-mobile-unpack-card--checked .rz-mobile-unpack-main {
+  background: #eef7f0;
+}
+.rz-mobile-unpack-list .rz-mobile-unpack-main:focus-visible {
+  outline: 2px solid var(--color-mobile-ui-primary);
+  outline-offset: 2px;
+}
