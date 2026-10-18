@@ -82,7 +82,7 @@ assert.doesNotMatch(mobile,/onClick=\{\(\) => changeSelectedLines\(false\)\}>All
 assert.match(mobile,/onClick=\{showReceiptList\}>Bonnen<\/Button>/)
 assert.match(mobile,/const requestedReceiptId = searchParams\.get\('receipt'\) \|\| ''/)
 assert.match(mobile,/if \(requestedReceiptId\) \{[\s\S]*await openReceipt\(requestedReceiptId\)[\s\S]*return/)
-assert.match(mobile,/if \(requestedView === 'bonnen'\) \{[\s\S]*setMode\('list'\)/)
+assert.match(mobile,/if \(requestedView === 'bonnen' \|\| manualReceiptListRef\.current\) \{[\s\S]*setMode\('list'\)/)
 assert.doesNotMatch(mobile,/variant=\"secondary\" onClick=\{showReceiptList\}>Bonnen/)
 assert.match(mobile,/Vul eerst de winkel in bij Bonkop/)
 assert.doesNotMatch(mobile,/return fileRef\.current\?\.click\(\)/)
