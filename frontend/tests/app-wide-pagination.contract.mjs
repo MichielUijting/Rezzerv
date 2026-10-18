@@ -217,4 +217,9 @@ for (const [name, component, containerClose] of [
   assert.ok(!component.includes('>Verborgen meldingen herstellen</Button>'), `Old undo label remains on ${name}`)
 }
 
+const voorraadFirstPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
+assert.match(voorraadFirstPage, /const inventoryPromise = fetchInventoryRows\(\)/)
+assert.match(voorraadFirstPage, /assignmentPromise\.then\(\(assignments\) =>/)
+assert.doesNotMatch(voorraadFirstPage, /const inventoryPromise = Promise\.all\(\[/)
+
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
