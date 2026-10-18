@@ -2,6 +2,7 @@ name: Change risk classification
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
   workflow_dispatch:
     inputs:
       candidate_sha:
