@@ -33,6 +33,6 @@ assert.match(iconCss, /\.rz-mobile-action-settings-icon[\s\S]*var\(--color-mobil
 assert.match(iconCss, /background:\s*color-mix\(in srgb, var\(--color-mobile-ui-primary\) 14%, #ffffff\)/)
 
 assert.match(chrome, /key: 'meer', label: 'Meer'/)
-assert.match(iconSource, /className="rz-mobile-action-bar-item/)
+assert.match(iconSource, /rz-mobile-action-bar-item\$\{item\.showLabel/)
 assert.match(iconCss, /\.rz-mobile-action-bar-item\s*\{[^}]*grid-template-rows:\s*44px auto;[^}]*min-height:\s*72px;[^}]*border:\s*0;[^}]*background:\s*transparent;/)
 assert.match(iconCss, /\.rz-mobile-action-bar-icon\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/)
