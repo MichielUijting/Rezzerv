@@ -31,19 +31,16 @@
 
 /* Mobile Kassa bonnen use the same compact list card as Uitpakken. */
 .rz-mobile-kassa .rz-mobile-kassa-receipt-card.rz-mobile-unpack-card {
-  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   min-height: 66px;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid #edf0ee;
   border-radius: 0;
+  background: transparent;
   text-align: left;
-}
-.rz-mobile-kassa .rz-mobile-kassa-receipt-card.rz-mobile-unpack-card:last-child {
-  border-bottom: 0;
 }
 .rz-mobile-kassa .rz-mobile-kassa-receipt-card .rz-mobile-inventory-card-meta span:last-child {
   color: inherit;
