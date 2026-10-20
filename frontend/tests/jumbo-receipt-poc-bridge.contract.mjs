@@ -98,7 +98,7 @@ assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
 const jumboLaunch = storeConnectionsSource.slice(
   storeConnectionsSource.indexOf('href={JUMBO_ORDERS_URL}'),
   storeConnectionsSource.indexOf('data-testid="jumbo-poc-open"'),
-),
+)
 assert.match(jumboLaunch, /target="_blank"/)
 assert.match(jumboLaunch, /rel="noopener noreferrer"/)
 assert.match(storeConnectionsSource, /Open mijn Jumbo \\(nieuw tabblad\\)/)
