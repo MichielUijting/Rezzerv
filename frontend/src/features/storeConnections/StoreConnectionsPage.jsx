@@ -742,23 +742,26 @@ export default function StoreConnectionsPage() {
                 Jumbo-bon naar Inhuis
               </a>
               <div>
-                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open daarna Jumbo in ditzelfde tabblad en klik op de favoriet. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Voor een grotere periode moet je kleinere periodes kiezen. Na terugkeer kun je de bonnen controleren.
+                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open Jumbo via de knop hieronder in een nieuw tabblad en klik daar na aanmelden op de favoriet. De favoriet brengt dat Jumbo-tabblad terug naar Inhuis met een bonvoorbeeld; je oorspronkelijke Inhuis-tabblad blijft open. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Kies kleinere periodes als er meer bonnen zijn.
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button
-                type="button"
+              <a
+                href={JUMBO_ORDERS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rz-button-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
                 onClick={() => {
-                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet.')
+                  setJumboPocProgress('Jumbo opent in een nieuw tabblad. Klik daar op de Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet. Inhuis blijft hier open.')
                   setJumboPocResult(null)
                   setJumboImportCandidate(null)
-                  window.location.assign(JUMBO_ORDERS_URL)
                 }}
                 data-testid="jumbo-poc-open"
               >
-                Open mijn Jumbo
-              </Button>
+                Open mijn Jumbo (nieuw tabblad)
+              </a>
             </div>
 
             {jumboPocProgress ? (
