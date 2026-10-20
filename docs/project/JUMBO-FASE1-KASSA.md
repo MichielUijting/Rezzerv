@@ -12,8 +12,9 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 
 ## Nieuwe technische stroom
 
-1. De gebruiker opent via Winkelkoppelingen zijn eigen ingelogde
-   Jumbo-bestellingenpagina in hetzelfde tabblad.
+1. De gebruiker opent via Winkelkoppelingen zijn eigen Jumbo-bestellingenpagina
+   in een **nieuw, geïsoleerd tabblad**. Het oorspronkelijke Inhuis-tabblad
+   blijft beschikbaar.
 2. De nieuwe v6-favoriet leest de begrensde historie binnen de ingestelde
    periode en geeft alleen afgeleide bonvelden terug, geen sessietokens of cookies.
 3. Inhuis toont de geselecteerde bonnen met hun datum, bonnummer en totaal,
@@ -110,3 +111,34 @@ en worden later opnieuw getoetst tijdens de verplichte integratieregessie.
 
 Zonder echte Jumbo-bon is het oordeel uitsluitend
 **technisch geautomatiseerd getest**, niet **live functioneel geaccepteerd**.
+
+## Herstel: behoud het Inhuis-tabblad bij Jumbo-aanmelding
+
+Bij een praktijkproef na een Jumbo-wachtwoordwijziging bleek dat de knop
+`Open mijn Jumbo` de huidige Inhuis-pagina verving. Dit gebeurde aantoonbaar
+via `window.location.assign(JUMBO_ORDERS_URL)`; dit was in de eerdere POC
+expliciet het bedoelde gedrag en zat zelfs in een vaste contracttest.
+
+De knop is nu een gewone link naar het vaste Jumbo-bestellingenadres met
+`target="_blank"` en `rel="noopener noreferrer"`. Daarmee blijft de
+bestaande Inhuis-pagina open en krijgt Jumbo geen `window.opener` toegang.
+De bestaande bookmarklet blijft op het **Jumbo-tabblad** werken en keert
+met de bestaande URL-fragmentmethode in *dat tabblad* terug naar Inhuis.
+Een resultaat wordt uitsluitend op die nieuwe Inhuis-pagina aangeboden voor
+expliciete import; er vindt geen cross-windowberichtenverkeer plaats.
+
+**Belangrijke scheiding:** de door Jumbo getoonde HTTP 401
+`State mismatch after login/redirect` betreft een upstream login-/redirect-
+controle. Dezelfde-tabbladnavigatie in Inhuis is een aantoonbare lokale oorzaak
+van het verdwenen Inhuis-tabblad, maar geen bewezen oorzaak van die 401.
+Er worden geen `state`-waarden gefabriceerd, geen cookies overgenomen en
+geen Jumbo-beveiligingscontroles uitgeschakeld. Als deze 401 na het opnieuw
+starten van een frisse Jumbo-login aanhoudt, volgt een afzonderlijke gerichte
+upstream diagnose met veilig geanonimiseerde gegevens, geen automatische
+bypass.
+
+Acceptatie: oorspronkelijke Inhuis-tabblad blijft open; Jumbo opent vanuit
+gebruikersklik in een apart tabblad; bookmarklet kan in het Jumbo-tabblad
+terugkeren naar Inhuis; de bestaande bevestiging voor Kassa-import blijft
+verplicht. CI bewijst nu de veilige linkconfiguratie en bestaand POC-contract;
+**een echte Jumbo-accountproef is nog nodig**.
