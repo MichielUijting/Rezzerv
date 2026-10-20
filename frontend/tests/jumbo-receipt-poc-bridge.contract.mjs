@@ -101,8 +101,8 @@ const jumboLaunch = storeConnectionsSource.slice(
 )
 assert.match(jumboLaunch, /target="_blank"/)
 assert.match(jumboLaunch, /rel="noopener noreferrer"/)
-assert.match(storeConnectionsSource, /Open mijn Jumbo \\(nieuw tabblad\\)/)
-assert.doesNotMatch(storeConnectionsSource, /window\\.location\\.assign\\(JUMBO_ORDERS_URL\\)/)
+assert.ok(storeConnectionsSource.includes('Open mijn Jumbo (nieuw tabblad)'))
+assert.ok(!storeConnectionsSource.includes('window.location.assign(JUMBO_ORDERS_URL)'))
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 // The Lidl bridge legitimately uses postMessage; isolate the Jumbo redirect handler.
