@@ -61,6 +61,7 @@ assert.ok(bookmarklet.includes('const jumboDateWindow = function(from, to)'))
 assert.ok(bookmarklet.includes('const selectJumboHistory = function(receipts, from, to'))
 assert.ok(!bookmarklet.includes('tf('), 'The Jumbo favorite must not refer to minified helper names')
 const bridgeSource = fs.readFileSync(new URL('../src/features/storeConnections/jumboReceiptPocBridge.js', import.meta.url), 'utf8')
+assert.ok(!bridgeSource.includes('parseJumboReceiptLayout.toString()'), 'Bookmarklet parser must not depend on minifier output')
 for (const helper of ['jumboDay', 'jumboDateWindow', 'selectJumboHistory']) {
   assert.ok(!bridgeSource.includes(helper + '.toString()'), 'No minifier-dependent helper: ' + helper)
 }
