@@ -63,7 +63,7 @@ async function runMock({ mutatePage = null, sourceHistory = history } = {}) {
   const script = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen', {
     from_date: '2026-10-10', to_date: '2026-10-12',
   })
-  await vm.runInNewContext(script.replace(/^javascript:/, ''), context)
+  await vm.runInNewContext(decodeURIComponent(script.replace(/^javascript:/, '')), context)
   assert.ok(target.includes(JUMBO_POC_FRAGMENT_PREFIX), 'redirect fragment must be produced')
   const result = JSON.parse(decodeURIComponent(target.split(JUMBO_POC_FRAGMENT_PREFIX)[1]))
   return { result, calls }
