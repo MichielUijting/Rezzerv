@@ -172,6 +172,51 @@ export function parseJumboReceiptLayout(rawJson) {
   }
 }
 
+// Keep bookmarklet helper source stable after Vite/esbuild minification.
+// Function#toString on imported helpers captures renamed symbols from the bundle
+// (for example "tf"), which do not exist in Jumbo's browsing context.
+const JUMBO_BOOKMARKLET_HELPER_SOURCE = `
+const jumboDay = function(value) {
+  if (typeof value !== 'string') return ''
+  const m = value.match(/^(20\\d{2})-(\\d{2})-(\\d{2})(?:T.*)?$/)
+  if (!m) return ''
+  const day = m[1] + '-' + m[2] + '-' + m[3]
+  const dt = new Date(day + 'T00:00:00Z')
+  return !Number.isNaN(dt.valueOf()) && dt.toISOString().slice(0, 10) === day ? day : ''
+};
+const jumboDateWindow = function(from, to) {
+  const start = jumboDay(from)
+  const end = jumboDay(to)
+  if (!start || !end || start !== from || end !== to || start > end) {
+    throw new Error('Stel een geldige Jumbo-begindatum en einddatum in.')
+  }
+  return { from_date: start, to_date: end }
+};
+const selectJumboHistory = function(receipts, from, to, max = JUMBO_BATCH_LIMIT) {
+  jumboDateWindow(from, to)
+  if (!Array.isArray(receipts) || receipts.length > 5000 ||
+      !Number.isInteger(max) || max < 1 || max > JUMBO_BATCH_LIMIT) {
+    throw new Error('Ongeldige Jumbo-geschiedenislijst.')
+  }
+  const selected = []
+  const seen = new Set()
+  for (const receipt of receipts) {
+    const id = String(receipt?.transactionId || '').trim()
+    const day = jumboDay(receipt?.purchaseEndOn)
+    if (!/^[A-Za-z0-9_-]{4,100}$/.test(id) || !day) {
+      throw new Error('Onvolledige Jumbo-historieregel; geen onzekere bonnen importeren.')
+    }
+    if (seen.has(id)) throw new Error('Dubbel Jumbo-bonnummer in de geschiedenislijst.')
+    seen.add(id)
+    if (day >= from && day <= to) selected.push(receipt)
+  }
+  if (selected.length > max) {
+    throw new Error('Meer dan ' + max + ' Jumbo-bonnen in deze periode. Kies een kleinere periode.')
+  }
+  return selected
+};
+`
+
 export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
   const callbackUrl = String(inhuisCallbackUrl || '').replace(/#.*$/, '')
   if (!validInhuisCallbackUrl(callbackUrl)) {
@@ -196,9 +241,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
     'const parseReceipt=' + parserSource + ';' +
     'const JUMBO_BATCH_LIMIT=' + String(JUMBO_BATCH_LIMIT) + ';' +
-    'const jumboDay=' + jumboDay.toString() + ';' +
-    'const jumboDateWindow=' + jumboDateWindow.toString() + ';' +
-    'const selectJumboHistory=' + selectJumboHistory.toString() + ';' +
+    JUMBO_BOOKMARKLET_HELPER_SOURCE +
     'const RANGE=' + JSON.stringify(checkedRange) + ';' +
     'const LIMIT=' + String(JUMBO_BATCH_LIMIT) + ';' +
     'const MAX_PAGES=' + String(JUMBO_MAX_PAGES) + ';' +
