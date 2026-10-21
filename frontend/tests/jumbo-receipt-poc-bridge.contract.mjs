@@ -151,6 +151,7 @@ rejected({ ...observation, source_origin: 'https://jumbo.com' })
 rejected({ ...observation, source_origin: 'https://evil.example' })
 rejected({ ...observation, ok: false })
 rejected({ ...observation, version: 5 })
+rejected({ ...observation, version: 6 }) // obsolete favorite must fail closed
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
