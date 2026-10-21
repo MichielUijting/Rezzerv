@@ -4,11 +4,25 @@ export const JUMBO_MAX_PAGES = 30
 
 export function jumboDay(value) {
   if (typeof value !== 'string') return ''
-  const m = value.match(/^(20\d{2})-(\d{2})-(\d{2})(?:T.*)?$/)
+  // Accept a real calendar day and a bounded, validated ISO or SQL-style
+  // time suffix. Keep the original purchaseEndOn in the imported receipt.
+  const m = value.match(/^(20\d{2})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/)
   if (!m) return ''
   const day = m[1] + '-' + m[2] + '-' + m[3]
   const dt = new Date(day + 'T00:00:00Z')
-  return !Number.isNaN(dt.valueOf()) && dt.toISOString().slice(0, 10) === day ? day : ''
+  if (Number.isNaN(dt.valueOf()) || dt.toISOString().slice(0, 10) !== day) return ''
+  if (m[4] !== undefined) {
+    const hh = Number(m[4])
+    const mm = Number(m[5])
+    const ss = m[6] === undefined ? 0 : Number(m[6])
+    if (hh > 23 || mm > 59 || ss > 59) return ''
+    const offset = m[8]
+    if (offset && offset !== 'Z') {
+      const digits = offset.slice(1).replace(':', '')
+      if (Number(digits.slice(0, 2)) > 23 || Number(digits.slice(2)) > 59) return ''
+    }
+  }
+  return day
 }
 
 export function jumboDateWindow(from, to) {
