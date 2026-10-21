@@ -22,6 +22,12 @@ class POTestSafetyTests(unittest.TestCase):
     def setUpClass(cls):
         cls.template = po.TEMPLATE.read_text(encoding="utf-8")
 
+    def test_explicit_existing_maintenance_pr_branch_is_supported(self):
+        content=po.render(self.template,branch='docs/inhuis-maintenance-safe-drain-protocol',sha=SHA,title=TITLE,instructions=INSTRUCTIONS)
+        self.assertIn('set "BRANCH=docs/inhuis-maintenance-safe-drain-protocol"',content)
+        with self.assertRaises(po.ValidationError):
+            po.render(self.template,branch='docs/unrelated-branch',sha=SHA,title=TITLE,instructions=INSTRUCTIONS)
+
     def test_valid_single_click_script_uses_official_start(self):
         content = po.render(self.template, branch=BRANCH, sha=SHA, title=TITLE, instructions=INSTRUCTIONS)
         self.assertTrue(content.startswith("@echo off\r\nCLS\r\n"))
@@ -36,7 +42,7 @@ class POTestSafetyTests(unittest.TestCase):
             artifact, source=self.template, branch=BRANCH, sha=SHA,
             title=TITLE, instructions=INSTRUCTIONS,
         )
-        self.assertIn(b"echo Controleer automatische periode.\\r\\n", artifact)
+        self.assertIn(b"echo Controleer automatische periode.\r\n", artifact)
         self.assertNotIn(b"echo echo Controleer", artifact)
 
     def test_final_artifact_rejects_nested_echo(self):
@@ -53,7 +59,7 @@ class POTestSafetyTests(unittest.TestCase):
         for tampered in (
             artifact.replace(SHA.encode(), b"0" * 40),
             artifact.replace(b"call start.bat", b"call unsafe.bat"),
-            artifact.replace(b"\\r\\n", b"\\n"),
+            artifact.replace(b"\r\n", b"\n"),
         ):
             with self.subTest(tampered=tampered[-80:]), self.assertRaises(po.ValidationError):
                 po.verify_generated_script(

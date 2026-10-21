@@ -189,9 +189,18 @@ def reset_postgresql_test_database() -> None:
             table_sql = ", ".join(
                 f"public.{preparer.quote(name)}" for name in sorted(tables)
             )
+            # This existing migrator-only test reset also replaces the singleton
+            # seed. Keep the bypass transaction-local; runtime tests still use
+            # the real barrier and missing control must continue to fail closed.
+            if "maintenance_control" in tables:
+                conn.execute(text("SELECT set_config('inhuis.maintenance_admin','1',true)"))
             conn.exec_driver_sql(
                 f"TRUNCATE TABLE {table_sql} RESTART IDENTITY CASCADE"
             )
+            if "maintenance_control" in tables:
+                conn.execute(text(
+                    "INSERT INTO maintenance_control(id,state,generation) VALUES(1,'normal',0)"
+                ))
     finally:
         migration_engine.dispose()
 

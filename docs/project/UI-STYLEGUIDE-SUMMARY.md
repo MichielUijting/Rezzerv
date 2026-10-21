@@ -1121,3 +1121,9 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - In de mobiele bonnenlijsten van **Kassa** en **Uitpakken** staat **geen wit of ander omvattend paneel** achter de afzonderlijke bonkaarten. De lijstcontainer is transparant, zonder eigen rand of afronding; de lichtgroene schermachtergrond blijft tussen de kaarten zichtbaar.
 - De checkbox voor selectie staat **naast en buiten de eigenlijke bonkaart**, rechtstreeks op de lichtgroene schermachtergrond.
 - Alleen het klikbare individuele bonpaneel heeft een eigen afgeronde achtergrond en een subtiele schaduw. De kleur blijft oranje bij **Controle nodig**, lichtgroen bij **Gecontroleerd**, en wit bij overige statussen. Dit betreft uitsluitend de visuele presentatie; status, bonselectie en verwerking blijven ongewijzigd.
+
+## PR #595 — onderhoudsmelding als headeroverlay
+
+- De bestaande onderhoudsmelding staat op desktop en mobiel als vaste overlay over de header, zonder extra ruimte boven de header.
+- Toon de tekst vetgedrukt op een dekkende lichtoranje achtergrond met donkere tekst en duidelijke rand. Lange berichten breken af en blijven binnen de viewport scrollbaar.
+- Behoud de bestaande statusbron, verversingsinterval, aankondigingstekst en blokkeringsmelding. Bij normale status verdwijnt de overlay.

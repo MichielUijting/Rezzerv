@@ -2,6 +2,14 @@
 
 TEST_LEVEL_PROVISIONAL: L
 
+## Actuele stand voor afronding PR #592
+
+De actuele gebruikersroute gebruikt favoriet **v14** en navigeert in hetzelfde tabblad naar Jumbo en terug naar Inhuis. Het eindgebruikersscherm is opgeschoond; technische POC-telemetrie en volledige bon-ID's staan niet meer in de zichtbare interface. De oorspronkelijke secties hieronder beschrijven de opeenvolgende ontwikkelstappen en zijn geen actuele instructie voor tabbladgedrag of favorietversie.
+
+De PO heeft de import van een echte Jumbo-bronbon naar Kassa en de opgeschoonde weergave bevestigd. Dit praktijkbewijs geldt voor die bronbon, niet voor alle Jumbo-formaten of de volledige voorraadketen. De bron-ID blijft exact behouden en de server valideert zelfstandig alle bedragen, regels en totalen; iedere import vereist expliciete bevestiging.
+
+Bij integratie met main na PR #595 zijn uitsluitend conflicterende versiewaarden opgelost naar 1.12.290; onderhoudsfunctionaliteit blijft behouden. De rode servercontracttest bevatte per ongeluk letterlijke backslash-teksten in plaats van echte tabs en regeleinden. De fixture is gecorrigeerd en uitgebreid met echte besturingstekens en controles op ongewijzigde identiteit. De productievalidator is hiervoor niet gewijzigd of versoepeld.
+
 ## Bestaand bewijs en grens
 
 PR #546 leverde een browser-POC op met de Jumbo-lijstoperatie

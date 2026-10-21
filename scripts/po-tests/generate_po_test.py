@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / "scripts" / "po-tests" / "po-test-template.bat"
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
-BRANCH_RE = re.compile(r"codex/[a-z0-9][a-z0-9_./-]*\Z")
+BRANCH_RE = re.compile(r"(?:codex/[a-z0-9][a-z0-9_./-]*|docs/inhuis-maintenance-safe-drain-protocol)\Z")
 TEXT_RE = re.compile(r"[A-Za-z0-9 .,:/\-]+\Z")
 PLACEHOLDERS = ("@@BRANCH@@", "@@SHA@@", "@@TITLE@@", "@@TEST_INSTRUCTIONS@@")
 MANDATORY = (

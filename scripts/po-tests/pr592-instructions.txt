@@ -1,0 +1,10 @@
+Log in als reguliere huishoudbeheerder en open Winkelkoppelingen.
+Controleer dat het Jumbo-scherm alleen de periode, hulp, gevonden bonnen en importbediening toont.
+Controleer dat geen technische POC-gegevens of volledige bonnummers in het scherm staan.
+Kies een beperkte datumperiode en open de hulp voor de Jumbo-favoriet.
+Gebruik de actuele v14-favoriet en controleer dat ophalen via hetzelfde tabblad terugkeert naar Inhuis.
+Controleer datum, winkel en bedrag van gevonden bonnen voordat je import bevestigt.
+Controleer dat zonder expliciete importbevestiging geen bon in Kassa wordt toegevoegd.
+Bevestig alleen een bedoelde testbon en controleer het resultaat en de bonregels in Kassa.
+Controleer dat na geslaagde import de tijdelijke preview verdwijnt en het resultaat zichtbaar blijft.
+Een herhaalde import moet via de bestaande duplicaatcontrole als bekend worden afgehandeld.

@@ -1,0 +1,28 @@
+/* Overlay the shared desktop/mobile header without shifting the page content. */
+.rz-maintenance-notice {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  box-sizing: border-box;
+  width: min(760px, calc(100% - 24px));
+  max-height: min(40vh, 16rem);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  padding: 10px 16px;
+  margin: 0;
+  background: #FFF1DC;
+  color: var(--color-text-primary, #1A1A1A);
+  border: 2px solid #B85C00;
+  border-radius: var(--radius-sm, 4px);
+  text-align: center;
+  font-size: 16px;
+  line-height: 1.4;
+  box-shadow: 0 3px 12px rgba(8, 41, 29, 0.3);
+}
+
+.rz-maintenance-notice strong {
+  font-weight: 700;
+}
