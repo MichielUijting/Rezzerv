@@ -1,5 +1,7 @@
 // Jumbo browser data is untrusted: only an explicit, reconciled receipt may enter Kassa.
 // This adapter never performs HTTP requests or stores credentials.
+import { JUMBO_BOOKMARKLET_VERSION } from './jumboReceiptPocBridge.js'
+
 export const JUMBO_WEB_ORIGIN = 'https://www.jumbo.com'
 
 function moneyCents(value) {
@@ -16,7 +18,7 @@ function validPurchaseDate(value) {
 }
 
 export function buildJumboImportEnvelope(payload) {
-  if (!payload || payload.version !== 6 || payload.ok !== true ||
+  if (!payload || payload.version !== JUMBO_BOOKMARKLET_VERSION || payload.ok !== true ||
       payload.source_origin !== JUMBO_WEB_ORIGIN) {
     throw new Error('De Jumbo-herkomst of de versie van de bon is ongeldig.')
   }
