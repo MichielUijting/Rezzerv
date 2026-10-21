@@ -172,6 +172,165 @@ export function parseJumboReceiptLayout(rawJson) {
   }
 }
 
+// Literal bookmarklet source: the production minifier must never rewrite or
+// rename identifiers inside the JavaScript that runs on www.jumbo.com.
+// Keep in sync with parseJumboReceiptLayout; browser contract exercises both.
+const JUMBO_BOOKMARKLET_PARSER_SOURCE = `
+function parseReceipt(rawJson) {
+  let data
+  try {
+    data = JSON.parse(rawJson)
+  } catch {
+    return { items: [], parseError: 'Invalid receipt JSON' }
+  }
+
+  const textObjects = []
+  try {
+    const sections = data.documents[0].documents[0].printSections
+    for (const section of sections) {
+      for (const object of Array.isArray(section?.textObjects) ? section.textObjects : []) {
+        for (const line of Array.isArray(object?.textLines) ? object.textLines : []) {
+          const texts = (Array.isArray(line?.texts) ? line.texts : []).map((entry) => String(entry?.text || ''))
+          textObjects.push(texts)
+        }
+      }
+    }
+  } catch {
+    return { items: [], parseError: 'Unexpected receipt structure' }
+  }
+
+  const items = []
+  let total = null
+  let paymentMethod = null
+  const vatLines = []
+  let itemCount = null
+
+  let index = 0
+  let inItems = false
+  while (index < textObjects.length) {
+    const texts = textObjects[index]
+    const joined = texts.map((text) => text.trim()).filter(Boolean).join(' ')
+
+    if (joined.includes('OMSCHRIJVING') && joined.includes('BEDRAG')) {
+      inItems = true
+      index += 1
+      if (index < textObjects.length) {
+        const separator = textObjects[index].join('')
+        if (separator.startsWith('=') || separator.startsWith('-')) index += 1
+      }
+      continue
+    }
+
+    if (inItems && joined.startsWith('Totaal')) {
+      inItems = false
+      for (const text of texts) {
+        const value = Number.parseFloat(text.trim().replace(',', '.'))
+        if (Number.isFinite(value)) total = value
+      }
+      index += 1
+      continue
+    }
+
+    if (inItems) {
+      const first = texts[0]?.trim() || ''
+      if (!first || first.startsWith('=') || first.startsWith('-')) {
+        index += 1
+        continue
+      }
+
+      const quantityMatch = first.match(/^\\s*(\\d+)\\s*[Xx]\\s*(\\d+[,.]\\d+)/)
+      if (quantityMatch && items.length) {
+        const quantity = Number.parseInt(quantityMatch[1], 10)
+        const unitPrice = Number.parseFloat(quantityMatch[2].replace(',', '.'))
+        items[items.length - 1].quantity = quantity
+        items[items.length - 1].unitPrice = unitPrice
+        for (const text of [...texts].reverse()) {
+          const value = Number.parseFloat(text.trim().replace(',', '.'))
+          if (Number.isFinite(value)) {
+            items[items.length - 1].price = value
+            break
+          }
+        }
+        index += 1
+        continue
+      }
+
+      let price = null
+      for (const text of [...texts].reverse()) {
+        const value = Number.parseFloat(text.trim().replace(',', '.'))
+        if (Number.isFinite(value)) {
+          price = value
+          break
+        }
+      }
+
+      const isPromo = texts.length > 1 && texts[1].trim() === 'P'
+      items.push({
+        name: first,
+        price,
+        quantity: 1,
+        unitPrice: price,
+        isPromo,
+        isDeposit: first.toUpperCase() === 'STATIEGELD',
+      })
+      index += 1
+      continue
+    }
+
+    if (joined.startsWith('Betaald')) {
+      index += 1
+      if (index < textObjects.length) {
+        paymentMethod = textObjects[index][0]?.trim() || null
+      }
+      index += 1
+      continue
+    }
+
+    if (joined.startsWith('BTW%') || joined.includes('Bedrag excl')) {
+      index += 1
+      while (index < textObjects.length) {
+        const values = textObjects[index]
+        const valueJoined = values.map((value) => value.trim()).filter(Boolean).join(' ')
+        if (!valueJoined || valueJoined.startsWith('-') || valueJoined.startsWith('=')) break
+        if (valueJoined.includes('%') || valueJoined.startsWith('BTW Totaal')) {
+          vatLines.push(values.map((value) => value.trim()).filter(Boolean))
+        }
+        index += 1
+      }
+      continue
+    }
+
+    const countMatch = joined.match(/Aantal artikelen.*?:\\s*(\\d+)/)
+    if (countMatch) {
+      itemCount = Number.parseInt(countMatch[1], 10)
+      index += 1
+      continue
+    }
+
+    index += 1
+  }
+
+  const products = items.filter((item) => !item.isDeposit)
+  const deposits = items.filter((item) => item.isDeposit)
+  const vatSummary = vatLines
+    .filter((parts) => parts.length >= 3 && !parts[0].includes('Totaal'))
+    .map((parts) => ({
+      rate: parts[0],
+      amountExcl: parts[1] || null,
+      vatAmount: parts[2] || null,
+    }))
+
+  return {
+    items: products,
+    deposits,
+    total,
+    paymentMethod,
+    vatSummary,
+    itemCount,
+  }
+}
+`
+
 // Keep bookmarklet helper source stable after Vite/esbuild minification.
 // Function#toString on imported helpers captures renamed symbols from the bundle
 // (for example "tf"), which do not exist in Jumbo's browsing context.
@@ -223,7 +382,6 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
     throw new Error('Ongeldige Inhuis-callback voor Jumbo-POC')
   }
 
-  const parserSource = parseJumboReceiptLayout.toString()
   const range = dateRange || (() => {
     const now = new Date()
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -239,7 +397,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
     'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';' +
     'const C=' + JSON.stringify(callbackUrl) + ';' +
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
-    'const parseReceipt=' + parserSource + ';' +
+    JUMBO_BOOKMARKLET_PARSER_SOURCE + ';' +
     'const JUMBO_BATCH_LIMIT=' + String(JUMBO_BATCH_LIMIT) + ';' +
     JUMBO_BOOKMARKLET_HELPER_SOURCE +
     'const RANGE=' + JSON.stringify(checkedRange) + ';' +
