@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 6
+export const JUMBO_BOOKMARKLET_VERSION = 7
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v6='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v7='
 
 function validInhuisCallbackUrl(value) {
   try {
