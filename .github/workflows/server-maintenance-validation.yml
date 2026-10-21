@@ -1,0 +1,49 @@
+name: Server maintenance isolated PostgreSQL validation
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/maintenance*'
+      - 'backend/app/api/server_maintenance_routes.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/main.py'
+      - 'backend/app/services/testing_service.py'
+      - 'backend/app/api/routes/kassa*'
+      - 'backend/alembic/**'
+      - 'backend/tests/test_maintenance*'
+      - 'frontend/src/features/platform/PlatformMaintenancePanel.jsx'
+      - '.github/workflows/server-maintenance-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maintenance_ci
+          POSTGRES_PASSWORD: maintenance_ci_ephemeral
+          POSTGRES_DB: inhuis_maintenance_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U maintenance_ci -d inhuis_maintenance_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      INHUIS_MAINTENANCE_TEST_DATABASE_URL: postgresql+psycopg://maintenance_ci:maintenance_ci_ephemeral@127.0.0.1:55432/inhuis_maintenance_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install sqlalchemy==2.0.36 alembic==1.19.1 'psycopg[binary]==3.3.4' fastapi==0.115.0 httpx==0.28.1 pytest
+      - name: Unit and real PostgreSQL concurrency, persistence and migration tests
+        run: >-
+          python -m pytest -q
+          backend/tests/test_maintenance_postgres_admission.py
+          backend/tests/test_maintenance_postgres_integration.py
+          backend/tests/test_maintenance_runtime_integration.py
+          backend/tests/test_maintenance_runtime_preflight.py
+          backend/tests/test_maintenance_schema_contract.py
+          backend/tests/test_maintenance_state_contract.py

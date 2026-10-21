@@ -6,7 +6,7 @@ from backend.app.services.maintenance_schema_contract import maintenance_metadat
 class MaintenanceSchemaContractTest(unittest.TestCase):
     def test_control_and_operation_columns(self):
         tables = maintenance_metadata.tables
-        self.assertEqual(set(tables), {"maintenance_control", "maintenance_operations"})
+        self.assertEqual(set(tables), {"maintenance_control", "maintenance_operations", "maintenance_audit"})
         control = tables["maintenance_control"]
         operations = tables["maintenance_operations"]
         self.assertTrue({"id", "state", "generation", "updated_at"} <= set(control.c.keys()))

@@ -306,7 +306,8 @@ def start_kassa_receipt_regression(authorization: Optional[str] = Header(None)) 
             return copy.deepcopy(_JOB_STATE)
         job_id = uuid.uuid4().hex
         _JOB_STATE.update({"job_id": job_id, "status": "running", "started_at": _utc_now(), "finished_at": None, "progress_current": 0, "progress_total": REQUIRED_RECEIPT_COUNT, "current_case_id": None, "current_filename": None, "message": "Regressie wordt gestart", "report": None})
-    threading.Thread(target=_execute_kassa_regression_job, args=(job_id,), daemon=True).start()
+    from app.services.maintenance_runtime import start_worker
+    start_worker(target=_execute_kassa_regression_job, args=(job_id,), daemon=True)
     return _get_job_state()
 
 

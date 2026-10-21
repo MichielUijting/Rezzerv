@@ -15,6 +15,9 @@ maintenance_control = sa.Table(
     sa.Column("id", sa.Integer, primary_key=True),
     sa.Column("state", sa.String(20), nullable=False),
     sa.Column("generation", sa.Integer, nullable=False),
+    sa.Column("announcement", sa.Text(), nullable=False, server_default=""),
+    sa.Column("evidence_json", sa.Text()),
+    sa.Column("locked_boot_id", sa.Text()),
     sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
     sa.CheckConstraint("id = 1", name="ck_maintenance_control_singleton"),
     sa.CheckConstraint("generation >= 0", name="ck_maintenance_generation_nonnegative"),
@@ -36,3 +39,12 @@ maintenance_operations = sa.Table(
 )
 sa.Index("ix_maintenance_operations_unfinished", maintenance_operations.c.started_at,
          postgresql_where=maintenance_operations.c.finished_at.is_(None))
+
+maintenance_audit = sa.Table(
+    "maintenance_audit", maintenance_metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("generation", sa.Integer, nullable=False),
+    sa.Column("actor_user_id", sa.Text(), nullable=False),
+    sa.Column("action", sa.String(30), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+)

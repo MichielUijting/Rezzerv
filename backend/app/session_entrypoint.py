@@ -455,3 +455,10 @@ with legacy_main.engine.begin() as provisioning_conn:
 install_actor_attribution_tracking(legacy_main.engine)
 activate_server_side_route_context()
 activate_server_side_session_routes()
+
+# Last middleware added is outermost: covers legacy and dynamically added APIs,
+# and stays active until background response tasks actually finish.
+from app.api.server_maintenance_routes import router as server_maintenance_router
+from app.services.maintenance_asgi import MaintenanceAdmissionMiddleware
+app.include_router(server_maintenance_router)
+app.add_middleware(MaintenanceAdmissionMiddleware, engine=legacy_main.engine)

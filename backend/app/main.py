@@ -11053,13 +11053,13 @@ def _run_receipt_zip_import_batch(batch_id: str, household_id: str, source_id: s
 
 
 def start_receipt_zip_import_batch(batch_id: str, household_id: str, source_id: str, source_filename: str, members: list[dict[str, Any]]):
-    worker = threading.Thread(
+    from app.services.maintenance_runtime import start_worker
+    worker = start_worker(
         target=_run_receipt_zip_import_batch,
         args=(batch_id, str(household_id), str(source_id), str(source_filename), list(members)),
         daemon=True,
         name=f'receipt-zip-import-{batch_id[:8]}',
     )
-    worker.start()
     return worker
 
 
