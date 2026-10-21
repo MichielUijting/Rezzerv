@@ -94,12 +94,17 @@ const tooMany = await runMock({
 assert.equal(tooMany.result.ok, false)
 assert.match(tooMany.result.error, /Meer dan 10 Jumbo-bonnen/)
 const badId = await runMock({
-  sourceHistory: [{ transactionId: 'PRIVATE:BAD', purchaseEndOn: '2026-10-11T12:00:00' }],
+  sourceHistory: [{ transactionId: 'PRIVATE WITH SPACE', purchaseEndOn: '2026-10-11T12:00:00' }],
 })
 assert.equal(badId.result.ok, false)
 assert.match(badId.result.error, /regel 1: bonnummer heeft een onverwacht formaat/)
-assert.doesNotMatch(badId.result.error, /PRIVATE:BAD/)
-assert.match(badId.result.error, /niet-toegestaan scheidingsteken/)
+assert.doesNotMatch(badId.result.error, /PRIVATE WITH SPACE/)
+assert.match(badId.result.error, /spaties of witruimte/)
+const separatorId = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO:TEST/2026.10', purchaseEndOn: '2026-10-11T12:00:00' }],
+})
+assert.equal(separatorId.result.ok, true, JSON.stringify(separatorId.result))
+assert.equal(separatorId.result.details[0].transactionId, 'JUMBO:TEST/2026.10')
 const missingDate = await runMock({
   sourceHistory: [{ transactionId: 'JUMBO-TEST-1', purchaseEndOn: null }],
 })
