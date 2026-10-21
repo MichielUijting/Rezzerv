@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 9
+export const JUMBO_BOOKMARKLET_VERSION = 10
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v9='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v10='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -359,11 +359,18 @@ const selectJumboHistory = function(receipts, from, to, max = JUMBO_BATCH_LIMIT)
   }
   const selected = []
   const seen = new Set()
-  for (const receipt of receipts) {
-    const id = String(receipt?.transactionId || '').trim()
+  for (const [index, receipt] of receipts.entries()) {
+    const id = typeof receipt?.transactionId === 'string' ? receipt.transactionId.trim() : ''
     const day = jumboDay(receipt?.purchaseEndOn)
-    if (!/^[A-Za-z0-9_-]{4,100}$/.test(id) || !day) {
-      throw new Error('Onvolledige Jumbo-historieregel; geen onzekere bonnen importeren.')
+    const prefix = 'Jumbo-historie, regel ' + String(index + 1) + ': '
+    if (!id) {
+      throw new Error(prefix + 'bonnummer ontbreekt of is geen tekst. Geen import uitgevoerd.')
+    }
+    if (!/^[A-Za-z0-9_-]{4,100}$/.test(id)) {
+      throw new Error(prefix + 'bonnummer heeft een onverwacht formaat. Geen import uitgevoerd.')
+    }
+    if (!day) {
+      throw new Error(prefix + 'aankoopdatum ontbreekt of is ongeldig. Geen import uitgevoerd.')
     }
     if (seen.has(id)) throw new Error('Dubbel Jumbo-bonnummer in de geschiedenislijst.')
     seen.add(id)
