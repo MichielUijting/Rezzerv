@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 12
+export const JUMBO_BOOKMARKLET_VERSION = 13
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v12='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v13='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -375,7 +375,14 @@ const selectJumboHistory = function(receipts, from, to, max = JUMBO_BATCH_LIMIT)
       throw new Error(prefix + 'bonnummer heeft een onverwacht formaat (' + reason + '). Geen import uitgevoerd.')
     }
     if (!day) {
-      throw new Error(prefix + 'aankoopdatum ontbreekt of is ongeldig. Geen import uitgevoerd.')
+      const value = receipt?.purchaseEndOn
+      const reason = value == null || value === '' ? 'ontbreekt' :
+        typeof value !== 'string' ? 'is geen tekstwaarde' :
+        /^[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(value) ? 'begint als ISO-datum maar heeft een ongeldige datum of tijdsaanduiding' :
+        /^[0-9]{2}[-/][0-9]{2}[-/][0-9]{4}/.test(value) ? 'gebruikt dag-maand-jaar-notatie' :
+        /^[0-9]{4}[/][0-9]{2}[/][0-9]{2}/.test(value) ? 'gebruikt schuine strepen in jaar-maand-dag' :
+        'heeft een andere datumnotatie'
+      throw new Error(prefix + 'aankoopdatum ' + reason + '. Geen import uitgevoerd.')
     }
     if (seen.has(id)) throw new Error('Dubbel Jumbo-bonnummer in de geschiedenislijst.')
     seen.add(id)
