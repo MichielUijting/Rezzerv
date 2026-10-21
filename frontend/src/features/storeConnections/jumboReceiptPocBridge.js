@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 8
+export const JUMBO_BOOKMARKLET_VERSION = 9
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v8='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v9='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -392,8 +392,8 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
   })()
   const checkedRange = jumboDateWindow(range.from_date, range.to_date)
 
-  return (
-    'javascript:(async()=>{' +
+  const bookmarkletSource = (
+    '(async()=>{' +
     'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';' +
     'const C=' + JSON.stringify(callbackUrl) + ';' +
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
@@ -427,4 +427,8 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange) {
     '}' +
     '})()'
   )
+  // Firefox strips literal CR/LF/TAB from javascript: bookmark URL text before
+  // evaluation, which joins statements such as `let data` and `try`.
+  // Encode the JavaScript payload so whitespace survives URL normalization.
+  return 'javascript:' + encodeURIComponent(bookmarkletSource)
 }
