@@ -9,7 +9,7 @@ const session = {
 }
 
 test('maintenance actions use exact generation and never offer an unproved Windows reboot', async ({ page }) => {
-  let state = { state: 'normal', generation: 0, active_operations: 0, restart_allowed: false }
+  let state = { state: 'normal', generation: 0, active_operations: 0, restart_allowed: false, host_agent_ready: true }
   const requests = []
   await page.route('**/api/session', route => route.fulfill({ json: session }))
   await page.route('**/api/maintenance/status', route => route.fulfill({ json: { state: 'normal' } }))
@@ -30,7 +30,7 @@ test('maintenance actions use exact generation and never offer an unproved Windo
   await panel.getByRole('button', { name: 'Onderhoud aankondigen' }).click()
   await panel.getByRole('button', { name: 'Verwerkingen veilig stoppen' }).click()
   await panel.getByRole('button', { name: 'Actuele veiligheidscontroles uitvoeren' }).click()
-  await expect(panel.getByText('Er is geen toestemming voor een Windows-herstart.', { exact: false })).toBeVisible()
+  await expect(panel.getByText('Herstarttoestemming ontbreekt of is verlopen.', { exact: false })).toBeVisible()
   await expect(panel.getByText('Alle veiligheidscontroles zijn geslaagd.', { exact: false })).toHaveCount(0)
   expect(requests.map(x => x.action)).toEqual(['announce', 'drain', 'prepare'])
 })

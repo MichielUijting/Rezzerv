@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/maintenance*'
+      - 'backend/app/services/household_notification_service.py'
+      - 'backend/app/maintenance/postgresql_legacy_production_rebuild.py'
       - 'backend/app/api/server_maintenance_routes.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
@@ -11,6 +13,9 @@ on:
       - 'backend/alembic/**'
       - 'backend/tests/test_maintenance*'
       - 'frontend/src/features/platform/PlatformMaintenancePanel.jsx'
+      - 'scripts/server-maintenance/**'
+      - 'backend/app/maintenance/server_maintenance_host_probe.py'
+      - 'docker-compose.maintenance.yml'
       - '.github/workflows/server-maintenance-validation.yml'
   workflow_dispatch:
 permissions:
@@ -37,13 +42,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install sqlalchemy==2.0.36 alembic==1.19.1 'psycopg[binary]==3.3.4' fastapi==0.115.0 httpx==0.28.1 pytest
+      - run: python -m pip install sqlalchemy==2.0.36 alembic==1.19.1 'psycopg[binary]==3.3.4' fastapi==0.115.0 httpx==0.28.1 cryptography==46.0.3 pytest
       - name: Unit and real PostgreSQL concurrency, persistence and migration tests
         run: >-
           python -m pytest -q
+          backend/tests/test_maintenance_host_proof.py
           backend/tests/test_maintenance_postgres_admission.py
           backend/tests/test_maintenance_postgres_integration.py
           backend/tests/test_maintenance_runtime_integration.py
           backend/tests/test_maintenance_runtime_preflight.py
           backend/tests/test_maintenance_schema_contract.py
           backend/tests/test_maintenance_state_contract.py
+
+  windows-host-parser:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse operational host agent without executing host/Docker actions
+        shell: pwsh
+        run: |
+          $tokens=$null; $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'scripts/server-maintenance/Windows-Host-Agent.ps1'),[ref]$tokens,[ref]$errors)
+          if ($errors.Count) { $errors | Format-List; throw 'Host agent syntax invalid' }
+          Write-Host 'WINDOWS_HOST_AGENT_PARSE_GREEN'

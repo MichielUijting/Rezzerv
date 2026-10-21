@@ -37,6 +37,10 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
             cls.base_engine.dispose()
 
     def setUp(self):
+        self.availability_patch = patch('backend.app.services.maintenance_runtime.read_agent_availability', return_value={'kind':'availability'})
+        self.availability_patch.start(); self.addCleanup(self.availability_patch.stop)
+        self.host_patch = patch('backend.app.services.maintenance_runtime.read_host_proof', return_value={'host_id':'test-host','windows_boot':'boot-test','volume_identity':'volume-test','cluster_identity':'cluster-test','domain_fingerprint':'test-fingerprint','issued_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()})
+        self.host_patch.start(); self.addCleanup(self.host_patch.stop)
         self.schema = 'maintenance_runtime_test_' + uuid4().hex
         with self.base_engine.begin() as conn:
             conn.exec_driver_sql(f'CREATE SCHEMA "{self.schema}"')
@@ -45,8 +49,7 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
         self.migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.migration)
         with self.engine.begin() as conn:
-            with Operations.context(MigrationContext.configure(conn)):
-                self.migration.upgrade()
+            conn.exec_driver_sql('CREATE TABLE test_writes(value integer)')
             conn.exec_driver_sql('CREATE TABLE household_registry(id text primary key)')
             conn.exec_driver_sql("INSERT INTO household_registry VALUES('test-a'),('test-b'),('0')")
             # The existing notification Alembic migration, not a parallel schema.
@@ -55,7 +58,8 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
             spec.loader.exec_module(module)
             with Operations.context(MigrationContext.configure(conn)):
                 module.upgrade()
-            conn.exec_driver_sql('CREATE TABLE test_writes(value integer)')
+            with Operations.context(MigrationContext.configure(conn)):
+                self.migration.upgrade()
 
     def tearDown(self):
         self.engine.dispose()
@@ -83,7 +87,9 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
             started.set()
             if not release.wait(10):
                 raise RuntimeError('Test failed to release worker')
+            from backend.app.services.maintenance_runtime import _operation
             with self.engine.begin() as conn:
+                conn.execute(text("SELECT set_config('inhuis.maintenance_operation',:op,true)"), {'op':_operation.get()})
                 conn.exec_driver_sql('INSERT INTO test_writes VALUES(1)')
         worker = start_worker(target=target, engine=self.engine)
         try:
@@ -171,6 +177,41 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
             with self.assertRaises(MaintenanceTransitionError): self.action('verify',3)
         with self.engine.connect() as conn:
             self.assertEqual(state(conn)['state'], 'locked')
+
+    def test_startup_is_durable_and_post_startup_external_writes_remain_closed(self):
+        from backend.app.services.maintenance_startup import begin_startup, finish_startup, install_runtime_operation_context
+        from sqlalchemy.exc import DBAPIError
+        self.action('announce',0,announcement='Test maintenance')
+        self.action('drain',1)
+        install_runtime_operation_context(self.engine)
+        begin_startup(self.engine)
+        try:
+            with self.engine.begin() as conn:
+                self.assertEqual(state(conn)['active_operations'],1)
+                conn.exec_driver_sql('INSERT INTO test_writes VALUES(7)')
+        finally:
+            finish_startup(self.engine)
+        with self.assertRaises(DBAPIError):
+            with self.engine.begin() as conn:
+                conn.exec_driver_sql('INSERT INTO test_writes VALUES(8)')
+
+    def test_missing_live_agent_never_enters_draining(self):
+        from backend.app.services.maintenance_runtime_preflight import MaintenancePreflightError
+        self.action('announce',0,announcement='Test maintenance')
+        with patch('backend.app.services.maintenance_runtime.read_agent_availability',side_effect=MaintenancePreflightError('offline')):
+            with self.assertRaises(MaintenancePreflightError): self.action('drain',1)
+        with self.engine.connect() as conn:
+            self.assertEqual(state(conn)['state'],'announced')
+
+    def test_unregistered_process_write_is_rejected_by_database(self):
+        from sqlalchemy.exc import DBAPIError
+        self.action('announce',0,announcement='Test maintenance')
+        self.action('drain',1)
+        with self.assertRaises(DBAPIError):
+            with self.engine.begin() as conn:
+                conn.exec_driver_sql('INSERT INTO test_writes VALUES(42)')
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text('SELECT count(*) FROM test_writes')).scalar_one(),0)
 
     def test_active_downgrade_is_refused_without_data_loss(self):
         self.action('announce',0,announcement='Test maintenance')

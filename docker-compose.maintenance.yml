@@ -1,0 +1,14 @@
+# Optional deployment-only overlay. Never applied by the local PO test.
+# The private DPAPI key and backup archives must remain OUTSIDE this directory.
+services:
+  backend:
+    environment:
+      INHUIS_MAINTENANCE_PROOF_FILE: /run/inhuis-maintenance/proof.json
+      INHUIS_MAINTENANCE_PUBLIC_KEY_FILE: /run/inhuis-maintenance/public.pem
+      INHUIS_MAINTENANCE_PUBLIC_KEY_SHA256: ${INHUIS_MAINTENANCE_PUBLIC_KEY_SHA256:?Pin the trusted Windows public key}
+      INHUIS_MAINTENANCE_HOST_ID: ${INHUIS_MAINTENANCE_HOST_ID:?Pin the trusted Windows machine identity}
+    volumes:
+      - type: bind
+        source: ${INHUIS_MAINTENANCE_PROOF_DIR:?Select the public proof directory}
+        target: /run/inhuis-maintenance
+        read_only: true

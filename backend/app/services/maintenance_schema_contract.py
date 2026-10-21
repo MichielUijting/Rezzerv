@@ -15,6 +15,7 @@ maintenance_control = sa.Table(
     sa.Column("id", sa.Integer, primary_key=True),
     sa.Column("state", sa.String(20), nullable=False),
     sa.Column("generation", sa.Integer, nullable=False),
+    sa.Column("cycle_id", sa.String(36)),
     sa.Column("announcement", sa.Text(), nullable=False, server_default=""),
     sa.Column("evidence_json", sa.Text()),
     sa.Column("locked_boot_id", sa.Text()),

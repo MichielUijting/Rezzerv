@@ -11,6 +11,11 @@ from __future__ import annotations
 from fastapi import Body, HTTPException, Request
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse
+# Register startup before any legacy bootstrap/provisioning can mutate data.
+from app.db import engine as maintenance_engine
+from app.services.maintenance_startup import begin_startup, finish_startup, install_runtime_operation_context
+install_runtime_operation_context(maintenance_engine)
+begin_startup(maintenance_engine)
 import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import create_server_session_router
@@ -462,3 +467,5 @@ from app.api.server_maintenance_routes import router as server_maintenance_route
 from app.services.maintenance_asgi import MaintenanceAdmissionMiddleware
 app.include_router(server_maintenance_router)
 app.add_middleware(MaintenanceAdmissionMiddleware, engine=legacy_main.engine)
+
+app.add_event_handler("startup", lambda: finish_startup(maintenance_engine))

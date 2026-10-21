@@ -12,6 +12,8 @@ export default function PlatformMaintenancePanel() {
   const [error, setError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const requestId = React.useRef(0)
+  const [now, setNow] = React.useState(Date.now())
+  React.useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
   async function request(action) {
     const id = ++requestId.current
     setBusy(true)
@@ -23,11 +25,12 @@ export default function PlatformMaintenancePanel() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Onderhoudscontrole mislukt.')
-      if (id === requestId.current) { setStatus(data); setError('') }
-    } catch (e) { if (id === requestId.current) setError(e.message) }
+      if (id === requestId.current) { setStatus({ ...data, restartUntil: Date.now() + Math.max(0, Number(data.restart_valid_for_seconds || 0)) * 1000 }); setError('') }
+    } catch (e) { if (id === requestId.current) { setError(e.message); setStatus(current => current ? { ...current, restart_allowed: false } : current) } }
     finally { if (id === requestId.current) setBusy(false) }
   }
   React.useEffect(() => { request(); return () => { ++requestId.current } }, [])
+  React.useEffect(() => { if (!status || status.state === 'normal') return; const timer = setInterval(() => { if (busy) return; if (status.state === 'draining' && status.active_operations === 0 && status.host_agent_ready) request('prepare'); else if (status.state === 'locked' && status.restart_detected) request('verify'); else request() }, 10000); return () => clearInterval(timer) }, [status?.state, busy])
   return <Card className="rz-card-home" data-testid="platform-maintenance-panel">
     <h2>Serveronderhoud</h2>
     {error && <p role="alert">{error}</p>}
@@ -39,12 +42,13 @@ export default function PlatformMaintenancePanel() {
         <Button disabled={busy || !announcement.trim()} onClick={() => request('announce')}>Onderhoud aankondigen</Button>
       </>}
       {status.state === 'announced' && <>
-        <Button disabled={busy} onClick={() => request('drain')}>Verwerkingen veilig stoppen</Button>
+        {!status.host_agent_ready && <p>De onderhoudsagent is nog niet gekoppeld of bereikbaar. Aankondigen en annuleren blijven mogelijk.</p>}
+        <Button disabled={busy || !status.host_agent_ready} onClick={() => request('drain')}>Verwerkingen veilig stoppen</Button>
         <Button disabled={busy} variant="secondary" onClick={() => request('cancel')}>Aankondiging annuleren</Button>
       </>}
       {['draining', 'locked'].includes(status.state) && <Button disabled={busy || status.active_operations !== 0} onClick={() => request('prepare')}>Actuele veiligheidscontroles uitvoeren</Button>}
-      {status.runtime_checks_passed && <p>Database- en verwerkingscontroles geslaagd. Host-, opslag- en back-upbewijs ontbreken nog. Er is geen toestemming voor een Windows-herstart.</p>}
-      {status.restart_allowed && <p role="status">Alle veiligheidscontroles zijn geslaagd. U kunt Windows nu zelf herstarten.</p>}
+      {status.state === 'locked' && !status.restart_allowed && <p>Herstarttoestemming ontbreekt of is verlopen. Vernieuw de status en laat de onderhoudsagent controleren.</p>}
+      {status.restart_allowed && now < status.restartUntil && <p role="status">Alle veiligheidscontroles zijn geslaagd. U kunt Windows nu zelf herstarten.</p>}
       {['locked', 'blocked', 'verifying'].includes(status.state) && <Button disabled={busy} onClick={() => request('verify')}>Omgeving na herstart controleren</Button>}
       {status.state === 'verifying' && <Button disabled={busy} onClick={() => request('release')}>Onderhoud beëindigen en gebruikers toelaten</Button>}
     </>}
