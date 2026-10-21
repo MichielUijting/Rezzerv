@@ -1,6 +1,7 @@
 // Jumbo browser data is untrusted: only an explicit, reconciled receipt may enter Kassa.
 // This adapter never performs HTTP requests or stores credentials.
 import { JUMBO_BOOKMARKLET_VERSION } from './jumboReceiptPocBridge.js'
+import { jumboDay } from './jumboReceiptBatch.js'
 
 export const JUMBO_WEB_ORIGIN = 'https://www.jumbo.com'
 
@@ -11,10 +12,7 @@ function moneyCents(value) {
 }
 
 function validPurchaseDate(value) {
-  if (typeof value !== 'string' || !/^20\d{2}-\d{2}-\d{2}(?:T.*)?$/.test(value)) return false
-  const date = value.slice(0, 10)
-  const parsed = new Date(date + 'T00:00:00Z')
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date
+  return Boolean(jumboDay(value))
 }
 
 export function buildJumboImportEnvelope(payload) {
