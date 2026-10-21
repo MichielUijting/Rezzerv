@@ -31,7 +31,7 @@ export default function PlatformMaintenancePanel() {
   }
   React.useEffect(() => { request(); return () => { ++requestId.current } }, [])
   React.useEffect(() => { if (!status || status.state === 'normal') return; const timer = setInterval(() => { if (busy) return; if (status.state === 'draining' && status.active_operations === 0 && status.host_agent_ready) request('prepare'); else if (status.state === 'locked' && status.restart_detected) request('verify'); else request() }, 10000); return () => clearInterval(timer) }, [status?.state, busy])
-  return <Card className="rz-card-home" data-testid="platform-maintenance-panel">
+  return <div data-testid="platform-maintenance-panel"><Card className="rz-card-home">
     <h2>Serveronderhoud</h2>
     {error && <p role="alert">{error}</p>}
     {status && <>
@@ -54,5 +54,5 @@ export default function PlatformMaintenancePanel() {
     </>}
     <Button variant="secondary" disabled={busy} onClick={() => request()}>Status vernieuwen</Button>
     <p>Bij een fout blijft onderhoud gesloten. Niet-opgeslagen invoer wordt niet automatisch verwerkt.</p>
-  </Card>
+  </Card></div>
 }
