@@ -122,7 +122,7 @@ def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
     assert "requestAnimationFrame(measure)" in data_table_source
 
     assert "import Button from './Button.jsx'" in pagination_source
-    for label in ("Eerste", "Vorige", "Pagina {currentPage} van {totalPages}", "Volgende", "Laatste"):
+    for label in ("labels?.first", "labels?.previous", "labels?.next", "labels?.last", "Pagina ${currentPage} van ${totalPages}", "onPageChange?.(1)", "onPageChange?.(totalPages)"):
         assert label in pagination_source
     assert "variant=\"secondary\"" in pagination_source
 
