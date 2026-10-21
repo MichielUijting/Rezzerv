@@ -152,6 +152,14 @@ const punctuatedObservation = {
 const punctuatedEnvelope = buildJumboImportEnvelope(punctuatedObservation)
 assert.equal(punctuatedEnvelope.external_receipt_id, 'ABC:123.2026/01')
 assert.throws(
+  () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'ABC:123.2026/01 ' } }),
+  /bonnummer/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'ABC:123.2026/01 ', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  /spaties of witruimte/
+)
+assert.throws(
   () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'BAD ID' } }),
   /bonnummer/
 )
