@@ -10,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 6)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 7)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v6=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v7=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -54,6 +54,13 @@ assert.equal(parsed.itemCount, 4)
 
 const bookmarklet = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen')
 assert.match(bookmarklet, /^javascript:/)
+assert.match(bookmarklet, /const jumboDay = function\\(value\\)/)
+assert.match(bookmarklet, /const jumboDateWindow = function\\(from, to\\)/)
+assert.match(bookmarklet, /const selectJumboHistory = function\\(receipts, from, to/)
+assert.doesNotMatch(bookmarklet, /\\btf\\b/)
+const bridgeSource = fs.readFileSync(new URL('../src/features/storeConnections/jumboReceiptPocBridge.js', import.meta.url), 'utf8')
+assert.doesNotMatch(bridgeSource, /jumboDay\\.toString\\(\\)|jumboDateWindow\\.toString\\(\\)|selectJumboHistory\\.toString\\(\\)/)
+
 assert.match(bookmarklet, /\/api\/graphql/)
 assert.match(bookmarklet, /GetOnlineOrdersAndStoreReceipts/)
 assert.match(bookmarklet, /GetDigitalReceipt/)
@@ -63,7 +70,7 @@ assert.match(bookmarklet, /OMSCHRIJVING/)
 assert.match(bookmarklet, /Betaald/)
 assert.match(bookmarklet, /credentials:"include"/)
 assert.match(bookmarklet, /JUMBO_WEB-orders/)
-assert.match(bookmarklet, /#jumbo-poc-v6=/)
+assert.match(bookmarklet, /#jumbo-poc-v7=/)
 assert.match(bookmarklet, /location\.href=C\+P/)
 assert.match(bookmarklet, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarklet, /window\.opener/)
