@@ -35,12 +35,12 @@ export function selectJumboHistory(receipts, from, to, max = JUMBO_BATCH_LIMIT) 
     if (!id) {
       throw new Error(prefix + 'bonnummer ontbreekt of is geen tekst. Geen import uitgevoerd.')
     }
-    if (!/^[A-Za-z0-9_-]{4,100}$/.test(id)) {
+    if (!/^[\x21-\x7E]{4,100}$/.test(id)) {
       const reason = id.length < 4 ? 'te kort' :
         id.length > 100 ? 'te lang' :
         /\s/.test(id) ? 'bevat spaties of witruimte' :
         /[^\x00-\x7F]/.test(id) ? 'bevat niet-ASCII-tekens' :
-        'bevat een niet-toegestaan scheidingsteken'
+        'bevat een ongeldig of niet-afdrukbaar teken'
       throw new Error(prefix + 'bonnummer heeft een onverwacht formaat (' + reason + '). Geen import uitgevoerd.')
     }
     if (!day) {
