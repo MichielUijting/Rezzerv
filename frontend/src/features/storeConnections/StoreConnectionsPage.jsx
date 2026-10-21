@@ -472,7 +472,10 @@ export default function StoreConnectionsPage() {
           body: JSON.stringify(envelope),
         }),
         buildJumboImportEnvelope,
-        setJumboProgress,
+        (progress) => {
+          setJumboProgress(progress)
+          setJumboPhase(progress.phase)
+        },
       )
       const message = 'Jumbo: ' + counts.new + ' nieuw, ' + counts.known
         + ' al bekend, ' + counts.refreshed + ' bijgewerkt, ' + counts.failed + ' mislukt.'
@@ -778,6 +781,8 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
+                  setJumboPhase('waiting')
+                  setJumboProgress(null)
                   setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet.')
                   setJumboPocResult(null)
                   setJumboImportCandidate(null)
