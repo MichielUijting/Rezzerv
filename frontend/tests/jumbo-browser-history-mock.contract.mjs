@@ -99,6 +99,7 @@ const badId = await runMock({
 assert.equal(badId.result.ok, false)
 assert.match(badId.result.error, /regel 1: bonnummer heeft een onverwacht formaat/)
 assert.doesNotMatch(badId.result.error, /PRIVATE:BAD/)
+assert.match(badId.result.error, /niet-toegestaan scheidingsteken/)
 const missingDate = await runMock({
   sourceHistory: [{ transactionId: 'JUMBO-TEST-1', purchaseEndOn: null }],
 })
