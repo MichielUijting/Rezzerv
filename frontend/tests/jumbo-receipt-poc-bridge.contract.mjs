@@ -54,13 +54,14 @@ assert.equal(parsed.itemCount, 4)
 
 const bookmarklet = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen')
 assert.match(bookmarklet, /^javascript:/)
-assert.match(bookmarklet, /const jumboDay = function\\(value\\)/)
-assert.match(bookmarklet, /const jumboDateWindow = function\\(from, to\\)/)
-assert.match(bookmarklet, /const selectJumboHistory = function\\(receipts, from, to/)
-assert.doesNotMatch(bookmarklet, /\\btf\\b/)
+assert.ok(bookmarklet.includes('const jumboDay = function(value)'))
+assert.ok(bookmarklet.includes('const jumboDateWindow = function(from, to)'))
+assert.ok(bookmarklet.includes('const selectJumboHistory = function(receipts, from, to'))
+assert.ok(!bookmarklet.includes('tf('), 'The Jumbo favorite must not refer to minified helper names')
 const bridgeSource = fs.readFileSync(new URL('../src/features/storeConnections/jumboReceiptPocBridge.js', import.meta.url), 'utf8')
-assert.doesNotMatch(bridgeSource, /jumboDay\\.toString\\(\\)|jumboDateWindow\\.toString\\(\\)|selectJumboHistory\\.toString\\(\\)/)
-
+for (const helper of ['jumboDay', 'jumboDateWindow', 'selectJumboHistory']) {
+  assert.ok(!bridgeSource.includes(helper + '.toString()'), 'No minifier-dependent helper: ' + helper)
+}
 assert.match(bookmarklet, /\/api\/graphql/)
 assert.match(bookmarklet, /GetOnlineOrdersAndStoreReceipts/)
 assert.match(bookmarklet, /GetDigitalReceipt/)
