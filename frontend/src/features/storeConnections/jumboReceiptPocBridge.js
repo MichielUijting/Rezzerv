@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 10
+export const JUMBO_BOOKMARKLET_VERSION = 11
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v10='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v11='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -367,7 +367,12 @@ const selectJumboHistory = function(receipts, from, to, max = JUMBO_BATCH_LIMIT)
       throw new Error(prefix + 'bonnummer ontbreekt of is geen tekst. Geen import uitgevoerd.')
     }
     if (!/^[A-Za-z0-9_-]{4,100}$/.test(id)) {
-      throw new Error(prefix + 'bonnummer heeft een onverwacht formaat. Geen import uitgevoerd.')
+      const reason = id.length < 4 ? 'te kort' :
+        id.length > 100 ? 'te lang' :
+        /\\s/.test(id) ? 'bevat spaties of witruimte' :
+        /[^\\x00-\\x7F]/.test(id) ? 'bevat niet-ASCII-tekens' :
+        'bevat een niet-toegestaan scheidingsteken'
+      throw new Error(prefix + 'bonnummer heeft een onverwacht formaat (' + reason + '). Geen import uitgevoerd.')
     }
     if (!day) {
       throw new Error(prefix + 'aankoopdatum ontbreekt of is ongeldig. Geen import uitgevoerd.')
