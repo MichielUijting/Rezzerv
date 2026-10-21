@@ -30,7 +30,7 @@ def collect(conn):
     statements=[]
     fingerprints=[]
     for table in tables:
-        sql = f"SELECT json_build_object('table', :table, 'rows', count(*), 'digest', md5(coalesce(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text)),''))) FROM {q(runtime['schema_name'])}.{q(table)} AS t"
+        sql = f"SELECT json_build_object('table', CAST(:table AS TEXT), 'rows', count(*), 'digest', md5(coalesce(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text)),''))) FROM {q(runtime['schema_name'])}.{q(table)} AS t"
         fingerprints.append(conn.execute(text(sql),{'table':table}).scalar_one())
         # Table identifiers come only from the inspected database, not a caller.
         statements.append(sql.replace(':table', "'"+table.replace("'","''")+"'"))
@@ -45,7 +45,7 @@ def collect(conn):
     """), {'tables':tables}).scalars().all()
     for sequence in sequences:
         label = 'sequence:'+sequence
-        sql = f"SELECT json_build_object('table', :table, 'rows', 1, 'digest', md5(row_to_json(t)::text)) FROM (SELECT last_value,is_called FROM {q(runtime['schema_name'])}.{q(sequence)}) t"
+        sql = f"SELECT json_build_object('table', CAST(:table AS TEXT), 'rows', 1, 'digest', md5(row_to_json(t)::text)) FROM (SELECT last_value,is_called FROM {q(runtime['schema_name'])}.{q(sequence)}) t"
         fingerprints.append(conn.execute(text(sql),{'table':label}).scalar_one())
         statements.append(sql.replace(':table', "'"+label.replace("'","''")+"'"))
     canonical=json.dumps(fingerprints,sort_keys=True,separators=(',',':'))
