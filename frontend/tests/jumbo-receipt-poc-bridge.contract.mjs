@@ -54,6 +54,8 @@ assert.equal(parsed.itemCount, 4)
 
 const bookmarklet = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen')
 assert.match(bookmarklet, /^javascript:/)
+assert.doesNotThrow(() => new Function(bookmarklet.slice('javascript:'.length)), 'Jumbo favorite must be valid standalone JavaScript')
+
 assert.ok(bookmarklet.includes('const jumboDay = function(value)'))
 assert.ok(bookmarklet.includes('const jumboDateWindow = function(from, to)'))
 assert.ok(bookmarklet.includes('const selectJumboHistory = function(receipts, from, to'))
