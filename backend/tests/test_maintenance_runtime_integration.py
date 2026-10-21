@@ -39,7 +39,7 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
     def setUp(self):
         self.availability_patch = patch('backend.app.services.maintenance_runtime.read_agent_availability', return_value={'kind':'availability'})
         self.availability_patch.start(); self.addCleanup(self.availability_patch.stop)
-        self.host_patch = patch('backend.app.services.maintenance_runtime.read_host_proof', return_value={'host_id':'test-host','windows_boot':'boot-test','volume_identity':'volume-test','cluster_identity':'cluster-test','domain_fingerprint':'test-fingerprint','issued_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()})
+        self.host_patch = patch('backend.app.services.maintenance_runtime.read_host_proof', return_value={'host_id':'test-host','windows_boot':'boot-test','volume_identity':'volume-test','cluster_identity':'cluster-test','domain_fingerprint':'test-fingerprint','backend_image':'test-image','issued_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()})
         self.host_patch.start(); self.addCleanup(self.host_patch.stop)
         self.schema = 'maintenance_runtime_test_' + uuid4().hex
         with self.base_engine.begin() as conn:
@@ -167,6 +167,14 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
                 self.action('release',4)
         with self.engine.connect() as conn:
             self.assertEqual(state(conn)['state'], 'normal')
+
+    def test_locked_baseline_cannot_be_overwritten_by_another_prepare(self):
+        evidence={'database':'test','schema_name':self.schema,'server_address':'127.0.0.1','database_oid':'123','alembic_heads':['test-head'],'backend_instance':'before'}
+        self.action('announce',0,announcement='Test maintenance')
+        self.action('drain',1)
+        with patch('backend.app.services.maintenance_runtime._evidence',return_value=evidence):
+            self.action('prepare',2)
+            with self.assertRaises(MaintenanceTransitionError): self.action('prepare',3)
 
     def test_changed_database_is_never_released(self):
         evidence = {"database":"test", "schema_name":self.schema, "server_address":"127.0.0.1", "database_oid":"123", "alembic_heads":["test-head"], "backend_instance":"before"}

@@ -46,7 +46,7 @@ export default function PlatformMaintenancePanel() {
         <Button disabled={busy || !status.host_agent_ready} onClick={() => request('drain')}>Verwerkingen veilig stoppen</Button>
         <Button disabled={busy} variant="secondary" onClick={() => request('cancel')}>Aankondiging annuleren</Button>
       </>}
-      {['draining', 'locked'].includes(status.state) && <Button disabled={busy || status.active_operations !== 0} onClick={() => request('prepare')}>Actuele veiligheidscontroles uitvoeren</Button>}
+      {status.state === 'draining' && <Button disabled={busy || status.active_operations !== 0} onClick={() => request('prepare')}>Actuele veiligheidscontroles uitvoeren</Button>}
       {status.state === 'locked' && !status.restart_allowed && <p>Herstarttoestemming ontbreekt of is verlopen. Vernieuw de status en laat de onderhoudsagent controleren.</p>}
       {status.restart_allowed && now < status.restartUntil && <p role="status">Alle veiligheidscontroles zijn geslaagd. U kunt Windows nu zelf herstarten.</p>}
       {['locked', 'blocked', 'verifying'].includes(status.state) && <Button disabled={busy} onClick={() => request('verify')}>Omgeving na herstart controleren</Button>}

@@ -20,6 +20,13 @@ def admit_operation(conn, *, kind: str) -> str:
     IMPORTANT: registration must commit *before* the work starts; the caller
     must retain a durable operation until all work and side effects finish.
     """
+    # Reject an already closed gate without waiting behind a prepare lock.
+    # The locked recheck below remains the admission authority in every race.
+    visible = conn.execute(text('SELECT state FROM maintenance_control WHERE id=1')).mappings().one_or_none()
+    if visible is None:
+        raise MaintenanceTransitionError('Onderhoudsstatus ontbreekt')
+    if MaintenanceState(visible['state']) not in (MaintenanceState.NORMAL, MaintenanceState.ANNOUNCED):
+        raise MaintenanceTransitionError('Nieuwe verwerking geblokkeerd wegens onderhoud')
     row = conn.execute(text(_CONTROL)).mappings().one_or_none()
     if row is None:
         raise MaintenanceTransitionError("Onderhoudsstatus ontbreekt")

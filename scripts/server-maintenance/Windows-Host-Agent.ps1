@@ -11,6 +11,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($ExternalUrl.Scheme -cne 'https' -or $FrontendUrl.Scheme -notin @('http','https') -or $ExternalUrl.UserInfo -or $FrontendUrl.UserInfo) { throw 'Gebruik een lokale HTTP(S)-basis-URL en een externe HTTPS-basis-URL zonder credentials.' }
 if (-not $IsWindows) { throw 'De operationele agent vereist Windows; geen hostbewijs geproduceerd.' }
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $EnvFile = (Resolve-Path -LiteralPath $EnvFile).Path

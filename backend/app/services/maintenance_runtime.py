@@ -106,14 +106,14 @@ def state(conn):
         result['host_agent_ready'] = False
     result['restart_detected'] = bool(row['locked_boot_id'] and row['locked_boot_id'] != _BOOT_ID)
     result.update(active_operations=outstanding_operations(conn), restart_allowed=False)
-    if row['state'] == 'locked' and not result['active_operations']:
+    if row['state'] == 'locked' and not result['active_operations'] and not result['restart_detected']:
         try:
             evidence = json.loads(row['evidence_json'] or '{}')
             live = _evidence(conn)
             proof = read_host_proof(cycle_id=row['cycle_id'], runtime=live)
             issued = datetime.fromisoformat(proof['issued_at'].replace('Z','+00:00'))
             result['restart_valid_for_seconds'] = max(0, 90-(datetime.now(timezone.utc)-issued).total_seconds())
-            result['restart_allowed'] = all(proof[key] == evidence['host'][key] for key in ('host_id','windows_boot','volume_identity','cluster_identity','domain_fingerprint'))
+            result['restart_allowed'] = all(proof[key] == evidence['host'][key] for key in ('host_id','windows_boot','volume_identity','cluster_identity','domain_fingerprint','backend_image')) and all(live.get(key) == evidence.get(key) for key in ('database','schema_name','database_oid','alembic_heads','release_version'))
         except Exception:
             pass
     return result
@@ -164,7 +164,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
     elif action == "drain" and current == "announced":
         read_agent_availability()
         target = "draining"
-    elif action == "prepare" and current in {"draining", "locked"}:
+    elif action == "prepare" and current == "draining":
         if outstanding_operations(conn):
             raise MaintenanceTransitionError("Lopende verwerkingen zijn nog niet afgerond")
         evidence = _evidence(conn)
