@@ -25,7 +25,7 @@ export function buildJumboImportEnvelope(payload) {
   const detail = payload.first_detail
   if (!detail) throw new Error('Er is geen digitale Jumbo-kassabon beschikbaar.')
   const transactionId = String(detail.transactionId || '').trim()
-  if (!/^[A-Za-z0-9_-]{4,100}$/.test(transactionId)) {
+  if (!/^[\x21-\x7E]{4,100}$/.test(transactionId)) {
     throw new Error('Het Jumbo-bonnummer ontbreekt of is ongeldig.')
   }
   if (!validPurchaseDate(detail.purchaseEndOn)) {
