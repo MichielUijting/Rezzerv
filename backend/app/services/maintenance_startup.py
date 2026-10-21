@@ -32,15 +32,7 @@ def begin_startup(engine):
         return
     op = str(uuid4())
     with engine.begin() as conn:
-        missing = conn.execute(text("""
-            SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname=current_schema() AND c.relkind IN ('r','p')
-            AND c.relname NOT IN ('maintenance_control','maintenance_operations','maintenance_audit','server_sessions','auth_audit_log','alembic_version')
-            AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
-              AND t.tgname='inhuis_maintenance_write_gate' AND t.tgenabled='O')
-        """)).scalars().all()
-        if missing:
-            raise RuntimeError('Niet alle tabellen hebben de onderhoudsbarriere; startup gestopt')
+        assert_write_barrier(conn)
         row = conn.execute(text('SELECT generation FROM maintenance_control WHERE id=1 FOR UPDATE')).mappings().one()
         conn.execute(text("INSERT INTO maintenance_operations(operation_id,generation,kind,started_at) VALUES(:op,:generation,'startup',CURRENT_TIMESTAMP)"), {'op':op,'generation':row['generation']})
     _startup_operation = op
@@ -61,3 +53,15 @@ def finish_startup(engine):
     with engine.begin() as conn:
         complete_operation(conn, operation_id=_startup_operation)
     _startup_operation = None
+
+
+def assert_write_barrier(conn):
+    missing = conn.execute(text("""
+        SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname=current_schema() AND c.relkind IN ('r','p')
+        AND c.relname NOT IN ('maintenance_control','maintenance_operations','maintenance_audit','server_sessions','auth_audit_log','alembic_version')
+        AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid
+          AND t.tgname='inhuis_maintenance_write_gate' AND t.tgenabled='O')
+    """)).scalars().all()
+    if missing:
+        raise RuntimeError('Niet alle tabellen hebben de onderhoudsbarriere; startup gestopt')

@@ -50,6 +50,7 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
         spec.loader.exec_module(self.migration)
         with self.engine.begin() as conn:
             conn.exec_driver_sql('CREATE TABLE test_writes(value integer)')
+            conn.exec_driver_sql('CREATE TABLE test_sequence(id bigserial PRIMARY KEY,value integer)')
             conn.exec_driver_sql('CREATE TABLE household_registry(id text primary key)')
             conn.exec_driver_sql("INSERT INTO household_registry VALUES('test-a'),('test-b'),('0')")
             # The existing notification Alembic migration, not a parallel schema.
@@ -177,6 +178,48 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
             with self.assertRaises(MaintenanceTransitionError): self.action('verify',3)
         with self.engine.connect() as conn:
             self.assertEqual(state(conn)['state'], 'locked')
+
+    def test_host_archive_restores_domain_and_owned_sequences_exactly(self):
+        import subprocess
+        from backend.app.maintenance.server_maintenance_host_probe import collect
+        from backend.app.alembic_head_authority import repository_head_revision
+        container = os.getenv('INHUIS_MAINTENANCE_TEST_POSTGRES_CONTAINER','')
+        if not container:
+            self.skipTest('Dedicated isolated Docker service required for real pg_dump/restore')
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql('CREATE TABLE alembic_version(version_num varchar(32) NOT NULL)')
+            conn.execute(text('INSERT INTO alembic_version VALUES(:revision)'),{'revision':repository_head_revision()})
+            conn.exec_driver_sql('INSERT INTO test_sequence(value) VALUES(9)')
+        self.action('announce',0,announcement='Test maintenance')
+        self.action('drain',1)
+        with self.engine.begin() as conn:
+            before=collect(conn)
+        url=self.base_engine.url
+        user=url.username
+        dump=subprocess.run(['docker','exec',container,'pg_dump','-U',user,'-d',url.database,'--format=custom','--no-owner','--no-privileges'],capture_output=True,check=True,timeout=120).stdout
+        self.assertTrue(dump.startswith(b'PGDMP'))
+        target_name='restore_'+uuid4().hex+'_maintenance_restore_test'
+        admin=create_engine(url,isolation_level='AUTOCOMMIT')
+        restored_engine=None
+        created=False
+        try:
+            with admin.connect() as conn:
+                conn.exec_driver_sql('CREATE DATABASE "'+target_name+'"')
+                created=True
+            subprocess.run(['docker','exec','-i',container,'pg_restore','--exit-on-error','--clean','--if-exists','--no-owner','--no-privileges','-U',user,'-d',target_name],input=dump,capture_output=True,check=True,timeout=120)
+            restored_engine=create_engine(url.set(database=target_name),connect_args={'options':f'-csearch_path={self.schema}'})
+            with restored_engine.begin() as conn:
+                after=collect(conn)
+            self.assertEqual(before['domain_fingerprint'],after['domain_fingerprint'])
+            self.assertTrue(any(row['table'].startswith('sequence:') for row in before['fingerprints']))
+            with self.engine.begin() as conn:
+                self.assertEqual(before['domain_fingerprint'],collect(conn)['domain_fingerprint'])
+        finally:
+            if restored_engine is not None: restored_engine.dispose()
+            if created:
+                with admin.connect() as conn:
+                    conn.exec_driver_sql('DROP DATABASE "'+target_name+'" WITH (FORCE)')
+            admin.dispose()
 
     def test_startup_is_durable_and_post_startup_external_writes_remain_closed(self):
         from backend.app.services.maintenance_startup import begin_startup, finish_startup, install_runtime_operation_context

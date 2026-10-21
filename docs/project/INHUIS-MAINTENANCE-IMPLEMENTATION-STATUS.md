@@ -1,44 +1,29 @@
-# PR 595 — runtime implementation checkpoint
+# PR 595 — implementation and verification status
 
 TEST_LEVEL_PROVISIONAL: L
 
-Development checkpoint, **not a completed maintenance feature**. Keep Draft;
-do not merge, deploy or use this candidate as permission for server restart.
+The backend, frontend, additive Alembic migration, PostgreSQL write barrier,
+durable startup/request/worker authority, signed Windows host companion,
+physical database/storage checks and verified backup/Windows-boot proof are
+implemented. See [operation and deployment contract](INHUIS-MAINTENANCE-OPERATIONS.md).
 
-Implemented for validation:
+The two initially failing Actions were repaired and both passed on
+`aa5036309e1c8ba2575b26aa4885ce00a545dd6f`:
 
-- Additive Alembic-owned control, durable operations and actor audit tables.
-- Outermost ASGI admission for all domain methods, including GET paths that can
-  backfill. Exact infrastructure exceptions retain authentication, status and
-  notification access. Admission and drain serialize on the same PostgreSQL row.
-- Durable handoff before ZIP-import, Kassa diagnostic and testing worker threads
-  start. Normal completion releases the operation; uncaught failure/cancellation
-  retains unresolved evidence. No expiry or force-drain bypass.
-- Announcement/start/cancellation/end messages through the existing household
-  notification service and an authenticated global status projection/banner.
-- Recovery permission on management routes, generation CAS, execution-time
-  Alembic/database/process/prepared-transaction checks and repeated database
-  identity comparison before release.
-- Existing Platformbeheer → Herstel screen with maintenance controls.
-- Isolated PostgreSQL integration tests and dedicated Actions workflow.
+- Server maintenance isolated PostgreSQL validation;
+- PostgreSQL data migration equivalence.
 
-## Remaining blockers
+The PostgreSQL nullable-recipient parameter is explicitly typed; the canonical
+schema authority includes the three additive maintenance tables. The local
+legacy migration/rebuild selftests also passed.
 
-- `restart_allowed` deliberately remains false. Physical host/volume authority,
-  a verified recoverable backup and actual Windows boot evidence are not yet
-  connected. A backend UUID identifies an instance, never a Windows reboot.
-- Startup DML/provisioning and dynamic installer threads are not yet inside the
-  durable writer authority. Direct CLI/other-process entrypoints also need an
-  enforced boundary before complete writer coverage can be claimed.
-- Full authentication/household/receipt-chain/Playwright/F7 evidence is missing.
-- No final patchversion/exact-candidate approval or validated Windows PO script.
-- Offline inbox delivery does not imply acknowledgement by every recipient.
-- Parallel PRs 592/594 remain relevant to retailer imports/progress.
+Current implementation evidence is still being collected. No final candidate
+or successful full regression is implied by this document. Keep Draft until the
+required preflight is green and follow the repository's exact-candidate gates.
+No merge, deployment or production action is authorized by this PR.
 
-Local checks: 16 unit tests plus 3 subtests passed; frontend production build
-passed; UI component reuse and Alembic-head-literal checks passed. Real
-PostgreSQL tests require the dedicated isolated CI service and are not claimed
-as passed locally. The full candidate remains incomplete.
-
-A prepared database drain is not host restart approval. Complete these blockers
-and full regression before offering a functional PO restart test.
+The optional host-agent overlay is not applied by local PO testing. Missing
+agent configuration disables starting the drain and never produces restart
+permission. Physical Windows/host acceptance is an operational exercise after a
+separate approved deployment; synthetic signed proofs in automated tests never
+stand in for real host evidence at execution time.

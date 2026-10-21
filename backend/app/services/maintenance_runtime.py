@@ -129,8 +129,11 @@ def _broadcast(conn, message, generation):
 
 
 def _evidence(conn):
+    from .maintenance_startup import assert_write_barrier
+    assert_write_barrier(conn)
     evidence = read_runtime_schema_evidence(conn, alembic_ini=Path(__file__).resolve().parents[2]/"alembic.ini")
-    # Include OID and physical cluster identity where the runtime role can read it.
+    evidence["release_version"] = (Path(__file__).resolve().parents[2]/"VERSION.txt").read_text().strip()
+    # The signed host evidence independently binds this connection to storage.
     evidence["database_oid"] = str(conn.execute(text("SELECT oid FROM pg_database WHERE datname=current_database()" )).scalar_one())
     active = conn.execute(text("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND (state IS DISTINCT FROM 'idle' OR xact_start IS NOT NULL)" )).scalar_one()
     if active:
@@ -174,7 +177,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
         evidence = _evidence(conn)
         if not previous or previous.get("backend_instance") == _BOOT_ID:
             raise MaintenanceTransitionError("De backend is nog niet herstart")
-        for key in ("database", "schema_name", "server_address", "database_oid", "alembic_heads"):
+        for key in ("database", "schema_name", "database_oid", "alembic_heads", "release_version"):
             if evidence.get(key) != previous.get(key):
                 raise MaintenanceTransitionError("De actieve database of software wijkt af van het onderhoudsbewijs")
         read_host_proof(cycle_id=cycle_id, runtime=evidence, previous=previous["host"])
@@ -188,7 +191,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
         live = _evidence(conn)
         if previous.get("backend_instance") == _BOOT_ID:
             raise MaintenanceTransitionError("Herstartbewijs ontbreekt")
-        for key in ("database", "schema_name", "server_address", "database_oid", "alembic_heads"):
+        for key in ("database", "schema_name", "database_oid", "alembic_heads", "release_version"):
             if previous.get(key) != live.get(key):
                 raise MaintenanceTransitionError("Herstelcontrole is niet meer geldig")
         read_host_proof(cycle_id=cycle_id, runtime=live, previous=previous["host"])

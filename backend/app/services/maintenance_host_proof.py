@@ -66,9 +66,14 @@ def read_host_proof(*, cycle_id, runtime, previous=None):
             raise ValueError('Host/cycle mismatch')
         if not proof['compose_project'] or not proof['volume_identity'] or not proof['cluster_identity']:
             raise ValueError('Physical storage identity missing')
+        boot = datetime.fromisoformat(proof['windows_boot'].replace('Z','+00:00'))
+        if boot.tzinfo is None or boot > now:
+            raise ValueError('Invalid Windows boot timestamp')
+        if not proof.get('backend_image'):
+            raise ValueError('Backend image missing')
         if not proof['windows_boot'] or not proof['frontend_ready'] or not proof['external_ready']:
             raise ValueError('Host/frontend/external health missing')
-        for key in ('database', 'database_oid', 'server_started_at', 'server_address', 'alembic_heads'):
+        for key in ('database', 'database_oid', 'server_started_at', 'server_address', 'alembic_heads', 'release_version'):
             if proof['database_runtime'][key] != runtime[key]:
                 raise ValueError('Independent host/database evidence differs')
         backup = proof['backup']
@@ -80,10 +85,11 @@ def read_host_proof(*, cycle_id, runtime, previous=None):
         if restored.tzinfo is None or not 0 <= (now-restored).total_seconds() <= 86400:
             raise ValueError('Backup proof too old')
         if previous:
-            for key in ('host_id','compose_project','volume_identity','cluster_identity','domain_fingerprint'):
+            for key in ('host_id','compose_project','volume_identity','cluster_identity','domain_fingerprint','backend_image'):
                 if proof[key] != previous[key]:
                     raise ValueError('Host/storage/data changed after restart')
-            if proof['windows_boot'] == previous['windows_boot']:
+            previous_boot = datetime.fromisoformat(previous['windows_boot'].replace('Z','+00:00'))
+            if boot <= previous_boot:
                 raise ValueError('Windows has not restarted')
             if proof['backup']['sha256'] != previous['backup']['sha256']:
                 raise ValueError('Backup artifact changed')

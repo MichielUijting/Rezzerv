@@ -11,7 +11,7 @@ from .maintenance_postgres_admission import admit_operation, complete_operation
 # Exact infrastructure routes only. Domain GETs can write/backfill and therefore
 # require admission too. No platform/admin-prefix exemption.
 _INFRASTRUCTURE = frozenset({
-    ("GET", "/api/health"), ("GET", "/api/session"),
+    ("GET", "/api/health"), ("GET", "/api/version"), ("GET", "/api/session"),
     ("POST", "/api/auth/login"), ("POST", "/api/auth/logout"),
     ("GET", "/api/features"), ("GET", "/api/notifications"),
     ("GET", "/api/maintenance/status"),

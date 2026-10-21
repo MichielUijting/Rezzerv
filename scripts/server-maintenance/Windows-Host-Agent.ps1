@@ -99,8 +99,8 @@ Write-Host ('Alleen deze bewijslocatie read-only aan backend koppelen: '+$ProofD
 if ($InstallAtLogon) {
     # Explicit optional deployment step, never run by a local PO test or backend.
     $user=[Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $args="-NoProfile -File `"$PSCommandPath`" -EnvFile `"$EnvFile`" -ComposeProject $ComposeProject -FrontendUrl `"$FrontendUrl`" -ExternalUrl `"$ExternalUrl`" -DataDirectory `"$DataDirectory`""
-    $action=New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument $args -WorkingDirectory $RepoRoot
+    $scheduledArguments="-NoProfile -File `"$PSCommandPath`" -EnvFile `"$EnvFile`" -ComposeProject $ComposeProject -FrontendUrl `"$FrontendUrl`" -ExternalUrl `"$ExternalUrl`" -DataDirectory `"$DataDirectory`""
+    $action=New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument $scheduledArguments -WorkingDirectory $RepoRoot
     Register-ScheduledTask -TaskName ('Inhuis-Onderhoud-'+$ComposeProject) -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive) -Description 'Levert ondertekend onderhoudsbewijs; herstart Windows nooit.' | Out-Null
     return
 }
@@ -147,7 +147,7 @@ do {
                     try { [void](Invoke-DockerText @('exec',$testId,'pg_isready','-U','postgres')); $ready=$true; break } catch { Start-Sleep -Seconds 1 }
                 }
                 if (-not $ready) { throw 'Geisoleerde herstelomgeving niet gereed.' }
-                Copy-DockerBinary @('exec','-i',$testId,'pg_restore','--exit-on-error','--no-owner','--no-privileges','-U','postgres','-d','postgres') $archive -Restore
+                Copy-DockerBinary @('exec','-i',$testId,'pg_restore','--exit-on-error','--clean','--if-exists','--no-owner','--no-privileges','-U','postgres','-d','postgres') $archive -Restore
                 Assert-Fingerprint $testId 'postgres' 'postgres' $probe
                 Assert-Fingerprint $postgres.Id $pgUser $db $probe
                 $backup=[ordered]@{ cycle_id=$cycle; sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant(); restored_and_compared=$true; restored_at=[datetimeoffset]::UtcNow.ToString('o'); domain_fingerprint=$probe.domain_fingerprint }
@@ -165,7 +165,13 @@ do {
         $front=Invoke-WebRequest -Uri $FrontendUrl -TimeoutSec 15
         $external=Invoke-WebRequest -Uri $ExternalUrl -TimeoutSec 15
         if ($front.StatusCode -ne 200 -or $external.StatusCode -ne 200 -or $front.Content -notmatch '<title>Inhuis</title>' -or $external.Content -notmatch '<title>Inhuis</title>') { throw 'Frontend/externe route niet functioneel bereikbaar.' }
-        $payload=[ordered]@{ cycle_id=$cycle; issued_at=[datetimeoffset]::UtcNow.ToString('o'); host_id=$hostId; windows_boot=$boot; backend_container_id=$backend.Id; compose_project=$ComposeProject; volume_identity=$volume; cluster_identity=$identity.cluster; database_runtime=$probe.database_runtime; domain_fingerprint=$probe.domain_fingerprint; backup=$backup; frontend_ready=$true; external_ready=$true }
+        foreach ($base in @($FrontendUrl,$ExternalUrl)) {
+            $health=Invoke-RestMethod -Uri ([uri]::new($base,'/api/health')) -TimeoutSec 15
+            $version=Invoke-RestMethod -Uri ([uri]::new($base,'/api/version')) -TimeoutSec 15
+            $frontendVersion=Invoke-RestMethod -Uri ([uri]::new($base,'/version.json')) -TimeoutSec 15
+            if ($health.status -cne 'ok' -or $health.datastore -cne 'postgresql' -or $health.database -cne $db -or $version.version -cne $probe.database_runtime.release_version -or $frontendVersion.version -cne $probe.database_runtime.release_version) { throw 'Backend/frontend/externe runtime niet gelijk of niet gereed.' }
+        }
+        $payload=[ordered]@{ cycle_id=$cycle; issued_at=[datetimeoffset]::UtcNow.ToString('o'); host_id=$hostId; windows_boot=$boot; backend_container_id=$backend.Id; backend_image=$backend.Image; compose_project=$ComposeProject; volume_identity=$volume; cluster_identity=$identity.cluster; database_runtime=$probe.database_runtime; domain_fingerprint=$probe.domain_fingerprint; backup=$backup; frontend_ready=$true; external_ready=$true }
         $bytes=[Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Compress -Depth 20))
         $signature=$rsa.SignData($bytes,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
         $envelope=@{payload=[Convert]::ToBase64String($bytes);signature=[Convert]::ToBase64String($signature)} | ConvertTo-Json -Compress

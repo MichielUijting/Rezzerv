@@ -1,6 +1,6 @@
 # Inhuis — gecontroleerd serveronderhoud en verwerkingsrust
 
-Status: **ontwerp- en acceptatiecontract, nog NIET geïmplementeerd**. Deze specificatie geeft geen toestemming om de bestaande server te herstarten, een database te wijzigen of productie om te schakelen.
+Status: **oorspronkelijk ontwerp- en acceptatiecontract**. De actuele implementatie en operationele inrichting staan in `INHUIS-MAINTENANCE-OPERATIONS.md`; de validatiestatus staat in `INHUIS-MAINTENANCE-IMPLEMENTATION-STATUS.md`. Deze specificatie geeft geen toestemming om de bestaande server te herstarten, een database te wijzigen of productie om te schakelen.
 
 ## Doel
 De Product Owner (PO) moet in één beheerhandeling gepland onderhoud kunnen aankondigen, de toegang tot nieuwe schrijfacties kunnen afsluiten, lopend werk veilig laten afronden en pas daarna expliciet een gecontroleerde Windows-herstart kunnen uitvoeren. Na herstel worden gebruikers weer toegelaten. De bestaande Inhuis-berichtenmodule is het kanaal voor gebruikersmeldingen.

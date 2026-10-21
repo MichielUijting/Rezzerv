@@ -36,6 +36,7 @@ jobs:
           --health-cmd "pg_isready -U maintenance_ci -d inhuis_maintenance_test"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
+      INHUIS_MAINTENANCE_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
       INHUIS_MAINTENANCE_TEST_DATABASE_URL: postgresql+psycopg://maintenance_ci:maintenance_ci_ephemeral@127.0.0.1:55432/inhuis_maintenance_test
     steps:
       - uses: actions/checkout@v4
