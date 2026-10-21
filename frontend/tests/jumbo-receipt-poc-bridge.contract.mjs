@@ -10,9 +10,25 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 13)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 14)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v13=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v14=')
+for (const stamp of [
+  '2026-10-19',
+  '2026-10-19T13:24:35Z',
+  '2026-10-19 13:24:35',
+  '2026-10-19 13:24:35.123456+0200',
+  '2026-10-19T13:24:35.123456+02:00',
+]) assert.equal(jumboDay(stamp), '2026-10-19', stamp)
+for (const stamp of [
+  '2026-02-30 13:24:35',
+  '2026-10-19 24:00:00',
+  '2026-10-19 13:62:00',
+  '2026-10-19 13:24:60',
+  '2026-10-19 13:24:35+29:00',
+  '2026-10-19 13:24:35 INVALID',
+]) assert.equal(jumboDay(stamp), '', stamp)
+
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -78,7 +94,7 @@ assert.match(bookmarkletBody, /OMSCHRIJVING/)
 assert.match(bookmarkletBody, /Betaald/)
 assert.match(bookmarkletBody, /credentials:"include"/)
 assert.match(bookmarkletBody, /JUMBO_WEB-orders/)
-assert.match(bookmarkletBody, /#jumbo-poc-v13=/)
+assert.match(bookmarkletBody, /#jumbo-poc-v14=/)
 assert.match(bookmarkletBody, /location\.href=C\+P/)
 assert.match(bookmarkletBody, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarkletBody, /window\.opener/)
@@ -151,6 +167,12 @@ const punctuatedObservation = {
 }
 const punctuatedEnvelope = buildJumboImportEnvelope(punctuatedObservation)
 assert.equal(punctuatedEnvelope.external_receipt_id, 'ABC:123.2026/01')
+const spacedTimeEnvelope = buildJumboImportEnvelope({
+  ...punctuatedObservation,
+  first_detail: { ...punctuatedObservation.first_detail, purchaseEndOn: '2026-10-19 13:24:35' },
+})
+assert.equal(spacedTimeEnvelope.receipt.purchaseDateTime, '2026-10-19 13:24:35')
+
 assert.throws(
   () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'ABC:123.2026/01 ' } }),
   /bonnummer/
@@ -184,6 +206,7 @@ rejected({ ...observation, version: 9 }) // previous bookmarklet version
 rejected({ ...observation, version: 10 }) // previous diagnostic version
 rejected({ ...observation, version: 11 }) // obsolete strict ID limitation
 rejected({ ...observation, version: 12 }) // previous version
+rejected({ ...observation, version: 13 }) // obsolete date-format limitation
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
