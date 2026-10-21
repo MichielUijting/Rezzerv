@@ -77,6 +77,7 @@ class AdmissionPostgresIntegration(unittest.TestCase):
                 self.assertEqual(begin_draining(conn, expected_generation=1), 2)
         with self._conn() as conn:
             self.assertEqual(outstanding_operations(conn), 1)
+            conn.rollback()
             with self.assertRaises(MaintenanceTransitionError):
                 with conn.begin():
                     admit_operation(conn, kind="inventory")
@@ -84,6 +85,7 @@ class AdmissionPostgresIntegration(unittest.TestCase):
             with conn.begin():
                 complete_operation(conn, operation_id=operation_id)
             self.assertEqual(outstanding_operations(conn), 0)
+            conn.rollback()
 
     def test_drain_serializes_against_inflight_admission(self):
         admitted = Event()
@@ -112,6 +114,7 @@ class AdmissionPostgresIntegration(unittest.TestCase):
             self.assertEqual(future_drain.result(timeout=10), 2)
         with self._conn() as conn:
             self.assertEqual(outstanding_operations(conn), 1)
+            conn.rollback()
             with conn.begin():
                 complete_operation(conn, operation_id=operation_id)
 
