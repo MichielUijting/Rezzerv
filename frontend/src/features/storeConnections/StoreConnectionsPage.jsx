@@ -742,26 +742,24 @@ export default function StoreConnectionsPage() {
                 Jumbo-bon naar Inhuis
               </a>
               <div>
-                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open Jumbo via de knop hieronder in een nieuw tabblad en klik daar na aanmelden op de favoriet. De favoriet brengt dat Jumbo-tabblad terug naar Inhuis met een bonvoorbeeld; je oorspronkelijke Inhuis-tabblad blijft open. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Kies kleinere periodes als er meer bonnen zijn.
+                Stel eerst de periode in en sleep de favoriet opnieuw naar je favorietenbalk. Open Jumbo via de knop hieronder in ditzelfde tabblad en klik daar na aanmelden op de favoriet. Na het ophalen kom je in hetzelfde tabblad terug in Inhuis met een bonvoorbeeld; er blijft dus één tabblad over. Er worden maximaal 10 bonnen per gekozen periode veilig overgedragen. Kies kleinere periodes als er meer bonnen zijn.
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <a
                 href={JUMBO_ORDERS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
                 role="button"
                 className="rz-button-primary"
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
                 onClick={() => {
-                  setJumboPocProgress('Jumbo opent in een nieuw tabblad. Klik daar op de Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet. Inhuis blijft hier open.')
+                  setJumboPocProgress('Jumbo opent in ditzelfde tabblad. Klik daar op de Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet. Daarna keer je terug in hetzelfde tabblad.')
                   setJumboPocResult(null)
                   setJumboImportCandidate(null)
                 }}
                 data-testid="jumbo-poc-open"
               >
-                Open mijn Jumbo (nieuw tabblad)
+                Open mijn Jumbo (zelfde tabblad)
               </a>
             </div>
 
