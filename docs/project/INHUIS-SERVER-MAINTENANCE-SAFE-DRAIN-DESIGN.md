@@ -67,3 +67,17 @@ Staat duurzaam opgeslagen in dezelfde authoritative PostgreSQL-omgeving met excl
 Dit document is **geen werkende functie**. De exacte bestaande berichtenmodule/API, alle achtergrondprocessors, de actuele server-release/SHA en operationele databaseauthority moeten nog in code/runtime worden geïnventariseerd. Tot productie-uitrol van een volledig geteste onderhoudsmodus: handmatige aankondiging via de bestaande berichtenmodule, aangekondigd onderhoudsvenster, controle op actieve verwerking, begeleide herstart en gecontroleerd herstel. De mogelijkheid 'geen actieve gebruikers' alleen is onvoldoende bewijs dat geen achtergrondverwerkingen lopen.
 
 Geen merge, release, deployment, database-, Docker-, firewall-, server- of Windows-wijzigingen worden door dit ontwerp uitgevoerd.
+
+
+## Bindend aanvullend besluit PO: databaseversie uitsluitend op uitvoeringsmoment beoordelen
+
+Een tijdens ontwikkeling gelezen databaseversie/SHA mag **nooit** worden gebruikt als bewijs dat het actuele serveronderhoud veilig is. De onderhoudscontrole moet iedere keer op de daadwerkelijk aangesloten runtimeomgeving opnieuw, uitsluitend read-only:
+- PostgreSQL-database-identiteit/schema/serverkenmerken opvragen via de echte bestaande runtimeverbinding;
+- de daadwerkelijke `alembic_version` in PostgreSQL uitlezen en vergelijken met de Alembic-head(s) van de **op dat moment geïnstalleerde** software;
+- de voor de actuele omgeving geldende database-identiteit aanvullend vergelijken met objectieve volume-/runtimegegevens; overeenkomende namen alleen zijn niet voldoende;
+- status van alle schrijvende verzoeken, actieve importworkers, leases en transacties controleren;
+- een afwijking/onbereikbare database **fail-closed** rapporteren en geen 'Veilig herstarten' aanbieden.
+
+**Gewone Windows-updates voeren geen Alembic-migraties uit.** Een database-upgrade is apart voorbereid, getest en geautoriseerd. De read-only probe `app.services.maintenance_runtime_preflight.read_runtime_schema_evidence` is de eerste geïsoleerde implementatie van de live identiteits- en schema-uitlezing; hij draait nog niet in de werkende applicatie en bewijst op zichzelf geen verwerkingsrust. De unit-tests zijn toegevoegd maar nog niet uitgevoerd.
+
+De migratieketen tijdens softwareontwikkeling blijft wél noodzakelijk om nieuwe tabellen op de juiste Alembic-head aan te sluiten. Dat is een andere controle dan het vaststellen van de feitelijk actieve database tijdens onderhoud.
