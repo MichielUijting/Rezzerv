@@ -10,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 12)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 13)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v12=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v13=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -78,7 +78,7 @@ assert.match(bookmarkletBody, /OMSCHRIJVING/)
 assert.match(bookmarkletBody, /Betaald/)
 assert.match(bookmarkletBody, /credentials:"include"/)
 assert.match(bookmarkletBody, /JUMBO_WEB-orders/)
-assert.match(bookmarkletBody, /#jumbo-poc-v12=/)
+assert.match(bookmarkletBody, /#jumbo-poc-v13=/)
 assert.match(bookmarkletBody, /location\.href=C\+P/)
 assert.match(bookmarkletBody, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarkletBody, /window\.opener/)
@@ -183,6 +183,7 @@ rejected({ ...observation, version: 8 }) // Firefox strips raw newline bytes fro
 rejected({ ...observation, version: 9 }) // previous bookmarklet version
 rejected({ ...observation, version: 10 }) // previous diagnostic version
 rejected({ ...observation, version: 11 }) // obsolete strict ID limitation
+rejected({ ...observation, version: 12 }) // previous version
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
@@ -244,7 +245,19 @@ assert.throws(
 
 assert.throws(
   () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: null }], '2026-08-01', '2026-09-30'),
-  /aankoopdatum ontbreekt of is ongeldig/
+  /aankoopdatum ontbreekt/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: 20261021 }], '2026-08-01', '2026-09-30'),
+  /aankoopdatum is geen tekstwaarde/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: '21/10/2026 PRIVATEDATA' }], '2026-08-01', '2026-09-30'),
+  error => /dag-maand-jaar-notatie/.test(error.message) && !error.message.includes('PRIVATEDATA')
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: '2026-10-41T09:00' }], '2026-08-01', '2026-09-30'),
+  /ongeldige datum of tijdsaanduiding/
 )
 const second = { ...observation.first_detail, transactionId: 'TXN-20261013-02' }
 const batch = { ...observation, details: [observation.first_detail, second] }
