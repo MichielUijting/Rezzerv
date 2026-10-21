@@ -751,6 +751,7 @@ export default function StoreConnectionsPage() {
                 href={JUMBO_ORDERS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                role="button"
                 className="rz-button-primary"
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
                 onClick={() => {
