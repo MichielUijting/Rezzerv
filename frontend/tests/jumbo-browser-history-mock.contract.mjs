@@ -109,5 +109,11 @@ const missingDate = await runMock({
   sourceHistory: [{ transactionId: 'JUMBO-TEST-1', purchaseEndOn: null }],
 })
 assert.equal(missingDate.result.ok, false)
-assert.match(missingDate.result.error, /regel 1: aankoopdatum ontbreekt of is ongeldig/)
+assert.match(missingDate.result.error, /regel 1: aankoopdatum ontbreekt/)
+const alternateDate = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO-TEST-2', purchaseEndOn: '21/10/2026 PRIVATE' }],
+})
+assert.equal(alternateDate.result.ok, false)
+assert.match(alternateDate.result.error, /dag-maand-jaar-notatie/)
+assert.doesNotMatch(alternateDate.result.error, /PRIVATE/)
 console.log('JUMBO_PAGINATED_BROWSER_MOCK_GREEN')
