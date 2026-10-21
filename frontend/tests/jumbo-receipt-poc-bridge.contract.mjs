@@ -10,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 7)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 8)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v7=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v8=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -74,7 +74,7 @@ assert.match(bookmarklet, /OMSCHRIJVING/)
 assert.match(bookmarklet, /Betaald/)
 assert.match(bookmarklet, /credentials:"include"/)
 assert.match(bookmarklet, /JUMBO_WEB-orders/)
-assert.match(bookmarklet, /#jumbo-poc-v7=/)
+assert.match(bookmarklet, /#jumbo-poc-v8=/)
 assert.match(bookmarklet, /location\.href=C\+P/)
 assert.match(bookmarklet, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarklet, /window\.opener/)
@@ -155,6 +155,7 @@ rejected({ ...observation, source_origin: 'https://evil.example' })
 rejected({ ...observation, ok: false })
 rejected({ ...observation, version: 5 })
 rejected({ ...observation, version: 6 }) // obsolete favorite must fail closed
+rejected({ ...observation, version: 7 }) // production syntax bug in v7
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
