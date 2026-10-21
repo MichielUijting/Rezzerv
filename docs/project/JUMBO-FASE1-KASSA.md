@@ -142,3 +142,11 @@ gebruikersklik in een apart tabblad; bookmarklet kan in het Jumbo-tabblad
 terugkeren naar Inhuis; de bestaande bevestiging voor Kassa-import blijft
 verplicht. CI bewijst nu de veilige linkconfiguratie en bestaand POC-contract;
 **een echte Jumbo-accountproef is nog nodig**.
+
+## Herstel favorietfout na productiebuild (21 oktober 2026)
+
+Tijdens de praktijkproef verscheen in Winkelkoppelingen de fout `tf is not defined` en kwamen geen Jumbo-bonnen in Kassa terecht. De bookmarklet genereerde broncode met `Function.prototype.toString()` uit geïmporteerde hulpfuncties. Na Vite-minificatie kan zo'n functie naar een verkorte bundelidentifier verwijzen die op de Jumbo-pagina niet bestaat; de code faalt nog vóór het ophalen. Voor de drie hulpfuncties voor datum/geschiedenis wordt daarom vanaf de nieuwe **favoriet v7** expliciete, bundel-onafhankelijke broncode gebruikt. De favoriet-URL draagt vanaf v7 het fragment `#jumbo-poc-v7=`.
+
+De gebruiker moet na installatie van deze wijziging de oude v6-favoriet **verwijderen** en de nieuwe v7-favoriet vanuit Winkelkoppelingen naar de favorietenbalk slepen, met de correcte importperiode. Met de bestaande lokale bron van PR #592 blijft de app v6 tonen totdat de nieuwe kandidaat lokaal is gestart. Bij terugkeer verschijnt eerst de preview; daadwerkelijke opslag in Kassa vereist nog steeds expliciet `Importeer ... bonnen naar Kassa`.
+
+Een gesimuleerde Jumbo-browserproef bevestigt werking van de nieuwe bookmarkletlogica. De echte Jumbo-account-API, authenticatie, tijdsperiode en een echte import naar Kassa blijven apart live te verifiëren; dit herstel is geen bewijs dat alle bronbonformaten compatibel zijn. Geen cookies, tokens of ruwe bonnen in logs of repository bewaren.
