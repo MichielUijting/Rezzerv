@@ -115,7 +115,7 @@ def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
     assert "EXISTS (SELECT 1 FROM raw_receipts rr" in backend_source
 
     assert "import Pagination from './Pagination.jsx'" in data_table_source
-    assert "pagination = false" in data_table_source
+    assert "pagination = true" in data_table_source
     assert "pageSize = 10" in data_table_source
     assert "<Pagination" in data_table_source
     assert "headerRow.offsetHeight" in data_table_source
