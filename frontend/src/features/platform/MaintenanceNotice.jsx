@@ -1,5 +1,6 @@
 import React from 'react'
 import { API_BASE_URL } from '../../lib/apiClient.js'
+import './maintenanceNotice.css'
 
 export default function MaintenanceNotice() {
   const [status, setStatus] = React.useState(null)
@@ -18,7 +19,7 @@ export default function MaintenanceNotice() {
     return () => { live = false; clearInterval(timer); controller.abort() }
   }, [])
   if (!status || status.state === 'normal') return null
-  return <div className="rz-feedback rz-feedback--info" role="status" data-testid="maintenance-notice">
-    {status.state === 'announced' ? status.announcement : 'Serveronderhoud: nieuwe verwerkingen zijn tijdelijk geblokkeerd. Niet-opgeslagen invoer is niet verwerkt.'}
+  return <div className="rz-feedback rz-feedback--info rz-maintenance-notice" role="status" data-testid="maintenance-notice">
+    <strong>{status.state === 'announced' ? status.announcement : 'Serveronderhoud: nieuwe verwerkingen zijn tijdelijk geblokkeerd. Niet-opgeslagen invoer is niet verwerkt.'}</strong>
   </div>
 }
