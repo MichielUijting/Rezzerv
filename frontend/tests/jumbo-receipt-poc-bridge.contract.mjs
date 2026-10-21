@@ -10,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 11)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 12)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v11=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v12=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -78,7 +78,7 @@ assert.match(bookmarkletBody, /OMSCHRIJVING/)
 assert.match(bookmarkletBody, /Betaald/)
 assert.match(bookmarkletBody, /credentials:"include"/)
 assert.match(bookmarkletBody, /JUMBO_WEB-orders/)
-assert.match(bookmarkletBody, /#jumbo-poc-v11=/)
+assert.match(bookmarkletBody, /#jumbo-poc-v12=/)
 assert.match(bookmarkletBody, /location\.href=C\+P/)
 assert.match(bookmarkletBody, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarkletBody, /window\.opener/)
@@ -145,6 +145,16 @@ const observation = {
   },
 }
 const envelope = buildJumboImportEnvelope(observation)
+const punctuatedObservation = {
+  ...observation,
+  first_detail: { ...observation.first_detail, transactionId: 'ABC:123.2026/01' },
+}
+const punctuatedEnvelope = buildJumboImportEnvelope(punctuatedObservation)
+assert.equal(punctuatedEnvelope.external_receipt_id, 'ABC:123.2026/01')
+assert.throws(
+  () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'BAD ID' } }),
+  /bonnummer/
+)
 assert.equal(envelope.provider, 'jumbo')
 assert.equal(envelope.external_receipt_id, 'TXN-20261013-01')
 assert.equal(envelope.schema_version, '1.0')
@@ -164,6 +174,7 @@ rejected({ ...observation, version: 7 }) // production syntax bug in v7
 rejected({ ...observation, version: 8 }) // Firefox strips raw newline bytes from v8
 rejected({ ...observation, version: 9 }) // previous bookmarklet version
 rejected({ ...observation, version: 10 }) // previous diagnostic version
+rejected({ ...observation, version: 11 }) // obsolete strict ID limitation
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
@@ -207,8 +218,12 @@ assert.throws(
   /regel 1: bonnummer ontbreekt/
 )
 assert.throws(
-  () => selectJumboHistory([{ transactionId: 'SENSITIVE:123', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  () => selectJumboHistory([{ transactionId: 'SENSITIVE WITH SPACE', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
   error => /bonnummer heeft een onverwacht formaat/.test(error.message) && !error.message.includes('SENSITIVE')
+)
+assert.deepEqual(
+  selectJumboHistory([{ transactionId: 'VALID:123/01', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30').map(row => row.transactionId),
+  ['VALID:123/01']
 )
 assert.throws(
   () => selectJumboHistory([{ transactionId: 'a.b', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
