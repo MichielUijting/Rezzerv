@@ -428,6 +428,10 @@ def _assert_target_safe_to_reset(connection: Connection) -> None:
 
 
 def _truncate_target(connection: Connection, tables: Sequence[str]) -> None:
+    # Only reached after immutable source validation and fresh-target sentinels.
+    # This privileged importer must replace the migration-owned control seed in
+    # the same transaction as every other table. Runtime requests never call it.
+    connection.execute(text("SELECT set_config('inhuis.maintenance_admin','1',true)"))
     quoted = ", ".join(connection.dialect.identifier_preparer.quote(name) for name in tables)
     connection.exec_driver_sql(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
 

@@ -36,7 +36,7 @@ def publish_household_notification(conn, *, household_id, category, title, messa
         existing = conn.execute(text("""
             SELECT id FROM household_notifications
             WHERE household_id=:household_id
-              AND ((recipient_user_id IS NULL AND :recipient_user_id IS NULL) OR recipient_user_id=:recipient_user_id)
+              AND ((recipient_user_id IS NULL AND CAST(:recipient_user_id AS TEXT) IS NULL) OR recipient_user_id=:recipient_user_id)
               AND source_type=:source_type AND source_key=:source_key
             LIMIT 1
         """), params).scalar()

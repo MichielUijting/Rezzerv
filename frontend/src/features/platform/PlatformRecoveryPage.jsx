@@ -1,4 +1,5 @@
 import React from 'react'
+import PlatformMaintenancePanel from './PlatformMaintenancePanel.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -135,6 +136,7 @@ export default function PlatformRecoveryPage() {
       <Header title="Herstel" />
       <div className="rz-content">
         <div className="rz-content-inner">
+          <PlatformMaintenancePanel />
           <Card className="rz-card-home">
             <h2>Platformherstel</h2>
             <p>Voer uitsluitend expliciet geautoriseerde herstelacties uit.</p>
