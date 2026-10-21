@@ -99,6 +99,10 @@ const jumboLaunch = storeConnectionsSource.slice(
   storeConnectionsSource.indexOf('href={JUMBO_ORDERS_URL}'),
   storeConnectionsSource.indexOf('data-testid="jumbo-poc-open"'),
 )
+assert.match(jumboLaunch, /role="button"/)
+assert.match(jumboLaunch, /className="rz-button-primary"/)
+const jumboButtonCss = fs.readFileSync(new URL('../src/ui/components/button.css', import.meta.url), 'utf8')
+assert.match(jumboButtonCss, /a\.rz-button-primary\[role="button"\]/)
 assert.match(jumboLaunch, /target="_blank"/)
 assert.match(jumboLaunch, /rel="noopener noreferrer"/)
 assert.ok(storeConnectionsSource.includes('Open mijn Jumbo (nieuw tabblad)'))
