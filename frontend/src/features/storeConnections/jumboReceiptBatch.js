@@ -29,7 +29,7 @@ export function selectJumboHistory(receipts, from, to, max = JUMBO_BATCH_LIMIT) 
   const selected = []
   const seen = new Set()
   for (const [index, receipt] of receipts.entries()) {
-    const id = typeof receipt?.transactionId === 'string' ? receipt.transactionId.trim() : ''
+    const id = typeof receipt?.transactionId === 'string' ? receipt.transactionId : ''
     const day = jumboDay(receipt?.purchaseEndOn)
     const prefix = 'Jumbo-historie, regel ' + String(index + 1) + ': '
     if (!id) {
