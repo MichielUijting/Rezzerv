@@ -1,8 +1,8 @@
 import { jumboDay, jumboDateWindow, selectJumboHistory, JUMBO_BATCH_LIMIT, JUMBO_MAX_PAGES } from './jumboReceiptBatch.js'
 
-export const JUMBO_BOOKMARKLET_VERSION = 13
+export const JUMBO_BOOKMARKLET_VERSION = 14
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
-export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v13='
+export const JUMBO_POC_FRAGMENT_PREFIX = '#jumbo-poc-v14='
 
 function validInhuisCallbackUrl(value) {
   try {
@@ -337,11 +337,23 @@ function parseReceipt(rawJson) {
 const JUMBO_BOOKMARKLET_HELPER_SOURCE = `
 const jumboDay = function(value) {
   if (typeof value !== 'string') return ''
-  const m = value.match(/^(20\\d{2})-(\\d{2})-(\\d{2})(?:T.*)?$/)
+  const m = value.match(/^(20\\d{2})-(\\d{2})-(\\d{2})(?:[T ](\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?(Z|[+-]\\d{2}:?\\d{2})?)?$/)
   if (!m) return ''
   const day = m[1] + '-' + m[2] + '-' + m[3]
   const dt = new Date(day + 'T00:00:00Z')
-  return !Number.isNaN(dt.valueOf()) && dt.toISOString().slice(0, 10) === day ? day : ''
+  if (Number.isNaN(dt.valueOf()) || dt.toISOString().slice(0, 10) !== day) return ''
+  if (m[4] !== undefined) {
+    const hh = Number(m[4])
+    const mm = Number(m[5])
+    const ss = m[6] === undefined ? 0 : Number(m[6])
+    if (hh > 23 || mm > 59 || ss > 59) return ''
+    const offset = m[8]
+    if (offset && offset !== 'Z') {
+      const digits = offset.slice(1).replace(':', '')
+      if (Number(digits.slice(0, 2)) > 23 || Number(digits.slice(2)) > 59) return ''
+    }
+  }
+  return day
 };
 const jumboDateWindow = function(from, to) {
   const start = jumboDay(from)
