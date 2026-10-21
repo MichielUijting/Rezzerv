@@ -105,6 +105,11 @@ const separatorId = await runMock({
 })
 assert.equal(separatorId.result.ok, true, JSON.stringify(separatorId.result))
 assert.equal(separatorId.result.details[0].transactionId, 'JUMBO:TEST/2026.10')
+const spacedTime = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO:TEST/2026.10', purchaseEndOn: '2026-10-11 12:00:00' }],
+})
+assert.equal(spacedTime.result.ok, true, JSON.stringify(spacedTime.result))
+assert.equal(spacedTime.result.details[0].purchaseEndOn, '2026-10-11 12:00:00')
 const missingDate = await runMock({
   sourceHistory: [{ transactionId: 'JUMBO-TEST-1', purchaseEndOn: null }],
 })
