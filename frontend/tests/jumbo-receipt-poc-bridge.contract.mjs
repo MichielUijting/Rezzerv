@@ -10,9 +10,9 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 10)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 11)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v10=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v11=')
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -78,7 +78,7 @@ assert.match(bookmarkletBody, /OMSCHRIJVING/)
 assert.match(bookmarkletBody, /Betaald/)
 assert.match(bookmarkletBody, /credentials:"include"/)
 assert.match(bookmarkletBody, /JUMBO_WEB-orders/)
-assert.match(bookmarkletBody, /#jumbo-poc-v10=/)
+assert.match(bookmarkletBody, /#jumbo-poc-v11=/)
 assert.match(bookmarkletBody, /location\.href=C\+P/)
 assert.match(bookmarkletBody, /source_origin:location\.origin/)
 assert.doesNotMatch(bookmarkletBody, /window\.opener/)
@@ -162,6 +162,7 @@ rejected({ ...observation, version: 6 }) // obsolete favorite must fail closed
 rejected({ ...observation, version: 7 }) // production syntax bug in v7
 rejected({ ...observation, version: 8 }) // Firefox strips raw newline bytes from v8
 rejected({ ...observation, version: 9 }) // previous bookmarklet version
+rejected({ ...observation, version: 10 }) // previous diagnostic version
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
@@ -208,6 +209,15 @@ assert.throws(
   () => selectJumboHistory([{ transactionId: 'SENSITIVE:123', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
   error => /bonnummer heeft een onverwacht formaat/.test(error.message) && !error.message.includes('SENSITIVE')
 )
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'a.b', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  /te kort/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'LONG PRIVATE ID WITH SPACE', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  error => /bevat spaties of witruimte/.test(error.message) && !error.message.includes('LONG PRIVATE')
+)
+
 assert.throws(
   () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: null }], '2026-08-01', '2026-09-30'),
   /aankoopdatum ontbreekt of is ongeldig/
