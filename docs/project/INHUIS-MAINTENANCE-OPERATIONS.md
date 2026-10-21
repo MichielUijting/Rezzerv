@@ -88,6 +88,8 @@ silently overwritten or advertised as a successful backup.
 
 The signed before/after evidence includes Windows boot time, actual cluster and
 volume identity, backend image, installed release/schema, and domain fingerprint.
+Before/after evidence is retained with the canonical actor in the durable
+maintenance audit, including after a subsequent maintenance cycle starts.
 A changed network IP is allowed only when fresh independent physical identity
 and data proof still match. A backend restart on the same Windows boot is not
 sufficient. A copied/empty/different database cannot satisfy the data/identity

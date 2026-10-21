@@ -17,7 +17,10 @@ The PostgreSQL nullable-recipient parameter is explicitly typed; the canonical
 schema authority includes the three additive maintenance tables. The local
 legacy migration/rebuild selftests also passed.
 
-Current implementation evidence is still being collected. No final candidate
+Current implementation evidence is still being collected. The necessary
+nullable SQL casts and exact schema/trigger-authority updates are explicit;
+no check has been bypassed. Local route tests additionally prove 401/403
+rejection before DML and that general status exposes no admin details. No final candidate
 or successful full regression is implied by this document. Keep Draft until the
 required preflight is green and follow the repository's exact-candidate gates.
 No merge, deployment or production action is authorized by this PR.

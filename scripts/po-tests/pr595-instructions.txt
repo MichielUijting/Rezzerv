@@ -1,0 +1,9 @@
+Log in met een account met technische platformbeheerrechten.
+Open Platformbeheer / Herstel en bekijk Serveronderhoud.
+Kondig een korte testperiode aan met datum, tijdzone en verwachte duur.
+Controleer de melding bij een regulier huishouden en op mobiel.
+Annuleer deze test-aankondiging en controleer dat Inhuis beschikbaar blijft.
+Zonder gekoppelde onderhoudsagent moet Verwerkingen veilig stoppen uitgeschakeld blijven.
+Controleer dat een gewoon huishoudaccount geen onderhoud kan beheren.
+Deze lokale PO-test installeert geen agent en geeft geen toestemming voor een Windows-herstart.
+De volledige fysieke herstartproef volgt uitsluitend na een apart goedgekeurde testinrichting.

@@ -47,5 +47,6 @@ maintenance_audit = sa.Table(
     sa.Column("generation", sa.Integer, nullable=False),
     sa.Column("actor_user_id", sa.Text(), nullable=False),
     sa.Column("action", sa.String(30), nullable=False),
+    sa.Column("evidence_json", sa.Text()),
     sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
 )

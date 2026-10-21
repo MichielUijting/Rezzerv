@@ -104,7 +104,7 @@ def state(conn):
         result['host_agent_ready'] = True
     except MaintenancePreflightError:
         result['host_agent_ready'] = False
-    result['restart_detected'] = bool(row['locked_boot_id'] and row['locked_boot_id'] != _BOOT_ID)
+    result['restart_detected'] = bool(row['state'] in {'locked','verifying','blocked'} and row['locked_boot_id'] and row['locked_boot_id'] != _BOOT_ID)
     result.update(active_operations=outstanding_operations(conn), restart_allowed=False)
     if row['state'] == 'locked' and not result['active_operations'] and not result['restart_detected']:
         try:
@@ -153,6 +153,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
     current = row["state"]
     target = None
     evidence = None
+    audit_evidence = None
     cycle_id = row["cycle_id"]
     if action == "announce" and current == "normal":
         if not announcement.strip():
@@ -169,6 +170,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
             raise MaintenanceTransitionError("Lopende verwerkingen zijn nog niet afgerond")
         evidence = _evidence(conn)
         evidence["host"] = read_host_proof(cycle_id=cycle_id, runtime=evidence)
+        audit_evidence = evidence
         target = "locked"
     elif action == "verify" and current in {"locked", "verifying", "blocked"}:
         if outstanding_operations(conn):
@@ -180,7 +182,8 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
         for key in ("database", "schema_name", "database_oid", "alembic_heads", "release_version"):
             if evidence.get(key) != previous.get(key):
                 raise MaintenanceTransitionError("De actieve database of software wijkt af van het onderhoudsbewijs")
-        read_host_proof(cycle_id=cycle_id, runtime=evidence, previous=previous["host"])
+        after_host = read_host_proof(cycle_id=cycle_id, runtime=evidence, previous=previous["host"])
+        audit_evidence = {**evidence, "host": after_host}
         target = "verifying"
         # Retain original pre-restart evidence until release, for repeatable checks.
         evidence = previous
@@ -194,7 +197,8 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
         for key in ("database", "schema_name", "database_oid", "alembic_heads", "release_version"):
             if previous.get(key) != live.get(key):
                 raise MaintenanceTransitionError("Herstelcontrole is niet meer geldig")
-        read_host_proof(cycle_id=cycle_id, runtime=live, previous=previous["host"])
+        after_host = read_host_proof(cycle_id=cycle_id, runtime=live, previous=previous["host"])
+        audit_evidence = {**live, "host": after_host}
         target = "normal"
     if target is None:
         raise MaintenanceTransitionError("Deze onderhoudsactie is nu niet toegestaan")
@@ -203,7 +207,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
     if action in messages:
         _broadcast(conn, messages[action], generation)
     conn.execute(text("UPDATE maintenance_control SET state=:state,generation=:generation,cycle_id=:cycle_id,announcement=:announcement,evidence_json=:evidence,locked_boot_id=:boot,updated_at=CURRENT_TIMESTAMP WHERE id=1"), {"state":target,"generation":generation,"cycle_id":cycle_id,"announcement":announcement.strip() if action=="announce" else row["announcement"],"evidence":json.dumps(evidence) if evidence else row["evidence_json"],"boot":_BOOT_ID if action=="prepare" else row["locked_boot_id"]})
-    conn.execute(text("INSERT INTO maintenance_audit(id,generation,actor_user_id,action) VALUES(:id,:generation,:actor,:action)"), {"id":str(uuid4()),"generation":generation,"actor":actor_user_id,"action":action})
+    conn.execute(text("INSERT INTO maintenance_audit(id,generation,actor_user_id,action,evidence_json) VALUES(:id,:generation,:actor,:action,:evidence)"), {"id":str(uuid4()),"generation":generation,"actor":actor_user_id,"action":action,"evidence":json.dumps(audit_evidence) if audit_evidence else None})
     result = state(conn)
     result["runtime_checks_passed"] = action == "prepare"
     return result

@@ -48,6 +48,7 @@ jobs:
           INHUIS_MAINTENANCE_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: >-
           python -m pytest -q
+          backend/tests/test_maintenance_platform_api.py
           backend/tests/test_maintenance_host_proof.py
           backend/tests/test_maintenance_postgres_admission.py
           backend/tests/test_maintenance_postgres_integration.py
