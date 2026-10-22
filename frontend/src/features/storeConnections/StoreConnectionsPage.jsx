@@ -22,11 +22,15 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
+import { deriveReceiptConnectionOverview, receiptConnectionSummary } from './receiptConnectionOverviewModel.js'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
+  const isMobileViewport = useMobileAppViewport()
+  const [activeProvider, setActiveProvider] = useState('')
   const ahSyncPageMountedRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
@@ -70,6 +74,19 @@ export default function StoreConnectionsPage() {
     () => deriveStoreConnectionRows(providers, connections, ahConnection),
     [providers, connections, ahConnection],
   )
+  const digitalReceiptRows = useMemo(() => {
+    const phases = { ah: ahPhase, jumbo: jumboPhase, lidl: lidlPhase }
+    const phaseLabels = {
+      waiting: 'Verbinding maken', fetching: 'Bonnen ophalen',
+      validating: 'Controleren', importing: 'Verwerken',
+      completed: 'Afgerond', failed: 'Controle nodig',
+    }
+    return deriveReceiptConnectionOverview(rows, ahConnection).map(row => ({
+      ...row,
+      statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
+    }))
+  }, [rows, ahConnection, ahPhase, jumboPhase, lidlPhase])
+  const digitalSummary = useMemo(() => receiptConnectionSummary(digitalReceiptRows), [digitalReceiptRows])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
@@ -90,6 +107,49 @@ export default function StoreConnectionsPage() {
       : '',
     [jumboFrom, jumboTo, jumboPeriodValid],
   )
+
+  const receiptConnectionColumns = useMemo(() => [
+    {
+      key: 'providerName',
+      header: 'Winkel',
+      width: 175,
+      renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
+    },
+    {
+      key: 'typeLabel',
+      header: 'Bonnen ophalen',
+      width: 205,
+      renderCell: row => <span data-testid={`receipt-connection-mode-${row.providerCode}`}>{row.typeLabel}</span>,
+    },
+    {
+      key: 'statusLabel',
+      header: 'Status',
+      width: 175,
+      renderCell: row => <span data-testid={`receipt-connection-status-${row.providerCode}`}>{row.statusLabel}</span>,
+    },
+    {
+      key: 'lastSyncLabel',
+      header: 'Laatst bijgewerkt',
+      width: 165,
+      renderCell: row => <span>{row.lastSyncLabel}</span>,
+    },
+    {
+      key: 'action',
+      header: 'Actie',
+      width: 165,
+      renderCell: row => (
+        <Button
+          type="button"
+          variant={activeProvider === row.providerCode ? 'secondary' : 'primary'}
+          data-testid={`receipt-connection-action-${row.providerCode}`}
+          disabled={isLoading}
+          onClick={() => handleReceiptConnectionAction(row)}
+        >
+          {row.actionLabel}
+        </Button>
+      ),
+    },
+  ], [activeProvider, isLoading])
 
   const storeConnectionColumns = useMemo(() => [
     {
@@ -646,6 +706,19 @@ export default function StoreConnectionsPage() {
     setEditingCode('')
     setCardNumber('')
   }
+
+  function handleReceiptConnectionAction(row) {
+    if (!row) return
+    setEditingCode('')
+    setActiveProvider(row.providerCode)
+  }
+
+  useEffect(() => {
+    if (!activeProvider) return
+    document.querySelector('[data-testid="receipt-connection-details"]')?.scrollIntoView({
+      behavior: 'smooth', block: 'start',
+    })
+  }, [activeProvider])
 
   function handleStoreConnectionAction(row) {
     if (row?.providerCode === 'aldi') return
