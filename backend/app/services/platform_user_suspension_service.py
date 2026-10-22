@@ -242,7 +242,9 @@ def install_server_session_suspension_guard() -> None:
     @wraps(original_resolve_login_identity)
     def guarded_resolve_login_identity(conn, email: str, password: str):
         identity = original_resolve_login_identity(conn, email, password)
-        ensure_user_account_status_schema(conn)
+        # Login is read-only for domain data, including during closed maintenance.
+        # Legacy status normalization belongs to controlled setup, never login.
+        validate_user_account_status_schema(conn)
         require_user_account_active(conn, str(identity.get("user_id") or ""))
         return identity
 
