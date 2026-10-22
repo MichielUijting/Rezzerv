@@ -273,6 +273,7 @@ export default function StoreConnectionsPage() {
     const ahResult = params.get('ah')
     if (!ahResult) return
     if (ahResult === 'connected') {
+      setActiveProvider('ah')
       showFeedback({
         variant: 'success',
         title: 'Albert Heijn gekoppeld',
@@ -301,6 +302,7 @@ export default function StoreConnectionsPage() {
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        setActiveProvider('lidl')
         lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
         setLidlCountsView(null)
         setLidlPhase('waiting')
@@ -474,6 +476,7 @@ export default function StoreConnectionsPage() {
   useEffect(() => {
     const hash = String(window.location.hash || '')
     if (!hash.startsWith(JUMBO_POC_FRAGMENT_PREFIX)) return
+    setActiveProvider('jumbo')
 
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
     try {
