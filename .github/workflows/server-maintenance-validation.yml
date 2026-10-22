@@ -6,6 +6,7 @@ on:
       - 'backend/app/services/household_notification_service.py'
       - 'backend/app/maintenance/postgresql_legacy_production_rebuild.py'
       - 'backend/app/api/server_maintenance_routes.py'
+      - 'backend/app/api/server_session_routes.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
       - 'backend/app/services/testing_service.py'
@@ -49,6 +50,7 @@ jobs:
         run: >-
           python -m pytest -q
           backend/tests/test_maintenance_platform_api.py
+          backend/tests/test_maintenance_login_identity.py
           backend/tests/test_maintenance_host_proof.py
           backend/tests/test_maintenance_postgres_admission.py
           backend/tests/test_maintenance_postgres_integration.py

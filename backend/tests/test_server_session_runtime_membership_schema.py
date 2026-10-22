@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+import pytest
 
 from app.api.server_session_routes import (
     SessionApiConfiguration,
@@ -62,6 +63,35 @@ def test_login_and_session_resolve_with_user_email_membership_schema():
         assert login.json()["role"] == "admin"
         assert client.get("/api/session").status_code == 200
     finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize('maintenance_state', ['draining', 'locked', 'verifying', 'blocked'])
+def test_platform_admin_can_log_in_with_real_maintenance_write_barrier(maintenance_state):
+    client, engine = _runtime_schema_client()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u-admin', 'platform.platform_admin', TRUE)
+            """))
+            conn.execute(text("UPDATE maintenance_control SET state=:state WHERE id=1"),
+                         {'state': maintenance_state})
+        # No mocked session/role service and no maintenance-admin bypass. The
+        # installed PostgreSQL statement triggers reject domain provisioning.
+        login = client.post('/api/auth/login', json={
+            'email': 'admin@rezzerv.local', 'password': 'Rezzerv123',
+        })
+        assert login.status_code == 200, login.text
+        assert login.json()['active_household_id'] is None
+        assert client.get('/api/session').status_code == 200
+        with engine.connect() as conn:
+            assert conn.execute(text('SELECT state FROM maintenance_control WHERE id=1')).scalar_one() == maintenance_state
+    finally:
+        # Restore only this expendable fixture's infrastructure singleton, so
+        # the next fixture can perform its normal controlled reset.
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE maintenance_control SET state='normal' WHERE id=1"))
         engine.dispose()
 
 

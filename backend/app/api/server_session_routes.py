@@ -16,6 +16,7 @@ from app.services.consumer_account_provisioning import (
     provision_new_consumer_account,
 )
 from app.services.password_service import verify_password
+from app.services.maintenance_state_contract import MaintenanceState
 from app.services.server_session_service import (
     DEFAULT_SESSION_TTL,
     SESSION_COOKIE_NAME,
@@ -202,7 +203,19 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
 
     # Keep every active Frontteam user's personal regular household projection
     # idempotently in sync. This never grants the platform role itself.
-    ensure_frontteam_household_for_session_runtime(conn)
+    # Login is infrastructure and must remain usable while domain writes are
+    # closed. Serialize the optional projection against drain in this same
+    # transaction; never exempt authorization/household tables from the barrier.
+    provision_households = True
+    if conn.dialect.name == "postgresql":
+        maintenance_state = MaintenanceState(conn.execute(text(
+            "SELECT state FROM maintenance_control WHERE id=1 FOR SHARE"
+        )).scalar_one())
+        provision_households = maintenance_state in (
+            MaintenanceState.NORMAL, MaintenanceState.ANNOUNCED,
+        )
+    if provision_households:
+        ensure_frontteam_household_for_session_runtime(conn)
 
     user_id = str(account.get("user_id") or "")
     resolved_email = str(account.get("email") or "").strip().lower()

@@ -81,7 +81,12 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     expect(await notice.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
     expect((await notice.boundingBox()).height).toBeLessThanOrEqual(viewport.height * 0.4 + 1)
 
-    status = { state: 'draining' }
+    for (const state of ['draining', 'locked', 'verifying', 'blocked']) {
+      status = { state, announcement: 'Bericht van de platformbeheerder: Windows wordt bijgewerkt.' }
+      await page.clock.fastForward(15000)
+      await expect(notice).toHaveText(status.announcement)
+    }
+    status = { state: 'draining', announcement: '   ' }
     await page.clock.fastForward(15000)
     await expect(notice).toContainText('nieuwe verwerkingen zijn tijdelijk geblokkeerd')
     status = { state: 'normal' }
