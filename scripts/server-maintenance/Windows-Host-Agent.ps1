@@ -11,6 +11,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'Host-Network-Identity.ps1')
 if ($ExternalUrl.Scheme -cne 'https' -or $FrontendUrl.Scheme -notin @('http','https') -or $ExternalUrl.UserInfo -or $FrontendUrl.UserInfo) { throw 'Gebruik een lokale HTTP(S)-basis-URL en een externe HTTPS-basis-URL zonder credentials.' }
 if (-not $IsWindows) { throw 'De operationele agent vereist Windows; geen hostbewijs geproduceerd.' }
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -126,8 +127,9 @@ do {
         $db=[string]$probe.database_runtime.database
         $identitySql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
         $identity=(Invoke-DockerText @('exec',$postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql)) | ConvertFrom-Json
-        $ips=@($postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress })
-        if ($identity.database -cne $db -or $identity.oid -cne $probe.database_runtime.database_oid -or ([datetimeoffset]$identity.started) -ne ([datetimeoffset]$probe.database_runtime.server_started_at) -or $probe.database_runtime.server_address -notin $ips) { throw 'Runtimeverbinding en fysieke PostgreSQL-container verschillen.' }
+        $ips=@($postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $sameAddress=Test-InhuisDatabaseServerAddress -DatabaseAddress $probe.database_runtime.server_address -ContainerAddresses $ips
+        if ($identity.database -cne $db -or $identity.oid -cne $probe.database_runtime.database_oid -or ([datetimeoffset]$identity.started) -ne ([datetimeoffset]$probe.database_runtime.server_started_at) -or -not $sameAddress) { throw 'Runtimeverbinding en fysieke PostgreSQL-container verschillen.' }
         $mounts=@($postgres.Mounts | Where-Object { $_.Type -in @('volume','bind') } | Sort-Object Destination | ForEach-Object { [ordered]@{ Type=$_.Type; Source=$_.Source; Destination=$_.Destination } })
         if (-not $mounts.Count) { throw 'Geen duurzame databaseopslag aangetoond.' }
         $volume=Get-Sha ($mounts | ConvertTo-Json -Compress -Depth 10)
