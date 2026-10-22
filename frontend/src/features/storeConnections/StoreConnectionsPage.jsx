@@ -831,7 +831,7 @@ export default function StoreConnectionsPage() {
               <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
-                {ahConnection?.connected ? ' De koppeling blijft bewaard na een herstart.' : ''}
+                {ahConnection?.connected ? ' Inhuis controleert automatisch ongeveer ieder kwartier op nieuwe AH-bonnen terwijl de server draait.' : ''}
                 {ahConnection?.last_sync_at ? <> Laatst gesynchroniseerd: <strong>{formatLastSync(ahConnection.last_sync_at)}</strong>.</> : null}
               </p>
             </div>
@@ -839,7 +839,7 @@ export default function StoreConnectionsPage() {
             {!ahConnection?.connected ? (
               <div style={{ display: 'grid', gap: '10px' }}>
                 <div style={{ color: '#667085' }}>
-                  Je logt één keer rechtstreeks bij Albert Heijn in. Inhuis ontvangt de bevestiging automatisch; je hoeft geen code of link te kopiëren.
+                  Tik of klik op Koppelen en meld je aan bij Albert Heijn. Inhuis regelt daarna de toegang en het ophalen van nieuwe bonnen.
                 </div>
                 <div>
                   <Button type="button" onClick={startAhLogin} disabled={ahBusy || isLoading} data-testid="ah-connect-start">
@@ -967,7 +967,7 @@ export default function StoreConnectionsPage() {
                 </p>
               ) : null}
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
-                Gebruik je normale Lidl.nl-login. Inhuis neemt alleen de bongegevens over; je wachtwoord, cookies en Lidl-sessie blijven in je browser.
+                Haal bonnen op via je eigen Lidl-account. Inhuis ontvangt alleen bongegevens, geen wachtwoord of browsercookies.
               </p>
             </div>
 
@@ -986,8 +986,10 @@ export default function StoreConnectionsPage() {
                 <Button variant="secondary" onClick={() => saveLidlWindow(true)} disabled={lidlWindowSaving}>Automatisch</Button>
               </div> : null}
             </div>
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig na deze update:</strong> verwijder eerst je oude Lidl-favoriet en sleep daarna de nieuwe v2-knop hieronder naar de favorietenbalk.</div>
+            <details data-testid="lidl-bookmarklet-help">
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Eerste keer? Stel Lidl-bonnen ophalen in</summary>
+              <div style={{ display: 'grid', gap: '8px', padding: '12px 0' }}>
+                <div>Sleep onderstaande knop één keer naar de favorietenbalk. Vervang een oudere Lidl-favoriet eerst.</div>
               <a
                 href={lidlBookmarklet}
                 data-testid="lidl-web-bookmarklet"
@@ -1005,13 +1007,12 @@ export default function StoreConnectionsPage() {
                 }}
                 onClick={(event) => event.preventDefault()}
               >
-                Lidl-bonnen naar Inhuis v2
+                Lidl-bonnen ophalen
               </a>
-              <div style={{ color: '#667085' }}>
-                Gebruik daarna de knop hieronder. Laat dit Inhuis-tabblad open en klik in de geopende Lidl-tab op de nieuwe v2-favoriet. Vanaf v2 blijft de favoriet zelf klein en haalt hij de actuele importcode uit je bestaande Inhuis-sessie, zodat toekomstige parserwijzigingen niet opnieuw een nieuwe favoriet vereisen.
+                <div>Klik op 'Open mijn Lidl-kassabonnen', meld je bij Lidl aan en kies daar de opgeslagen favoriet.
+                  Laat dit Inhuis-tabblad open zolang Lidl bonnen doorgeeft.</div>
               </div>
-            </div>
-
+            </details>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button
                 type="button"
