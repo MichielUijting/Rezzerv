@@ -1,0 +1,44 @@
+name: Winkelkoppelingen onboarding en AH auto-import contract
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/ah_receipt_background_sync.py'
+      - 'backend/tests/test_ah_receipt_background_sync.py'
+      - 'backend/app/main.py'
+      - 'frontend/src/features/storeConnections/receiptConnectionOverviewModel.js'
+      - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
+      - 'frontend/src/features/kassa/KassaPage.jsx'
+      - 'frontend/tests/receipt-connection-overview.contract.mjs'
+      - 'frontend/tests/store-connections.contract.mjs'
+      - '.github/workflows/store-connection-onboarding-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  receipt-onboarding-contract:
+    name: Digital receipt overview and guarded AH background sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify honest retailer capability model and UI source
+        run: |
+          node frontend/tests/receipt-connection-overview.contract.mjs
+          node frontend/tests/store-connections.contract.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated worker unit test dependencies
+        run: python -m pip install --quiet pytest sqlalchemy alembic
+      - name: Verify safe AH worker scheduling, locks and maintenance admission
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/tests/test_ah_receipt_background_sync.py
+          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py
