@@ -15,7 +15,6 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.services.ah_receipt_sync_service import sync_ah_receipts
 from app.services.maintenance_runtime import writer_operation
 
 LOGGER = logging.getLogger(__name__)
@@ -43,6 +42,9 @@ def _due(last_sync_at, now: datetime) -> bool:
 def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> None:
     # Admission is durable until the entire receipt import finishes.
     # During server maintenance, the existing write barrier refuses new work.
+    # Import on the actual execution path, not during application registration
+    # or isolated contract tests; failures remain behind maintenance admission.
+    from app.services.ah_receipt_sync_service import sync_ah_receipts
     sync_ah_receipts(
         engine,
         receipt_root,
