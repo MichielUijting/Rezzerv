@@ -1,0 +1,10 @@
+Log in als reguliere huishoudbeheerder en open Winkelkoppelingen.
+Controleer dat het opgeschoonde Jumbo-scherm en de bestaande v14-favoriet behouden zijn.
+Haal binnen een beperkte periode een of enkele bedoelde Jumbo-testbonnen op.
+Controleer dat de preview nog geen import uitvoert en bevestig daarna bewust de import naar Kassa.
+Controleer tijdens verwerking de teller i van N en de aantallen nieuw, bekend, bijgewerkt en mislukt.
+Na geslaagde verwerking moet de preview verdwijnen en moet het resultaat zichtbaar blijven.
+Bij een gedeeltelijke fout moet het werkelijk bevestigde aantal verwerkt zichtbaar blijven.
+Controleer bij AH en Lidl dezelfde statusweergave met bestaande importresultaten.
+Zonder betrouwbaar totaal mag geen fictieve i-van-N-teller of voortgangsbalk verschijnen.
+Controleer dat de onderhoudsoverlay uit PR 595 en de tabbladroute uit PR 592 behouden zijn.

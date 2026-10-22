@@ -23,6 +23,7 @@ import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
+import ImportProgress from './ImportProgress.jsx'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
@@ -40,12 +41,18 @@ export default function StoreConnectionsPage() {
   const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'encrypted_database' })
   const [ahBusy, setAhBusy] = useState(false)
   const [ahSyncProgress, setAhSyncProgress] = useState('')
+  const [ahPhase, setAhPhase] = useState('')
+  const [ahCounts, setAhCounts] = useState(null)
   const [lidlWebProgress, setLidlWebProgress] = useState('')
+  const [lidlPhase, setLidlPhase] = useState('')
+  const [lidlCountsView, setLidlCountsView] = useState(null)
   const [lidlWindow, setLidlWindow] = useState(null)
   const [lidlFrom, setLidlFrom] = useState('')
   const [lidlTo, setLidlTo] = useState('')
   const [lidlWindowSaving, setLidlWindowSaving] = useState(false)
   const [jumboPocProgress, setJumboPocProgress] = useState('')
+  const [jumboPhase, setJumboPhase] = useState('')
+  const [jumboProgress, setJumboProgress] = useState(null)
   const [jumboPocResult, setJumboPocResult] = useState(null)
   const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
   const [jumboImportBusy, setJumboImportBusy] = useState(false)
@@ -235,7 +242,10 @@ export default function StoreConnectionsPage() {
 
       if (data.type === 'inhuis:lidl-handshake') {
         lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
+        setLidlCountsView(null)
+        setLidlPhase('waiting')
         if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
+          setLidlPhase('failed')
           setLidlWebProgress('Je gebruikt een oude Lidl-favoriet. Verwijder die en sleep de nieuwe Lidl-bonnen naar Inhuis v2-knop opnieuw naar je favorietenbalk.')
           showFeedback({
             key: 'lidl-receipt-import',
@@ -247,6 +257,7 @@ export default function StoreConnectionsPage() {
           return
         }
         lidlSourceWindow = event.source
+        setLidlPhase('fetching')
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         try {
           const period = await fetchJson('/api/receipts/retailers/lidl/import-window')
@@ -258,6 +269,7 @@ export default function StoreConnectionsPage() {
             script: buildLidlWebPageScript(window.location.origin, period),
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
+          setLidlPhase('failed')
           setLidlWebProgress('Lidl-import afgebroken: importperiode kon niet worden geladen.')
           showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Importperiode ophalen mislukt.' })
         }
@@ -267,16 +279,21 @@ export default function StoreConnectionsPage() {
       if (!lidlSourceWindow || event.source !== lidlSourceWindow) return
 
       if (data.type === 'inhuis:lidl-progress') {
+        setLidlPhase('fetching')
         setLidlWebProgress(String(data.message || 'Lidl-bonnen verwerken…'))
         return
       }
 
       if (data.type === 'inhuis:lidl-receipt') {
+        setLidlPhase('importing')
         const receipt = data.receipt
         const receiptId = String(receipt?.id || '').trim()
         const products = Array.isArray(receipt?.products) ? receipt.products : []
         if (!/^\d{8,40}$/.test(receiptId) || !products.length) {
           lidlCounts.failed += 1
+          setLidlCountsView({ ...lidlCounts })
+          setLidlPhase('failed')
+          setLidlWebProgress('Lidl-bon bevat geen geldig bonnummer of artikelregels.')
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
@@ -302,6 +319,9 @@ export default function StoreConnectionsPage() {
           else {
             // Unknown acknowledgement is not proof of a new receipt.
             lidlCounts.failed += 1
+            setLidlCountsView({ ...lidlCounts })
+            setLidlPhase('failed')
+            setLidlWebProgress('Inhuis gaf geen herkenbaar Lidl-importresultaat terug.')
             event.source?.postMessage({
               type: 'inhuis:lidl-ack',
               receipt_id: receiptId,
@@ -310,6 +330,7 @@ export default function StoreConnectionsPage() {
             }, LIDL_WEB_ORIGIN)
             return
           }
+          setLidlCountsView({ ...lidlCounts })
           setLidlWebProgress('Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
             + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.')
           event.source?.postMessage({
@@ -320,6 +341,9 @@ export default function StoreConnectionsPage() {
         } catch (err) {
           lidlCounts.failed += 1
           const message = normalizeErrorMessage(err?.message) || 'De Lidl-bon kon niet worden geïmporteerd.'
+          setLidlCountsView({ ...lidlCounts })
+          setLidlPhase('failed')
+          setLidlWebProgress(message)
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
@@ -351,6 +375,8 @@ export default function StoreConnectionsPage() {
               message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
           }
         }
+        setLidlCountsView({ ...lidlCounts })
+        setLidlPhase(lidlCounts.failed ? 'failed' : 'completed')
         const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
           + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.'
         setLidlWebProgress(summary)
@@ -369,6 +395,7 @@ export default function StoreConnectionsPage() {
 
       if (data.type === 'inhuis:lidl-error') {
         const message = String(data.message || 'De Lidl-webimport is mislukt.')
+        setLidlPhase('failed')
         setLidlWebProgress(message)
         if (lidlImportPageMountedRef.current) showFeedback({
           key: 'lidl-receipt-import', variant: 'error', title: 'Lidl-webimport', message,
@@ -397,6 +424,7 @@ export default function StoreConnectionsPage() {
 
       if (!payload?.ok) {
         const message = String(payload?.error || 'Jumbo-bonnen ophalen is mislukt.')
+        setJumboPhase('failed')
         setJumboPocProgress(message)
         setJumboPocResult(null)
         setJumboImportCandidate(null)
@@ -404,6 +432,8 @@ export default function StoreConnectionsPage() {
       } else {
         const found = Number(payload?.total_results || 0)
         setJumboImportCandidate(Array.isArray(payload?.details) && payload.details.length ? payload : null)
+        setJumboPhase('validating')
+        setJumboProgress(null)
         setJumboPocResult({
           totalResults: found,
           currentPage: Number(payload?.current_page || 0),
@@ -427,6 +457,7 @@ export default function StoreConnectionsPage() {
       }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Het Jumbo-resultaat kon niet worden gelezen.'
+      setJumboPhase('failed')
       setJumboPocProgress(message)
       setJumboPocResult(null)
       setJumboImportCandidate(null)
@@ -439,6 +470,8 @@ export default function StoreConnectionsPage() {
   async function confirmJumboImport() {
     if (!jumboImportCandidate || jumboImportBusy) return
     setJumboImportBusy(true)
+    setJumboPhase('validating')
+    setJumboProgress(null)
     try {
       // Never use the URL fragment as an implicit instruction to write data.
       const counts = await importJumboBatch(
@@ -448,9 +481,14 @@ export default function StoreConnectionsPage() {
           body: JSON.stringify(envelope),
         }),
         buildJumboImportEnvelope,
+        (progress) => {
+          setJumboProgress(progress)
+          setJumboPhase(progress.phase)
+        },
       )
       const message = 'Jumbo: ' + counts.new + ' nieuw, ' + counts.known
         + ' al bekend, ' + counts.refreshed + ' bijgewerkt, ' + counts.failed + ' mislukt.'
+      setJumboPhase('completed')
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       setJumboPocResult(null)
@@ -460,6 +498,7 @@ export default function StoreConnectionsPage() {
       const progress = err?.jumboProcessed != null
         ? ' (' + err.jumboProcessed + ' al verwerkt; veilig gestopt bij volgende bon.)'
         : ''
+      setJumboPhase('failed')
       setJumboPocProgress(message + progress)
       showFeedback({ variant: 'error', title: 'Jumbo kassabon', message: message + progress })
     } finally {
@@ -488,6 +527,8 @@ export default function StoreConnectionsPage() {
 
   async function syncAhReceipts() {
     setAhBusy(true)
+    setAhPhase('fetching')
+    setAhCounts(null)
     setAhSyncProgress('AH-bonnen worden opgehaald en gecontroleerd…')
     try {
       const result = await fetchJson('/api/receipts/retailers/ah/sync', {
@@ -548,6 +589,8 @@ export default function StoreConnectionsPage() {
           + (hour === undefined ? ', tijd niet beschikbaar' : ' om ' + hour + ':' + minute)
           + '; transactietype niet beschikbaar.'
       }).join(' ')
+      setAhCounts({ new: processed, known: skipped, refreshed: 0, failed })
+      setAhPhase(failed ? 'failed' : 'completed')
       setAhSyncProgress(summary + (failureDiagnosis ? ' ' + failureDiagnosis : '') + (lineDiagnostic ? ' ' + lineDiagnostic : '') + (failedReceiptDates ? ' ' + failedReceiptDates : ''))
       if (!ahSyncPageMountedRef.current) return
       showFeedback({
@@ -562,7 +605,8 @@ export default function StoreConnectionsPage() {
       await loadAhStatus()
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
-      setAhSyncProgress('AH-synchronisatie mislukt. Probeer het opnieuw.')
+      setAhPhase('failed')
+      setAhSyncProgress('AH-synchronisatie mislukt. ' + message)
       if (!ahSyncPageMountedRef.current) return
       showFeedback({
         key: 'ah-receipt-sync',
@@ -698,11 +742,7 @@ export default function StoreConnectionsPage() {
                 </Button>
               </div>
             )}
-            {ahSyncProgress ? (
-              <div className="rz-inline-feedback" role="status" aria-live="polite" data-testid="ah-sync-progress">
-                {ahSyncProgress}
-              </div>
-            ) : null}
+            <ImportProgress store="Albert Heijn" phase={ahPhase} message={ahSyncProgress} counts={ahCounts} testId="ah-sync-progress" />
           </div>
         </Card>
 
@@ -755,6 +795,8 @@ export default function StoreConnectionsPage() {
                 className="rz-button-primary"
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
                 onClick={() => {
+                  setJumboPhase('waiting')
+                  setJumboProgress(null)
                   setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
                   setJumboPocResult(null)
                   setJumboImportCandidate(null)
@@ -765,9 +807,9 @@ export default function StoreConnectionsPage() {
               </a>
             </div>
 
-            {jumboPocProgress ? (
-              <div className="rz-inline-feedback" data-testid="jumbo-poc-progress">{jumboPocProgress}</div>
-            ) : null}
+            <ImportProgress store="Jumbo" phase={jumboPhase} message={jumboPocProgress}
+              processed={jumboProgress?.processed} total={jumboProgress?.total}
+              counts={jumboProgress?.counts} testId="jumbo-poc-progress" />
 
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '10px' }}>
@@ -854,9 +896,8 @@ export default function StoreConnectionsPage() {
               </Button>
             </div>
 
-            {lidlWebProgress ? (
-              <div className="rz-inline-feedback" data-testid="lidl-web-progress">{lidlWebProgress}</div>
-            ) : null}
+            <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
+              counts={lidlCountsView} testId="lidl-web-progress" />
           </div>
         </Card>
 

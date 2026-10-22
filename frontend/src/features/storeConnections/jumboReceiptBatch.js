@@ -84,7 +84,7 @@ export function jumboImportResult(result) {
   throw new Error('Inhuis gaf geen herkenbare Jumbo-importbevestiging.')
 }
 
-export async function importJumboBatch(payload, importOne, buildEnvelope) {
+export async function importJumboBatch(payload, importOne, buildEnvelope, onProgress = () => {}) {
   if (!payload?.ok || !Array.isArray(payload.details) ||
       payload.details.length > JUMBO_BATCH_LIMIT || !payload.details.length) {
     throw new Error('Er zijn geen bevestigde Jumbo-bonnen voor verwerking.')
@@ -103,16 +103,20 @@ export async function importJumboBatch(payload, importOne, buildEnvelope) {
     envelopes.push(envelope)
   }
   const counts = { new: 0, known: 0, refreshed: 0, failed: 0 }
+  onProgress({ phase: 'importing', processed: 0, total: envelopes.length, counts: { ...counts } })
   for (const envelope of envelopes) {
     try {
       const result = await importOne(envelope)
       counts[jumboImportResult(result)] += 1
+      onProgress({ phase: 'importing', processed: counts.new + counts.known + counts.refreshed, total: envelopes.length, counts: { ...counts } })
     } catch (error) {
       counts.failed += 1
+      onProgress({ phase: 'failed', processed: counts.new + counts.known + counts.refreshed, total: envelopes.length, counts: { ...counts } })
       error.jumboCounts = counts
       error.jumboProcessed = counts.new + counts.known + counts.refreshed
       throw error
     }
   }
+  onProgress({ phase: 'completed', processed: envelopes.length, total: envelopes.length, counts: { ...counts } })
   return counts
 }

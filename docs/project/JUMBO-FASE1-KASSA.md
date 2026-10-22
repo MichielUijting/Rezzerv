@@ -220,3 +220,11 @@ PO-praktijkbewijs: de echte Jumbo-kassabon van 19 oktober 2026 is na de server-I
 De technische POC-output in Winkelkoppelingen is niet voor eindgebruikers bedoeld. De gebruikersweergave toont voortaan alleen de periode, de knop om Jumbo te openen, een standaard ingeklapte hulp voor de browserfavoriet, een kort overzicht met datum/winkel/bedrag per opgehaalde bon, een expliciete importknop en een duidelijke resultaat- of foutmelding. POC-transport, GraphQL-herkomst, volledige bon-ID's, parserformaten, ontleedstatus en dubbele detailopsommingen verdwijnen uit de visuele interface. Na succesvolle import wordt de tijdelijke preview verwijderd; het importresultaat blijft zichtbaar. Het interne gegevenscontract, de strikte validatie en de expliciete bevestiging vóór databasewrites blijven ongewijzigd.
 
 Deze frontendaanpassing raakt hetzelfde Jumbo-paneel als Draft PR #594 (gedeelde voortgangsindicatie); vóór Ready/merge moet de samenloop met #594 bewust worden opgelost. Release/merge uitsluitend na afzonderlijke PO-GO.
+
+## PR #594 — gedeelde importvoortgang na integratie met #592
+
+AH, Lidl en Jumbo gebruiken dezelfde toegankelijke statuspresentatie. Bij Jumbo begint de teller pas na expliciete importbevestiging op 0 van N en telt uitsluitend herkenbare serverbevestigingen als verwerkt (nieuw, bekend of bijgewerkt). Bij een fout stopt de reeks, blijft het werkelijk bevestigde aantal staan en wordt de mislukte bon apart geteld. Na volledige verwerking verdwijnt de preview volgens #592.
+
+Voor AH en Lidl worden bestaande server-/importresultaten getoond. Zolang geen betrouwbaar totaal beschikbaar is, verschijnt geen fictieve teller of voortgangsbalk. De AH-sync blijft een bestaande synchrone API-aanroep; live i/N tijdens die serveraanroep en een duurzaam importstatuscontract over herladen heen vallen buiten deze frontendwijziging.
+
+Main met #592 en #595 is geïntegreerd met behoud van favoriet v14, de exacte bron-ID, de datumvalidator, één tabblad, het opgeschoonde scherm en expliciete importbevestiging. Synthetische browser-/contracttests vervangen geen nieuwe live Jumbo-, AH- of Lidl-accountproef.

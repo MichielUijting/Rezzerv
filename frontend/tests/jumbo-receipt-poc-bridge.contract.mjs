@@ -308,4 +308,27 @@ await assert.rejects(
   }, buildJumboImportEnvelope),
   (error) => error.jumboProcessed === 1 && error.jumboCounts.failed === 1,
 )
+const progressEvents = []
+const progressCounts = await importJumboBatch(batch, async (_envelope) => ({
+  duplicate: true,
+}), buildJumboImportEnvelope, (event) => progressEvents.push(event))
+assert.deepEqual(progressCounts, { new: 0, known: 2, refreshed: 0, failed: 0 })
+assert.deepEqual(progressEvents.map((event) => [event.phase, event.processed, event.total]), [
+  ['importing', 0, 2], ['importing', 1, 2], ['importing', 2, 2], ['completed', 2, 2],
+])
+const failedEvents = []
+await assert.rejects(
+  () => importJumboBatch(batch, async () => { throw new Error('Network interrupted') },
+    buildJumboImportEnvelope, (event) => failedEvents.push(event)),
+  (error) => error.jumboProcessed === 0 && error.jumboCounts.failed === 1,
+)
+assert.deepEqual(failedEvents.at(-1), {
+  phase: 'failed', processed: 0, total: 2,
+  counts: { new: 0, known: 0, refreshed: 0, failed: 1 },
+})
+assert.match(ui, /<ImportProgress store="Jumbo"/)
+assert.match(ui, /<ImportProgress store="Lidl"/)
+assert.match(ui, /<ImportProgress store="Albert Heijn"/)
+console.log('UNIFORM_STORE_IMPORT_PROGRESS_CONTRACT_GREEN')
+
 console.log('JUMBO_BATCH_IMPORT_FAIL_CLOSED_GREEN')
