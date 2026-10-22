@@ -33,7 +33,7 @@ export function deriveReceiptConnectionOverview(existingRows, ahConnection) {
         isAutomatic: connected,
         statusCode: connected ? 'connected' : 'not_connected',
         statusLabel: connected ? 'Gekoppeld' : 'Niet gekoppeld',
-        typeLabel: 'Automatisch bij Kassa',
+        typeLabel: connected ? 'Automatisch' : 'Direct koppelen',
         actionLabel: connected ? 'Bekijken' : 'Koppelen',
         lastSyncLabel: connected ? legacy?.lastSyncLabel || '—' : '—',
       }
