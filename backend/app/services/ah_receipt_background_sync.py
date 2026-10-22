@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.ah_receipt_sync_service import sync_ah_receipts
+from app.services.maintenance_runtime import writer_operation
 
 LOGGER = logging.getLogger(__name__)
 AH_AUTO_SYNC_INTERVAL_SECONDS = 15 * 60
@@ -36,6 +37,18 @@ def _due(last_sync_at, now: datetime) -> bool:
     if last_sync_at.tzinfo is None:
         last_sync_at = last_sync_at.replace(tzinfo=timezone.utc)
     return now - last_sync_at >= timedelta(seconds=AH_AUTO_SYNC_INTERVAL_SECONDS)
+
+
+@writer_operation
+def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> None:
+    # Admission is durable until the entire receipt import finishes.
+    # During server maintenance, the existing write barrier refuses new work.
+    sync_ah_receipts(
+        engine,
+        receipt_root,
+        household_id=household_id,
+        limit=AH_AUTO_SYNC_LIMIT,
+    )
 
 
 def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]:
@@ -77,12 +90,7 @@ def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]
                 if not _due(last_run, datetime.now(timezone.utc)):
                     continue
                 try:
-                    sync_ah_receipts(
-                        engine,
-                        receipt_root,
-                        household_id=household_id,
-                        limit=AH_AUTO_SYNC_LIMIT,
-                    )
+                    _admitted_ah_sync(engine, receipt_root, household_id)
                 except Exception:
                     # Fail closed for this household. Do not log provider errors,
                     # access tokens, receipt IDs or potentially sensitive bodies.
