@@ -68,3 +68,6 @@ jobs:
           [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'scripts/server-maintenance/Windows-Host-Agent.ps1'),[ref]$tokens,[ref]$errors)
           if ($errors.Count) { $errors | Format-List; throw 'Host agent syntax invalid' }
           Write-Host 'WINDOWS_HOST_AGENT_PARSE_GREEN'
+      - name: Exact database IP identity including PostgreSQL CIDR notation
+        shell: pwsh
+        run: ./scripts/server-maintenance/Test-Host-Network-Identity.ps1

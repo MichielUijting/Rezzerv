@@ -50,6 +50,13 @@ container IDs, PostgreSQL storage mounts, cluster system identifier, database OI
 and server startup time; it cross-checks the backend's actual runtime connection.
 No server/container name is accepted as identity evidence by itself.
 
+The runtime PostgreSQL address may use `inet::text` CIDR notation. The host
+agent validates the numeric address and prefix and compares the exact host IP
+against the PostgreSQL container's IPv4/IPv6 addresses. Matching a subnet alone
+never proves identity. Invalid addresses fail closed; database name, OID and
+PostgreSQL startup time must still independently match. The pure network tests
+run on Windows without starting the operational agent or touching Docker.
+
 Run the agent under the same Windows account that owns Docker Desktop. It stores
 its RSA private key in that user's DPAPI-protected local data directory; the
 folder ACL permits only that user and SYSTEM. The public key is UTF-8 PEM. Pin
