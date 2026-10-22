@@ -139,7 +139,7 @@ for (const width of [1280, 390]) {
     const overview = page.getByTestId('receipt-connections-overview-table')
     await expect(overview).toBeVisible()
     await expect(page.getByTestId('receipt-connection-summary')).toContainText('1 gekoppeld')
-    await expect(page.getByTestId('receipt-connection-mode-ah')).toContainText('Automatisch bij Kassa')
+    await expect(page.getByTestId('receipt-connection-mode-ah')).toContainText('Automatisch')
     await expect(page.getByTestId('receipt-connection-status-ah')).toContainText('Gekoppeld')
     await expect(page.getByTestId('receipt-connection-mode-jumbo')).toContainText('Via browser')
     await expect(page.getByTestId('receipt-connection-status-jumbo')).toContainText('Browserstap nodig')
