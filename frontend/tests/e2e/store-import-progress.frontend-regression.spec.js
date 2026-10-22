@@ -94,6 +94,7 @@ test('AH shows waiting status without an invented progress total', async ({ page
     await route.fulfill({ json: { receipts_found: 3, receipts_processed: 2, receipts_skipped_known: 1, receipts_failed: 0 } })
   })
   await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-ah').click()
   await page.getByTestId('ah-sync-receipts').click()
   const status = page.getByTestId('ah-sync-progress')
   await expect(status).toContainText('Bonnen ophalen')
@@ -110,6 +111,7 @@ for (const receiptId of ['123456789012', 'TEST:LIDL']) {
     await mockStorePage(page)
     await page.route('**/api/receipts/retailers/import', route => route.fulfill({ json: {} }))
     await page.goto('/instellingen/winkelkoppelingen')
+    await page.getByTestId('receipt-connection-action-lidl').click()
     await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
     await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', {
       origin: 'https://www.lidl.nl', source: window,
@@ -126,5 +128,29 @@ for (const receiptId of ['123456789012', 'TEST:LIDL']) {
     await expect(status).toContainText('Mislukt')
     await expect(status).toContainText('0 nieuw · 0 bekend · 0 bijgewerkt · 1 mislukt')
     await expect(status.getByRole('progressbar')).toHaveCount(0)
+  })
+}
+
+for (const width of [1280, 390]) {
+  test(`Digital receipt setup is visible first with honest capabilities at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await mockStorePage(page)
+    await page.goto('/instellingen/winkelkoppelingen')
+    const overview = page.getByTestId('receipt-connections-overview-table')
+    await expect(overview).toBeVisible()
+    await expect(page.getByTestId('receipt-connection-summary')).toContainText('1 gekoppeld')
+    await expect(page.getByTestId('receipt-connection-mode-ah')).toContainText('Automatisch bij Kassa')
+    await expect(page.getByTestId('receipt-connection-status-ah')).toContainText('Gekoppeld')
+    await expect(page.getByTestId('receipt-connection-mode-jumbo')).toContainText('Via browser')
+    await expect(page.getByTestId('receipt-connection-status-jumbo')).toContainText('Browserstap nodig')
+    await expect(page.getByTestId('receipt-connection-status-aldi')).toContainText('Nog niet beschikbaar')
+    await expect(page.getByTestId('jumbo-receipt-poc')).toHaveCount(0)
+    await expect(page.getByTestId('ah-digital-receipts')).toHaveCount(0)
+    await page.getByTestId('receipt-connection-action-jumbo').click()
+    await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
+    await expect(page.getByTestId('jumbo-bookmarklet-help')).not.toHaveAttribute('open', '')
+    await page.getByTestId('receipt-connection-action-ah').click()
+    await expect(page.getByTestId('ah-digital-receipts')).toBeVisible()
+    await expect(page.getByTestId('jumbo-receipt-poc')).toHaveCount(0)
   })
 }
