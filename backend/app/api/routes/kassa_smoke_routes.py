@@ -215,7 +215,8 @@ def start_kassa_smoke_check(authorization: Optional[str] = Header(None)) -> dict
             return copy.deepcopy(_JOB_STATE)
         job_id = uuid.uuid4().hex
         _JOB_STATE.update({"job_id": job_id, "status": "running", "started_at": _now(), "finished_at": None, "progress_current": 0, "progress_total": REQUIRED_RECEIPT_COUNT, "current_case_id": None, "current_filename": None, "message": "Kassa smoke-check wordt gestart", "report": None})
-    threading.Thread(target=_run_job, args=(job_id,), daemon=True).start()
+    from app.services.maintenance_runtime import start_worker
+    start_worker(target=_run_job, args=(job_id,), daemon=True)
     return _state()
 
 

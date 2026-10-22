@@ -10,9 +10,25 @@ import {
   parseJumboReceiptLayout,
 } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 
-assert.equal(JUMBO_BOOKMARKLET_VERSION, 6)
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 14)
 assert.equal(JUMBO_ORDERS_URL, 'https://www.jumbo.com/bestellingen')
-assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v6=')
+assert.equal(JUMBO_POC_FRAGMENT_PREFIX, '#jumbo-poc-v14=')
+for (const stamp of [
+  '2026-10-19',
+  '2026-10-19T13:24:35Z',
+  '2026-10-19 13:24:35',
+  '2026-10-19 13:24:35.123456+0200',
+  '2026-10-19T13:24:35.123456+02:00',
+]) assert.equal(jumboDay(stamp), '2026-10-19', stamp)
+for (const stamp of [
+  '2026-02-30 13:24:35',
+  '2026-10-19 24:00:00',
+  '2026-10-19 13:62:00',
+  '2026-10-19 13:24:60',
+  '2026-10-19 13:24:35+29:00',
+  '2026-10-19 13:24:35 INVALID',
+]) assert.equal(jumboDay(stamp), '', stamp)
+
 
 const syntheticLayout = JSON.stringify({
   documents: [{
@@ -54,19 +70,34 @@ assert.equal(parsed.itemCount, 4)
 
 const bookmarklet = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen')
 assert.match(bookmarklet, /^javascript:/)
-assert.match(bookmarklet, /\/api\/graphql/)
-assert.match(bookmarklet, /GetOnlineOrdersAndStoreReceipts/)
-assert.match(bookmarklet, /GetDigitalReceipt/)
-assert.match(bookmarklet, /receiptOverview/)
-assert.match(bookmarklet, /receiptImage/)
-assert.match(bookmarklet, /OMSCHRIJVING/)
-assert.match(bookmarklet, /Betaald/)
-assert.match(bookmarklet, /credentials:"include"/)
-assert.match(bookmarklet, /JUMBO_WEB-orders/)
-assert.match(bookmarklet, /#jumbo-poc-v6=/)
-assert.match(bookmarklet, /location\.href=C\+P/)
-assert.match(bookmarklet, /source_origin:location\.origin/)
-assert.doesNotMatch(bookmarklet, /window\.opener/)
+assert.ok(!/[\r\n\t]/.test(bookmarklet), 'Firefox bookmarklets must not contain literal newlines or tabs')
+const bookmarkletBody = decodeURIComponent(bookmarklet.slice('javascript:'.length))
+assert.match(bookmarkletBody, /function parseReceipt/)
+assert.doesNotThrow(() => new Function(decodeURIComponent(bookmarklet.replace(/[\r\n\t]/g, '').slice('javascript:'.length))), 'Document URL normalization must preserve syntax in encoded favorite')
+assert.doesNotThrow(() => new Function(decodeURIComponent(bookmarklet.slice('javascript:'.length))), 'Jumbo favorite must be valid standalone JavaScript')
+
+assert.ok(bookmarkletBody.includes('const jumboDay = function(value)'))
+assert.ok(bookmarkletBody.includes('const jumboDateWindow = function(from, to)'))
+assert.ok(bookmarkletBody.includes('const selectJumboHistory = function(receipts, from, to'))
+assert.ok(!bookmarkletBody.includes('tf('), 'The Jumbo favorite must not refer to minified helper names')
+const bridgeSource = fs.readFileSync(new URL('../src/features/storeConnections/jumboReceiptPocBridge.js', import.meta.url), 'utf8')
+assert.ok(!bridgeSource.includes('parseJumboReceiptLayout.toString()'), 'Bookmarklet parser must not depend on minifier output')
+for (const helper of ['jumboDay', 'jumboDateWindow', 'selectJumboHistory']) {
+  assert.ok(!bridgeSource.includes(helper + '.toString()'), 'No minifier-dependent helper: ' + helper)
+}
+assert.match(bookmarkletBody, /\/api\/graphql/)
+assert.match(bookmarkletBody, /GetOnlineOrdersAndStoreReceipts/)
+assert.match(bookmarkletBody, /GetDigitalReceipt/)
+assert.match(bookmarkletBody, /receiptOverview/)
+assert.match(bookmarkletBody, /receiptImage/)
+assert.match(bookmarkletBody, /OMSCHRIJVING/)
+assert.match(bookmarkletBody, /Betaald/)
+assert.match(bookmarkletBody, /credentials:"include"/)
+assert.match(bookmarkletBody, /JUMBO_WEB-orders/)
+assert.match(bookmarkletBody, /#jumbo-poc-v14=/)
+assert.match(bookmarkletBody, /location\.href=C\+P/)
+assert.match(bookmarkletBody, /source_origin:location\.origin/)
+assert.doesNotMatch(bookmarkletBody, /window\.opener/)
 assert.doesNotMatch(bookmarklet, /postMessage/)
 assert.doesNotMatch(bookmarklet, /inhuis:jumbo-poc-handshake/)
 assert.doesNotMatch(bookmarklet, /BOOKMARKLET_START/)
@@ -83,11 +114,18 @@ const storeConnectionsSource = fs.readFileSync(
 assert.match(storeConnectionsSource, /JUMBO_POC_FRAGMENT_PREFIX/)
 assert.match(storeConnectionsSource, /decodeURIComponent\(encoded\)/)
 assert.match(storeConnectionsSource, /window\.history\.replaceState/)
-assert.match(storeConnectionsSource, /redirectmethode/)
-assert.match(storeConnectionsSource, /URL-fragment/)
-assert.match(storeConnectionsSource, /Ontlede productregels/)
-assert.match(storeConnectionsSource, /Betaalwijze/)
-assert.match(storeConnectionsSource, /Geen \(nieuwe\) kassabonnen gevonden\./)
+assert.match(storeConnectionsSource, /Jumbo digitale kassabonnen/)
+assert.match(storeConnectionsSource, /Gevonden kassabonnen/)
+assert.match(storeConnectionsSource, /jumbo-confirm-import/)
+assert.match(storeConnectionsSource, /setJumboPocResult\(null\)/)
+assert.doesNotMatch(storeConnectionsSource, /Nieuwste bon-ID:/)
+assert.doesNotMatch(storeConnectionsSource, /Parsermelding:/)
+
+assert.match(storeConnectionsSource, /Eerste keer\? Stel de Jumbo-favoriet in/)
+assert.doesNotMatch(storeConnectionsSource, /<strong>POC transport:/)
+assert.doesNotMatch(storeConnectionsSource, /<strong>Jumbo-origin:/)
+assert.doesNotMatch(storeConnectionsSource, /<strong>Bonformaat:/)
+assert.match(storeConnectionsSource, /Geen kassabonnen in de gekozen periode gevonden/)
 assert.doesNotMatch(storeConnectionsSource, /buildJumboPocPageScript/)
 assert.doesNotMatch(storeConnectionsSource, /jumbo-poc-diagnostics/)
 assert.doesNotMatch(storeConnectionsSource, /SOURCE_MISMATCH/)
@@ -95,7 +133,19 @@ assert.doesNotMatch(storeConnectionsSource, /HANDSHAKE_OK/)
 assert.doesNotMatch(storeConnectionsSource, /sampleReceipt/)
 assert.doesNotMatch(storeConnectionsSource, /v4-knop/)
 assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
-assert.match(storeConnectionsSource, /window\.location\.assign\(JUMBO_ORDERS_URL\)/)
+const jumboLaunch = storeConnectionsSource.slice(
+  storeConnectionsSource.indexOf('href={JUMBO_ORDERS_URL}'),
+  storeConnectionsSource.indexOf('data-testid="jumbo-poc-open"'),
+)
+assert.match(jumboLaunch, /role="button"/)
+assert.match(jumboLaunch, /className="rz-button-primary"/)
+const jumboButtonCss = fs.readFileSync(new URL('../src/ui/components/button.css', import.meta.url), 'utf8')
+assert.match(jumboButtonCss, /a\.rz-button-primary\[role="button"\]/)
+assert.doesNotMatch(jumboLaunch, /target="_blank"/)
+assert.doesNotMatch(jumboLaunch, /rel="noopener noreferrer"/)
+assert.ok(storeConnectionsSource.includes('Open mijn Jumbo'))
+assert.match(storeConnectionsSource, /data-testid="jumbo-bookmarklet-help"/)
+assert.ok(!storeConnectionsSource.includes('window.location.assign(JUMBO_ORDERS_URL)'))
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 // The Lidl bridge legitimately uses postMessage; isolate the Jumbo redirect handler.
@@ -118,6 +168,30 @@ const observation = {
   },
 }
 const envelope = buildJumboImportEnvelope(observation)
+const punctuatedObservation = {
+  ...observation,
+  first_detail: { ...observation.first_detail, transactionId: 'ABC:123.2026/01' },
+}
+const punctuatedEnvelope = buildJumboImportEnvelope(punctuatedObservation)
+assert.equal(punctuatedEnvelope.external_receipt_id, 'ABC:123.2026/01')
+const spacedTimeEnvelope = buildJumboImportEnvelope({
+  ...punctuatedObservation,
+  first_detail: { ...punctuatedObservation.first_detail, purchaseEndOn: '2026-10-19 13:24:35' },
+})
+assert.equal(spacedTimeEnvelope.receipt.purchaseDateTime, '2026-10-19 13:24:35')
+
+assert.throws(
+  () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'ABC:123.2026/01 ' } }),
+  /bonnummer/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'ABC:123.2026/01 ', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  /spaties of witruimte/
+)
+assert.throws(
+  () => buildJumboImportEnvelope({ ...observation, first_detail: { ...observation.first_detail, transactionId: 'BAD ID' } }),
+  /bonnummer/
+)
 assert.equal(envelope.provider, 'jumbo')
 assert.equal(envelope.external_receipt_id, 'TXN-20261013-01')
 assert.equal(envelope.schema_version, '1.0')
@@ -132,6 +206,14 @@ rejected({ ...observation, source_origin: 'https://jumbo.com' })
 rejected({ ...observation, source_origin: 'https://evil.example' })
 rejected({ ...observation, ok: false })
 rejected({ ...observation, version: 5 })
+rejected({ ...observation, version: 6 }) // obsolete favorite must fail closed
+rejected({ ...observation, version: 7 }) // production syntax bug in v7
+rejected({ ...observation, version: 8 }) // Firefox strips raw newline bytes from v8
+rejected({ ...observation, version: 9 }) // previous bookmarklet version
+rejected({ ...observation, version: 10 }) // previous diagnostic version
+rejected({ ...observation, version: 11 }) // obsolete strict ID limitation
+rejected({ ...observation, version: 12 }) // previous version
+rejected({ ...observation, version: 13 }) // obsolete date-format limitation
 rejected({ ...observation, first_detail: null })
 rejected({ ...observation, first_detail: { ...observation.first_detail, transactionId: '' } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, purchaseEndOn: '' } })
@@ -147,11 +229,11 @@ assert.match(ui, /setJumboImportCandidate\(null\)/)
 assert.match(ui, /importJumboBatch\(/)
 assert.match(ui, /jumbo-from-date/)
 assert.match(ui, /jumbo-to-date/)
-assert.match(bookmarklet, /Jumbo geschiedenis ophalen/)
-assert.match(bookmarklet, /selectJumboHistory/)
-assert.match(bookmarklet, /MAX_PAGES/)
-assert.match(bookmarklet, /Jumbo-paginering wijkt af/)
-assert.match(bookmarklet, /location\.href=C\+P/)
+assert.match(bookmarkletBody, /Jumbo geschiedenis ophalen/)
+assert.match(bookmarkletBody, /selectJumboHistory/)
+assert.match(bookmarkletBody, /MAX_PAGES/)
+assert.match(bookmarkletBody, /Jumbo-paginering wijkt af/)
+assert.match(bookmarkletBody, /location\.href=C\+P/)
 
 console.log('JUMBO_RECEIPT_REDIRECT_DETAIL_POC_CONTRACT_GREEN')
 
@@ -170,6 +252,43 @@ assert.equal(selectJumboHistory(history, '2026-08-25', '2026-08-25')[0].transact
 assert.throws(() => selectJumboHistory([...history, history[0]], '2026-08-01', '2026-09-30'))
 assert.throws(() => selectJumboHistory(history, '2026-08-01', '2026-09-30', 1))
 assert.throws(() => selectJumboHistory([{ transactionId:'BAD', purchaseEndOn:'unknown' }], '2026-08-01', '2026-09-30'))
+assert.throws(
+  () => selectJumboHistory([{ transactionId: null, purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  /regel 1: bonnummer ontbreekt/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'SENSITIVE WITH SPACE', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  error => /bonnummer heeft een onverwacht formaat/.test(error.message) && !error.message.includes('SENSITIVE')
+)
+assert.deepEqual(
+  selectJumboHistory([{ transactionId: 'VALID:123/01', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30').map(row => row.transactionId),
+  ['VALID:123/01']
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'a.b', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  /te kort/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'LONG PRIVATE ID WITH SPACE', purchaseEndOn: '2026-09-01T12:00:00' }], '2026-08-01', '2026-09-30'),
+  error => /bevat spaties of witruimte/.test(error.message) && !error.message.includes('LONG PRIVATE')
+)
+
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: null }], '2026-08-01', '2026-09-30'),
+  /aankoopdatum ontbreekt/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: 20261021 }], '2026-08-01', '2026-09-30'),
+  /aankoopdatum is geen tekstwaarde/
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: '21/10/2026 PRIVATEDATA' }], '2026-08-01', '2026-09-30'),
+  error => /dag-maand-jaar-notatie/.test(error.message) && !error.message.includes('PRIVATEDATA')
+)
+assert.throws(
+  () => selectJumboHistory([{ transactionId: 'JUMBO-12345', purchaseEndOn: '2026-10-41T09:00' }], '2026-08-01', '2026-09-30'),
+  /ongeldige datum of tijdsaanduiding/
+)
 const second = { ...observation.first_detail, transactionId: 'TXN-20261013-02' }
 const batch = { ...observation, details: [observation.first_detail, second] }
 const imported = []

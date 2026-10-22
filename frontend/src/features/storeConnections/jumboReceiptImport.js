@@ -1,5 +1,8 @@
 // Jumbo browser data is untrusted: only an explicit, reconciled receipt may enter Kassa.
 // This adapter never performs HTTP requests or stores credentials.
+import { JUMBO_BOOKMARKLET_VERSION } from './jumboReceiptPocBridge.js'
+import { jumboDay } from './jumboReceiptBatch.js'
+
 export const JUMBO_WEB_ORIGIN = 'https://www.jumbo.com'
 
 function moneyCents(value) {
@@ -9,21 +12,18 @@ function moneyCents(value) {
 }
 
 function validPurchaseDate(value) {
-  if (typeof value !== 'string' || !/^20\d{2}-\d{2}-\d{2}(?:T.*)?$/.test(value)) return false
-  const date = value.slice(0, 10)
-  const parsed = new Date(date + 'T00:00:00Z')
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date
+  return Boolean(jumboDay(value))
 }
 
 export function buildJumboImportEnvelope(payload) {
-  if (!payload || payload.version !== 6 || payload.ok !== true ||
+  if (!payload || payload.version !== JUMBO_BOOKMARKLET_VERSION || payload.ok !== true ||
       payload.source_origin !== JUMBO_WEB_ORIGIN) {
     throw new Error('De Jumbo-herkomst of de versie van de bon is ongeldig.')
   }
   const detail = payload.first_detail
   if (!detail) throw new Error('Er is geen digitale Jumbo-kassabon beschikbaar.')
-  const transactionId = String(detail.transactionId || '').trim()
-  if (!/^[A-Za-z0-9_-]{4,100}$/.test(transactionId)) {
+  const transactionId = typeof detail.transactionId === 'string' ? detail.transactionId : ''
+  if (!/^[\x21-\x7E]{4,100}$/.test(transactionId)) {
     throw new Error('Het Jumbo-bonnummer ontbreekt of is ongeldig.')
   }
   if (!validPurchaseDate(detail.purchaseEndOn)) {

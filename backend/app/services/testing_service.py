@@ -117,8 +117,8 @@ class TestingService:
                     "status": "running",
                 }
         self._set_running(test_type)
-        thread = Thread(target=self._run_test, args=(test_type,), daemon=True)
-        thread.start()
+        from app.services.maintenance_runtime import start_worker
+        start_worker(target=self._run_test, args=(test_type,), daemon=True)
         return {"started": True, "test_type": test_type, "status": "running"}
 
     def _run_test(self, test_type: str) -> None:

@@ -14,6 +14,7 @@ Technical Design Reference:
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from app.services.maintenance_runtime import writer_operation
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 import base64
@@ -10267,6 +10268,7 @@ def mark_receipt_source_scanned(source_id: str):
         )
 
 
+@writer_operation
 def import_resend_inbound_event(event_payload: dict[str, Any]) -> dict[str, Any]:
     if str(event_payload.get('type') or '').strip() != 'email.received':
         return {'ignored': True, 'reason': 'unsupported_event_type'}
@@ -10668,6 +10670,7 @@ def _normalized_purchase_at_or_fallback(receipt_table_id: str, result: dict[str,
     return result
 
 
+@writer_operation
 def import_uploaded_receipt_payload(
     household_id: str,
     filename: str,
@@ -10806,6 +10809,7 @@ def store_receipt_email_metadata(raw_receipt_id: str, household_id: str, payload
         )
 
 
+@writer_operation
 def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback_filename: str = 'receipt.eml', source_id: str | None = None) -> dict[str, Any]:
     default_email_source = ensure_household_email_source(household_id)
     payload = parse_email_receipt_payload(email_bytes, fallback_filename=fallback_filename)
@@ -11053,13 +11057,13 @@ def _run_receipt_zip_import_batch(batch_id: str, household_id: str, source_id: s
 
 
 def start_receipt_zip_import_batch(batch_id: str, household_id: str, source_id: str, source_filename: str, members: list[dict[str, Any]]):
-    worker = threading.Thread(
+    from app.services.maintenance_runtime import start_worker
+    worker = start_worker(
         target=_run_receipt_zip_import_batch,
         args=(batch_id, str(household_id), str(source_id), str(source_filename), list(members)),
         daemon=True,
         name=f'receipt-zip-import-{batch_id[:8]}',
     )
-    worker.start()
     return worker
 
 
@@ -18069,6 +18073,7 @@ def get_purchase_import_batch_diagnostics(batch_id: str, authorization: Optional
 
 
 @app.post("/api/purchase-import-batches/{batch_id}/process")
+@writer_operation
 def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, authorization: Optional[str] = Header(None)):
     current_line_id = None
     current_line_name = None

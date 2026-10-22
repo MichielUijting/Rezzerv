@@ -4,11 +4,25 @@ export const JUMBO_MAX_PAGES = 30
 
 export function jumboDay(value) {
   if (typeof value !== 'string') return ''
-  const m = value.match(/^(20\d{2})-(\d{2})-(\d{2})(?:T.*)?$/)
+  // Accept a real calendar day and a bounded, validated ISO or SQL-style
+  // time suffix. Keep the original purchaseEndOn in the imported receipt.
+  const m = value.match(/^(20\d{2})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/)
   if (!m) return ''
   const day = m[1] + '-' + m[2] + '-' + m[3]
   const dt = new Date(day + 'T00:00:00Z')
-  return !Number.isNaN(dt.valueOf()) && dt.toISOString().slice(0, 10) === day ? day : ''
+  if (Number.isNaN(dt.valueOf()) || dt.toISOString().slice(0, 10) !== day) return ''
+  if (m[4] !== undefined) {
+    const hh = Number(m[4])
+    const mm = Number(m[5])
+    const ss = m[6] === undefined ? 0 : Number(m[6])
+    if (hh > 23 || mm > 59 || ss > 59) return ''
+    const offset = m[8]
+    if (offset && offset !== 'Z') {
+      const digits = offset.slice(1).replace(':', '')
+      if (Number(digits.slice(0, 2)) > 23 || Number(digits.slice(2)) > 59) return ''
+    }
+  }
+  return day
 }
 
 export function jumboDateWindow(from, to) {
@@ -28,11 +42,30 @@ export function selectJumboHistory(receipts, from, to, max = JUMBO_BATCH_LIMIT) 
   }
   const selected = []
   const seen = new Set()
-  for (const receipt of receipts) {
-    const id = String(receipt?.transactionId || '').trim()
+  for (const [index, receipt] of receipts.entries()) {
+    const id = typeof receipt?.transactionId === 'string' ? receipt.transactionId : ''
     const day = jumboDay(receipt?.purchaseEndOn)
-    if (!/^[A-Za-z0-9_-]{4,100}$/.test(id) || !day) {
-      throw new Error('Onvolledige Jumbo-historieregel; geen onzekere bonnen importeren.')
+    const prefix = 'Jumbo-historie, regel ' + String(index + 1) + ': '
+    if (!id) {
+      throw new Error(prefix + 'bonnummer ontbreekt of is geen tekst. Geen import uitgevoerd.')
+    }
+    if (!/^[\x21-\x7E]{4,100}$/.test(id)) {
+      const reason = id.length < 4 ? 'te kort' :
+        id.length > 100 ? 'te lang' :
+        /\s/.test(id) ? 'bevat spaties of witruimte' :
+        /[^\x00-\x7F]/.test(id) ? 'bevat niet-ASCII-tekens' :
+        'bevat een ongeldig of niet-afdrukbaar teken'
+      throw new Error(prefix + 'bonnummer heeft een onverwacht formaat (' + reason + '). Geen import uitgevoerd.')
+    }
+    if (!day) {
+      const value = receipt?.purchaseEndOn
+      const reason = value == null || value === '' ? 'ontbreekt' :
+        typeof value !== 'string' ? 'is geen tekstwaarde' :
+        /^[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(value) ? 'begint als ISO-datum maar heeft een ongeldige datum of tijdsaanduiding' :
+        /^[0-9]{2}[-/][0-9]{2}[-/][0-9]{4}/.test(value) ? 'gebruikt dag-maand-jaar-notatie' :
+        /^[0-9]{4}[/][0-9]{2}[/][0-9]{2}/.test(value) ? 'gebruikt schuine strepen in jaar-maand-dag' :
+        'heeft een andere datumnotatie'
+      throw new Error(prefix + 'aankoopdatum ' + reason + '. Geen import uitgevoerd.')
     }
     if (seen.has(id)) throw new Error('Dubbel Jumbo-bonnummer in de geschiedenislijst.')
     seen.add(id)

@@ -42,6 +42,9 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     HOUSEHOLD_PROFILE_TABLE,
     HOUSEHOLD_RESIDENT_TABLE,
     "household_lidl_import_windows",
+    "maintenance_control",
+    "maintenance_operations",
+    "maintenance_audit",
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -52,7 +55,7 @@ _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_spaces_direct_immutable_delete",
 }
 EXPECTED_POSTGRESQL_TRIGGERS = (
-    _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS | {MANUAL_SOURCE_TRIGGER}
+    _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS | {MANUAL_SOURCE_TRIGGER, "inhuis_maintenance_write_gate"}
 )
 
 
@@ -632,6 +635,33 @@ def _assert_lidl_import_window_schema(connection) -> None:
     print("HOUSEHOLD_LIDL_IMPORT_WINDOW_SCHEMA_GREEN")
 
 
+def _assert_maintenance_schema(connection) -> None:
+    from app.services.maintenance_schema_contract import maintenance_metadata
+    inspector = inspect(connection)
+    for name, table in maintenance_metadata.tables.items():
+        actual = {column['name']:column for column in inspector.get_columns(name)}
+        if set(actual) != set(table.c.keys()):
+            raise AssertionError(f'Maintenance column drift: {name}')
+        for column in table.c:
+            if not column.nullable and actual[column.name]['nullable']:
+                raise AssertionError(f'Maintenance nullability drift: {name}.{column.name}')
+        expected_checks = {c.name for c in table.constraints if isinstance(c,sa.CheckConstraint)}
+        actual_checks = {c['name'] for c in inspector.get_check_constraints(name)}
+        if expected_checks != actual_checks:
+            raise AssertionError(f'Maintenance constraint drift: {name}')
+        if set(inspector.get_pk_constraint(name)['constrained_columns']) != {c.name for c in table.primary_key}:
+            raise AssertionError(f'Maintenance primary key drift: {name}')
+    rows = connection.execute(text('SELECT id,state,generation FROM maintenance_control')).mappings().all()
+    if len(rows)!=1 or rows[0]['id']!=1 or rows[0]['generation']<0 or rows[0]['state'] not in {'normal','announced','draining','locked','verifying','blocked'}:
+        raise AssertionError('Maintenance singleton/state authority missing')
+    if connection.dialect.name == 'postgresql':
+        # Merely adding a trigger name to the legacy allowlist is insufficient:
+        # prove every domain table is covered and every trigger is enabled.
+        from app.services.maintenance_startup import assert_write_barrier
+        assert_write_barrier(connection)
+    print('MAINTENANCE_SCHEMA_AND_WRITE_BARRIER_GREEN')
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -654,6 +684,7 @@ def main() -> None:
             _assert_household_representative_image_authority(connection)
             _assert_household_profile_schema(connection)
             _assert_lidl_import_window_schema(connection)
+            _assert_maintenance_schema(connection)
     finally:
         engine.dispose()
 

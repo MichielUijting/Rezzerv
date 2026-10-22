@@ -2,6 +2,14 @@
 
 TEST_LEVEL_PROVISIONAL: L
 
+## Actuele stand voor afronding PR #592
+
+De actuele gebruikersroute gebruikt favoriet **v14** en navigeert in hetzelfde tabblad naar Jumbo en terug naar Inhuis. Het eindgebruikersscherm is opgeschoond; technische POC-telemetrie en volledige bon-ID's staan niet meer in de zichtbare interface. De oorspronkelijke secties hieronder beschrijven de opeenvolgende ontwikkelstappen en zijn geen actuele instructie voor tabbladgedrag of favorietversie.
+
+De PO heeft de import van een echte Jumbo-bronbon naar Kassa en de opgeschoonde weergave bevestigd. Dit praktijkbewijs geldt voor die bronbon, niet voor alle Jumbo-formaten of de volledige voorraadketen. De bron-ID blijft exact behouden en de server valideert zelfstandig alle bedragen, regels en totalen; iedere import vereist expliciete bevestiging.
+
+Bij integratie met main na PR #595 zijn uitsluitend conflicterende versiewaarden opgelost naar 1.12.290; onderhoudsfunctionaliteit blijft behouden. De rode servercontracttest bevatte per ongeluk letterlijke backslash-teksten in plaats van echte tabs en regeleinden. De fixture is gecorrigeerd en uitgebreid met echte besturingstekens en controles op ongewijzigde identiteit. De productievalidator is hiervoor niet gewijzigd of versoepeld.
+
 ## Bestaand bewijs en grens
 
 PR #546 leverde een browser-POC op met de Jumbo-lijstoperatie
@@ -12,8 +20,9 @@ echte digitale Jumbo-kassabonnen van de PO beschikbaar voor acceptatie.
 
 ## Nieuwe technische stroom
 
-1. De gebruiker opent via Winkelkoppelingen zijn eigen ingelogde
-   Jumbo-bestellingenpagina in hetzelfde tabblad.
+1. De gebruiker opent via Winkelkoppelingen zijn eigen Jumbo-bestellingenpagina
+   in een **nieuw, geïsoleerd tabblad**. Het oorspronkelijke Inhuis-tabblad
+   blijft beschikbaar.
 2. De nieuwe v6-favoriet leest de begrensde historie binnen de ingestelde
    periode en geeft alleen afgeleide bonvelden terug, geen sessietokens of cookies.
 3. Inhuis toont de geselecteerde bonnen met hun datum, bonnummer en totaal,
@@ -110,3 +119,112 @@ en worden later opnieuw getoetst tijdens de verplichte integratieregessie.
 
 Zonder echte Jumbo-bon is het oordeel uitsluitend
 **technisch geautomatiseerd getest**, niet **live functioneel geaccepteerd**.
+
+## Herstel: behoud het Inhuis-tabblad bij Jumbo-aanmelding
+
+Bij een praktijkproef na een Jumbo-wachtwoordwijziging bleek dat de knop
+`Open mijn Jumbo` de huidige Inhuis-pagina verving. Dit gebeurde aantoonbaar
+via `window.location.assign(JUMBO_ORDERS_URL)`; dit was in de eerdere POC
+expliciet het bedoelde gedrag en zat zelfs in een vaste contracttest.
+
+De knop is nu een gewone link naar het vaste Jumbo-bestellingenadres met
+`target="_blank"` en `rel="noopener noreferrer"`. Daarmee blijft de
+bestaande Inhuis-pagina open en krijgt Jumbo geen `window.opener` toegang.
+De bestaande bookmarklet blijft op het **Jumbo-tabblad** werken en keert
+met de bestaande URL-fragmentmethode in *dat tabblad* terug naar Inhuis.
+Een resultaat wordt uitsluitend op die nieuwe Inhuis-pagina aangeboden voor
+expliciete import; er vindt geen cross-windowberichtenverkeer plaats.
+
+**Belangrijke scheiding:** de door Jumbo getoonde HTTP 401
+`State mismatch after login/redirect` betreft een upstream login-/redirect-
+controle. Dezelfde-tabbladnavigatie in Inhuis is een aantoonbare lokale oorzaak
+van het verdwenen Inhuis-tabblad, maar geen bewezen oorzaak van die 401.
+Er worden geen `state`-waarden gefabriceerd, geen cookies overgenomen en
+geen Jumbo-beveiligingscontroles uitgeschakeld. Als deze 401 na het opnieuw
+starten van een frisse Jumbo-login aanhoudt, volgt een afzonderlijke gerichte
+upstream diagnose met veilig geanonimiseerde gegevens, geen automatische
+bypass.
+
+Acceptatie: oorspronkelijke Inhuis-tabblad blijft open; Jumbo opent vanuit
+gebruikersklik in een apart tabblad; bookmarklet kan in het Jumbo-tabblad
+terugkeren naar Inhuis; de bestaande bevestiging voor Kassa-import blijft
+verplicht. CI bewijst nu de veilige linkconfiguratie en bestaand POC-contract;
+**een echte Jumbo-accountproef is nog nodig**.
+
+## Praktijkfout in productiebuild en favoriet v8 (21 oktober 2026)
+
+De PO zag achtereenvolgens `tf is not defined` (oude dynamische hulpfuncties) en, met v7, `Uncaught SyntaxError: unexpected token: keyword 'const'` op `www.jumbo.com/bestellingen`. Het scherm bleef onveranderd omdat de browserfavoriet niet uitvoerbaar was. De tweede melding is een syntaxisfout van de favoriet; afzonderlijke Nuxt/GraphQL-meldingen van Jumbo zijn niet bewezen als oorzaak.
+
+Voor **v8** gebruikt de bookmarklet uitsluitend statische, expliciete JavaScript-brontekst voor de bonparser en datum-/geschiedenishelpers. Geen `Function.prototype.toString()` op productie-geminificeerde implementaties. De aparte bron-/syntaxis- en browsermockcontracten controleren gegenereerde code; ook een echte Firefox-praktijkproef blijft vereist. Versie en resultaatfragment zijn `v8` / `#jumbo-poc-v8=`. De adapter accepteert uitsluitend de actuele versie en de verwachte herkomst; v6/v7 worden geweigerd.
+
+Bij lokale PR-test moet de PO de vorige favoriet verwijderen en de **nieuwe v8-favoriet** vanuit Winkelkoppelingen naar de favorietenbalk slepen nadat de bijgewerkte kandidaat lokaal met de officiële `start.bat` draait. Vervolgens in het geopende, ingelogde Jumbo-tabblad op de favoriet klikken, preview controleren, en pas na controle expliciet importeren. De URL-fragmentoverdracht zelf schrijft geen bonnen. Zonder echte accountbonnen blijft compatibiliteit met Jumbo's live GraphQL-schema onbewezen.
+
+## Firefox: v8-fout en bookmarklet v9 (21 oktober 2026)
+
+Een PO-praktijkproef met de correcte v8-favoriet op `www.jumbo.com/bestellingen` gaf in Firefox `Uncaught SyntaxError: unexpected token: keyword 'try'` (regel 1, positie 154). Dit is gereduceerd tot Firefox URL-normalisatie: een `javascript:`-bladwijzer verliest letterlijke CR/LF/TAB-karakters vóór JavaScript-evaluatie. De v8-bron bevatte `let data\n  try`, dat daardoor `let data  try` werd en ongeldige syntaxis opleverde. De betrokken document- en Jumbo-Nuxt-meldingen zijn niet de aangetoonde oorzaak.
+
+**Versie v9** encodeert de volledige JavaScript-body met `encodeURIComponent` achter het `javascript:`-schema. De bronparser en helperfuncties blijven afzonderlijke, stabiele broncode (geen minifier-afhankelijke `.toString()`). De geautomatiseerde browsercontracttest decodeert het fragment ná simulatie van Firefox-whitespaceverwijdering en valideert de JavaScript-syntaxis; de browsermock draait de gedecodeerde bookmarklet in een gesimuleerde Jumbo-context. Verouderde v6/v7/v8-resultaten blijven fail-closed afgewezen. Exacte v9-bonverwerking in het echte account wordt nog apart met de PO geverifieerd.
+
+Voor de PO-praktijkproef: start de exact-SHA kandidaat met het standaard lokale script en de officiële `start.bat`, verwijder de oude v8-favoriet en sleep de nieuwe **v9** vanuit Winkelkoppelingen in de favorietenbalk. De favoriet mag geen ruwe sessietokens/cookies bevatten; maak geen bonnen openbaar. De preview schrijft niets; import naar Kassa vereist afzonderlijke bevestiging.
+
+## Praktijkobservatie: historieveld onbekend (v10, 21 oktober 2026)
+
+De PO heeft met favoriet v9 daadwerkelijk de Jumbo-pagina verlaten en is teruggekeerd naar Inhuis. De foutmelding is `Onvolledige Jumbo-historieregel; geen onzekere bonnen importeren.` Daarmee is de JavaScript-startblokkade verdwenen, maar de bronhistorie niet gevalideerd. De oorspronkelijke controle gebruikte één generieke foutmelding voor ontbrekend/onverwacht `transactionId` en ontbrekend/ongeldig `purchaseEndOn`, ook voor historie buiten het geselecteerde datuminterval. Zonder bronbewijs is **niet** vastgesteld welk veld in de echte Jumbo-respons afwijkt.
+
+De bookmarklet v10 behoudt fail-closed validatie en meldt bij fouten **uitsluitend** het volgnummer van de betrokken historieregel en één van de categorieën: bonnummer ontbreekt/geeft geen tekst; bonnummer onverwacht formaat; aankoopdatum ontbreekt/ongeldig. Er worden geen bonnummers, aankoopdatums, artikelen, adresgegevens, sessietokens of ruwe API-antwoorden in het foutbericht opgenomen. De bronvalidatie en de ingesloten bookmarklethelper worden synchroon bijgewerkt en in contract-/browsermocktests gecontroleerd, inclusief een test dat een ongeldig bonnummer niet in de melding verschijnt.
+
+Het doel van deze gerichte praktijkdiagnose is het echte bronveldprobleem identificeren alvorens enige formaatconversie of validatieverruiming uit te voeren. Resultaten van v9 en ouder worden niet verwerkt door v10. Ook bij v10 wordt zonder expliciete bevestiging niets naar Kassa geschreven.
+
+## Praktijkdiagnose ID-notatie (v11, 21 oktober 2026)
+
+Met favoriet v10 is op de eerste Jumbo-historieregel de validatiefout `bonnummer heeft een onverwacht formaat` vastgesteld. De huidige acceptatieregel vereist 4–100 tekens uitsluitend uit ASCII-letters, cijfers, underscore en koppelteken. **Het werkelijke bonnummer en het afwijkende teken zijn nog niet bekend.** De fout kan een te korte/lange waarde, witruimte, een ander scheidingsteken of niet-ASCII-tekens betreffen. Daarom wordt deze regex niet verruimd voordat objectief bronbewijs bekend is.
+
+Favoriet v11 toont bij deze fout alleen een veilige categorie (te kort/te lang/witruimte/niet-ASCII/ander scheidingsteken) en het regelnummer, **niet** het bonnummer of de waarde. Dezelfde categorisering staat in de gedeelde selectiefunctie. Tests controleren dat bronwaarden niet in foutmeldingen terugkomen. De overige invoercontroles, de fail-closed-stop en de vereiste expliciete importbevestiging blijven onveranderd. De v11-favoriet moet opnieuw vanuit Winkelkoppelingen worden opgeslagen nadat een exact gecontroleerde kandidaat lokaal is gestart. Dit is een gerichte bronformaatdiagnose, geen bewijs van een werkende end-to-end import.
+
+## Tabbladgedrag — één Inhuis-tabblad (21 oktober 2026)
+
+PO-praktijkfeedback: wanneer `Open mijn Jumbo (nieuw tabblad)` de Jumbo-website opent met `target="_blank"`, komt de opgeslagen favoriet door de redirect terug als tweede Inhuis-tabblad terwijl het oorspronkelijke Inhuis-tabblad open blijft. De PO wil na afloop precies één Inhuis-tabblad.
+
+De Jumbo-knop gebruikt daarom voortaan **navigatie in hetzelfde tabblad** (normale `href` zonder `target="_blank"`). De favoriet keert via het URL-fragment terug naar ditzelfde tabblad; gebruikers hoeven geen tabblad handmatig te sluiten. De bestaande cookie-sessie blijft in de browser aanwezig; er wordt geen wachtwoord, token of cookie in de fragmentdata geplaatst. Dit is bewust een wijziging ten opzichte van PR #592's eerdere keuze om Inhuis in een achtergrondtabblad open te laten. Tijdens bezoek/login bij Jumbo is Inhuis tijdelijk niet zichtbaar. Na redirect moet de bestaande Inhuis-sessie opnieuw normaal laden; een echte Firefox-praktijkproef moet bevestigen dat de sessie behouden blijft. Geen `window.opener`, `window.close`, cross-origin scripting of afzwakking van login-/statecontroles.
+
+## Bronbonnummer met afdrukbare scheidingstekens (v12, 21 oktober 2026)
+
+De PO heeft met v11 objectief bevestigd dat de eerste Jumbo-historieregel een niet-ondersteund **ASCII-scheidingsteken** bevat. De daadwerkelijke identifier is uit privacyoverwegingen niet gedeeld; de exacte punctuatie is dus niet bewezen. De oorspronkelijke regex `^[A-Za-z0-9_-]{4,100}$` was een eigen Inhuis-beperking en geen aangetoond Jumbo-broncontract. De GraphQL-detailopvraag stuurt het identifier als JSON-variabele `transactionId` en interpoleert deze niet in de GraphQL-query.
+
+Vanaf bookmarklet **v12** accepteren de historievalidator én de importadapter dezelfde begrensde reeks afdrukbare ASCII-tekens (`U+0021` t/m `U+007E`, 4–100 posities), waaronder punten, dubbele punten en schuine strepen. Witruimte, besturingstekens, lege waarden, niet-ASCII, te lange of te korte identifiers blijven ongeldig. Het exacte originele identifier blijft integraal behouden voor detailmatch, externe ID en deduplicatie; geen tekenvervanging, trimming van interne tekens, hashing, cast naar numeriek of synthetische ID. Alle overige historie-/detail-/bedragvalidaties en expliciete Kassa-importbevestiging blijven ongewijzigd.
+
+Gerichte synthetische tests behandelen het gehele importenvelope en de browsermock met scheidingstekens, weigeren witruimte en bewaken de intacte identifier. Een echte Jumbo-bon is hiermee **nog niet bewezen** te zijn geïmporteerd: mogelijke verschillen in GraphQL-detailresponse, bonlayout of backend-validatie moeten bij de volgende PO-praktijkproef feitelijk blijken. Dezelfde-tabbladnavigatie blijft behouden.
+
+## Praktijkdiagnose aankoopdatum (v13, 21 oktober 2026)
+
+Met v12 heeft de PO bevestigd dat de bonnummer-validatie is gepasseerd, maar op historieregel 1 stopt de koppeling met `aankoopdatum ontbreekt of is ongeldig`. Dit bewijst nog niet of de datum ontbreekt, geen tekst is, een andere notatie heeft of een ongeldige datum bevat. Er wordt daarom geen bronwaarde stilzwijgend geconverteerd, geraden of door de huidige datum vervangen.
+
+Favoriet v13 categoriseert de datumafwijking privacyveilig als: ontbreekt, geen tekstwaarde, dag-maand-jaar, jaar/maand/dag, ongeldige ISO-achtige datum of overige notatie. De originele datum en de bongegevens verschijnen niet in diagnosemeldingen. De strenge historie-/detail-/bedragvalidatie en de expliciete bevestiging voor Kassa blijven ongewijzigd. De volgende Firefox-proef moet eerst de werkelijk voorkomende categorie aantonen. Een geldige import in Kassa is nog niet live bewezen.
+
+## Datumcontrole in Jumbo historie — v14 (21 oktober 2026)
+
+Bij de PO-proef met favoriet v13 kwam historie-regel 1 langs de bonnummercontrole, maar gaf de datumdiagnose uitsluitend aan dat `purchaseEndOn` met een ISO-datum begint en de volledige waarde niet overeenkomt met het oude contract. De volledige waarde en het werkelijke suffix zijn niet gedeeld. Een zichtbare Jum­bo-bon van 19 oktober 2026 bewijst dat de Jumbo-webinterface een datum toont, maar niet de exacte GraphQL-notatie. De werkelijke oorzaak is daarom nog niet definitief bevestigd.
+
+De gedeelde datumvalidator en de statische favoriethelper accepteren vanaf v14 naast de bestaande ISO-datum een **uitdrukkelijk begrensde** datum-tijdvorm met spatie als scheidingsteken, optionele seconden en fracties en `Z` of expliciete tijdzone-offset (`+HH:MM` of `+HHMM`). Dag, kalenderdatum, uur, minuut, seconde en tijdzone-offset worden gevalideerd, zonder datumverschuiving, gok of vervanging van het bronmoment. De importadapter gebruikt dezelfde validator en behoudt het volledige oorspronkelijke `purchaseEndOn`. Andere vormen blijven fail-closed. Contract- en browsermocktests bevatten geldige en ongeldige varianten. Deze wijziging moet nog met een echte bon bevestigd worden, inclusief detail-/layout- en Kassa-importcontroles; de favoriet-URL moet na het opstarten opnieuw naar v14 worden opgeslagen.
+
+## Echte Jumbo-preview bereikt, backend-ID-blokkade opgeheven (21 oktober 2026)
+
+Bij de PO-praktijkproef met v14 verscheen een echte Jumbo-bon van 19 oktober 2026 (8 regels, totaal €45,29) in de Inhuis-preview en was `Importeer 1 bon(nen) naar Kassa` beschikbaar. De bevestigde import werd vervolgens door de **server** afgewezen met `Ongeldig Jumbo-bonnummer`. De oorzaak is vastgesteld in `backend/app/services/jumbo_receipt_validation.py`: de server gebruikte nog de oude whitelist `[A-Za-z0-9_-]{4,100}`, terwijl de frontend inmiddels een afdrukbaar bron-ID inclusief scheidingstekens (`[\\x21-\\x7E]{4,100}`) toestond. Het oorspronkelijke Jumbo-bonnummer eindigt onder andere op `.json`. Die dubbele, ongedocumenteerde ID-regel is een technische fout, geen afzonderlijke PO-functionele eis.
+
+De backend valideert nu dezelfde begrensde, afdrukbare bron-ID (4–100 tekens). Er wordt **niets** aan het bron-ID gewijzigd, vervangen of afgekapt; de server vergelijkt nog steeds exact `external_receipt_id` met `receipt.transactionId`. Leegte, witruimte, besturingstekens, niet-ASCII en onjuiste lengte blijven geweigerd. De bestaande verifi­catie van aankoopdatum, productregels, bedragen, totaalsommen, korting en statiegeld blijft onveranderd. De gerichte backendtests bevatten een realistisch `.json`-ID, overige afdrukbare scheidingstekens, mismatch en onveilige tekens. Een nieuwe PO-test via de bestaande v14-favoriet moet nog bevestigen dat de echte bon wordt opgeslagen; een eventuele volgende backendfout moet op eigen bewijs worden onderzocht.
+
+## Eindgebruikersscherm opschonen na geslaagde Jumbo-import (21 oktober 2026)
+
+PO-praktijkbewijs: de echte Jumbo-kassabon van 19 oktober 2026 is na de server-ID-correctie met status **1 nieuw, 0 bekend, 0 bijgewerkt, 0 mislukt** opgeslagen en verscheen in Kassa met acht productregels en een sluitend bonbedrag van € 45,29. Dezelfde tabbladroute is eerder door de PO bevestigd. Dit is geslaagd praktijkbewijs voor deze bronbon, niet automatisch voor alle toekomstige Jumbo-formaten.
+
+De technische POC-output in Winkelkoppelingen is niet voor eindgebruikers bedoeld. De gebruikersweergave toont voortaan alleen de periode, de knop om Jumbo te openen, een standaard ingeklapte hulp voor de browserfavoriet, een kort overzicht met datum/winkel/bedrag per opgehaalde bon, een expliciete importknop en een duidelijke resultaat- of foutmelding. POC-transport, GraphQL-herkomst, volledige bon-ID's, parserformaten, ontleedstatus en dubbele detailopsommingen verdwijnen uit de visuele interface. Na succesvolle import wordt de tijdelijke preview verwijderd; het importresultaat blijft zichtbaar. Het interne gegevenscontract, de strikte validatie en de expliciete bevestiging vóór databasewrites blijven ongewijzigd.
+
+Deze frontendaanpassing raakt hetzelfde Jumbo-paneel als Draft PR #594 (gedeelde voortgangsindicatie); vóór Ready/merge moet de samenloop met #594 bewust worden opgelost. Release/merge uitsluitend na afzonderlijke PO-GO.
+
+## PR #594 — gedeelde importvoortgang na integratie met #592
+
+AH, Lidl en Jumbo gebruiken dezelfde toegankelijke statuspresentatie. Bij Jumbo begint de teller pas na expliciete importbevestiging op 0 van N en telt uitsluitend herkenbare serverbevestigingen als verwerkt (nieuw, bekend of bijgewerkt). Bij een fout stopt de reeks, blijft het werkelijk bevestigde aantal staan en wordt de mislukte bon apart geteld. Na volledige verwerking verdwijnt de preview volgens #592.
+
+Voor AH en Lidl worden bestaande server-/importresultaten getoond. Zolang geen betrouwbaar totaal beschikbaar is, verschijnt geen fictieve teller of voortgangsbalk. De AH-sync blijft een bestaande synchrone API-aanroep; live i/N tijdens die serveraanroep en een duurzaam importstatuscontract over herladen heen vallen buiten deze frontendwijziging.
+
+Main met #592 en #595 is geïntegreerd met behoud van favoriet v14, de exacte bron-ID, de datumvalidator, één tabblad, het opgeschoonde scherm en expliciete importbevestiging. Synthetische browser-/contracttests vervangen geen nieuwe live Jumbo-, AH- of Lidl-accountproef.
