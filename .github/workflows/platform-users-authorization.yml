@@ -110,6 +110,14 @@ jobs:
           PYTHONPATH: .
         run: python -m pytest -q tests/test_platform_users_route_authorization.py
 
+      - name: Verify platform admin login with closed maintenance barrier
+        env:
+          PYTHONPATH: .
+        run: >-
+          python -m pytest -q
+          tests/test_server_session_runtime_membership_schema.py
+          -k test_platform_admin_can_log_in_with_real_maintenance_write_barrier
+
       - name: Run existing server-side session security selftest
         env:
           PYTHONPATH: .

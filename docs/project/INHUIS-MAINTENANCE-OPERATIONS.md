@@ -136,3 +136,28 @@ machine/container/cycle, expiry, backup/data mismatch and Windows-boot changes.
 Windows CI parses the operational agent without executing server actions.
 Full repository authorization, household, receipt/inventory, migration,
 frontend/Playwright, version and exact-candidate gates remain required.
+
+## Recovery login during maintenance
+
+Authentication remains an infrastructure operation while domain admission is
+closed. Login reads the persisted maintenance state under a shared transaction
+lock before its optional Frontteam household synchronization. Synchronization
+runs only in `normal` or `announced`; closed states use existing canonical
+accounts, roles and memberships without provisioning domain data. Missing or
+unknown maintenance authority fails closed. Password and session permissions
+are unchanged, and no domain table is exempted from the write barrier.
+
+The header retains the administrator's announcement throughout the maintenance
+cycle. The standard blocking text is a fallback only when no message is present.
+A running agent heartbeat is not proof that the post-reboot backup, identity,
+data and route checks have passed. An expired cycle proof still blocks release.
+
+## Windows restart: access while maintenance remains closed
+
+After Windows and Docker start, the backend and frontend must be reachable even
+when the persisted maintenance state is `draining`, `locked`, `verifying` or
+`blocked`. A platform administrator with the existing recovery permission can
+authenticate, inspect the maintenance evidence and use the existing controlled
+completion action. No login or application startup automatically changes the
+maintenance state or admits normal domain writes. Admission reopens only after
+the administrator explicitly completes maintenance and all required checks pass.
