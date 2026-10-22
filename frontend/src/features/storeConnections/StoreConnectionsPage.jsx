@@ -778,11 +778,50 @@ export default function StoreConnectionsPage() {
           <div style={{ display: 'grid', gap: '8px' }}>
             <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelkoppelingen</h2>
             <p style={{ margin: 0, color: '#667085' }}>
-              Koppel hier een winkel éénmalig. Daarna kun je via Kassabonnen automatisch bonnen ophalen zonder opnieuw te koppelen.
+              Kies je supermarkt in het overzicht. Inhuis laat zien wat automatisch gaat en wanneer een browserstap nodig is.
             </p>
           </div>
         </Card>
 
+        <Card>
+          <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px' }}>
+            <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
+            <div data-testid="receipt-connection-summary" style={{ color: '#667085' }}>
+              {digitalSummary.automatic} gekoppeld met automatische AH-import bij Kassa · {digitalSummary.browser} via browser · {digitalSummary.unavailable} nog niet beschikbaar
+            </div>
+            <p style={{ margin: 0 }}>
+              Albert Heijn kan nieuwe bonnen automatisch inlezen wanneer je Kassa opent.
+              Jumbo en Lidl vragen momenteel nog om een browseractie.
+            </p>
+            <DataTable
+              columns={receiptConnectionColumns}
+              data={digitalReceiptRows}
+              getRowKey={row => row.providerCode}
+              dataTestId="receipt-connections-overview-table"
+              tableClassName="rz-store-review-table"
+              emptyMessage="Geen winkelkoppelingen beschikbaar."
+              stickyHeader={false}
+              stickyFilters={false}
+            />
+            {activeProvider === 'ah' ? (
+              <ImportProgress store="Albert Heijn" phase={ahPhase} message={ahSyncProgress}
+                counts={ahCounts} testId="ah-sync-progress" />
+            ) : null}
+            {activeProvider === 'jumbo' ? (
+              <ImportProgress store="Jumbo" phase={jumboPhase} message={jumboPocProgress}
+                processed={jumboProgress?.processed} total={jumboProgress?.total}
+                counts={jumboProgress?.counts} testId="jumbo-poc-progress" />
+            ) : null}
+            {activeProvider === 'lidl' ? (
+              <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
+                counts={lidlCountsView} testId="lidl-web-progress" />
+            ) : null}
+          </div>
+        </Card>
+
+        {activeProvider ? <div data-testid="receipt-connection-details" /> : null}
+
+        {activeProvider === 'ah' ? (
         <Card>
           <div data-testid="ah-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '680px' }}>
             <div>
@@ -815,14 +854,22 @@ export default function StoreConnectionsPage() {
                 </Button>
               </div>
             )}
-            <ImportProgress store="Albert Heijn" phase={ahPhase} message={ahSyncProgress} counts={ahCounts} testId="ah-sync-progress" />
+
           </div>
         </Card>
+        ) : null}
 
+        {activeProvider === 'jumbo' ? (
         <Card>
           <div data-testid="jumbo-receipt-poc" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
             <div>
               <h3 style={{ margin: 0 }}>Jumbo digitale kassabonnen</h3>
+              {isMobileViewport ? (
+                <p role="status" style={{ margin: '6px 0' }}>
+                  Voor Jumbo is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
+                  Dit werkt niet betrouwbaar in alle mobiele browsers.
+                </p>
+              ) : null}
               <p style={{ margin: '6px 0 0' }}>
                 Kies de periode en haal je kassabonnen op. Controleer de gevonden bonnen en bevestig daarna de import naar Kassa.
               </p>
@@ -880,10 +927,6 @@ export default function StoreConnectionsPage() {
               </a>
             </div>
 
-            <ImportProgress store="Jumbo" phase={jumboPhase} message={jumboPocProgress}
-              processed={jumboProgress?.processed} total={jumboProgress?.total}
-              counts={jumboProgress?.counts} testId="jumbo-poc-progress" />
-
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '10px' }}>
                 {jumboPocResult.details.length ? (
@@ -907,11 +950,19 @@ export default function StoreConnectionsPage() {
             ) : null}
           </div>
         </Card>
+        ) : null}
 
+        {activeProvider === 'lidl' ? (
         <Card>
           <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
             <div>
               <h3 style={{ margin: 0 }}>Lidl digitale bonnen</h3>
+              {isMobileViewport ? (
+                <p role="status" style={{ margin: '6px 0' }}>
+                  Voor Lidl is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
+                  Dit werkt niet betrouwbaar in alle mobiele browsers.
+                </p>
+              ) : null}
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Gebruik je normale Lidl.nl-login. Inhuis neemt alleen de bongegevens over; je wachtwoord, cookies en Lidl-sessie blijven in je browser.
               </p>
@@ -968,12 +1019,11 @@ export default function StoreConnectionsPage() {
                 Open mijn Lidl-kassabonnen
               </Button>
             </div>
-
-            <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
-              counts={lidlCountsView} testId="lidl-web-progress" />
           </div>
         </Card>
+        ) : null}
 
+        {(activeProvider === 'aldi' || activeProvider === 'plus') ? (
         <Card>
           <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
             <h3 style={{ margin: 0 }}>Aldi en PLUS</h3>
@@ -981,10 +1031,14 @@ export default function StoreConnectionsPage() {
             <p style={{ margin: 0 }}>Papieren kassabonnen van Aldi en PLUS kunnen nog steeds via Kassa worden gescand.</p>
           </div>
         </Card>
+        ) : null}
 
-        <PicnicAccountResearchPanel />
+        {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
 
-        <Card>
+        <details data-testid="loyalty-connections-settings">
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Klantenkaarten en bestaande winkelinstellingen</summary>
+          <p>Een klantenkaartkoppeling betekent niet dat digitale kassabonnen automatisch worden opgehaald.</p>
+          <Card>
           {error ? <div className="rz-inline-feedback" data-testid="store-connections-error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback-success" data-testid="store-connections-status">{status}</div> : null}
 
@@ -999,6 +1053,7 @@ export default function StoreConnectionsPage() {
             stickyFilters={false}
           />
         </Card>
+        </details>
 
         {editingRow ? (
           <Card>
