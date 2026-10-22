@@ -790,11 +790,11 @@ export default function StoreConnectionsPage() {
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px' }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
             <div data-testid="receipt-connection-summary" style={{ color: '#667085' }}>
-              {digitalSummary.automatic} gekoppeld met automatische AH-import bij Kassa · {digitalSummary.browser} via browser · {digitalSummary.unavailable} nog niet beschikbaar
+              {digitalSummary.automatic} automatisch gekoppeld · {digitalSummary.browser} via browser · {digitalSummary.unavailable} nog niet beschikbaar
             </div>
             <p style={{ margin: 0 }}>
-              Albert Heijn kan nieuwe bonnen automatisch inlezen wanneer je Kassa opent.
-              Jumbo en Lidl vragen momenteel nog om een browseractie.
+              Na koppeling haalt Inhuis AH-bonnen ongeveer ieder kwartier automatisch op terwijl de server draait.
+              Jumbo en Lidl vragen voorlopig nog een actie in de browser.
             </p>
             <DataTable
               columns={receiptConnectionColumns}
