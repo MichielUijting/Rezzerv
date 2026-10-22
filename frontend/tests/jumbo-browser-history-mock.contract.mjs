@@ -63,7 +63,7 @@ async function runMock({ mutatePage = null, sourceHistory = history } = {}) {
   const script = buildJumboPocBookmarklet('http://localhost:5176/instellingen/winkelkoppelingen', {
     from_date: '2026-10-10', to_date: '2026-10-12',
   })
-  await vm.runInNewContext(script.replace(/^javascript:/, ''), context)
+  await vm.runInNewContext(decodeURIComponent(script.replace(/^javascript:/, '')), context)
   assert.ok(target.includes(JUMBO_POC_FRAGMENT_PREFIX), 'redirect fragment must be produced')
   const result = JSON.parse(decodeURIComponent(target.split(JUMBO_POC_FRAGMENT_PREFIX)[1]))
   return { result, calls }
@@ -93,4 +93,32 @@ const tooMany = await runMock({
 })
 assert.equal(tooMany.result.ok, false)
 assert.match(tooMany.result.error, /Meer dan 10 Jumbo-bonnen/)
+const badId = await runMock({
+  sourceHistory: [{ transactionId: 'PRIVATE WITH SPACE', purchaseEndOn: '2026-10-11T12:00:00' }],
+})
+assert.equal(badId.result.ok, false)
+assert.match(badId.result.error, /regel 1: bonnummer heeft een onverwacht formaat/)
+assert.doesNotMatch(badId.result.error, /PRIVATE WITH SPACE/)
+assert.match(badId.result.error, /spaties of witruimte/)
+const separatorId = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO:TEST/2026.10', purchaseEndOn: '2026-10-11T12:00:00' }],
+})
+assert.equal(separatorId.result.ok, true, JSON.stringify(separatorId.result))
+assert.equal(separatorId.result.details[0].transactionId, 'JUMBO:TEST/2026.10')
+const spacedTime = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO:TEST/2026.10', purchaseEndOn: '2026-10-11 12:00:00' }],
+})
+assert.equal(spacedTime.result.ok, true, JSON.stringify(spacedTime.result))
+assert.equal(spacedTime.result.details[0].purchaseEndOn, '2026-10-11 12:00:00')
+const missingDate = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO-TEST-1', purchaseEndOn: null }],
+})
+assert.equal(missingDate.result.ok, false)
+assert.match(missingDate.result.error, /regel 1: aankoopdatum ontbreekt/)
+const alternateDate = await runMock({
+  sourceHistory: [{ transactionId: 'JUMBO-TEST-2', purchaseEndOn: '21/10/2026 PRIVATE' }],
+})
+assert.equal(alternateDate.result.ok, false)
+assert.match(alternateDate.result.error, /dag-maand-jaar-notatie/)
+assert.doesNotMatch(alternateDate.result.error, /PRIVATE/)
 console.log('JUMBO_PAGINATED_BROWSER_MOCK_GREEN')

@@ -34,6 +34,69 @@ def test_jumbo_server_accepts_reconciled_synthetic_receipt():
     assert validate_jumbo_receipt_for_import(envelope()) is None
 
 
+@pytest.mark.parametrize("original_id", [
+    "onwkasnmbz-a6743c22-cbbd-11f1-909c-ac190a7f0000.json",
+    "JUMBO:2026/10.19",
+    "ABC?DEF=123&456",
+    r"ID\tWITH_TAB",
+    r"ID\nWITH_NEWLINE",
+])
+def test_jumbo_server_accepts_exact_printable_provider_id(original_id):
+    receipt = deepcopy(GOOD_RECEIPT)
+    receipt["transactionId"] = original_id
+    payload = RetailerReceiptEnvelope(
+        provider="jumbo",
+        external_receipt_id=original_id,
+        receipt=receipt,
+    )
+    assert validate_jumbo_receipt_for_import(payload) is None
+    assert payload.external_receipt_id == original_id
+    assert payload.receipt["transactionId"] == original_id
+
+
+@pytest.mark.parametrize("unsafe_id", [
+    "ID WITH SPACE",
+    "ID\tWITH_TAB",
+    "ID\nWITH_NEWLINE",
+    "ID\rWITH_CR",
+    "ID\x00WITH_NUL",
+    "ID\x7fWITH_DEL",
+    "ABC",
+    "IDénonascii",
+    "X" * 101,
+])
+def test_jumbo_server_rejects_unsafe_ids_without_modifying_them(unsafe_id):
+    receipt = deepcopy(GOOD_RECEIPT)
+    receipt["transactionId"] = unsafe_id
+    payload = RetailerReceiptEnvelope(
+        provider="jumbo",
+        external_receipt_id=unsafe_id,
+        receipt=receipt,
+    )
+    with pytest.raises(ValueError, match="Ongeldig Jumbo-bonnummer"):
+        validate_jumbo_receipt_for_import(payload)
+    assert payload.external_receipt_id == unsafe_id
+    assert payload.receipt["transactionId"] == unsafe_id
+
+
+def test_jumbo_envelope_rejects_empty_source_id():
+    with pytest.raises(ValueError):
+        RetailerReceiptEnvelope(provider="jumbo", external_receipt_id="", receipt=deepcopy(GOOD_RECEIPT))
+
+
+def test_jumbo_server_rejects_mismatching_source_id():
+    receipt = deepcopy(GOOD_RECEIPT)
+    receipt["transactionId"] = "JUMBO:123.456"
+    payload = RetailerReceiptEnvelope(
+        provider="jumbo",
+        external_receipt_id="JUMBO:123.457",
+        receipt=receipt,
+    )
+    with pytest.raises(ValueError, match="komt niet overeen"):
+        validate_jumbo_receipt_for_import(payload)
+
+
+
 @pytest.mark.parametrize("mutation", [
     lambda r: r.update(grandTotal=7.20),
     lambda r: r.update(depositTotal=0),

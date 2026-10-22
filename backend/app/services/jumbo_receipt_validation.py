@@ -20,7 +20,10 @@ def validate_jumbo_receipt_for_import(envelope: RetailerReceiptEnvelope) -> None
         return
     receipt = envelope.receipt
     identifier = str(envelope.external_receipt_id or "")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{4,100}", identifier):
+    # Preserve Jumbo's exact source identifier, including printable punctuation.
+    # Receipt identity and equality still fail closed for blanks, whitespace,
+    # control characters, non-ASCII values and length violations.
+    if not re.fullmatch(r"[\x21-\x7E]{4,100}", identifier):
         raise ValueError("Ongeldig Jumbo-bonnummer")
     if str(receipt.get("transactionId") or "") != identifier:
         raise ValueError("Jumbo-bonnummer komt niet overeen")
