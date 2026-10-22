@@ -151,3 +151,13 @@ The header retains the administrator's announcement throughout the maintenance
 cycle. The standard blocking text is a fallback only when no message is present.
 A running agent heartbeat is not proof that the post-reboot backup, identity,
 data and route checks have passed. An expired cycle proof still blocks release.
+
+## Windows restart: access while maintenance remains closed
+
+After Windows and Docker start, the backend and frontend must be reachable even
+when the persisted maintenance state is `draining`, `locked`, `verifying` or
+`blocked`. A platform administrator with the existing recovery permission can
+authenticate, inspect the maintenance evidence and use the existing controlled
+completion action. No login or application startup automatically changes the
+maintenance state or admits normal domain writes. Admission reopens only after
+the administrator explicitly completes maintenance and all required checks pass.
