@@ -137,3 +137,69 @@ def test_policy_codes_and_attribute_defaults_are_valid_and_food_does_not_match_a
             assert definition.get('default') is None or definition['default'] in definition['values']
         assert all(code in official_bricks() for code in rule['brick_codes'])
     assert classify_product_type({'name': 'Koffiebonen'}, '10006218')['status'] == 'pending'
+
+
+@pytest.mark.parametrize('name', ['Aardappelpartjes', 'Aardappelschijfjes', 'Aardappelblokjes', 'Krieltjes', 'Frozen potato wedges'])
+def test_potato_preparations_reject_crisps_without_guessing_storage(name):
+    from app.services.automatic_product_type_service import gpc_brick_conflict
+    assert gpc_brick_conflict({'product_name': name}, '10000177')
+    for code in ['10006104', '10000270', '10000271', '10000272']:
+        assert gpc_brick_conflict({'product_name': name}, code) is None
+    assert classify_product_type({'name': name})['status'] == 'pending'
+
+
+@pytest.mark.parametrize('name,code', [('Paprika chips','10000177'), ('Potato wedges crisps','10000177'), ('Bananen','10005897'), ('Halfvolle melk','10000025')])
+def test_brick_validation_preserves_non_conflicting_sources(name, code):
+    from app.services.automatic_product_type_service import gpc_brick_conflict
+    assert gpc_brick_conflict({'product_name': name}, code) is None
+
+
+def test_official_code_is_not_automatically_correct_for_product(monkeypatch):
+    from contextlib import nullcontext
+    from unittest.mock import Mock
+    from app.services import gpc_local_catalog_service as service
+    monkeypatch.setattr(service, 'ensure_local_gpc_schema', lambda: None)
+    monkeypatch.setattr(service, 'engine', Mock(begin=lambda: nullcontext(None)))
+    monkeypatch.setattr(service, 'search_official_gpc_bricks', lambda *args, **kwargs: [{'brick_code': '10000177', 'brick_description': 'Chips/Snacks'}])
+    result = service.classify_gpc_product(product_name='Aardappelpartjes', explicit_gpc_brick_code='10000177')
+    assert result['status'] == 'not_classified'
+    assert result['reason'] == 'conflicting_product_category'
+    assert not result.get('product_type_id')
+    assert result['suggestions'] == []
+    valid = service.classify_gpc_product(product_name='Paprika chips', explicit_gpc_brick_code='10000177')
+    assert valid['status'] == 'classified'
+
+
+def test_candidate_ranking_cannot_reintroduce_rejected_potato_snack_code(monkeypatch):
+    from contextlib import nullcontext
+    from unittest.mock import Mock
+    from app.services import gpc_local_catalog_service as service
+    monkeypatch.setattr(service, 'ensure_local_gpc_schema', lambda: None)
+    monkeypatch.setattr(service, 'engine', Mock(begin=lambda: nullcontext(None)))
+    monkeypatch.setattr(service, 'list_official_gpc_bricks', lambda *args: [])
+    monkeypatch.setattr(service, 'rank_external_gpc_candidates', lambda **kwargs: ([{'gpc_brick_code':'10000177','confidence':1}], {}))
+    result = service.classify_gpc_product(product_name='Aardappelpartjes')
+    assert result['status'] == 'not_classified'
+    assert result['suggestions'] == []
+
+
+@pytest.mark.parametrize('generic', [False, True])
+def test_link_routes_reject_conflicting_brick_inside_atomic_transaction(monkeypatch, generic):
+    from unittest.mock import MagicMock
+    from app.services import off_product_link_service as service
+    engine = MagicMock()
+    monkeypatch.setattr(service, 'engine', engine)
+    monkeypatch.setattr(service, 'ensure_product_inventory_group_schema', lambda: None)
+    monkeypatch.setattr(service, 'resolve_external_article_identity', lambda *args: {})
+    monkeypatch.setattr(service, 'assert_external_product_identity_compatible', lambda **kwargs: None)
+    monkeypatch.setattr(service, '_upsert_global_product', lambda *args: ('test-id','8710624234294',1,'stuk'))
+    monkeypatch.setattr(service, '_resolve_product_type', lambda *args: 'gpc:10000177')
+    persisted = MagicMock()
+    monkeypatch.setattr(service, 'persist_product_type', persisted)
+    with pytest.raises(ValueError, match='broncategorie'):
+        if generic:
+            service.link_generic_product_with_product_type(receipt_item_id='test', generic_product_name='Aardappelpartjes', product_type_assignment={})
+        else:
+            service.link_off_product_with_product_type(receipt_item_id='test', off_product={'product_name':'Aardappelpartjes'}, product_type_assignment={})
+    persisted.assert_not_called()
+    assert engine.begin.return_value.__exit__.call_args.args[0] is ValueError

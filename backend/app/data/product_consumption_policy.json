@@ -1362,5 +1362,29 @@
         "no added sugar"
       ]
     }
+  ],
+  "brick_validation_rules": [
+    {
+      "key": "potato_preparation_is_not_shelf_stable_crisps",
+      "terms": [
+        "aardappelpartjes",
+        "aardappelschijfjes",
+        "aardappelblokjes",
+        "krieltjes",
+        "potato wedges",
+        "potato slices",
+        "diced potatoes",
+        "baby potatoes"
+      ],
+      "exclude_terms": [
+        "chips",
+        "crisps",
+        "snack",
+        "snacks"
+      ],
+      "incompatible_brick_codes": [
+        "10000177"
+      ]
+    }
   ]
 }

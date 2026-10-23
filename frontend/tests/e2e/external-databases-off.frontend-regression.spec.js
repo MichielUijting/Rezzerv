@@ -331,7 +331,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByTestId('external-exact-link-guidance')).toContainText('generiek')
   })
 
-  test('Bananen gebruiken de expliciete officiële GPC Brick uit OFF zonder classificatie-omweg', async ({ page }) => {
+  test('Bananen behouden hun expliciete officiële GPC Brick na broncontrole', async ({ page }) => {
     let classifyCalled = false;
     let exactCatalogLookupCalled = false;
     let householdProductTypesCalled = false;
@@ -360,8 +360,8 @@ test.describe('Externe databases OFF candidate flow', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
     });
     await page.route('**/api/external-products/gpc/classify', async (route) => {
-      classifyCalled = !route.request().postDataJSON()?.product_facts;
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Classificatie-omweg mag niet nodig zijn' }) });
+      if (!route.request().postDataJSON()?.product_facts) classifyCalled = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'classified', classification_source: 'explicit_gpc_code', gpc_brick_code: '10005897' }) });
     });
     await page.route('**/api/catalog/gpc/bricks?query=10005897&limit=5', async (route) => {
       await route.fulfill({
@@ -396,7 +396,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Producttype bepaald via expliciete GPC Brickcode van de externe bron.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
     expect(exactCatalogLookupCalled).toBe(true);
-    expect(classifyCalled).toBe(false);
+    expect(classifyCalled).toBe(true);
     expect(householdProductTypesCalled).toBe(false);
   });
 
@@ -843,5 +843,25 @@ for (const width of [390, 1280]) {
     await expect(section).toContainText('je hoeft niets in te vullen');
     await expect(section).not.toContainText('Melk · koemelk · halfvol · regulier');
     await expect(section.locator('input, select, textarea, button')).toHaveCount(0);
+  });
+}
+
+for (const width of [390, 1280]) {
+  test(`Tegenstrijdige OFF-brick wordt niet geselecteerd of koppelbaar (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const receipt = receiptItemsPayload();
+    receipt.items[0].receipt_line_text = 'Aardappelpartjes';
+    receipt.items[0].retailer_code = 'lidl';
+    await page.route('**/api/external-databases/receipt-items?limit=500', route => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify(receipt) }));
+    await page.route('**/api/external-products/off/search', route => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ ...automaticSearchResponse(), results:[{gtin:'8710624234294',product_name:'Aardappelpartjes',brand:'gwoon',score:0.626,gpc_brick_code:'10000177'}] }) }));
+    await page.route('**/api/external-products/gpc/classify', route => route.fulfill({ status:200, contentType:'application/json', body:JSON.stringify({ok:true,status:'not_classified',reason:'conflicting_product_category',message:'De broncategorie past niet bij de productomschrijving. Het artikel blijft voorlopig ongekoppeld; je hoeft niets in te vullen.',automatic_product_type:{status:'pending'}}) }));
+    await page.goto('/externe-databases');
+    await page.getByTestId('external-receipt-items-table').locator('tbody tr', {hasText:'Aardappelpartjes'}).dblclick();
+    await page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', {hasText:'8710624234294'}).getByRole('radio').check();
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('De broncategorie past niet bij de productomschrijving');
+    await expect(page.getByLabel('Producttype', {exact:true})).toHaveValue('');
+    await expect(page.getByRole('button', {name:'Koppel artikel en Producttype',exact:true})).toBeDisabled();
+    await expect(page.getByRole('button', {name:'Koppel als generiek artikel',exact:true})).toBeDisabled();
+    await expect(page.getByTestId('external-automatic-product-type')).toContainText('je hoeft niets in te vullen');
   });
 }

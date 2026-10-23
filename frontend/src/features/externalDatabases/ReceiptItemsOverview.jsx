@@ -558,6 +558,15 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           setProductTypeSelectionSource('')
           setProductTypeClassificationStatus('Nederlandse GS1 GPC-naam wordt gecontroleerd...')
           try {
+            const validation = await fetchJsonWithAuth('/api/external-products/gpc/classify', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ product_name: productName, category, category_tags: categoryTags, gpc_brick_code: brickCode }),
+            })
+            const decision = await validation.json().catch(() => ({}))
+            if (!validation.ok || decision.status !== 'classified' || decision.gpc_brick_code !== brickCode) {
+              throw new Error(decision.message || 'De broncategorie kon niet betrouwbaar worden bevestigd. Het artikel blijft voorlopig ongekoppeld.')
+            }
+            if (cancelled || userGpcChoiceLockedRef.current) return
             const response = await fetchJsonWithAuth(
               `/api/catalog/gpc/bricks?query=${encodeURIComponent(brickCode)}&limit=5`,
               { method: 'GET' },
@@ -626,6 +635,14 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.detail || 'GPC-classificatie is mislukt')
         if (cancelled || userGpcChoiceLockedRef.current) return
+
+        if (data?.reason === 'conflicting_product_category') {
+          setSelectedProductTypeId('')
+          setProductTypeSelectionSource('')
+          setGpcSuggestedBricks([])
+          setProductTypeClassificationStatus(data.message)
+          return
+        }
 
         const suggestedBricks = limitSearchCandidates(Array.isArray(data?.suggestions) ? data.suggestions : data?.suggestion ? [data.suggestion] : [])
         setGpcSuggestedBricks(suggestedBricks)

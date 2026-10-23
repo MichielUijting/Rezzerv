@@ -55,6 +55,22 @@ def _matches(text_value, term):
     return list(re.finditer(r'(?<!\w)' + re.escape(normalized(term)) + r'(?!\w)', text_value)) if normalized(term) else []
 
 
+def gpc_brick_conflict(product, brick_code):
+    """Reject known contradictions, without inventing an alternative Brick.
+
+    Separate validation rules cover products whose consumption attributes are
+    not yet complete enough for automatic aggregation.
+    """
+    facts = source_facts(product)
+    title = normalized(' '.join(str(facts.get(key) or '') for key in ('name', 'product_name', 'variant')))
+    for rule in policy().get('brick_validation_rules', []):
+        if (any(_matches(title, term) for term in rule['terms'])
+                and not any(_matches(title, term) for term in rule.get('exclude_terms', []))
+                and str(brick_code) in rule['incompatible_brick_codes']):
+            return 'De broncategorie past niet bij de productomschrijving. Het artikel blijft voorlopig ongekoppeld; je hoeft niets in te vullen.'
+    return None
+
+
 def _attribute_value(definition, title, structured):
     matches = []
     for code, item in definition['values'].items():

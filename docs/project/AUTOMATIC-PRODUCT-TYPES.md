@@ -116,3 +116,21 @@ huishoudisolatie, groepsvoorspelling, verbergen/herstellen en ongewijzigde event
 Browserregressies controleren automatisch resultaat/pending zonder invoervelden
 op 390 en 1280 pixels. De bestaande keten-, identity-, autorisatie-, migratie-
 en F7-gates blijven vereist; gerichte tests vervangen die niet.
+
+### Tegenstrijdige externe Brickcodes
+
+Een bestaande officiële code is nog geen bewijs dat zij bij het bronproduct
+past. De uitbreidbare `brick_validation_rules` in de productpolicy worden
+toegepast op expliciete broncodes, gerangschikte voorstellen en de exacte en
+generieke opslagroute. De UI laat een expliciete broncode eerst server-side
+controleren. Bekende conflicten geven een begrijpelijke melding, een lege
+producttypeselectie en geblokkeerde koppelacties. De opslagroute weigert het
+conflict ook zonder UI en rolt de transactie terug.
+
+De eerste regel voorkomt houdbare chips (`10000177`) bij aardappelpartjes,
+aardappelschijfjes, aardappelblokjes en krieltjes zonder expliciete
+chips-/snackaanduiding. Werkelijke chips blijven toegestaan. Er wordt niet
+gedaan alsof uitsluitend de productnaam bewijst of een aardappelbereiding vers,
+gekoeld of diepgevroren is: ontbrekende gegevens blijven pending, zonder
+handmatige classificatieopdracht. Deze conflictcontrole vergroot de zestien
+consumptiefamilies niet en is geen volledige semantische productvalidatie.
