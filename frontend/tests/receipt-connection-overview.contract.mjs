@@ -148,6 +148,24 @@ assert.doesNotMatch(page, /Kies je supermarkt in het overzicht/)
 assert.doesNotMatch(page, /server/i)
 assert.doesNotMatch(page, /<h2[^>]*>Winkelkoppelingen<\/h2>/)
 assert.match(page, /Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas/)
+// The main mobile table stays one compact row per shop; never revert to
+// Settings' label-per-cell card layout or affect other tables.
+assert.match(page, /receipt-connection-mobile-heading/)
+assert.match(page, /rz-receipt-connection-compact-table/)
+assert.match(page, /isMobileViewport \? \(/)
+const mobileCompact = readFileSync(
+  new URL('../src/features/storeConnections/receiptConnectionCompact.css', import.meta.url), 'utf8',
+)
+assert.match(mobileCompact, /@media \(max-width: 720px\)/)
+assert.match(mobileCompact, /rz-receipt-connection-mobile-heading/)
+assert.match(mobileCompact, /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1.2fr\) minmax\(0, 1.5fr\)/)
+assert.match(mobileCompact, /rz-receipt-connection-compact-table tbody tr/)
+assert.match(mobileCompact, /min-height: 44px !important/)
+assert.match(mobileCompact, /tbody td\[data-mobile-label\]::before/)
+assert.match(mobileCompact, /content: none/)
+assert.match(mobileCompact, /tbody td button/)
+assert.doesNotMatch(mobileCompact, /(?:^|\n)\s*\.rz-table tbody tr\b/)
+
 const columns = page.slice(page.indexOf('const receiptConnectionColumns'), page.indexOf('const storeConnectionColumns'))
 assert.deepEqual([...columns.matchAll(/header: '([^']+)'/g)].map(match => match[1]),
   ['Winkel', 'Laatst bijgewerkt', 'Status'])
