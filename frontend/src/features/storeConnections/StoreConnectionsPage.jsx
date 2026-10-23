@@ -28,6 +28,7 @@ import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
 import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
+import './receiptConnectionCompact.css'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
@@ -889,12 +890,19 @@ export default function StoreConnectionsPage() {
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
             {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
+            {isMobileViewport ? (
+              <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" aria-hidden="true">
+                <span>Winkel</span>
+                <span>Laatst bijgewerkt</span>
+                <span>Status</span>
+              </div>
+            ) : null}
             <DataTable
               columns={receiptConnectionColumns}
               data={digitalReceiptRows}
               getRowKey={row => row.providerCode}
               dataTestId="receipt-connections-overview-table"
-              tableClassName="rz-store-review-table"
+              tableClassName="rz-store-review-table rz-receipt-connection-compact-table"
               emptyMessage="Geen winkelkoppelingen beschikbaar."
               stickyHeader={false}
               stickyFilters={false}
