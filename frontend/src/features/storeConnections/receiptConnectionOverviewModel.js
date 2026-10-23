@@ -10,7 +10,27 @@ const DIGITAL_STORES = [
   { code: 'plus', name: 'PLUS' },
 ]
 
-export function deriveReceiptConnectionOverview(existingRows, ahConnection) {
+// A first import has no confirmed checkpoint. Show a real starting point,
+// not a fake synchronization timestamp, and share it with the date inputs.
+export function firstImportDate(now = new Date()) {
+  return `${now.getFullYear() - 1}-01-01`
+}
+
+export function safeImportDate(value, now = new Date()) {
+  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null
+  const parsed = new Date(value + 'T00:00:00Z')
+  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) return null
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
+  return value <= today ? value : null
+}
+
+export function displayedImportDate(value, now = new Date()) {
+  const day = safeImportDate(value, now) || firstImportDate(now)
+  const [year, month, date] = day.split('-')
+  return { day, label: `${date}-${month}-${year}`, isDefault: !safeImportDate(value, now) }
+}
+
+export function deriveReceiptConnectionOverview(existingRows, ahConnection, importDates = {}, now = new Date()) {
   const known = new Map((Array.isArray(existingRows) ? existingRows : [])
     .map(row => [String(row.providerCode || '').toLowerCase(), row]))
   return DIGITAL_STORES.map(store => {
@@ -39,7 +59,14 @@ export function deriveReceiptConnectionOverview(existingRows, ahConnection) {
       }
     }
     if (store.code === 'jumbo' || store.code === 'lidl') {
-      return { ...base, actionLabel: 'Bonnen ophalen' }
+      const latest = displayedImportDate(importDates?.[store.code], now)
+      return {
+        ...base,
+        actionLabel: 'Bonnen ophalen',
+        lastSyncLabel: latest.label,
+        lastUpdatedDate: latest.day,
+        isDefaultImportDate: latest.isDefault,
+      }
     }
     if (store.code === 'aldi' || store.code === 'plus') {
       return {
