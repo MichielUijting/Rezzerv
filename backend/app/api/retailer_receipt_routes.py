@@ -36,6 +36,7 @@ from app.services.picnic_account_secure_store import (
 )
 
 from app.services.retailer_receipt_import_service import import_retailer_receipt
+from app.services.retailer_receipt_import_dates import latest_retailer_import_dates
 from app.services.lidl_import_window_service import get_window, save_window, complete_import
 from app.api.household_profile_routes import _context_and_membership
 from app.services.authorization_foundation_service import evaluate_household_permission
@@ -109,6 +110,12 @@ def _authorized_household_id(authorization: str | None) -> str:
     runtime_context = require_household_context(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     return household_context.active_household_id
+
+
+@router.get("/last-updated")
+def get_retailer_import_dates(authorization: Optional[str] = Header(None)):
+    household_id = _authorized_household_id(authorization)
+    return {"dates": latest_retailer_import_dates(engine, household_id=household_id)}
 
 
 @router.get("/providers")
