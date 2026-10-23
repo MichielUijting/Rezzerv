@@ -197,14 +197,26 @@ jobs:
           DO $$
           DECLARE
             truncate_sql text;
+            maintenance_before jsonb;
           BEGIN
+            -- Preserve the live maintenance authority; never bypass its write barrier.
+            SELECT to_jsonb(control) INTO maintenance_before
+              FROM public.maintenance_control AS control WHERE id = 1;
+            IF maintenance_before->>'state' IS DISTINCT FROM 'normal' THEN
+              RAISE EXCEPTION 'F6-02 reset requires an existing normal maintenance authority';
+            END IF;
             SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
               INTO truncate_sql
               FROM pg_tables
              WHERE schemaname = 'public'
-               AND tablename <> 'alembic_version';
+               AND tablename NOT IN ('alembic_version', 'maintenance_control');
             IF truncate_sql IS NOT NULL THEN
               EXECUTE truncate_sql;
+            END IF;
+            IF maintenance_before IS DISTINCT FROM (
+              SELECT to_jsonb(control) FROM public.maintenance_control AS control WHERE id = 1
+            ) THEN
+              RAISE EXCEPTION 'F6-02 reset changed the maintenance authority';
             END IF;
           END
           $$;
@@ -287,14 +299,26 @@ jobs:
           DO $$
           DECLARE
             truncate_sql text;
+            maintenance_before jsonb;
           BEGIN
+            -- Preserve the live maintenance authority; never bypass its write barrier.
+            SELECT to_jsonb(control) INTO maintenance_before
+              FROM public.maintenance_control AS control WHERE id = 1;
+            IF maintenance_before->>'state' IS DISTINCT FROM 'normal' THEN
+              RAISE EXCEPTION 'F6-02 reset requires an existing normal maintenance authority';
+            END IF;
             SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
               INTO truncate_sql
               FROM pg_tables
              WHERE schemaname = 'public'
-               AND tablename <> 'alembic_version';
+               AND tablename NOT IN ('alembic_version', 'maintenance_control');
             IF truncate_sql IS NOT NULL THEN
               EXECUTE truncate_sql;
+            END IF;
+            IF maintenance_before IS DISTINCT FROM (
+              SELECT to_jsonb(control) FROM public.maintenance_control AS control WHERE id = 1
+            ) THEN
+              RAISE EXCEPTION 'F6-02 reset changed the maintenance authority';
             END IF;
           END
           $$;
