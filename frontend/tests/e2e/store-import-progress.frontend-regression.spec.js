@@ -219,3 +219,37 @@ for (const width of [1280, 390]) {
     await expect(page.getByTestId('jumbo-receipt-poc')).toHaveCount(0)
   })
 }
+
+test('Lidl keeps the authorized save gate while sharing the same presentation as Jumbo', async ({ page }) => {
+  await mockStorePage(page)
+  let saved = false
+  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+    if (route.request().method() === 'PUT') {
+      const submitted = route.request().postDataJSON()
+      expect(submitted).toEqual({ from_date: '2026-10-21', to_date: null })
+      saved = true
+      return route.fulfill({ json: {
+        from_date: '2026-10-21', to_date: '2026-10-31',
+        configured_from_date: '2026-10-21', configured_to_date: null,
+        can_manage: true,
+      } })
+    }
+    return route.fulfill({ json: {
+      from_date: '2026-10-01', to_date: '2026-10-31',
+      configured_from_date: null, configured_to_date: null,
+      can_manage: true,
+    } })
+  })
+  await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-lidl').click()
+  await expect(page.getByTestId('lidl-from-date')).toHaveValue('2026-10-21')
+  await expect(page.getByTestId('lidl-period-unsaved')).toBeVisible()
+  const open = page.getByTestId('lidl-web-open-history')
+  await expect(open).toBeDisabled()
+  await page.getByTestId('lidl-save-period').click()
+  await expect.poll(() => saved).toBe(true)
+  await expect(page.getByTestId('lidl-period-unsaved')).toHaveCount(0)
+  await expect(open).toBeEnabled()
+  // No actual retailer login, browser window or receipt write is triggered.
+})
+
