@@ -5,6 +5,9 @@ on:
     paths:
       - 'backend/app/services/ah_receipt_background_sync.py'
       - 'backend/tests/test_ah_receipt_background_sync.py'
+      - 'backend/app/api/retailer_receipt_routes.py'
+      - 'backend/app/services/retailer_receipt_import_dates.py'
+      - 'backend/tests/test_retailer_receipt_import_dates.py'
       - 'backend/app/main.py'
       - 'frontend/src/features/storeConnections/receiptConnectionOverviewModel.js'
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
@@ -40,5 +43,5 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/tests/test_ah_receipt_background_sync.py
-          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py
+          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
+          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
