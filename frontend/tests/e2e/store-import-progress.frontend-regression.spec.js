@@ -18,7 +18,8 @@ async function mockStorePage(page) {
       '/api/store-providers': [{ code: 'ah', name: 'Albert Heijn' }, { code: 'jumbo', name: 'Jumbo' }],
       '/api/store-connections': [],
       '/api/receipts/retailers/ah/status': { connected: true },
-      '/api/receipts/retailers/lidl/import-window': { from_date: '2026-10-01', to_date: '2026-10-31', can_manage: false },
+      '/api/receipts/retailers/lidl/import-window': { from_date: '2026-10-01', to_date: '2026-10-31', can_manage: true },
+      '/api/receipts/retailers/last-updated': { dates: { jumbo: '2026-10-19', lidl: '2026-10-21' } },
       '/api/maintenance/status': { state: 'normal' },
     }
     return route.fulfill({ json: responses[path] ?? {} })
@@ -50,7 +51,7 @@ for (const width of [1280, 390]) {
     await expect(preview).toBeVisible()
     expect(calls).toBe(0)
     await expect(preview).not.toContainText('TEST:receipt')
-    await expect(page.getByTestId('jumbo-bookmarklet-help')).not.toHaveAttribute('open', '')
+    await expect(page.getByTestId('jumbo-bookmarklet-dialog')).toHaveCount(0)
     await page.getByTestId('jumbo-confirm-import').click()
     const status = page.getByTestId('jumbo-poc-progress')
     await expect(status).toHaveAttribute('role', 'status')
@@ -141,6 +142,8 @@ for (const width of [1280, 390]) {
     await expect(page.getByTestId('receipt-connection-summary')).toHaveCount(0)
     await expect(overview.locator('thead th')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
     await expect(page.getByTestId('receipt-connection-updated-ah')).not.toBeEmpty()
+    await expect(page.getByTestId('receipt-connection-updated-jumbo')).toHaveText('19-10-2026')
+    await expect(page.getByTestId('receipt-connection-updated-lidl')).toHaveText('21-10-2026')
     await expect(page.getByTestId('receipt-connection-action-ah')).toHaveText('Bekijken')
     await expect(page.getByTestId('receipt-connection-action-jumbo')).toHaveText('Bonnen ophalen')
     await expect(page.getByTestId('receipt-connection-action-lidl')).toHaveText('Bonnen ophalen')
@@ -153,9 +156,44 @@ for (const width of [1280, 390]) {
     await expect(page.getByTestId('aldi-digital-unavailable')).toContainText('geen digitale kassabonnen aan via haar website of klantenpas')
     await page.getByTestId('receipt-connection-action-plus').click()
     await expect(page.getByTestId('aldi-digital-unavailable')).toContainText('geen digitale kassabonnen aan via haar website of klantenpas')
+    const overviewCard = overview.locator('xpath=ancestor::*[contains(@class, "rz-card")][1]')
+    const beforeClick = await overviewCard.boundingBox()
     await page.getByTestId('receipt-connection-action-jumbo').click()
-    await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
-    await expect(page.getByTestId('jumbo-bookmarklet-help')).not.toHaveAttribute('open', '')
+    const jumbo = page.getByTestId('jumbo-receipt-poc')
+    await expect(jumbo).toBeVisible()
+    await expect(page.getByTestId('jumbo-from-date')).toHaveValue('2026-10-19')
+    const detailsCard = jumbo.locator('xpath=ancestor::*[contains(@class, "rz-card")][1]')
+    const afterClick = await overviewCard.boundingBox()
+    const details = await detailsCard.boundingBox()
+    expect(Math.abs(beforeClick.width - afterClick.width)).toBeLessThan(2)
+    expect(Math.abs(beforeClick.width - details.width)).toBeLessThan(2)
+
+    const openJumbo = page.getByTestId('jumbo-poc-open')
+    const firstTime = page.getByTestId('jumbo-help-open')
+    const openBox = await openJumbo.boundingBox()
+    const firstTimeBox = await firstTime.boundingBox()
+    if (width === 1280) {
+      expect(Math.abs(openBox.y - firstTimeBox.y)).toBeLessThan(2)
+      expect(firstTimeBox.x).toBeGreaterThan(openBox.x)
+    }
+    await firstTime.click()
+    const dialog = page.getByTestId('jumbo-bookmarklet-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveAttribute('aria-modal', 'true')
+    await expect(page.getByTestId('jumbo-poc-bookmarklet')).toHaveAttribute('draggable', 'true')
+    await expect(page.getByTestId('jumbo-poc-bookmarklet')).toHaveAttribute('href', /^javascript:/)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeVisible()
+    await page.mouse.click(5, 5)
+    await expect(dialog).toBeVisible()
+    await page.getByTestId('jumbo-help-ok').click()
+    await expect(dialog).toHaveCount(0)
+    await page.getByTestId('receipt-connection-action-lidl').click()
+    await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
+    await expect(page.getByTestId('lidl-import-window').locator('input[type="date"]').first()).toHaveValue('2026-10-21')
+    const lidlCard = page.getByTestId('lidl-digital-receipts').locator('xpath=ancestor::*[contains(@class, "rz-card")][1]')
+    const lidlDimensions = await lidlCard.boundingBox()
+    expect(Math.abs(beforeClick.width - lidlDimensions.width)).toBeLessThan(2)
     await page.getByTestId('receipt-connection-action-ah').click()
     await expect(page.getByTestId('ah-digital-receipts')).toBeVisible()
     await expect(page.getByTestId('jumbo-receipt-poc')).toHaveCount(0)
