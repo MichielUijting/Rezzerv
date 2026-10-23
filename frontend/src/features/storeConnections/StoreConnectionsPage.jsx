@@ -281,7 +281,12 @@ export default function StoreConnectionsPage() {
     // otherwise be blocked by Firefox/other browser popup protection.
     // The fresh window retains window.opener for Lidl's existing postMessage
     // contract; it navigates to Lidl only AFTER confirmed persistence.
-    const lidlTab = window.open('about:blank', '_blank')
+    let lidlTab
+    try {
+      lidlTab = window.open('about:blank', '_blank')
+    } catch {
+      lidlTab = null
+    }
     if (!lidlTab) {
       showFeedback({
         variant: 'error',
@@ -293,6 +298,12 @@ export default function StoreConnectionsPage() {
 
     setLidlWindowSaving(true)
     try {
+      // The newly opened tab stays visible while the period is saved.
+      // Never expose household or receipt data in the provisional page.
+      if (lidlTab.document?.body) {
+        lidlTab.document.title = 'Inhuis - Lidl'
+        lidlTab.document.body.textContent = 'Inhuis bereidt Lidl voor…'
+      }
       if (needsSave) {
         const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
           method: 'PUT',
