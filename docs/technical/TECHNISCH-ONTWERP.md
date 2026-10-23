@@ -288,3 +288,16 @@ Deze ontwerpbaseline is akkoord wanneer:
 - elk `.py`-bestand een header of generated catalog entry heeft;
 - refactor-/delete-kandidaten niet direct verwijderd maar gemarkeerd zijn;
 - SSOT-regels expliciet geborgd zijn in ontwerp en catalogus.
+
+
+### TD-07 aanvulling — Bijna op, equivalente GPC-producten
+
+`backend/app/services/almost_out_group_service.py` verzorgt de read-only
+huishoudprojectie en de hoeveelheidgewogen aankoopvoorspelling voor dezelfde
+Brick en expliciete huishoudvariant. Het leest canonieke huishoudartikel-ID's,
+centrale classificatie en verpakkingsinhoud, voorraad en events. Het schrijft
+geen voorraad, classificaties, schema of centrale productidentiteiten.
+`main.py` houdt autorisatie, instellingenopslag en het bestaande API-contract.
+De productie-API wordt gedekt door
+`backend/tests/almost_out_api_projection_selftest.py`; de rekengrenzen door
+`backend/tests/test_almost_out_group_service.py`.

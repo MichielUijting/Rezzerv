@@ -369,6 +369,9 @@ function buildHouseholdSettingsFormState(settings = {}) {
     auto_restock: normalizeSettingsFormValue(settings?.auto_restock, 'checkbox'),
     packaging_unit: normalizeSettingsFormValue(settings?.packaging_unit),
     packaging_quantity: normalizeSettingsFormValue(settings?.packaging_quantity, 'number'),
+    almost_out_variant: normalizeSettingsFormValue(settings?.almost_out_variant),
+    almost_out_content_value: normalizeSettingsFormValue(settings?.almost_out_content_value, 'number'),
+    almost_out_content_unit: normalizeSettingsFormValue(settings?.almost_out_content_unit),
     notes: normalizeSettingsFormValue(settings?.notes),
   }
 }
@@ -415,6 +418,9 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
     settings?.auto_restock,
     settings?.packaging_unit,
     settings?.packaging_quantity,
+    settings?.almost_out_variant,
+    settings?.almost_out_content_value,
+    settings?.almost_out_content_unit,
     settings?.notes,
   ])
 
@@ -507,6 +513,9 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         auto_restock: Boolean(formState.auto_restock),
         packaging_unit: formState.packaging_unit.trim(),
         packaging_quantity: formState.packaging_quantity === '' ? null : Number(formState.packaging_quantity),
+        almost_out_variant: formState.almost_out_variant.trim(),
+        almost_out_content_value: formState.almost_out_content_value === '' ? null : Number(formState.almost_out_content_value),
+        almost_out_content_unit: formState.almost_out_content_unit.trim(),
         notes: formState.notes.trim(),
       }
       const response = await fetchJsonWithAuth(`/api/household-articles/${encodeURIComponent(resolvedArticleId)}/settings`, {
@@ -514,7 +523,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         body: JSON.stringify(payload),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.detail || 'Huishoudinstellingen konden niet worden opgeslagen.')
+      if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Controleer de instellingen. Vul een positieve inhoud en een geldige inhoudseenheid in.')
       const nextSettings = data?.settings && typeof data.settings === 'object' ? data.settings : payload
       dirtyFieldsRef.current.clear()
       setFormState(buildHouseholdSettingsFormState(nextSettings))
@@ -585,6 +594,10 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         </div>
         <EditableHouseholdFieldRow field={{ key: 'packaging_unit', label: 'Verpakkingseenheid', type: 'text', placeholder: 'Bijvoorbeeld: pak' }} draftValue={formState.packaging_unit} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <EditableHouseholdFieldRow field={{ key: 'packaging_quantity', label: 'Verpakkingshoeveelheid', type: 'number', placeholder: '1', step: '0.1' }} draftValue={formState.packaging_quantity} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
+        <p>Bijna op telt producten met dezelfde Brick en dezelfde onderstaande variant samen. Gebruik bijvoorbeeld bij beide winkels ‘halfvolle koemelk’. Laat de variant leeg om het product apart te houden. De inhoud komt uit de Catalogus; vul deze hieronder in als die ontbreekt of afwijkt.</p>
+        <EditableHouseholdFieldRow field={{ key: 'almost_out_variant', label: 'Variant voor Bijna op', type: 'text', placeholder: 'Bijvoorbeeld: halfvolle koemelk' }} draftValue={formState.almost_out_variant} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
+        <EditableHouseholdFieldRow field={{ key: 'almost_out_content_value', label: 'Inhoud per verpakking', type: 'number', placeholder: 'Bijvoorbeeld: 1', step: '0.001' }} draftValue={formState.almost_out_content_value} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
+        <EditableHouseholdFieldRow field={{ key: 'almost_out_content_unit', label: 'Inhoudseenheid', type: 'text', placeholder: 'l, ml, kg, g of stuk' }} draftValue={formState.almost_out_content_unit} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <EditableHouseholdFieldRow field={{ key: 'notes', label: 'Notities', type: 'textarea', placeholder: 'Eigen notities voor dit huishouden' }} draftValue={formState.notes} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
       </div>
       <div className="rz-article-inline-actions" style={{ marginTop: 12 }}>

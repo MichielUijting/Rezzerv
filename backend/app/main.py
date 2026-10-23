@@ -827,9 +827,12 @@ class HouseholdArticleSettingsUpdateRequest(BaseModel):
     auto_restock: bool | None = None
     packaging_unit: str | None = None
     packaging_quantity: float | None = None
+    almost_out_variant: str | None = None
+    almost_out_content_value: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    almost_out_content_unit: str | None = None
     notes: str | None = None
 
-    @field_validator('favorite_store', 'default_location_id', 'default_sublocation_id', 'packaging_unit', 'notes', mode='before')
+    @field_validator('favorite_store', 'default_location_id', 'default_sublocation_id', 'packaging_unit', 'notes', 'almost_out_variant', 'almost_out_content_unit', mode='before')
     @classmethod
     def normalize_optional_text_fields(cls, value):
         if value is None:
@@ -3753,6 +3756,9 @@ HOUSEHOLD_ARTICLE_SETTINGS_ALLOWED_KEYS = (
     'auto_restock',
     'packaging_unit',
     'packaging_quantity',
+    'almost_out_variant',
+    'almost_out_content_value',
+    'almost_out_content_unit',
 )
 
 
@@ -3863,6 +3869,9 @@ def get_household_article_settings(conn, household_id: str, household_article_id
             'auto_restock': bool(settings_map.get('auto_restock')) if settings_map.get('auto_restock') is not None else False,
             'packaging_unit': normalize_optional_text_field(settings_map.get('packaging_unit')),
             'packaging_quantity': float(settings_map['packaging_quantity']) if settings_map.get('packaging_quantity') not in (None, '') else None,
+            'almost_out_variant': settings_map.get('almost_out_variant'),
+            'almost_out_content_value': settings_map.get('almost_out_content_value'),
+            'almost_out_content_unit': settings_map.get('almost_out_content_unit'),
             'notes': (normalize_optional_text_field(note_row.get('note')) if note_row else None),
             'notes_updated_at': normalize_datetime(note_row.get('updated_at') or note_row.get('created_at')) if note_row else None,
         },
@@ -3890,6 +3899,12 @@ def update_household_article_settings(conn, household_id: str, household_article
         raise HTTPException(status_code=400, detail='Prijsindicatie mag niet negatief zijn')
     if packaging_quantity is not None and packaging_quantity <= 0:
         raise HTTPException(status_code=400, detail='Verpakkingshoeveelheid moet groter zijn dan 0')
+    from app.services.almost_out_group_service import UNITS
+    content_unit = str(payload.almost_out_content_unit or '').strip().lower() or None
+    if content_unit is not None and content_unit not in UNITS:
+        raise HTTPException(status_code=400, detail='Kies l, ml, cl, dl, kg, g, mg of stuk als inhoudseenheid')
+    if (payload.almost_out_content_value is None) != (content_unit is None):
+        raise HTTPException(status_code=400, detail='Vul zowel de inhoud per verpakking als de inhoudseenheid in')
     if status not in {'active', 'inactive'}:
         raise HTTPException(status_code=400, detail='Status moet active of inactive zijn')
 
@@ -3928,7 +3943,14 @@ def update_household_article_settings(conn, household_id: str, household_article
         'auto_restock': auto_restock if auto_restock is not None else False,
         'packaging_unit': packaging_unit,
         'packaging_quantity': packaging_quantity,
+        'almost_out_variant': payload.almost_out_variant,
+        'almost_out_content_value': payload.almost_out_content_value,
+        'almost_out_content_unit': content_unit,
     }
+    # Older clients must not erase the aggregation settings they do not know.
+    for key in ('almost_out_variant', 'almost_out_content_value', 'almost_out_content_unit'):
+        if key not in payload.model_fields_set:
+            settings_payload[key] = get_household_article_settings(conn, household_id, household_article_id)['settings'].get(key)
     for setting_key in HOUSEHOLD_ARTICLE_SETTINGS_ALLOWED_KEYS:
         setting_value = settings_payload.get(setting_key)
         conn.execute(
@@ -4276,7 +4298,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
 
 
 
-def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
     article_name = str(article_row.get('naam') or '').strip()
     global_product_id = str(article_row.get('global_product_id') or '').strip()
@@ -4294,14 +4316,17 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     if ideal_stock is None and min_stock is not None:
         ideal_stock = float(min_stock) + 1.0
 
-    inventory_rows = get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
-    event_rows = get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
+    inventory_rows = group_projection['inventory_rows'] if group_projection else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
+    event_rows = group_projection['event_rows'] if group_projection else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
     current_quantity = calculate_inventory_total_quantity_from_rows(inventory_rows)
     event_net_quantity = calculate_inventory_event_net_quantity(event_rows)
     has_event_history = len(event_rows) > 0
     data_state = ALMOST_OUT_DATA_STATE_OK
     data_state_message = None
-    if min_stock is None:
+    if group_projection and group_projection.get('member_data_inconsistent'):
+        data_state = ALMOST_OUT_DATA_STATE_INCONSISTENT
+        data_state_message = 'Voorraad en mutaties van een onderliggend artikel komen niet overeen.'
+    elif min_stock is None:
         data_state = ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
         data_state_message = 'Artikel heeft geen minimumvoorraad en valt daarom buiten almost-out signalering.'
     elif current_quantity < 0:
@@ -4316,7 +4341,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     prediction_payload = None
     prediction_triggered = False
     if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and prediction_enabled and prediction_days > 0:
-        prediction_payload = compute_household_product_prediction(
+        prediction_payload = None if group_projection else compute_household_product_prediction(
             conn,
             household_id,
             household_article_id,
@@ -4325,6 +4350,9 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             prediction_days=prediction_days,
             global_product_id=global_product_id,
         )
+        if group_projection:
+            from app.services.almost_out_group_service import prediction_from_events
+            prediction_payload = prediction_from_events(event_rows, prediction_days)
         prediction_triggered = bool(prediction_payload and prediction_payload.get('prediction_triggered'))
 
     include_item = False
@@ -4412,6 +4440,15 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             'inconsistent_data_rule': 'block_from_almost_out',
         },
     }
+    if group_projection:
+        item_payload.update({key: value for key, value in group_projection.items() if key not in {'inventory_rows', 'event_rows'}})
+        item_payload['product_anchor'] = 'gpc_variant'
+        item_payload['household_article_name'] = group_projection['aggregation_variant']
+        item_payload['display_name'] = group_projection['aggregation_variant']
+        item_payload['packaging_unit'] = f"verpakking van {group_projection['representative_package_content']:g} {group_projection['aggregation_unit']}"
+        item_payload['verpakkingseenheid'] = item_payload['packaging_unit']
+        item_payload['packaging_quantity'] = 1
+        item_payload['verpakkingshoeveelheid'] = 1
     if prediction_payload:
         item_payload.update(prediction_payload)
     else:
@@ -4455,16 +4492,6 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
 
-    # Without prediction, an article with no minimum stock can never appear
-    # in Bijna op. Avoid expensive inventory/event lookups for those rows.
-    if not bool(household_settings.get('prediction_enabled')):
-        article_rows = [
-            row for row in article_rows
-            if normalize_optional_numeric_field(row.get('min_stock')) is not None
-        ]
-        if not article_rows:
-            return []
-
     eligible_count = len(article_rows)
     hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
@@ -4493,22 +4520,36 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             bucket = settings_map_by_article.setdefault(article_id, {})
             bucket[str(row.get('setting_key') or '').strip()] = _parse_json_setting_value(row.get('setting_value'))
 
+    from app.services.almost_out_group_service import load_groups, load_group_projection
     items: list[dict] = []
-    for article_row in article_rows:
-        article_id = str(article_row.get('id') or '').strip()
-        if settings_map_by_article.get(article_id, {}).get('almost_out_hidden') is True:
-            hidden_count += 1
-            continue
-        evaluation = evaluate_household_article_almost_out(
-            conn,
-            household_id,
-            article_row,
-            household_settings=household_settings,
-            article_settings_map=settings_map_by_article.get(article_id, {}),
-        )
-        evaluation.update(gpc_by_article.get(article_id, {}))
-        if evaluation.get('include_in_almost_out'):
-            items.append(evaluation)
+    groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
+    for group in groups:
+        # Legacy products without explicit variant/content retain their behavior.
+        candidates = [group['members'][0]] if group['key'][0] == 'gpc_variant' else group['members']
+        for article_row in candidates:
+            article_id = str(article_row['id'])
+            members = group['members'] if group['key'][0] == 'gpc_variant' else [article_row]
+            if not household_settings.get('prediction_enabled') and not any(member.get('min_stock') is not None for member in members):
+                continue
+            if any(settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True for member in members):
+                hidden_count += 1
+                continue
+            projection = None
+            if group['key'][0] == 'gpc_variant':
+                projection = load_group_projection(conn, household_id, group)
+                article_row = dict(article_row)
+                reference_factor = group['factors'][article_id]
+                for field in ('min_stock', 'ideal_stock'):
+                    values = [float(member[field]) * group['factors'][str(member['id'])] / reference_factor for member in members if member.get(field) is not None]
+                    article_row[field] = max(values) if values else None
+            evaluation = evaluate_household_article_almost_out(
+                conn, household_id, article_row, household_settings=household_settings,
+                article_settings_map=settings_map_by_article.get(article_id, {}),
+                group_projection=projection,
+            )
+            evaluation.update(gpc_by_article.get(article_id, {}))
+            if evaluation.get('include_in_almost_out'):
+                items.append(evaluation)
 
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",

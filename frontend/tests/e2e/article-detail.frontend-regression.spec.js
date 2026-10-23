@@ -274,6 +274,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const articleId = 'household-article-dropdown-test';
     const articleName = 'Dropdown testartikel';
     let savedFavoriteStore = '';
+    let savedAggregation = null;
 
     await page.route('**/api/session', async (route) => {
       await route.fulfill({
@@ -391,6 +392,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await page.route(`**/api/household-articles/${articleId}/settings`, async (route) => {
       const payload = JSON.parse(route.request().postData() || '{}');
       savedFavoriteStore = String(payload.favorite_store || '');
+      savedAggregation = payload;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -458,8 +460,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await listbox.getByRole('option', { name: 'Plus', exact: true }).click();
 
     await expect(trigger).toContainText('Plus');
+    await settingsSection.getByLabel('Variant voor Bijna op:').fill('halfvolle koemelk');
+    await settingsSection.getByLabel('Inhoud per verpakking:').fill('500');
+    await settingsSection.getByLabel('Inhoudseenheid:').fill('ml');
     await page.getByTestId('article-household-settings-save').click();
     await expect.poll(() => savedFavoriteStore).toBe('Plus');
+    expect(savedAggregation.almost_out_variant).toBe('halfvolle koemelk');
+    expect(savedAggregation.almost_out_content_value).toBe(500);
+    expect(savedAggregation.almost_out_content_unit).toBe('ml');
     expect(consoleErrors).toEqual([]);
   });
 });

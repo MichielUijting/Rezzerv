@@ -82,6 +82,9 @@ export function buildHouseholdSettingsPayload(settings = {}, favoriteStore = '')
     auto_restock: Boolean(settings?.auto_restock),
     packaging_unit: String(settings?.packaging_unit || '').trim(),
     packaging_quantity: nullableNumber(settings?.packaging_quantity),
+    almost_out_variant: String(settings?.almost_out_variant || '').trim(),
+    almost_out_content_value: nullableNumber(settings?.almost_out_content_value),
+    almost_out_content_unit: String(settings?.almost_out_content_unit || '').trim(),
     notes: String(settings?.notes || '').trim(),
   }
 }
