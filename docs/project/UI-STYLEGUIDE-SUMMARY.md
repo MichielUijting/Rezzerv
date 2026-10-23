@@ -1127,3 +1127,12 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - De bestaande onderhoudsmelding staat op desktop en mobiel als vaste overlay over de header, zonder extra ruimte boven de header.
 - Toon de tekst vetgedrukt op een dekkende lichtoranje achtergrond met donkere tekst en duidelijke rand. Lange berichten breken af en blijven binnen de viewport scrollbaar.
 - Behoud de bestaande statusbron, verversingsinterval, aankondigingstekst en blokkeringsmelding. Bij normale status verdwijnt de overlay.
+
+## Winkelkoppelingen — compact overzicht (PO, 23 oktober 2026)
+
+De pagina **Winkelkoppelingen** toont zonder extra inleidend paneel één titel **Mijn winkelkoppelingen** en direct daaronder de bestaande `DataTable`, met uitsluitend de kolommen **Winkel**, **Laatst bijgewerkt** en **Status** (de actieknoppen staan in de Status-kolom). Geen samenvatting, technische uitleg of apart klantenkaartpaneel boven of onder deze overzichtstabel. De bij de gekozen winkel behorende bediening en uniforme voortgang volgen onder de tabel.
+
+Voor Aldi en PLUS luidt de zichtbare statusknop **Geen koppeling mogelijk**, met eenvoudige uitleg dat er geen digitale kassabonnen via website of klantenpas beschikbaar zijn. De presentatie moet op desktop en mobiel begrijpelijk blijven; op mobiel worden de drie kolommen met compacte breedten en zonder technische extra kolommen getoond.
+
+In alle gebruikerszichtbare teksten wordt waar mogelijk **Inhuis** gebruikt in plaats van de technische infrastructuurterm 'server'. Onderdelen die technisch `server` heten (variabelen, API's, interne statuscodes) blijven ongewijzigd om contractbreuk te vermijden. Voor onderhouduitleg is **Onderhoud aan Inhuis** de functionele benaming.
+
