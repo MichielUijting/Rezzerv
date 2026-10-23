@@ -1,0 +1,5 @@
+/* Only the compact mobile Winkelkoppelingen receipt panels use zero vertical
+   spacing between a date label and its field. Desktop/global inputs unchanged. */
+.rz-store-receipt-panel--mobile .rz-input-field {
+  row-gap: 0;
+}
