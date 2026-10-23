@@ -382,8 +382,18 @@ def _seed_registry(conn) -> None:
             VALUES (:role_key, :scope, :name)
             ON CONFLICT(role_key) DO UPDATE SET active = TRUE, name = excluded.name
         """), {"role_key": role_key, "scope": scope, "name": role_names[role_key]})
-        conn.execute(text("DELETE FROM auth_role_permissions WHERE role_key = :role_key"), {"role_key": role_key})
-        for permission_key in sorted(permissions):
+        # Preserve created_at for unchanged grants. Rebuilding every grant at
+        # startup changes signed maintenance data even if permissions are equal.
+        existing = set(conn.execute(text("""
+            SELECT permission_key FROM auth_role_permissions WHERE role_key = :role_key
+        """), {"role_key": role_key}).scalars().all())
+        desired = set(permissions)
+        for permission_key in sorted(existing - desired):
+            conn.execute(text("""
+                DELETE FROM auth_role_permissions
+                WHERE role_key = :role_key AND permission_key = :permission_key
+            """), {"role_key": role_key, "permission_key": permission_key})
+        for permission_key in sorted(desired - existing):
             conn.execute(text("""
                 INSERT INTO auth_role_permissions(role_key, permission_key)
                 VALUES (:role_key, :permission_key)

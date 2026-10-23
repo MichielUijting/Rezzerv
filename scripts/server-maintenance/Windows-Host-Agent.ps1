@@ -108,8 +108,11 @@ if ($InstallAtLogon) {
 }
 
 do {
+    $checkStage = 'start'
     try {
+        $checkStage = 'container-identiteit'
         $backend=Get-Container 'backend'; $postgres=Get-Container 'postgres'
+        $checkStage = 'onderhoudstoestand'
         $probe=(Invoke-DockerText @('exec',$backend.Id,'python','-m','app.maintenance.server_maintenance_host_probe')) | ConvertFrom-Json
         $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
         $available=[ordered]@{kind='availability';issued_at=[datetimeoffset]::UtcNow.ToString('o');host_id=$hostId;backend_container_id=$backend.Id;windows_boot=$boot}
@@ -121,15 +124,19 @@ do {
         [IO.File]::Move($availableTemp,(Join-Path $ProofDirectory 'availability.json'),$true)
         if ($probe.state -notin @('draining','locked','verifying','blocked') -or -not $probe.cycle_id -or $probe.active_operations -ne 0) { if ($Once) { return }; Start-Sleep -Seconds 10; continue }
         $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+        $checkStage = 'database-bootstraprol'
         $userEnv=@($postgres.Config.Env | Where-Object { $_.StartsWith('POSTGRES_USER=') })
         if ($userEnv.Count -ne 1) { throw 'PostgreSQL bootstrap-identiteit ontbreekt.' }
         $pgUser=$userEnv[0].Substring('POSTGRES_USER='.Length)
         $db=[string]$probe.database_runtime.database
         $identitySql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
+        $checkStage = 'database-identiteit'
         $identity=(Invoke-DockerText @('exec',$postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql)) | ConvertFrom-Json
         $ips=@($postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $checkStage = 'database-netwerkidentiteit'
         $sameAddress=Test-InhuisDatabaseServerAddress -DatabaseAddress $probe.database_runtime.server_address -ContainerAddresses $ips
         if ($identity.database -cne $db -or $identity.oid -cne $probe.database_runtime.database_oid -or ([datetimeoffset]$identity.started) -ne ([datetimeoffset]$probe.database_runtime.server_started_at) -or -not $sameAddress) { throw 'Runtimeverbinding en fysieke PostgreSQL-container verschillen.' }
+        $checkStage = 'duurzame-databaseopslag'
         $mounts=@($postgres.Mounts | Where-Object { $_.Type -in @('volume','bind') } | Sort-Object Destination | ForEach-Object { [ordered]@{ Type=$_.Type; Source=$_.Source; Destination=$_.Destination } })
         if (-not $mounts.Count) { throw 'Geen duurzame databaseopslag aangetoond.' }
         $volume=Get-Sha ($mounts | ConvertTo-Json -Compress -Depth 10)
@@ -137,6 +144,7 @@ do {
         if ($cycle -notmatch '^[a-f0-9-]{36}$') { throw 'Ongeldige onderhoudscyclus.' }
         $archive=Join-Path $DataDirectory ($cycle+'.dump')
         $receipt=Join-Path $DataDirectory ($cycle+'.backup.json')
+        $checkStage = 'back-up-en-herstelproef'
         if (-not (Test-Path -LiteralPath $receipt)) {
             # Full custom archive is streamed as bytes, never through PowerShell text.
             Copy-DockerBinary @('exec',$postgres.Id,'pg_dump','-U',$pgUser,'-d',$db,'--format=custom','--no-owner','--no-privileges') $archive
@@ -163,17 +171,21 @@ do {
                 }
             }
         }
+        $checkStage = 'back-up-en-data-integriteit'
         $backup=Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
         if ($backup.sha256 -cne (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -or $backup.domain_fingerprint -cne $probe.domain_fingerprint) { throw 'Back-up of actuele data gewijzigd.' }
+        $checkStage = 'frontend-bereikbaarheid'
         $front=Invoke-WebRequest -Uri $FrontendUrl -TimeoutSec 15
         $external=Invoke-WebRequest -Uri $ExternalUrl -TimeoutSec 15
         if ($front.StatusCode -ne 200 -or $external.StatusCode -ne 200 -or $front.Content -notmatch '<title>Inhuis</title>' -or $external.Content -notmatch '<title>Inhuis</title>') { throw 'Frontend/externe route niet functioneel bereikbaar.' }
+        $checkStage = 'backend-en-versiecontrole'
         foreach ($base in @($FrontendUrl,$ExternalUrl)) {
             $health=Invoke-RestMethod -Uri ([uri]::new($base,'/api/health')) -TimeoutSec 15
             $version=Invoke-RestMethod -Uri ([uri]::new($base,'/api/version')) -TimeoutSec 15
             $frontendVersion=Invoke-RestMethod -Uri ([uri]::new($base,'/version.json')) -TimeoutSec 15
             if ($health.status -cne 'ok' -or $health.datastore -cne 'postgresql' -or $health.database -cne $db -or $version.version -cne $probe.database_runtime.release_version -or $frontendVersion.version -cne $probe.database_runtime.release_version) { throw 'Backend/frontend/externe runtime niet gelijk of niet gereed.' }
         }
+        $checkStage = 'onderhoudsbewijs-ondertekenen'
         $payload=[ordered]@{ cycle_id=$cycle; issued_at=[datetimeoffset]::UtcNow.ToString('o'); host_id=$hostId; windows_boot=$boot; backend_container_id=$backend.Id; backend_image=$backend.Image; compose_project=$ComposeProject; volume_identity=$volume; cluster_identity=$identity.cluster; database_runtime=$probe.database_runtime; domain_fingerprint=$probe.domain_fingerprint; backup=$backup; frontend_ready=$true; external_ready=$true }
         $bytes=[Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Compress -Depth 20))
         $signature=$rsa.SignData($bytes,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
@@ -184,7 +196,9 @@ do {
         Write-Host 'Actueel ondertekend onderhoudsbewijs vernieuwd. Windows wordt niet herstart.'
     } catch {
         # Never renew the signature after a failed check. Existing proof expires.
-        Write-Warning 'Onderhoudsbewijs niet vernieuwd; controle mislukt. Inhuis blijft gesloten. Geen gevoelige details gelogd.'
+        # Fixed stage identifiers only: never include exception message, command output or sensitive values.
+        $safeExceptionType = $_.Exception.GetType().Name -replace '[^A-Za-z0-9]', ''
+        Write-Warning ('Onderhoudsbewijs niet vernieuwd bij controle: ' + $checkStage + ' (' + $safeExceptionType + '). Inhuis blijft gesloten. Geen gevoelige details gelogd.')
         if ($Once) { throw }
     }
     if (-not $Once) { Start-Sleep -Seconds 10 }

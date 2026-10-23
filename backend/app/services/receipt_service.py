@@ -1772,6 +1772,11 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
                         source_path = EXCLUDED.source_path,
                         is_active = EXCLUDED.is_active,
                         updated_at = CURRENT_TIMESTAMP
+                    WHERE receipt_sources.household_id IS DISTINCT FROM EXCLUDED.household_id
+                       OR receipt_sources.type IS DISTINCT FROM EXCLUDED.type
+                       OR receipt_sources.label IS DISTINCT FROM EXCLUDED.label
+                       OR receipt_sources.source_path IS DISTINCT FROM EXCLUDED.source_path
+                       OR receipt_sources.is_active IS DISTINCT FROM EXCLUDED.is_active
                     '''
                 ),
                 {**definition, 'household_id': household_id, 'is_active': True},
