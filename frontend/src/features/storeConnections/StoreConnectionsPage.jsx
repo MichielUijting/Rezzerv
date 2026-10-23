@@ -111,19 +111,19 @@ export default function StoreConnectionsPage() {
     {
       key: 'providerName',
       header: 'Winkel',
-      width: 190,
+      width: isMobileViewport ? 90 : 190,
       renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
     },
     {
       key: 'lastSyncLabel',
       header: 'Laatst bijgewerkt',
-      width: 180,
+      width: isMobileViewport ? 115 : 180,
       renderCell: row => <span data-testid={`receipt-connection-updated-${row.providerCode}`}>{row.lastSyncLabel}</span>,
     },
     {
       key: 'action',
       header: 'Status',
-      width: 230,
+      width: isMobileViewport ? 175 : 230,
       renderCell: row => (
         <span data-testid={`receipt-connection-status-${row.providerCode}`}>
           <Button
@@ -138,7 +138,7 @@ export default function StoreConnectionsPage() {
         </span>
       ),
     },
-  ], [activeProvider, isLoading])
+  ], [activeProvider, isLoading, isMobileViewport])
 
   const storeConnectionColumns = useMemo(() => [
     {
