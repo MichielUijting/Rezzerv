@@ -379,4 +379,3 @@ test('Lidl refuses to save a changed period when popup permission is blocked', a
   expect(saves).toBe(0)
   await expect(page.getByTestId('lidl-web-open-history')).toBeEnabled()
 })
-
