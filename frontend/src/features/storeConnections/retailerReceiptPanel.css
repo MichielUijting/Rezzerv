@@ -1,0 +1,4 @@
+/* Keep the regular Input label spacing inside mobile retailer panels. */
+.rz-store-receipt-panel--mobile .rz-input-field {
+  row-gap: 6px;
+}

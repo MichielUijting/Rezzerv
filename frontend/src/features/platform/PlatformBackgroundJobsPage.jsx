@@ -24,14 +24,14 @@ const BACKGROUND_ACTIONS = Object.freeze([
   {
     key: 'parsing-fixtures',
     title: 'Parsing-fixture regressie uitvoeren',
-    description: 'Voer de server-side parsingbaseline uit op de vaste kassabonfixtures.',
+    description: 'Controleer de bonverwerking in Inhuis met vaste testkassabonnen.',
     endpoint: '/api/testing/regression/parsing-fixtures/run',
     confirmLabel: 'Fixture-regressie starten',
   },
   {
     key: 'parsing-raw',
     title: 'Raw parsing regressie uitvoeren',
-    description: 'Voer de server-side parsingbaseline uit op de vaste raw kassabonbestanden.',
+    description: 'Controleer de bonverwerking in Inhuis met opgeslagen testkassabonnen.',
     endpoint: '/api/testing/regression/parsing-raw/run',
     confirmLabel: 'Raw regressie starten',
   },
@@ -107,11 +107,11 @@ export default function PlatformBackgroundJobsPage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <h2>Technische regressietaken</h2>
-            <p>Start uitsluitend zelfstandig uitvoerbare server-side taken waarvoor je expliciet bent geautoriseerd.</p>
+            <p>Start alleen Inhuis-taken waarvoor je toestemming hebt.</p>
             <p>Zelfstandig uitvoerbare Kassa- en parsingregressies kunnen hier worden gestart. Externe layer-startmarkers blijven bewust buiten deze beheerpagina.</p>
             <p>Het completion-endpoint is een interne callback en is geen beheeractie.</p>
             <p>Status en historie vallen onder Diagnostiek en worden op deze pagina niet gelezen zonder <code>platform.diagnostics.view</code>.</p>
-            <p>Parsingtaken worden binnen de serverrequest uitgevoerd. De Kassa-controles starten als server-side achtergrondtaak; de actuele voortgang is daarna onder Diagnostiek zichtbaar.</p>
+            <p>Inhuis voert de verwerking uit. De Kassa-controles lopen op de achtergrond; de voortgang staat bij Diagnostiek.</p>
 
             {BACKGROUND_ACTIONS.map((action) => (
               <div key={action.key} data-testid={`platform-background-jobs-action-${action.key}`}>

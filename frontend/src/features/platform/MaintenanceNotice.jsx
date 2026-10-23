@@ -20,6 +20,6 @@ export default function MaintenanceNotice() {
   }, [])
   if (!status || status.state === 'normal') return null
   return <div className="rz-feedback rz-feedback--info rz-maintenance-notice" role="status" data-testid="maintenance-notice">
-    <strong>{status.announcement?.trim() || 'Serveronderhoud: nieuwe verwerkingen zijn tijdelijk geblokkeerd. Niet-opgeslagen invoer is niet verwerkt.'}</strong>
+    <strong>{status.announcement?.trim() || 'Onderhoud aan Inhuis: nieuwe verwerkingen zijn tijdelijk geblokkeerd. Niet-opgeslagen invoer is niet verwerkt.'}</strong>
   </div>
 }

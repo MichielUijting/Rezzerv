@@ -56,7 +56,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     await expect(notice).toHaveCount(0)
     const before = await header.boundingBox()
 
-    status = { state: 'announced', announcement: 'Serveronderhoud morgen om 10:00 Europe/Amsterdam, verwachte duur 15 minuten.' }
+    status = { state: 'announced', announcement: 'Onderhoud aan Inhuis morgen om 10:00 Europe/Amsterdam, verwachte duur 15 minuten.' }
     await page.clock.fastForward(15000)
     await expect(notice).toHaveText(status.announcement)
     await expect(notice).toHaveAttribute('role', 'status')

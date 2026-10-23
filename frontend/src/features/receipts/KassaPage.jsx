@@ -339,7 +339,7 @@ function createUploadTechnicalError(response, responseText, endpoint) {
     body.slice(0, 4000) || '(lege response-body)',
   ].join('\n')
   return {
-    userMessage: 'Upload mislukt. De server gaf een technische fout terug.',
+    userMessage: 'Upload mislukt. Inhuis kon de bon niet verwerken. Probeer het opnieuw.',
     detail,
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
 
 async function picnicRequest(path, options = {}) {
   const response = await fetch('/api/receipts/retailers/picnic/' + path, {
@@ -17,6 +18,7 @@ async function picnicRequest(path, options = {}) {
 }
 
 export default function PicnicAccountResearchPanel() {
+  const isMobileViewport = useMobileAppViewport()
   const [account, setAccount] = useState({ connected: false, verification_required: false })
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -57,7 +59,11 @@ export default function PicnicAccountResearchPanel() {
 
   return (
     <Card>
-      <div data-testid="picnic-account-research" style={{ display: 'grid', gap: '12px' }}>
+      <div
+        data-testid="picnic-account-research"
+        className={isMobileViewport ? 'rz-store-receipt-panel--mobile' : undefined}
+        style={{ display: 'grid', rowGap: '12px' }}
+      >
         <h3 style={{ margin: 0 }}>Picnic — accountkoppeling (proef)</h3>
         <p style={{ margin: 0 }}>
           Deze proef kan alleen bestellingen uitlezen en toont nog geen digitale kassabonnen in Kassa.

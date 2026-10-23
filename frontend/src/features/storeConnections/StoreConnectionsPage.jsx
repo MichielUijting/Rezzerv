@@ -22,11 +22,20 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
+import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate } from './receiptConnectionOverviewModel.js'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
+import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
+import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
+import './receiptConnectionCompact.css'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
+  const isMobileViewport = useMobileAppViewport()
+  const [activeProvider, setActiveProvider] = useState('')
+  const [latestImportDates, setLatestImportDates] = useState({})
+  const [setupHelpStore, setSetupHelpStore] = useState('')
   const ahSyncPageMountedRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
@@ -56,11 +65,7 @@ export default function StoreConnectionsPage() {
   const [jumboPocResult, setJumboPocResult] = useState(null)
   const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
   const [jumboImportBusy, setJumboImportBusy] = useState(false)
-  const [jumboFrom, setJumboFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 29)
-    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
-  })
+  const [jumboFrom, setJumboFrom] = useState(() => firstImportDate())
   const [jumboTo, setJumboTo] = useState(() => {
     const d = new Date()
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
@@ -70,8 +75,20 @@ export default function StoreConnectionsPage() {
     () => deriveStoreConnectionRows(providers, connections, ahConnection),
     [providers, connections, ahConnection],
   )
+  const digitalReceiptRows = useMemo(() => {
+    const phases = { ah: ahPhase, jumbo: jumboPhase, lidl: lidlPhase }
+    const phaseLabels = {
+      waiting: 'Verbinding maken', fetching: 'Bonnen ophalen',
+      validating: 'Controleren', importing: 'Verwerken',
+      completed: 'Afgerond', failed: 'Controle nodig',
+    }
+    return deriveReceiptConnectionOverview(rows, ahConnection, latestImportDates).map(row => ({
+      ...row,
+      statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
+    }))
+  }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
-  const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
+  const lidlPeriodUnsaved = Boolean(lidlWindow) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
     lidlTo !== (lidlWindow.configured_to_date || '')
   )
@@ -90,6 +107,54 @@ export default function StoreConnectionsPage() {
       : '',
     [jumboFrom, jumboTo, jumboPeriodValid],
   )
+
+  const receiptConnectionColumns = useMemo(() => [
+    {
+      key: 'providerName',
+      header: 'Winkel',
+      width: isMobileViewport ? 90 : 190,
+      renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
+    },
+    {
+      key: 'lastSyncLabel',
+      header: 'Laatst bijgewerkt',
+      width: isMobileViewport ? 115 : 180,
+      renderCell: row => (
+        <span
+          data-testid={`receipt-connection-updated-${row.providerCode}`}
+          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
+        >
+          {row.lastSyncLabel}
+        </span>
+      ),
+    },
+    {
+      key: 'action',
+      header: 'Status',
+      width: isMobileViewport ? 175 : 230,
+      renderCell: row => (
+        <span data-testid={`receipt-connection-status-${row.providerCode}`}>
+          {row.providerCode === 'aldi' || row.providerCode === 'plus' ? (
+            <span
+              data-testid={`receipt-connection-unavailable-${row.providerCode}`}
+              title="Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas."
+              style={{ color: 'var(--color-ui-primary)', fontWeight: 600 }}
+            >Geen koppeling mogelijk</span>
+          ) : (
+            <Button
+              type="button"
+              variant={activeProvider === row.providerCode ? 'secondary' : 'primary'}
+              data-testid={`receipt-connection-action-${row.providerCode}`}
+              disabled={isLoading}
+              onClick={() => handleReceiptConnectionAction(row)}
+            >
+              {row.actionLabel}
+            </Button>
+          )}
+        </span>
+      ),
+    },
+  ], [activeProvider, isLoading, isMobileViewport])
 
   const storeConnectionColumns = useMemo(() => [
     {
@@ -148,6 +213,17 @@ export default function StoreConnectionsPage() {
     return data
   }
 
+  async function refreshLatestImportDates({ resetPeriods = false } = {}) {
+    const response = await fetchJson('/api/receipts/retailers/last-updated')
+    const latest = response?.dates || {}
+    setLatestImportDates(latest)
+    if (resetPeriods) {
+      setJumboFrom(displayedImportDate(latest.jumbo).day)
+      setLidlFrom(displayedImportDate(latest.lidl).day)
+    }
+    return latest
+  }
+
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -165,6 +241,14 @@ export default function StoreConnectionsPage() {
       setLidlWindow(windowData)
       setLidlFrom(windowData.configured_from_date || windowData.from_date || '')
       setLidlTo(windowData.configured_to_date || '')
+      try {
+        await refreshLatestImportDates({ resetPeriods: true })
+      } catch {
+        // A temporary read failure must not prevent using Winkelkoppelingen.
+        // The previous year's first day remains the conservative initial window.
+        setJumboFrom(firstImportDate())
+        setLidlFrom(firstImportDate())
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
@@ -172,22 +256,87 @@ export default function StoreConnectionsPage() {
     }
   }
 
-  async function saveLidlWindow(reset = false) {
+  async function openLidlWithSavedPeriod() {
+    if (lidlWindowSaving) return
+    if (!lidlWindow || !lidlFrom || (lidlTo && lidlFrom > lidlTo)) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'Kies eerst een geldige periode om je Lidl-bonnen op te halen.',
+      })
+      return
+    }
+
+    // Lidl's browser favorite reads the household-scoped, confirmed window.
+    // Save changed dates before visiting Lidl; never run with a stale period.
+    const needsSave = lidlPeriodUnsaved
+    if (needsSave && !lidlWindow.can_manage) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De gekozen periode kan niet worden opgeslagen. Vraag de beheerder van je huishouden om de Lidl-periode in te stellen.',
+      })
+      return
+    }
+
+    // Open synchronously within the user click. An async window.open would
+    // otherwise be blocked by Firefox/other browser popup protection.
+    // The fresh window retains its opener reference for Lidl's existing postMessage
+    // contract; it navigates to Lidl only AFTER confirmed persistence.
+    let lidlTab
+    try {
+      lidlTab = window.open('about:blank', '_blank')
+    } catch {
+      lidlTab = null
+    }
+    if (!lidlTab) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De browser heeft het Lidl-tabblad geblokkeerd. Sta pop-ups voor Inhuis toe en probeer opnieuw.',
+      })
+      return
+    }
+
     setLidlWindowSaving(true)
     try {
-      const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
-        method: 'PUT',
-        body: JSON.stringify({
-          from_date: reset ? null : (lidlFrom || null),
-          to_date: reset ? null : (lidlTo || null),
-        }),
-      })
-      setLidlWindow(data)
-      setLidlFrom(data.configured_from_date || data.from_date || '')
-      setLidlTo(data.configured_to_date || '')
-      showFeedback({ variant: 'success', title: 'Lidl-importperiode opgeslagen', message: reset ? 'Automatische periode hersteld.' : 'De nieuwe periode geldt bij de volgende import.' })
+      // The newly opened tab stays visible while the period is saved.
+      // Never expose household or receipt data in the provisional page.
+      if (lidlTab.document?.body) {
+        lidlTab.document.title = 'Inhuis - Lidl'
+        lidlTab.document.body.textContent = 'Inhuis bereidt Lidl voor…'
+      }
+      if (needsSave) {
+        const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
+          method: 'PUT',
+          body: JSON.stringify({
+            from_date: lidlFrom,
+            to_date: lidlTo || null,
+          }),
+        })
+        if (
+          data?.configured_from_date !== lidlFrom ||
+          (data?.configured_to_date || '') !== lidlTo
+        ) {
+          throw new Error('Inhuis kon de gekozen importperiode niet bevestigen.')
+        }
+        setLidlWindow(data)
+        setLidlFrom(data.configured_from_date)
+        setLidlTo(data.configured_to_date || '')
+      }
+
+      if (lidlTab.closed) {
+        throw new Error('Het Lidl-tabblad is gesloten voordat de periode gereed was.')
+      }
+      lidlTab.location.replace(LIDL_HISTORY_URL)
     } catch (err) {
-      showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Opslaan mislukt.' })
+      if (!lidlTab.closed) lidlTab.close()
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De gekozen periode kon niet worden voorbereid. Lidl is niet geopend. Probeer het opnieuw.',
+        detail: normalizeErrorMessage(err?.message),
+      })
     } finally {
       setLidlWindowSaving(false)
     }
@@ -213,6 +362,7 @@ export default function StoreConnectionsPage() {
     const ahResult = params.get('ah')
     if (!ahResult) return
     if (ahResult === 'connected') {
+      setActiveProvider('ah')
       showFeedback({
         variant: 'success',
         title: 'Albert Heijn gekoppeld',
@@ -241,6 +391,7 @@ export default function StoreConnectionsPage() {
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        setActiveProvider('lidl')
         lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
         setLidlCountsView(null)
         setLidlPhase('waiting')
@@ -375,6 +526,13 @@ export default function StoreConnectionsPage() {
               message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
           }
         }
+        if (lidlCounts.failed === 0) {
+          try {
+            await refreshLatestImportDates({ resetPeriods: true })
+          } catch {
+            // Receipt results are already acknowledged; date display can retry next visit.
+          }
+        }
         setLidlCountsView({ ...lidlCounts })
         setLidlPhase(lidlCounts.failed ? 'failed' : 'completed')
         const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
@@ -414,6 +572,7 @@ export default function StoreConnectionsPage() {
   useEffect(() => {
     const hash = String(window.location.hash || '')
     if (!hash.startsWith(JUMBO_POC_FRAGMENT_PREFIX)) return
+    setActiveProvider('jumbo')
 
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
     try {
@@ -492,6 +651,11 @@ export default function StoreConnectionsPage() {
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       setJumboPocResult(null)
+      try {
+        await refreshLatestImportDates({ resetPeriods: true })
+      } catch {
+        // A display refresh must not turn a confirmed Kassa import into a failure.
+      }
       showFeedback({ variant: 'success', title: 'Jumbo kassabon', message })
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De Jumbo-bon kon niet veilig worden geïmporteerd.'
@@ -647,6 +811,19 @@ export default function StoreConnectionsPage() {
     setCardNumber('')
   }
 
+  function handleReceiptConnectionAction(row) {
+    if (!row) return
+    setEditingCode('')
+    setActiveProvider(row.providerCode)
+  }
+
+  useEffect(() => {
+    if (!activeProvider) return
+    document.querySelector('[data-testid="receipt-connection-details"]')?.scrollIntoView({
+      behavior: 'smooth', block: 'start',
+    })
+  }, [activeProvider])
+
   function handleStoreConnectionAction(row) {
     if (row?.providerCode === 'aldi') return
     if (row?.connectionSource === 'ah_account') {
@@ -700,31 +877,70 @@ export default function StoreConnectionsPage() {
 
   return (
     <AppShell title="Winkelkoppelingen" showExit={false}>
-      <div style={{ display: 'grid', gap: '16px' }} data-testid="store-connections-page">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gap: '16px',
+        width: '100%',
+        maxWidth: '760px',
+        minWidth: 0,
+        margin: '0 auto',
+      }} data-testid="store-connections-page">
         <Card>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelkoppelingen</h2>
-            <p style={{ margin: 0, color: '#667085' }}>
-              Koppel hier een winkel éénmalig. Daarna kun je via Kassabonnen automatisch bonnen ophalen zonder opnieuw te koppelen.
-            </p>
+          <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
+            <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
+            {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
+            {isMobileViewport ? (
+              <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" role="group" aria-label="Kolommen winkelkoppelingen">
+                <span>Winkel</span>
+                <span>Laatst bijgewerkt</span>
+                <span>Status</span>
+              </div>
+            ) : null}
+            <DataTable
+              columns={receiptConnectionColumns}
+              data={digitalReceiptRows}
+              getRowKey={row => row.providerCode}
+              dataTestId="receipt-connections-overview-table"
+              tableClassName="rz-store-review-table rz-receipt-connection-compact-table"
+              emptyMessage="Geen winkelkoppelingen beschikbaar."
+              stickyHeader={false}
+              stickyFilters={false}
+            />
+            {activeProvider === 'ah' ? (
+              <ImportProgress store="Albert Heijn" phase={ahPhase} message={ahSyncProgress}
+                counts={ahCounts} testId="ah-sync-progress" />
+            ) : null}
+            {activeProvider === 'jumbo' ? (
+              <ImportProgress store="Jumbo" phase={jumboPhase} message={jumboPocProgress}
+                processed={jumboProgress?.processed} total={jumboProgress?.total}
+                counts={jumboProgress?.counts} testId="jumbo-poc-progress" />
+            ) : null}
+            {activeProvider === 'lidl' ? (
+              <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
+                counts={lidlCountsView} testId="lidl-web-progress" />
+            ) : null}
           </div>
         </Card>
 
+        {activeProvider ? <div data-testid="receipt-connection-details" /> : null}
+
+        {activeProvider === 'ah' ? (
         <Card>
-          <div data-testid="ah-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '680px' }}>
+          <div data-testid="ah-digital-receipts" style={{ display: 'grid', rowGap: '12px', maxWidth: '680px' }}>
             <div>
               <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
-                {ahConnection?.connected ? ' De koppeling blijft bewaard na een herstart.' : ''}
+                {ahConnection?.connected ? ' Inhuis haalt automatisch ongeveer ieder kwartier nieuwe AH-bonnen op.' : ''}
                 {ahConnection?.last_sync_at ? <> Laatst gesynchroniseerd: <strong>{formatLastSync(ahConnection.last_sync_at)}</strong>.</> : null}
               </p>
             </div>
 
             {!ahConnection?.connected ? (
-              <div style={{ display: 'grid', gap: '10px' }}>
+              <div style={{ display: 'grid', rowGap: '10px' }}>
                 <div style={{ color: '#667085' }}>
-                  Je logt één keer rechtstreeks bij Albert Heijn in. Inhuis ontvangt de bevestiging automatisch; je hoeft geen code of link te kopiëren.
+                  Tik of klik op Koppelen en meld je aan bij Albert Heijn. Inhuis regelt daarna de toegang en het ophalen van nieuwe bonnen.
                 </div>
                 <div>
                   <Button type="button" onClick={startAhLogin} disabled={ahBusy || isLoading} data-testid="ah-connect-start">
@@ -733,7 +949,7 @@ export default function StoreConnectionsPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', columnGap: '12px', rowGap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
                   {ahBusy ? 'AH-bonnen ophalen…' : 'Nu synchroniseren'}
                 </Button>
@@ -742,77 +958,59 @@ export default function StoreConnectionsPage() {
                 </Button>
               </div>
             )}
-            <ImportProgress store="Albert Heijn" phase={ahPhase} message={ahSyncProgress} counts={ahCounts} testId="ah-sync-progress" />
+
           </div>
         </Card>
+        ) : null}
 
+        {activeProvider === 'jumbo' ? (
         <Card>
-          <div data-testid="jumbo-receipt-poc" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Jumbo digitale kassabonnen</h3>
-              <p style={{ margin: '6px 0 0' }}>
-                Kies de periode en haal je kassabonnen op. Controleer de gevonden bonnen en bevestig daarna de import naar Kassa.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Input label="Vanaf" type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-from-date" />
-              <Input label="Tot en met" type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-to-date" />
-            </div>
-            {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
-            <details data-testid="jumbo-bookmarklet-help">
-              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Eerste keer? Stel de Jumbo-favoriet in</summary>
-              <div style={{ display: 'grid', gap: '8px', padding: '12px 0' }}>
-                <div>Sleep de onderstaande knop één keer naar de favorietenbalk van je browser. Heb je al een oude Jumbo-favoriet? Vervang die eerst. Bij een gewijzigde importperiode sleep je de knop opnieuw.</div>
-              <a
-                href={jumboPeriodValid ? jumboPocBookmarklet : undefined}
-                data-testid="jumbo-poc-bookmarklet"
-                aria-disabled={!jumboPeriodValid}
-                style={{
-                  display: 'inline-flex',
-                  width: 'fit-content',
-                  minHeight: '40px',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-ui-primary)',
-                  color: 'var(--color-ui-primary)',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-                onClick={(event) => event.preventDefault()}
-              >
-                Jumbo-bonnen ophalen
-              </a>
-                <div>Open daarna Jumbo en klik op deze favoriet om de bonnen naar Inhuis terug te brengen.</div>
-              </div>
-            </details>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <a
-                href={JUMBO_ORDERS_URL}
-                role="button"
-                className="rz-button-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
-                onClick={() => {
-                  setJumboPhase('waiting')
-                  setJumboProgress(null)
-                  setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
-                  setJumboPocResult(null)
-                  setJumboImportCandidate(null)
-                }}
-                data-testid="jumbo-poc-open"
-              >
-                Open mijn Jumbo
-              </a>
-            </div>
-
-            <ImportProgress store="Jumbo" phase={jumboPhase} message={jumboPocProgress}
-              processed={jumboProgress?.processed} total={jumboProgress?.total}
-              counts={jumboProgress?.counts} testId="jumbo-poc-progress" />
-
+          <RetailerReceiptPanel
+            retailer="Jumbo"
+            testId="jumbo-receipt-poc"
+            isMobileViewport={isMobileViewport}
+            from={jumboFrom}
+            to={jumboTo}
+            fromTestId="jumbo-from-date"
+            toTestId="jumbo-to-date"
+            onFromChange={(event) => {
+              setJumboFrom(event.target.value)
+              setJumboImportCandidate(null)
+              setJumboPocResult(null)
+            }}
+            onToChange={(event) => {
+              setJumboTo(event.target.value)
+              setJumboImportCandidate(null)
+              setJumboPocResult(null)
+            }}
+            openHref={JUMBO_ORDERS_URL}
+            openTestId="jumbo-poc-open"
+            onOpen={() => {
+              setJumboPhase('waiting')
+              setJumboProgress(null)
+              setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
+              setJumboPocResult(null)
+              setJumboImportCandidate(null)
+            }}
+            helpTestId="jumbo-help-open"
+            onHelp={() => setSetupHelpStore('jumbo')}
+            periodError={!jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
+            setupHelp={
+              <RetailerBookmarkletHelp
+                provider="jumbo"
+                retailer="Jumbo"
+                open={setupHelpStore === 'jumbo'}
+                onClose={() => setSetupHelpStore('')}
+                bookmarklet={jumboPocBookmarklet}
+                valid={jumboPeriodValid}
+                instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
+                  wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
+                  sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
+              />
+            }
+          >
             {jumboPocResult ? (
-              <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '10px' }}>
+              <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: '10px' }}>
                 {jumboPocResult.details.length ? (
                   <>
                     <strong>Gevonden kassabonnen ({jumboPocResult.details.length})</strong>
@@ -832,129 +1030,59 @@ export default function StoreConnectionsPage() {
                 )}
               </div>
             ) : null}
-          </div>
+
+          </RetailerReceiptPanel>
         </Card>
+        ) : null}
 
+        {activeProvider === 'lidl' ? (
         <Card>
-          <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Lidl digitale bonnen</h3>
-              <p style={{ margin: '6px 0 0', color: '#667085' }}>
-                Gebruik je normale Lidl.nl-login. Inhuis neemt alleen de bongegevens over; je wachtwoord, cookies en Lidl-sessie blijven in je browser.
-              </p>
-            </div>
-
-            <div data-testid="lidl-import-window">
-              <strong>Importperiode</strong>
-              <p>{lidlWindow ? lidlWindow.from_date + ' t/m ' + lidlWindow.to_date : 'Laden…'}</p>
-              {lidlPeriodUnsaved ? (
-                <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
-                  De gekozen importperiode is nog niet opgeslagen. Klik eerst op Opslaan.
-                </div>
-              ) : null}
-              {lidlWindow?.can_manage ? <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Input type="date" label="Van" value={lidlFrom} onChange={e => setLidlFrom(e.target.value)} />
-                <Input type="date" label="Tot (optioneel)" value={lidlTo} onChange={e => setLidlTo(e.target.value)} />
-                <Button onClick={() => saveLidlWindow(false)} disabled={lidlWindowSaving || !lidlFrom || Boolean(lidlTo && lidlFrom > lidlTo)}>Opslaan</Button>
-                <Button variant="secondary" onClick={() => saveLidlWindow(true)} disabled={lidlWindowSaving}>Automatisch</Button>
-              </div> : null}
-            </div>
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig na deze update:</strong> verwijder eerst je oude Lidl-favoriet en sleep daarna de nieuwe v2-knop hieronder naar de favorietenbalk.</div>
-              <a
-                href={lidlBookmarklet}
-                data-testid="lidl-web-bookmarklet"
-                style={{
-                  display: 'inline-flex',
-                  width: 'fit-content',
-                  minHeight: '40px',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--color-ui-primary)',
-                  color: 'var(--color-ui-primary)',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-                onClick={(event) => event.preventDefault()}
-              >
-                Lidl-bonnen naar Inhuis v2
-              </a>
-              <div style={{ color: '#667085' }}>
-                Gebruik daarna de knop hieronder. Laat dit Inhuis-tabblad open en klik in de geopende Lidl-tab op de nieuwe v2-favoriet. Vanaf v2 blijft de favoriet zelf klein en haalt hij de actuele importcode uit je bestaande Inhuis-sessie, zodat toekomstige parserwijzigingen niet opnieuw een nieuwe favoriet vereisen.
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button
-                type="button"
-                onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
-                disabled={lidlPeriodUnsaved || lidlWindowSaving || !lidlWindow}
-                data-testid="lidl-web-open-history"
-              >
-                Open mijn Lidl-kassabonnen
-              </Button>
-            </div>
-
-            <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
-              counts={lidlCountsView} testId="lidl-web-progress" />
-          </div>
-        </Card>
-
-        <Card>
-          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
-            <h3 style={{ margin: 0 }}>Aldi en PLUS</h3>
-            <p style={{ margin: 0 }}>Voor Aldi en PLUS zijn momenteel geen digitaal toegankelijke kassabonnen voor een rechtstreekse koppeling met Inhuis aangetoond. Rechtstreeks ophalen van kassabonnen is daarom momenteel niet mogelijk.</p>
-            <p style={{ margin: 0 }}>Papieren kassabonnen van Aldi en PLUS kunnen nog steeds via Kassa worden gescand.</p>
-          </div>
-        </Card>
-
-        <PicnicAccountResearchPanel />
-
-        <Card>
-          {error ? <div className="rz-inline-feedback" data-testid="store-connections-error">{error}</div> : null}
-          {status ? <div className="rz-inline-feedback rz-inline-feedback-success" data-testid="store-connections-status">{status}</div> : null}
-
-          <DataTable
-            columns={storeConnectionColumns}
-            data={rows}
-            getRowKey={(row) => row.providerCode}
-            emptyMessage="Geen winkels beschikbaar."
-            dataTestId="store-connections-table"
-            tableClassName="rz-store-review-table"
-            stickyHeader={false}
-            stickyFilters={false}
+          <RetailerReceiptPanel
+            retailer="Lidl"
+            testId="lidl-digital-receipts"
+            dateRangeTestId="lidl-import-window"
+            isMobileViewport={isMobileViewport}
+            from={lidlFrom}
+            to={lidlTo || lidlWindow?.to_date || ''}
+            fromTestId="lidl-from-date"
+            toTestId="lidl-to-date"
+            onFromChange={(event) => setLidlFrom(event.target.value)}
+            onToChange={(event) => setLidlTo(event.target.value)}
+            datesDisabled={lidlWindowSaving || !lidlWindow?.can_manage}
+            openTestId="lidl-web-open-history"
+            onOpen={openLidlWithSavedPeriod}
+            openDisabled={lidlWindowSaving || !lidlWindow}
+            openBusy={lidlWindowSaving}
+            helpTestId="lidl-help-open"
+            onHelp={() => setSetupHelpStore('lidl')}
+            setupHelp={
+              <RetailerBookmarkletHelp
+                provider="lidl"
+                retailer="Lidl"
+                open={setupHelpStore === 'lidl'}
+                onClose={() => setSetupHelpStore('')}
+                bookmarklet={lidlBookmarklet}
+                instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
+                  opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
+              />
+            }
           />
         </Card>
-
-        {editingRow ? (
-          <Card>
-            <div data-testid="store-connection-editor" style={{ display: 'grid', gap: '12px', maxWidth: '520px' }}>
-              <div style={{ display: 'grid', gap: '4px' }}>
-                <h3 style={{ margin: 0 }}>{editingRow.connection ? 'Winkelkoppeling wijzigen' : 'Winkel koppelen'}</h3>
-                <div data-testid="store-connection-editor-provider" style={{ color: '#667085' }}>{editingRow.providerName}</div>
-              </div>
-
-              <div>
-                <div className="rz-label">Type koppeling</div>
-                <div data-testid="store-connection-editor-type">klantenkaart</div>
-              </div>
-
-              <Input
-                label="Kaartnummer / klantnummer"
-                data-testid="store-connection-card-number"
-                value={cardNumber}
-                onChange={(event) => setCardNumber(event.target.value)}
-                disabled={isSaving}
-              />
-
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" data-testid="store-connection-save" onClick={handleSave} disabled={isSaving}>Opslaan koppeling</Button>
-                <Button type="button" variant="secondary" data-testid="store-connection-cancel" onClick={closeEditor} disabled={isSaving}>Annuleren</Button>
-              </div>
-            </div>
-          </Card>
         ) : null}
+
+        {(activeProvider === 'aldi' || activeProvider === 'plus') ? (
+        <Card>
+          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', rowGap: '6px' }}>
+            <h3 style={{ margin: 0 }}>{activeProvider === 'aldi' ? 'Aldi' : 'PLUS'}</h3>
+            <p style={{ margin: 0 }}>Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas. Een koppeling met Inhuis is daarom niet mogelijk.</p>
+            <p style={{ margin: 0 }}>Papieren kassabonnen kun je nog steeds in Kassa scannen.</p>
+          </div>
+        </Card>
+        ) : null}
+
+        {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
+
+
       </div>
     </AppShell>
   )

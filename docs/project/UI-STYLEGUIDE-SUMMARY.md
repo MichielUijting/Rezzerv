@@ -1127,3 +1127,38 @@ Bij een asynchrone paginawisseling blijven de laatst geladen tabelregels of mobi
 - De bestaande onderhoudsmelding staat op desktop en mobiel als vaste overlay over de header, zonder extra ruimte boven de header.
 - Toon de tekst vetgedrukt op een dekkende lichtoranje achtergrond met donkere tekst en duidelijke rand. Lange berichten breken af en blijven binnen de viewport scrollbaar.
 - Behoud de bestaande statusbron, verversingsinterval, aankondigingstekst en blokkeringsmelding. Bij normale status verdwijnt de overlay.
+
+## Winkelkoppelingen — compact overzicht (PO, 23 oktober 2026)
+
+De pagina **Winkelkoppelingen** toont zonder extra inleidend paneel één titel **Mijn winkelkoppelingen** en direct daaronder de bestaande `DataTable`, met uitsluitend de kolommen **Winkel**, **Laatst bijgewerkt** en **Status** (de actieknoppen staan in de Status-kolom). Geen samenvatting, technische uitleg of apart klantenkaartpaneel boven of onder deze overzichtstabel. De bij de gekozen winkel behorende bediening en uniforme voortgang volgen onder de tabel.
+
+Voor Aldi en PLUS luidt de zichtbare statusknop **Geen koppeling mogelijk**, met eenvoudige uitleg dat er geen digitale kassabonnen via website of klantenpas beschikbaar zijn. De presentatie moet op desktop en mobiel begrijpelijk blijven; op mobiel worden de drie kolommen met compacte breedten en zonder technische extra kolommen getoond.
+
+In alle gebruikerszichtbare teksten wordt waar mogelijk **Inhuis** gebruikt in plaats van de technische infrastructuurterm 'server'. Onderdelen die technisch `server` heten (variabelen, API's, interne statuscodes) blijven ongewijzigd om contractbreuk te vermijden. Voor onderhouduitleg is **Onderhoud aan Inhuis** de functionele benaming.
+
+
+## Winkelkoppelingen: vaste paneelbreedte en Jumbo-koppelvenster — 23 oktober 2026
+
+De drie-kolomstabel met **Winkel**, **Laatst bijgewerkt** en **Status** bepaalt de beschikbare paneelbreedte: alle onderliggende, op aanvraag zichtbare winkelpanelen gebruiken dezelfde breedte, zodat er bij het wisselen van winkel geen horizontale sprong optreedt. Kleinere mobiele viewports behouden binnen de tabel de bestaande horizontale scroll.
+
+Voor Jumbo en Lidl toont **Laatst bijgewerkt** de geverifieerde laatste importdatum of, bij een eerste import, **1 januari van het voorafgaande jaar** als herkenbare startdatum. De `Vanaf`-datum in het onderliggende paneel komt overeen met diezelfde datum; gebruikers kunnen handmatig een andere periode kiezen. Na een succesvol afgesloten import kan de datum worden ververst.
+
+De Jumbo-bedieningsrij plaatst **Open mijn Jumbo** links en **Eerste keer koppelen met Jumbo?** rechts. De tweede knop opent een modal met een naar de favorietenbalk sleepbare **Jumbo-bonnen ophalen**-knop. Deze modal sluit uitsluitend door **OK**, niet door Escape of klikken buiten de modal, en behoudt de toetsenbordfocus binnen het venster. Voor de openstaande modal blijven dezelfde bestaande Inhuis-knoppen en tekst-/contrastregels gelden.
+
+## Winkelkoppelingen: niet-interactieve onbeschikbare status en uniforme retailerpanelen — 23 oktober 2026
+
+Bij Aldi en PLUS is **Geen koppeling mogelijk** in de Status-kolom gewone tekst met de Inhuis-primaire donkergroene kleur; geen knop, hoveractie of toetsenbordfocus. De eenvoudige reden blijft beschikbaar via het label/de tooltip. De andere winkels houden een echte actieknop.
+
+De onderste Jumbo- en Lidl-panelen hanteren dezelfde presentatievolgorde en maatvoering: dezelfde twee datumvelden, één horizontale actierij (**Open mijn [winkel]** links; **Eerste keer koppelen met [winkel]?** rechts) en voor de eerste keer dezelfde gedeelde overlay met sleepbare browserfavoriet. Beide overlays hebben één sluitactie, **OK**, en blijven staan bij Escape of klikken buiten het venster. Het technische verschil blijft intern: Lidl slaat een gewijzigde importperiode via de bestaande huishoudroute automatisch op zodra de gebruiker op **Open mijn Lidl** klikt. Alleen na bevestigde opslag wordt het Lidl-tabblad geopend. De extra knoppen **Periode opslaan** en **Automatische periode** en de bijbehorende waarschuwing zijn verwijderd; bij een fout krijgt de gebruiker één begrijpelijke melding en blijft de Lidl-bonophaalactie zonder effect. De bestaande bonimport en autorisatie blijven intact.
+
+## Winkelkoppelingen: exacte gedeelde Jumbo/Lidl-paneelgeometrie (PO, 23 oktober 2026)
+
+Beide winkelpanelen zijn één en dezelfde `RetailerReceiptPanel`-component. Kopieer de markup voor Jumbo en Lidl niet meer afzonderlijk. Gebruik dezelfde ene korte toelichting (‘Kies de periode en haal je kassabonnen op.’), dezelfde typografie, identieke datumveldvolgorde en verticale marges. De onderste acties staan in een vaste gedeelde tweekolomsindeling met op desktop 160 px voor **Open mijn [winkel]** en 240 px voor **Eerste keer koppelen met [winkel]?**. Op kleine schermen worden beide kolommen evenredig geschaald, waarbij hun posities en breedtes tussen winkels exact overeenkomen en knopteksten mogen afbreken. Na openen van Jumbo of Lidl mag geen verschil ontstaan in buitenbreedte, panelhoogte (zonder importresultaten), veldhoogte of verticale positie van de datums en knoppen. Provider-specifieke opslag, accountautorisatie, bonbevestiging, foutmeldingen en browseroverdracht blijven technische logica buiten dit gedeelde visuele component.
+
+## Winkelkoppelingen: reguliere verticale afstanden in winkelpanelen (PO, 23 oktober 2026)
+
+De onderste winkelpanelen behouden op mobiel dezelfde reguliere verticale tussenruimte als op desktop: 12 px tussen hoofdonderdelen en datumvelden, 6 px tussen datumlabel en invoerveld en 6 px boven toelichtingen. Bestaande interne afstanden van 10 of 6 px in overige winkelpanelen blijven behouden. Dit vervangt het eerdere besluit om mobiele detailregels op nul te zetten. De compacte overzichtstabel bovenaan blijft ongewijzigd. Jumbo en Lidl blijven dezelfde gedeelde component gebruiken; globale Input-opmaak wordt niet gewijzigd. Gerichte layoutcontroles gelden op 390, 500, 896 en 1280 px.
+
+## Winkelkoppelingen: compacte mobiele hoofdtabel (PO, 23 oktober 2026)
+
+Op mobiel wordt **Mijn winkelkoppelingen** weergegeven als één compacte rij per winkel in de bestaande `DataTable`, met éénmaal de kolomkoppen **Winkel**, **Laatst bijgewerkt**, **Status**. De algemene Instellingen-opmaak die tabelrijen omzet naar grote gestapelde kaartjes geldt niet voor uitsluitend deze tabel. Daardoor staan de winkelnaam, datum en actie naast elkaar in één korte rij, zonder telkens drie herhaalde labels en zonder extra binnenpanelen. De Status-knoppen blijven rechtstreeks bedienbaar en **Geen koppeling mogelijk** blijft niet-klikbare donkergroene tekst. Op desktop en alle andere mobiele Instellingen-tabellen verandert niets. Er gelden gerichte controles voor 390, 500 en 896 pixels; de zes winkelregels blijven in beeld en de tabel mag niet horizontaal uit het scherm lopen.
