@@ -279,7 +279,7 @@ export default function StoreConnectionsPage() {
 
     // Open synchronously within the user click. An async window.open would
     // otherwise be blocked by Firefox/other browser popup protection.
-    // The fresh window retains window.opener for Lidl's existing postMessage
+    // The fresh window retains its opener reference for Lidl's existing postMessage
     // contract; it navigates to Lidl only AFTER confirmed persistence.
     let lidlTab
     try {
