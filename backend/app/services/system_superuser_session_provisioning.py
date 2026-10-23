@@ -137,6 +137,7 @@ def ensure_system_superuser_for_session_runtime(conn) -> SystemSuperuserSessionP
             ON CONFLICT(user_id, role_key) DO UPDATE SET
                 active = TRUE,
                 updated_at = CURRENT_TIMESTAMP
+            WHERE auth_platform_user_roles.active IS DISTINCT FROM TRUE
             """
         ),
         {"user_id": user_id},
