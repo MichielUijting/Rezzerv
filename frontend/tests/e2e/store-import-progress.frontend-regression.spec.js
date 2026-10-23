@@ -284,6 +284,7 @@ for (const width of [390, 896, 1280]) {
       if (provider === 'jumbo' || provider === 'lidl') {
         expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
         expect(layout.labelGap).toBe(mobile ? '0px' : '6px')
+        expect(layout.dateGap).toBe(mobile ? '0px' : '12px')
       } else if (provider === 'ah') {
         expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
       }
