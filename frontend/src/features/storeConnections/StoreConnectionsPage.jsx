@@ -22,7 +22,7 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
-import { deriveReceiptConnectionOverview, receiptConnectionSummary } from './receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
@@ -86,7 +86,6 @@ export default function StoreConnectionsPage() {
       statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
     }))
   }, [rows, ahConnection, ahPhase, jumboPhase, lidlPhase])
-  const digitalSummary = useMemo(() => receiptConnectionSummary(digitalReceiptRows), [digitalReceiptRows])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
@@ -112,41 +111,31 @@ export default function StoreConnectionsPage() {
     {
       key: 'providerName',
       header: 'Winkel',
-      width: 175,
+      width: 190,
       renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
-    },
-    {
-      key: 'typeLabel',
-      header: 'Bonnen ophalen',
-      width: 205,
-      renderCell: row => <span data-testid={`receipt-connection-mode-${row.providerCode}`}>{row.typeLabel}</span>,
-    },
-    {
-      key: 'statusLabel',
-      header: 'Status',
-      width: 175,
-      renderCell: row => <span data-testid={`receipt-connection-status-${row.providerCode}`}>{row.statusLabel}</span>,
     },
     {
       key: 'lastSyncLabel',
       header: 'Laatst bijgewerkt',
-      width: 165,
-      renderCell: row => <span>{row.lastSyncLabel}</span>,
+      width: 180,
+      renderCell: row => <span data-testid={`receipt-connection-updated-${row.providerCode}`}>{row.lastSyncLabel}</span>,
     },
     {
       key: 'action',
-      header: 'Actie',
-      width: 165,
+      header: 'Status',
+      width: 230,
       renderCell: row => (
-        <Button
-          type="button"
-          variant={activeProvider === row.providerCode ? 'secondary' : 'primary'}
-          data-testid={`receipt-connection-action-${row.providerCode}`}
-          disabled={isLoading}
-          onClick={() => handleReceiptConnectionAction(row)}
-        >
-          {row.actionLabel}
-        </Button>
+        <span data-testid={`receipt-connection-status-${row.providerCode}`}>
+          <Button
+            type="button"
+            variant={activeProvider === row.providerCode ? 'secondary' : 'primary'}
+            data-testid={`receipt-connection-action-${row.providerCode}`}
+            disabled={isLoading}
+            onClick={() => handleReceiptConnectionAction(row)}
+          >
+            {row.actionLabel}
+          </Button>
+        </span>
       ),
     },
   ], [activeProvider, isLoading])
@@ -778,24 +767,8 @@ export default function StoreConnectionsPage() {
     <AppShell title="Winkelkoppelingen" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="store-connections-page">
         <Card>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelkoppelingen</h2>
-            <p style={{ margin: 0, color: '#667085' }}>
-              Kies je supermarkt in het overzicht. Inhuis laat zien wat automatisch gaat en wanneer een browserstap nodig is.
-            </p>
-          </div>
-        </Card>
-
-        <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px' }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
-            <div data-testid="receipt-connection-summary" style={{ color: '#667085' }}>
-              {digitalSummary.automatic} automatisch gekoppeld · {digitalSummary.browser} via browser · {digitalSummary.unavailable} nog niet beschikbaar
-            </div>
-            <p style={{ margin: 0 }}>
-              Na koppeling haalt Inhuis AH-bonnen ongeveer ieder kwartier automatisch op terwijl de server draait.
-              Jumbo en Lidl vragen voorlopig nog een actie in de browser.
-            </p>
             <DataTable
               columns={receiptConnectionColumns}
               data={digitalReceiptRows}
@@ -831,7 +804,7 @@ export default function StoreConnectionsPage() {
               <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
-                {ahConnection?.connected ? ' Inhuis controleert automatisch ongeveer ieder kwartier op nieuwe AH-bonnen terwijl de server draait.' : ''}
+                {ahConnection?.connected ? ' Inhuis haalt automatisch ongeveer ieder kwartier nieuwe AH-bonnen op.' : ''}
                 {ahConnection?.last_sync_at ? <> Laatst gesynchroniseerd: <strong>{formatLastSync(ahConnection.last_sync_at)}</strong>.</> : null}
               </p>
             </div>
@@ -1030,63 +1003,16 @@ export default function StoreConnectionsPage() {
         {(activeProvider === 'aldi' || activeProvider === 'plus') ? (
         <Card>
           <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', gap: '6px' }}>
-            <h3 style={{ margin: 0 }}>Aldi en PLUS</h3>
-            <p style={{ margin: 0 }}>Voor Aldi en PLUS zijn momenteel geen digitaal toegankelijke kassabonnen voor een rechtstreekse koppeling met Inhuis aangetoond. Rechtstreeks ophalen van kassabonnen is daarom momenteel niet mogelijk.</p>
-            <p style={{ margin: 0 }}>Papieren kassabonnen van Aldi en PLUS kunnen nog steeds via Kassa worden gescand.</p>
+            <h3 style={{ margin: 0 }}>{activeProvider === 'aldi' ? 'Aldi' : 'PLUS'}</h3>
+            <p style={{ margin: 0 }}>Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas. Een koppeling met Inhuis is daarom niet mogelijk.</p>
+            <p style={{ margin: 0 }}>Papieren kassabonnen kun je nog steeds in Kassa scannen.</p>
           </div>
         </Card>
         ) : null}
 
         {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
 
-        <details data-testid="loyalty-connections-settings">
-          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Klantenkaarten en bestaande winkelinstellingen</summary>
-          <p>Een klantenkaartkoppeling betekent niet dat digitale kassabonnen automatisch worden opgehaald.</p>
-          <Card>
-          {error ? <div className="rz-inline-feedback" data-testid="store-connections-error">{error}</div> : null}
-          {status ? <div className="rz-inline-feedback rz-inline-feedback-success" data-testid="store-connections-status">{status}</div> : null}
 
-          <DataTable
-            columns={storeConnectionColumns}
-            data={rows}
-            getRowKey={(row) => row.providerCode}
-            emptyMessage="Geen winkels beschikbaar."
-            dataTestId="store-connections-table"
-            tableClassName="rz-store-review-table"
-            stickyHeader={false}
-            stickyFilters={false}
-          />
-        </Card>
-        </details>
-
-        {editingRow ? (
-          <Card>
-            <div data-testid="store-connection-editor" style={{ display: 'grid', gap: '12px', maxWidth: '520px' }}>
-              <div style={{ display: 'grid', gap: '4px' }}>
-                <h3 style={{ margin: 0 }}>{editingRow.connection ? 'Winkelkoppeling wijzigen' : 'Winkel koppelen'}</h3>
-                <div data-testid="store-connection-editor-provider" style={{ color: '#667085' }}>{editingRow.providerName}</div>
-              </div>
-
-              <div>
-                <div className="rz-label">Type koppeling</div>
-                <div data-testid="store-connection-editor-type">klantenkaart</div>
-              </div>
-
-              <Input
-                label="Kaartnummer / klantnummer"
-                data-testid="store-connection-card-number"
-                value={cardNumber}
-                onChange={(event) => setCardNumber(event.target.value)}
-                disabled={isSaving}
-              />
-
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" data-testid="store-connection-save" onClick={handleSave} disabled={isSaving}>Opslaan koppeling</Button>
-                <Button type="button" variant="secondary" data-testid="store-connection-cancel" onClick={closeEditor} disabled={isSaving}>Annuleren</Button>
-              </div>
-            </div>
-          </Card>
-        ) : null}
       </div>
     </AppShell>
   )
