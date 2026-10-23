@@ -81,7 +81,7 @@ test('recovery page requires an explicit target and exact typed confirmation bef
 
   const result = page.getByTestId('platform-recovery-result')
   await expect(result).toContainText('Herstelactie afgerond voor huishouden: household-recovery-target')
-  await expect(result).toContainText('De server heeft de definitieve verwijdering succesvol verwerkt.')
+  await expect(result).toContainText('Inhuis heeft de definitieve verwijdering succesvol verwerkt.')
 
   expect(purgeRequests).toHaveLength(1)
   expect(purgeRequests[0].method).toBe('POST')
