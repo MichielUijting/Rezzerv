@@ -45,6 +45,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "maintenance_control",
     "maintenance_operations",
     "maintenance_audit",
+    "global_product_consumption_profiles",
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -662,6 +663,44 @@ def _assert_maintenance_schema(connection) -> None:
     print('MAINTENANCE_SCHEMA_AND_WRITE_BARRIER_GREEN')
 
 
+def _assert_consumption_profile_schema(connection) -> None:
+    # This new head extension is validated semantically, never by changing the
+    # immutable historical baseline or dropping its unrelated comparisons.
+    inspector = inspect(connection)
+    table = 'global_product_consumption_profiles'
+    columns = {column['name']: column for column in inspector.get_columns(table)}
+    required = {'global_product_id','classification_key','status','label','facts_json',
+                'profile_json','source_fingerprint','policy_version','updated_at'}
+    if set(columns) != required:
+        raise AssertionError(f'Consumption profile column drift: {set(columns)}')
+    for name in required - {'classification_key','label'}:
+        if columns[name]['nullable']:
+            raise AssertionError(f'Consumption profile nullability drift: {name}')
+    if inspector.get_pk_constraint(table)['constrained_columns'] != ['global_product_id']:
+        raise AssertionError('Consumption profile primary key drift')
+    foreign_keys = inspector.get_foreign_keys(table)
+    if len(foreign_keys) != 1 or not (
+        foreign_keys[0]['constrained_columns'] == ['global_product_id']
+        and foreign_keys[0]['referred_table'] == 'global_products'
+        and foreign_keys[0]['referred_columns'] == ['id']
+        and foreign_keys[0].get('options', {}).get('ondelete') == 'CASCADE'
+    ):
+        raise AssertionError('Consumption profile cascade foreign key drift')
+    indexes = inspector.get_indexes(table)
+    if not any(index['name'] == 'idx_consumption_profile_key'
+               and index['column_names'] == ['classification_key'] for index in indexes):
+        raise AssertionError('Consumption profile classification index missing')
+    checks = inspector.get_check_constraints(table)
+    if len(checks) != 1 or checks[0]['name'] != 'ck_consumption_profile_status':
+        raise AssertionError('Consumption profile status constraint missing')
+    normalized = re.sub(r'[\s()\[\]"`]', '', checks[0]['sqltext'].lower())
+    # PostgreSQL reflection expands IN to ANY(ARRAY[...]); verify both allowed
+    # literals without modifying the database in this read-only authority.
+    if set(re.findall(r"'([^']*)'", normalized)) != {'ready','pending'}:
+        raise AssertionError('Consumption profile status values drift')
+    print('CONSUMPTION_PROFILE_SCHEMA_GREEN')
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -684,6 +723,7 @@ def main() -> None:
             _assert_household_representative_image_authority(connection)
             _assert_household_profile_schema(connection)
             _assert_lidl_import_window_schema(connection)
+            _assert_consumption_profile_schema(connection)
             _assert_maintenance_schema(connection)
     finally:
         engine.dispose()
