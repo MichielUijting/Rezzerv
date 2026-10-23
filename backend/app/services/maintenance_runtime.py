@@ -125,7 +125,7 @@ def _broadcast(conn, message, generation):
     # including users joining after announcement. No new communication system.
     households = conn.execute(text("SELECT id FROM household_registry")).scalars().all()
     for household in households:
-        publish_household_notification(conn, household_id=household, category="serveronderhoud", title="Serveronderhoud Inhuis", message=message, source_type="server_maintenance", source_key=str(generation))
+        publish_household_notification(conn, household_id=household, category="serveronderhoud", title="Onderhoud aan Inhuis", message=message, source_type="server_maintenance", source_key=str(generation))
 
 
 def _evidence(conn):
@@ -203,7 +203,7 @@ def transition(conn, *, action, expected_generation, actor_user_id, announcement
     if target is None:
         raise MaintenanceTransitionError("Deze onderhoudsactie is nu niet toegestaan")
     generation = expected_generation + 1
-    messages = {"announce": announcement.strip(), "cancel": "Het aangekondigde serveronderhoud is geannuleerd.", "drain": "Serveronderhoud is begonnen. Nieuwe verwerkingen zijn tijdelijk geblokkeerd. Lopend werk wordt afgerond.", "release": "Het onderhoud aan Inhuis is afgerond. De applicatie is weer beschikbaar."}
+    messages = {"announce": announcement.strip(), "cancel": "Het aangekondigde onderhoud aan Inhuis is geannuleerd.", "drain": "Onderhoud aan Inhuis is begonnen. Nieuwe verwerkingen zijn tijdelijk geblokkeerd. Lopend werk wordt afgerond.", "release": "Het onderhoud aan Inhuis is afgerond. De applicatie is weer beschikbaar."}
     if action in messages:
         _broadcast(conn, messages[action], generation)
     conn.execute(text("UPDATE maintenance_control SET state=:state,generation=:generation,cycle_id=:cycle_id,announcement=:announcement,evidence_json=:evidence,locked_boot_id=:boot,updated_at=CURRENT_TIMESTAMP WHERE id=1"), {"state":target,"generation":generation,"cycle_id":cycle_id,"announcement":announcement.strip() if action=="announce" else row["announcement"],"evidence":json.dumps(evidence) if evidence else row["evidence_json"],"boot":_BOOT_ID if action=="prepare" else row["locked_boot_id"]})
