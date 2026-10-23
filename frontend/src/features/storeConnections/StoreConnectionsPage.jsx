@@ -86,7 +86,7 @@ export default function StoreConnectionsPage() {
     }))
   }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
-  const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
+  const lidlPeriodUnsaved = Boolean(lidlWindow) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
     lidlTo !== (lidlWindow.configured_to_date || '')
   )
@@ -254,22 +254,76 @@ export default function StoreConnectionsPage() {
     }
   }
 
-  async function saveLidlWindow(reset = false) {
+  async function openLidlWithSavedPeriod() {
+    if (lidlWindowSaving) return
+    if (!lidlWindow || !lidlFrom || (lidlTo && lidlFrom > lidlTo)) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'Kies eerst een geldige periode om je Lidl-bonnen op te halen.',
+      })
+      return
+    }
+
+    // Lidl's browser favorite reads the household-scoped, confirmed window.
+    // Save changed dates before visiting Lidl; never run with a stale period.
+    const needsSave = lidlPeriodUnsaved
+    if (needsSave && !lidlWindow.can_manage) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De gekozen periode kan niet worden opgeslagen. Vraag de beheerder van je huishouden om de Lidl-periode in te stellen.',
+      })
+      return
+    }
+
+    // Open synchronously within the user click. An async window.open would
+    // otherwise be blocked by Firefox/other browser popup protection.
+    // The fresh window retains window.opener for Lidl's existing postMessage
+    // contract; it navigates to Lidl only AFTER confirmed persistence.
+    const lidlTab = window.open('about:blank', '_blank')
+    if (!lidlTab) {
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De browser heeft het Lidl-tabblad geblokkeerd. Sta pop-ups voor Inhuis toe en probeer opnieuw.',
+      })
+      return
+    }
+
     setLidlWindowSaving(true)
     try {
-      const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
-        method: 'PUT',
-        body: JSON.stringify({
-          from_date: reset ? null : (lidlFrom || null),
-          to_date: reset ? null : (lidlTo || null),
-        }),
-      })
-      setLidlWindow(data)
-      setLidlFrom(data.configured_from_date || data.from_date || '')
-      setLidlTo(data.configured_to_date || '')
-      showFeedback({ variant: 'success', title: 'Lidl-importperiode opgeslagen', message: reset ? 'Automatische periode hersteld.' : 'De nieuwe periode geldt bij de volgende import.' })
+      if (needsSave) {
+        const data = await fetchJson('/api/receipts/retailers/lidl/import-window', {
+          method: 'PUT',
+          body: JSON.stringify({
+            from_date: lidlFrom,
+            to_date: lidlTo || null,
+          }),
+        })
+        if (
+          data?.configured_from_date !== lidlFrom ||
+          (data?.configured_to_date || '') !== lidlTo
+        ) {
+          throw new Error('Inhuis kon de gekozen importperiode niet bevestigen.')
+        }
+        setLidlWindow(data)
+        setLidlFrom(data.configured_from_date)
+        setLidlTo(data.configured_to_date || '')
+      }
+
+      if (lidlTab.closed) {
+        throw new Error('Het Lidl-tabblad is gesloten voordat de periode gereed was.')
+      }
+      lidlTab.location.replace(LIDL_HISTORY_URL)
     } catch (err) {
-      showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Opslaan mislukt.' })
+      if (!lidlTab.closed) lidlTab.close()
+      showFeedback({
+        variant: 'error',
+        title: 'Lidl openen',
+        message: 'De gekozen periode kon niet worden voorbereid. Lidl is niet geopend. Probeer het opnieuw.',
+        detail: normalizeErrorMessage(err?.message),
+      })
     } finally {
       setLidlWindowSaving(false)
     }
@@ -1001,7 +1055,7 @@ export default function StoreConnectionsPage() {
                   label="Vanaf"
                   value={lidlFrom}
                   onChange={event => setLidlFrom(event.target.value)}
-                  disabled={!lidlWindow?.can_manage || lidlWindowSaving}
+                  disabled={lidlWindowSaving || !lidlWindow?.can_manage}
                   data-testid="lidl-from-date"
                 />
                 <Input
@@ -1009,33 +1063,11 @@ export default function StoreConnectionsPage() {
                   label="Tot en met"
                   value={lidlTo || lidlWindow?.to_date || ''}
                   onChange={event => setLidlTo(event.target.value)}
-                  disabled={!lidlWindow?.can_manage || lidlWindowSaving}
+                  disabled={lidlWindowSaving || !lidlWindow?.can_manage}
                   data-testid="lidl-to-date"
                 />
               </div>
-              {lidlPeriodUnsaved ? (
-                <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
-                  Sla de gekozen periode eerst op voordat je de Lidl-bonnen ophaalt.
-                </div>
-              ) : null}
-              {lidlWindow?.can_manage ? (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => saveLidlWindow(false)}
-                    disabled={lidlWindowSaving || !lidlFrom || Boolean(lidlTo && lidlFrom > lidlTo)}
-                    data-testid="lidl-save-period"
-                  >Periode opslaan</Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => saveLidlWindow(true)}
-                    disabled={lidlWindowSaving}
-                    data-testid="lidl-reset-period"
-                  >Automatische periode</Button>
-                </div>
-              ) : null}
+
             </div>
 
             <div style={{
@@ -1044,10 +1076,10 @@ export default function StoreConnectionsPage() {
             }}>
               <Button
                 type="button"
-                onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
-                disabled={lidlPeriodUnsaved || lidlWindowSaving || !lidlWindow}
+                onClick={openLidlWithSavedPeriod}
+                disabled={lidlWindowSaving || !lidlWindow}
                 data-testid="lidl-web-open-history"
-              >Open mijn Lidl</Button>
+              >{lidlWindowSaving ? 'Lidl voorbereiden…' : 'Open mijn Lidl'}</Button>
               <Button
                 type="button"
                 variant="secondary"
