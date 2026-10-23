@@ -87,7 +87,7 @@ export default function PlatformSessionsPage() {
 
   return (
     <div data-testid="platform-sessions-page">
-      <Header title="Sessies" subtitle="Bekijk actieve serversessies en trek een andere sessie gericht in." />
+      <Header title="Sessies" subtitle="Bekijk je actieve Inhuis-sessies en beëindig een andere sessie." />
 
       <Card>
         <p>
