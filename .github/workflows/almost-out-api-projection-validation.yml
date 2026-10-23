@@ -14,6 +14,9 @@ on:
       - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/services/almost_out_group_service.py'
+      - 'backend/app/services/automatic_product_type_service.py'
+      - 'backend/app/data/product_consumption_policy.json'
+      - 'backend/tests/test_automatic_product_type_service.py'
       - 'backend/tests/test_almost_out_group_service.py'
       - 'backend/app/database.py'
       - 'backend/app/testing/canonical_scenario_catalog.py'
@@ -95,7 +98,7 @@ jobs:
             backend/app/testing/canonical_scenario_catalog.py
 
       - name: Validate GPC grouping and quantity weighted predictions
-        run: python -m pytest -q backend/tests/test_almost_out_group_service.py
+        run: python -m pytest -q backend/tests/test_almost_out_group_service.py backend/tests/test_automatic_product_type_service.py
 
       - name: Validate Almost-out projection through real PostgreSQL API
         shell: bash
@@ -109,7 +112,7 @@ jobs:
           grep -F 'PASS repeated_projection_read_is_idempotent' almost-out-api-projection.log
           grep -F 'PASS recalculation_disappears_above_threshold_and_reappears_below' almost-out-api-projection.log
           grep -F 'PASS postgresql_end_state_preserves_projection_source_and_household_isolation' almost-out-api-projection.log
-          grep -F 'ALMOST_OUT_GPC_VARIANT_UNITS_ISOLATION_VISIBILITY_GREEN' almost-out-api-projection.log
+          grep -F 'ALMOST_OUT_AUTOMATIC_TYPE_UNITS_ISOLATION_VISIBILITY_GREEN' almost-out-api-projection.log
           grep -F 'ALMOST_OUT_API_PROJECTION_POSTGRESQL_GREEN' almost-out-api-projection.log
 
       - name: Upload F3-05 evidence

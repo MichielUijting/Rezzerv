@@ -41,32 +41,25 @@ Voor voorraad, Bijna op en boodschappen mag het generieke artikel leidend zijn w
 
 Prognoses gebruiken huishoudgegevens en historische voorraadbewegingen. Instellingen en uitkomsten blijven aan het juiste huishouden en de juiste rol gebonden.
 
-Voor Bijna op kunnen verschillende winkel-/merkproducten binnen één huishouden
-samen meetellen op dezelfde officiële Brick, dezelfde expliciet gekozen variant
-en een compatibele inhoudseenheid. De officiële melk-Brick onderscheidt geen
-vetgehalte: volle en halfvolle melk vereisen dus verschillende varianten. De
-variant wordt op het bestaande artikeldetail onder Huishouden ingesteld, met
-bijvoorbeeld bij beide winkels `halfvolle koemelk`. Dit is een huishoudspecifieke
-aggregatiekeuze, geen nieuwe centrale product- of artikelidentiteit. De concrete
-huishoudartikelen, aankoopbronnen en voorraadposities blijven behouden.
+Externe databases bepaalt automatisch een centraal consumptie-/producttype uit
+de officiële GPC Brick, beschikbare gestructureerde kenmerken en herkenbare
+productomschrijvingen. De code en beslisgrenzen staan in
+[AUTOMATIC-PRODUCT-TYPES.md](AUTOMATIC-PRODUCT-TYPES.md). Dit is een afgeleide
+indeling; GTIN, centraal product, huishoudartikel en handmatige Artikelgroep
+blijven afzonderlijke identiteiten.
 
-Inhoud per verpakking komt uit de Catalogus; een huishoudbeheerder kan onder
-Huishouden een afwijkende/ontbrekende inhoud en inhoudseenheid vastleggen.
-500 ml en 1 l worden naar liters omgerekend, gram naar kilogram. Zonder
-expliciete variant of betrouwbare inhoud blijft het bestaande product apart.
-Namen en barcodes bepalen de aggregatie niet. Verschillende dimensies (kg/l)
-worden niet samengeteld.
+Een compleet, niet-tegenstrijdig type telt voor Bijna op samen over winkels en
+merken. Verpakkingsinhoud wordt afzonderlijk omgerekend. Er zijn geen verplichte
+variantvelden of classificatiebevestigingen voor huishoudens. Onvoldoende
+informatie geeft een automatische pending-status: het artikel blijft apart en
+vraagt geen invoer. Herkenning wordt opnieuw beoordeeld wanneer centrale
+productgegevens veranderen. Een onzekere match wordt nooit als feit opgeslagen.
 
-De groepsprojectie gebruikt uitsluitend canonieke huishoudartikel-ID's binnen
-het actieve huishouden. Zij toont één signaal, in verpakkingen van het stabiel
-gekozen representatieve artikel; de verpakkingsinhoud staat erbij. Minimum- en
-streefvoorraad gebruiken de hoogste naar die verpakking omgerekende grens,
-geen optelsom van dubbele instellingen. Het aankoopritme telt alle groepsleden
-mee, bundelt aankopen op dezelfde dag en weegt de gekochte hoeveelheid mee.
-Verbergen of overzetten naar Boodschappen onderdrukt het hele groepssignaal;
-herstellen gebruikt de bestaande huishoudactie. Er ontstaan geen extra
-voorraadmutaties. Ontbrekende of inconsistente onderliggende gegevens worden
-niet door naamherkenning of schattingen gerepareerd.
+De eerste expliciete regelset dekt zestien productfamilies. Dit is geen claim
+van volledige assortimentsdekking of een nieuwe officiële GS1-typecode. De
+bestaande veilige exacte/generieke productkoppeling blijft de autoriteit voor
+het koppelen van een bonartikel; automatische categorisering keurt geen
+onzekere bon- of productidentiteit goed.
 
 ## Winkels en importinstellingen
 

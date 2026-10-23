@@ -1,0 +1,1366 @@
+{
+  "version": "consumption-types-v1",
+  "attributes": {
+    "milk_fat": {
+      "label": "Vetklasse",
+      "fields": [
+        "milk_fat_class",
+        "fatInMilkContent",
+        "fat_in_milk_content",
+        "percentOfMilkFatInDairy"
+      ],
+      "values": {
+        "halfvol": {
+          "label": "halfvol",
+          "terms": [
+            "halfvol",
+            "halfvolle",
+            "semi skimmed",
+            "semi-skimmed",
+            "reduced fat",
+            "half fat"
+          ],
+          "source_values": [
+            "1.5",
+            "1.8",
+            "1.6",
+            "1.7"
+          ]
+        },
+        "vol": {
+          "label": "vol",
+          "terms": [
+            "volle",
+            "vol",
+            "whole milk",
+            "whole",
+            "full fat"
+          ],
+          "source_values": [
+            "3.5"
+          ]
+        },
+        "mager": {
+          "label": "mager",
+          "terms": [
+            "magere",
+            "mager",
+            "skimmed",
+            "skim",
+            "non fat",
+            "fat free"
+          ],
+          "source_values": [
+            "0.1",
+            "0"
+          ]
+        }
+      }
+    },
+    "milk_source": {
+      "label": "Melksoort",
+      "fields": [
+        "milk_source",
+        "milkSourceCode"
+      ],
+      "values": {
+        "koe": {
+          "label": "koemelk",
+          "terms": [
+            "koemelk",
+            "cow",
+            "cows milk"
+          ]
+        },
+        "geit": {
+          "label": "geitenmelk",
+          "terms": [
+            "geitenmelk",
+            "goat"
+          ]
+        },
+        "schaap": {
+          "label": "schapenmelk",
+          "terms": [
+            "schapenmelk",
+            "sheep"
+          ]
+        },
+        "plantaardig": {
+          "label": "plantaardig",
+          "terms": [
+            "haver",
+            "oat",
+            "soja",
+            "soy",
+            "amandelmelk",
+            "almond milk"
+          ]
+        }
+      },
+      "default": "koe"
+    },
+    "lactose": {
+      "label": "Lactose",
+      "fields": [
+        "lactose"
+      ],
+      "values": {
+        "normaal": {
+          "label": "regulier",
+          "terms": []
+        },
+        "vrij": {
+          "label": "lactosevrij",
+          "terms": [
+            "lactosevrij",
+            "lactose free",
+            "lactose-free",
+            "lactosevrije",
+            "lactosefrei",
+            "sans lactose"
+          ]
+        }
+      },
+      "default": "normaal"
+    },
+    "cheese_type": {
+      "label": "Kaassoort",
+      "fields": [
+        "cheeseTypeCode",
+        "cheese_type"
+      ],
+      "values": {
+        "gouda": {
+          "label": "Goudse kaas",
+          "terms": [
+            "gouda",
+            "goudse",
+            "gouds"
+          ]
+        },
+        "edam": {
+          "label": "Edammer",
+          "terms": [
+            "edam",
+            "edammer"
+          ]
+        },
+        "maasdam": {
+          "label": "Maasdammer",
+          "terms": [
+            "maasdam",
+            "maasdammer"
+          ]
+        },
+        "cheddar": {
+          "label": "Cheddar",
+          "terms": [
+            "cheddar"
+          ]
+        },
+        "brie": {
+          "label": "Brie",
+          "terms": [
+            "brie"
+          ]
+        },
+        "geit": {
+          "label": "Geitenkaas",
+          "terms": [
+            "geitenkaas",
+            "goat cheese"
+          ]
+        }
+      }
+    },
+    "maturity": {
+      "label": "Rijping",
+      "fields": [
+        "cheeseMaturationPeriodDescription",
+        "maturity",
+        "rijping"
+      ],
+      "values": {
+        "jong": {
+          "label": "jong",
+          "terms": [
+            "jong",
+            "jonge",
+            "young"
+          ]
+        },
+        "jong_belegen": {
+          "label": "jong belegen",
+          "terms": [
+            "jong belegen",
+            "young matured"
+          ]
+        },
+        "belegen": {
+          "label": "belegen",
+          "terms": [
+            "belegen",
+            "matured"
+          ]
+        },
+        "extra_belegen": {
+          "label": "extra belegen",
+          "terms": [
+            "extra belegen"
+          ]
+        },
+        "oud": {
+          "label": "oud",
+          "terms": [
+            "oud",
+            "oude",
+            "old",
+            "aged"
+          ]
+        },
+        "overjarig": {
+          "label": "overjarig",
+          "terms": [
+            "overjarig"
+          ]
+        }
+      }
+    },
+    "cheese_fat": {
+      "label": "Vetklasse",
+      "fields": [
+        "fatPercentageInDryMatter",
+        "cheese_fat_class"
+      ],
+      "values": {
+        "48": {
+          "label": "48+",
+          "terms": [
+            "48+",
+            "48 +"
+          ]
+        },
+        "30": {
+          "label": "30+",
+          "terms": [
+            "30+",
+            "30 +"
+          ]
+        },
+        "20": {
+          "label": "20+",
+          "terms": [
+            "20+",
+            "20 +"
+          ]
+        },
+        "50": {
+          "label": "50+",
+          "terms": [
+            "50+",
+            "50 +"
+          ]
+        }
+      }
+    },
+    "cheese_form": {
+      "label": "Vorm",
+      "fields": [
+        "cheese_form"
+      ],
+      "values": {
+        "stuk_plak": {
+          "label": "stuk/plak",
+          "terms": []
+        },
+        "geraspt": {
+          "label": "geraspt",
+          "terms": [
+            "gerasp",
+            "geraspt",
+            "geraspte",
+            "grated"
+          ]
+        },
+        "smeerbaar": {
+          "label": "smeerbaar",
+          "terms": [
+            "smeerkaas",
+            "spreadable"
+          ]
+        }
+      },
+      "default": "stuk_plak"
+    },
+    "apple_variety": {
+      "label": "Ras",
+      "fields": [
+        "variety",
+        "cultivar",
+        "apple_variety"
+      ],
+      "values": {
+        "elstar": {
+          "label": "Elstar",
+          "terms": [
+            "Elstar",
+            "elstar"
+          ]
+        },
+        "jonagold": {
+          "label": "Jonagold",
+          "terms": [
+            "Jonagold",
+            "jonagold"
+          ]
+        },
+        "gala": {
+          "label": "Gala",
+          "terms": [
+            "Gala",
+            "gala"
+          ]
+        },
+        "fuji": {
+          "label": "Fuji",
+          "terms": [
+            "Fuji",
+            "fuji"
+          ]
+        },
+        "granny_smith": {
+          "label": "Granny Smith",
+          "terms": [
+            "Granny Smith",
+            "granny_smith"
+          ]
+        },
+        "golden_delicious": {
+          "label": "Golden Delicious",
+          "terms": [
+            "Golden Delicious",
+            "golden_delicious"
+          ]
+        },
+        "pink_lady": {
+          "label": "Pink Lady",
+          "terms": [
+            "Pink Lady",
+            "pink_lady"
+          ]
+        },
+        "braeburn": {
+          "label": "Braeburn",
+          "terms": [
+            "Braeburn",
+            "braeburn"
+          ]
+        },
+        "kanzi": {
+          "label": "Kanzi",
+          "terms": [
+            "Kanzi",
+            "kanzi"
+          ]
+        }
+      }
+    },
+    "cooking_type": {
+      "label": "Kooktype",
+      "fields": [
+        "cooking_type",
+        "cookingType"
+      ],
+      "values": {
+        "vast": {
+          "label": "vastkokend",
+          "terms": [
+            "vastkokend",
+            "vastkokende",
+            "waxy"
+          ]
+        },
+        "kruimig": {
+          "label": "kruimig",
+          "terms": [
+            "kruimig",
+            "kruimige",
+            "floury"
+          ]
+        },
+        "zeer_kruimig": {
+          "label": "zeer kruimig",
+          "terms": [
+            "zeer kruimig",
+            "extra kruimig"
+          ]
+        },
+        "vrij_vast": {
+          "label": "vrij vastkokend",
+          "terms": [
+            "vrij vastkokend"
+          ]
+        }
+      }
+    },
+    "bread_grain": {
+      "label": "Graansoort",
+      "fields": [
+        "grain_type"
+      ],
+      "values": {
+        "volkoren": {
+          "label": "volkoren",
+          "terms": [
+            "volkoren",
+            "wholemeal",
+            "whole wheat"
+          ]
+        },
+        "wit": {
+          "label": "wit",
+          "terms": [
+            "wit",
+            "witte",
+            "white bread"
+          ]
+        },
+        "bruin": {
+          "label": "bruin",
+          "terms": [
+            "bruin",
+            "bruine",
+            "brown bread"
+          ]
+        },
+        "rogge": {
+          "label": "rogge",
+          "terms": [
+            "rogge",
+            "rye"
+          ]
+        }
+      }
+    },
+    "pasta_shape": {
+      "label": "Pastasoort",
+      "fields": [
+        "pasta_shape"
+      ],
+      "values": {
+        "spaghetti": {
+          "label": "spaghetti",
+          "terms": [
+            "spaghetti"
+          ]
+        },
+        "penne": {
+          "label": "penne",
+          "terms": [
+            "penne"
+          ]
+        },
+        "fusilli": {
+          "label": "fusilli",
+          "terms": [
+            "fusilli"
+          ]
+        },
+        "macaroni": {
+          "label": "macaroni",
+          "terms": [
+            "macaroni"
+          ]
+        },
+        "linguine": {
+          "label": "linguine",
+          "terms": [
+            "linguine"
+          ]
+        },
+        "tagliatelle": {
+          "label": "tagliatelle",
+          "terms": [
+            "tagliatelle"
+          ]
+        },
+        "lasagne": {
+          "label": "lasagne",
+          "terms": [
+            "lasagne"
+          ]
+        }
+      }
+    },
+    "rice_type": {
+      "label": "Rijstsoort",
+      "fields": [
+        "rice_type"
+      ],
+      "values": {
+        "basmati": {
+          "label": "basmati",
+          "terms": [
+            "basmati"
+          ]
+        },
+        "jasmijn": {
+          "label": "jasmijn",
+          "terms": [
+            "jasmijn"
+          ]
+        },
+        "pandan": {
+          "label": "pandan",
+          "terms": [
+            "pandan"
+          ]
+        },
+        "risotto": {
+          "label": "risotto",
+          "terms": [
+            "risotto"
+          ]
+        },
+        "zilvervlies": {
+          "label": "zilvervlies",
+          "terms": [
+            "zilvervlies"
+          ]
+        }
+      }
+    },
+    "egg_housing": {
+      "label": "Houderij",
+      "fields": [
+        "housing",
+        "egg_housing"
+      ],
+      "values": {
+        "bio": {
+          "label": "biologisch",
+          "terms": [
+            "biologisch",
+            "organic",
+            "biologische"
+          ]
+        },
+        "uitloop": {
+          "label": "vrije uitloop",
+          "terms": [
+            "vrije uitloop",
+            "free range"
+          ]
+        },
+        "scharrel": {
+          "label": "scharrel",
+          "terms": [
+            "scharrel",
+            "barn eggs"
+          ]
+        }
+      }
+    },
+    "meat_species": {
+      "label": "Vleessoort",
+      "fields": [
+        "meat_species"
+      ],
+      "values": {
+        "rund": {
+          "label": "rund",
+          "terms": [
+            "rund",
+            "rundergehakt",
+            "rundgehakt",
+            "beef"
+          ]
+        },
+        "varken": {
+          "label": "varken",
+          "terms": [
+            "varken",
+            "varkensgehakt",
+            "pork"
+          ]
+        },
+        "gemengd": {
+          "label": "half om half",
+          "terms": [
+            "half om half",
+            "gemengd gehakt",
+            "mixed mince"
+          ]
+        },
+        "kip": {
+          "label": "kip",
+          "terms": [
+            "kip",
+            "kipgehakt",
+            "chicken"
+          ]
+        },
+        "kalkoen": {
+          "label": "kalkoen",
+          "terms": [
+            "kalkoen",
+            "turkey"
+          ]
+        }
+      }
+    },
+    "nut_type": {
+      "label": "Notensoort",
+      "fields": [
+        "nut_type"
+      ],
+      "values": {
+        "amandel": {
+          "label": "amandel",
+          "terms": [
+            "amandel",
+            "amandelen",
+            "almond",
+            "almonds"
+          ]
+        },
+        "walnoot": {
+          "label": "walnoot",
+          "terms": [
+            "walnoot",
+            "walnoten",
+            "walnut",
+            "walnuts"
+          ]
+        },
+        "cashew": {
+          "label": "cashew",
+          "terms": [
+            "cashew",
+            "cashewnoten"
+          ]
+        },
+        "hazelnoot": {
+          "label": "hazelnoot",
+          "terms": [
+            "hazelnoot",
+            "hazelnoten",
+            "hazelnuts"
+          ]
+        },
+        "pinda": {
+          "label": "pinda",
+          "terms": [
+            "pinda",
+            "pindas",
+            "peanut",
+            "peanuts"
+          ]
+        }
+      }
+    },
+    "roast": {
+      "label": "Bereiding",
+      "fields": [
+        "preparation"
+      ],
+      "values": {
+        "rauw": {
+          "label": "ongebrand",
+          "terms": [
+            "ongebrand",
+            "rauw",
+            "raw",
+            "unroasted",
+            "ongebrande"
+          ]
+        },
+        "gebrand": {
+          "label": "gebrand",
+          "terms": [
+            "gebrand",
+            "roasted",
+            "gebrande"
+          ]
+        },
+        "gerookt": {
+          "label": "gerookt",
+          "terms": [
+            "gerookt",
+            "smoked",
+            "gerookte"
+          ]
+        }
+      }
+    },
+    "salt": {
+      "label": "Zout",
+      "fields": [
+        "salt_class"
+      ],
+      "values": {
+        "ongezouten": {
+          "label": "ongezouten",
+          "terms": [
+            "ongezouten",
+            "unsalted"
+          ]
+        },
+        "gezouten": {
+          "label": "gezouten",
+          "terms": [
+            "gezouten",
+            "salted"
+          ]
+        }
+      }
+    },
+    "flavour": {
+      "label": "Smaak",
+      "fields": [
+        "flavour",
+        "flavor"
+      ],
+      "values": {
+        "naturel": {
+          "label": "naturel",
+          "terms": [
+            "naturel"
+          ]
+        },
+        "vanille": {
+          "label": "vanille",
+          "terms": [
+            "vanille"
+          ]
+        },
+        "aardbei": {
+          "label": "aardbei",
+          "terms": [
+            "aardbei"
+          ]
+        },
+        "banaan": {
+          "label": "banaan",
+          "terms": [
+            "banaan"
+          ]
+        },
+        "chocolade": {
+          "label": "chocolade",
+          "terms": [
+            "chocolade"
+          ]
+        },
+        "paprika": {
+          "label": "paprika",
+          "terms": [
+            "paprika"
+          ]
+        },
+        "basilicum": {
+          "label": "basilicum",
+          "terms": [
+            "basilicum"
+          ]
+        }
+      }
+    },
+    "sugar": {
+      "label": "Suiker",
+      "fields": [
+        "sugar_class"
+      ],
+      "values": {
+        "normaal": {
+          "label": "regulier",
+          "terms": []
+        },
+        "zero": {
+          "label": "suikervrij",
+          "terms": [
+            "zero",
+            "suikervrij",
+            "sugar free",
+            "zonder suiker"
+          ]
+        },
+        "light": {
+          "label": "light",
+          "terms": [
+            "light"
+          ]
+        }
+      },
+      "default": "normaal"
+    },
+    "water_gas": {
+      "label": "Koolzuur",
+      "fields": [
+        "carbonation"
+      ],
+      "values": {
+        "plat": {
+          "label": "zonder koolzuur",
+          "terms": [
+            "zonder koolzuur",
+            "plat",
+            "still water"
+          ]
+        },
+        "bruis": {
+          "label": "met koolzuur",
+          "terms": [
+            "bruisend",
+            "met koolzuur",
+            "sparkling"
+          ]
+        }
+      }
+    },
+    "coffee_type": {
+      "label": "Koffiesoort",
+      "fields": [
+        "coffee_type"
+      ],
+      "values": {
+        "bonen": {
+          "label": "bonen",
+          "terms": [
+            "koffiebonen",
+            "coffee beans"
+          ]
+        },
+        "gemalen": {
+          "label": "gemalen",
+          "terms": [
+            "gemalen",
+            "ground coffee"
+          ]
+        },
+        "capsules": {
+          "label": "capsules",
+          "terms": [
+            "capsules",
+            "koffiecapsules"
+          ]
+        },
+        "pads": {
+          "label": "pads",
+          "terms": [
+            "koffiepads",
+            "pads"
+          ]
+        }
+      }
+    },
+    "tea_type": {
+      "label": "Theesoort",
+      "fields": [
+        "tea_type"
+      ],
+      "values": {
+        "groen": {
+          "label": "groen",
+          "terms": [
+            "groene thee",
+            "green tea"
+          ]
+        },
+        "zwart": {
+          "label": "zwart",
+          "terms": [
+            "zwarte thee",
+            "black tea"
+          ]
+        },
+        "rooibos": {
+          "label": "rooibos",
+          "terms": [
+            "rooibos"
+          ]
+        },
+        "munt": {
+          "label": "munt",
+          "terms": [
+            "muntthee",
+            "mint tea"
+          ]
+        },
+        "kamille": {
+          "label": "kamille",
+          "terms": [
+            "kamille",
+            "chamomile"
+          ]
+        }
+      }
+    },
+    "wine_colour": {
+      "label": "Kleur",
+      "fields": [
+        "wine_colour"
+      ],
+      "values": {
+        "rood": {
+          "label": "rood",
+          "terms": [
+            "rode wijn",
+            "red wine",
+            "rosso"
+          ]
+        },
+        "wit": {
+          "label": "wit",
+          "terms": [
+            "witte wijn",
+            "white wine",
+            "bianco"
+          ]
+        },
+        "rose": {
+          "label": "rosé",
+          "terms": [
+            "rosé",
+            "rose wine",
+            "rosato"
+          ]
+        }
+      }
+    },
+    "wine_grape": {
+      "label": "Druif",
+      "fields": [
+        "grape_variety"
+      ],
+      "values": {
+        "malbec": {
+          "label": "malbec",
+          "terms": [
+            "malbec"
+          ]
+        },
+        "primitivo": {
+          "label": "primitivo",
+          "terms": [
+            "primitivo"
+          ]
+        },
+        "merlot": {
+          "label": "merlot",
+          "terms": [
+            "merlot"
+          ]
+        },
+        "chardonnay": {
+          "label": "chardonnay",
+          "terms": [
+            "chardonnay"
+          ]
+        },
+        "sauvignon blanc": {
+          "label": "sauvignon blanc",
+          "terms": [
+            "sauvignon blanc"
+          ]
+        },
+        "chenin blanc": {
+          "label": "chenin blanc",
+          "terms": [
+            "chenin blanc"
+          ]
+        }
+      }
+    }
+  },
+  "rules": [
+    {
+      "key": "melk",
+      "label": "Melk",
+      "terms": [
+        "melk",
+        "milk"
+      ],
+      "attributes": [
+        "milk_source",
+        "milk_fat",
+        "lactose"
+      ],
+      "brick_codes": [
+        "10000025",
+        "10000026",
+        "10000027"
+      ],
+      "brick_terms": [],
+      "forbidden_values": {
+        "milk_source": [
+          "plantaardig"
+        ]
+      },
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "kaas",
+      "label": "Kaas",
+      "terms": [
+        "kaas",
+        "cheese",
+        "gouda",
+        "goudse"
+      ],
+      "attributes": [
+        "cheese_type",
+        "maturity",
+        "cheese_fat",
+        "cheese_form"
+      ],
+      "brick_codes": [
+        "10000028",
+        "10000029",
+        "10000030"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "appel",
+      "label": "Appel",
+      "terms": [
+        "appel",
+        "appels",
+        "apple",
+        "apples"
+      ],
+      "attributes": [
+        "apple_variety"
+      ],
+      "brick_codes": [
+        "10005900"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "aardappel",
+      "label": "Aardappel",
+      "terms": [
+        "aardappel",
+        "aardappelen",
+        "potato",
+        "potatoes"
+      ],
+      "attributes": [
+        "cooking_type"
+      ],
+      "brick_codes": [
+        "10006104"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "brood",
+      "label": "Brood",
+      "terms": [
+        "brood",
+        "bread"
+      ],
+      "attributes": [
+        "bread_grain"
+      ],
+      "brick_codes": [
+        "10000163",
+        "10000164",
+        "10000165"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "pasta",
+      "label": "Pasta",
+      "terms": [
+        "pasta",
+        "spaghetti",
+        "penne",
+        "fusilli",
+        "macaroni",
+        "linguine",
+        "tagliatelle",
+        "lasagne"
+      ],
+      "attributes": [
+        "pasta_shape"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "pasta/noedels"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "rijst",
+      "label": "Rijst",
+      "terms": [
+        "rijst",
+        "rice"
+      ],
+      "attributes": [
+        "rice_type"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "rijst"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "ei",
+      "label": "Ei",
+      "terms": [
+        "ei",
+        "eieren",
+        "eggs"
+      ],
+      "attributes": [
+        "egg_housing"
+      ],
+      "brick_codes": [
+        "10006210"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "gehakt",
+      "label": "Gehakt",
+      "terms": [
+        "gehakt",
+        "rundergehakt",
+        "varkensgehakt",
+        "rundgehakt",
+        "mince",
+        "minced"
+      ],
+      "attributes": [
+        "meat_species"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "vlees",
+        "gevogelte"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "noten",
+      "label": "Noten",
+      "terms": [
+        "noten",
+        "amandelen",
+        "amandel",
+        "walnoten",
+        "cashewnoten",
+        "nuts",
+        "almonds"
+      ],
+      "attributes": [
+        "nut_type",
+        "roast",
+        "salt"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "noten/zaadjes"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "yoghurt",
+      "label": "Yoghurt",
+      "terms": [
+        "yoghurt",
+        "yogurt"
+      ],
+      "attributes": [
+        "milk_fat",
+        "flavour"
+      ],
+      "brick_codes": [
+        "10000277",
+        "10000278",
+        "10000279"
+      ],
+      "brick_terms": [],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "chips",
+      "label": "Chips",
+      "terms": [
+        "chips",
+        "crisps"
+      ],
+      "attributes": [
+        "flavour"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "chips",
+        "snacks"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "water",
+      "label": "Water",
+      "terms": [
+        "water"
+      ],
+      "attributes": [
+        "water_gas"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "water"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "koffie",
+      "label": "Koffie",
+      "terms": [
+        "koffie",
+        "coffee",
+        "koffiebonen",
+        "koffiepads",
+        "koffiecapsules"
+      ],
+      "attributes": [
+        "coffee_type"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "koffie"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "thee",
+      "label": "Thee",
+      "terms": [
+        "thee",
+        "tea",
+        "muntthee"
+      ],
+      "attributes": [
+        "tea_type"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "thee"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    },
+    {
+      "key": "wijn",
+      "label": "Wijn",
+      "terms": [
+        "wijn",
+        "wine"
+      ],
+      "attributes": [
+        "wine_colour",
+        "wine_grape"
+      ],
+      "brick_codes": [],
+      "brick_terms": [
+        "wijn"
+      ],
+      "segment_codes": [
+        "50000000"
+      ]
+    }
+  ],
+  "separating_terms": [
+    {
+      "key": "glutenvrij",
+      "terms": [
+        "glutenvrij",
+        "gluten free"
+      ]
+    },
+    {
+      "key": "vegan",
+      "terms": [
+        "vegan",
+        "veganistisch"
+      ]
+    },
+    {
+      "key": "gerookt",
+      "terms": [
+        "gerookt",
+        "smoked"
+      ]
+    },
+    {
+      "key": "light",
+      "terms": [
+        "light"
+      ]
+    },
+    {
+      "key": "gekruid",
+      "terms": [
+        "gekruid",
+        "kruidenkaas"
+      ]
+    },
+    {
+      "key": "suikervrij",
+      "terms": [
+        "suikervrij",
+        "sugar free"
+      ]
+    },
+    {
+      "key": "geen_toegevoegde_suiker",
+      "terms": [
+        "zonder toegevoegde suiker",
+        "no added sugar"
+      ]
+    }
+  ]
+}

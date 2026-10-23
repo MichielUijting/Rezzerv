@@ -88,18 +88,12 @@ const settingsPayload = buildHouseholdSettingsPayload({
   auto_restock: true,
   packaging_unit: 'stuk',
   packaging_quantity: 1,
-  almost_out_variant: 'halfvolle koemelk',
-  almost_out_content_value: 500,
-  almost_out_content_unit: 'ml',
   notes: 'Bij voorkeur biologisch',
 }, 'AH')
 assert.equal(settingsPayload.favorite_store, 'AH')
 assert.equal(settingsPayload.min_stock, 2)
 assert.equal(settingsPayload.default_location_id, 'space-kitchen')
 assert.equal(settingsPayload.notes, 'Bij voorkeur biologisch')
-assert.equal(settingsPayload.almost_out_variant, 'halfvolle koemelk')
-assert.equal(settingsPayload.almost_out_content_value, 500)
-assert.equal(settingsPayload.almost_out_content_unit, 'ml')
 
 const shoppingPayload = buildShoppingListPayload({
   article_name: 'Broccoli',

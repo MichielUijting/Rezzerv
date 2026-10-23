@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+import json
+from sqlalchemy import text
 
 from fastapi import APIRouter, Body, Header, HTTPException, Request
 
@@ -19,6 +21,7 @@ from app.services.product_group_crud_store import create_product_group, delete_p
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
 from app.db import engine
+from app.services.automatic_product_type_service import classify_product_type, source_facts, official_bricks
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
 from app.services.session_request_context import require_platform_permission_from_session
 
@@ -108,7 +111,30 @@ def external_candidate_product_type_link(payload: dict[str, Any] = Body(default_
 
 @router.post('/api/external-products/gpc/classify')
 def external_product_gpc_classify(payload: dict[str, Any] = Body(default_factory=dict)):
-    return classify_gpc_product(
+    require_platform_permission_from_session('platform.external_products.view')
+    global_product_id = str(payload.get('global_product_id') or '').strip()
+    if global_product_id:
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT gp.name, gp.variant, gp.category, gp.size_value, gp.size_unit,
+                       gb.brick_code, cp.facts_json
+                FROM global_products gp
+                LEFT JOIN global_product_gpc_bricks gb ON gb.global_product_id = gp.id
+                LEFT JOIN global_product_consumption_profiles cp ON cp.global_product_id = gp.id
+                WHERE gp.id = :id AND COALESCE(gp.status, 'active') = 'active'
+            """), {'id': global_product_id}).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail='Catalogusartikel niet gevonden')
+        try:
+            stored = json.loads(row.get('facts_json') or '{}')
+        except (ValueError, TypeError):
+            stored = {}
+        if not isinstance(stored, dict):
+            stored = {}
+        facts = {**stored, **{key: row[key] for key in ('name', 'variant', 'category', 'size_value', 'size_unit')}}
+        payload = {'product_name': row['name'], 'category': row['category'],
+                   'gpc_brick_code': row['brick_code'] or '', 'product_facts': facts}
+    result = classify_gpc_product(
         product_name=_payload_text(payload, 'product_name', 'candidate_name', 'name'),
         category=_payload_text(payload, 'category', 'categories'),
         category_tags=payload.get('category_tags') or payload.get('categories_tags') or [],
@@ -116,6 +142,13 @@ def external_product_gpc_classify(payload: dict[str, Any] = Body(default_factory
         search_text=_payload_text(payload, 'search_text', 'receipt_line_text'),
         product_intent=_payload_text(payload, 'product_intent', 'candidate_product_intent'),
     )
+    profile = classify_product_type(payload.get('product_facts') or payload, result.get('gpc_brick_code') or _payload_text(payload, 'gpc_brick_code', 'gpcCategoryCode'))
+    if profile['status'] == 'ready' and result.get('status') != 'classified':
+        code = profile['gpc_brick_code']
+        result = {**result, 'status': 'classified', 'classification_source': 'automatic_consumption_type',
+                  'confidence': 1.0, 'product_type_id': f'gpc:{code}',
+                  'gpc_brick_code': code, 'gpc_brick_name': official_bricks()[code]['gpc_brick_name']}
+    return {**result, 'automatic_product_type': profile}
 
 
 @router.post('/api/external-products/off/link')

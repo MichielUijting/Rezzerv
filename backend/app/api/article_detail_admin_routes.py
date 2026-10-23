@@ -139,9 +139,6 @@ def _member_note_only_settings(current_settings: dict[str, Any], payload: dict[s
         'auto_restock',
         'packaging_unit',
         'packaging_quantity',
-        'almost_out_variant',
-        'almost_out_content_value',
-        'almost_out_content_unit',
     )
     sanitized = {key: current_settings.get(key) for key in protected_keys}
     sanitized['notes'] = raw_payload.get('notes')

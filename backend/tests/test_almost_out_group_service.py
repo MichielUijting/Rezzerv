@@ -15,30 +15,25 @@ def test_unknown_or_invalid_content_is_not_guessed(value, unit):
     assert content(value, unit) is None
 
 
-def test_lidl_and_ah_same_brick_and_variant_are_equivalent_despite_packaging():
-    first = {'id': 'ah', 'global_product_id': 'gp-ah', 'brick_code': '10000025', 'size_value': 1, 'size_unit': 'l', 'naam': 'AH halfvolle melk'}
-    second = {'id': 'lidl', 'global_product_id': 'gp-lidl', 'brick_code': '10000025', 'size_value': 500, 'size_unit': 'ml', 'naam': 'Milbona'}
-    key, first_factor = grouping_key(first, {'almost_out_variant': 'Halfvolle koemelk'})
-    other_key, other_factor = grouping_key(second, {'almost_out_variant': '  halfvolle   koemelk '})
+def test_lidl_and_ah_are_automatically_equivalent_without_household_settings():
+    first = {'id': 'ah', 'global_product_id': 'gp-ah', 'brick_code': '10000025', 'size_value': 1, 'size_unit': 'l', 'product_name': 'AH halfvolle melk'}
+    second = {'id': 'lidl', 'global_product_id': 'gp-lidl', 'brick_code': '10000025', 'size_value': 500, 'size_unit': 'ml', 'product_name': 'Milbona halfvolle melk'}
+    key, factor = grouping_key(first, {})
+    other_key, other_factor = grouping_key(second, {})
     assert key == other_key
-    assert first_factor == 1
+    assert factor == 1
     assert other_factor == .5
-    assert grouping_key(second, {'almost_out_variant': 'volle koemelk'})[0] != key
-    assert grouping_key({**second, 'brick_code': '10000026'}, {'almost_out_variant': 'halfvolle koemelk'})[0] != key
+    assert grouping_key({**second, 'product_name': 'Volle melk'}, {})[0] != key
+    assert grouping_key({**second, 'brick_code': '10000026'}, {})[0] != key
+    assert grouping_key({**second, 'size_unit': 'kg'}, {})[0] != key
 
 
-def test_unknown_variant_or_size_never_merges_two_products():
-    first = {'id': 'a', 'global_product_id': 'gp-a', 'brick_code': '10000025', 'size_value': 1, 'size_unit': 'l'}
+def test_unknown_metadata_and_obsolete_manual_settings_never_force_a_merge():
+    first = {'id': 'a', 'global_product_id': 'gp-a', 'brick_code': '10000025', 'size_value': 1, 'size_unit': 'l', 'product_name': 'Melk'}
     second = {**first, 'id': 'b', 'global_product_id': 'gp-b'}
-    assert grouping_key(first, {})[0] != grouping_key(second, {})[0]
-    assert grouping_key({**first, 'size_value': None}, {'almost_out_variant': 'halfvol'})[0][0] == 'product'
-
-
-def test_explicit_household_content_override_and_incompatible_dimensions():
-    row = {'id': 'a', 'brick_code': '10000025', 'size_value': 1, 'size_unit': 'l'}
-    key, factor = grouping_key(row, {'almost_out_variant': 'halfvol', 'almost_out_content_value': 500, 'almost_out_content_unit': 'ml'})
-    assert factor == .5
-    assert key != grouping_key({**row, 'size_unit': 'kg'}, {'almost_out_variant': 'halfvol'})[0]
+    obsolete = {'almost_out_variant': 'halfvolle melk', 'almost_out_content_value': 1, 'almost_out_content_unit': 'l'}
+    assert grouping_key(first, obsolete)[0] != grouping_key(second, obsolete)[0]
+    assert grouping_key({**first, 'facts_json': '{invalid'}, {})[0][0] == 'product'
 
 
 def test_quantity_weighted_rhythm_handles_different_packages_and_same_day_purchases():
@@ -63,18 +58,3 @@ def test_same_day_only_and_unusable_dates_have_no_prediction():
     events = [{'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-10-09'}] * 2
     assert prediction_from_events(events, 7) is None
     assert prediction_from_events([{'event_type': 'purchase', 'quantity': 1, 'purchase_date': 'invalid'}], 7) is None
-
-
-@pytest.mark.parametrize('quantity', [0, -1, float('inf'), float('nan')])
-def test_production_settings_model_rejects_invalid_package_content(quantity):
-    # Load the actual model without starting the application or its database.
-    import ast
-    from pathlib import Path
-    from pydantic import BaseModel, Field, ValidationError, field_validator
-    path = Path(__file__).parents[1] / 'app' / 'main.py'
-    tree = ast.parse(path.read_text())
-    model = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'HouseholdArticleSettingsUpdateRequest')
-    namespace = {'BaseModel': BaseModel, 'Field': Field, 'field_validator': field_validator}
-    exec(compile(ast.Module(body=[model], type_ignores=[]), str(path), 'exec'), namespace)
-    with pytest.raises(ValidationError):
-        namespace[model.name](almost_out_content_value=quantity, almost_out_content_unit='l')

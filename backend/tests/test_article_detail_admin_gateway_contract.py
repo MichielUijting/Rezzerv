@@ -128,9 +128,6 @@ def _build_main_endpoint(name, calls, *, inventory=False):
                     'auto_restock': True,
                     'packaging_unit': 'stuk',
                     'packaging_quantity': 1,
-                    'almost_out_variant': 'halfvolle koemelk',
-                    'almost_out_content_value': 500,
-                    'almost_out_content_unit': 'ml',
                     'notes': 'Bestaande notitie',
                 }
             },
@@ -266,9 +263,6 @@ def test_notes_route_allows_every_household_member_and_preserves_other_settings(
     assert household_id == 'household-a'
     assert payload['notes'] == 'Gedeelde notitie'
     assert payload['favorite_store'] == 'AH'
-    assert payload['almost_out_variant'] == 'halfvolle koemelk'
-    assert payload['almost_out_content_value'] == 500
-    assert payload['almost_out_content_unit'] == 'ml'
     assert payload['min_stock'] == 2
     assert payload['ideal_stock'] == 5
     assert payload['average_price'] == 3.45

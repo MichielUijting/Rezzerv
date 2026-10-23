@@ -2,11 +2,12 @@
 
 Grouping never replaces household article identity or writes inventory. Content
 is expressed in representative packages, so the existing shopping contract keeps
-its meaning. Unknown variants/content deliberately remain separate products.
+its meaning. Incomplete central types/content deliberately remain separate products.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 import math
 from typing import Any
 
@@ -37,16 +38,21 @@ def content(value, unit):
     return quantity * normalized_unit[1], normalized_unit[0]
 
 
-def grouping_key(row, settings):
-    """Only an explicit household variant asserts interchangeable products."""
-    variant = ' '.join(str(settings.get('almost_out_variant') or '').casefold().split())
-    size = content(settings.get('almost_out_content_value'), settings.get('almost_out_content_unit'))
-    if size is None:
-        size = content(row.get('size_value'), row.get('size_unit'))
-    brick = str(row.get('brick_code') or '').strip()
-    if brick and variant and size:
-        return ('gpc_variant', brick, variant, size[1]), size[0]
-    # Do not infer semantic identity from names, barcodes or missing attributes.
+def grouping_key(row, settings=None):
+    from app.services.automatic_product_type_service import classify_product_type, package_content
+    try:
+        facts = json.loads(row.get('facts_json') or '{}')
+    except (ValueError, TypeError):
+        facts = None
+    if not isinstance(facts, dict):
+        return ('product', str(row.get('global_product_id') or row['id'])), 1.0
+    product = {**facts, 'name': row.get('product_name') or row.get('name') or '',
+               'variant': row.get('variant') or facts.get('variant') or '',
+               'size_value': row.get('size_value'), 'size_unit': row.get('size_unit')}
+    profile = classify_product_type(product, str(row.get('brick_code') or ''))
+    size = package_content(product)
+    if profile['status'] == 'ready' and size:
+        return ('automatic_product_type', profile['key'], profile['label'], size[1]), size[0]
     return ('product', str(row.get('global_product_id') or row['id'])), 1.0
 
 
@@ -55,10 +61,11 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     if not ids:
         return []
     metadata = conn.execute(text('''
-        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gb.brick_code
+        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gp.name AS product_name, gp.variant, gb.brick_code, cp.facts_json
         FROM household_articles ha
         LEFT JOIN global_products gp ON gp.id = ha.global_product_id
         LEFT JOIN global_product_gpc_bricks gb ON gb.global_product_id = gp.id
+        LEFT JOIN global_product_consumption_profiles cp ON cp.global_product_id = gp.id
         WHERE ha.household_id = :household_id AND ha.id IN :ids
           AND COALESCE(ha.status, 'active') = 'active'
     ''').bindparams(bindparam('ids', expanding=True)), {'household_id': str(household_id), 'ids': ids}).mappings().all()
@@ -121,9 +128,9 @@ def load_group_projection(conn, household_id, group):
         'member_article_ids': ids,
         'member_data_inconsistent': inconsistent,
         'aggregation_scope': group['key'][0],
-        'aggregation_variant': group['key'][2] if group['key'][0] == 'gpc_variant' else None,
-        'aggregation_unit': group['key'][3] if group['key'][0] == 'gpc_variant' else None,
-        'representative_package_content': package_size if group['key'][0] == 'gpc_variant' else None,
+        'aggregation_variant': group['key'][2] if group['key'][0] == 'automatic_product_type' else None,
+        'aggregation_unit': group['key'][3] if group['key'][0] == 'automatic_product_type' else None,
+        'representative_package_content': package_size if group['key'][0] == 'automatic_product_type' else None,
     }
 
 
@@ -161,7 +168,7 @@ def prediction_from_events(events, prediction_days, now=None):
     until = max(days[dates[-1]] / rate - since, 0)
     return {
         'prediction_available': True, 'prediction_basis': 'quantity_weighted_purchase_interval',
-        'prediction_scope': 'gpc_variant',
+        'prediction_scope': 'automatic_product_type',
         'average_purchase_interval_days': elapsed / (len(dates) - 1),
         'average_purchase_quantity': sum(days.values()) / len(dates),
         'last_purchase_at': last.isoformat(), 'days_since_last_purchase': since,

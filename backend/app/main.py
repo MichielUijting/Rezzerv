@@ -827,12 +827,9 @@ class HouseholdArticleSettingsUpdateRequest(BaseModel):
     auto_restock: bool | None = None
     packaging_unit: str | None = None
     packaging_quantity: float | None = None
-    almost_out_variant: str | None = None
-    almost_out_content_value: float | None = Field(default=None, gt=0, allow_inf_nan=False)
-    almost_out_content_unit: str | None = None
     notes: str | None = None
 
-    @field_validator('favorite_store', 'default_location_id', 'default_sublocation_id', 'packaging_unit', 'notes', 'almost_out_variant', 'almost_out_content_unit', mode='before')
+    @field_validator('favorite_store', 'default_location_id', 'default_sublocation_id', 'packaging_unit', 'notes', mode='before')
     @classmethod
     def normalize_optional_text_fields(cls, value):
         if value is None:
@@ -3756,9 +3753,6 @@ HOUSEHOLD_ARTICLE_SETTINGS_ALLOWED_KEYS = (
     'auto_restock',
     'packaging_unit',
     'packaging_quantity',
-    'almost_out_variant',
-    'almost_out_content_value',
-    'almost_out_content_unit',
 )
 
 
@@ -3869,9 +3863,6 @@ def get_household_article_settings(conn, household_id: str, household_article_id
             'auto_restock': bool(settings_map.get('auto_restock')) if settings_map.get('auto_restock') is not None else False,
             'packaging_unit': normalize_optional_text_field(settings_map.get('packaging_unit')),
             'packaging_quantity': float(settings_map['packaging_quantity']) if settings_map.get('packaging_quantity') not in (None, '') else None,
-            'almost_out_variant': settings_map.get('almost_out_variant'),
-            'almost_out_content_value': settings_map.get('almost_out_content_value'),
-            'almost_out_content_unit': settings_map.get('almost_out_content_unit'),
             'notes': (normalize_optional_text_field(note_row.get('note')) if note_row else None),
             'notes_updated_at': normalize_datetime(note_row.get('updated_at') or note_row.get('created_at')) if note_row else None,
         },
@@ -3899,12 +3890,6 @@ def update_household_article_settings(conn, household_id: str, household_article
         raise HTTPException(status_code=400, detail='Prijsindicatie mag niet negatief zijn')
     if packaging_quantity is not None and packaging_quantity <= 0:
         raise HTTPException(status_code=400, detail='Verpakkingshoeveelheid moet groter zijn dan 0')
-    from app.services.almost_out_group_service import UNITS
-    content_unit = str(payload.almost_out_content_unit or '').strip().lower() or None
-    if content_unit is not None and content_unit not in UNITS:
-        raise HTTPException(status_code=400, detail='Kies l, ml, cl, dl, kg, g, mg of stuk als inhoudseenheid')
-    if (payload.almost_out_content_value is None) != (content_unit is None):
-        raise HTTPException(status_code=400, detail='Vul zowel de inhoud per verpakking als de inhoudseenheid in')
     if status not in {'active', 'inactive'}:
         raise HTTPException(status_code=400, detail='Status moet active of inactive zijn')
 
@@ -3943,14 +3928,7 @@ def update_household_article_settings(conn, household_id: str, household_article
         'auto_restock': auto_restock if auto_restock is not None else False,
         'packaging_unit': packaging_unit,
         'packaging_quantity': packaging_quantity,
-        'almost_out_variant': payload.almost_out_variant,
-        'almost_out_content_value': payload.almost_out_content_value,
-        'almost_out_content_unit': content_unit,
     }
-    # Older clients must not erase the aggregation settings they do not know.
-    for key in ('almost_out_variant', 'almost_out_content_value', 'almost_out_content_unit'):
-        if key not in payload.model_fields_set:
-            settings_payload[key] = get_household_article_settings(conn, household_id, household_article_id)['settings'].get(key)
     for setting_key in HOUSEHOLD_ARTICLE_SETTINGS_ALLOWED_KEYS:
         setting_value = settings_payload.get(setting_key)
         conn.execute(
@@ -4380,7 +4358,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     packaging_quantity = normalize_optional_numeric_field(article_settings_map.get('packaging_quantity'))
     fallback_ideal_stock = float(ideal_stock) if ideal_stock is not None else ((float(min_stock) + 1.0) if min_stock is not None else 1.0)
     amount_to_buy = max(fallback_ideal_stock - current_quantity, 0.0)
-    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, packaging_quantity)
+    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, 1 if group_projection else packaging_quantity)
 
     default_location_id = normalize_optional_text_field(article_settings_map.get('default_location_id'))
     default_sublocation_id = normalize_optional_text_field(article_settings_map.get('default_sublocation_id'))
@@ -4442,7 +4420,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     }
     if group_projection:
         item_payload.update({key: value for key, value in group_projection.items() if key not in {'inventory_rows', 'event_rows'}})
-        item_payload['product_anchor'] = 'gpc_variant'
+        item_payload['product_anchor'] = 'automatic_product_type'
         item_payload['household_article_name'] = group_projection['aggregation_variant']
         item_payload['display_name'] = group_projection['aggregation_variant']
         item_payload['packaging_unit'] = f"verpakking van {group_projection['representative_package_content']:g} {group_projection['aggregation_unit']}"
@@ -4525,17 +4503,17 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
-        candidates = [group['members'][0]] if group['key'][0] == 'gpc_variant' else group['members']
+        candidates = [group['members'][0]] if group['key'][0] == 'automatic_product_type' else group['members']
         for article_row in candidates:
             article_id = str(article_row['id'])
-            members = group['members'] if group['key'][0] == 'gpc_variant' else [article_row]
+            members = group['members'] if group['key'][0] == 'automatic_product_type' else [article_row]
             if not household_settings.get('prediction_enabled') and not any(member.get('min_stock') is not None for member in members):
                 continue
             if any(settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True for member in members):
                 hidden_count += 1
                 continue
             projection = None
-            if group['key'][0] == 'gpc_variant':
+            if group['key'][0] == 'automatic_product_type':
                 projection = load_group_projection(conn, household_id, group)
                 article_row = dict(article_row)
                 reference_factor = group['factors'][article_id]

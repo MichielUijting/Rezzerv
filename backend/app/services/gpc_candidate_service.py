@@ -24,7 +24,11 @@ _GENERIC_TOKENS = {
 
 _SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
     "prepared",
-    "processed",
+    "processed", "ongebrand", "ongebrande", "gebrand", "gebrande",
+    "gezouten", "ongezouten", "rauw", "rauwe", "raw", "roasted", "unroasted",
+    "salted", "unsalted", "bereid", "bereide", "bewerkt", "bewerkte",
+    "onbewerkt", "onverwerkt", "perishable", "frozen", "shelf", "stable",
+    "beperkt", "houdbaar", "houdbare", "diepvries",
 }
 
 _COMPOUND_SUFFIXES = (
@@ -350,6 +354,14 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str], hierarchy_w
             location_score += 5.0
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
+        # Processing words and spelling similarity alone are not product evidence.
+        # In particular "ongebrand" must not match "brand-/graveergereedschap".
+        anchors = _semantic_anchor_tokens(signal_tokens)
+        if not anchors or not any(
+            anchor == token or (len(anchor) >= 5 and len(token) >= 5 and (anchor in token or token in anchor))
+            for anchor in anchors for token in haystack_tokens
+        ):
+            continue
         if source in _ANCHOR_REQUIRED_SIGNAL_SOURCES:
             semantic_anchors = _semantic_anchor_tokens(signal_tokens)
             if semantic_anchors and not (semantic_anchors & haystack_tokens):
