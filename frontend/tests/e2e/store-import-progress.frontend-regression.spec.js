@@ -159,6 +159,29 @@ for (const receiptId of ['123456789012', 'TEST:LIDL']) {
   })
 }
 
+// Check the approved responsive arrangement, independently of native anchor/button
+// font metrics: stacked full-width actions on mobile; one shared row on desktop.
+async function expectRetailerActions(page, open, help, width) {
+  await page.mouse.move(0, 0)
+  const boxes = await page.getByTestId('retailer-receipt-action-row').evaluate(row => {
+    return [...row.children].map(element => {
+      const rect = element.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: rect.width }
+    })
+  })
+  const [first, second] = boxes
+  if (width <= 720) {
+    expect(second.y).toBeGreaterThanOrEqual(first.bottom)
+    expect(Math.abs(first.x - second.x)).toBeLessThan(2)
+    expect(Math.abs(first.width - second.width)).toBeLessThan(2)
+  } else {
+    expect(second.x).toBeGreaterThanOrEqual(first.right)
+    expect(Math.min(first.bottom, second.bottom) - Math.max(first.y, second.y)).toBeGreaterThan(0)
+  }
+  await expect(open).toBeVisible()
+  await expect(help).toBeVisible()
+}
+
 for (const width of [1280, 896, 390]) {
   test(`Digital receipt setup is visible first with honest capabilities at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
@@ -203,10 +226,7 @@ for (const width of [1280, 896, 390]) {
 
     const openJumbo = page.getByTestId('jumbo-poc-open')
     const firstTime = page.getByTestId('jumbo-help-open')
-    const openBox = await openJumbo.boundingBox()
-    const firstTimeBox = await firstTime.boundingBox()
-    expect(Math.abs(openBox.y - firstTimeBox.y)).toBeLessThan(2)
-    expect(firstTimeBox.x).toBeGreaterThan(openBox.x)
+    await expectRetailerActions(page, openJumbo, firstTime, width)
     await firstTime.click()
     const dialog = page.getByTestId('jumbo-bookmarklet-dialog')
     await expect(dialog).toBeVisible()
@@ -229,10 +249,7 @@ for (const width of [1280, 896, 390]) {
     const lidlGeometry = await receiptPanelGeometry(page, 'lidl')
     expect(lidlGeometry).toEqual(jumboGeometry)
 
-    const lidlOpen = await page.getByTestId('lidl-web-open-history').boundingBox()
-    const lidlHelp = await page.getByTestId('lidl-help-open').boundingBox()
-    expect(Math.abs(lidlOpen.y - lidlHelp.y)).toBeLessThan(2)
-    expect(lidlHelp.x).toBeGreaterThan(lidlOpen.x)
+    await expectRetailerActions(page, page.getByTestId('lidl-web-open-history'), page.getByTestId('lidl-help-open'), width)
     await page.getByTestId('lidl-help-open').click()
     const lidlDialog = page.getByTestId('lidl-bookmarklet-dialog')
     await expect(lidlDialog).toBeVisible()
