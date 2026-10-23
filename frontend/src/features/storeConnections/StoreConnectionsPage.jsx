@@ -891,7 +891,7 @@ export default function StoreConnectionsPage() {
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
             {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
             {isMobileViewport ? (
-              <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" aria-hidden="true">
+              <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" role="group" aria-label="Kolommen winkelkoppelingen">
                 <span>Winkel</span>
                 <span>Laatst bijgewerkt</span>
                 <span>Status</span>
