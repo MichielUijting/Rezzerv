@@ -159,7 +159,7 @@ for (const receiptId of ['123456789012', 'TEST:LIDL']) {
   })
 }
 
-for (const width of [1280, 390]) {
+for (const width of [1280, 896, 390]) {
   test(`Digital receipt setup is visible first with honest capabilities at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await mockStorePage(page)
