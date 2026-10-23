@@ -74,10 +74,28 @@ assert.match(page, /row.providerCode === 'aldi' \|\| row.providerCode === 'plus'
 assert.match(page, /color: 'var\(--color-ui-primary\)'/)
 assert.match(page, /lidl-from-date/)
 assert.match(page, /lidl-to-date/)
-assert.match(page, /lidl-save-period/)
-assert.match(page, /lidl-reset-period/)
+assert.doesNotMatch(page, /lidl-save-period/)
+assert.doesNotMatch(page, /lidl-reset-period/)
 assert.match(page, /Open mijn Lidl/)
+assert.match(page, /onClick={openLidlWithSavedPeriod}/)
+assert.match(page, /async function openLidlWithSavedPeriod\(\)/)
+assert.match(page, /const needsSave = lidlPeriodUnsaved/)
+assert.match(page, /needsSave && !lidlWindow\.can_manage/)
+assert.match(page, /window\.open\('about:blank', '_blank'\)/)
+assert.match(page, /lidlTab\.location\.replace\(LIDL_HISTORY_URL\)/)
+assert.match(page, /data\?\.configured_from_date !== lidlFrom/)
+assert.match(page, /lidlTab\.close\(\)/)
+assert.doesNotMatch(page, /Sla de gekozen periode eerst op/)
+assert.doesNotMatch(page, /Automatische periode hersteld/)
+assert.doesNotMatch(page, /lidl-period-unsaved/)
+
 assert.match(page, /Eerste keer koppelen met Lidl\?/)
+
+const openLidl = page.slice(page.indexOf('async function openLidlWithSavedPeriod'), page.indexOf('useEffect(() => {', page.indexOf('async function openLidlWithSavedPeriod')))
+assert.ok(openLidl.indexOf("window.open('about:blank'") < openLidl.indexOf("method: 'PUT'"),
+  'Browser popup must be opened synchronously in the user gesture')
+assert.ok(openLidl.indexOf("method: 'PUT'") < openLidl.indexOf('lidlTab.location.replace'),
+  'Lidl must not navigate until the save is confirmed')
 
 const bookmarkletHelp = readFileSync(new URL('../src/features/storeConnections/RetailerBookmarkletHelp.jsx', import.meta.url), 'utf8')
 assert.match(bookmarkletHelp, /createPortal/)
