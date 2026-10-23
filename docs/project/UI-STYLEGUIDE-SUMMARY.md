@@ -1144,3 +1144,9 @@ De drie-kolomstabel met **Winkel**, **Laatst bijgewerkt** en **Status** bepaalt 
 Voor Jumbo en Lidl toont **Laatst bijgewerkt** de geverifieerde laatste importdatum of, bij een eerste import, **1 januari van het voorafgaande jaar** als herkenbare startdatum. De `Vanaf`-datum in het onderliggende paneel komt overeen met diezelfde datum; gebruikers kunnen handmatig een andere periode kiezen. Na een succesvol afgesloten import kan de datum worden ververst.
 
 De Jumbo-bedieningsrij plaatst **Open mijn Jumbo** links en **Eerste keer koppelen met Jumbo?** rechts. De tweede knop opent een modal met een naar de favorietenbalk sleepbare **Jumbo-bonnen ophalen**-knop. Deze modal sluit uitsluitend door **OK**, niet door Escape of klikken buiten de modal, en behoudt de toetsenbordfocus binnen het venster. Voor de openstaande modal blijven dezelfde bestaande Inhuis-knoppen en tekst-/contrastregels gelden.
+
+## Winkelkoppelingen: niet-interactieve onbeschikbare status en uniforme retailerpanelen — 23 oktober 2026
+
+Bij Aldi en PLUS is **Geen koppeling mogelijk** in de Status-kolom gewone tekst met de Inhuis-primaire donkergroene kleur; geen knop, hoveractie of toetsenbordfocus. De eenvoudige reden blijft beschikbaar via het label/de tooltip. De andere winkels houden een echte actieknop.
+
+De onderste Jumbo- en Lidl-panelen hanteren dezelfde presentatievolgorde en maatvoering: dezelfde twee datumvelden, één horizontale actierij (**Open mijn [winkel]** links; **Eerste keer koppelen met [winkel]?** rechts) en voor de eerste keer dezelfde gedeelde overlay met sleepbare browserfavoriet. Beide overlays hebben één sluitactie, **OK**, en blijven staan bij Escape of klikken buiten het venster. Het enige functionele verschil is dat Lidl wegens het bestaande backend-importvenster de acties **Periode opslaan** en **Automatische periode** bij de datumvelden behoudt. Deze acties zijn geen alternatieve bonimport en veranderen het Jumbo-proces niet.
