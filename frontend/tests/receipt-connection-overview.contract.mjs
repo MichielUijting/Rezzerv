@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { deriveReceiptConnectionOverview, receiptConnectionSummary } from '../src/features/storeConnections/receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview, receiptConnectionSummary, displayedImportDate, firstImportDate, safeImportDate } from '../src/features/storeConnections/receiptConnectionOverviewModel.js'
+
+const clock = new Date('2026-10-23T12:00:00')
+assert.equal(firstImportDate(clock), '2025-01-01')
+assert.equal(displayedImportDate(undefined, clock).label, '01-01-2025')
+assert.equal(displayedImportDate('2026-10-19', clock).label, '19-10-2026')
+assert.equal(displayedImportDate('2026-10-19', clock).isDefault, false)
+assert.equal(safeImportDate('2026-02-30', clock), null)
+assert.equal(safeImportDate('2027-01-01', clock), null)
+assert.equal(safeImportDate('2026-10-19 15:04:06', clock), null)
+const seenRows = deriveReceiptConnectionOverview([], { connected: false },
+  { jumbo: '2026-10-19', lidl: '2026-10-21' }, clock)
+assert.equal(seenRows.find(row => row.providerCode === 'jumbo').lastSyncLabel, '19-10-2026')
+assert.equal(seenRows.find(row => row.providerCode === 'jumbo').lastUpdatedDate, '2026-10-19')
+assert.equal(seenRows.find(row => row.providerCode === 'lidl').lastSyncLabel, '21-10-2026')
 
 const rows = deriveReceiptConnectionOverview(
   [
@@ -19,7 +33,9 @@ for (const code of ['jumbo', 'lidl']) {
   assert.equal(row.isAutomatic, false)
   assert.equal(row.statusLabel, 'Browserstap nodig')
   assert.equal(row.actionLabel, 'Bonnen ophalen')
-  assert.equal(row.lastSyncLabel, '—')
+  assert.equal(row.lastSyncLabel, displayedImportDate(undefined).label)
+  assert.equal(row.lastUpdatedDate, firstImportDate())
+  assert.equal(row.isDefaultImportDate, true)
   assert.equal(row.cardNumber, undefined)
 }
 const picnic = rows.find(row => row.providerCode === 'picnic')
@@ -41,6 +57,18 @@ const page = readFileSync(new URL('../src/features/storeConnections/StoreConnect
 assert.match(page, /receipt-connections-overview-table/)
 assert.doesNotMatch(page, /data-testid="receipt-connection-summary"/)
 assert.match(page, /data-testid="receipt-connection-details"/)
+assert.match(page, /\/api\/receipts\/retailers\/last-updated/)
+assert.match(page, /maxWidth: '760px'/)
+assert.match(page, /gridTemplateColumns: 'minmax\(0, 1fr\)'/)
+assert.match(page, /jumbo-from-date/)
+assert.match(page, /jumbo-bookmarklet-dialog/)
+assert.match(page, /jumbo-help-open/)
+assert.match(page, /jumbo-help-ok/)
+assert.match(page, /createPortal/)
+assert.match(page, /event\.key === 'Escape'/)
+assert.match(page, /setJumboHelpOpen\(false\)/)
+assert.doesNotMatch(page, /<summary[^>]*>Eerste keer\? Stel de Jumbo-favoriet in/)
+
 assert.doesNotMatch(page, /loyalty-connections-settings/)
 assert.doesNotMatch(page, /Klantenkaarten en bestaande winkelinstellingen/)
 assert.doesNotMatch(page, /Kies je supermarkt in het overzicht/)
