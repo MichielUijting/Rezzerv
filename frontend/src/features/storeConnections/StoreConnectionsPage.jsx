@@ -1012,7 +1012,7 @@ export default function StoreConnectionsPage() {
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--color-ui-primary)',
                   color: 'var(--color-ui-primary)',
-                  fontWeight: 600,
+                  fontWeight: 400,
                   textDecoration: 'none',
                 }}
                 onClick={(event) => event.preventDefault()}
@@ -1080,7 +1080,7 @@ export default function StoreConnectionsPage() {
 
             <div data-testid="lidl-import-window">
               <strong>Importperiode</strong>
-              <p>{lidlWindow ? lidlWindow.from_date + ' t/m ' + lidlWindow.to_date : 'Laden…'}</p>
+              <p>{lidlWindow ? (lidlFrom || '—') + ' t/m ' + (lidlTo || lidlWindow.to_date) : 'Laden…'}</p>
               {lidlPeriodUnsaved ? (
                 <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
                   De gekozen importperiode is nog niet opgeslagen. Klik eerst op Opslaan.
