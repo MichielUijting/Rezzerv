@@ -451,3 +451,41 @@ test('Lidl refuses to save a changed period when popup permission is blocked', a
   expect(saves).toBe(0)
   await expect(page.getByTestId('lidl-web-open-history')).toBeEnabled()
 })
+
+for (const width of [390, 500, 896]) {
+  test(`Winkelkoppelingen is a compact mobile row table at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await mockStorePage(page)
+    await page.goto('/instellingen/winkelkoppelingen')
+    const table = page.getByTestId('receipt-connections-overview-table')
+    const items = table.locator('tbody tr')
+    await expect(items).toHaveCount(6)
+    const mobileHeader = page.getByTestId('receipt-connection-mobile-heading')
+    if (width <= 720) {
+      await expect(mobileHeader).toBeVisible()
+      await expect(mobileHeader.locator('span')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
+      const metrics = await table.evaluate(element => {
+        const rowElements = [...element.querySelectorAll('tbody tr')]
+        return {
+          rowDisplays: rowElements.map(row => getComputedStyle(row).display),
+          maxHeight: Math.max(...rowElements.map(row => row.getBoundingClientRect().height)),
+          firstLabel: getComputedStyle(element.querySelector('tbody td'), '::before').content,
+          scrollWidth: element.scrollWidth,
+          width: element.clientWidth,
+        }
+      })
+      expect(metrics.rowDisplays.every(display => display === 'grid')).toBe(true)
+      expect(metrics.maxHeight).toBeLessThan(80)
+      expect(metrics.firstLabel).toBe('none')
+      expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.width + 2)
+    } else {
+      await expect(mobileHeader).toHaveCount(0)
+      await expect(table.locator('thead th')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
+      await expect(items.first()).toHaveCSS('display', 'table-row')
+    }
+    await expect(page.getByTestId('receipt-connection-unavailable-aldi')).toHaveText('Geen koppeling mogelijk')
+    await expect(page.getByTestId('receipt-connection-unavailable-plus')).toHaveText('Geen koppeling mogelijk')
+    await page.getByTestId('receipt-connection-action-jumbo').click()
+    await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
+  })
+}
