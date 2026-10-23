@@ -252,4 +252,3 @@ test('Lidl keeps the authorized save gate while sharing the same presentation as
   await expect(open).toBeEnabled()
   // No actual retailer login, browser window or receipt write is triggered.
 })
-
