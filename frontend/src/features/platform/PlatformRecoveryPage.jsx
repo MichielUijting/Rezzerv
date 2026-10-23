@@ -162,7 +162,7 @@ export default function PlatformRecoveryPage() {
               {result ? (
                 <div data-testid="platform-recovery-result">
                   <p>Herstelactie afgerond voor huishouden: {result.householdId}</p>
-                  <p>De server heeft de definitieve verwijdering succesvol verwerkt.</p>
+                  <p>Inhuis heeft de definitieve verwijdering succesvol verwerkt.</p>
                 </div>
               ) : null}
 
