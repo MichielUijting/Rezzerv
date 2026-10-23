@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -33,9 +34,7 @@ export default function StoreConnectionsPage() {
   const [activeProvider, setActiveProvider] = useState('')
   const [latestImportDates, setLatestImportDates] = useState({})
   const [jumboHelpOpen, setJumboHelpOpen] = useState(false)
-  const jumboHelpTriggerRef = useRef(null)
-  const jumboHelpOkRef = useRef(null)
-  const jumboHelpLinkRef = useRef(null)
+  const jumboHelpDialogRef = useRef(null)
   const ahSyncPageMountedRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
@@ -87,6 +86,36 @@ export default function StoreConnectionsPage() {
       statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
     }))
   }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase])
+  useEffect(() => {
+    if (!jumboHelpOpen) return undefined
+    const previousFocus = document.activeElement
+    const dialog = jumboHelpDialogRef.current
+    dialog?.querySelector('[data-testid="jumbo-help-ok"]')?.focus()
+    const keepDialogOpen = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      if (event.key !== 'Tab' || !dialog) return
+      const linksAndButtons = [...dialog.querySelectorAll('a[href], button:not([disabled])')]
+      if (!linksAndButtons.length) return
+      const first = linksAndButtons[0]
+      const last = linksAndButtons[linksAndButtons.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', keepDialogOpen, true)
+    return () => {
+      document.removeEventListener('keydown', keepDialogOpen, true)
+      previousFocus?.focus?.()
+    }
+  }, [jumboHelpOpen])
+
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
@@ -904,13 +933,74 @@ export default function StoreConnectionsPage() {
               <Input label="Tot en met" type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-to-date" />
             </div>
             {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
-            <details data-testid="jumbo-bookmarklet-help">
-              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Eerste keer? Stel de Jumbo-favoriet in</summary>
-              <div style={{ display: 'grid', gap: '8px', padding: '12px 0' }}>
-                <div>Sleep de onderstaande knop één keer naar de favorietenbalk van je browser. Heb je al een oude Jumbo-favoriet? Vervang die eerst. Bij een gewijzigde importperiode sleep je de knop opnieuw.</div>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px',
+            }}>
+              <a
+                href={JUMBO_ORDERS_URL}
+                role="button"
+                className="rz-button-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                onClick={() => {
+                  setJumboPhase('waiting')
+                  setJumboProgress(null)
+                  setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
+                  setJumboPocResult(null)
+                  setJumboImportCandidate(null)
+                }}
+                data-testid="jumbo-poc-open"
+              >
+                Open mijn Jumbo
+              </a>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setJumboHelpOpen(true)}
+                data-testid="jumbo-help-open"
+              >
+                Eerste keer koppelen met Jumbo?
+              </Button>
+            </div>
+
+            {jumboHelpOpen ? createPortal(
+              <div
+                data-testid="jumbo-bookmarklet-help"
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 3000,
+                  display: 'grid', placeItems: 'center', padding: '16px',
+                  background: 'rgba(0, 0, 0, 0.55)',
+                }}
+              >
+                <div
+                  ref={jumboHelpDialogRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="jumbo-bookmarklet-help-title"
+                  data-testid="jumbo-bookmarklet-dialog"
+                  style={{
+                    width: 'min(100%, 520px)',
+                    maxHeight: 'calc(100vh - 32px)',
+                    overflowY: 'auto',
+                    padding: '24px',
+                    borderRadius: 'var(--radius-md)',
+                    background: '#fff',
+                    boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
+                    display: 'grid',
+                    gap: '14px',
+                  }}
+                >
+                  <h3 id="jumbo-bookmarklet-help-title" style={{ margin: 0 }}>
+                    Eerste keer koppelen met Jumbo?
+                  </h3>
+                  <p style={{ margin: 0 }}>
+                    Sleep de knop hieronder naar de favorietenbalk van je browser.
+                    Heb je al een oude Jumbo-favoriet? Vervang die eerst.
+                  </p>
               <a
                 href={jumboPeriodValid ? jumboPocBookmarklet : undefined}
                 data-testid="jumbo-poc-bookmarklet"
+                draggable="true"
                 aria-disabled={!jumboPeriodValid}
                 style={{
                   display: 'inline-flex',
@@ -928,28 +1018,23 @@ export default function StoreConnectionsPage() {
               >
                 Jumbo-bonnen ophalen
               </a>
-                <div>Open daarna Jumbo en klik op deze favoriet om de bonnen naar Inhuis terug te brengen.</div>
-              </div>
-            </details>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <a
-                href={JUMBO_ORDERS_URL}
-                role="button"
-                className="rz-button-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
-                onClick={() => {
-                  setJumboPhase('waiting')
-                  setJumboProgress(null)
-                  setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
-                  setJumboPocResult(null)
-                  setJumboImportCandidate(null)
-                }}
-                data-testid="jumbo-poc-open"
-              >
-                Open mijn Jumbo
-              </a>
-            </div>
+                  <p style={{ margin: 0 }}>
+                    Klik op <strong>OK</strong> nadat de favoriet is opgeslagen.
+                    Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
+                    wanneer je op de website van Jumbo bent.
+                    Kies je later een andere importperiode, sleep de knop dan opnieuw.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      type="button"
+                      onClick={() => setJumboHelpOpen(false)}
+                      data-testid="jumbo-help-ok"
+                    >OK</Button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            ) : null}
 
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '10px' }}>
