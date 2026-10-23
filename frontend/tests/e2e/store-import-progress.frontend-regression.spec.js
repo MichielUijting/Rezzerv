@@ -26,6 +26,33 @@ async function mockStorePage(page) {
   })
 }
 
+async function receiptPanelGeometry(page, provider) {
+  return page.evaluate(store => {
+    const root = document.querySelector(store === 'jumbo'
+      ? '[data-testid="jumbo-receipt-poc"]'
+      : '[data-testid="lidl-digital-receipts"]')
+    if (!root) throw new Error('Receipt panel not mounted')
+    const base = root.getBoundingClientRect()
+    const box = (selector) => {
+      const element = root.querySelector(selector)
+      if (!element) throw new Error('Missing matching panel element: ' + selector)
+      const rect = element.getBoundingClientRect()
+      return [rect.x - base.x, rect.y - base.y, rect.width, rect.height]
+        .map(value => Math.round(value))
+    }
+    return {
+      panel: [Math.round(base.width), Math.round(base.height)],
+      heading: box('h3'),
+      description: box('p:last-child'),
+      from: box('input[data-testid$="-from-date"]'),
+      to: box('input[data-testid$="-to-date"]'),
+      actions: box('[data-testid="retailer-receipt-action-row"]'),
+      open: box(store === 'jumbo' ? '[data-testid="jumbo-poc-open"]' : '[data-testid="lidl-web-open-history"]'),
+      help: box(store === 'jumbo' ? '[data-testid="jumbo-help-open"]' : '[data-testid="lidl-help-open"]'),
+    }
+  }, provider)
+}
+
 const payload = {
   version: 14, ok: true, source_origin: 'https://www.jumbo.com', total_results: 2,
   details: [1, 2].map(n => ({
@@ -172,6 +199,7 @@ for (const width of [1280, 390]) {
     const details = await detailsCard.boundingBox()
     expect(Math.abs(beforeClick.width - afterClick.width)).toBeLessThan(2)
     expect(Math.abs(beforeClick.width - details.width)).toBeLessThan(2)
+    const jumboGeometry = await receiptPanelGeometry(page, 'jumbo')
 
     const openJumbo = page.getByTestId('jumbo-poc-open')
     const firstTime = page.getByTestId('jumbo-help-open')
@@ -198,6 +226,9 @@ for (const width of [1280, 390]) {
     const lidlCard = page.getByTestId('lidl-digital-receipts').locator('xpath=ancestor::*[contains(@class, "rz-card")][1]')
     const lidlDimensions = await lidlCard.boundingBox()
     expect(Math.abs(beforeClick.width - lidlDimensions.width)).toBeLessThan(2)
+    const lidlGeometry = await receiptPanelGeometry(page, 'lidl')
+    expect(lidlGeometry).toEqual(jumboGeometry)
+
     const lidlOpen = await page.getByTestId('lidl-web-open-history').boundingBox()
     const lidlHelp = await page.getByTestId('lidl-help-open').boundingBox()
     expect(Math.abs(lidlOpen.y - lidlHelp.y)).toBeLessThan(2)
