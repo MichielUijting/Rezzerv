@@ -251,6 +251,46 @@ for (const width of [1280, 896, 390]) {
   })
 }
 
+for (const width of [390, 896, 1280]) {
+  test(`Winkelpanelen hebben alleen mobiel nul verticale tussenruimte bij ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await mockStorePage(page)
+    await page.goto('/instellingen/winkelkoppelingen')
+    const mobile = width <= 720
+    for (const [provider, panelId] of [
+      ['jumbo', 'jumbo-receipt-poc'],
+      ['lidl', 'lidl-digital-receipts'],
+      ['ah', 'ah-digital-receipts'],
+      ['picnic', 'picnic-account-research'],
+    ]) {
+      await page.getByTestId('receipt-connection-action-' + provider).click()
+      const panel = page.getByTestId(panelId)
+      await expect(panel).toBeVisible()
+      const layout = await panel.evaluate(element => {
+        const computed = window.getComputedStyle(element)
+        const firstText = element.querySelector('p')
+        const dateRow = element.querySelector('input[type="date"]')?.closest(
+          '[data-testid="lidl-import-window"], [data-testid="retailer-receipt-date-range"]',
+        )
+        const dateLabel = element.querySelector('.rz-input-field')
+        return {
+          gap: computed.rowGap,
+          textMargin: firstText ? window.getComputedStyle(firstText).marginTop : null,
+          dateGap: dateRow ? window.getComputedStyle(dateRow).rowGap : null,
+          labelGap: dateLabel ? window.getComputedStyle(dateLabel).rowGap : null,
+        }
+      })
+      expect(layout.gap).toBe(mobile ? '0px' : '12px')
+      if (provider === 'jumbo' || provider === 'lidl') {
+        expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
+        expect(layout.labelGap).toBe(mobile ? '0px' : '6px')
+      } else if (provider === 'ah') {
+        expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
+      }
+    }
+  })
+}
+
 test('Lidl automatically saves changed dates before opening browser and keeps one user action', async ({ page }) => {
   await mockStorePage(page)
   let releaseSave
