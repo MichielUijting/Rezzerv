@@ -1136,3 +1136,11 @@ Voor Aldi en PLUS luidt de zichtbare statusknop **Geen koppeling mogelijk**, met
 
 In alle gebruikerszichtbare teksten wordt waar mogelijk **Inhuis** gebruikt in plaats van de technische infrastructuurterm 'server'. Onderdelen die technisch `server` heten (variabelen, API's, interne statuscodes) blijven ongewijzigd om contractbreuk te vermijden. Voor onderhouduitleg is **Onderhoud aan Inhuis** de functionele benaming.
 
+
+## Winkelkoppelingen: vaste paneelbreedte en Jumbo-koppelvenster — 23 oktober 2026
+
+De drie-kolomstabel met **Winkel**, **Laatst bijgewerkt** en **Status** bepaalt de beschikbare paneelbreedte: alle onderliggende, op aanvraag zichtbare winkelpanelen gebruiken dezelfde breedte, zodat er bij het wisselen van winkel geen horizontale sprong optreedt. Kleinere mobiele viewports behouden binnen de tabel de bestaande horizontale scroll.
+
+Voor Jumbo en Lidl toont **Laatst bijgewerkt** de geverifieerde laatste importdatum of, bij een eerste import, **1 januari van het voorafgaande jaar** als herkenbare startdatum. De `Vanaf`-datum in het onderliggende paneel komt overeen met diezelfde datum; gebruikers kunnen handmatig een andere periode kiezen. Na een succesvol afgesloten import kan de datum worden ververst.
+
+De Jumbo-bedieningsrij plaatst **Open mijn Jumbo** links en **Eerste keer koppelen met Jumbo?** rechts. De tweede knop opent een modal met een naar de favorietenbalk sleepbare **Jumbo-bonnen ophalen**-knop. Deze modal sluit uitsluitend door **OK**, niet door Escape of klikken buiten de modal, en behoudt de toetsenbordfocus binnen het venster. Voor de openstaande modal blijven dezelfde bestaande Inhuis-knoppen en tekst-/contrastregels gelden.
