@@ -102,20 +102,20 @@ const retailerPanel = readFileSync(
   new URL('../src/features/storeConnections/RetailerReceiptPanel.jsx', import.meta.url),
   'utf8',
 )
-assert.equal((page.match(/<RetailerReceiptPanel\\b/g) || []).length, 2,
+assert.equal((page.match(/<RetailerReceiptPanel\b/g) || []).length, 2,
   'Jumbo en Lidl moeten dezelfde component gebruiken')
 assert.match(retailerPanel, /{retailer} digitale kassabonnen/)
-assert.match(retailerPanel, /Kies de periode en haal je kassabonnen op\\./)
-assert.equal((retailerPanel.match(/<Input\\b/g) || []).length, 2)
+assert.match(retailerPanel, /Kies de periode en haal je kassabonnen op\./)
+assert.equal((retailerPanel.match(/<Input\b/g) || []).length, 2)
 assert.match(retailerPanel, /gridTemplateColumns: isMobileViewport/)
 assert.match(retailerPanel, /160px/)
 assert.match(retailerPanel, /240px/)
 assert.match(retailerPanel, /width: '100%'/)
 assert.match(retailerPanel, /Open mijn {retailer}/)
-assert.match(retailerPanel, /Eerste keer koppelen met {retailer}\\?/)
+assert.match(retailerPanel, /Eerste keer koppelen met {retailer}\?/)
 assert.match(retailerPanel, /data-testid={openTestId}/)
 assert.match(retailerPanel, /data-testid={helpTestId}/)
-assert.doesNotMatch(page, /Kies de periode en haal je kassabonnen op\\./)
+assert.doesNotMatch(page, /Kies de periode en haal je kassabonnen op\./)
 
 const bookmarkletHelp = readFileSync(new URL('../src/features/storeConnections/RetailerBookmarkletHelp.jsx', import.meta.url), 'utf8')
 assert.match(bookmarkletHelp, /createPortal/)
