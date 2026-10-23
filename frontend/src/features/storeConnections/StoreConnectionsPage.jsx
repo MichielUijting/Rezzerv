@@ -22,7 +22,7 @@ import {
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
-import { deriveReceiptConnectionOverview } from './receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
@@ -31,6 +31,11 @@ export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
+  const [latestImportDates, setLatestImportDates] = useState({})
+  const [jumboHelpOpen, setJumboHelpOpen] = useState(false)
+  const jumboHelpTriggerRef = useRef(null)
+  const jumboHelpOkRef = useRef(null)
+  const jumboHelpLinkRef = useRef(null)
   const ahSyncPageMountedRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
@@ -60,11 +65,7 @@ export default function StoreConnectionsPage() {
   const [jumboPocResult, setJumboPocResult] = useState(null)
   const [jumboImportCandidate, setJumboImportCandidate] = useState(null)
   const [jumboImportBusy, setJumboImportBusy] = useState(false)
-  const [jumboFrom, setJumboFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 29)
-    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
-  })
+  const [jumboFrom, setJumboFrom] = useState(() => firstImportDate())
   const [jumboTo, setJumboTo] = useState(() => {
     const d = new Date()
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
@@ -81,11 +82,11 @@ export default function StoreConnectionsPage() {
       validating: 'Controleren', importing: 'Verwerken',
       completed: 'Afgerond', failed: 'Controle nodig',
     }
-    return deriveReceiptConnectionOverview(rows, ahConnection).map(row => ({
+    return deriveReceiptConnectionOverview(rows, ahConnection, latestImportDates).map(row => ({
       ...row,
       statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
     }))
-  }, [rows, ahConnection, ahPhase, jumboPhase, lidlPhase])
+  }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlPeriodUnsaved = Boolean(lidlWindow?.can_manage) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
@@ -118,7 +119,14 @@ export default function StoreConnectionsPage() {
       key: 'lastSyncLabel',
       header: 'Laatst bijgewerkt',
       width: isMobileViewport ? 115 : 180,
-      renderCell: row => <span data-testid={`receipt-connection-updated-${row.providerCode}`}>{row.lastSyncLabel}</span>,
+      renderCell: row => (
+        <span
+          data-testid={`receipt-connection-updated-${row.providerCode}`}
+          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
+        >
+          {row.lastSyncLabel}
+        </span>
+      ),
     },
     {
       key: 'action',
@@ -197,6 +205,17 @@ export default function StoreConnectionsPage() {
     return data
   }
 
+  async function refreshLatestImportDates({ resetPeriods = false } = {}) {
+    const response = await fetchJson('/api/receipts/retailers/last-updated')
+    const latest = response?.dates || {}
+    setLatestImportDates(latest)
+    if (resetPeriods) {
+      setJumboFrom(displayedImportDate(latest.jumbo).day)
+      setLidlFrom(displayedImportDate(latest.lidl).day)
+    }
+    return latest
+  }
+
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -214,6 +233,14 @@ export default function StoreConnectionsPage() {
       setLidlWindow(windowData)
       setLidlFrom(windowData.configured_from_date || windowData.from_date || '')
       setLidlTo(windowData.configured_to_date || '')
+      try {
+        await refreshLatestImportDates({ resetPeriods: true })
+      } catch {
+        // A temporary read failure must not prevent using Winkelkoppelingen.
+        // The previous year's first day remains the conservative initial window.
+        setJumboFrom(firstImportDate())
+        setLidlFrom(firstImportDate())
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
@@ -765,9 +792,17 @@ export default function StoreConnectionsPage() {
 
   return (
     <AppShell title="Winkelkoppelingen" showExit={false}>
-      <div style={{ display: 'grid', gap: '16px' }} data-testid="store-connections-page">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gap: '16px',
+        width: '100%',
+        maxWidth: '760px',
+        minWidth: 0,
+        margin: '0 auto',
+      }} data-testid="store-connections-page">
         <Card>
-          <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px' }}>
+          <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
             {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
             <DataTable
