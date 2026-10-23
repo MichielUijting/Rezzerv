@@ -27,6 +27,7 @@ import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
+import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
 
 export default function StoreConnectionsPage() {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
@@ -956,68 +957,50 @@ export default function StoreConnectionsPage() {
 
         {activeProvider === 'jumbo' ? (
         <Card>
-          <div data-testid="jumbo-receipt-poc" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Jumbo digitale kassabonnen</h3>
-              {isMobileViewport ? (
-                <p role="status" style={{ margin: '6px 0' }}>
-                  Voor Jumbo is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
-                  Dit werkt niet betrouwbaar in alle mobiele browsers.
-                </p>
-              ) : null}
-              <p style={{ margin: '6px 0 0' }}>
-                Kies de periode en haal je kassabonnen op. Controleer de gevonden bonnen en bevestig daarna de import naar Kassa.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Input label="Vanaf" type="date" value={jumboFrom} onChange={(event) => { setJumboFrom(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-from-date" />
-              <Input label="Tot en met" type="date" value={jumboTo} onChange={(event) => { setJumboTo(event.target.value); setJumboImportCandidate(null); setJumboPocResult(null) }} data-testid="jumbo-to-date" />
-            </div>
-            {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
-            <div style={{
-              display: 'flex', alignItems: 'stretch',
-              justifyContent: 'space-between', flexWrap: 'nowrap', gap: '8px',
-            }}>
-              <a
-                href={JUMBO_ORDERS_URL}
-                role="button"
-                className="rz-button-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minWidth: 0, textDecoration: 'none' }}
-                onClick={() => {
-                  setJumboPhase('waiting')
-                  setJumboProgress(null)
-                  setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
-                  setJumboPocResult(null)
-                  setJumboImportCandidate(null)
-                }}
-                data-testid="jumbo-poc-open"
-              >
-                Open mijn Jumbo
-              </a>
-              <Button
-                type="button"
-                variant="secondary"
-                style={{ maxWidth: '60%', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
-                onClick={() => setSetupHelpStore('jumbo')}
-                data-testid="jumbo-help-open"
-              >
-                Eerste keer koppelen met Jumbo?
-              </Button>
-            </div>
-
-            <RetailerBookmarkletHelp
-              provider="jumbo"
-              retailer="Jumbo"
-              open={setupHelpStore === 'jumbo'}
-              onClose={() => setSetupHelpStore('')}
-              bookmarklet={jumboPocBookmarklet}
-              valid={jumboPeriodValid}
-              instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
-                wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
-                sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
-            />
-
+          <RetailerReceiptPanel
+            retailer="Jumbo"
+            testId="jumbo-receipt-poc"
+            isMobileViewport={isMobileViewport}
+            from={jumboFrom}
+            to={jumboTo}
+            fromTestId="jumbo-from-date"
+            toTestId="jumbo-to-date"
+            onFromChange={(event) => {
+              setJumboFrom(event.target.value)
+              setJumboImportCandidate(null)
+              setJumboPocResult(null)
+            }}
+            onToChange={(event) => {
+              setJumboTo(event.target.value)
+              setJumboImportCandidate(null)
+              setJumboPocResult(null)
+            }}
+            openHref={JUMBO_ORDERS_URL}
+            openTestId="jumbo-poc-open"
+            onOpen={() => {
+              setJumboPhase('waiting')
+              setJumboProgress(null)
+              setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
+              setJumboPocResult(null)
+              setJumboImportCandidate(null)
+            }}
+            helpTestId="jumbo-help-open"
+            onHelp={() => setSetupHelpStore('jumbo')}
+            periodError={!jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
+            setupHelp={
+              <RetailerBookmarkletHelp
+                provider="jumbo"
+                retailer="Jumbo"
+                open={setupHelpStore === 'jumbo'}
+                onClose={() => setSetupHelpStore('')}
+                bookmarklet={jumboPocBookmarklet}
+                valid={jumboPeriodValid}
+                instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
+                  wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
+                  sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
+              />
+            }
+          >
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '10px' }}>
                 {jumboPocResult.details.length ? (
@@ -1039,76 +1022,43 @@ export default function StoreConnectionsPage() {
                 )}
               </div>
             ) : null}
-          </div>
+
+          </RetailerReceiptPanel>
         </Card>
         ) : null}
 
         {activeProvider === 'lidl' ? (
         <Card>
-          <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Lidl digitale kassabonnen</h3>
-              {isMobileViewport ? (
-                <p role="status" style={{ margin: '6px 0' }}>
-                  Voor Lidl is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
-                  Dit werkt niet betrouwbaar in alle mobiele browsers.
-                </p>
-              ) : null}
-              <p style={{ margin: '6px 0 0' }}>
-                Kies de periode en haal je kassabonnen op. Inhuis neemt daarna de nieuwe bonnen over in Kassa.
-              </p>
-            </div>
-
-            <div data-testid="lidl-import-window" style={{ display: 'grid', gap: '10px' }}>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Input
-                  type="date"
-                  label="Vanaf"
-                  value={lidlFrom}
-                  onChange={event => setLidlFrom(event.target.value)}
-                  disabled={lidlWindowSaving || !lidlWindow?.can_manage}
-                  data-testid="lidl-from-date"
-                />
-                <Input
-                  type="date"
-                  label="Tot en met"
-                  value={lidlTo || lidlWindow?.to_date || ''}
-                  onChange={event => setLidlTo(event.target.value)}
-                  disabled={lidlWindowSaving || !lidlWindow?.can_manage}
-                  data-testid="lidl-to-date"
-                />
-              </div>
-
-            </div>
-
-            <div style={{
-              display: 'flex', alignItems: 'stretch',
-              justifyContent: 'space-between', flexWrap: 'nowrap', gap: '8px',
-            }}>
-              <Button
-                type="button"
-                onClick={openLidlWithSavedPeriod}
-                disabled={lidlWindowSaving || !lidlWindow}
-                data-testid="lidl-web-open-history"
-              >{lidlWindowSaving ? 'Lidl voorbereiden…' : 'Open mijn Lidl'}</Button>
-              <Button
-                type="button"
-                variant="secondary"
-                style={{ maxWidth: '60%', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
-                onClick={() => setSetupHelpStore('lidl')}
-                data-testid="lidl-help-open"
-              >Eerste keer koppelen met Lidl?</Button>
-            </div>
-            <RetailerBookmarkletHelp
-              provider="lidl"
-              retailer="Lidl"
-              open={setupHelpStore === 'lidl'}
-              onClose={() => setSetupHelpStore('')}
-              bookmarklet={lidlBookmarklet}
-              instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
-                opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
-            />
-          </div>
+          <RetailerReceiptPanel
+            retailer="Lidl"
+            testId="lidl-digital-receipts"
+            dateRangeTestId="lidl-import-window"
+            isMobileViewport={isMobileViewport}
+            from={lidlFrom}
+            to={lidlTo || lidlWindow?.to_date || ''}
+            fromTestId="lidl-from-date"
+            toTestId="lidl-to-date"
+            onFromChange={(event) => setLidlFrom(event.target.value)}
+            onToChange={(event) => setLidlTo(event.target.value)}
+            datesDisabled={lidlWindowSaving || !lidlWindow?.can_manage}
+            openTestId="lidl-web-open-history"
+            onOpen={openLidlWithSavedPeriod}
+            openDisabled={lidlWindowSaving || !lidlWindow}
+            openBusy={lidlWindowSaving}
+            helpTestId="lidl-help-open"
+            onHelp={() => setSetupHelpStore('lidl')}
+            setupHelp={
+              <RetailerBookmarkletHelp
+                provider="lidl"
+                retailer="Lidl"
+                open={setupHelpStore === 'lidl'}
+                onClose={() => setSetupHelpStore('')}
+                bookmarklet={lidlBookmarklet}
+                instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
+                  opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
+              />
+            }
+          />
         </Card>
         ) : null}
 
