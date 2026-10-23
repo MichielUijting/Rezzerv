@@ -453,6 +453,13 @@ export default function StoreConnectionsPage() {
               message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
           }
         }
+        if (lidlCounts.failed === 0) {
+          try {
+            await refreshLatestImportDates({ resetPeriods: true })
+          } catch {
+            // Receipt results are already acknowledged; date display can retry next visit.
+          }
+        }
         setLidlCountsView({ ...lidlCounts })
         setLidlPhase(lidlCounts.failed ? 'failed' : 'completed')
         const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
@@ -571,6 +578,11 @@ export default function StoreConnectionsPage() {
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       setJumboPocResult(null)
+      try {
+        await refreshLatestImportDates({ resetPeriods: true })
+      } catch {
+        // A display refresh must not turn a confirmed Kassa import into a failure.
+      }
       showFeedback({ variant: 'success', title: 'Jumbo kassabon', message })
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De Jumbo-bon kon niet veilig worden geïmporteerd.'
