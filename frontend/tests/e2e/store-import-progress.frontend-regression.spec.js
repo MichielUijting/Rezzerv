@@ -172,10 +172,8 @@ for (const width of [1280, 390]) {
     const firstTime = page.getByTestId('jumbo-help-open')
     const openBox = await openJumbo.boundingBox()
     const firstTimeBox = await firstTime.boundingBox()
-    if (width === 1280) {
-      expect(Math.abs(openBox.y - firstTimeBox.y)).toBeLessThan(2)
-      expect(firstTimeBox.x).toBeGreaterThan(openBox.x)
-    }
+    expect(Math.abs(openBox.y - firstTimeBox.y)).toBeLessThan(2)
+    expect(firstTimeBox.x).toBeGreaterThan(openBox.x)
     await firstTime.click()
     const dialog = page.getByTestId('jumbo-bookmarklet-dialog')
     await expect(dialog).toBeVisible()
