@@ -41,13 +41,20 @@ export function deriveReceiptConnectionOverview(existingRows, ahConnection) {
     if (store.code === 'jumbo' || store.code === 'lidl') {
       return { ...base, actionLabel: 'Bonnen ophalen' }
     }
+    if (store.code === 'aldi' || store.code === 'plus') {
+      return {
+        ...base,
+        isAvailable: false,
+        statusCode: 'unavailable',
+        statusLabel: 'Geen koppeling mogelijk',
+        actionLabel: 'Geen koppeling mogelijk',
+      }
+    }
     return {
       ...base,
       isAvailable: false,
-      isAutomatic: false,
       statusCode: 'unavailable',
       statusLabel: 'Nog niet beschikbaar',
-      typeLabel: 'Geen automatische bonimport',
       actionLabel: 'Uitleg',
     }
   })
