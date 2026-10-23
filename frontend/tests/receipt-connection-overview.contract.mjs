@@ -76,8 +76,9 @@ assert.match(page, /lidl-from-date/)
 assert.match(page, /lidl-to-date/)
 assert.doesNotMatch(page, /lidl-save-period/)
 assert.doesNotMatch(page, /lidl-reset-period/)
-assert.match(page, /Open mijn Lidl/)
-assert.match(page, /onClick={openLidlWithSavedPeriod}/)
+assert.match(page, /retailer="Lidl"/)
+assert.match(page, /openTestId="lidl-web-open-history"/)
+assert.match(page, /onOpen={openLidlWithSavedPeriod}/)
 assert.match(page, /async function openLidlWithSavedPeriod\(\)/)
 assert.match(page, /const needsSave = lidlPeriodUnsaved/)
 assert.match(page, /needsSave && !lidlWindow\.can_manage/)
@@ -89,13 +90,32 @@ assert.doesNotMatch(page, /Sla de gekozen periode eerst op/)
 assert.doesNotMatch(page, /Automatische periode hersteld/)
 assert.doesNotMatch(page, /lidl-period-unsaved/)
 
-assert.match(page, /Eerste keer koppelen met Lidl\?/)
+assert.match(page, /helpTestId="lidl-help-open"/)
 
 const openLidl = page.slice(page.indexOf('async function openLidlWithSavedPeriod'), page.indexOf('useEffect(() => {', page.indexOf('async function openLidlWithSavedPeriod')))
 assert.ok(openLidl.indexOf("window.open('about:blank'") < openLidl.indexOf("method: 'PUT'"),
   'Browser popup must be opened synchronously in the user gesture')
 assert.ok(openLidl.indexOf("method: 'PUT'") < openLidl.indexOf('lidlTab.location.replace'),
   'Lidl must not navigate until the save is confirmed')
+
+const retailerPanel = readFileSync(
+  new URL('../src/features/storeConnections/RetailerReceiptPanel.jsx', import.meta.url),
+  'utf8',
+)
+assert.equal((page.match(/<RetailerReceiptPanel\\b/g) || []).length, 2,
+  'Jumbo en Lidl moeten dezelfde component gebruiken')
+assert.match(retailerPanel, /{retailer} digitale kassabonnen/)
+assert.match(retailerPanel, /Kies de periode en haal je kassabonnen op\\./)
+assert.equal((retailerPanel.match(/<Input\\b/g) || []).length, 2)
+assert.match(retailerPanel, /gridTemplateColumns: isMobileViewport/)
+assert.match(retailerPanel, /160px/)
+assert.match(retailerPanel, /240px/)
+assert.match(retailerPanel, /width: '100%'/)
+assert.match(retailerPanel, /Open mijn {retailer}/)
+assert.match(retailerPanel, /Eerste keer koppelen met {retailer}\\?/)
+assert.match(retailerPanel, /data-testid={openTestId}/)
+assert.match(retailerPanel, /data-testid={helpTestId}/)
+assert.doesNotMatch(page, /Kies de periode en haal je kassabonnen op\\./)
 
 const bookmarkletHelp = readFileSync(new URL('../src/features/storeConnections/RetailerBookmarkletHelp.jsx', import.meta.url), 'utf8')
 assert.match(bookmarkletHelp, /createPortal/)
