@@ -117,6 +117,19 @@ assert.match(retailerPanel, /data-testid={openTestId}/)
 assert.match(retailerPanel, /data-testid={helpTestId}/)
 assert.doesNotMatch(page, /Kies de periode en haal je kassabonnen op\./)
 
+// PO mobile spacing contract: no vertical row margins in any store detail,
+// without changing desktop spacing or the global input component.
+assert.match(retailerPanel, /rowGap: isMobileViewport \? 0 : '12px'/)
+assert.match(retailerPanel, /margin: isMobileViewport \? 0 : '6px 0 0'/)
+assert.match(retailerPanel, /columnGap: '12px', rowGap: isMobileViewport \? 0 : '12px'/)
+assert.match(retailerPanel, /className=\{isMobileViewport \? 'rz-store-receipt-panel--mobile'/)
+const compactCss = readFileSync(new URL('../src/features/storeConnections/retailerReceiptPanel.css', import.meta.url), 'utf8')
+assert.match(compactCss, /\.rz-store-receipt-panel--mobile \.rz-input-field\s*\{\s*row-gap: 0;/)
+assert.match(page, /data-testid="ah-digital-receipts" style=\{\{ display: 'grid', rowGap: isMobileViewport \? 0 : '12px'/)
+assert.match(page, /data-testid="aldi-digital-unavailable" role="status" style=\{\{ display: 'grid', rowGap: isMobileViewport \? 0 : '6px'/)
+const picnicPanel = readFileSync(new URL('../src/features/storeConnections/PicnicAccountResearchPanel.jsx', import.meta.url), 'utf8')
+assert.match(picnicPanel, /rowGap: isMobileViewport \? 0 : '12px'/)
+
 const bookmarkletHelp = readFileSync(new URL('../src/features/storeConnections/RetailerBookmarkletHelp.jsx', import.meta.url), 'utf8')
 assert.match(bookmarkletHelp, /createPortal/)
 assert.match(bookmarkletHelp, /role="dialog"/)
