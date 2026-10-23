@@ -769,6 +769,7 @@ export default function StoreConnectionsPage() {
         <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px' }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
+            {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
             <DataTable
               columns={receiptConnectionColumns}
               data={digitalReceiptRows}
