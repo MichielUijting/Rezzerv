@@ -927,10 +927,10 @@ export default function StoreConnectionsPage() {
 
         {activeProvider === 'ah' ? (
         <Card>
-          <div data-testid="ah-digital-receipts" style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '12px', maxWidth: '680px' }}>
+          <div data-testid="ah-digital-receipts" style={{ display: 'grid', rowGap: '12px', maxWidth: '680px' }}>
             <div>
               <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
-              <p style={{ margin: isMobileViewport ? 0 : '6px 0 0', color: '#667085' }}>
+              <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
                 {ahConnection?.connected ? ' Inhuis haalt automatisch ongeveer ieder kwartier nieuwe AH-bonnen op.' : ''}
                 {ahConnection?.last_sync_at ? <> Laatst gesynchroniseerd: <strong>{formatLastSync(ahConnection.last_sync_at)}</strong>.</> : null}
@@ -938,7 +938,7 @@ export default function StoreConnectionsPage() {
             </div>
 
             {!ahConnection?.connected ? (
-              <div style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '10px' }}>
+              <div style={{ display: 'grid', rowGap: '10px' }}>
                 <div style={{ color: '#667085' }}>
                   Tik of klik op Koppelen en meld je aan bij Albert Heijn. Inhuis regelt daarna de toegang en het ophalen van nieuwe bonnen.
                 </div>
@@ -949,7 +949,7 @@ export default function StoreConnectionsPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', columnGap: '12px', rowGap: isMobileViewport ? 0 : '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', columnGap: '12px', rowGap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
                   {ahBusy ? 'AH-bonnen ophalen…' : 'Nu synchroniseren'}
                 </Button>
@@ -1010,7 +1010,7 @@ export default function StoreConnectionsPage() {
             }
           >
             {jumboPocResult ? (
-              <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '10px' }}>
+              <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: '10px' }}>
                 {jumboPocResult.details.length ? (
                   <>
                     <strong>Gevonden kassabonnen ({jumboPocResult.details.length})</strong>
@@ -1072,7 +1072,7 @@ export default function StoreConnectionsPage() {
 
         {(activeProvider === 'aldi' || activeProvider === 'plus') ? (
         <Card>
-          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '6px' }}>
+          <div data-testid="aldi-digital-unavailable" role="status" style={{ display: 'grid', rowGap: '6px' }}>
             <h3 style={{ margin: 0 }}>{activeProvider === 'aldi' ? 'Aldi' : 'PLUS'}</h3>
             <p style={{ margin: 0 }}>Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas. Een koppeling met Inhuis is daarom niet mogelijk.</p>
             <p style={{ margin: 0 }}>Papieren kassabonnen kun je nog steeds in Kassa scannen.</p>

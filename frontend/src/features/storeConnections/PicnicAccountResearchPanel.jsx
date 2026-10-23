@@ -62,7 +62,7 @@ export default function PicnicAccountResearchPanel() {
       <div
         data-testid="picnic-account-research"
         className={isMobileViewport ? 'rz-store-receipt-panel--mobile' : undefined}
-        style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '12px' }}
+        style={{ display: 'grid', rowGap: '12px' }}
       >
         <h3 style={{ margin: 0 }}>Picnic — accountkoppeling (proef)</h3>
         <p style={{ margin: 0 }}>

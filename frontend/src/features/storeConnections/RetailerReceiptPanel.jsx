@@ -46,24 +46,24 @@ export default function RetailerReceiptPanel({
     <div
       data-testid={testId}
       className={isMobileViewport ? 'rz-store-receipt-panel--mobile' : undefined}
-      style={{ display: 'grid', rowGap: isMobileViewport ? 0 : '12px', maxWidth: '760px', minWidth: 0 }}
+      style={{ display: 'grid', rowGap: '12px', maxWidth: '760px', minWidth: 0 }}
     >
       <div>
         <h3 style={{ margin: 0 }}>{retailer} digitale kassabonnen</h3>
         {isMobileViewport ? (
-          <p role="status" style={{ margin: 0 }}>
+          <p role="status" style={{ margin: '6px 0 0' }}>
             Voor het ophalen is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
             Dit werkt niet betrouwbaar in alle mobiele browsers.
           </p>
         ) : null}
-        <p style={{ margin: isMobileViewport ? 0 : '6px 0 0' }}>
+        <p style={{ margin: '6px 0 0' }}>
           Kies de periode en haal je kassabonnen op.
         </p>
       </div>
 
       <div
         data-testid={dateRangeTestId || 'retailer-receipt-date-range'}
-        style={{ display: 'flex', columnGap: '12px', rowGap: isMobileViewport ? 0 : '12px', flexWrap: 'wrap' }}
+        style={{ display: 'flex', columnGap: '12px', rowGap: '12px', flexWrap: 'wrap' }}
       >
         <Input
           label="Vanaf"

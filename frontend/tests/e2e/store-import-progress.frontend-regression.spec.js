@@ -251,8 +251,8 @@ for (const width of [1280, 896, 390]) {
   })
 }
 
-for (const width of [390, 896, 1280]) {
-  test(`Winkelpanelen hebben alleen mobiel nul verticale tussenruimte bij ${width}px`, async ({ page }) => {
+for (const width of [390, 500, 896, 1280]) {
+  test(`Winkelpanelen hebben reguliere verticale tussenruimte bij ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await mockStorePage(page)
     await page.goto('/instellingen/winkelkoppelingen')
@@ -280,13 +280,13 @@ for (const width of [390, 896, 1280]) {
           labelGap: dateLabel ? window.getComputedStyle(dateLabel).rowGap : null,
         }
       })
-      expect(layout.gap).toBe(mobile ? '0px' : '12px')
+      expect(layout.gap).toBe('12px')
       if (provider === 'jumbo' || provider === 'lidl') {
-        expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
-        expect(layout.labelGap).toBe(mobile ? '0px' : '6px')
-        expect(layout.dateGap).toBe(mobile ? '0px' : '12px')
+        expect(layout.textMargin).toBe('6px')
+        expect(layout.labelGap).toBe('6px')
+        expect(layout.dateGap).toBe('12px')
       } else if (provider === 'ah') {
-        expect(layout.textMargin).toBe(mobile ? '0px' : '6px')
+        expect(layout.textMargin).toBe('6px')
       }
     }
   })
