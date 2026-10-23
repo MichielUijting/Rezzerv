@@ -4,7 +4,7 @@ Status: Draft PR #598, 22 oktober 2026. Dit document onderscheidt aantoonbaar we
 
 ## Functioneel doel
 
-De gebruiker kiest een supermarkt bovenaan **Instellingen → Winkelkoppelingen**. De tabel toont de winkel, de werkelijke wijze van bonontvangst, status, laatste AH-synchronisatie en een begrijpelijke actie. Alle bediening is met dezelfde responsieve Inhuis-componenten bruikbaar op desktop en mobiel; klantenkaartgegevens staan gescheiden onder een ingeklapte sectie.
+De gebruiker kiest een supermarkt bovenaan **Instellingen → Winkelkoppelingen**. De tabel bevat precies drie kolommen: **Winkel**, **Laatst bijgewerkt** en **Status**. In de laatste kolom staan uitsluitend de bedieningsknoppen. De eerdere technische uitleg, het afzonderlijke bovenste kader en de oude klantenkaartsectie zijn niet zichtbaar. Bestaande opgeslagen klantenkaartgegevens blijven ongewijzigd. Dezelfde Inhuis-tabelcomponent wordt responsief gebruikt op desktop en mobiel.
 
 ## Werkelijke bronmogelijkheden
 
@@ -44,6 +44,16 @@ Het bestaande `ImportProgress` uit PR #594 wordt boven de geselecteerde winkelin
 4. Een nieuwe Jumbo- of Lidl-favoriet hoeft niet onterecht als automatisch/geïnstalleerd te worden getoond.
 5. De gekozen importperiode en de bestaande Kassa-/duplicaat-/financiële controles blijven ongewijzigd.
 6. Mobiel toont dezelfde status en bediening als desktop; browserafhankelijke ontbrekende mogelijkheden worden eerlijk aangegeven.
+
+## PO-vaststelling: minimale gebruikersweergave (23 oktober 2026)
+
+Het scherm toont uitsluitend **Mijn winkelkoppelingen** en de drie-kolommige tabel. Geen apart inleidend tekstkader, geen begeleidende samenvatting of technische toelichting direct boven de tabel, en geen onderliggende klantenkaartsectie. Bij selectie van een winkel verschijnt alleen de bijbehorende bediening en indien relevant de uniforme importvoortgang. De statuskolom heeft voor Albert Heijn, Jumbo en Lidl een actieknop, voor Picnic een toelichtingsknop en voor Aldi/PLUS de knop **Geen koppeling mogelijk**. Bij Aldi/PLUS is de toelichting in begrijpelijke termen: **'Deze winkelketen biedt geen digitale kassabonnen aan via haar website of klantenpas. Een koppeling met Inhuis is daarom niet mogelijk.'** Papieren bonnen blijven via Kassa te verwerken.
+
+Vermijd in gebruikerszichtbare teksten de technische term 'server': noem de toepassing **Inhuis**, of gebruik in een zin gewoon 'Inhuis verwerkt...' / 'Onderhoud aan Inhuis'. Technische interne functienamen, API's, tabellen, gebeurtenissen en bestandsnamen worden niet omgedoopt. Dit is alleen een tekst-/presentatierichtlijn.
+
+### Rechtstreeks koppelen zonder browserfavoriet
+
+Een standaard website kan niet zelfstandig bladwijzers plaatsen of retailer-sessies op andere domeinen uitlezen. Een browserextensie met expliciete toestemming kan wel favorieten beheren en periodieke verwerking organiseren zolang de betreffende browser en sessie beschikbaar zijn, maar werkt niet uniform op alle mobiele browsers en geeft geen permanente server-onafhankelijke toegang. Volledig automatisch, op elk apparaat onafhankelijk van de browser, vereist een toegestane accountkoppeling met een duurzame authenticatieroute en bonbroncontract per retailer. De huidige Jumbo-/Lidl-koppelingen hebben dat nog niet; bouw niet op opgeslagen browsercookies, geforceerde login of geautomatiseerd omzeilen van verificatie. Onderzoek deze mogelijkheid als afzonderlijk afgebakende vervolgstap, zonder de bestaande werkende handmatige import te verstoren.
 
 ## Nog geen volledige automatisering
 
