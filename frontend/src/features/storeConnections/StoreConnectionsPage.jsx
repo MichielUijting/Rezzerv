@@ -982,70 +982,89 @@ export default function StoreConnectionsPage() {
         <Card>
           <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
             <div>
-              <h3 style={{ margin: 0 }}>Lidl digitale bonnen</h3>
+              <h3 style={{ margin: 0 }}>Lidl digitale kassabonnen</h3>
               {isMobileViewport ? (
                 <p role="status" style={{ margin: '6px 0' }}>
                   Voor Lidl is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
                   Dit werkt niet betrouwbaar in alle mobiele browsers.
                 </p>
               ) : null}
-              <p style={{ margin: '6px 0 0', color: '#667085' }}>
-                Haal bonnen op via je eigen Lidl-account. Inhuis ontvangt alleen bongegevens, geen wachtwoord of browsercookies.
+              <p style={{ margin: '6px 0 0' }}>
+                Kies de periode en haal je kassabonnen op. Inhuis neemt daarna de nieuwe bonnen over in Kassa.
               </p>
             </div>
 
-            <div data-testid="lidl-import-window">
-              <strong>Importperiode</strong>
-              <p>{lidlWindow ? (lidlFrom || '—') + ' t/m ' + (lidlTo || lidlWindow.to_date) : 'Laden…'}</p>
+            <div data-testid="lidl-import-window" style={{ display: 'grid', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <Input
+                  type="date"
+                  label="Vanaf"
+                  value={lidlFrom}
+                  onChange={event => setLidlFrom(event.target.value)}
+                  disabled={!lidlWindow?.can_manage || lidlWindowSaving}
+                  data-testid="lidl-from-date"
+                />
+                <Input
+                  type="date"
+                  label="Tot en met"
+                  value={lidlTo || lidlWindow?.to_date || ''}
+                  onChange={event => setLidlTo(event.target.value)}
+                  disabled={!lidlWindow?.can_manage || lidlWindowSaving}
+                  data-testid="lidl-to-date"
+                />
+              </div>
               {lidlPeriodUnsaved ? (
                 <div className="rz-inline-feedback" role="status" data-testid="lidl-period-unsaved">
-                  De gekozen importperiode is nog niet opgeslagen. Klik eerst op Opslaan.
+                  Sla de gekozen periode eerst op voordat je de Lidl-bonnen ophaalt.
                 </div>
               ) : null}
-              {lidlWindow?.can_manage ? <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Input type="date" label="Van" value={lidlFrom} onChange={e => setLidlFrom(e.target.value)} />
-                <Input type="date" label="Tot (optioneel)" value={lidlTo} onChange={e => setLidlTo(e.target.value)} />
-                <Button onClick={() => saveLidlWindow(false)} disabled={lidlWindowSaving || !lidlFrom || Boolean(lidlTo && lidlFrom > lidlTo)}>Opslaan</Button>
-                <Button variant="secondary" onClick={() => saveLidlWindow(true)} disabled={lidlWindowSaving}>Automatisch</Button>
-              </div> : null}
+              {lidlWindow?.can_manage ? (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => saveLidlWindow(false)}
+                    disabled={lidlWindowSaving || !lidlFrom || Boolean(lidlTo && lidlFrom > lidlTo)}
+                    data-testid="lidl-save-period"
+                  >Periode opslaan</Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => saveLidlWindow(true)}
+                    disabled={lidlWindowSaving}
+                    data-testid="lidl-reset-period"
+                  >Automatische periode</Button>
+                </div>
+              ) : null}
             </div>
-            <details data-testid="lidl-bookmarklet-help">
-              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Eerste keer? Stel Lidl-bonnen ophalen in</summary>
-              <div style={{ display: 'grid', gap: '8px', padding: '12px 0' }}>
-                <div>Sleep onderstaande knop één keer naar de favorietenbalk. Vervang een oudere Lidl-favoriet eerst.</div>
-              <a
-                href={lidlBookmarklet}
-                data-testid="lidl-web-bookmarklet"
-                style={{
-                  display: 'inline-flex',
-                  width: 'fit-content',
-                  minHeight: '40px',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--color-ui-primary)',
-                  color: 'var(--color-ui-primary)',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-                onClick={(event) => event.preventDefault()}
-              >
-                Lidl-bonnen ophalen
-              </a>
-                <div>Klik op 'Open mijn Lidl-kassabonnen', meld je bij Lidl aan en kies daar de opgeslagen favoriet.
-                  Laat dit Inhuis-tabblad open zolang Lidl bonnen doorgeeft.</div>
-              </div>
-            </details>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+
+            <div style={{
+              display: 'flex', alignItems: 'stretch',
+              justifyContent: 'space-between', flexWrap: 'nowrap', gap: '8px',
+            }}>
               <Button
                 type="button"
                 onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
                 disabled={lidlPeriodUnsaved || lidlWindowSaving || !lidlWindow}
                 data-testid="lidl-web-open-history"
-              >
-                Open mijn Lidl-kassabonnen
-              </Button>
+              >Open mijn Lidl</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                style={{ maxWidth: '60%', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
+                onClick={() => setSetupHelpStore('lidl')}
+                data-testid="lidl-help-open"
+              >Eerste keer koppelen met Lidl?</Button>
             </div>
+            <RetailerBookmarkletHelp
+              provider="lidl"
+              retailer="Lidl"
+              open={setupHelpStore === 'lidl'}
+              onClose={() => setSetupHelpStore('')}
+              bookmarklet={lidlBookmarklet}
+              instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
+                opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
+            />
           </div>
         </Card>
         ) : null}
