@@ -934,14 +934,14 @@ export default function StoreConnectionsPage() {
             </div>
             {!jumboPeriodValid ? <div role="alert">Kies een geldige begin- en einddatum voor Jumbo.</div> : null}
             <div style={{
-              display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px',
+              display: 'flex', alignItems: 'stretch',
+              justifyContent: 'space-between', flexWrap: 'nowrap', gap: '8px',
             }}>
               <a
                 href={JUMBO_ORDERS_URL}
                 role="button"
                 className="rz-button-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minWidth: 0, textDecoration: 'none' }}
                 onClick={() => {
                   setJumboPhase('waiting')
                   setJumboProgress(null)
@@ -956,6 +956,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 variant="secondary"
+                style={{ maxWidth: '60%', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
                 onClick={() => setJumboHelpOpen(true)}
                 data-testid="jumbo-help-open"
               >
