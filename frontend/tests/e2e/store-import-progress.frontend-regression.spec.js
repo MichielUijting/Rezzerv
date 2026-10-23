@@ -220,14 +220,14 @@ for (const width of [1280, 390]) {
   })
 }
 
-test('Lidl keeps the authorized save gate while sharing the same presentation as Jumbo', async ({ page }) => {
+test('Lidl automatically saves changed dates before opening browser and keeps one user action', async ({ page }) => {
   await mockStorePage(page)
-  let saved = false
-  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+  let releaseSave
+  let requestedPeriod = null
+  await page.route('**/api/receipts/retailers/lidl/import-window', async route => {
     if (route.request().method() === 'PUT') {
-      const submitted = route.request().postDataJSON()
-      expect(submitted).toEqual({ from_date: '2026-10-21', to_date: null })
-      saved = true
+      requestedPeriod = route.request().postDataJSON()
+      await new Promise(resolve => { releaseSave = resolve })
       return route.fulfill({ json: {
         from_date: '2026-10-21', to_date: '2026-10-31',
         configured_from_date: '2026-10-21', configured_to_date: null,
@@ -240,15 +240,119 @@ test('Lidl keeps the authorized save gate while sharing the same presentation as
       can_manage: true,
     } })
   })
+  await page.addInitScript(() => {
+    window.__lidlPopupCalls = []
+    window.__lidlLaunched = null
+    window.__lidlClosed = false
+    window.open = (...args) => {
+      window.__lidlPopupCalls.push(args)
+      return {
+        closed: false,
+        location: { replace: url => { window.__lidlLaunched = url } },
+        close() { this.closed = true; window.__lidlClosed = true },
+      }
+    }
+  })
   await page.goto('/instellingen/winkelkoppelingen')
   await page.getByTestId('receipt-connection-action-lidl').click()
   await expect(page.getByTestId('lidl-from-date')).toHaveValue('2026-10-21')
-  await expect(page.getByTestId('lidl-period-unsaved')).toBeVisible()
-  const open = page.getByTestId('lidl-web-open-history')
-  await expect(open).toBeDisabled()
-  await page.getByTestId('lidl-save-period').click()
-  await expect.poll(() => saved).toBe(true)
   await expect(page.getByTestId('lidl-period-unsaved')).toHaveCount(0)
+  await expect(page.getByTestId('lidl-save-period')).toHaveCount(0)
+  await expect(page.getByTestId('lidl-reset-period')).toHaveCount(0)
+  const open = page.getByTestId('lidl-web-open-history')
   await expect(open).toBeEnabled()
-  // No actual retailer login, browser window or receipt write is triggered.
+  await open.click()
+  await expect(open).toBeDisabled()
+  await expect.poll(() => requestedPeriod).toEqual({ from_date: '2026-10-21', to_date: null })
+  const beforeSave = await page.evaluate(() => ({
+    tabs: window.__lidlPopupCalls, launched: window.__lidlLaunched,
+  }))
+  expect(beforeSave.tabs).toEqual([['about:blank', '_blank']])
+  expect(beforeSave.launched).toBe(null)
+  expect(typeof releaseSave).toBe('function')
+  releaseSave()
+  await expect.poll(() => page.evaluate(() => window.__lidlLaunched)).toContain('www.lidl.nl')
+  await expect(open).toBeEnabled()
+  expect(await page.evaluate(() => window.__lidlClosed)).toBe(false)
+})
+
+test('Lidl does not open retailer or leave stale dates after failed automatic period save', async ({ page }) => {
+  await mockStorePage(page)
+  let updates = 0
+  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+    if (route.request().method() === 'PUT') {
+      updates++
+      return route.fulfill({ status: 503, json: { detail: 'Opslaan tijdelijk niet beschikbaar.' } })
+    }
+    return route.fulfill({ json: { from_date: '2026-10-01', to_date: '2026-10-31', can_manage: true } })
+  })
+  await page.addInitScript(() => {
+    window.__lidlOpened = null
+    window.__lidlPopupClosed = false
+    window.open = () => ({
+      closed: false,
+      location: { replace: url => { window.__lidlOpened = url } },
+      close() { this.closed = true; window.__lidlPopupClosed = true },
+    })
+  })
+  await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-lidl').click()
+  await page.getByTestId('lidl-web-open-history').click()
+  await expect.poll(() => updates).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__lidlPopupClosed)).toBe(true)
+  expect(await page.evaluate(() => window.__lidlOpened)).toBe(null)
+  await expect(page.getByTestId('lidl-from-date')).toHaveValue('2026-10-21')
+  await expect(page.getByTestId('lidl-web-open-history')).toBeEnabled()
+})
+
+test('Lidl avoids unnecessary saves when date window already matches', async ({ page }) => {
+  await mockStorePage(page)
+  let updates = 0
+  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+    if (route.request().method() === 'PUT') {
+      updates++
+      return route.fulfill({ status: 500, json: {} })
+    }
+    return route.fulfill({ json: {
+      from_date: '2026-10-21', to_date: '2026-10-31',
+      configured_from_date: '2026-10-21', configured_to_date: null,
+      can_manage: true,
+    } })
+  })
+  await page.addInitScript(() => {
+    window.__lidlOpened = null
+    window.open = () => ({
+      closed: false,
+      location: { replace: url => { window.__lidlOpened = url } },
+      close() { this.closed = true },
+    })
+  })
+  await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-lidl').click()
+  await page.getByTestId('lidl-web-open-history').click()
+  await expect.poll(() => page.evaluate(() => window.__lidlOpened)).toContain('www.lidl.nl')
+  expect(updates).toBe(0)
+})
+
+test('Lidl cannot bypass household period permissions or blocked browser popups', async ({ page }) => {
+  await mockStorePage(page)
+  let updates = 0
+  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+    if (route.request().method() === 'PUT') {
+      updates++
+      return route.fulfill({ status: 403, json: {} })
+    }
+    return route.fulfill({ json: {
+      from_date: '2026-10-01', to_date: '2026-10-31', can_manage: false,
+    } })
+  })
+  await page.addInitScript(() => {
+    window.__lidlAttemptedPopup = 0
+    window.open = () => { window.__lidlAttemptedPopup++; return null }
+  })
+  await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-lidl').click()
+  await page.getByTestId('lidl-web-open-history').click()
+  expect(updates).toBe(0)
+  expect(await page.evaluate(() => window.__lidlAttemptedPopup)).toBe(0)
 })
