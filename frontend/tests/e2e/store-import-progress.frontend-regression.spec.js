@@ -356,3 +356,27 @@ test('Lidl cannot bypass household period permissions or blocked browser popups'
   expect(updates).toBe(0)
   expect(await page.evaluate(() => window.__lidlAttemptedPopup)).toBe(0)
 })
+
+test('Lidl refuses to save a changed period when popup permission is blocked', async ({ page }) => {
+  await mockStorePage(page)
+  let saves = 0
+  await page.route('**/api/receipts/retailers/lidl/import-window', route => {
+    if (route.request().method() === 'PUT') {
+      saves++
+      return route.fulfill({ status: 500, json: {} })
+    }
+    return route.fulfill({ json: {
+      from_date: '2026-10-01', to_date: '2026-10-31', can_manage: true,
+    } })
+  })
+  await page.addInitScript(() => {
+    window.__lidlPopupBlocked = true
+    window.open = () => null
+  })
+  await page.goto('/instellingen/winkelkoppelingen')
+  await page.getByTestId('receipt-connection-action-lidl').click()
+  await page.getByTestId('lidl-web-open-history').click()
+  expect(saves).toBe(0)
+  await expect(page.getByTestId('lidl-web-open-history')).toBeEnabled()
+})
+
