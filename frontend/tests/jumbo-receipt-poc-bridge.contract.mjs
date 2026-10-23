@@ -114,14 +114,18 @@ const storeConnectionsSource = fs.readFileSync(
 assert.match(storeConnectionsSource, /JUMBO_POC_FRAGMENT_PREFIX/)
 assert.match(storeConnectionsSource, /decodeURIComponent\(encoded\)/)
 assert.match(storeConnectionsSource, /window\.history\.replaceState/)
-assert.match(storeConnectionsSource, /Jumbo digitale kassabonnen/)
+assert.match(storeConnectionsSource, /retailer="Jumbo"/)
+const sharedPanel = fs.readFileSync(new URL('../src/features/storeConnections/RetailerReceiptPanel.jsx', import.meta.url), 'utf8')
+assert.match(sharedPanel, /{retailer} digitale kassabonnen/)
+assert.match(sharedPanel, /Kies de periode en haal je kassabonnen op\./)
 assert.match(storeConnectionsSource, /Gevonden kassabonnen/)
 assert.match(storeConnectionsSource, /jumbo-confirm-import/)
 assert.match(storeConnectionsSource, /setJumboPocResult\(null\)/)
 assert.doesNotMatch(storeConnectionsSource, /Nieuwste bon-ID:/)
 assert.doesNotMatch(storeConnectionsSource, /Parsermelding:/)
 
-assert.match(storeConnectionsSource, /Eerste keer koppelen met Jumbo\?/)
+assert.match(storeConnectionsSource, /helpTestId="jumbo-help-open"/)
+assert.match(sharedPanel, /Eerste keer koppelen met {retailer}\?/)
 assert.doesNotMatch(storeConnectionsSource, /<strong>POC transport:/)
 assert.doesNotMatch(storeConnectionsSource, /<strong>Jumbo-origin:/)
 assert.doesNotMatch(storeConnectionsSource, /<strong>Bonformaat:/)
@@ -133,10 +137,13 @@ assert.doesNotMatch(storeConnectionsSource, /HANDSHAKE_OK/)
 assert.doesNotMatch(storeConnectionsSource, /sampleReceipt/)
 assert.doesNotMatch(storeConnectionsSource, /v4-knop/)
 assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
-const jumboLaunch = storeConnectionsSource.slice(
-  storeConnectionsSource.indexOf('href={JUMBO_ORDERS_URL}'),
-  storeConnectionsSource.indexOf('data-testid="jumbo-poc-open"'),
+assert.match(storeConnectionsSource, /openHref={JUMBO_ORDERS_URL}/)
+assert.match(storeConnectionsSource, /openTestId="jumbo-poc-open"/)
+const jumboLaunch = sharedPanel.slice(
+  sharedPanel.indexOf('<a'),
+  sharedPanel.indexOf('</a>'),
 )
+assert.match(jumboLaunch, /href={openHref}/)
 assert.match(jumboLaunch, /role="button"/)
 assert.match(jumboLaunch, /className="rz-button-primary"/)
 const jumboButtonCss = fs.readFileSync(new URL('../src/ui/components/button.css', import.meta.url), 'utf8')
