@@ -62,7 +62,7 @@ export default function RetailerReceiptPanel({
       </div>
 
       <div
-        data-testid={dateRangeTestId}
+        data-testid={dateRangeTestId || 'retailer-receipt-date-range'}
         style={{ display: 'flex', columnGap: '12px', rowGap: isMobileViewport ? 0 : '12px', flexWrap: 'wrap' }}
       >
         <Input
