@@ -158,7 +158,7 @@ for (const width of [1280, 390]) {
       await expect(unavailable).toHaveText('Geen koppeling mogelijk')
       await expect(unavailable).toHaveAttribute('title', /geen digitale kassabonnen aan via haar website of klantenpas/)
       await expect(unavailable.locator('button')).toHaveCount(0)
-      await expect(unavailable).toHaveCSS('color', /rgb\\(/)
+      await expect(unavailable).toHaveCSS('color', /^rgb/)
     }
     await expect(page.getByTestId('aldi-digital-unavailable')).toHaveCount(0)
     const overviewCard = overview.locator('xpath=ancestor::*[contains(@class, "rz-card")][1]')
