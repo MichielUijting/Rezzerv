@@ -1174,3 +1174,11 @@ artikel voorlopig apart blijft en geen invoer nodig is. Bestaande optionele
 platformtools voor bron-/GPC-beheer blijven beschikbaar. De verandering gebruikt
 geen nieuwe kleuren, kader-, formulier- of navigatiepatronen. Zowel 390 als
 1280 pixels worden gericht getest.
+
+### GPC-selectie in Externe databases — 24 oktober 2026
+
+Een keuzelijst die als keuze wordt gepresenteerd is bedienbaar zodra de
+classificatiecontrole klaar is. De geselecteerde code wordt expliciet als
+selectie getoond, met uitleg over generiek versus exact koppelen. Selecteren
+is geen opslaan. Tijdens controleren of opslaan mag de bestaande centrale
+select tijdelijk worden uitgeschakeld.

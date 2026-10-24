@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+import re
 from typing import Any, Iterable
 
 from app.services.product_taxonomy_store import (
@@ -71,6 +72,18 @@ _SEMANTIC_GPC_SIGNAL_SOURCES = {
 
 _EXTERNAL_TAXONOMY_SIGNAL_SOURCES = {
     "external_category_tags",
+}
+
+# OFF ancestor categories describe a large food collection, not a product.
+# "plant based food" must never supply the anchor "plant" for garden plants.
+_BROAD_FOOD_CATEGORY_PHRASES = (
+    'plant based foods and beverages', 'plant based food and beverage',
+    'plant based foods', 'plant based food', 'foods and beverages',
+    'food and beverage', 'plantaardige voedingsmiddelen', 'plantaardige voeding',
+)
+_CATEGORY_CONTEXT_SOURCES = {
+    'category', 'external_category', 'external_categories',
+    'external_category_tags', 'external_search_text',
 }
 
 _ANCHOR_REQUIRED_SIGNAL_SOURCES = (
@@ -171,6 +184,10 @@ def _append_signal(
     weight: float,
 ) -> None:
     normalized = normalize_taxonomy_text(text_value)
+    if source in _CATEGORY_CONTEXT_SOURCES:
+        for phrase in _BROAD_FOOD_CATEGORY_PHRASES:
+            normalized = re.sub(r'(?<!\w)' + re.escape(phrase) + r'(?!\w)', ' ', normalized)
+        normalized = ' '.join(normalized.split())
     if not normalized or normalized in seen:
         return
     tokens = _meaningful_tokens(normalized)

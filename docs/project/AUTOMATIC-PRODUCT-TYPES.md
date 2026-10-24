@@ -134,3 +134,17 @@ gedaan alsof uitsluitend de productnaam bewijst of een aardappelbereiding vers,
 gekoeld of diepgevroren is: ontbrekende gegevens blijven pending, zonder
 handmatige classificatieopdracht. Deze conflictcontrole vergroot de zestien
 consumptiefamilies niet en is geen volledige semantische productvalidatie.
+
+### Selectie en brede broncategorieën
+
+Een geselecteerde GS1 GPC-code is nog geen opgeslagen artikelkoppeling. Het
+scherm toont expliciet de huidige selectie en legt uit wanneer generiek
+koppelen beschikbaar is of een exacte productkandidaat moet worden gekozen.
+De keuzelijst is bedienbaar zodra de classificatiecontrole klaar is; een
+keuze volgt dezelfde bestaande bevestigingsroute als de kandidaatknoppen.
+
+Brede OFF-voedingsvoorouders zoals `plant-based-foods-and-beverages` worden
+uit categorie-/zoekcontext verwijderd vóór de kandidaatweging. Zij mogen
+geen tuinplanten bewijzen. Specifieke productcategorieën (zoals `potatoes`)
+en echte plantnamen blijven normale signalen. Er worden geen fictieve
+Brickcodes of bewaartoestanden toegevoegd om lege resultaten op te vullen.

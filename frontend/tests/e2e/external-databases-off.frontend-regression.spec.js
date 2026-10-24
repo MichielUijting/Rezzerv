@@ -837,6 +837,10 @@ for (const width of [390, 1280]) {
     await expect(section).toContainText('Melk · koemelk · halfvol · regulier');
     await expect(section.locator('input, select, textarea, button')).toHaveCount(0);
     await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10000025');
+    await expect(page.getByLabel('Producttype', { exact: true })).toBeEnabled();
+    await page.getByLabel('Producttype', { exact: true }).selectOption('gpc:10000025');
+    await expect(page.getByTestId('external-gpc-selection-summary')).toContainText('10000025');
+    await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled();
     ready = false;
     await page.reload();
     await page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: 'halfvolle melk' }).dblclick();
