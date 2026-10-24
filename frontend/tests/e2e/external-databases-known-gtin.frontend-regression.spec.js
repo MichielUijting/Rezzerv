@@ -7,7 +7,7 @@ import {
 
 test.use({ storageState: 'playwright/.auth/superuser.json' })
 
-test.describe('Externe databases 2: uitsluitend overzicht', () => {
+test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
   for (const width of [390, 1280]) {
     test(`OFF-paneel gebruikt bestaande automatische zoekflow op ${width}px`, async ({ page }) => {

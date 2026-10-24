@@ -23,7 +23,8 @@ artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschill
 artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
 blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
 van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
-DataTable. Deze actie zoekt geen externe kandidaten en schrijft geen gegevens.
+DataTable. Het laden van de artikellijst start geen externe zoekacties en
+schrijft geen gegevens. OFF-kandidaten worden pas na artikelselectie gezocht.
 Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
 worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
 Statiegeld/emballage, kortingen, koop-/spaarzegels, betalingen en totalen zijn
