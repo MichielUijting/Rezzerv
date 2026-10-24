@@ -79,7 +79,7 @@ def run_manual_search_contract() -> None:
 def run_automatic_search_contract() -> None:
     original_resolve_receipt_item = service.resolve_receipt_item
     original_query_off = service._query_off
-    captured = {}
+    captured = {"queries": []}
 
     try:
         service.resolve_receipt_item = lambda receipt_item_id: {
@@ -93,6 +93,7 @@ def run_automatic_search_contract() -> None:
 
         def fake_query(query, page_size):
             captured["query"] = query
+            captured["queries"].append(query)
             return [], "test_provider"
 
         service._query_off = fake_query
@@ -105,9 +106,28 @@ def run_automatic_search_contract() -> None:
         )
 
         assert_equal(captured.get("query"), "passata", "automatische providerzoekterm gebruikt essentieel producttoken")
-        assert_equal(result["query"], "passata rust", "automatische gerapporteerde zoekterm is genormaliseerd")
+        assert_equal(captured["queries"], ["jumbo passata rust", "passata rust", "passata"],
+                     "bestaande huismerkzoekterm wordt gevolgd door ruimere suggestiezoektermen")
+        assert_equal(result["query"], "jumbo passata rust", "automatische gerapporteerde zoekterm behoudt huismerkevidence")
         assert_equal(result["results"], [], "automatische lege resultaatset")
         assert_equal(result["mutated"], False, "automatische zoekactie muteert niet")
+
+        def broader_query(query, page_size):
+            if query == "jumbo passata rust":
+                return [], "test_provider"
+            return [{"code": "8718452504435", "product_name": "Passata", "brands": "Jumbo"}], "test_provider"
+
+        service._query_off = broader_query
+        suggestions = service.search_off_candidates({
+            "receipt_item_id": "purchase-import-line:line-1", "mode": "automatic", "limit": 20,
+        })
+        assert_equal([row["gtin"] for row in suggestions["results"]], ["8718452504435"],
+                     "geen exacte eerste hit levert bestaande ruimere OFF-suggestie op")
+        assert_equal(suggestions["results"][0]["automatic_evidence"]["matched_queries"],
+                     ["passata rust", "passata"], "suggestie behoudt bewijs van ruimere zoekvarianten")
+        for flag in ("mutated", "creates_global_product", "creates_household_article",
+                     "creates_inventory_event", "creates_external_candidate"):
+            assert_equal(suggestions[flag], False, f"suggesties zoeken zonder {flag}")
     finally:
         service.resolve_receipt_item = original_resolve_receipt_item
         service._query_off = original_query_off

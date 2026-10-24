@@ -32,6 +32,19 @@ meetellen volgens de financiële bonregels. Uitpakken-importkopieën van een
 kassabon worden niet opnieuw als zelfstandige bron gelezen: de actuele
 regelrol en verwijderstatus van de oorspronkelijke bon blijven leidend.
 Externe databases 2 toont geen knop Afsluiten.
+Op desktop opent dubbelklikken op een artikel een OFF-kandidatenpaneel onder de
+tabel; op mobiel volstaat één tik. Enter of spatie ondersteunt toetsenbordgebruik.
+De bestaande automatische OFF-zoekroute van Externe databases wordt hergebruikt:
+de server bepaalt artikelnaam/winkel uit de bron-ID, maakt dezelfde zoekvarianten
+en suggesties, bewaakt product-/huismerkconflicten en rangschikt kandidaten.
+Het paneel toont naam, merk, barcode, inhoud en overeenkomst, met standaard
+zoeken, sorteren en paginering. De eerste volgorde blijft de bestaande automatische
+voorkeursvolgorde. Een kandidaat is een suggestie, geen bewezen exacte match.
+Zoeken start alleen na selectie en maakt geen Catalogus-, kandidaat-, huishoud-
+of voorraadmutatie. Bij wisselen van artikel worden oude resultaten gewist en
+lopende clientverzoeken afgebroken; een late respons mag het nieuwe paneel niet
+overschrijven. Leeg resultaat, onbereikbare OFF-bron en rechtenfouten worden apart
+afgehandeld; bij een zoekfout kan de gebruiker opnieuw zoeken.
 Oude statiegeldregels die ten onrechte als product zijn opgeslagen, worden via
 een afzonderlijk herstelplan hergeclassificeerd naar financieel/niet-voorraadgerechtigd.
 De oorspronkelijke regel, bedragen, koppelingen en voorraadhistorie blijven behouden;

@@ -10,6 +10,98 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 test.describe('Externe databases 2: uitsluitend overzicht', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
   for (const width of [390, 1280]) {
+    test(`OFF-paneel gebruikt bestaande automatische zoekflow op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const searches = []
+      const unexpectedWrites = []
+      let errorAttempts = 0
+      let slowMilk = false
+      let releaseSlow = null
+      let slowCompleted = false
+      const rows = ['Melk', 'Appels', 'Kaas'].map((name, index) => ({
+        id: `receipt-table-line:off-panel-${index}`, receipt_line_text: name,
+        retailer_code: 'lidl', receipt_article_number: String(index), quantity_label: '1 stuk',
+      }))
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        if (path === '/api/external-products/off/search') {
+          const body = request.postDataJSON()
+          searches.push(body)
+          if (slowMilk && body.receipt_item_id === rows[0].id) {
+            await new Promise((resolve) => { releaseSlow = resolve })
+            try {
+              await route.fulfill({ json: { provider: 'openfoodfacts', results: [
+                { gtin: '8720326035617', product_name: 'Verouderde respons voor Melk', score: .99 },
+              ] } })
+            } catch { /* The previous item's request is expected to be aborted. */ }
+            slowCompleted = true
+            return
+          }
+          if (body.receipt_item_id === rows[1].id) return route.fulfill({ json: { provider: 'openfoodfacts', results: [] } })
+          if (body.receipt_item_id === rows[2].id && errorAttempts++ === 0) return route.fulfill({ status: 503, json: { detail: 'OFF is tijdelijk niet bereikbaar.' } })
+          return route.fulfill({ json: { provider: 'openfoodfacts', results: [
+            { gtin: '8720326035617', product_name: 'Voorkeur uit automatische zoekvarianten', brand: 'Testmerk', quantity: '1 l', score: .60, automatic_rank_score: .95 },
+            { gtin: '8718452504435', product_name: 'Tweede suggestie', brand: 'Testmerk', quantity: '500 ml', score: .99, automatic_rank_score: .80 },
+          ] } })
+        }
+        if (request.method() !== 'GET') unexpectedWrites.push(path)
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'off-panel-test', email: 'off-panel@example.test', active_household_id: '0',
+          context_type: 'system', role: 'owner', is_platform_superuser: true,
+          permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const table = page.getByTestId('external-databases-2-table')
+      await expect(table.locator('tbody tr')).toHaveCount(3)
+      expect(searches).toEqual([])
+      const open = async (index) => {
+        const row = table.locator('tbody tr').filter({ hasText: rows[index].receipt_line_text })
+        if (width <= 720) await row.click()
+        else await row.dblclick()
+      }
+      if (width > 720) {
+        await table.locator('tbody tr').first().click()
+        await expect(page.getByTestId('external-databases-2-off-panel')).toHaveCount(0)
+        expect(searches).toEqual([])
+      }
+      await open(0)
+      const panel = page.getByTestId('external-databases-2-off-panel')
+      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      const candidates = panel.getByTestId('external-databases-2-off-candidates')
+      await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
+      await expect(candidates.locator('tbody tr').first()).toContainText('95%')
+      expect(searches[0]).toEqual({ receipt_item_id: rows[0].id, mode: 'automatic', limit: 20 })
+      expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      await open(1)
+      await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
+      await expect(panel).toContainText('Geen passende OFF-kandidaten gevonden.')
+      await expect(panel).not.toContainText('Tweede suggestie')
+      await open(2)
+      await expect(panel.getByRole('alert')).toContainText('OFF is tijdelijk niet bereikbaar.')
+      await panel.getByRole('button', { name: 'Opnieuw zoeken' }).click()
+      await expect(panel.getByTestId('external-databases-2-off-candidates')).toContainText('Tweede suggestie')
+      await expect(table.locator('tbody tr')).toHaveCount(3)
+      await expect(page.getByRole('button', { name: /Koppel|Opslaan|Afsluiten/ })).toHaveCount(0)
+      slowMilk = true
+      await open(0)
+      await expect(panel.getByRole('status')).toContainText('Kandidaten zoeken')
+      await expect.poll(() => Boolean(releaseSlow)).toBe(true)
+      await open(1)
+      await expect(panel).toContainText('Geen passende OFF-kandidaten gevonden.')
+      releaseSlow()
+      await expect.poll(() => slowCompleted).toBe(true)
+      await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
+      await expect(panel).not.toContainText('Verouderde respons')
+      expect(unexpectedWrites).toEqual([])
+    })
+
     test(`standaardtabel zoekt over alle pagina's op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const writes = []
