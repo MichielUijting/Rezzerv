@@ -98,6 +98,7 @@ def _exercise_receipt_items_http_path() -> None:
 
 def _exercise_weight_detail_repair_and_source_filter() -> None:
     from app.maintenance.repair_weight_detail_rows import build_plan, apply_plan, plan_digest
+    from app.maintenance import repair_legacy_deposit_rows as deposits
     from app.services.external_unlinked_articles_service import _source_articles
 
     prefix = f"__weight_{uuid.uuid4()}"
@@ -112,13 +113,14 @@ def _exercise_weight_detail_repair_and_source_filter() -> None:
                     {'id': receipt, 'hash': uuid.uuid4().hex * 2})
                 conn.execute(text('''INSERT INTO receipt_tables
                     (id, raw_receipt_id, household_id, workflow_state, store_name, currency, parse_status, line_count)
-                    VALUES (:id, :id, '0', 'active', 'Lidl', 'EUR', 'review_needed', 4)'''), {'id': receipt})
+                    VALUES (:id, :id, '0', 'active', 'Lidl', 'EUR', 'review_needed', 6)'''), {'id': receipt})
                 for index, role, deleted, raw in (
                     (0, 'product', False, 'GEMBER'),
                     (1, 'product', False, '0,094 kg x 5,99 EUR'),
                     (2, 'loyalty', False, 'Koopzegel'),
                     (3, 'product', True, 'Verwijderd'),
-                    (4, 'financial', False, 'Statiegeld')):
+                    (4, 'financial', False, 'Statiegeld'),
+                    (5, 'product', False, 'Statiegeld')):
                     conn.execute(text('''INSERT INTO receipt_table_lines
                         (id, receipt_table_id, line_index, raw_label, normalized_label, quantity,
                          unit_price, line_total, external_article_code, article_match_status,
@@ -144,14 +146,29 @@ def _exercise_weight_detail_repair_and_source_filter() -> None:
                 ('deposit-copy', 'receipt', 'receipt-line:' + prefix + 'live4', 'Statiegeld'),
                 ('orphan-copy', 'receipt', None, 'Verouderde bonkopie'),
                 ('mislabelled-copy', 'mock', 'receipt-line:' + prefix + 'removed0', 'Verwijderde bonkopie'),
-                ('real-purchase', 'mock', 'independent-product', 'Melk')):
+                ('real-purchase', 'mock', 'independent-product', 'Melk'),
+                ('legacy-import-deposit', 'mock', 'independent-deposit', 'Statiegeld')):
                 conn.execute(text('''INSERT INTO purchase_import_lines
-                    (id, batch_id, external_line_ref, article_name_raw, quantity_raw, match_status)
-                    VALUES (:id, :batch, :reference, :label, 1, 'unmatched')'''),
+                    (id, batch_id, external_line_ref, article_name_raw, quantity_raw, line_price_raw, match_status)
+                    VALUES (:id, :batch, :reference, :label, 1, .15, 'unmatched')'''),
                     {'id': prefix + suffix, 'batch': prefix + source_type, 'reference': reference, 'label': label})
+            purchase_plan = deposits.build_purchase_plan(conn)
+            assert prefix + 'legacy-import-deposit' in {row['id'] for row in purchase_plan}
+            deposits.apply_purchase_plan(conn, plan_digest(purchase_plan))
+            assert not any(row['id'].startswith(prefix) for row in deposits.build_purchase_plan(conn))
             purchases = [row for row in _source_articles(conn)
                          if str(row.get('purchase_import_line_id', '')).startswith(prefix)]
             assert [row['purchase_import_line_id'] for row in purchases] == [prefix + 'real-purchase'], purchases
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 3, sources
+            deposit_plan = deposits.build_plan(conn)
+            assert {prefix + suffix + '5' for suffix in ('live', 'removed')} <= {row['id'] for row in deposit_plan}
+            deposits.apply_plan(conn, plan_digest(deposit_plan))
+            assert not any(row['id'].startswith(prefix) for row in deposits.build_plan(conn))
+            repaired_deposit = conn.execute(text('''SELECT line_role, inventory_eligible, is_deleted, line_total
+                FROM receipt_table_lines WHERE id=:id'''), {'id': prefix + 'live5'}).one()
+            assert repaired_deposit[:3] == ('financial', 0, False), repaired_deposit
+            assert str(repaired_deposit[3]) == '0.56', repaired_deposit
             sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
             assert len(sources) == 2, sources
             assert all(row['receipt_line_text'] == 'Gember' for row in sources)

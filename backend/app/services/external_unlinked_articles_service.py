@@ -10,13 +10,16 @@ from sqlalchemy import text
 from app.db import engine
 from app.services.external_article_ui_projection import project_central_link_truth
 from app.services.external_article_product_link_service import (
-    normalize_external_link_article_code,
-    normalize_external_link_receipt_text,
     normalize_external_link_retailer_code,
 )
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+
+
+def _overview_retailer_code(value):
+    code = normalize_external_link_retailer_code(value)
+    return 'ah' if code in {'ah', 'albert-heijn', 'albert-heijn-digitaal'} else code
 
 
 def _source_articles(conn):
@@ -67,25 +70,24 @@ def list_articles_without_catalog_barcode() -> dict:
         for source in _source_articles(conn):
             if not str(source.get("receipt_line_text") or "").strip():
                 continue
-            # Same shop/text/code context as central product links; no household
-            # identity is inferred from a name. Keep different article codes apart.
+            # Presentation-only grouping requested by the PO. Exact displayed
+            # spelling, including case/inner spaces/accents; never product identity.
             key = (
-                normalize_external_link_retailer_code(source.get("retailer_code")),
-                normalize_external_link_receipt_text(source.get("receipt_line_text")),
-                normalize_external_link_article_code(source.get("external_article_code")),
+                _overview_retailer_code(source.get("retailer_code")),
+                source["receipt_line_text"],
             )
             if key in seen:
                 continue
-            seen.add(key)
             projected = project_central_link_truth(conn, source)
             if projected.get("central_link_active") is True and is_valid_gtin(
                 str(projected.get("linked_gtin") or "")
             ):
                 continue
+            seen.add(key)
             items.append({
                 "id": source["receipt_item_id"],
                 "receipt_line_text": source["receipt_line_text"],
-                "retailer_code": normalize_external_link_retailer_code(source.get("retailer_code")),
+                "retailer_code": key[0],
                 "receipt_article_number": str(source.get("external_article_code") or ""),
                 "quantity_label": str(source.get("quantity_label") or ""),
             })

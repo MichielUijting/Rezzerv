@@ -18,9 +18,11 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
 bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
 actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
-Cataloguskoppeling zonder barcode blijft zichtbaar. Gelijke winkel-/bontekst-/
-artikelcodecontexten worden éénmaal getoond; verschillende artikelcodes blijven
-afzonderlijk. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
+Cataloguskoppeling zonder barcode blijft zichtbaar. Exact dezelfde getoonde
+artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschillende
+artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
+blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
+van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
 DataTable. Deze actie zoekt geen externe kandidaten en schrijft geen gegevens.
 Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
 worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
@@ -30,6 +32,10 @@ meetellen volgens de financiële bonregels. Uitpakken-importkopieën van een
 kassabon worden niet opnieuw als zelfstandige bron gelezen: de actuele
 regelrol en verwijderstatus van de oorspronkelijke bon blijven leidend.
 Externe databases 2 toont geen knop Afsluiten.
+Oude statiegeldregels die ten onrechte als product zijn opgeslagen, worden via
+een afzonderlijk herstelplan hergeclassificeerd naar financieel/niet-voorraadgerechtigd.
+De oorspronkelijke regel, bedragen, koppelingen en voorraadhistorie blijven behouden;
+het openen van de lijst voert dit herstel niet uit.
 Losse gewichtsdetails worden bij de Lidl-bronnormalisatie vóór Kassa/Uitpakken
 samengevoegd indien de brongegevens dit bewijzen; bij twijfel vragen ze controle
 en zijn ze niet voorraadgerechtigd. Bestaande bewezen dubbele bronregels kunnen

@@ -30,6 +30,28 @@ De ontvangen databaseanalyse toonde 15 dergelijke regels op verwijderde bonnen,
 geen overeenkomstige vervuiling in Catalogus of voorraad. Goedgekeurde of
 gekoppelde regels worden bewust niet op basis van tekst verwijderd.
 
+## Aanvullend: verkeerd gemarkeerd statiegeld
+
+`app.maintenance.repair_legacy_deposit_rows` corrigeert oude productrollen voor
+statiegeld/emballage. Zowel ruwe als genormaliseerde brontekst moeten volgens de
+bestaande bronclassificatie statiegeld aantonen en er moet een regelbedrag zijn.
+Een tegenstrijdige artikelnaam wordt niet overschreven. Alleen de opgeslagen
+rol wordt financieel en voorraadgerechtigdheid wordt 0. De regel wordt niet
+verwijderd; bedrag, labels, bestaande koppelingen en voorraadgeschiedenis blijven
+behouden, ook op een eerder goedgekeurde bon. Er wordt geen voorraadcorrectie
+of Catalogusopschoning op basis van een naam uitgevoerd.
+
+Een onverwerkte zelfstandige aankoopimport is een productcollectie, geen financieel
+grootboek. Een daarin toegelaten statiegeldregel kan expliciet worden verwijderd
+na een volledige bronveiligheidskopie, uitsluitend zonder verwerkingsfeit,
+verwerkingstijdstip, product-/huishoudkoppeling of externe kandidaat. De originele
+batchbron blijft behouden. Gekoppelde/verwerkte gevallen worden niet verwijderd.
+
+Het aparte artikel-herstel-CMD combineert beide expliciete plannen in één
+veiligheidskopie en transactie. Het normale test/startscript blijft uitsluitend
+de bestaande opstartroute gebruiken. Eerst software starten, daarna het afzonderlijke
+herstelscript uitvoeren en de lijst verversen. Een tweede herstelrun moet 0 wijzigen.
+
 ## Controle
 
 1. Start de nieuwe PR-versie via het bijgewerkte testscript en `start.bat`.
