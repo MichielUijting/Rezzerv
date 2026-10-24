@@ -4,7 +4,6 @@ import { fetchJsonWithAuth, getAuthHeaders } from '../../../lib/authSession'
 export const ALMOST_OUT_POLICY_MODES = {
   ADVISORY: 'advisory',
   OVERRIDE: 'override',
-  OVERRIDE_FALLBACK_TO_STOCK: 'override_fallback_to_stock',
 }
 
 export const ALMOST_OUT_POLICY_OPTIONS = [
@@ -16,14 +15,20 @@ export const ALMOST_OUT_POLICY_OPTIONS = [
   {
     value: ALMOST_OUT_POLICY_MODES.OVERRIDE,
     label: 'Leidend',
-    description: 'Gebruik voorspelde uitputting als hoofdregel wanneer er genoeg historie is.',
+    description: 'Gebruik de voorspelling wanneer er genoeg aankoopgeschiedenis is. Anders gebruikt Inhuis de minimumvoorraad.',
   },
-  {
-    value: ALMOST_OUT_POLICY_MODES.OVERRIDE_FALLBACK_TO_STOCK,
-    label: 'Leidend met veilige terugval',
-    description: 'Gebruik voorspelde uitputting als hoofdregel en val terug op voorraad als historie ontbreekt.',
-  },
+
 ]
+
+function settingsErrorMessage(detail, fallback) {
+  if (typeof detail === 'string' && detail.trim()) return detail.trim()
+  // FastAPI validation details are arrays of objects, not displayable strings.
+  // Keep technical field paths, input values and objects out of user feedback.
+  if (Array.isArray(detail)) {
+    return 'De instellingen zijn niet opgeslagen. Controleer de gekozen instelling en het aantal dagen.'
+  }
+  return fallback
+}
 
 function normalizeSettings(value = {}) {
   const normalizedPolicyMode = String(value.policy_mode || value.policyMode || ALMOST_OUT_POLICY_MODES.ADVISORY).trim().toLowerCase()
@@ -44,7 +49,7 @@ export async function fetchAlmostOutSettings() {
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data?.detail || 'Almost-out instellingen konden niet worden geladen.')
+    throw new Error(settingsErrorMessage(data?.detail, 'De instellingen voor Bijna op konden niet worden geladen.'))
   }
   return normalizeSettings(data)
 }
@@ -67,7 +72,7 @@ export async function saveAlmostOutSettings(settings = {}) {
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data?.detail || 'Almost-out instellingen konden niet worden opgeslagen.')
+    throw new Error(settingsErrorMessage(data?.detail, 'De instellingen voor Bijna op konden niet worden opgeslagen. Probeer het opnieuw.'))
   }
   return normalizeSettings(data)
 }
