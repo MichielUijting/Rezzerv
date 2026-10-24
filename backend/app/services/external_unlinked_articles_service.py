@@ -36,11 +36,16 @@ def _source_articles(conn):
 
     receipts = conn.execute(text("""
         SELECT rtl.id AS receipt_line_id, rt.store_name AS retailer_code,
-               COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
-               rtl.barcode AS retailer_article_number,
+               COALESCE(NULLIF(rtl.normalized_label, ''), rtl.raw_label) AS receipt_line_text,
+               rtl.external_article_code AS retailer_article_number,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+        WHERE COALESCE(rtl.is_deleted, FALSE) = FALSE
+          AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL
+          AND COALESCE(rt.workflow_state, 'active') NOT IN ('removed_reimport_allowed', 'removed')
+          AND rtl.line_role = 'product' AND rtl.inventory_eligible = 1
         ORDER BY rt.created_at DESC, rtl.line_index ASC, rtl.id ASC
     """)).mappings()
     for row in receipts:

@@ -93,6 +93,56 @@ def _exercise_receipt_items_http_path() -> None:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise AssertionError(f"External receipt-items response shape is invalid: {payload!r}")
     print("POSTGRESQL_EXTERNAL_RECEIPT_ITEMS_REQUEST_GREEN")
+    _exercise_weight_detail_repair_and_source_filter()
+
+
+def _exercise_weight_detail_repair_and_source_filter() -> None:
+    from app.maintenance.repair_weight_detail_rows import build_plan, apply_plan, plan_digest
+    from app.services.external_unlinked_articles_service import _source_articles
+
+    prefix = f"__weight_{uuid.uuid4()}"
+    with engine.connect() as conn:
+        transaction = conn.begin()
+        try:
+            for suffix in ('live', 'removed'):
+                receipt = prefix + suffix
+                conn.execute(text('''INSERT INTO raw_receipts
+                    (id, household_id, original_filename, mime_type, storage_path, sha256_hash, raw_status)
+                    VALUES (:id, '0', 'weight-test', 'application/json', 'test-only', :hash, 'stored')'''),
+                    {'id': receipt, 'hash': uuid.uuid4().hex * 2})
+                conn.execute(text('''INSERT INTO receipt_tables
+                    (id, raw_receipt_id, household_id, workflow_state, store_name, currency, parse_status, line_count)
+                    VALUES (:id, :id, '0', 'active', 'Lidl', 'EUR', 'review_needed', 4)'''), {'id': receipt})
+                for index, role, deleted, raw in (
+                    (0, 'product', False, 'GEMBER'),
+                    (1, 'product', False, '0,094 kg x 5,99 EUR'),
+                    (2, 'loyalty', False, 'Koopzegel'),
+                    (3, 'product', True, 'Verwijderd')):
+                    conn.execute(text('''INSERT INTO receipt_table_lines
+                        (id, receipt_table_id, line_index, raw_label, normalized_label, quantity,
+                         unit_price, line_total, external_article_code, article_match_status,
+                         line_role, inventory_eligible, is_deleted)
+                        VALUES (:id, :receipt, :idx, :raw, :normalized, .094, 5.99, .56,
+                                'WEIGHT-TEST', 'unmatched', :role, :eligible, :deleted)'''),
+                        {'id': receipt + str(index), 'receipt': receipt, 'idx': index,
+                         'raw': raw, 'normalized': 'Gember' if index < 2 else raw,
+                         'role': role, 'eligible': int(role == 'product'), 'deleted': deleted})
+                if suffix == 'removed':
+                    conn.execute(text('UPDATE raw_receipts SET deleted_at=CURRENT_TIMESTAMP WHERE id=:id'), {'id': receipt})
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 2, sources
+            assert all(row['receipt_line_text'] == 'Gember' for row in sources)
+            plan = build_plan(conn)
+            assert {prefix + suffix + '1' for suffix in ('live', 'removed')} <= {row['id'] for row in plan}
+            apply_plan(conn, plan_digest(plan))
+            assert not any(row['id'].startswith(prefix) for row in build_plan(conn))
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 1 and sources[0]['receipt_line_id'] == prefix + 'live0', sources
+            original = conn.execute(text('SELECT is_deleted, line_role FROM receipt_table_lines WHERE id=:id'), {'id': prefix + 'live0'}).one()
+            assert original == (False, 'product'), original
+        finally:
+            transaction.rollback()
+    print('POSTGRESQL_WEIGHT_DETAIL_REPAIR_AND_SOURCE_FILTER_GREEN')
 
 
 def _insert_candidate_fixture() -> None:

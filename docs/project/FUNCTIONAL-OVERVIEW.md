@@ -22,6 +22,12 @@ Cataloguskoppeling zonder barcode blijft zichtbaar. Gelijke winkel-/bontekst-/
 artikelcodecontexten worden éénmaal getoond; verschillende artikelcodes blijven
 afzonderlijk. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
 DataTable. Deze actie zoekt geen externe kandidaten en schrijft geen gegevens.
+Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
+worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
+Losse gewichtsdetails worden bij de Lidl-bronnormalisatie vóór Kassa/Uitpakken
+samengevoegd indien de brongegevens dit bewijzen; bij twijfel vragen ze controle
+en zijn ze niet voorraadgerechtigd. Bestaande bewezen dubbele bronregels kunnen
+expliciet worden hersteld volgens [het herstelprotocol](WEIGHT-DETAIL-REPAIR.md).
 
 Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd.
 
