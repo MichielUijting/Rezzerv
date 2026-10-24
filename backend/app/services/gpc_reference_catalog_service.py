@@ -7,6 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 from app.services.dutch_gpc_projection_service import ensure_bundled_dutch_gpc_reference
+from app.services.automatic_product_type_service import verified_official_labels
 
 
 _GPC_CODE = re.compile(r"^\d{8}$")
@@ -31,6 +32,8 @@ def _valid_hierarchy(row: dict[str, Any]) -> bool:
 
 def _nl_select_sql(conn: Connection, *, where: str = "", limit: bool = False) -> str:
     active_sql = _active_clause(conn, "gpg")
+    columns = {column['name'] for column in inspect(conn).get_columns('gpc_product_groups')}
+    version_sql = 'gpg.source_version' if 'source_version' in columns else 'NULL'
     limit_sql = " LIMIT :limit" if limit else ""
     return f"""
         SELECT
@@ -42,6 +45,7 @@ def _nl_select_sql(conn: Connection, *, where: str = "", limit: bool = False) ->
             gpg.gpc_family_name AS family_description,
             gpg.gpc_segment_code AS segment_code,
             gpg.gpc_segment_name AS segment_description,
+            {version_sql} AS source_version,
             'gs1_gpc_nl' AS reference_source
         FROM gpc_product_groups gpg
         WHERE lower(COALESCE(gpg.language_code, '')) = 'nl'
@@ -65,8 +69,8 @@ def _product_group_row(conn: Connection, brick_code: str) -> dict[str, Any] | No
     ).mappings().all()
     if not rows:
         return None
-    row = dict(rows[0])
-    return row if _valid_hierarchy(row) else None
+    row = verified_official_labels(rows[0])
+    return row if row and _valid_hierarchy(row) else None
 
 
 def _canonical_brick_row(conn: Connection, brick_code: str) -> dict[str, Any] | None:
@@ -89,9 +93,9 @@ def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
     if "gpc_product_groups" not in _tables(conn):
         return []
     return [
-        dict(row)
+        verified
         for row in conn.execute(text(_nl_select_sql(conn))).mappings().all()
-        if _valid_hierarchy(dict(row))
+        if (verified := verified_official_labels(row)) and _valid_hierarchy(verified)
     ]
 
 
@@ -170,10 +174,11 @@ def search_official_gpc_bricks(
         """
 
     return [
-        dict(row)
+        verified
         for row in conn.execute(
             text(_nl_select_sql(conn, where=where, limit=True)),
             params,
         ).mappings().all()
-        if _valid_hierarchy(dict(row))
+        if (verified := verified_official_labels(row)) and _valid_hierarchy(verified)
+        and (not normalized or any(normalized in str(verified.get(key) or '').lower() for key in ('brick_code', 'brick_description', 'class_description', 'family_description', 'segment_description')))
     ]
