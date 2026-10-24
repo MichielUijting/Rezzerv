@@ -27,6 +27,8 @@ def _source_articles(conn):
                pil.quantity_raw, pil.unit_raw
         FROM purchase_import_lines pil
         LEFT JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+        WHERE COALESCE(pib.source_type, '') <> 'receipt'
+          AND COALESCE(pil.external_line_ref, '') NOT LIKE 'receipt-line:%'
         ORDER BY pil.created_at DESC, pil.id ASC
     """)).mappings()
     for row in purchases:
@@ -34,6 +36,10 @@ def _source_articles(conn):
         item["external_article_code"] = row["external_article_code"]
         yield item
 
+    # Receipt-derived Uitpakken/import rows are copies, not another source of
+    # product truth. Read their canonical receipt once below, with its current
+    # business role and lifecycle. Stale copies must not reintroduce deposits,
+    # loyalty, deleted details or deleted receipts into the article overview.
     receipts = conn.execute(text("""
         SELECT rtl.id AS receipt_line_id, rt.store_name AS retailer_code,
                COALESCE(NULLIF(rtl.normalized_label, ''), rtl.raw_label) AS receipt_line_text,

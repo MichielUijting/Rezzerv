@@ -24,6 +24,12 @@ afzonderlijk. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeeld
 DataTable. Deze actie zoekt geen externe kandidaten en schrijft geen gegevens.
 Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
 worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
+Statiegeld/emballage, kortingen, koop-/spaarzegels, betalingen en totalen zijn
+geen artikelen voor deze lijst. Financiële regels blijven wel op de bon en
+meetellen volgens de financiële bonregels. Uitpakken-importkopieën van een
+kassabon worden niet opnieuw als zelfstandige bron gelezen: de actuele
+regelrol en verwijderstatus van de oorspronkelijke bon blijven leidend.
+Externe databases 2 toont geen knop Afsluiten.
 Losse gewichtsdetails worden bij de Lidl-bronnormalisatie vóór Kassa/Uitpakken
 samengevoegd indien de brongegevens dit bewijzen; bij twijfel vragen ze controle
 en zijn ze niet voorraadgerechtigd. Bestaande bewezen dubbele bronregels kunnen

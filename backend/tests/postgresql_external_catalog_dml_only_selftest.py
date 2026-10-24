@@ -117,7 +117,8 @@ def _exercise_weight_detail_repair_and_source_filter() -> None:
                     (0, 'product', False, 'GEMBER'),
                     (1, 'product', False, '0,094 kg x 5,99 EUR'),
                     (2, 'loyalty', False, 'Koopzegel'),
-                    (3, 'product', True, 'Verwijderd')):
+                    (3, 'product', True, 'Verwijderd'),
+                    (4, 'financial', False, 'Statiegeld')):
                     conn.execute(text('''INSERT INTO receipt_table_lines
                         (id, receipt_table_id, line_index, raw_label, normalized_label, quantity,
                          unit_price, line_total, external_article_code, article_match_status,
@@ -129,6 +130,28 @@ def _exercise_weight_detail_repair_and_source_filter() -> None:
                          'role': role, 'eligible': int(role == 'product'), 'deleted': deleted})
                 if suffix == 'removed':
                     conn.execute(text('UPDATE raw_receipts SET deleted_at=CURRENT_TIMESTAMP WHERE id=:id'), {'id': receipt})
+            conn.execute(text('''INSERT INTO store_providers (id, code, name, status, import_mode)
+                VALUES (:id, :id, 'Test', 'active', 'receipt')'''), {'id': prefix})
+            conn.execute(text('''INSERT INTO household_store_connections
+                (id, household_id, store_provider_id, connection_status)
+                VALUES (:id, '0', :id, 'active')'''), {'id': prefix})
+            for source_type in ('receipt', 'mock'):
+                conn.execute(text('''INSERT INTO purchase_import_batches
+                    (id, household_id, store_provider_id, connection_id, source_type, import_status)
+                    VALUES (:batch, '0', :id, :id, :source_type, 'new')'''),
+                    {'batch': prefix + source_type, 'id': prefix, 'source_type': source_type})
+            for suffix, source_type, reference, label in (
+                ('deposit-copy', 'receipt', 'receipt-line:' + prefix + 'live4', 'Statiegeld'),
+                ('orphan-copy', 'receipt', None, 'Verouderde bonkopie'),
+                ('mislabelled-copy', 'mock', 'receipt-line:' + prefix + 'removed0', 'Verwijderde bonkopie'),
+                ('real-purchase', 'mock', 'independent-product', 'Melk')):
+                conn.execute(text('''INSERT INTO purchase_import_lines
+                    (id, batch_id, external_line_ref, article_name_raw, quantity_raw, match_status)
+                    VALUES (:id, :batch, :reference, :label, 1, 'unmatched')'''),
+                    {'id': prefix + suffix, 'batch': prefix + source_type, 'reference': reference, 'label': label})
+            purchases = [row for row in _source_articles(conn)
+                         if str(row.get('purchase_import_line_id', '')).startswith(prefix)]
+            assert [row['purchase_import_line_id'] for row in purchases] == [prefix + 'real-purchase'], purchases
             sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
             assert len(sources) == 2, sources
             assert all(row['receipt_line_text'] == 'Gember' for row in sources)

@@ -43,6 +43,7 @@ test.describe('Externe databases 2: uitsluitend overzicht', () => {
       await expect(table).toContainText('Artikel 22')
       await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
       await expect(table.getByRole('checkbox')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
       expect(writes).toEqual([])
     })

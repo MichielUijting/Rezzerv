@@ -38,7 +38,7 @@ export default function ExternalDatabases2Page() {
   }, [])
 
   return (
-    <AppShell title="Externe databases 2">
+    <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
         {error ? <p role="alert">{error}</p> : null}
