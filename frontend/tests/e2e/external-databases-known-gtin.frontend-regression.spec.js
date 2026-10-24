@@ -7,6 +7,48 @@ import {
 
 test.use({ storageState: 'playwright/.auth/superuser.json' })
 
+test.describe('Externe databases 2: uitsluitend overzicht', () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+  for (const width of [390, 1280]) {
+    test(`standaardtabel zoekt over alle pagina's op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const writes = []
+      const rows = Array.from({ length: 23 }, (_, index) => ({
+        id: `article-${index}`, receipt_line_text: `Artikel ${String(index).padStart(2, '0')}`,
+        retailer_code: 'lidl', receipt_article_number: String(index), quantity_label: '1 l',
+      }))
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        if (request.method() !== 'GET') writes.push(path)
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'external-overview-test', email: 'overview@example.test',
+          active_household_id: '0', context_type: 'system', role: 'owner',
+          is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const table = page.getByTestId('external-databases-2-table')
+      await expect(table.locator('tbody tr')).toHaveCount(10)
+      await expect(page.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
+      await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
+      await expect(table).toContainText('Artikel 10')
+      await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('Artikel 22')
+      await expect(table.locator('tbody tr')).toHaveCount(1)
+      await expect(table).toContainText('Artikel 22')
+      await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
+      await expect(table.getByRole('checkbox')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
+      expect(writes).toEqual([])
+    })
+  }
+})
+
 test.describe('Externe databases bekende GTIN regressie', () => {
   test('Bonartikel met bestaande GTIN behoudt artikelcode en start geen OFF-zoekactie', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);

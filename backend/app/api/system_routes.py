@@ -55,6 +55,7 @@ from app.services.open_food_facts_candidate_store import save_open_food_facts_pr
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
+from app.services.external_unlinked_articles_service import list_articles_without_catalog_barcode
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -350,6 +351,11 @@ def external_databases_receipt_items(limit: int = Query(default=200)):
     payload = list_external_receipt_items(limit=limit)
     payload = _without_taxonomy_seed_candidates(payload)
     return _without_spaarzegels_receipt_items(payload)
+
+
+@router.get('/api/external-databases/unlinked-articles')
+def external_databases_unlinked_articles():
+    return _without_spaarzegels_receipt_items(list_articles_without_catalog_barcode())
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')

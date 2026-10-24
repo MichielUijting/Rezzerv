@@ -14,6 +14,15 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
+**Externe databases 2** is een afzonderlijke, alleen-lezen platformactie naast
+Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
+bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
+actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
+Cataloguskoppeling zonder barcode blijft zichtbaar. Gelijke winkel-/bontekst-/
+artikelcodecontexten worden éénmaal getoond; verschillende artikelcodes blijven
+afzonderlijk. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
+DataTable. Deze actie zoekt geen externe kandidaten en schrijft geen gegevens.
+
 Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd.
 
 Voor bonartikelen bestaan twee geldige centrale koppelvormen:
