@@ -73,3 +73,15 @@ jobs:
       - name: Exact database IP identity including PostgreSQL CIDR notation
         shell: pwsh
         run: ./scripts/server-maintenance/Test-Host-Network-Identity.ps1
+      - name: Parse isolated rehearsal CMD embedded PowerShell without Docker actions
+        shell: pwsh
+        run: |
+          $script=Get-Content 'scripts/server-maintenance/Inhuis_Server_Geisoleerde_Herstartproef.cmd' -Raw
+          $marker='# INHUIS_POWERSHELL_START'
+          $index=$script.LastIndexOf($marker)
+          if ($index -lt 0) { throw 'Rehearsal script marker missing' }
+          $body=$script.Substring($index+$marker.Length)
+          $tokens=$null; $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseInput($body,[ref]$tokens,[ref]$errors)
+          if ($errors.Count) { $errors | Format-List; throw 'Rehearsal PowerShell syntax invalid' }
+          Write-Host 'ISOLATED_REHEARSAL_POWERSHELL_PARSE_GREEN'
