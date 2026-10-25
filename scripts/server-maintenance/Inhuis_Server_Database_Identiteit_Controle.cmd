@@ -33,6 +33,23 @@ $lines.Add('Geen databasewijziging, Docker-start/stop, herstel of herstart uitge
 $lines.Add('')
 $ok = $false
 
+# The same strict CIDR parsing contract as Host-Network-Identity.ps1.
+# PostgreSQL may report inet_server_addr() as e.g. 10.200.2.2/32.
+function ConvertTo-InhuisDiagnosticIPAddress {
+    param([Parameter(Mandatory)][string]$Value)
+    $parts = $Value.Split('/')
+    if ($parts.Count -gt 2 -or $parts[0] -ne $parts[0].Trim() -or $parts[0].Contains('%')) { throw 'ONGELDIG_DATABASE_IP' }
+    $address = $null
+    if (-not [Net.IPAddress]::TryParse($parts[0], [ref]$address)) { throw 'ONGELDIG_DATABASE_IP' }
+    $ipv4 = $address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork
+    if ($ipv4 -and $parts[0] -cne $address.ToString()) { throw 'ONGELDIG_DATABASE_IP' }
+    if ($parts.Count -eq 2) {
+        $maximum = if ($ipv4) { 32 } else { 128 }
+        if ($parts[1] -notmatch '^(0|[1-9][0-9]{0,2})$' -or [int]$parts[1] -gt $maximum) { throw 'ONGELDIGE_IP_PREFIX' }
+    }
+    return $address
+}
+
 try {
     if (-not (Get-Command docker.exe -ErrorAction SilentlyContinue)) { throw 'DOCKER_CLI_ONTBREEKT' }
     $ids = @(& docker.exe ps -aq 2>$null)
@@ -110,11 +127,15 @@ except Exception as exc:
     $lines.Add('Alembic-schema: ' + (@($db.revisions) -join ','))
 
     # Match the actual server socket to running container interfaces, not a name.
+    $databaseAddress = ConvertTo-InhuisDiagnosticIPAddress -Value ([string]$db.server_ip)
     $matches = @()
     foreach ($container in $containers) {
         if ($container.State.Running -ne $true) { continue }
-        $addresses = @($container.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address })
-        if ($addresses -contains [string]$db.server_ip) { $matches += $container }
+        $addresses = @($container.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        foreach ($candidate in $addresses) {
+            $candidateAddress = ConvertTo-InhuisDiagnosticIPAddress -Value ([string]$candidate)
+            if ($databaseAddress.Equals($candidateAddress)) { $matches += $container; break }
+        }
     }
     if ($matches.Count -ne 1) { throw 'DATABASE_CONTAINER_NIET_UNIEK_GEIDENTIFICEERD' }
     $databaseContainer = $matches[0]
