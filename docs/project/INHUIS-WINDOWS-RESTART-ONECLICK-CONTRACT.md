@@ -37,6 +37,36 @@ Een Windows-update zelf kan langer dan minuten duren; de Inhuis-bediening mag da
 - De installatie idempotent en omkeerbaar maken. Vóór toepassen: aan de PO tonen
   welke Scheduled Task of Windows-instelling wordt toegevoegd/gewijzigd.
 
+### Aanvullend bewijs uit een actieve gesplitste runtime
+
+Een bestaande werkende backend kan een PostgreSQL-container buiten zijn eigen
+Compose-project gebruiken. De read-only socket/volume/schema-controle kan die
+verbinding exact aanwijzen, maar bewijst nog niet dat de huidige
+`Windows-Host-Agent.ps1` deze omgeving kan beheren: die agent selecteert zowel
+`backend` als `postgres` met `docker compose --project-name ... ps -q` uit
+hetzelfde Compose-project. Een Windows Scheduled Task voor een **ander** project
+is dus geen geldig bewijs voor de werkelijk gebruikte Inhuis-backend.
+
+Bij deze situatie geldt fail-closed:
+
+1. Geen bestaande agenttaak hergebruiken, wijzigen of dupliceren op basis van
+   slechts namen of een groen HTTP-resultaat.
+2. Geen tweede PostgreSQL-proces op het bestaande actieve volume starten.
+3. Geen bestaande PostgreSQL-container stoppen, recreëren of hernoemen zolang
+   databaseautoriteit, herstelbare back-up en veilig onderhoudsvenster niet
+   onafhankelijk zijn bewezen.
+4. Eerst een eenmalig, toetsbaar inrichtingstraject ontwerpen dat de werkelijke
+   backend, database en onderhoudsagent dezelfde autoritatieve runtime laat
+   bewaken. Behoud van de **bestaande fysieke data** is verplicht; een
+   volume- of datamigratie is geen automatisch onderdeel.
+5. Een geïsoleerde repetitie moet de nieuwe Compose-/agentconfiguratie met
+   testopslag bewijzen. Pas na een aparte productie-GO mag een concrete
+   omschakeling van de echte server worden uitgevoerd.
+
+Een reeds werkende app achter een externe URL is geen bewijs dat het
+onderhoudscontract ook op die app wordt afgedwongen. De huidige lock, database
+en agent worden daarom afzonderlijk gecontroleerd vóór een reboot-proef.
+
 ## Procedure voor iedere Windows-update
 
 1. Bestaande beheerscherm: onderhoud aankondigen en verwerkingen veilig stoppen.
