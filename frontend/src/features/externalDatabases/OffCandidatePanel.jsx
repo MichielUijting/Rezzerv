@@ -59,20 +59,21 @@ export default function OffCandidatePanel({ item }) {
     <section className="rz-external-receipt-detail" aria-labelledby="off-candidate-heading" data-testid="external-databases-2-off-panel" aria-busy={loading}>
       <div className="rz-external-databases-card">
         <h3 id="off-candidate-heading">Productkandidaten voor {item.receipt_line_text} — {item.retailer}</h3>
-        <p>Productgegevens van Lidl waar beschikbaar, aangevuld met Open Food Facts. Zoeken slaat niets op.</p>
+        <p>Productgegevens van Albert Heijn, Jumbo en Lidl waar beschikbaar, aangevuld met Open Food Facts. Zoeken slaat niets op.</p>
         {evidence ? <div data-testid="retailer-product-evidence">
           <p>{evidence.message}</p>
           {evidence.product_name ? <p>{evidence.product_name}{evidence.brand ? ` — ${evidence.brand}` : ''}</p> : null}
           {evidence.description ? <p>{evidence.description}</p> : null}
-          {evidence.article_number ? <p>Lidl-artikelnummer: {evidence.article_number}</p> : null}
-          {evidence.gtins?.length ? <p>Barcode{evidence.gtins.length > 1 ? 's' : ''} vermeld door Lidl: {evidence.gtins.join(', ')}</p> : null}
-          {evidence.source_url ? <a href={evidence.source_url} target="_blank" rel="noopener noreferrer">Bekijk product bij Lidl</a> : null}
+          {evidence.article_number ? <p>{evidence.source || 'Lidl'}-artikelnummer: {evidence.article_number}</p> : null}
+          {evidence.gtins?.length ? <p>Barcode{evidence.gtins.length > 1 ? 's' : ''} vermeld door {evidence.source || 'Lidl'}: {evidence.gtins.join(', ')}</p> : null}
+          {evidence.source_url ? <a href={evidence.source_url} target="_blank" rel="noopener noreferrer">Bekijk product bij {evidence.source || 'Lidl'}</a> : null}
         </div> : null}
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {error ? <div role="alert"><p>{error}</p><Button type="button" variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Opnieuw zoeken</Button></div> : null}
         {!loading && !error ? <DataTable
           columns={columns}
           data={results}
+          pageSize={7}
           getRowKey={(row) => row.gtin}
           defaultSort={{ key: 'rank', direction: 'asc' }}
           emptyMessage="Geen passende productkandidaten gevonden."

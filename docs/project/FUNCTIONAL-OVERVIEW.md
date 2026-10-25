@@ -50,6 +50,29 @@ naam, merk, barcode, inhoud, bron, herkenning en overeenkomst, met standaard
 zoeken, sorteren en paginering. De eerste volgorde blijft de bestaande automatische
 voorkeursvolgorde. Een naamsuggestie blijft herkenbaar als suggestie. Een door Lidl vermelde barcode
 blijft bronbewijs en is geen automatisch bevestigde Cataloguskoppeling.
+Voor Albert Heijn en Jumbo wordt eveneens de winkelcatalogus geraadpleegd.
+AH zoekt met de boncode/naam en vergelijkt uitsluitend het expliciete `hqId` met
+de boncode. De aparte `webshopId` bepaalt de detailopvraag, waarvan het geretourneerde
+product-ID gelijk moet zijn. Jumbo zoekt openbare productlinks en verifieert de
+exacte SKU; bij een 401/403 op de product-API wordt de openbare productpagina met
+dezelfde SKU gebruikt. Zonder boncodeovereenkomst blijft een winkelproduct een
+zichtbare naamsuggestie. Naam-, variant-, huismerk- en GTIN-conflicten worden
+geweerd; meerdere verschillende GTINs bij dezelfde boncode blijven ambigu.
+Een unieke boncode/barcode-overeenkomst krijgt een exacte OFF-lookup; overige
+winkelresultaten worden met de bestaande OFF-suggesties samengevoegd, ontdubbeld
+op GTIN en begrensd tot twintig kandidaten. Een voorloopnul bij een geldige
+GTIN-14 wordt voor de OFF-opvraag als equivalente GTIN-13 behandeld; dit is geen
+conversie van een winkelartikelnummer. Een bronfout wist reeds gevonden geldige
+winkelresultaten niet. Beide routes zijn anoniem, zonder klantaccount/cookies,
+met vaste eigen winkelhosts, geen redirects, maximaal twintig verzoeken,
+maximaal acht productdetails, acht seconden per verzoek, dertig seconden
+netwerkbudget en 2 MiB per antwoord. Alleen een anonieme AH-gasttokenopvraag en
+vaste read-only productqueries mogen POST gebruiken; geen login/winkelmand/order.
+De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
+per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
+Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
+De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+
 De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
 met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,
 een netwerkbudget van twaalf seconden en maximaal 2 MiB per antwoord. Er is

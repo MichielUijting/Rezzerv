@@ -144,7 +144,7 @@ def test_fallback_reuses_off_and_retains_evidence(monkeypatch, status):
 
 
 def test_other_retailer_never_calls_lidl(monkeypatch):
-    resolved(monkeypatch, 'Jumbo')
+    resolved(monkeypatch, 'Picnic')
     monkeypatch.setattr(search, 'lookup_lidl_product', lambda item: pytest.fail('wrong retailer'))
     monkeypatch.setattr(off, 'search_off_candidates_for_item', lambda *args: {'results': [], 'provider': 'test'})
     assert search.search_article_candidates({})['retailer_evidence'] is None

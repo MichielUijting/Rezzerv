@@ -162,9 +162,10 @@ docs/technical/_generated/python-file-inventory.json
 
 Na generatie moeten alle onbekende modules worden aangevuld in deze catalogus of gemarkeerd als `unclassified` in de traceability-matrix.
 
-## Externe databases 2: publieke Lidl-productinformatie
+## Externe databases 2: publieke winkelproductinformatie
 
 | Module | TD Section | Runtime Type | Role | Used By | Depends On | Reads/Writes Data | Status Authority | Refactor Status |
 |---|---|---|---|---|---|---|---|---|
 | `backend/app/services/lidl_product_lookup.py` | TD-05 | production | Begrensde anonieme Nederlandse productpagina; exact gescopeerde JSON-LD/Nuxt-GTIN-evidence | external_article_search_service | urllib, HTMLParser, gtin_validation_service | publiek netwerk lezen / geen writes | no | keep |
-| `backend/app/services/external_article_search_service.py` | TD-05 | production | Bron-ID oplossen; Lidl-barcodebewijs en bestaande OFF-suggesties alleen-lezen combineren | system_routes | off_search_service, lidl_product_lookup | bronregel lezen via bestaande resolver / geen writes | no | keep |
+| `backend/app/services/external_article_search_service.py` | TD-05 | production | Bron-ID oplossen; AH-/Jumbo-/Lidl-barcodebewijs en bestaande OFF-suggesties alleen-lezen combineren | system_routes | off_search_service, lidl_product_lookup, retailer_product_lookup | bronregel lezen via bestaande resolver / geen writes | no | keep |
+| `backend/app/services/retailer_product_lookup.py` | TD-05 | production | Begrensde anonieme AH-/Jumbo-productzoekfunctie; hqId/webshopId/SKU/GTIN gescheiden, publieke Jumbo-terugval | external_article_search_service | urllib, bestaande naam-/huismerk-/GTIN-guards | publiek netwerk lezen / geen writes | no | keep |

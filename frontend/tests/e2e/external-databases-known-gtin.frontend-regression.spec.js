@@ -47,6 +47,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           }, results: [
             { gtin: '8720326035617', product_name: 'Voorkeur uit automatische zoekvarianten', source: 'Lidl + Open Food Facts', evidence_label: 'Lidl-barcode gevonden in OFF', brand: 'Testmerk', quantity: '1 l', score: .60, automatic_rank_score: .95 },
             { gtin: '8718452504435', product_name: 'Tweede suggestie', brand: 'Testmerk', quantity: '500 ml', score: .99, automatic_rank_score: .80 },
+            ...Array.from({ length: 13 }, (_, index) => ({ gtin: String(80000000 + index), product_name: `Aanvullende suggestie ${String(index).padStart(2, '0')}`, source: 'Jumbo', evidence_label: 'Winkelproduct; suggestie op naam', score: .7 })),
           ] } })
         }
         if (request.method() !== 'GET') unexpectedWrites.push(path)
@@ -86,6 +87,21 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(panel.getByTestId('retailer-product-evidence')).toContainText('8720326035617')
       await expect(panel.getByRole('link', { name: 'Bekijk product bij Lidl' })).toHaveAttribute('href', 'https://www.lidl.nl/p/test/p1234567')
       expect(searches[0]).toEqual({ receipt_item_id: rows[0].id, mode: 'automatic', limit: 20 })
+      await expect(candidates.locator('tbody tr')).toHaveCount(7)
+      const paging = panel.getByRole('navigation', { name: 'Paginering' })
+      await paging.getByRole('button', { name: '+', exact: true }).click()
+      await expect(candidates.locator('tbody tr')).toHaveCount(7)
+      await expect(candidates).toContainText('Aanvullende suggestie 05')
+      await paging.getByRole('button', { name: '3', exact: true }).click()
+      await expect(candidates.locator('tbody tr')).toHaveCount(1)
+      await expect(candidates).toContainText('Aanvullende suggestie 12')
+      await panel.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('Voorkeur')
+      await expect(candidates.locator('tbody tr')).toHaveCount(1)
+      await expect(candidates).toContainText('Voorkeur uit automatische zoekvarianten')
+      await expect(paging).toHaveCount(0)
+      await panel.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
+      await expect(candidates.locator('tbody tr')).toHaveCount(7)
+      expect(searches).toHaveLength(1)
       expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')

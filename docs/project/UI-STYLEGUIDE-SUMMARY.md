@@ -1182,3 +1182,12 @@ classificatiecontrole klaar is. De geselecteerde code wordt expliciet als
 selectie getoond, met uitleg over generiek versus exact koppelen. Selecteren
 is geen opslaan. Tijdens controleren of opslaan mag de bestaande centrale
 select tijdelijk worden uitgeschakeld.
+
+### Externe databases 2: zeven kandidaten per pagina — PO, 25 oktober 2026
+
+Uitsluitend de onderste kandidatentabel toont maximaal **7 resultaten per pagina**
+op desktop en mobiel. Meer kandidaten blijven beschikbaar via de bestaande
+DataTable-paginering onder de tabel; filteren en sorteren bestrijken alle
+opgehaalde resultaten en zetten de pagina terug op 1. De bovenste artikellijst
+en de algemene standaard van 10 wijzigen niet. Het bestaande productpaneel
+toont ook AH-/Jumbo-bronbewijs; naamsuggesties blijven expliciet herkenbaar.
