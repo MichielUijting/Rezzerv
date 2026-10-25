@@ -651,3 +651,42 @@ def test_valid_product_intent_hint_is_reused_for_candidate_signals(monkeypatch):
 
     assert bundle["intent_key"] == "groente.broccoli"
     assert any(signal["normalized"] == "broccoli" for signal in bundle["signals"])
+
+
+def test_almonds_cannot_match_engraving_tools_through_processing_adjectives():
+    from app.services.automatic_product_type_service import official_bricks
+    rows = []
+    for code in ('10001742', '10001743'):
+        b = official_bricks()[code]
+        rows.append({'brick_code': code, 'brick_description': b['gpc_brick_name'],
+                     'class_description': b['gpc_class_name'], 'family_description': b['gpc_family_name'],
+                     'segment_description': b['gpc_segment_name'], 'reference_source': 'gs1_gpc_nl'})
+    bundle = {'signals': [{'text': 'Amandelen ongebrand Amandelen', 'normalized': 'amandelen ongebrand amandelen', 'tokens': ['amandelen', 'ongebrand'], 'source': 'product_name', 'weight': 1.45}]}
+    assert service.rank_gpc_candidates(rows, bundle) == []
+
+
+def test_broad_off_food_ancestors_do_not_match_garden_plants(monkeypatch):
+    monkeypatch.setattr(service, 'classify_product_intent_from_taxonomy', lambda value: '')
+    monkeypatch.setattr(service, 'get_taxonomy_metadata_for_intent', lambda key: {})
+    monkeypatch.setattr(service, 'load_taxonomy_rules', lambda: ())
+    bundle = service.build_product_signals({
+        'product_name':'Aardappelpartjes',
+        'external_category_tags':['en:plant-based-foods-and-beverages','en:plant-based-foods'],
+        'external_category':'Plant based food and beverage',
+        'external_search_text':'Aardappelpartjes plant based food plant based foods',
+    })
+    plants = [_row('10003234','Plant/Bodembemeststof/Voeding'), _row('10006563','Aeonium Arboreum - Levende Plant')]
+    assert service.rank_gpc_candidates(plants, bundle) == []
+    plant_bundle = service.build_product_signals({'product_name':'Aeonium Arboreum levende plant'})
+    assert service.rank_gpc_candidates(plants, plant_bundle)[0]['brick_code'] == '10006563'
+
+
+def test_specific_off_food_tags_survive_ancestor_filter(monkeypatch):
+    monkeypatch.setattr(service, 'classify_product_intent_from_taxonomy', lambda value: '')
+    monkeypatch.setattr(service, 'get_taxonomy_metadata_for_intent', lambda key: {})
+    monkeypatch.setattr(service, 'load_taxonomy_rules', lambda: ())
+    bundle = service.build_product_signals({'product_name':'Aardappelpartjes','external_category_tags':['en:plant-based-foods','en:potatoes']})
+    rows = [_row('10006104','Potatoes'),_row('10006563','Aeonium Arboreum - Levende Plant')]
+    result = service.rank_gpc_candidates(rows,bundle)
+    assert result and result[0]['brick_code'] == '10006104'
+    assert all(r['brick_code'] != '10006563' for r in result)

@@ -12,6 +12,7 @@ from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.gpc_candidate_service import build_product_signals, rank_gpc_candidates
+from app.services.automatic_product_type_service import gpc_brick_conflict
 from app.services.gpc_reference_catalog_service import list_official_gpc_bricks, search_official_gpc_bricks
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
@@ -297,6 +298,14 @@ def classify_gpc_product(*, product_name: str, category: str = "", category_tags
                 None,
             )
             if row:
+                conflict = gpc_brick_conflict({'product_name': product_name}, explicit)
+                if conflict:
+                    return {
+                        'ok': True, 'status': 'not_classified',
+                        'reason': 'conflicting_product_category', 'message': conflict,
+                        'rejected_gpc_brick_code': explicit,
+                        'suggestions': [], 'suggestion': None,
+                    }
                 return {
                     "ok": True,
                     "status": "classified",
@@ -321,6 +330,8 @@ def classify_gpc_product(*, product_name: str, category: str = "", category_tags
             reference_rows=reference_rows,
             limit=5,
         )
+        suggestions = [item for item in suggestions
+                       if not gpc_brick_conflict({'product_name': product_name}, item.get('gpc_brick_code'))]
         suggestion_payload = {
             "suggestion": suggestions[0] if suggestions else None,
             "suggestions": suggestions,

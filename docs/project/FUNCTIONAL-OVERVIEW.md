@@ -41,6 +41,26 @@ Voor voorraad, Bijna op en boodschappen mag het generieke artikel leidend zijn w
 
 Prognoses gebruiken huishoudgegevens en historische voorraadbewegingen. Instellingen en uitkomsten blijven aan het juiste huishouden en de juiste rol gebonden.
 
+Externe databases bepaalt automatisch een centraal consumptie-/producttype uit
+de officiële GPC Brick, beschikbare gestructureerde kenmerken en herkenbare
+productomschrijvingen. De code en beslisgrenzen staan in
+[AUTOMATIC-PRODUCT-TYPES.md](AUTOMATIC-PRODUCT-TYPES.md). Dit is een afgeleide
+indeling; GTIN, centraal product, huishoudartikel en handmatige Artikelgroep
+blijven afzonderlijke identiteiten.
+
+Een compleet, niet-tegenstrijdig type telt voor Bijna op samen over winkels en
+merken. Verpakkingsinhoud wordt afzonderlijk omgerekend. Er zijn geen verplichte
+variantvelden of classificatiebevestigingen voor huishoudens. Onvoldoende
+informatie geeft een automatische pending-status: het artikel blijft apart en
+vraagt geen invoer. Herkenning wordt opnieuw beoordeeld wanneer centrale
+productgegevens veranderen. Een onzekere match wordt nooit als feit opgeslagen.
+
+De eerste expliciete regelset dekt zestien productfamilies. Dit is geen claim
+van volledige assortimentsdekking of een nieuwe officiële GS1-typecode. De
+bestaande veilige exacte/generieke productkoppeling blijft de autoriteit voor
+het koppelen van een bonartikel; automatische categorisering keurt geen
+onzekere bon- of productidentiteit goed.
+
 ## Winkels en importinstellingen
 
 Winkelkoppelingen en importinstellingen bepalen hoe aankopen en kassabonnen binnenkomen. Beheer hiervan is huishoudgebonden en voorbehouden aan de juiste beheerrol.
