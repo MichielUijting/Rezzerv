@@ -1191,3 +1191,15 @@ DataTable-paginering onder de tabel; filteren en sorteren bestrijken alle
 opgehaalde resultaten en zetten de pagina terug op 1. De bovenste artikellijst
 en de algemene standaard van 10 wijzigen niet. Het bestaande productpaneel
 toont ook AH-/Jumbo-bronbewijs; naamsuggesties blijven expliciet herkenbaar.
+
+### Externe databases 2: compacte kandidatentabel — PO, 25 oktober 2026
+
+De eerste kolom toont alleen het volgnummer; de zichtbare kop **Voorkeur**
+vervalt. **Herkenning** benoemt uitsluitend herkenning op naam zonder het woord
+*Suggestie*, en in de kolom **Bron** wordt *Open Food Facts* afgekort tot **OFF**.
+De toelichting boven de onderste tabel introduceert deze afkorting als
+**Open Food Facts (OFF)**. De standaardmelding over Jumbo-producten die alleen
+op naam overeenkomen wordt in dit paneel niet herhaald; eventuele aanvullende
+bronwaarschuwingen blijven zichtbaar. Tussen paneeltitel en toelichting en
+tussen toelichting en direct volgende tabel staat telkens één compacte
+regel tussenruimte; geen lege melding mag een extra rij toevoegen.

@@ -8,6 +8,26 @@
   gap: 18px;
 }
 
+.rz-external-databases-card--off {
+  gap: 14px;
+}
+
+.rz-external-databases-card--off > p {
+  margin: 0;
+}
+
+.rz-external-off-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .rz-external-databases-header,
 .rz-external-databases-section-header {
   display: flex;

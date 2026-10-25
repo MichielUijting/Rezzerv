@@ -82,7 +82,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       const candidates = panel.getByTestId('external-databases-2-off-candidates')
       await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
       await expect(candidates.locator('tbody tr').first()).toContainText('95%')
-      await expect(candidates).toContainText('Lidl + Open Food Facts')
+      await expect(candidates).toContainText('Lidl + OFF')
       await expect(panel.getByTestId('retailer-product-evidence')).toContainText('1234567')
       await expect(panel.getByTestId('retailer-product-evidence')).toContainText('8720326035617')
       await expect(panel.getByRole('link', { name: 'Bekijk product bij Lidl' })).toHaveAttribute('href', 'https://www.lidl.nl/p/test/p1234567')
@@ -164,6 +164,59 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
       expect(writes).toEqual([])
+    })
+
+    test(`Jumbo-kandidaten tonen compacte bron- en herkenningsteksten op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const notice = 'Producten gevonden bij Jumbo. De koppeling met het bonartikel is alleen op naam; controleer de suggesties.'
+      await page.route('**/api/**', async (route) => {
+        const path = new URL(route.request().url()).pathname
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'jumbo-display-test', email: 'jumbo-display@example.test',
+          active_household_id: '0', context_type: 'system', role: 'owner',
+          is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: [
+          { id: 'receipt-table-line:jumbo-display', receipt_line_text: 'JUMBO FUET PLAKJES',
+            retailer_code: 'jumbo', receipt_article_number: '123', quantity_label: '1' },
+        ] } })
+        if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+          provider: 'retailer_catalog', retailer_evidence: { source: 'Jumbo', status: 'name_suggestions', message: notice },
+          results: [
+            { gtin: '8710000000001', product_name: 'Jumbo Fuet plakjes', source: 'Jumbo', evidence_label: 'Winkelproduct; suggestie op naam', score: .9 },
+            { gtin: '8710000000002', product_name: 'Fuet plakjes', source: 'Open Food Facts', evidence_label: 'Suggestie op artikelnaam', score: .8 },
+            { gtin: '8710000000003', product_name: 'Jumbo Fuet 70 g', source: 'Jumbo + Open Food Facts', evidence_label: 'Artikelnummer en barcode bevestigd', score: 1 },
+          ],
+        } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const row = page.getByTestId('external-databases-2-table').locator('tbody tr').first()
+      if (width <= 720) await row.click()
+      else await row.dblclick()
+      const panel = page.getByTestId('external-databases-2-off-panel')
+      const candidates = panel.getByTestId('external-databases-2-off-candidates')
+      await expect(candidates.locator('tbody tr')).toHaveCount(3)
+      await expect(candidates.locator('thead tr').first()).not.toContainText('Voorkeur')
+      await expect(candidates.locator('tbody tr').first().locator('td').first()).toHaveText('1')
+      await expect(candidates).toContainText('Alleen op artikelnaam')
+      await expect(candidates).toContainText('Winkelproduct; alleen op naam')
+      await expect(candidates).not.toContainText('Suggestie')
+      await expect(candidates).toContainText('Jumbo + OFF')
+      await expect(candidates).not.toContainText('Open Food Facts')
+      await expect(panel.locator('.rz-external-databases-card--off > p')).toContainText('Open Food Facts (OFF)')
+      await expect(panel.getByTestId('retailer-product-evidence')).toHaveCount(0)
+      const spacing = await panel.locator('.rz-external-databases-card--off').evaluate((element) => ({
+        gap: getComputedStyle(element).rowGap,
+        introMarginTop: getComputedStyle(element.querySelector(':scope > p')).marginTop,
+        introMarginBottom: getComputedStyle(element.querySelector(':scope > p')).marginBottom,
+      }))
+      expect(spacing).toEqual({ gap: '14px', introMarginTop: '0px', introMarginBottom: '0px' })
+      await candidates.getByRole('textbox', { name: 'Filter op Bron' }).fill('OFF')
+      await expect(candidates.locator('tbody tr')).toHaveCount(2)
     })
   }
 })
