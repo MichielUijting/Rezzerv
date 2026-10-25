@@ -29,7 +29,7 @@ class ServerRehearsalScriptContract(unittest.TestCase):
     def test_exact_existing_runtime_preflight_before_mutation(self):
         content = self.content
         before = content.index("$liveVolumes =")
-        create = content.index("[void](Invoke-TestCompose @('up'")
+        create = content.index("[void](Invoke-TestCompose -Arguments @('up'")
         self.assertLess(before, create)
         self.assertIn("LIVE_BACKEND_IMAGE_GEWIJZIGD", content)
         self.assertIn("LIVE_DATABASE_IMAGE_GEWIJZIGD", content)
@@ -49,6 +49,12 @@ class ServerRehearsalScriptContract(unittest.TestCase):
         self.assertNotIn("docker.exe rm", content.lower())
         self.assertNotIn("start.bat", content.lower())
         self.assertNotIn("shutdown.exe", content.lower())
+
+    def test_array_arguments_bind_as_one_parameter(self):
+        import re
+
+        self.assertNotRegex(self.content, r"Invoke-Test(?:Docker|Compose)\s+@\(")
+        self.assertIn("Invoke-TestCompose -Arguments @('stop','postgres')", self.content)
 
 
 if __name__ == "__main__":
