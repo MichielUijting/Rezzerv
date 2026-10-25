@@ -90,3 +90,58 @@ deze diagnosemodule; geen Catalogus-, huishoudartikel- of voorraadmutatie.
 
 Geen applicatieversiebump: uitsluitend geïsoleerde diagnose-/testcode en
 documentatie; de applicatieruntime blijft ongewijzigd.
+
+## Online catalogusproef
+
+`scripts/diagnostics/Inhuis_Winkelproduct_Onlineproef.cmd` gebruikt de opgeslagen
+actieve productregels rechtstreeks. Ontbrekende oude bronbestanden blokkeren deze
+proef niet. Er worden maximaal twee verschillende artikelen per AH/Lidl/Jumbo
+geselecteerd, met canonieke productrol en dezelfde huishoudrelatie in alle joins.
+Deze openbare productkennis wordt uitsluitend binnen de lokale proef vergeleken;
+er worden geen huishoudartikelen samengevoegd of blijvende koppelingen gemaakt.
+De databaseverbinding/snapshot wordt vrijgegeven vóór externe verzoeken.
+
+- AH: anoniem token, productzoeken met boncode en zo nodig naam; uitsluitend
+  `hqId` wordt vergeleken met de boncode. De aparte `webshopId` bepaalt de
+  GraphQL-productlookup. De response moet dezelfde webshop-ID teruggeven. Een
+  GTIN komt uitsluitend uit het expliciete `product.tradeItem.gtin`-veld.
+- Lidl: Nederlandse `/q/api/search` met `q`, `assortment=NL`, `locale=nl_NL` en
+  verplichte `version=2.0`. Zoekfallback kan ongerelateerde producten retourneren;
+  naam-/variantcontrole wijst die af. ERP/webshop-ID's worden niet met boncodes
+  vereenzelvigd: alleen een expliciete exact overeenkomende IAN telt als observatie.
+  Een eventuele GTIN komt uit één passend JSON-LD Product op de productpagina,
+  niet uit willekeurige cijfers, aanbiedingen of aanbevelingen elders op de pagina.
+- Jumbo: openbare zoekpagina → expliciete productlink/SKU → product-GraphQL.
+  Bij 401/403 wordt alleen de openbare productpagina geprobeerd, zonder login,
+  cookies of accountomweg. Het JSON-LD Product moet dezelfde SKU hebben. Zonder
+  boncode blijft een gevonden barcode uitsluitend een naamsuggestie.
+- Picnic blijft expliciet niet getest zonder account. De oude Aldi-app-API is
+  geen geverifieerde actuele connector en is niet geactiveerd.
+
+De proef deelt alleen naam/boncode met de betreffende winkelzoekfunctie, geen
+bonbedragen, datums, huishouden-ID's of klantgegevens. Het TXT-rapport bevat alleen
+aantallen en vaste status-/foutcodes, geen tokens, codes, namen of privébestanden.
+HTTPS-hosts zijn vast begrensd; redirects, mutaties en accountacties zijn geweigerd.
+Maximaal 24 verzoeken, elk maximaal 8 seconden, totaal netwerkbudget 120 seconden,
+maximale response 8 MiB. Geen retries of betaalde proxies. De CMD gebruikt dezelfde
+bewezen bestaande-runtimecontrole als de lokaal geslaagde bronproef.
+
+Status `receipt_code_and_catalog_gtin_observed` betekent alleen dat dezelfde code
+in het benoemde winkelveld en een expliciete GTIN samen zijn waargenomen. Het is
+geen automatische Cataloguskoppeling, acceptatie of assortimentdekkingsclaim.
+Conflicterende barcodes worden niet gekozen. Een overeenkomstige naam zonder
+overeenkomstige boncode blijft `name_suggestions_only`. Een geweigerde bron is
+`source_unavailable`, nooit een claim dat het artikel niet bestaat.
+
+Live protocolcontrole 25 oktober 2026 met een openbaar voorbeeldproduct:
+AH `hqId` → webshopproduct → `tradeItem.gtin` werkte. Lidl gaf bij halfvolle melk
+ook ongerelateerde producten terug; de nieuwe filter wees de onderzochte resultaten
+af. De Jumbo-product-API gaf 401; de openbare JSON-LD-terugval leverde vervolgens
+twee passende catalogusproducten met expliciete GTIN op, uitsluitend naamsuggesties.
+Dit zijn protocolobservaties uit deze omgeving, nog geen bewijs op de PO-database.
+Windows/CMD en de echte PostgreSQL-selectie moeten lokaal worden uitgevoerd.
+
+De volgende PO-stap is de Onlineproef uitvoeren bij draaiend Inhuis en het rapport
+`Inhuis_Winkelproduct_Onlineproef_Resultaat.txt` delen. De bronproef hoeft niet opnieuw.
+Productieruntime/Externe databases 2 verandert pas nadat de werkelijke bronroute is
+bewezen; deze proef schrijft geen barcodes of Catalogusproducten.
