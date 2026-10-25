@@ -42,7 +42,7 @@ function Invoke-TestDocker([string[]]$Arguments) {
     return ($result -join "`n").Trim()
 }
 function Get-DockerIdentity([string]$Name) {
-    $raw = Invoke-TestDocker @('inspect',$Name)
+    $raw = Invoke-TestDocker -Arguments @('inspect',$Name)
     $parsed = ConvertFrom-Json -InputObject $raw
     $objects = @()
     foreach ($item in $parsed) { $objects += $item }
@@ -56,11 +56,11 @@ function Invoke-TestCompose([string[]]$Arguments) {
 
 try {
     if (-not (Get-Command docker.exe -ErrorAction SilentlyContinue)) { throw 'DOCKER_ONTBREEKT' }
-    [void](Invoke-TestDocker @('version','--format','{{.Server.Version}}'))
-    [void](Invoke-TestDocker @('compose','version','--short'))
+    [void](Invoke-TestDocker -Arguments @('version','--format','{{.Server.Version}}'))
+    [void](Invoke-TestDocker -Arguments @('compose','version','--short'))
     $os = Get-CimInstance Win32_OperatingSystem
     if ([long]$os.FreePhysicalMemory -lt 900000) { throw 'MINDER_DAN_900_MIB_VRIJ_RAM' }
-    [void](Invoke-TestDocker @('image','inspect','postgres:17-alpine','--format','{{.Id}}'))
+    [void](Invoke-TestDocker -Arguments @('image','inspect','postgres:17-alpine','--format','{{.Id}}'))
 
     # Exact live identity from the most recent confirmed PO report. Read only.
     $backend = Get-DockerIdentity 'inhuis-1296-hersteltest-backend-1'
@@ -97,13 +97,13 @@ volumes:
   rehearsal_data:
 '@
     [IO.File]::WriteAllText($composeFile,$yaml,[Text.UTF8Encoding]::new($false))
-    [void](Invoke-TestCompose @('config','--quiet'))
+    [void](Invoke-TestCompose -Arguments @('config','--quiet'))
     $lines.Add('Tijdelijk project: ' + $project)
     $lines.Add('Testconfiguratie: zonder hostpoorten of extern netwerk, zonder broncodebuild, met eigen Docker-volume')
 
     $created = $true
-    [void](Invoke-TestCompose @('up','-d','--no-build','--pull','never'))
-    $testContainerId = Invoke-TestCompose @('ps','-q','postgres')
+    [void](Invoke-TestCompose -Arguments @('up','-d','--no-build','--pull','never'))
+    $testContainerId = Invoke-TestCompose -Arguments @('ps','-q','postgres')
     if ($testContainerId -notmatch '^[a-f0-9]{64}$') { throw 'TESTCONTAINER_ID_ONGELDIG' }
     $testContainer = Get-DockerIdentity $testContainerId
     if ($testContainer.Config.Labels.'com.docker.compose.project' -cne $project -or $testContainer.Config.Labels.'com.docker.compose.service' -cne 'postgres') { throw 'TESTCONTAINER_LABELS_ONJUIST' }
@@ -120,12 +120,12 @@ volumes:
     if (-not $ready) { throw 'TESTDATABASE_NIET_GEREED' }
 
     $sql = "CREATE TABLE inhuis_rehearsal (marker text PRIMARY KEY); INSERT INTO inhuis_rehearsal VALUES ('$id');"
-    [void](Invoke-TestDocker @('exec',$testContainerId,'psql','-X','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c',$sql))
-    $before = Invoke-TestDocker @('exec',$testContainerId,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c','SELECT marker FROM inhuis_rehearsal')
+    [void](Invoke-TestDocker -Arguments @('exec',$testContainerId,'psql','-X','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c',$sql))
+    $before = Invoke-TestDocker -Arguments @('exec',$testContainerId,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c','SELECT marker FROM inhuis_rehearsal')
     if ($before -cne $id) { throw 'TESTGEGEVENS_NIET_GESCHREVEN' }
 
-    [void](Invoke-TestCompose @('stop','postgres'))
-    [void](Invoke-TestCompose @('start','postgres'))
+    [void](Invoke-TestCompose -Arguments @('stop','postgres'))
+    [void](Invoke-TestCompose -Arguments @('start','postgres'))
     $ready = $false
     for ($attempt=0; $attempt -lt 40; $attempt++) {
         & docker.exe exec $testContainerId pg_isready -U inhuis_test -d inhuis_test 1>$null 2>$null
@@ -133,7 +133,7 @@ volumes:
         Start-Sleep -Seconds 2
     }
     if (-not $ready) { throw 'TESTDATABASE_NA_HERSTART_NIET_GEREED' }
-    $after = Invoke-TestDocker @('exec',$testContainerId,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c','SELECT marker FROM inhuis_rehearsal')
+    $after = Invoke-TestDocker -Arguments @('exec',$testContainerId,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','inhuis_test','-d','inhuis_test','-c','SELECT marker FROM inhuis_rehearsal')
     if ($after -cne $id) { throw 'TESTGEGEVENS_NA_HERSTART_VERSCHILLEN' }
     $lines.Add('Synthetische gegevens na Compose stop/start: IDENTIEK')
     $passed = $true
@@ -141,13 +141,13 @@ volumes:
     $lines.Add('VEILIG GESTOPT: ' + $_.Exception.Message)
 } finally {
     if ($created -and -not $testContainerId -and $project -and $composeFile) {
-        try { $testContainerId = Invoke-TestCompose @('ps','-aq','postgres') } catch { }
+        try { $testContainerId = Invoke-TestCompose -Arguments @('ps','-aq','postgres') } catch { }
     }
     if ($created -and $testContainerId -match '^[a-f0-9]{64}$') {
         try {
             $current = Get-DockerIdentity $testContainerId
             if ($current.Config.Labels.'com.docker.compose.project' -ceq $project -and $current.Config.Labels.'com.docker.compose.service' -ceq 'postgres') {
-                [void](Invoke-TestCompose @('stop','postgres'))
+                [void](Invoke-TestCompose -Arguments @('stop','postgres'))
                 $lines.Add('Eigen testcontainer na de proef gestopt om geheugen vrij te maken.')
             } else { $lines.Add('WAARSCHUWING: testcontainer-identiteit afwijkend; niets gestopt.') }
         } catch { $lines.Add('WAARSCHUWING: testcontainer mogelijk nog actief; geen bredere opruiming uitgevoerd.') }
