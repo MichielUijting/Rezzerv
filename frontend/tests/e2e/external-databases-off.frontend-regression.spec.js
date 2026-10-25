@@ -187,10 +187,11 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();
     await candidateTable.locator('tbody tr', { hasText: '8710000000093' }).getByRole('radio').check();
-    await expect(page.getByLabel('Producttype', { exact: true })).toBeDisabled();
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Er is geen actie nodig.');
+    // Een keuze blijft bedienbaar zodra de classificatiecontrole is afgerond.
+    await expect(page.getByLabel('Producttype', { exact: true })).toBeEnabled();
     await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Producttype', { exact: true }).locator('option:checked')).toHaveText('GPC-classificatie ontbreekt');
-    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Er is geen actie nodig.');
     await expect(page.getByTestId('external-manual-gpc-search')).toBeVisible();
     await page.getByLabel('Zoek op Brickcode of producttype').fill('10000284');
     await page.getByRole('button', { name: 'Zoek GPC' }).click();
@@ -516,6 +517,12 @@ test.describe('Externe databases OFF candidate flow', () => {
 
   test('Gekoppelde bonartikelregel toont score, artikel, Producttype en definitieve GTIN', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
+
+    // De fictieve gekoppelde catalogus-ID bestaat niet in de echte database.
+    // Isoleer uitsluitend de read-only producttypecontrole in deze schermtest.
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'not_classified', reason: 'insufficient_confidence', automatic_product_type: { status: 'pending' } }) });
+    });
 
     await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
       await route.fulfill({
