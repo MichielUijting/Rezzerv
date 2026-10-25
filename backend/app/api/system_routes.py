@@ -55,6 +55,7 @@ from app.services.open_food_facts_candidate_store import save_open_food_facts_pr
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
+from app.services.external_article_search_service import search_article_candidates
 from app.services.external_unlinked_articles_service import list_articles_without_catalog_barcode
 
 router = APIRouter()
@@ -315,6 +316,15 @@ def external_products_open_food_facts_search(payload: dict[str, Any] = Body(defa
     """Nieuwe tijdelijke OFF-zoekflow zonder databasewrites."""
     try:
         return search_off_candidates(payload)
+    except OffSearchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post('/api/external-databases/products/search-preview')
+def external_databases_product_search_preview(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Read-only store evidence and OFF candidates for Externe databases 2."""
+    try:
+        return search_article_candidates(payload)
     except OffSearchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

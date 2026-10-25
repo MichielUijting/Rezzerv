@@ -46,7 +46,7 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende OFF-kandidaten te zoeken.</p>
+        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken.</p>
         {error ? <p role="alert">{error}</p> : null}
         <div className="rz-external-receipt-overview">
         <DataTable

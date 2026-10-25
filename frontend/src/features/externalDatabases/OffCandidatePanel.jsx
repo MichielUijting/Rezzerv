@@ -7,6 +7,8 @@ const columns = [
   { key: 'rank', label: 'Voorkeur', width: 90, align: 'right', sortable: true },
   { key: 'product_name', label: 'Artikel', width: 280, sortable: true, filterable: true },
   { key: 'brand', label: 'Merk', width: 150, sortable: true, filterable: true },
+  { key: 'source', label: 'Bron', width: 180, sortable: true, filterable: true },
+  { key: 'evidence_label', label: 'Herkenning', width: 230, sortable: true, filterable: true },
   { key: 'gtin', label: 'Barcode', width: 170, sortable: true, filterable: true },
   { key: 'quantity', label: 'Inhoud', width: 140, sortable: true, filterable: true },
   { key: 'match', label: 'Overeenkomst', width: 140, align: 'right', sortable: true,
@@ -17,6 +19,7 @@ export default function OffCandidatePanel({ item }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [evidence, setEvidence] = useState(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
@@ -25,11 +28,11 @@ export default function OffCandidatePanel({ item }) {
     setLoading(true)
     setResults([])
     setError('')
+    setEvidence(null)
     async function search() {
       try {
-        // Same automatic flow as Externe databases: resolve the source by ID,
-        // then apply existing query variants, retailer affinity and ranking.
-        const response = await fetchJsonWithAuth('/api/external-products/off/search', {
+        // Source identity and store evidence are resolved by the backend.
+        const response = await fetchJsonWithAuth('/api/external-databases/products/search-preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -37,6 +40,7 @@ export default function OffCandidatePanel({ item }) {
         })
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Open Food Facts kon niet worden geraadpleegd.')
+        if (active) setEvidence(payload.retailer_evidence || null)
         if (payload.provider === 'unavailable') throw new Error('Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.')
         if (active) setResults((Array.isArray(payload.results) ? payload.results : []).map((row, index) => ({
           ...row, rank: index + 1, match: Number(row.automatic_rank_score ?? row.score) || 0,
@@ -54,16 +58,24 @@ export default function OffCandidatePanel({ item }) {
   return (
     <section className="rz-external-receipt-detail" aria-labelledby="off-candidate-heading" data-testid="external-databases-2-off-panel" aria-busy={loading}>
       <div className="rz-external-databases-card">
-        <h3 id="off-candidate-heading">OFF-kandidaten voor {item.receipt_line_text} — {item.retailer}</h3>
-        <p>Best passende suggesties uit Open Food Facts, op volgorde van voorkeur.</p>
-        {loading ? <p role="status">Kandidaten zoeken in Open Food Facts...</p> : null}
+        <h3 id="off-candidate-heading">Productkandidaten voor {item.receipt_line_text} — {item.retailer}</h3>
+        <p>Productgegevens van Lidl waar beschikbaar, aangevuld met Open Food Facts. Zoeken slaat niets op.</p>
+        {evidence ? <div data-testid="retailer-product-evidence">
+          <p>{evidence.message}</p>
+          {evidence.product_name ? <p>{evidence.product_name}{evidence.brand ? ` — ${evidence.brand}` : ''}</p> : null}
+          {evidence.description ? <p>{evidence.description}</p> : null}
+          {evidence.article_number ? <p>Lidl-artikelnummer: {evidence.article_number}</p> : null}
+          {evidence.gtins?.length ? <p>Barcode{evidence.gtins.length > 1 ? 's' : ''} vermeld door Lidl: {evidence.gtins.join(', ')}</p> : null}
+          {evidence.source_url ? <a href={evidence.source_url} target="_blank" rel="noopener noreferrer">Bekijk product bij Lidl</a> : null}
+        </div> : null}
+        {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {error ? <div role="alert"><p>{error}</p><Button type="button" variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Opnieuw zoeken</Button></div> : null}
         {!loading && !error ? <DataTable
           columns={columns}
           data={results}
           getRowKey={(row) => row.gtin}
           defaultSort={{ key: 'rank', direction: 'asc' }}
-          emptyMessage="Geen passende OFF-kandidaten gevonden."
+          emptyMessage="Geen passende productkandidaten gevonden."
           dataTestId="external-databases-2-off-candidates"
         /> : null}
       </div>

@@ -24,7 +24,7 @@ artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
 blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
 van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
 DataTable. Het laden van de artikellijst start geen externe zoekacties en
-schrijft geen gegevens. OFF-kandidaten worden pas na artikelselectie gezocht.
+schrijft geen gegevens. Productkandidaten worden pas na artikelselectie gezocht.
 Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
 worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
 Statiegeld/emballage, kortingen, koop-/spaarzegels, betalingen en totalen zijn
@@ -33,14 +33,27 @@ meetellen volgens de financiële bonregels. Uitpakken-importkopieën van een
 kassabon worden niet opnieuw als zelfstandige bron gelezen: de actuele
 regelrol en verwijderstatus van de oorspronkelijke bon blijven leidend.
 Externe databases 2 toont geen knop Afsluiten.
-Op desktop opent dubbelklikken op een artikel een OFF-kandidatenpaneel onder de
+Op desktop opent dubbelklikken op een artikel een productkandidatenpaneel onder de
 tabel; op mobiel volstaat één tik. Enter of spatie ondersteunt toetsenbordgebruik.
-De bestaande automatische OFF-zoekroute van Externe databases wordt hergebruikt:
+De alleen-lezen productzoekroute gebruikt voor Lidl eerst het opgeslagen winkelartikelnummer
+om een Nederlandse Lidl-productpagina te raadplegen. Alleen een uniek Product met
+hetzelfde paginanummer én passende naam/variant wordt gebruikt. Een barcode moet
+expliciet in dat Product of de bijbehorende Nuxt-productnode staan en een geldige
+GTIN-controle hebben. Artikel-/ERP-/IAN-nummers worden nooit tot GTIN omgevormd.
+Eén aangetroffen barcode wordt exact in OFF opgezocht; ontbrekende OFF-informatie
+laat de Lidl-bron zichtbaar. Bij meerdere barcodes wordt niet willekeurig gekozen.
+Zonder bruikbare Lidl-barcode wordt de bestaande automatische OFF-zoeklogica van Externe databases hergebruikt:
 de server bepaalt artikelnaam/winkel uit de bron-ID, maakt dezelfde zoekvarianten
 en suggesties, bewaakt product-/huismerkconflicten en rangschikt kandidaten.
-Het paneel toont naam, merk, barcode, inhoud en overeenkomst, met standaard
+Het paneel toont Lidl-brongegevens en de reden van een eventuele terugval, plus
+naam, merk, barcode, inhoud, bron, herkenning en overeenkomst, met standaard
 zoeken, sorteren en paginering. De eerste volgorde blijft de bestaande automatische
-voorkeursvolgorde. Een kandidaat is een suggestie, geen bewezen exacte match.
+voorkeursvolgorde. Een naamsuggestie blijft herkenbaar als suggestie. Een door Lidl vermelde barcode
+blijft bronbewijs en is geen automatisch bevestigde Cataloguskoppeling.
+De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
+met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,
+een netwerkbudget van twaalf seconden en maximaal 2 MiB per antwoord. Er is
+geen accountlogin, Scan&Go, buitenlandse koppeltabel of assortimentimport.
 Zoeken start alleen na selectie en maakt geen Catalogus-, kandidaat-, huishoud-
 of voorraadmutatie. Bij wisselen van artikel worden oude resultaten gewist en
 lopende clientverzoeken afgebroken; een late respons mag het nieuwe paneel niet

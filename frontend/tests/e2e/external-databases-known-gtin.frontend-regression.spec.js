@@ -25,7 +25,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.route('**/api/**', async (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname
-        if (path === '/api/external-products/off/search') {
+        if (path === '/api/external-databases/products/search-preview') {
           const body = request.postDataJSON()
           searches.push(body)
           if (slowMilk && body.receipt_item_id === rows[0].id) {
@@ -38,10 +38,14 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
             slowCompleted = true
             return
           }
-          if (body.receipt_item_id === rows[1].id) return route.fulfill({ json: { provider: 'openfoodfacts', results: [] } })
+          if (body.receipt_item_id === rows[1].id) return route.fulfill({ json: { provider: 'openfoodfacts', results: [], retailer_evidence: { status: 'no_barcode', message: 'Lidl-product gevonden, maar geen barcode vermeld.' } } })
           if (body.receipt_item_id === rows[2].id && errorAttempts++ === 0) return route.fulfill({ status: 503, json: { detail: 'OFF is tijdelijk niet bereikbaar.' } })
-          return route.fulfill({ json: { provider: 'openfoodfacts', results: [
-            { gtin: '8720326035617', product_name: 'Voorkeur uit automatische zoekvarianten', brand: 'Testmerk', quantity: '1 l', score: .60, automatic_rank_score: .95 },
+          return route.fulfill({ json: { provider: 'openfoodfacts', retailer_evidence: {
+            status: 'barcode_found', product_name: 'Halfvolle melk', brand: 'Testmerk',
+            article_number: '1234567', gtins: ['8720326035617'], source_url: 'https://www.lidl.nl/p/test/p1234567',
+            message: 'Lidl vermeldt één geldige barcode bij dit product.',
+          }, results: [
+            { gtin: '8720326035617', product_name: 'Voorkeur uit automatische zoekvarianten', source: 'Lidl + Open Food Facts', evidence_label: 'Lidl-barcode gevonden in OFF', brand: 'Testmerk', quantity: '1 l', score: .60, automatic_rank_score: .95 },
             { gtin: '8718452504435', product_name: 'Tweede suggestie', brand: 'Testmerk', quantity: '500 ml', score: .99, automatic_rank_score: .80 },
           ] } })
         }
@@ -77,12 +81,18 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       const candidates = panel.getByTestId('external-databases-2-off-candidates')
       await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
       await expect(candidates.locator('tbody tr').first()).toContainText('95%')
+      await expect(candidates).toContainText('Lidl + Open Food Facts')
+      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('1234567')
+      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('8720326035617')
+      await expect(panel.getByRole('link', { name: 'Bekijk product bij Lidl' })).toHaveAttribute('href', 'https://www.lidl.nl/p/test/p1234567')
       expect(searches[0]).toEqual({ receipt_item_id: rows[0].id, mode: 'automatic', limit: 20 })
       expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
-      await expect(panel).toContainText('Geen passende OFF-kandidaten gevonden.')
+      await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       await expect(panel).not.toContainText('Tweede suggestie')
+      await expect(panel).toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
+      await expect(panel).not.toContainText('1234567')
       await open(2)
       await expect(panel.getByRole('alert')).toContainText('OFF is tijdelijk niet bereikbaar.')
       await panel.getByRole('button', { name: 'Opnieuw zoeken' }).click()
@@ -94,7 +104,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(panel.getByRole('status')).toContainText('Kandidaten zoeken')
       await expect.poll(() => Boolean(releaseSlow)).toBe(true)
       await open(1)
-      await expect(panel).toContainText('Geen passende OFF-kandidaten gevonden.')
+      await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       releaseSlow()
       await expect.poll(() => slowCompleted).toBe(true)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')

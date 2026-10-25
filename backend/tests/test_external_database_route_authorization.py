@@ -43,6 +43,7 @@ def build_connection():
         ("POST", "/api/external-databases/off/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/coverage/receipt-items", "platform.external_products.search"),
         ("POST", "/api/external-products/off/search", "platform.external_products.search"),
+        ("POST", "/api/external-databases/products/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/save-candidates", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/candidates/confirm-external", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/promote-candidate", "platform.external_products.link_existing"),
