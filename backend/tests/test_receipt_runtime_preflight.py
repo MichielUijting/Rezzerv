@@ -44,22 +44,19 @@ def test_runtime_preflight_fails_closed_when_paddle_is_not_ready(monkeypatch):
         runtime_preflight.run_runtime_preflight()
 
 
-def test_runtime_preflight_keeps_explicit_paddle_diagnostic_escape_hatch(monkeypatch):
+def test_runtime_preflight_skips_paddle_initialization_when_disabled(monkeypatch):
     monkeypatch.setattr(
         runtime_preflight,
         'warm_receipt_image_preprocessing',
         lambda: {'status': 'ok'},
     )
-    monkeypatch.setattr(
-        runtime_preflight,
-        'warm_receipt_ocr_runtime',
-        lambda: {'paddle_ready': False, 'tesseract_ready': True},
-    )
+    def unexpected_ocr_warmup():
+        pytest.fail('Paddle OCR must not initialize when startup warmup is disabled')
+
+    monkeypatch.setattr(runtime_preflight, 'warm_receipt_ocr_runtime', unexpected_ocr_warmup)
     monkeypatch.setenv('REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP', 'false')
 
     result = runtime_preflight.run_runtime_preflight()
 
-    assert result['ocr_runtime'] == {
-        'paddle_ready': False,
-        'tesseract_ready': True,
-    }
+    assert result['ocr_runtime']['startup_warmup_skipped'] is True
+    assert result['ocr_runtime']['paddle_ready'] is False
