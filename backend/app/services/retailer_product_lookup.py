@@ -103,7 +103,7 @@ class GuestTransport:
 
 def compatible(item, name, brand=''):
     return name_compatible(item.get('receipt_line_text', ''), name) and bool(
-        external_product_identity_compatibility(retailer_code=item.get('retailer_code'),
+        external_product_identity_compatibility(retailer_code=retailer_code(item.get('retailer_code')),
             receipt_text=item.get('receipt_line_text'), candidate_name=name, candidate_brand=brand).get('ok'))
 
 

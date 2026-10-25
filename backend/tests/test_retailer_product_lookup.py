@@ -244,3 +244,11 @@ def test_off_brand_conflict_does_not_overwrite_store_product(monkeypatch):
     result = service.search_article_candidates({})
     assert result['results'][0]['source'] == 'Albert Heijn'
     assert result['results'][0]['brand'] == 'AH'
+
+
+@pytest.mark.parametrize('retailer', ['ah', 'Albert Heijn', 'albert-heijn-digitaal'])
+def test_digital_ah_retailer_alias_preserves_private_label_guard(retailer):
+    source = item()
+    source['retailer_code'] = retailer
+    assert retail.compatible(source, 'AH Halfvolle melk', 'AH')
+    assert not retail.compatible(source, 'Campina Halfvolle melk', 'Campina')
