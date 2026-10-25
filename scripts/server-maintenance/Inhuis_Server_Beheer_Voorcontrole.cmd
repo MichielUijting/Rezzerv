@@ -37,14 +37,17 @@ if errorlevel 1 (
   goto :finish
 )
 >>"%TMP_REPORT%" echo.
->>"%TMP_REPORT%" echo [Restartbeleid en image-identiteit van alle containers]
-docker ps -aq | powershell.exe -NoProfile -NonInteractive -Command "$input | ForEach-Object { $id=$_.Trim(); if($id){ docker.exe inspect --format 'naam={{.Name}} restart={{.HostConfig.RestartPolicy.Name}} imageID={{.Image}}' $id 2>$null } }" >>"%TMP_REPORT%" 2>nul
+>>"%TMP_REPORT%" echo [Restartbeleid, Compose-identiteit en opslagkoppelingen]
+rem Inspect JSON is consumed in memory; only whitelisted metadata is written.
+docker ps -aq | powershell.exe -NoProfile -NonInteractive -Command "$input | ForEach-Object { $id=$_.Trim(); if($id){ $a=@(docker.exe inspect $id | ConvertFrom-Json); foreach($c in $a){ $p=$c.Config.Labels.'com.docker.compose.project'; $s=$c.Config.Labels.'com.docker.compose.service'; $v=@($c.Mounts | Where-Object { $_.Type -eq 'volume' } | ForEach-Object { $_.Name + ':' + $_.Destination }) -join ','; Write-Output ('naam='+$c.Name+' restart='+$c.HostConfig.RestartPolicy.Name+' project='+$p+' service='+$s+' imageID='+$c.Image+' volumes='+$v) } } }" >>"%TMP_REPORT%" 2>nul
 >>"%TMP_REPORT%" echo.
 >>"%TMP_REPORT%" echo [Windows-aanmeldstart: alleen taaknamen en status]
 powershell.exe -NoProfile -NonInteractive -Command "Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match 'Inhuis|Docker|Scanner' } | Select-Object TaskName,State | Format-Table -HideTableHeaders | Out-String -Width 160" >>"%TMP_REPORT%" 2>nul
 >>"%TMP_REPORT%" echo.
 >>"%TMP_REPORT%" echo [Windows automatische start via gebruikersaccount]
 powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Docker|Inhuis' } | ForEach-Object { $_.Name }" >>"%TMP_REPORT%" 2>nul
+>>"%TMP_REPORT%" echo [Windows laatste opstart en aangemelde sessie]
+powershell.exe -NoProfile -NonInteractive -Command "$o=Get-CimInstance Win32_OperatingSystem; Write-Output ('Boot='+$o.LastBootUpTime.ToString('yyyy-MM-dd HH:mm:ss')); Write-Output ('InteractiveSession='+[Environment]::UserInteractive)" >>"%TMP_REPORT%" 2>nul
 >>"%TMP_REPORT%" echo.
 >>"%TMP_REPORT%" echo [Lokale bereikbaarheidscontrole; geen gebruikersaanmelding]
 powershell.exe -NoProfile -NonInteractive -Command "foreach($u in @('http://127.0.0.1:8011/api/health','http://127.0.0.1:5174/','http://127.0.0.1:8003/health')){ try { $r=Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 4; Write-Output ($u+' : HTTP '+[int]$r.StatusCode) } catch { Write-Output ($u+' : niet bereikbaar / afwijkend') } }" >>"%TMP_REPORT%" 2>nul
