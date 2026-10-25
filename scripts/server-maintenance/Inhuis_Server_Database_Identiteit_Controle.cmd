@@ -39,7 +39,12 @@ try {
     if ($LASTEXITCODE -ne 0 -or $ids.Count -eq 0) { throw 'DOCKER_NIET_BEREIKBAAR_OF_LEEG' }
     $raw = & docker.exe inspect @ids 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'DOCKER_INSPECT_MISLUKT' }
-    $containers = @($raw | ConvertFrom-Json)
+    # Windows PowerShell 5.1 may emit the JSON array as ONE pipeline object.
+    # Enumerate it explicitly to avoid selecting all containers as one backend.
+    $parsed = ConvertFrom-Json -InputObject ($raw -join "`n")
+    $containers = @()
+    foreach ($item in $parsed) { $containers += $item }
+    if ($containers.Count -ne $ids.Count) { throw 'DOCKER_INVENTARIS_AANTAL_AFWIJKEND' }
     $targetName = '/inhuis-1296-hersteltest-backend-1'
     $targets = @($containers | Where-Object { $_.Name -eq $targetName })
     if ($targets.Count -ne 1 -or $targets[0].State.Running -ne $true) { throw 'BEKENDE_BACKEND_NIET_UNIEK_OF_NIET_ACTIEF' }
@@ -74,12 +79,17 @@ try:
             raise RuntimeError('NO_SCHEMA_REVISION')
         print('INHUIS_EVIDENCE=' + json.dumps(dict(result, revisions=revisions), sort_keys=True))
     engine.dispose()
-except Exception:
-    print('INHUIS_PROBE_FAILED')
+except Exception as exc:
+    # Only the exception class, never a connection URL or message with secrets.
+    print('INHUIS_PROBE_FAILED=' + type(exc).__name__)
     sys.exit(3)
 '@
     $output = @($probe | & docker.exe exec -i ($targetName.TrimStart('/')) python - 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw 'BACKEND_READONLY_SQL_MISLUKT' }
+    if ($LASTEXITCODE -ne 0) {
+        $failure = @($output | Where-Object { $_ -like 'INHUIS_PROBE_FAILED=*' } | Select-Object -First 1)
+        if ($failure.Count -eq 1) { throw ('BACKEND_READONLY_SQL_MISLUKT_' + $failure[0].Substring('INHUIS_PROBE_FAILED='.Length)) }
+        throw 'BACKEND_PYTHON_NIET_UITVOERBAAR_OF_GEEN_DIAGNOSE'
+    }
     $evidenceLine = @($output | Where-Object { $_ -like 'INHUIS_EVIDENCE=*' })
     if ($evidenceLine.Count -ne 1) { throw 'DATABASE_EVIDENCE_ONTBREEKT' }
     $db = $evidenceLine[0].Substring('INHUIS_EVIDENCE='.Length) | ConvertFrom-Json
