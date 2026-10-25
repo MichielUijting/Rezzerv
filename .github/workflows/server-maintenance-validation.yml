@@ -58,6 +58,7 @@ jobs:
           backend/tests/test_maintenance_runtime_preflight.py
           backend/tests/test_maintenance_schema_contract.py
           backend/tests/test_maintenance_state_contract.py
+          backend/tests/test_server_maintenance_split_container_selection_contract.py
 
   windows-host-parser:
     runs-on: windows-latest
