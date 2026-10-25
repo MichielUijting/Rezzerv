@@ -290,3 +290,54 @@ test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile
   await expect(page.getByTestId('store-import-open-ah')).toHaveText('Albert Heijn')
   await expect(page.getByTestId('store-import-open-lidl')).toHaveText('Lidl Plus')
 })
+
+for (const width of [390, 1280]) {
+  test(`Bijna op settings offers only valid policies and readable save feedback at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let rejectSave = true
+    let savedPolicy = null
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/household/almost-out-settings') {
+        if (route.request().method() === 'PUT') {
+          const payload = route.request().postDataJSON()
+          if (rejectSave) {
+            return route.fulfill({ status: 422, json: { detail: [{ loc: ['body', 'policy_mode'], msg: 'Invalid value' }] } })
+          }
+          savedPolicy = payload.policy_mode
+          return route.fulfill({ json: { ...payload, is_household_admin: true } })
+        }
+        return route.fulfill({ json: { prediction_enabled: false, prediction_days: 7, policy_mode: 'advisory', is_household_admin: true } })
+      }
+      const responses = {
+        '/api/session': {
+          authenticated: true, user_id: 'settings-admin', email: 'settings@example.test',
+          user: { id: 'settings-admin', email: 'settings@example.test' },
+          context_type: 'regular', active_household_id: 'settings-household',
+          active_household_name: 'Test huishouden', role: 'admin', display_role: 'admin',
+          household_role: 'household.admin', is_viewer: false, is_platform_superuser: false,
+          is_frontteam: false,
+          permissions: { 'household_settings.view': true, 'household_settings.manage': true },
+          supported_permissions: ['household_settings.view', 'household_settings.manage'],
+        },
+        '/api/session/households': { items: [], can_switch_households: false },
+        '/api/household': { id: 'settings-household', name: 'Test huishouden' },
+        '/api/maintenance/status': { state: 'normal' },
+      }
+      return route.fulfill({ json: responses[path] ?? {} })
+    })
+    await page.goto('/instellingen/bijna-op-voorspelling')
+    const policy = page.getByTestId('almost-out-policy-mode')
+    await expect(policy.locator('option')).toHaveCount(2)
+    await expect(policy.locator('option[value="override_fallback_to_stock"]')).toHaveCount(0)
+    await page.getByTestId('almost-out-prediction-enabled').check()
+    await policy.selectOption('override')
+    await page.getByTestId('almost-out-settings-save').click()
+    await expect(page.getByRole('status')).toContainText('De instellingen zijn niet opgeslagen.')
+    await expect(page.getByTestId('settings-almost-out-page')).not.toContainText('[object Object]')
+    rejectSave = false
+    await page.getByTestId('almost-out-settings-save').click()
+    await expect(page.getByRole('status')).toContainText('Opgeslagen')
+    expect(savedPolicy).toBe('override')
+  })
+}

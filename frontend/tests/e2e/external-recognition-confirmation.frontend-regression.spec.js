@@ -83,6 +83,11 @@ test.describe('Externe herkenning bevestigen geïntegreerde regressie', () => {
     await page.route('**/api/inventory/groups', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ group_options: [] }) })
     })
+    // De kandidaat is synthetisch; de nieuwe read-only classificatie mag in
+    // deze herkenningsregressie niet op platformrechten of echte data leunen.
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'not_classified', reason: 'insufficient_confidence', automatic_product_type: { status: 'pending' } }) })
+    })
     await page.route('**/api/external-products/off/search', async (route) => {
       const payload = route.request().postDataJSON()
       await route.fulfill({
