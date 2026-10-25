@@ -60,10 +60,18 @@ try {
 import json, os, sys
 try:
     from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
     url = os.environ.get('DATABASE_URL')
     if not url:
         raise RuntimeError('NO_RUNTIME_DATABASE_URL')
-    engine = create_engine(url, connect_args={'connect_timeout': 5})
+    # Match the application's canonical psycopg 3 driver selection. A plain
+    # postgresql:// URL otherwise makes SQLAlchemy look for absent psycopg2.
+    parsed = make_url(url)
+    if parsed.drivername == 'postgresql':
+        parsed = parsed.set(drivername='postgresql+psycopg')
+    if parsed.get_backend_name() != 'postgresql':
+        raise RuntimeError('NOT_POSTGRESQL')
+    engine = create_engine(parsed, connect_args={'connect_timeout': 5})
     with engine.connect() as connection:
         connection.execute(text('SET TRANSACTION READ ONLY'))
         result = connection.execute(text('''
