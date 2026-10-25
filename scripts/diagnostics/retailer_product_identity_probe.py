@@ -24,6 +24,10 @@ MAX_RECEIPTS = 2000
 MAX_LINES = 2000
 
 
+class SourceReadError(ValueError):
+    """Fixed diagnostic code only, never an exception containing private data."""
+
+
 def valid_gtin(value):
     """Exact ASCII digits, valid length/check digit; no digit stripping/padding."""
     if not isinstance(value, str) or not re.fullmatch(r"(?:[0-9]{8}|[0-9]{12,14})", value):
@@ -59,6 +63,10 @@ def line_evidence(provider, item):
             (explicit if key in EXPLICIT_GTIN_KEYS else ambiguous).append(entry)
         for key in SKU_KEYS + (("id",) if prefix == "product" or provider in {"ah", "picnic"} else ()):
             value = code_value(obj.get(key))
+            # Retailer IDs can be JSON integers (AH uses these). Preserve the
+            # source namespace; this conversion never produces a GTIN.
+            if isinstance(obj.get(key), int) and not isinstance(obj[key], bool) and 0 <= obj[key] < 10**30:
+                value = str(obj[key])
             if value:
                 skus.append({"field": prefix + "." + key, "value": value})
     gtins = {e["value"] for e in explicit if e["check_digit_valid"]}
@@ -79,34 +87,49 @@ def line_evidence(provider, item):
 def source_lines(envelope):
     """Read only the bounded, known retailer-envelope layout we actually store."""
     if not isinstance(envelope, dict) or envelope.get("schema_version") != "1.0":
-        raise ValueError("Unknown envelope version")
+        raise SourceReadError("unknown_envelope_version")
     provider = envelope.get("provider")
     if provider not in PROVIDERS:
-        raise ValueError("Unknown provider")
+        raise SourceReadError("unknown_provider")
     root = envelope.get("receipt")
     if not isinstance(root, dict):
-        raise ValueError("Missing receipt")
-    for wrapper in ("receipt", "ticket", "data", "order"):
+        raise SourceReadError("missing_receipt_object")
+    original_root = root
+    for wrapper in ("receipt", "data", "ticket", "order"):
         if isinstance(root.get(wrapper), dict):
             root = root[wrapper]
-    lines = next((root[k] for k in ("items", "products", "lines", "articles", "itemsLine")
-                  if isinstance(root.get(k), list)), None)
+    lines = next((candidate[k] for candidate in (original_root, root)
+                  for k in ("items", "products", "lines", "entries", "receiptLines", "basketItems")
+                  if isinstance(candidate.get(k), list)), None)
     if lines is None or len(lines) > MAX_LINES or any(not isinstance(x, dict) for x in lines):
-        raise ValueError("Unknown or excessive source lines")
+        raise SourceReadError("unknown_or_excessive_line_layout")
     return provider, lines
 
 
 def read_envelope(path, root, expected_hash):
     """Constrain path, size and content hash before opening private source data."""
-    source = Path(path).resolve()
-    source.relative_to(Path(root).resolve())
-    if not source.is_file() or source.stat().st_size > MAX_FILE_BYTES:
-        raise ValueError("Source missing or excessive")
-    with source.open("rb") as stream:
-        data = stream.read(MAX_FILE_BYTES + 1)
-    if len(data) > MAX_FILE_BYTES or hashlib.sha256(data).hexdigest() != expected_hash:
-        raise ValueError("Source hash differs")
-    return json.loads(data)
+    try:
+        source = Path(path).resolve()
+        try:
+            source.relative_to(Path(root).resolve())
+        except ValueError:
+            raise SourceReadError("outside_storage_root") from None
+        if not source.is_file():
+            raise SourceReadError("source_file_missing")
+        if source.stat().st_size > MAX_FILE_BYTES:
+            raise SourceReadError("source_file_too_large")
+        with source.open("rb") as stream:
+            data = stream.read(MAX_FILE_BYTES + 1)
+        if len(data) > MAX_FILE_BYTES:
+            raise SourceReadError("source_file_too_large")
+        if hashlib.sha256(data).hexdigest() != expected_hash:
+            raise SourceReadError("source_hash_mismatch")
+        try:
+            return json.loads(data)
+        except (ValueError, UnicodeError):
+            raise SourceReadError("source_json_invalid") from None
+    except OSError:
+        raise SourceReadError("source_file_unreadable") from None
 
 
 def audit(conn, storage_root):
@@ -137,29 +160,13 @@ def audit(conn, storage_root):
         household = hashlib.sha256(salt + str(row["household_id"]).encode()).hexdigest()[:12]
         key = household, row["provider"]
         group = groups.setdefault(key, {"household_ref": household, "provider": row["provider"],
-            "source_receipts": 0, "source_errors": 0, "source_lines": 0,
+            "source_receipts": 0, "source_errors": 0, "source_error_reasons": Counter(), "source_lines": 0,
             "explicit_nonproduct_lines_skipped": 0, "statuses": Counter(), "numeric_identifier_fields": 0,
             "persisted_product_lines": 0, "persisted_valid_gtin_shape": 0,
             "persisted_sku_present": 0, "barcode_also_sku": 0})
         group["source_receipts"] += 1
-        try:
-            provider, lines = source_lines(read_envelope(row["storage_path"], storage_root, row["sha256_hash"]))
-            if provider != row["provider"]:
-                raise ValueError("Provider mismatch")
-        except (ValueError, OSError, TypeError, UnicodeError):
-            group["source_errors"] += 1
-            continue
-        for item in lines:
-            role = next((item[k] for k in ("line_type", "lineType", "type") if item.get(k)), "product")
-            if role not in {"product", "article", "item"}:
-                group["explicit_nonproduct_lines_skipped"] += 1
-                continue
-            observation = line_evidence(provider, item)
-            group["source_lines"] += 1
-            group["statuses"][observation["status"]] += 1
-            group["numeric_identifier_fields"] += observation["numeric_identifier_fields"]
-        # Aggregate separately: raw rows may be folded during import (weights),
-        # so there is deliberately NO positional/name-based raw-to-saved join.
+        # Saved identifiers are independent evidence: count them even when the
+        # original source file is absent, inaccessible or fails integrity checks.
         saved = conn.execute(text("""
             SELECT rtl.barcode, rtl.external_article_code
             FROM receipt_table_lines rtl JOIN receipt_tables rt ON rt.id=rtl.receipt_table_id
@@ -174,7 +181,30 @@ def audit(conn, storage_root):
             group["persisted_valid_gtin_shape"] += int(valid_gtin(barcode))
             group["persisted_sku_present"] += int(bool(sku))
             group["barcode_also_sku"] += int(bool(sku) and sku == barcode)
-    return {"schema_version": "1.0", "read_only": True, "network_requests": 0,
+        try:
+            provider, lines = source_lines(read_envelope(row["storage_path"], storage_root, row["sha256_hash"]))
+            if provider != row["provider"]:
+                raise SourceReadError("provider_mismatch")
+        except SourceReadError as exc:
+            group["source_errors"] += 1
+            group["source_error_reasons"][str(exc)] += 1
+            continue
+        except (ValueError, OSError, TypeError, UnicodeError):
+            group["source_errors"] += 1
+            group["source_error_reasons"]["other_source_structure_error"] += 1
+            continue
+        for item in lines:
+            role = next((item[k] for k in ("line_type", "lineType", "type") if item.get(k)), "product")
+            if role not in {"product", "article", "item"}:
+                group["explicit_nonproduct_lines_skipped"] += 1
+                continue
+            observation = line_evidence(provider, item)
+            group["source_lines"] += 1
+            group["statuses"][observation["status"]] += 1
+            group["numeric_identifier_fields"] += observation["numeric_identifier_fields"]
+        # Aggregate separately: raw rows may be folded during import (weights),
+        # so there is deliberately NO positional/name-based raw-to-saved join.
+    return {"schema_version": "1.0", "probe_version": 2, "read_only": True, "network_requests": 0,
         "retailer_product_verified": False, "barcode_link_verified": False,
         "scope": "Stored retailer API source envelopes, including historical receipts; no new fetch/import",
         "groups": list(groups.values()),

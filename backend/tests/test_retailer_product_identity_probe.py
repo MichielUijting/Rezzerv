@@ -70,6 +70,18 @@ class IdentityProbeTests(unittest.TestCase):
             self.assertEqual(row["status"], "retailer_sku_only")
             self.assertEqual(row["explicit_gtins"], [])
 
+    def test_numeric_ah_sku_is_observed_without_barcode_promotion(self):
+        for item in ({"retailerSku": 123456}, {"id": 4056489846932}):
+            row = line_evidence("ah", item)
+            self.assertEqual(row["status"], "retailer_sku_only")
+            self.assertEqual(row["explicit_gtins"], [])
+
+    def test_importer_alternate_layout_is_supported(self):
+        for key in ("entries", "receiptLines", "basketItems"):
+            provider, rows = source_lines({"schema_version": "1.0", "provider": "ah", "receipt": {"data": {key: [{"id": 123}]}}})
+            self.assertEqual(provider, "ah")
+            self.assertEqual(len(rows), 1)
+
     def test_nested_id_never_becomes_gtin(self):
         row = line_evidence("jumbo", {"product": {"id": "8718452829408"}})
         self.assertEqual(row["status"], "retailer_sku_only")
@@ -144,8 +156,22 @@ class IdentityProbeTests(unittest.TestCase):
 
     def test_provider_mismatch_and_missing_file_are_counted_not_printed(self):
         row = {"id": "x", "household_id": "h", "provider": "ah", "storage_path": "/missing", "sha256_hash": "0" * 64}
-        result = audit(Connection([row]), "/raw")
+        result = audit(Connection([row], [{"barcode": "4056489846932", "external_article_code": "123"}]), "/")
         self.assertEqual(result["groups"][0]["source_errors"], 1)
+        self.assertEqual(result["groups"][0]["source_error_reasons"], {"source_file_missing": 1})
+        self.assertEqual(result["groups"][0]["persisted_product_lines"], 1)
+        self.assertEqual(result["groups"][0]["persisted_sku_present"], 1)
+        self.assertEqual(result["groups"][0]["persisted_valid_gtin_shape"], 1)
+
+    def test_integrity_and_layout_errors_have_distinct_safe_reasons(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "private.json"
+            data = b'{"schema_version":"1.0","provider":"jumbo","receipt":{"items":[]}}'
+            path.write_bytes(data)
+            row = {"id": "x", "household_id": "h", "provider": "ah", "storage_path": str(path), "sha256_hash": "0" * 64}
+            self.assertEqual(audit(Connection([row]), directory)["groups"][0]["source_error_reasons"], {"source_hash_mismatch": 1})
+            row["sha256_hash"] = hashlib.sha256(data).hexdigest()
+            self.assertEqual(audit(Connection([row]), directory)["groups"][0]["source_error_reasons"], {"provider_mismatch": 1})
 
 
 if __name__ == "__main__":

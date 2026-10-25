@@ -2,6 +2,22 @@
 
 TEST_LEVEL_PROVISIONAL: L
 
+## Correctie bronproef V2
+
+Het eerste lokale rapport bevat 519 bronbonnen, waarvan 517 overgeslagen en
+slechts 2 uitgelezen (9 bronregels). Dat is geen bruikbaar dekkingsbewijs.
+V1 maakte geen onderscheid tussen ontbrekend bestand, opslagpad, hashconflict en
+onbekende JSON-/bonstructuur. V2 telt deze oorzaken apart met vaste veilige labels.
+Geen bestandspaden, tokens of inhoud van foutmeldingen worden afgedrukt.
+
+V1 sloeg ook de telling van opgeslagen productcodes over bij een bronleesfout.
+V2 leest die onafhankelijk: een bronbestandprobleem betekent niet dat er geen
+productcodes zijn opgeslagen. Numerieke AH-/Picnic-winkel-ID's worden als
+winkel-ID herkend, nooit als GTIN. De ondersteunde regelvelden en wrappervolgorde
+volgen nu de bestaande retailer-normalizer, inclusief entries/receiptLines/basketItems.
+De oorzaak van de 517 bronleesfouten is nog niet vastgesteld; V2 stelt die vast
+zonder bestandspaden aan te passen, hashes te omzeilen of bestanden te herstellen.
+
 Doel van deze eerste stap is vaststellen welke identificerende gegevens de
 bestaande digitale bonkoppelingen werkelijk bewaren. Dit is geen geïmplementeerde
 assortimentimport, websitezoeker of automatische Cataloguskoppeling.
