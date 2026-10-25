@@ -129,6 +129,67 @@ def _decimal_field(item: dict, key: str) -> Decimal:
     return Decimal(str(value))
 
 
+def _verify_gpc_variant_aggregation(engine, main, client, headers, url):
+    """Real PostgreSQL/API proof: cross-retailer history, units and household isolation."""
+    from datetime import datetime, timedelta, timezone
+    from app.services.gpc_reference_catalog_service import ensure_official_gpc_brick
+
+    members = [('ah', TARGET_HOUSEHOLD, 'halfvolle koemelk', 1, 'l'),
+               ('lidl', TARGET_HOUSEHOLD, 'halfvolle koemelk', 500, 'ml'),
+               ('vol', TARGET_HOUSEHOLD, 'volle koemelk', 1, 'l'),
+               ('foreign', ISOLATION_HOUSEHOLD, 'halfvolle koemelk', 1, 'l')]
+    now = datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        assert ensure_official_gpc_brick(conn, '10000025')
+        for label, household, variant, size, unit in members:
+            article_id = f'f3-gpc-{label}'
+            product_id = main.ensure_global_product_record(conn, None, f'{label} {variant} melk', source='test', size_value=size, size_unit=unit)
+            conn.execute(text("INSERT INTO global_product_gpc_bricks(global_product_id, brick_code, assignment_source, confidence, updated_at) VALUES (:gp, '10000025', 'manual', 1, CURRENT_TIMESTAMP)"), {'gp': product_id})
+            _seed_article(conn, household_id=household, article_id=article_id,
+                          inventory_id=f'{article_id}-inventory', name='Identieke zichtbare naam',
+                          quantity=Decimal('0'), min_stock=Decimal('0'), ideal_stock=Decimal('1.5'))
+            conn.execute(text('UPDATE household_articles SET global_product_id=:gp, min_stock=NULL WHERE id=:id'), {'gp': product_id, 'id': article_id})
+            from app.services.automatic_product_type_service import persist_product_type
+            profile = persist_product_type(conn, product_id, {'name': f'{label} {variant} melk', 'size_value': size, 'size_unit': unit}, '10000025')
+            assert profile['status'] == 'ready'
+            assert conn.execute(text('SELECT classification_key FROM global_product_consumption_profiles WHERE global_product_id=:id'), {'id': product_id}).scalar_one() == profile['key']
+            quantity = 2 if label == 'lidl' else 1
+            date = (now - timedelta(days=14 if label == 'ah' else 7)).date().isoformat()
+            for event_type, sign in [('purchase', 1), ('consume', -1)]:
+                conn.execute(text("""INSERT INTO inventory_events
+                    (id, household_id, article_id, article_name, event_type, quantity, purchase_date, created_at, source)
+                    VALUES (:id, :household, :article, 'Identieke zichtbare naam', :event_type, :quantity, :date, CURRENT_TIMESTAMP, 'test')"""),
+                    {'id': f'{article_id}-{event_type}', 'household': household, 'article': article_id, 'event_type': event_type, 'quantity': sign * quantity, 'date': date})
+        main.set_household_almost_out_settings(conn, TARGET_HOUSEHOLD, prediction_enabled=True, prediction_days=7, policy_mode='advisory')
+
+    items = _items_by_article_id(client.get(url, headers=headers))
+    grouped = [item for item in items.values() if item.get('aggregation_scope') == 'automatic_product_type']
+    assert len(grouped) == 1, grouped
+    result = grouped[0]
+    assert set(result['member_article_ids']) == {'f3-gpc-ah', 'f3-gpc-lidl'}
+    assert result['purchase_event_count'] == 2
+    assert result['average_purchase_quantity'] == 1
+    assert result['prediction_triggered'] is True
+    assert result['current_quantity'] == 0
+    assert result['amount_to_buy'] == 2  # Buy whole representative packages.
+    # The existing endpoint hides the entire group, including when a nonrepresentative is selected.
+    response = client.post(url + '/hide', headers=headers, json={'article_ids': ['f3-gpc-lidl']})
+    assert response.status_code == 200, response.text
+    assert not any(item.get('aggregation_scope') == 'automatic_product_type' for item in _items_by_article_id(client.get(url, headers=headers)).values())
+    response = client.post(url + '/restore', headers=headers)
+    assert response.status_code == 200, response.text
+    assert any(item.get('aggregation_scope') == 'automatic_product_type' for item in _items_by_article_id(client.get(url, headers=headers)).values())
+    response = client.post(url + '/mark-in-shopping', headers=headers, json={'article_ids': ['f3-gpc-ah']})
+    assert response.status_code == 200, response.text
+    assert not any(item.get('aggregation_scope') == 'automatic_product_type' for item in _items_by_article_id(client.get(url, headers=headers)).values())
+    assert client.post(url + '/restore', headers=headers).status_code == 200
+    with engine.begin() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE article_id LIKE 'f3-gpc-%'")).scalar_one() == 8
+    foreign = client.post(url + '/hide', headers=headers, json={'article_ids': ['f3-gpc-foreign']})
+    assert foreign.status_code == 404, foreign.text
+    print('ALMOST_OUT_AUTOMATIC_TYPE_UNITS_ISOLATION_VISIBILITY_GREEN')
+
+
 def run() -> int:
     checks: list[str] = []
     catalog = load_canonical_scenario_catalog()
@@ -287,6 +348,7 @@ def run() -> int:
             assert article_ids["below"] in after_consume
             assert _decimal_field(after_consume[article_ids["below"]], "current_quantity") == Decimal(str(almost_out["below"]["quantity"]))
             checks.append("recalculation_disappears_above_threshold_and_reappears_below")
+            _verify_gpc_variant_aggregation(engine, main_module, client, owner_headers, target_url)
 
         with engine.begin() as conn:
             target_rows = conn.execute(

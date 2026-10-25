@@ -14,6 +14,83 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
+**Externe databases 2** is een afzonderlijke, alleen-lezen platformactie naast
+Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
+bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
+actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
+Cataloguskoppeling zonder barcode blijft zichtbaar. Exact dezelfde getoonde
+artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschillende
+artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
+blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
+van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
+DataTable. Het laden van de artikellijst start geen externe zoekacties en
+schrijft geen gegevens. Productkandidaten worden pas na artikelselectie gezocht.
+Alleen actieve, voorraadgerechtigde productregels van niet-verwijderde bonnen
+worden getoond, met de genormaliseerde artikelnaam en het winkelartikelnummer.
+Statiegeld/emballage, kortingen, koop-/spaarzegels, betalingen en totalen zijn
+geen artikelen voor deze lijst. Financiële regels blijven wel op de bon en
+meetellen volgens de financiële bonregels. Uitpakken-importkopieën van een
+kassabon worden niet opnieuw als zelfstandige bron gelezen: de actuele
+regelrol en verwijderstatus van de oorspronkelijke bon blijven leidend.
+Externe databases 2 toont geen knop Afsluiten.
+Op desktop opent dubbelklikken op een artikel een productkandidatenpaneel onder de
+tabel; op mobiel volstaat één tik. Enter of spatie ondersteunt toetsenbordgebruik.
+De alleen-lezen productzoekroute gebruikt voor Lidl eerst het opgeslagen winkelartikelnummer
+om een Nederlandse Lidl-productpagina te raadplegen. Alleen een uniek Product met
+hetzelfde paginanummer én passende naam/variant wordt gebruikt. Een barcode moet
+expliciet in dat Product of de bijbehorende Nuxt-productnode staan en een geldige
+GTIN-controle hebben. Artikel-/ERP-/IAN-nummers worden nooit tot GTIN omgevormd.
+Eén aangetroffen barcode wordt exact in OFF opgezocht; ontbrekende OFF-informatie
+laat de Lidl-bron zichtbaar. Bij meerdere barcodes wordt niet willekeurig gekozen.
+Zonder bruikbare Lidl-barcode wordt de bestaande automatische OFF-zoeklogica van Externe databases hergebruikt:
+de server bepaalt artikelnaam/winkel uit de bron-ID, maakt dezelfde zoekvarianten
+en suggesties, bewaakt product-/huismerkconflicten en rangschikt kandidaten.
+Het paneel toont Lidl-brongegevens en de reden van een eventuele terugval, plus
+naam, merk, barcode, inhoud, bron, herkenning en overeenkomst, met standaard
+zoeken, sorteren en paginering. De eerste volgorde blijft de bestaande automatische
+voorkeursvolgorde. Een naamsuggestie blijft herkenbaar als suggestie. Een door Lidl vermelde barcode
+blijft bronbewijs en is geen automatisch bevestigde Cataloguskoppeling.
+Voor Albert Heijn en Jumbo wordt eveneens de winkelcatalogus geraadpleegd.
+AH zoekt met de boncode/naam en vergelijkt uitsluitend het expliciete `hqId` met
+de boncode. De aparte `webshopId` bepaalt de detailopvraag, waarvan het geretourneerde
+product-ID gelijk moet zijn. Jumbo zoekt openbare productlinks en verifieert de
+exacte SKU; bij een 401/403 op de product-API wordt de openbare productpagina met
+dezelfde SKU gebruikt. Zonder boncodeovereenkomst blijft een winkelproduct een
+zichtbare naamsuggestie. Naam-, variant-, huismerk- en GTIN-conflicten worden
+geweerd; meerdere verschillende GTINs bij dezelfde boncode blijven ambigu.
+Een unieke boncode/barcode-overeenkomst krijgt een exacte OFF-lookup; overige
+winkelresultaten worden met de bestaande OFF-suggesties samengevoegd, ontdubbeld
+op GTIN en begrensd tot twintig kandidaten. Een voorloopnul bij een geldige
+GTIN-14 wordt voor de OFF-opvraag als equivalente GTIN-13 behandeld; dit is geen
+conversie van een winkelartikelnummer. Een bronfout wist reeds gevonden geldige
+winkelresultaten niet. Beide routes zijn anoniem, zonder klantaccount/cookies,
+met vaste eigen winkelhosts, geen redirects, maximaal twintig verzoeken,
+maximaal acht productdetails, acht seconden per verzoek, dertig seconden
+netwerkbudget en 2 MiB per antwoord. Alleen een anonieme AH-gasttokenopvraag en
+vaste read-only productqueries mogen POST gebruiken; geen login/winkelmand/order.
+De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
+per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
+Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
+De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+
+De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
+met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,
+een netwerkbudget van twaalf seconden en maximaal 2 MiB per antwoord. Er is
+geen accountlogin, Scan&Go, buitenlandse koppeltabel of assortimentimport.
+Zoeken start alleen na selectie en maakt geen Catalogus-, kandidaat-, huishoud-
+of voorraadmutatie. Bij wisselen van artikel worden oude resultaten gewist en
+lopende clientverzoeken afgebroken; een late respons mag het nieuwe paneel niet
+overschrijven. Leeg resultaat, onbereikbare OFF-bron en rechtenfouten worden apart
+afgehandeld; bij een zoekfout kan de gebruiker opnieuw zoeken.
+Oude statiegeldregels die ten onrechte als product zijn opgeslagen, worden via
+een afzonderlijk herstelplan hergeclassificeerd naar financieel/niet-voorraadgerechtigd.
+De oorspronkelijke regel, bedragen, koppelingen en voorraadhistorie blijven behouden;
+het openen van de lijst voert dit herstel niet uit.
+Losse gewichtsdetails worden bij de Lidl-bronnormalisatie vóór Kassa/Uitpakken
+samengevoegd indien de brongegevens dit bewijzen; bij twijfel vragen ze controle
+en zijn ze niet voorraadgerechtigd. Bestaande bewezen dubbele bronregels kunnen
+expliciet worden hersteld volgens [het herstelprotocol](WEIGHT-DETAIL-REPAIR.md).
+
 Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd.
 
 Voor bonartikelen bestaan twee geldige centrale koppelvormen:
@@ -40,6 +117,26 @@ Voor voorraad, Bijna op en boodschappen mag het generieke artikel leidend zijn w
 ## Prognoses en Bijna op
 
 Prognoses gebruiken huishoudgegevens en historische voorraadbewegingen. Instellingen en uitkomsten blijven aan het juiste huishouden en de juiste rol gebonden.
+
+Externe databases bepaalt automatisch een centraal consumptie-/producttype uit
+de officiële GPC Brick, beschikbare gestructureerde kenmerken en herkenbare
+productomschrijvingen. De code en beslisgrenzen staan in
+[AUTOMATIC-PRODUCT-TYPES.md](AUTOMATIC-PRODUCT-TYPES.md). Dit is een afgeleide
+indeling; GTIN, centraal product, huishoudartikel en handmatige Artikelgroep
+blijven afzonderlijke identiteiten.
+
+Een compleet, niet-tegenstrijdig type telt voor Bijna op samen over winkels en
+merken. Verpakkingsinhoud wordt afzonderlijk omgerekend. Er zijn geen verplichte
+variantvelden of classificatiebevestigingen voor huishoudens. Onvoldoende
+informatie geeft een automatische pending-status: het artikel blijft apart en
+vraagt geen invoer. Herkenning wordt opnieuw beoordeeld wanneer centrale
+productgegevens veranderen. Een onzekere match wordt nooit als feit opgeslagen.
+
+De eerste expliciete regelset dekt zestien productfamilies. Dit is geen claim
+van volledige assortimentsdekking of een nieuwe officiële GS1-typecode. De
+bestaande veilige exacte/generieke productkoppeling blijft de autoriteit voor
+het koppelen van een bonartikel; automatische categorisering keurt geen
+onzekere bon- of productidentiteit goed.
 
 ## Winkels en importinstellingen
 

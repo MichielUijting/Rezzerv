@@ -1162,3 +1162,44 @@ De onderste winkelpanelen behouden op mobiel dezelfde reguliere verticale tussen
 ## Winkelkoppelingen: compacte mobiele hoofdtabel (PO, 23 oktober 2026)
 
 Op mobiel wordt **Mijn winkelkoppelingen** weergegeven als één compacte rij per winkel in de bestaande `DataTable`, met éénmaal de kolomkoppen **Winkel**, **Laatst bijgewerkt**, **Status**. De algemene Instellingen-opmaak die tabelrijen omzet naar grote gestapelde kaartjes geldt niet voor uitsluitend deze tabel. Daardoor staan de winkelnaam, datum en actie naast elkaar in één korte rij, zonder telkens drie herhaalde labels en zonder extra binnenpanelen. De Status-knoppen blijven rechtstreeks bedienbaar en **Geen koppeling mogelijk** blijft niet-klikbare donkergroene tekst. Op desktop en alle andere mobiele Instellingen-tabellen verandert niets. Er gelden gerichte controles voor 390, 500 en 896 pixels; de zes winkelregels blijven in beeld en de tabel mag niet horizontaal uit het scherm lopen.
+
+
+## Externe databases: automatisch producttype — 23 oktober 2026
+
+Het bestaande detailpaneel toont **Automatisch producttype voor Bijna op** als
+read-only resultaat, via dezelfde koppen, tekst en feedbacktypografie als de
+omringende secties. De standaardflow vraagt geen varianttekst of bevestiging
+van deze afgeleide indeling. Bij onvoldoende gegevens staat expliciet dat het
+artikel voorlopig apart blijft en geen invoer nodig is. Bestaande optionele
+platformtools voor bron-/GPC-beheer blijven beschikbaar. De verandering gebruikt
+geen nieuwe kleuren, kader-, formulier- of navigatiepatronen. Zowel 390 als
+1280 pixels worden gericht getest.
+
+### GPC-selectie in Externe databases — 24 oktober 2026
+
+Een keuzelijst die als keuze wordt gepresenteerd is bedienbaar zodra de
+classificatiecontrole klaar is. De geselecteerde code wordt expliciet als
+selectie getoond, met uitleg over generiek versus exact koppelen. Selecteren
+is geen opslaan. Tijdens controleren of opslaan mag de bestaande centrale
+select tijdelijk worden uitgeschakeld.
+
+### Externe databases 2: zeven kandidaten per pagina — PO, 25 oktober 2026
+
+Uitsluitend de onderste kandidatentabel toont maximaal **7 resultaten per pagina**
+op desktop en mobiel. Meer kandidaten blijven beschikbaar via de bestaande
+DataTable-paginering onder de tabel; filteren en sorteren bestrijken alle
+opgehaalde resultaten en zetten de pagina terug op 1. De bovenste artikellijst
+en de algemene standaard van 10 wijzigen niet. Het bestaande productpaneel
+toont ook AH-/Jumbo-bronbewijs; naamsuggesties blijven expliciet herkenbaar.
+
+### Externe databases 2: compacte kandidatentabel — PO, 25 oktober 2026
+
+De eerste kolom toont alleen het volgnummer; de zichtbare kop **Voorkeur**
+vervalt. **Herkenning** benoemt uitsluitend herkenning op naam zonder het woord
+*Suggestie*, en in de kolom **Bron** wordt *Open Food Facts* afgekort tot **OFF**.
+De toelichting boven de onderste tabel introduceert deze afkorting als
+**Open Food Facts (OFF)**. De standaardmelding over Jumbo-producten die alleen
+op naam overeenkomen wordt in dit paneel niet herhaald; eventuele aanvullende
+bronwaarschuwingen blijven zichtbaar. Tussen paneeltitel en toelichting en
+tussen toelichting en direct volgende tabel staat telkens één compacte
+regel tussenruimte; geen lege melding mag een extra rij toevoegen.

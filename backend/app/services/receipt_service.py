@@ -1726,6 +1726,14 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
     result = _parse_receipt_content_without_financial_typing(file_bytes, filename, mime_type)
     if not result.is_receipt or not result.lines:
         return result
+    # This is the source producer, before Canonical V1 and Kassa/Uitpakken.
+    # Downstream routing continues to use only the resulting structured type.
+    from app.receipt_ingestion.weight_detail import normalize_legacy_weight_details
+    result.lines, unresolved_weight = normalize_legacy_weight_details(result.lines)
+    if unresolved_weight:
+        result.parse_status = 'review_needed'
+        result.parser_diagnostics = dict(result.parser_diagnostics or {})
+        result.parser_diagnostics.update(blocking_error=True, unresolved_weight_detail=True)
     for line in result.lines:
         if not isinstance(line, dict):
             continue

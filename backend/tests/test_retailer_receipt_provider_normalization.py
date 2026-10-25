@@ -320,6 +320,45 @@ def test_lidl_weight_detail_row_is_metadata_not_second_purchase_component():
     ) == Decimal("4.42")
 
 
+@pytest.mark.parametrize('detail_amount', ['0', '0.56', None])
+def test_explicit_weight_text_with_duplicated_amount_cannot_create_second_product(detail_amount):
+    products = [
+        {'name':'Gewogen artikel', 'quantity':'0.094', 'unitPrice':'5.99', 'lineTotal':'0.56', 'articleId':'test-sku'},
+        {'name':'Gewogen artikel', 'rawText':'0,094 kg x 5,99 EUR', 'quantity':'0.094',
+         'unitPrice':'5.99', 'lineTotal':detail_amount, 'articleId':'test-sku'},
+    ]
+    result = normalize_retailer_receipt(RetailerReceiptEnvelope(provider='lidl', external_receipt_id='weight-duplicate',
+        receipt={'totalAmount':'0.56','products':products}),scan_id='weight-test',document_sha256='e'*64)
+    assert len(result.receipt.lines) == 1
+    line = result.receipt.lines[0]
+    assert line.line_type == 'product'
+    assert line.quantity == Decimal('0.094')
+    assert line.line_total == Decimal('0.56')
+
+
+@pytest.mark.parametrize('position', ['first', 'conflicting-sku'])
+@pytest.mark.parametrize('provider', ['lidl', 'ah', 'jumbo', 'picnic'])
+def test_unresolved_weight_detail_stays_reviewable_without_inventory_permission(position, provider):
+    from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+    products = [{'name':'0,094 kg x 5,99 EUR', 'rawText':'0,094 kg x 5,99 EUR',
+                 'quantity':'0.094', 'unitPrice':'5.99', 'lineTotal':'0.56', 'articleId':'detail-sku'}]
+    if position == 'conflicting-sku':
+        products.insert(0, {'name':'Ander artikel','quantity':'0.094','unitPrice':'5.99','lineTotal':'0.56','articleId':'other-sku'})
+    result = normalize_retailer_receipt(RetailerReceiptEnvelope(provider=provider,external_receipt_id='weight-unresolved',
+        receipt={'totalAmount':'0.56','products':products}),scan_id='weight-test',document_sha256='f'*64)
+    assert result.quality.requires_review is True
+    legacy = canonical_to_receipt_parse_result(result)
+    assert legacy.lines[-1]['line_type'] == 'unknown'
+    assert derive_receipt_line_semantics(legacy.lines[-1])['inventory_eligible'] is False
+
+
+def test_two_real_weighted_purchases_are_not_collapsed():
+    products = [dict(name='Gewogen artikel', quantity='0.094', unitPrice='5.99', lineTotal='0.56', articleId='test-sku') for _ in range(2)]
+    result = normalize_retailer_receipt(RetailerReceiptEnvelope(provider='lidl',external_receipt_id='two-real-purchases',
+        receipt={'totalAmount':'1.12','products':products}),scan_id='weight-test',document_sha256='e'*64)
+    assert len(result.receipt.lines) == 2
+
+
 def test_lidl_weight_detail_discount_is_applied_to_priced_article():
     envelope = RetailerReceiptEnvelope(
         provider="lidl",
