@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+import pytest
 
 from app.services import ah_receipt_background_sync as worker
+from app.services import ah_receipt_sync_service as sync_service
 
 
 def test_due_calculation_rejects_unknown_and_recent_states():
@@ -104,3 +106,53 @@ def test_registered_writer_requires_maintenance_admission():
     # The inner function is covered by the existing writer_operation contract.
     assert hasattr(worker._admitted_ah_sync, "__wrapped__")
     assert worker.AH_AUTO_SYNC_LIMIT == 100
+
+
+def test_known_preimport_failure_is_completed_without_claiming_sync_success(monkeypatch, tmp_path):
+    def unavailable(*_args, **_kwargs):
+        raise sync_service.AHPreImportFailure("No import started")
+
+    monkeypatch.setattr(sync_service, "sync_ah_receipts", unavailable)
+    assert worker._admitted_ah_sync.__wrapped__(None, tmp_path, "household-a") is False
+
+
+def test_unclassified_import_failure_must_remain_unresolved(monkeypatch, tmp_path):
+    def interrupted(*_args, **_kwargs):
+        raise RuntimeError("unknown state after import started")
+
+    monkeypatch.setattr(sync_service, "sync_ah_receipts", interrupted)
+    with pytest.raises(RuntimeError, match="unknown state"):
+        worker._admitted_ah_sync.__wrapped__(None, tmp_path, "household-a")
+
+
+def test_preimport_failure_counts_as_failed_scheduler_attempt(monkeypatch, tmp_path):
+    engine = FakeEngine([{"household_id": "household-a", "last_sync_at": None}])
+    monkeypatch.setattr(worker, "_admitted_ah_sync", lambda *_args: False)
+    assert worker.sync_due_ah_households(engine, tmp_path) == {
+        "due": 1, "completed": 0, "failed": 1, "locked": 0
+    }
+
+
+def test_receipt_list_error_is_explicitly_preimport(monkeypatch, tmp_path):
+    monkeypatch.setattr(sync_service, "get_ah_session", lambda *_args: object())
+    monkeypatch.setattr(sync_service, "save_ah_session", lambda *_args: pytest.fail("unexpected mutation"))
+
+    class UnavailableClient:
+        def list_receipts(self, *_args, **_kwargs):
+            raise OSError("retailer unavailable")
+
+    with pytest.raises(sync_service.AHPreImportFailure):
+        sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=UnavailableClient())
+
+
+def test_missing_or_unreadable_ah_session_is_preimport(monkeypatch, tmp_path):
+    monkeypatch.setattr(sync_service, "get_ah_session", lambda *_args: None)
+    with pytest.raises(sync_service.AHPreImportFailure):
+        sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=object())
+
+    def unreadable(*_args):
+        raise ValueError("invalid session material")
+
+    monkeypatch.setattr(sync_service, "get_ah_session", unreadable)
+    with pytest.raises(sync_service.AHPreImportFailure):
+        sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=object())

@@ -20,6 +20,14 @@ from app.services.retailer_account_secure_store import (
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 
+class AHPreImportFailure(Exception):
+    """AH failed before any receipt import or persisted sync mutation began.
+
+    The background scheduler may safely finish its maintenance admission for
+    this failure only; failures after this boundary remain unresolved.
+    """
+
+
 def connect_ah_account(
     engine: Engine,
     *,
@@ -106,14 +114,20 @@ def sync_ah_receipts(
     limit: int = 100,
     client: AHReceiptClient | None = None,
 ) -> dict[str, Any]:
-    session = get_ah_session(engine, household_id)
-    if session is None:
-        raise ValueError("Albert Heijn-account is niet gekoppeld")
+    try:
+        session = get_ah_session(engine, household_id)
+        if session is None:
+            raise ValueError("Albert Heijn-account is niet gekoppeld")
+    except Exception as exc:
+        raise AHPreImportFailure("AH-synchronisatie gestopt voor de importfase") from exc
 
     owns_client = client is None
     active_client = client or AHReceiptClient()
     try:
-        session, summaries = active_client.list_receipts(session, limit=limit)
+        try:
+            session, summaries = active_client.list_receipts(session, limit=limit)
+        except Exception as exc:
+            raise AHPreImportFailure("AH-bonnenlijst niet beschikbaar; geen import begonnen") from exc
         save_ah_session(engine, household_id, session)
 
         known_ids = get_known_ah_receipt_ids(engine, household_id)

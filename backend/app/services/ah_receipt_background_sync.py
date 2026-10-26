@@ -39,18 +39,25 @@ def _due(last_sync_at, now: datetime) -> bool:
 
 
 @writer_operation
-def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> None:
+def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> bool:
     # Admission is durable until the entire receipt import finishes.
     # During server maintenance, the existing write barrier refuses new work.
     # Import on the actual execution path, not during application registration
     # or isolated contract tests; failures remain behind maintenance admission.
-    from app.services.ah_receipt_sync_service import sync_ah_receipts
-    sync_ah_receipts(
-        engine,
-        receipt_root,
-        household_id=household_id,
-        limit=AH_AUTO_SYNC_LIMIT,
-    )
+    from app.services.ah_receipt_sync_service import AHPreImportFailure, sync_ah_receipts
+    try:
+        sync_ah_receipts(
+            engine,
+            receipt_root,
+            household_id=household_id,
+            limit=AH_AUTO_SYNC_LIMIT,
+        )
+    except AHPreImportFailure:
+        # No receipt import or persisted sync mutation was attempted. The
+        # wrapper can complete the durable admission without hiding an
+        # interrupted import. Never log account or provider error details.
+        return False
+    return True
 
 
 def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]:
@@ -92,14 +99,18 @@ def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]
                 if not _due(last_run, datetime.now(timezone.utc)):
                     continue
                 try:
-                    _admitted_ah_sync(engine, receipt_root, household_id)
+                    completed = _admitted_ah_sync(engine, receipt_root, household_id)
                 except Exception:
                     # Fail closed for this household. Do not log provider errors,
                     # access tokens, receipt IDs or potentially sensitive bodies.
                     LOGGER.warning("AH background sync failed for one household")
                     result["failed"] += 1
                 else:
-                    result["completed"] += 1
+                    if completed is False:
+                        LOGGER.warning("AH background sync failed before receipt import")
+                        result["failed"] += 1
+                    else:
+                        result["completed"] += 1
             finally:
                 lock_conn.execute(
                     text("SELECT pg_advisory_unlock(:lock_key)"), {"lock_key": key}
