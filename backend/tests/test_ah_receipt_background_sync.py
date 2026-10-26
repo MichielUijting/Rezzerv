@@ -142,17 +142,30 @@ def test_receipt_list_error_is_explicitly_preimport(monkeypatch, tmp_path):
             raise OSError("retailer unavailable")
 
     with pytest.raises(sync_service.AHPreImportFailure):
+        sync_service.sync_ah_receipts(
+            None, tmp_path, household_id="household-a", client=UnavailableClient(),
+            classify_preimport_failures=True,
+        )
+    with pytest.raises(OSError, match="retailer unavailable"):
         sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=UnavailableClient())
 
 
 def test_missing_or_unreadable_ah_session_is_preimport(monkeypatch, tmp_path):
     monkeypatch.setattr(sync_service, "get_ah_session", lambda *_args: None)
-    with pytest.raises(sync_service.AHPreImportFailure):
+    with pytest.raises(ValueError, match="niet gekoppeld"):
         sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=object())
+    with pytest.raises(sync_service.AHPreImportFailure):
+        sync_service.sync_ah_receipts(
+            None, tmp_path, household_id="household-a", client=object(),
+            classify_preimport_failures=True,
+        )
 
     def unreadable(*_args):
         raise ValueError("invalid session material")
 
     monkeypatch.setattr(sync_service, "get_ah_session", unreadable)
     with pytest.raises(sync_service.AHPreImportFailure):
-        sync_service.sync_ah_receipts(None, tmp_path, household_id="household-a", client=object())
+        sync_service.sync_ah_receipts(
+            None, tmp_path, household_id="household-a", client=object(),
+            classify_preimport_failures=True,
+        )

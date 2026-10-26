@@ -51,6 +51,7 @@ def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> 
             receipt_root,
             household_id=household_id,
             limit=AH_AUTO_SYNC_LIMIT,
+            classify_preimport_failures=True,
         )
     except AHPreImportFailure:
         # No receipt import or persisted sync mutation was attempted. The

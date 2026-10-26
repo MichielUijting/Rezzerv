@@ -58,6 +58,7 @@ def count_pending_ah_receipts(
     household_id: str,
     limit: int = 100,
     client: AHReceiptClient | None = None,
+    classify_preimport_failures: bool = False,
 ) -> dict[str, Any]:
     """Count AH receipts that can still be imported without importing them."""
     session = get_ah_session(engine, household_id)
@@ -119,7 +120,9 @@ def sync_ah_receipts(
         if session is None:
             raise ValueError("Albert Heijn-account is niet gekoppeld")
     except Exception as exc:
-        raise AHPreImportFailure("AH-synchronisatie gestopt voor de importfase") from exc
+        if classify_preimport_failures:
+            raise AHPreImportFailure("AH-synchronisatie gestopt voor de importfase") from exc
+        raise
 
     owns_client = client is None
     active_client = client or AHReceiptClient()
@@ -127,7 +130,9 @@ def sync_ah_receipts(
         try:
             session, summaries = active_client.list_receipts(session, limit=limit)
         except Exception as exc:
-            raise AHPreImportFailure("AH-bonnenlijst niet beschikbaar; geen import begonnen") from exc
+            if classify_preimport_failures:
+                raise AHPreImportFailure("AH-bonnenlijst niet beschikbaar; geen import begonnen") from exc
+            raise
         save_ah_session(engine, household_id, session)
 
         known_ids = get_known_ah_receipt_ids(engine, household_id)
