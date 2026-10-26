@@ -82,7 +82,7 @@ FEATURE_FLAG_DEFINITIONS = {
     ACTION_HOME_SPAARTEGOEDEN: _home_action("Spaartegoeden", "spaartegoeden"),
     ACTION_HOME_EXTERNE_DATABASES: _home_action("Externe databases", "externe-databases"),
     ACTION_HOME_EXTERNE_DATABASES_2: _home_action("Externe databases 2", "externe-databases-2"),
-    ACTION_HOME_ARTIKELSYNONIEMEN: _home_action("Artikelsynoniemen", "artikelsynoniemen"),
+    ACTION_HOME_ARTIKELSYNONIEMEN: _home_action("Artikel-synoniemen", "artikelsynoniemen"),
     ACTION_HOME_CATALOGUS: _home_action("Catalogus", "catalogus"),
     ACTION_HOME_KLANTKAARTEN: _home_action("Klantkaarten", "klantkaarten"),
     ACTION_HOME_BESTELLEN: _home_action("Bestellen", "bestellen"),

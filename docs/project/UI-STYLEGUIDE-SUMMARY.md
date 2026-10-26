@@ -1204,13 +1204,16 @@ bronwaarschuwingen blijven zichtbaar. Tussen paneeltitel en toelichting en
 tussen toelichting en direct volgende tabel staat telkens één compacte
 regel tussenruimte; geen lege melding mag een extra rij toevoegen.
 
-### Artikelsynoniemen — PO, 26 oktober 2026
+### Artikel-synoniemen — PO, 26 oktober 2026
 
-De actiebutton **Artikelsynoniemen** is beschikbaar voor Superusers en
+De actiebutton **Artikel-synoniemen** is beschikbaar voor Superusers en
 Frontteamleden. Het scherm gebruikt AppShell, ScreenCard en de centrale DataTable
 met selectie, kolomfilters, sortering, resize en standaardpaginering. De bulkknop
 **Koppelen** staat bij de tabelacties onder de tabel en is inactief zonder selectie.
-Artikel- en synoniemcodes, beide verpakkingen en tekstovereenkomst blijven zichtbaar.
+De zeven kolommen zijn: selectie; eerste artikelnaam, foto en winkel; tweede
+artikelnaam, foto en andere winkel. De afbeelding gebruikt de gedeelde
+Catalogusfoto met placeholder. Een zichtbare winkelaanduiding is altijd afkomstig
+uit vastgelegde winkelinformatie. De knop Vernieuwen vervalt.
 Er is één korte toelichting over handmatig controleren en een link naar
 Externe databases 2 voor ontbrekende codes. De mobiele header/Terug en feedback
 komen uit de bestaande gedeelde componenten.

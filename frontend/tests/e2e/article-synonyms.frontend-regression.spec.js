@@ -8,8 +8,10 @@ for (const width of [390, 1280]) {
       const writes = []
       const pairs = Array.from({ length: 12 }, (_, i) => ({
         id: `pair-${i}`, score: .95-i/100, fingerprint: 'a'.repeat(64),
-        left: { id: `left-${i}`, name: `AH Melk ${i}`, primary_gtin: '08719587325926', size_value: '1', size_unit: 'l' },
-        right: { id: `right-${i}`, name: `Jumbo Melk ${i}`, primary_gtin: '08718452513666', size_value: '2', size_unit: 'l' },
+        left: { id: `left-${i}`, name: `AH Melk ${i}`, store_name: 'Albert Heijn', primary_gtin: '08719587325926',
+          image_url: i === 0 ? 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACAUwAOw==' : '', size_value: '1', size_unit: 'l' },
+        right: { id: `right-${i}`, name: `Jumbo Melk ${i}`, store_name: 'Jumbo', primary_gtin: '08718452513666',
+          image_url: '', size_value: '2', size_unit: 'l' },
       }))
       const linked = new Set()
       let failed = false
@@ -36,13 +38,21 @@ for (const width of [390, 1280]) {
       await page.goto('/artikelsynoniemen')
       const table = page.getByTestId('article-synonyms-table')
       await expect(table.locator('tbody tr')).toHaveCount(10)
+      await expect(page.getByRole('heading', { name: 'Artikel-synoniemen', level: 2, exact: true })).toBeVisible()
+      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(7)
+      await expect(table.locator('thead tr').first()).toContainText('Artikelnaam')
+      await expect(table.locator('thead tr').first()).toContainText('Foto artikel')
+      await expect(table.locator('tbody tr').first()).toContainText('Albert Heijn')
+      await expect(table.locator('tbody tr').first()).toContainText('Jumbo')
+      await expect(table.locator('tbody tr').first().locator('img')).toHaveCount(1)
+      await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
       await table.getByRole('checkbox').nth(0).check()
       await table.getByRole('checkbox').nth(1).check()
       await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
       await expect(table.locator('tbody tr')).toHaveCount(2)
       await table.getByRole('checkbox').first().check()
-      await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('AH Melk 0')
+      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('AH Melk 0')
       await expect(table.locator('tbody tr')).toHaveCount(1)
       expect(writes).toEqual([])
       await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
@@ -51,7 +61,7 @@ for (const width of [390, 1280]) {
       await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
       await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
       expect(writes[1].selections.map((item) => item.left_product_id)).toEqual(['left-0', 'left-1', 'left-10'])
-      await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
+      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('')
       await expect(table.locator('tbody tr')).toHaveCount(9)
       await expect(table).not.toContainText('AH Melk 0')
       await page.reload()

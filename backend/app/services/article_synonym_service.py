@@ -20,6 +20,28 @@ METHOD = 'word12-char35-tfidf-v1'
 MIN_SCORE = 0.20
 MAX_PER_PRODUCT = 7
 
+RETAILER_NAMES = {
+    'ah': 'Albert Heijn',
+    'albert-heijn': 'Albert Heijn',
+    'jumbo': 'Jumbo',
+    'lidl': 'Lidl',
+    'aldi': 'Aldi',
+    'plus': 'PLUS',
+    'picnic': 'Picnic',
+    'dirk': 'Dirk',
+}
+
+
+def _retailer_code(value):
+    value = unicodedata.normalize('NFKD', str(value or '').strip().lower())
+    value = ''.join(c for c in value if not unicodedata.combining(c))
+    code = re.sub(r'[^a-z0-9]+', '-', value).strip('-')
+    return 'ah' if code == 'albert-heijn' else code
+
+
+def _store_name(code):
+    return RETAILER_NAMES.get(code, code.replace('-', ' ').title()) if code else 'Niet vastgelegd'
+
 
 def _normalized(value):
     value = unicodedata.normalize('NFKD', str(value or '').lower())
@@ -48,23 +70,31 @@ def _vectors(products, chars=False):
 
 
 def _fingerprint(left, right):
-    value = json.dumps([METHOD, left, right], sort_keys=True, ensure_ascii=False, default=str)
+    # A changed thumbnail or display label does not change product identity.
+    stable = [{k: v for k, v in product.items() if k not in {'image_url', 'store_name'}} for product in (left, right)]
+    value = json.dumps([METHOD, *stable], sort_keys=True, ensure_ascii=False, default=str)
     return sha256(value.encode()).hexdigest()
 
 
 def load_products(conn):
     """Only central catalog facts; never read private household articles/receipts."""
     codes = defaultdict(set)
+    retailers = defaultdict(set)
     for row in conn.execute(text("""
         SELECT global_product_id, retailer_code, external_article_code
         FROM external_article_product_links
-        WHERE status='confirmed' AND TRIM(external_article_code) <> ''
+        WHERE status='confirmed' AND TRIM(retailer_code) <> ''
     """)).mappings():
-        codes[row['global_product_id']].add(f"{row['retailer_code']}: {row['external_article_code']}")
+        retailer = _retailer_code(row['retailer_code'])
+        if not retailer:
+            continue
+        retailers[row['global_product_id']].add(retailer)
+        if str(row['external_article_code'] or '').strip():
+            codes[row['global_product_id']].add(f"{retailer}: {row['external_article_code']}")
     products = []
     for row in conn.execute(text("""
         SELECT gp.id, gp.name, gp.brand, gp.variant, gp.primary_gtin,
-               gp.size_value, gp.size_unit, gpc.brick_code
+               gp.size_value, gp.size_unit, gp.image_url, gp.source, gpc.brick_code
         FROM global_products gp
         LEFT JOIN global_product_gpc_bricks gpc ON gpc.global_product_id=gp.id
         WHERE gp.status='active' AND TRIM(gp.name) <> '' ORDER BY gp.id
@@ -75,7 +105,19 @@ def load_products(conn):
         article_codes = sorted(codes[product['id']])
         if not valid_gtin and not article_codes:
             continue
-        product.update(primary_gtin=valid_gtin, article_codes=article_codes)
+        known_retailers = set(retailers[product['id']])
+        # A catalog source is shop evidence only when it names an actual shop.
+        source_retailer = _retailer_code(product.pop('source'))
+        if not known_retailers and source_retailer in RETAILER_NAMES:
+            known_retailers.add(source_retailer)
+        retailer_code = next(iter(known_retailers)) if len(known_retailers) == 1 else ''
+        product.update(
+            primary_gtin=valid_gtin,
+            article_codes=article_codes,
+            retailer_code=retailer_code,
+            store_name=_store_name(retailer_code),
+            image_url=str(product.get('image_url') or '').strip(),
+        )
         # Stable serialization across PostgreSQL Decimal and HTTP JSON.
         product['size_value'] = str(product['size_value'] or '')
         products.append(product)
@@ -107,6 +149,9 @@ def suggest_pairs(products, confirmed=()):
             right = products[j]
             a, b = sorted((left['id'], right['id']))
             if score < MIN_SCORE or (a, b) in confirmed:
+                continue
+            # Shop-specific synonyms need two distinct, documented shops.
+            if not left.get('retailer_code') or not right.get('retailer_code') or left['retailer_code'] == right['retailer_code']:
                 continue
             if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
                 continue  # Same trade item, not a synonym with a different identity.

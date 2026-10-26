@@ -1,8 +1,8 @@
-# Artikelsynoniemen
+# Artikel-synoniemen
 
 PO-opdracht 26 oktober 2026. TEST_LEVEL_PROVISIONAL: L.
 
-De nieuwe actie **Artikelsynoniemen** en route `/artikelsynoniemen` zijn beschikbaar
+De nieuwe actie **Artikel-synoniemen** en route `/artikelsynoniemen` zijn beschikbaar
 voor Superusers **of** actieve Frontteamleden. Beide mogen dezelfde suggesties
 bevestigen. Reguliere huishoudrollen, Platformbeheerder-only en IP-owner-only
 geven geen toegang. De API controleert de actuele serversessie en canonieke
@@ -16,6 +16,12 @@ bevestigde centrale winkelartikelcode. Een winkelcode is altijd voorzien van de
 winkelnaam; een winkelcode wordt nooit omgezet in een barcode. Artikelen zonder
 code/barcode moeten eerst in Externe databases 2 worden aangevuld. Deze wijziging
 voegt aan dat bestaande scherm geen nieuwe opslagroute toe.
+Een winkelaanduiding komt uit de bevestigde centrale winkelkoppeling of een
+expliciet herkende winkel als Catalogusbron. Alleen producten met één eenduidige
+winkel worden voorgesteld; de twee winkels moeten verschillend zijn. Een
+ontbrekende of dubbelzinnige winkel leidt niet tot een gefingeerde winkelnaam
+of een te bevestigen paar. Productfoto's komen uitsluitend uit de opgeslagen
+Catalogus-`image_url`, met de bestaande placeholder als er geen foto is.
 
 De kandidaatselectie gebruikt de beproefde TF-IDF/cosine-baseline: woord-1/2-grams
 en teken-3/5-grams, beide 50%, over Nederlandse naam en variant. Winkelwoorden
@@ -27,12 +33,16 @@ centrale set gezocht, niet uitsluitend op AH/Jumbo. Dezelfde GTIN of dezelfde
 winkelcode is een exacte identiteit en geen synoniempaar. Bekende verschillende
 GPC Bricks worden uitgesloten; ontbrekende kenmerken worden niet verzonnen.
 
-De standaard DataTable toont artikel, code/barcode, voorgesteld synoniem,
-code/barcode van dat synoniem, beide verpakkingsinhouden en overeenkomst.
-Zoeken, sorteren, kolombreedtes en paginering volgen het gedeelde component
-(10 per pagina). Selectie blijft over pagina's/filters bestaan. **Koppelen** is
+De standaard DataTable bevat exact zeven kolommen: **Selectie**, **Artikelnaam**,
+**Foto artikel**, **Winkel**, en nogmaals **Artikelnaam**, **Foto artikel**,
+**Winkel** voor de tweede winkel. Elke rij is precies één voorstel voor een
+relatie tussen twee verschillende centrale Catalogusartikelen. Zoeken, sorteren,
+kolombreedtes en de bestaande centrale pagineringscomponent volgen de DataTable
+(10 per pagina, navigatie wanneer er meer resultaten zijn). Selectie blijft over
+pagina's/filters bestaan. **Koppelen** is
 de expliciete handmatige bevestiging voor maximaal 200 gekozen paren tegelijk.
-Alleen aanvinken of het scherm openen schrijft niets. Vernieuwen wist de selectie.
+De knop is inactief bij nul geselecteerde rijen. Alleen aanvinken of het scherm
+openen schrijft niets. Er is geen knop **Vernieuwen**.
 
 De backend valideert ieder paar opnieuw tegen actuele suggesties en een
 fingerprint van de getoonde productfeiten. Bij een verouderd/ongeldig paar wordt
@@ -41,7 +51,8 @@ vernieuwen bewust gebeurt. Herhaling met ongewijzigde feiten is idempotent.
 Productrijen worden in vaste volgorde vergrendeld. De unieke gesorteerde
 paaridentiteit voorkomt dubbele of omgekeerde relaties. Opgeslagen zijn actor,
 tijd, methode, score en fingerprint. Een bevestiging verdwijnt uit de suggesties
-en blijft na herladen bewaard.
+en blijft na herladen bewaard in de centrale Catalogus-relatietabel
+`article_synonym_links`.
 
 Dit is een directe relatie tussen twee centrale producten. Er wordt geen
 transitieve gelijkheid afgeleid: A↔B en B↔C bewijzen niet A↔C. GTINs, producten,

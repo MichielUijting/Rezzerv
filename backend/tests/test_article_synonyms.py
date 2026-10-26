@@ -17,9 +17,10 @@ from app.services import article_synonym_service as service
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def product(pid, name, gtin='', brick='milk', **extra):
+def product(pid, name, gtin='', brick='milk', retailer_code='ah', **extra):
     return dict(id=pid, name=name, brand='', variant='', primary_gtin=gtin,
-                size_value='1', size_unit='l', brick_code=brick, article_codes=[], **extra)
+                size_value='1', size_unit='l', brick_code=brick, article_codes=[],
+                retailer_code=retailer_code, store_name=service._store_name(retailer_code), image_url='', **extra)
 
 
 def migration_module():
@@ -31,26 +32,30 @@ def migration_module():
 
 class MatchingTest(unittest.TestCase):
     def test_cross_retailer_different_gtins(self):
-        items = [product('a', 'AH Halfvolle melk', '08719587325926'), product('b', 'Jumbo Halfvolle melk', '08718452513666'), product('c', 'Appels', brick='fruit')]
+        items = [product('a', 'AH Halfvolle melk', '08719587325926'), product('b', 'Jumbo Halfvolle melk', '08718452513666', retailer_code='jumbo'), product('c', 'Appels', brick='fruit')]
         result = service.suggest_pairs(items)
         self.assertEqual([(p['left']['id'], p['right']['id']) for p in result], [('a','b')])
         self.assertGreater(result[0]['score'], .9)
         self.assertEqual(service.suggest_pairs(items, [('a','b')]), [])
 
     def test_same_gtin_is_not_synonym(self):
-        self.assertEqual(service.suggest_pairs([product('a','Melk','08719587325926'), product('b','Melk','08719587325926')]), [])
+        self.assertEqual(service.suggest_pairs([product('a','Melk','08719587325926'), product('b','Melk','08719587325926',retailer_code='jumbo')]), [])
+
+    def test_same_or_unknown_store_cannot_be_confirmed_as_cross_store_synonym(self):
+        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk')]), [])
+        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk', retailer_code='')]), [])
 
     def test_same_retailer_code_is_not_synonym(self):
-        items = [product('a','Melk'), product('b','Melk')]
+        items = [product('a','Melk'), product('b','Melk',retailer_code='jumbo')]
         for item in items:
             item['article_codes'] = ['ah: 123']
         self.assertEqual(service.suggest_pairs(items), [])
 
     def test_brick_conflict_excluded(self):
-        self.assertEqual(service.suggest_pairs([product('a','Halfvolle melk'), product('b','Halfvolle melk', brick='fruit')]), [])
+        self.assertEqual(service.suggest_pairs([product('a','Halfvolle melk'), product('b','Halfvolle melk', brick='fruit', retailer_code='jumbo')]), [])
 
     def test_distinct_packaging_preserved(self):
-        a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk')
+        a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
         b['size_value'] = '2'
         result = service.suggest_pairs([a,b])[0]
         self.assertEqual(result['left']['size_value'], '1')
@@ -58,8 +63,9 @@ class MatchingTest(unittest.TestCase):
         self.assertIn('variant', result['warning'])
 
     def test_deterministic_unique_unordered_pairs(self):
-        items = [product(str(i), 'Halfvolle melk') for i in range(12)]
+        items = [product(str(i), 'Halfvolle melk', retailer_code='ah' if i%2 else 'jumbo') for i in range(12)]
         result = service.suggest_pairs(items)
+        self.assertTrue(result)
         self.assertEqual(result, service.suggest_pairs(list(reversed(items))))
         self.assertEqual(len({p['id'] for p in result}), len(result))
         self.assertTrue(all(p['left']['id'] < p['right']['id'] for p in result))
@@ -70,14 +76,15 @@ class StoreTest(unittest.TestCase):
         self.engine = create_engine('sqlite://')
         with self.engine.begin() as conn:
             conn.exec_driver_sql('PRAGMA foreign_keys=ON')
-            conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT)')
+            conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT, image_url TEXT, source TEXT)')
             conn.exec_driver_sql('CREATE TABLE global_product_gpc_bricks(global_product_id TEXT PRIMARY KEY, brick_code TEXT)')
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
             module = migration_module()
             with Operations.context(MigrationContext.configure(conn)):
                 module.upgrade()
             for pid, gtin in [('a','8719587325926'), ('b','8718452513666'), ('c','')]:
-                conn.execute(text("INSERT INTO global_products VALUES (:id,'Halfvolle melk','','',:gtin,1,'l','active')"), dict(id=pid, gtin=gtin))
+                conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source) VALUES (:id,'Halfvolle melk','','',:gtin,1,'l','active','', 'catalog')"), dict(id=pid, gtin=gtin))
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('a','ah','823326','confirmed'),('b','jumbo','394270','confirmed')"))
 
     def tearDown(self):
         self.engine.dispose()
@@ -88,8 +95,8 @@ class StoreTest(unittest.TestCase):
 
     def test_read_only_excludes_codeless_invalid_and_deleted(self):
         with self.engine.begin() as conn:
-            conn.execute(text("INSERT INTO global_products VALUES ('d','Halfvolle melk','','','not8719587325926',1,'l','active')"))
-            conn.execute(text("INSERT INTO global_products VALUES ('e','Halfvolle melk','','','8719587325926',1,'l','deleted')"))
+            conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status) VALUES ('d','Halfvolle melk','','','not8719587325926',1,'l','active')"))
+            conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status) VALUES ('e','Halfvolle melk','','','8719587325926',1,'l','deleted')"))
             self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b'])
             service.suggest_pairs(service.load_products(conn))
             self.assertEqual(service.confirmed_pairs(conn), set())
@@ -100,6 +107,21 @@ class StoreTest(unittest.TestCase):
             self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b','c'])
             conn.execute(text("UPDATE external_article_product_links SET status='inactive'"))
             self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b'])
+
+    def test_catalog_image_and_confirmed_shop_are_projected(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE global_products SET image_url='https://example.org/test.jpg' WHERE id='a'"))
+            items = service.load_products(conn)
+            self.assertEqual([p['store_name'] for p in items], ['Albert Heijn', 'Jumbo'])
+            self.assertEqual(items[0]['image_url'], 'https://example.org/test.jpg')
+            self.assertEqual(items[1]['image_url'], '')
+            self.assertEqual(len(service.suggest_pairs(items)), 1)
+
+    def test_photo_change_does_not_invalidate_selection(self):
+        with self.engine.begin() as conn:
+            selection = self.selection(conn)
+            conn.execute(text("UPDATE global_products SET image_url='data:image/png;base64,Zm9v' WHERE id='a'"))
+            self.assertEqual(service.confirm_pairs(conn, [selection], 'actor'), {'linked': 1, 'already_linked': 0})
 
     def test_bulk_idempotent_and_persisted_with_actor(self):
         with self.engine.begin() as conn:

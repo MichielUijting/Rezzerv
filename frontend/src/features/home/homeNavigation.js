@@ -14,7 +14,7 @@ const LEGACY_TILES = [
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙', clickable: true },
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️', clickable: true },
   { key: 'externe-databases-2', label: 'Externe databases 2', icon: '🗄️', clickable: true },
-  { key: 'artikelsynoniemen', label: 'Artikelsynoniemen', icon: '🔗', clickable: true },
+  { key: 'artikelsynoniemen', label: 'Artikel-synoniemen', icon: '🔗', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳', clickable: false },
   { key: 'recepten', label: 'Gerechten', icon: '🍳', clickable: false, feature: FEATURE_GERECHTEN },

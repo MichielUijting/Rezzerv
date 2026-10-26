@@ -12,7 +12,7 @@ router = APIRouter(prefix='/api/external-databases/article-synonyms', tags=['art
 def _actor(permission):
     context = require_platform_permission_from_session(permission)
     if not (context.is_platform_superuser or context.is_frontteam):
-        raise HTTPException(403, 'Alleen Superusers en Frontteamleden mogen artikelsynoniemen beheren.')
+        raise HTTPException(403, 'Alleen Superusers en Frontteamleden mogen artikel-synoniemen beheren.')
     return context
 
 
