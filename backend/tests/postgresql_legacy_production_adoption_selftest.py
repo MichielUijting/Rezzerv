@@ -292,6 +292,10 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
             assert "platform_home_settings" in tables
             assert "household_profiles" in tables
             assert "household_residents" in tables
+            assert "global_product_consumption_profiles" in tables
+            profile_fks = connection.execute("PRAGMA foreign_key_list(global_product_consumption_profiles)").fetchall()
+            assert any(row[2] == 'global_products' and row[3] == 'global_product_id' and row[6].upper() == 'CASCADE' for row in profile_fks), profile_fks
+            assert connection.execute("SELECT COUNT(*) FROM global_product_consumption_profiles").fetchone()[0] == 0
             manual = connection.execute(
                 """
                 SELECT household_id, type

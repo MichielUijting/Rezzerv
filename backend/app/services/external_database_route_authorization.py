@@ -18,6 +18,7 @@ _EXTERNAL_DATABASE_SEARCH_SUFFIXES = (
     "/match-preview",
     "/diagnose-real-candidates",
     "/off/search-preview",
+    "/products/search-preview",
     "/coverage/receipt-items",
 )
 

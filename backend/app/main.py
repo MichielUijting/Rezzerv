@@ -4276,7 +4276,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
 
 
 
-def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
     article_name = str(article_row.get('naam') or '').strip()
     global_product_id = str(article_row.get('global_product_id') or '').strip()
@@ -4294,14 +4294,17 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     if ideal_stock is None and min_stock is not None:
         ideal_stock = float(min_stock) + 1.0
 
-    inventory_rows = get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
-    event_rows = get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
+    inventory_rows = group_projection['inventory_rows'] if group_projection else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
+    event_rows = group_projection['event_rows'] if group_projection else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
     current_quantity = calculate_inventory_total_quantity_from_rows(inventory_rows)
     event_net_quantity = calculate_inventory_event_net_quantity(event_rows)
     has_event_history = len(event_rows) > 0
     data_state = ALMOST_OUT_DATA_STATE_OK
     data_state_message = None
-    if min_stock is None:
+    if group_projection and group_projection.get('member_data_inconsistent'):
+        data_state = ALMOST_OUT_DATA_STATE_INCONSISTENT
+        data_state_message = 'Voorraad en mutaties van een onderliggend artikel komen niet overeen.'
+    elif min_stock is None:
         data_state = ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
         data_state_message = 'Artikel heeft geen minimumvoorraad en valt daarom buiten almost-out signalering.'
     elif current_quantity < 0:
@@ -4316,7 +4319,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     prediction_payload = None
     prediction_triggered = False
     if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and prediction_enabled and prediction_days > 0:
-        prediction_payload = compute_household_product_prediction(
+        prediction_payload = None if group_projection else compute_household_product_prediction(
             conn,
             household_id,
             household_article_id,
@@ -4325,6 +4328,9 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             prediction_days=prediction_days,
             global_product_id=global_product_id,
         )
+        if group_projection:
+            from app.services.almost_out_group_service import prediction_from_events
+            prediction_payload = prediction_from_events(event_rows, prediction_days)
         prediction_triggered = bool(prediction_payload and prediction_payload.get('prediction_triggered'))
 
     include_item = False
@@ -4352,7 +4358,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     packaging_quantity = normalize_optional_numeric_field(article_settings_map.get('packaging_quantity'))
     fallback_ideal_stock = float(ideal_stock) if ideal_stock is not None else ((float(min_stock) + 1.0) if min_stock is not None else 1.0)
     amount_to_buy = max(fallback_ideal_stock - current_quantity, 0.0)
-    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, packaging_quantity)
+    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, 1 if group_projection else packaging_quantity)
 
     default_location_id = normalize_optional_text_field(article_settings_map.get('default_location_id'))
     default_sublocation_id = normalize_optional_text_field(article_settings_map.get('default_sublocation_id'))
@@ -4412,6 +4418,15 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             'inconsistent_data_rule': 'block_from_almost_out',
         },
     }
+    if group_projection:
+        item_payload.update({key: value for key, value in group_projection.items() if key not in {'inventory_rows', 'event_rows'}})
+        item_payload['product_anchor'] = 'automatic_product_type'
+        item_payload['household_article_name'] = group_projection['aggregation_variant']
+        item_payload['display_name'] = group_projection['aggregation_variant']
+        item_payload['packaging_unit'] = f"verpakking van {group_projection['representative_package_content']:g} {group_projection['aggregation_unit']}"
+        item_payload['verpakkingseenheid'] = item_payload['packaging_unit']
+        item_payload['packaging_quantity'] = 1
+        item_payload['verpakkingshoeveelheid'] = 1
     if prediction_payload:
         item_payload.update(prediction_payload)
     else:
@@ -4455,16 +4470,6 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
 
-    # Without prediction, an article with no minimum stock can never appear
-    # in Bijna op. Avoid expensive inventory/event lookups for those rows.
-    if not bool(household_settings.get('prediction_enabled')):
-        article_rows = [
-            row for row in article_rows
-            if normalize_optional_numeric_field(row.get('min_stock')) is not None
-        ]
-        if not article_rows:
-            return []
-
     eligible_count = len(article_rows)
     hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
@@ -4493,22 +4498,36 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             bucket = settings_map_by_article.setdefault(article_id, {})
             bucket[str(row.get('setting_key') or '').strip()] = _parse_json_setting_value(row.get('setting_value'))
 
+    from app.services.almost_out_group_service import load_groups, load_group_projection
     items: list[dict] = []
-    for article_row in article_rows:
-        article_id = str(article_row.get('id') or '').strip()
-        if settings_map_by_article.get(article_id, {}).get('almost_out_hidden') is True:
-            hidden_count += 1
-            continue
-        evaluation = evaluate_household_article_almost_out(
-            conn,
-            household_id,
-            article_row,
-            household_settings=household_settings,
-            article_settings_map=settings_map_by_article.get(article_id, {}),
-        )
-        evaluation.update(gpc_by_article.get(article_id, {}))
-        if evaluation.get('include_in_almost_out'):
-            items.append(evaluation)
+    groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
+    for group in groups:
+        # Legacy products without explicit variant/content retain their behavior.
+        candidates = [group['members'][0]] if group['key'][0] == 'automatic_product_type' else group['members']
+        for article_row in candidates:
+            article_id = str(article_row['id'])
+            members = group['members'] if group['key'][0] == 'automatic_product_type' else [article_row]
+            if not household_settings.get('prediction_enabled') and not any(member.get('min_stock') is not None for member in members):
+                continue
+            if any(settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True for member in members):
+                hidden_count += 1
+                continue
+            projection = None
+            if group['key'][0] == 'automatic_product_type':
+                projection = load_group_projection(conn, household_id, group)
+                article_row = dict(article_row)
+                reference_factor = group['factors'][article_id]
+                for field in ('min_stock', 'ideal_stock'):
+                    values = [float(member[field]) * group['factors'][str(member['id'])] / reference_factor for member in members if member.get(field) is not None]
+                    article_row[field] = max(values) if values else None
+            evaluation = evaluate_household_article_almost_out(
+                conn, household_id, article_row, household_settings=household_settings,
+                article_settings_map=settings_map_by_article.get(article_id, {}),
+                group_projection=projection,
+            )
+            evaluation.update(gpc_by_article.get(article_id, {}))
+            if evaluation.get('include_in_almost_out'):
+                items.append(evaluation)
 
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",

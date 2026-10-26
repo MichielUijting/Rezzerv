@@ -42,10 +42,14 @@ Een Windows-update zelf kan langer dan minuten duren; de Inhuis-bediening mag da
 Een bestaande werkende backend kan een PostgreSQL-container buiten zijn eigen
 Compose-project gebruiken. De read-only socket/volume/schema-controle kan die
 verbinding exact aanwijzen, maar bewijst nog niet dat de huidige
-`Windows-Host-Agent.ps1` deze omgeving kan beheren: die agent selecteert zowel
-`backend` als `postgres` met `docker compose --project-name ... ps -q` uit
-hetzelfde Compose-project. Een Windows Scheduled Task voor een **ander** project
-is dus geen geldig bewijs voor de werkelijk gebruikte Inhuis-backend.
+`Windows-Host-Agent.ps1` deze omgeving kan beheren. De agent ondersteunt nu
+optioneel een expliciete backend- en PostgreSQL-containernaam naast de
+standaardselectie uit één Compose-project. Hij controleert vóór installatie
+of de backend bij het gekozen Compose-project hoort, of de database duurzame
+opslag heeft, en of de fysieke PostgreSQL-identiteit en netwerkroute exact
+overeenkomen met de runtimeprobe uit de backend. Zonder dat bewijs wordt de
+Windows-taak niet geïnstalleerd. Een Windows Scheduled Task voor een **ander**
+project is nog steeds geen geldig bewijs voor de werkelijk gebruikte Inhuis-backend.
 
 Bij deze situatie geldt fail-closed:
 
@@ -55,10 +59,10 @@ Bij deze situatie geldt fail-closed:
 3. Geen bestaande PostgreSQL-container stoppen, recreëren of hernoemen zolang
    databaseautoriteit, herstelbare back-up en veilig onderhoudsvenster niet
    onafhankelijk zijn bewezen.
-4. Eerst een eenmalig, toetsbaar inrichtingstraject ontwerpen dat de werkelijke
-   backend, database en onderhoudsagent dezelfde autoritatieve runtime laat
-   bewaken. Behoud van de **bestaande fysieke data** is verplicht; een
-   volume- of datamigratie is geen automatisch onderdeel.
+4. Eerst het expliciete containerpaar met de agent in een read-only
+   identiteitscontrole bewijzen. Pas daarna kan de onderhoudsagent onder
+   afzonderlijke productie-GO worden ingericht; behoud van de **bestaande
+   fysieke data** is verplicht en een volumemigratie is geen onderdeel.
 5. Een geïsoleerde repetitie moet de nieuwe Compose-/agentconfiguratie met
    testopslag bewijzen. Pas na een aparte productie-GO mag een concrete
    omschakeling van de echte server worden uitgevoerd.

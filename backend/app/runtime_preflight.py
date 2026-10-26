@@ -42,9 +42,16 @@ def run_runtime_preflight() -> dict:
             f"REZZERV_RECEIPT_STARTUP_REMBG_WARMUP is enabled: {image_result}"
         )
 
-    ocr_result = warm_receipt_ocr_runtime()
+    # When disabled, do not initialize PaddleOCR at all. The receipt OCR path
+    # remains available on first use; this only skips the startup prewarm.
+    paddle_warmup = _paddle_warmup_enabled()
+    ocr_result = warm_receipt_ocr_runtime() if paddle_warmup else {
+        "paddle_ready": False,
+        "tesseract_ready": False,
+        "startup_warmup_skipped": True,
+    }
     print(f"Receipt OCR startup warmup: {ocr_result}", flush=True)
-    if _paddle_warmup_enabled() and not bool(ocr_result.get("paddle_ready")):
+    if paddle_warmup and not bool(ocr_result.get("paddle_ready")):
         raise RuntimeError(
             "Receipt Paddle OCR warmup failed while "
             f"REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP is enabled: {ocr_result}"

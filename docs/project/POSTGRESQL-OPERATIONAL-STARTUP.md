@@ -70,6 +70,14 @@ De PostgreSQL-rollen zijn gescheiden:
 
 Alembic is de exclusieve schema-authority. Productieruntimecode en request-paden maken of wijzigen geen schema-objecten.
 
+Nieuwe domeintabellen moeten via Alembic ook de bestaande PostgreSQL-trigger
+`inhuis_maintenance_write_gate` krijgen, inclusief INSERT, UPDATE, DELETE en
+TRUNCATE. De startupcontrole blijft voor alle domeintabellen fail-closed.
+Migratie `20261023_02` voegt deze bescherming toe aan
+`global_product_consumption_profiles`, ook voor databases waar de voorafgaande
+profielmigratie al is uitgevoerd. Er worden geen product- of huishoudgegevens
+gewijzigd en de bestaande onderhoudsfunctie wordt hergebruikt.
+
 De migration credential is alleen beschikbaar waar schema-preflight/migratie die nodig heeft. De normale business-runtime en de officiële ketentest bewijzen dat de migratiecredential tijdens de productieketen afwezig is.
 
 ## Readiness en credential-drift

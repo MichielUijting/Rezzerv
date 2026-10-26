@@ -196,6 +196,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
                 or product.get("product_name")
             ),
             "brand": _text(product.get("brands")),
+            "quantity": _text(product.get("quantity")),
             "category": _text(product.get("categories")),
             "categories": _text(product.get("categories")),
             "category_tags": _text_list(product.get("categories_tags")),
@@ -274,6 +275,7 @@ def _resolve_purchase_import_line(conn, source_id: str) -> dict[str, Any] | None
         "receipt_item_type": "purchase_import_line",
         "receipt_item_source_id": source_id,
         "receipt_line_text": _text(row.get("receipt_line_text") or row.get("external_article_code")),
+        "external_article_code": _text(row.get("external_article_code")),
         "retailer_code": retailer,
         "brand": _text(row.get("brand")),
         "quantity_label": " ".join(
@@ -324,6 +326,7 @@ def _resolve_receipt_table_line(conn, source_id: str) -> dict[str, Any] | None:
             '''
             SELECT
                 rtl.id AS source_id,
+                rtl.external_article_code,
                 COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
                 COALESCE(CAST(rtl.quantity AS TEXT), '') AS quantity,
                 COALESCE(rtl.unit, '') AS unit,
@@ -341,6 +344,7 @@ def _resolve_receipt_table_line(conn, source_id: str) -> dict[str, Any] | None:
     return {
         "receipt_item_type": "receipt_table_line",
         "receipt_item_source_id": source_id,
+        "external_article_code": _text(row.get("external_article_code")),
         "receipt_line_text": _text(row.get("receipt_line_text")),
         "retailer_code": _text(row.get("retailer_code")),
         "brand": "",
@@ -903,6 +907,15 @@ def search_off_candidates(payload: dict[str, Any]) -> dict[str, Any]:
         raise OffSearchError("mode moet manual of automatic zijn")
 
     item = resolve_receipt_item(receipt_item_id)
+    return search_off_candidates_for_item(payload, item)
+
+
+def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+    """Internal entry point: item must already be resolved server-side."""
+    receipt_item_id = item["receipt_item_id"]
+    mode = _text(payload.get("mode") or "manual").lower()
+    if mode not in {"manual", "automatic"}:
+        raise OffSearchError("mode moet manual of automatic zijn")
     limit = max(1, min(int(payload.get("limit") or 10), 20))
     query_diagnostics: list[dict[str, Any]] = []
 
