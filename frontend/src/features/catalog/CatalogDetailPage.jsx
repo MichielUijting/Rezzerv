@@ -140,6 +140,11 @@ export default function CatalogDetailPage() {
                   </div>
 
                   <div>
+                    <dt>Gekoppelde winkels</dt>
+                    <dd>{Number(product.linked_store_count || 0)}</dd>
+                  </div>
+
+                  <div>
                     <dt>Producttype</dt>
                     <dd>
                       {text(

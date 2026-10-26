@@ -82,7 +82,7 @@ export default function ArticleSynonymsPage() {
   }
 
   const columns = [
-    { key: 'select', label: 'Selectie', width: 88, renderCell: (item) => <input type="checkbox"
+    { key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check', renderCell: (item) => <input type="checkbox"
       aria-label={`Selecteer ${item.article_name} (${item.article_store}) en ${item.synonym_name} (${item.synonym_store})`}
       checked={selected.has(item.id)} disabled={saving || (!selected.has(item.id) && selected.size >= 200)}
       onChange={() => toggle(item.id)} /> },

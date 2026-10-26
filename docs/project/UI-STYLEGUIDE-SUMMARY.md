@@ -1210,10 +1210,14 @@ De actiebutton **Artikel-synoniemen** is beschikbaar voor Superusers en
 Frontteamleden. Het scherm gebruikt AppShell, ScreenCard en de centrale DataTable
 met selectie, kolomfilters, sortering, resize en standaardpaginering. De bulkknop
 **Koppelen** staat bij de tabelacties onder de tabel en is inactief zonder selectie.
-De zeven kolommen zijn: selectie; eerste artikelnaam, foto en winkel; tweede
+De zeven kolommen zijn: selectie (lege, smalle kolomkop); eerste artikelnaam, foto en winkel; tweede
 artikelnaam, foto en andere winkel. De afbeelding gebruikt de gedeelde
 Catalogusfoto met placeholder. Een zichtbare winkelaanduiding is altijd afkomstig
 uit vastgelegde winkelinformatie. De knop Vernieuwen vervalt.
+Catalogus desktop toont de numerieke, rechts uitgelijnde, sorteerbare en
+filterbare kolom **Gekoppelde winkels** naast Huishoudartikelen. Het gaat om
+unieke andere winkels van uitsluitend directe bevestigde synoniemkoppelingen;
+de waarde staat ook op mobiel, in het artikeldetail en in de export.
 Er is één korte toelichting over handmatig controleren en een link naar
 Externe databases 2 voor ontbrekende codes. De mobiele header/Terug en feedback
 komen uit de bestaande gedeelde componenten.

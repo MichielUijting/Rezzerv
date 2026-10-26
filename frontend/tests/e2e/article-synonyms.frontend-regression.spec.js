@@ -40,6 +40,8 @@ for (const width of [390, 1280]) {
       await expect(table.locator('tbody tr')).toHaveCount(10)
       await expect(page.getByRole('heading', { name: 'Artikel-synoniemen', level: 2, exact: true })).toBeVisible()
       await expect(table.locator('thead tr').first().locator('th')).toHaveCount(7)
+      await expect(table.locator('thead tr').first().locator('th').first()).toHaveText('')
+      await expect(table.locator('colgroup col').first()).toHaveAttribute('style', /48px/)
       await expect(table.locator('thead tr').first()).toContainText('Artikelnaam')
       await expect(table.locator('thead tr').first()).toContainText('Foto artikel')
       await expect(table.locator('tbody tr').first()).toContainText('Albert Heijn')
@@ -86,3 +88,39 @@ test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
   await expect(page.getByTestId('article-synonyms-table')).toHaveCount(0)
   expect(reads).toBe(0)
 })
+
+for (const width of [390, 1280]) {
+  test(`Catalogus toont het aantal gekoppelde winkels op ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const articles = [
+      { id: 'ah', name: 'Halfvolle melk AH', catalog_kind: 'exact', linked_store_count: 1 },
+      { id: 'jumbo', name: 'Halfvolle melk Jumbo', catalog_kind: 'exact', linked_store_count: 1 },
+      { id: 'other', name: 'Brood', catalog_kind: 'exact', linked_store_count: 0 },
+    ]
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
+        is_platform_superuser: true, permissions: {},
+      } })
+      if (path === '/api/catalog') return route.fulfill({ json: {
+        items: articles, total: articles.length, limit: 10, offset: 0,
+      } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/catalogus')
+    if (width > 720) {
+      await expect(page.getByTestId('catalog-linked-stores-ah')).toHaveText('1')
+      await expect(page.getByTestId('catalog-linked-stores-jumbo')).toHaveText('1')
+      await expect(page.getByTestId('catalog-linked-stores-other')).toHaveText('0')
+      await expect(page.getByRole('columnheader', { name: /Gekoppelde winkels/ })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'Filter gekoppelde winkels' })).toBeVisible()
+    } else {
+      await expect(page.getByTestId('mobile-catalog-open-ah')).toContainText('Gekoppelde winkels: 1')
+      await expect(page.getByTestId('mobile-catalog-open-other')).toContainText('Gekoppelde winkels: 0')
+    }
+  })
+}

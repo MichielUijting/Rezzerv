@@ -33,7 +33,7 @@ centrale set gezocht, niet uitsluitend op AH/Jumbo. Dezelfde GTIN of dezelfde
 winkelcode is een exacte identiteit en geen synoniempaar. Bekende verschillende
 GPC Bricks worden uitgesloten; ontbrekende kenmerken worden niet verzonnen.
 
-De standaard DataTable bevat exact zeven kolommen: **Selectie**, **Artikelnaam**,
+De standaard DataTable bevat exact zeven kolommen: **lege selectiekop**, **Artikelnaam**,
 **Foto artikel**, **Winkel**, en nogmaals **Artikelnaam**, **Foto artikel**,
 **Winkel** voor de tweede winkel. Elke rij is precies één voorstel voor een
 relatie tussen twee verschillende centrale Catalogusartikelen. Zoeken, sorteren,
@@ -61,6 +61,19 @@ zelfstandig bestaan. Deze eerste functie geeft Bijna op of boodschappen geen
 nieuwe automatische aggregatie; de bestaande automatische consumptietypes
 blijven daarvoor leidend. Een hoge tekstscore is geen bewijs voor dezelfde smaak,
 bereiding of samenstelling; de gebruiker vergelijkt de zichtbare productgegevens.
+
+De **Catalogus** toont per product de numerieke kolom **Gekoppelde winkels**;
+dezelfde waarde staat in de mobiele Catalogus en beide detailpresentaties. Dit
+is het aantal **unieke andere winkels** waaraan het product **rechtstreeks** via
+een bevestigde synoniemrelatie is gekoppeld: een AH-product gekoppeld aan één
+Jumbo-product heeft waarde 1; zonder geldige directe koppelingen waarde 0.
+Meerdere gekoppelde producten uit dezelfde andere winkel tellen eenmaal.
+Een keten A↔B en B↔C telt C niet automatisch voor A. Alleen winkels met één
+eenduidige, actuele centrale winkelaanduiding tellen mee; ontbrekende,
+tegenstrijdige of verwijderde winkelgegevens worden niet als winkel verzonnen.
+De teller is afgeleid bij het lezen, wordt niet dubbel opgeslagen en is
+filterbaar, sorteerbaar en beschikbaar in de Catalogus-export. Er worden geen
+huishoudartikelen of kassabondata geraadpleegd voor deze telling.
 
 Alembic maakt uitsluitend `article_synonym_links`, met foreign keys, unieke
 paarvolgorde en onderhoudsschrijfbarrière. Downgrade verwijdert alleen deze

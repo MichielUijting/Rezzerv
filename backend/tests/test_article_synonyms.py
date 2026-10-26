@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.api import article_synonym_routes as routes
+from app.api import catalog_routes
 from app.services import article_synonym_service as service
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -157,6 +158,55 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(conn.execute(text('SELECT confirmed_by FROM article_synonym_links')).scalar_one(), 'actor')
             self.assertEqual(service.suggest_pairs(service.load_products(conn), service.confirmed_pairs(conn)), [])
             self.assertEqual(conn.execute(text('SELECT COUNT(*) FROM global_products')).scalar_one(), 3)
+
+    def test_catalog_counts_distinct_direct_other_shops_not_synonym_products(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                    (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
+                VALUES
+                    ('d','Melk','','','',1,'l','active','','plus'),
+                    ('e','Melk','','','',1,'l','active','','catalog'),
+                    ('f','Melk','','','',1,'l','active','','catalog'),
+                    ('g','Melk','','','',1,'l','deleted','','lidl')
+            """))
+            conn.execute(text("""
+                INSERT INTO external_article_product_links VALUES
+                    ('e','jumbo','SKU2','confirmed'),
+                    ('f','ah','SKU3','confirmed'),
+                    ('f','jumbo','SKU4','confirmed')
+            """))
+            for left, right in [('a','b'), ('a','d'), ('a','e'), ('a','f'), ('a','g'), ('b','d')]:
+                conn.execute(text("""
+                    INSERT INTO article_synonym_links
+                        (left_product_id,right_product_id,confirmed_by,source_fingerprint,method,score)
+                    VALUES (:left,:right,'tester','stable','fixture',0.9)
+                """), {'left': left, 'right': right})
+            # This isolated fixture uses a minimal retailer-link table; Catalogus
+            # also needs the presentation alias column from the full schema.
+            conn.exec_driver_sql('ALTER TABLE external_article_product_links ADD COLUMN receipt_text_normalized TEXT')
+
+        # One AH article linked to two different Jumbo products and one PLUS
+        # product has two linked stores. Ambiguous and deleted peers do not add
+        # a store. A--B and B--D never imply a further A--D relation.
+        with patch.object(catalog_routes, 'engine', self.engine):
+            counts = {
+                product_id: catalog_routes._catalog_row(product_id)['linked_store_count']
+                for product_id in ('a', 'b', 'c', 'd', 'e', 'f')
+            }
+            self.assertEqual(counts, {'a': 2, 'b': 2, 'c': 0, 'd': 2, 'e': 1, 'f': 0})
+            filtered = catalog_routes.list_catalog(
+                linked_store_count='2', sort_by='linked_store_count',
+                sort_direction='desc', limit=10, offset=0,
+            )
+            self.assertEqual(filtered['total'], 3)
+            self.assertEqual({item['id'] for item in filtered['items']}, {'a', 'b', 'd'})
+
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE external_article_product_links SET status='inactive' WHERE global_product_id='e'"))
+        with patch.object(catalog_routes, 'engine', self.engine):
+            self.assertEqual(catalog_routes._catalog_row('a')['linked_store_count'], 2)
+            self.assertEqual(catalog_routes._catalog_row('e')['linked_store_count'], 0)
 
     def test_whole_bulk_rejected_on_stale_selection(self):
         with self.assertRaises(HTTPException) as error:
