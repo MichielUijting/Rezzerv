@@ -11,6 +11,8 @@ export default function PlatformMaintenancePanel() {
   const [announcement, setAnnouncement] = React.useState('')
   const [error, setError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+  const [confirmSessionClose, setConfirmSessionClose] = React.useState(false)
+  const [sessionCloseResult, setSessionCloseResult] = React.useState(null)
   const requestId = React.useRef(0)
   const [now, setNow] = React.useState(Date.now())
   React.useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
@@ -30,6 +32,23 @@ export default function PlatformMaintenancePanel() {
     finally { if (id === requestId.current) setBusy(false) }
   }
   React.useEffect(() => { request(); return () => { ++requestId.current } }, [])
+  async function closeRemainingSessions() {
+    setBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/platform/maintenance/sessions/close`, {
+        credentials: 'include', cache: 'no-store', method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_generation: status.generation, confirmed: true }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Sessies beëindigen mislukt.')
+      setSessionCloseResult(Number(data.sessions_revoked || 0))
+      setConfirmSessionClose(false)
+      await request()
+    } catch (e) { setError(e.message || 'Sessies beëindigen mislukt.') }
+    finally { setBusy(false) }
+  }
   React.useEffect(() => { if (!status || status.state === 'normal') return; const timer = setInterval(() => { if (busy) return; if (status.state === 'draining' && status.active_operations === 0 && status.host_agent_ready) request('prepare'); else if (status.state === 'locked' && status.restart_detected) request('verify'); else request() }, 10000); return () => clearInterval(timer) }, [status?.state, busy])
   return <div data-testid="platform-maintenance-panel"><Card className="rz-card-home">
     <h2>Onderhoud aan Inhuis</h2>
@@ -37,6 +56,7 @@ export default function PlatformMaintenancePanel() {
     {status && <>
       <p role="status">{LABELS[status.state] || 'Onbekend — geblokkeerd'}. Lopende verwerkingen: {status.active_operations}.</p>
       {status.announcement && <p>{status.announcement}</p>}
+      {sessionCloseResult !== null && <p role="status">{sessionCloseResult} andere inlogsessie(s) beëindigd. Lopende verwerkingen zijn niet afgebroken.</p>}
       {status.state === 'normal' && <>
         <Input label="Onderhoudsvenster en verwachte duur" value={announcement} onChange={e => setAnnouncement(e.target.value)} maxLength={2000} placeholder="Datum, begintijd, tijdzone en verwachte duur" />
         <Button disabled={busy || !announcement.trim()} onClick={() => request('announce')}>Onderhoud aankondigen</Button>
@@ -46,6 +66,16 @@ export default function PlatformMaintenancePanel() {
         <Button disabled={busy || !status.host_agent_ready} onClick={() => request('drain')}>Verwerkingen veilig stoppen</Button>
         <Button disabled={busy} variant="secondary" onClick={() => request('cancel')}>Aankondiging annuleren</Button>
       </>}
+      {['announced', 'draining'].includes(status.state) && <>
+        <p>Na minimaal twee minuten kunt u gebruikers die aangemeld blijven gecontroleerd afmelden. Dit voorkomt nieuwe handelingen, maar breekt geen lopende verwerking af. Een geldige sessie betekent niet noodzakelijk dat iemand nu actief werkt.</p>
+        <Button variant="secondary" disabled={busy} onClick={() => setConfirmSessionClose(true)}>Resterende sessies beëindigen</Button>
+      </>}
+      {['announced', 'draining'].includes(status.state) && confirmSessionClose && <Card>
+        <h3>Andere gebruikers afmelden?</h3>
+        <p>Alle andere geldige inlogsessies worden ingetrokken. Uw beheersessie blijft bestaan. Niet-opgeslagen invoer van andere gebruikers kan verloren gaan. Reeds gestarte verwerkingen worden niet afgebroken. Deze handeling is pas twee minuten na de aankondiging toegestaan en vereist ook sessiebeheerrechten.</p>
+        <Button disabled={busy} onClick={closeRemainingSessions}>Ja, andere sessies beëindigen</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => setConfirmSessionClose(false)}>Annuleren</Button>
+      </Card>}
       {status.state === 'draining' && <Button disabled={busy || status.active_operations !== 0} onClick={() => request('prepare')}>Actuele veiligheidscontroles uitvoeren</Button>}
       {status.state === 'locked' && !status.restart_allowed && <p>Herstarttoestemming ontbreekt of is verlopen. Vernieuw de status en laat de onderhoudsagent controleren.</p>}
       {status.restart_allowed && now < status.restartUntil && <p role="status">Alle veiligheidscontroles zijn geslaagd. U kunt Windows nu zelf herstarten.</p>}
