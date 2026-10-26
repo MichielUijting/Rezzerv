@@ -83,6 +83,25 @@ container IDs, PostgreSQL storage mounts, cluster system identifier, database OI
 and server startup time; it cross-checks the backend's actual runtime connection.
 No server/container name is accepted as identity evidence by itself.
 
+The local frontend URL must target `localhost` or `127.0.0.1` on the **actual
+user-facing published port**, not an assumed development port. The host agent
+finds exactly one running container publishing that port and checks both its
+Compose project and `frontend` service label, plus the actual `80/tcp` binding.
+During installation and before a signed maintenance-cycle proof it also checks
+that both the local and external HTTPS user routes render Inhuis and report the
+same frontend release. During routine heartbeat it checks container/port identity
+without making repeated external network requests. The backend's physical
+PostgreSQL connection is checked separately; no same-Compose-project assumption
+is made for the explicit split-database mode.
+
+An existing or competing `Inhuis-Onderhoud-*` Windows Scheduled Task is **not**
+overwritten, removed or silently disabled by `-InstallAtLogon`. If a stale task
+points to another Compose project, installation stops with a clear diagnostic.
+An operator must first reconcile the old task's identity and choose a separately
+approved replacement procedure. This prevents two agents from publishing
+conflicting maintenance evidence. A green browser login or Docker indicator is
+not a substitute for that reconciliation.
+
 The runtime PostgreSQL address may use `inet::text` CIDR notation. The host
 agent validates the numeric address and prefix and compares the exact host IP
 against the PostgreSQL container's IPv4/IPv6 addresses. Matching a subnet alone
