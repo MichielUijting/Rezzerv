@@ -18,7 +18,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 class MaintenancePlatformApiTests(unittest.TestCase):
     def setUp(self):
         self.engine=MagicMock(); self.engine.dialect.name='postgresql'
-        self.permission=Mock(return_value=types.SimpleNamespace(user_id='canonical-test-actor'))
+        self.permission=Mock(return_value=types.SimpleNamespace(user_id='canonical-test-actor',session_id='canonical-admin-session'))
         self.session=Mock(return_value=types.SimpleNamespace(user_id='canonical-test-user'))
         db=types.ModuleType('app.db'); db.engine=self.engine
         sessions=types.ModuleType('app.services.session_request_context')
@@ -55,3 +55,23 @@ class MaintenancePlatformApiTests(unittest.TestCase):
             response=self.client.get('/api/maintenance/status')
         self.assertEqual(response.json(),{'state':'announced','announcement':'Test maintenance'})
         self.permission.assert_not_called(); self.session.assert_called_once()
+
+    def test_bulk_session_close_requires_both_separate_permissions(self):
+        with patch.object(self.routes,'revoke_remaining_sessions',return_value={'sessions_revoked':2}) as revoke:
+            response=self.client.post('/api/platform/maintenance/sessions/close',json={'expected_generation':7,'confirmed':True})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(self.permission.call_args_list[0].args,('platform.recovery.manage',))
+        self.assertEqual(self.permission.call_args_list[1].args,('platform.sessions.revoke',))
+        self.assertEqual(revoke.call_args.kwargs['current_session_id'],'canonical-admin-session')
+        self.assertEqual(revoke.call_args.kwargs['expected_generation'],7)
+
+    def test_session_close_without_confirmation_never_updates_database(self):
+        response=self.client.post('/api/platform/maintenance/sessions/close',json={'expected_generation':7,'confirmed':False})
+        self.assertEqual(response.status_code,400)
+        self.engine.begin.assert_not_called()
+
+    def test_session_close_denied_permission_never_updates_database(self):
+        self.permission.side_effect=[types.SimpleNamespace(user_id='admin',session_id='s1'),HTTPException(403,'forbidden')]
+        response=self.client.post('/api/platform/maintenance/sessions/close',json={'expected_generation':7,'confirmed':True})
+        self.assertEqual(response.status_code,403)
+        self.engine.begin.assert_not_called()

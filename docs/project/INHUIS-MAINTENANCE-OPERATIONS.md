@@ -11,6 +11,18 @@ implicit technical privileges.
    Existing household notification inboxes receive the announcement. The signed-in
    global banner also covers technical accounts without a household. Offline
    delivery is an inbox projection, not a receipt/acknowledgement guarantee.
+   Leave at least two minutes between announcement and involuntary session
+   sign-out. A signed-in session is not evidence of current user activity.
+   The administrator can explicitly choose **Resterende sessies beëindigen**,
+   which requires **both** `platform.recovery.manage` and
+   `platform.sessions.revoke`. A second confirmation is mandatory. All other
+   unexpired sign-in sessions are revoked in one audited transaction; the
+   administrator's own session remains valid. A client with unsaved form data
+   may lose that unsaved input, so warn users beforehand. Session revocation
+   blocks future authenticated requests but does **not** abort operations
+   already admitted. A stale maintenance generation or a grace period shorter
+   than two minutes fails closed. This action is allowed only in `announced`
+   or `draining`, never as a shortcut around maintenance admission checks.
 2. Select **Verwerkingen veilig stoppen**. A fresh, pinned Windows-agent heartbeat
    is required before this can close admission. Existing requests/worker handoffs
    finish; new domain requests and database writes are rejected. The screen polls
@@ -32,6 +44,27 @@ leave admission closed. There is no forced reboot, lease expiry or force-release
 An interrupted/crashed operation requires investigation and reconciliation using
 its original domain contract; removing its record merely because it is old is
 not an acceptable recovery procedure.
+
+### Shortest safe interruption window
+
+- Announce while normal usage continues; the two-minute notice period does
+  **not** itself take the application offline.
+- Near the planned time, optionally revoke remaining login sessions after the
+  confirmation and then initiate the normal drain. Once draining, **new**
+  domain work is denied, while previously admitted operations finish.
+- Minimize actual downtime by initiating drain only when maintenance is ready;
+  do not treat revoked sessions as evidence that operations are zero. A clean
+  session list and an empty maintenance-operation list are distinct facts.
+- If an operation is stuck, stay in a blocked state and reconcile the original
+  workflow. Never terminate a backend, delete a maintenance-operation row,
+  force-release or reboot based on session count alone.
+- Proceed with the existing host-proof/backup gate, an operator-performed
+  Windows reboot, exact image/data/route checks, and explicit release.
+- The scanner path and the actual user-facing HTTP/HTTPS routes must be tested
+  after each reboot; a green Docker container icon alone is not sufficient.
+- A host agent which cannot establish the exact backend/physical PostgreSQL
+  identity (including a stale scheduled task pointing to another Compose
+  project) is **not** a valid source of restart permission.
 
 ## One-time deployment configuration (separate approval required)
 
