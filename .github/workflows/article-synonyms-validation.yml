@@ -13,6 +13,8 @@ on:
       - 'backend/alembic/**'
       - 'backend/tests/test_article_synonyms.py'
       - 'backend/requirements.txt'
+      - 'frontend/src/features/articleSynonyms/**'
+      - 'frontend/tests/e2e/article-synonyms.frontend-regression.spec.js'
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,3 +53,39 @@ jobs:
           python -m pip install "${packages[@]}"
       - name: Matching, API authorization and atomic persistence contracts
         run: python -m unittest discover -s backend/tests -p test_article_synonyms.py -v
+
+  frontend-regression:
+    name: Artikel-synoniemen Playwright regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Start isolated frontend
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 --strictPort > /tmp/article-synonyms-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -80 /tmp/article-synonyms-vite.log
+          exit 1
+      - name: Check seven columns, pagination, selection and both authorized roles
+        run: ./node_modules/.bin/playwright test tests/e2e/article-synonyms.frontend-regression.spec.js --project=chromium --no-deps
+      - name: Upload browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-synonyms-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
