@@ -39,11 +39,14 @@ def test_legacy_compose_mode_preserved_and_install_is_opt_in():
 
 def test_split_install_preflights_real_database_before_persistent_mutation():
     source = AGENT.read_text(encoding="utf-8")
-    preflight = source.index("if ($InstallAtLogon -and $DirectContainerSelection)")
+    preflight = source.index("if ($InstallAtLogon) {")
     directory_write = source.index("New-Item -ItemType Directory -Force -Path $DataDirectory")
     task_install = source.index("Register-ScheduledTask")
     assert preflight < directory_write < task_install
-    assert "Assert-DirectDatabaseBinding $preflightPostgres $preflightProbe" in source[preflight:directory_write]
+    assert (
+        "if ($DirectContainerSelection) { Assert-DirectDatabaseBinding $preflightPostgres $preflightProbe }"
+        in source[preflight:directory_write]
+    )
 
 
 def test_host_docker_argument_arrays_use_explicit_named_binding():
