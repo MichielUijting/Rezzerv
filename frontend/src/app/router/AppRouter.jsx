@@ -41,6 +41,7 @@ import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurc
 import AlmostOutResponsive from '../../features/almostOut/AlmostOutResponsive.jsx'
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import ExternalDatabases2Page from '../../features/externalDatabases/ExternalDatabases2Page.jsx'
+import OffManualSearchPage from '../../features/externalDatabases/OffManualSearchPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
 import CatalogResponsive from '../../features/catalog/CatalogResponsive.jsx'
@@ -194,6 +195,7 @@ const router = createBrowserRouter([
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
   { path: '/externe-databases-2', element: <ProtectedFrontteam><ExternalDatabases2Page /></ProtectedFrontteam> },
+  { path: '/externe-databases-2/off-zoeken/:receiptItemId', element: <ProtectedFrontteam><OffManualSearchPage /></ProtectedFrontteam> },
   { path: '/catalogus', element: <Protected><CatalogResponsive /></Protected> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
   { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -16,6 +17,7 @@ const columns = [
 ]
 
 export default function ExternalDatabases2Page() {
+  const location = useLocation()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -29,9 +31,15 @@ export default function ExternalDatabases2Page() {
         const response = await fetchJsonWithAuth('/api/external-databases/unlinked-articles', { method: 'GET' })
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
-        if (!cancelled) setItems((payload.items || []).map((item) => ({
-          ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
-        })))
+        if (!cancelled) {
+          const loadedItems = (payload.items || []).map((item) => ({
+            ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+          }))
+          setItems(loadedItems)
+          if (location.state?.selectedItemId) {
+            setSelectedItem(loadedItems.find((item) => item.id === location.state.selectedItemId) || null)
+          }
+        }
       } catch {
         if (!cancelled) setError('De artikelen konden niet worden geladen.')
       } finally {
@@ -40,7 +48,7 @@ export default function ExternalDatabases2Page() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [location.state?.selectedItemId])
 
   return (
     <AppShell title="Externe databases 2" showExit={false}>

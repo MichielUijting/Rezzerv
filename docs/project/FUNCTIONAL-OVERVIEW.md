@@ -41,12 +41,12 @@ hetzelfde paginanummer én passende naam/variant wordt gebruikt. Een barcode moe
 expliciet in dat Product of de bijbehorende Nuxt-productnode staan en een geldige
 GTIN-controle hebben. Artikel-/ERP-/IAN-nummers worden nooit tot GTIN omgevormd.
 Eén aangetroffen barcode wordt exact in OFF opgezocht; ontbrekende OFF-informatie
-laat de Lidl-bron zichtbaar. Bij meerdere barcodes wordt niet willekeurig gekozen.
+mag de Lidl-bron niet als zoekbewijs laten verdwijnen. Bij meerdere barcodes wordt niet willekeurig gekozen.
 Zonder bruikbare Lidl-barcode wordt de bestaande automatische OFF-zoeklogica van Externe databases hergebruikt:
 de server bepaalt artikelnaam/winkel uit de bron-ID, maakt dezelfde zoekvarianten
 en suggesties, bewaakt product-/huismerkconflicten en rangschikt kandidaten.
-Het paneel toont Lidl-brongegevens en de reden van een eventuele terugval, plus
-naam, merk, barcode, inhoud, bron, herkenning en overeenkomst, met standaard
+Het paneel toont productkandidaten met naam, merk, barcode, inhoud, bron,
+herkenning en overeenkomst, met standaard
 zoeken, sorteren en paginering. De eerste volgorde blijft de bestaande automatische
 voorkeursvolgorde. Een naamsuggestie blijft herkenbaar als suggestie. Een door Lidl vermelde barcode
 blijft bronbewijs en is geen automatisch bevestigde Cataloguskoppeling.
@@ -72,6 +72,16 @@ De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
 per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
 Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
 De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+Het kandidaatpaneel toont na de vaste regel over beschikbare productgegevens
+geen afzonderlijke uitleg, bronstatusalinea's of extra bronbewijsteksten. Een
+knop **Zelf zoeken in OFF** opent een eigen scherm voor het geselecteerde
+bonartikel. Daar kan de gebruiker met één vrij tekstinvoerveld productnaam,
+merk en andere trefwoorden invullen. Zoeken start pas bij **Zoeken** of Enter;
+de resultaten komen uitsluitend uit OFF en tonen maximaal **7 kandidaten per
+pagina**, met paginering voor de overige resultaten (maximaal twintig per
+zoekopdracht). De resultatentabel heeft geen tweede reeks filterinvoervelden.
+Terug brengt de gebruiker terug naar het geselecteerde artikel. De zoekroute
+controleert het bonartikel opnieuw op de server en schrijft niets weg.
 
 De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
 met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,

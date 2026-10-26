@@ -25,6 +25,14 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.route('**/api/**', async (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname
+        if (path === '/api/external-products/off/search') {
+          const body = request.postDataJSON()
+          expect(body).toEqual({ receipt_item_id: rows[0].id, mode: 'manual', query: 'halfvolle melk bio', limit: 20 })
+          return route.fulfill({ json: { provider: 'openfoodfacts', mutated: false, results: Array.from({ length: 16 }, (_, index) => ({
+            gtin: `87123456789${String(index).padStart(2, '0')}`, product_name: `Vrij gezocht product ${index + 1}`,
+            brand: 'OFF-merk', quantity: '1 l', score: 1 - index / 20,
+          })) } })
+        }
         if (path === '/api/external-databases/products/search-preview') {
           const body = request.postDataJSON()
           searches.push(body)
@@ -83,9 +91,8 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
       await expect(candidates.locator('tbody tr').first()).toContainText('95%')
       await expect(candidates).toContainText('Lidl + OFF')
-      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('1234567')
-      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('8720326035617')
-      await expect(panel.getByRole('link', { name: 'Bekijk product bij Lidl' })).toHaveAttribute('href', 'https://www.lidl.nl/p/test/p1234567')
+      await expect(panel.getByTestId('retailer-product-evidence')).toHaveCount(0)
+      await expect(panel).not.toContainText('Lidl vermeldt één geldige barcode')
       expect(searches[0]).toEqual({ receipt_item_id: rows[0].id, mode: 'automatic', limit: 20 })
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       const paging = panel.getByRole('navigation', { name: 'Paginering' })
@@ -103,11 +110,29 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       expect(searches).toHaveLength(1)
       expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
+      await expect(page.getByRole('heading', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+      await expect(page.getByRole('textbox')).toHaveCount(1)
+      const freeSearch = page.getByRole('textbox', { name: 'Zoektekst in OFF' })
+      await freeSearch.fill('halfvolle melk bio')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      const freeResults = page.getByTestId('external-off-free-search-results')
+      await expect(freeResults.locator('tbody tr')).toHaveCount(7)
+      await expect(freeResults).toContainText('Vrij gezocht product 1')
+      const freePaging = page.getByRole('navigation', { name: 'Paginering' })
+      await freePaging.getByRole('button', { name: '3', exact: true }).click()
+      await expect(freeResults.locator('tbody tr')).toHaveCount(2)
+      await expect(freeResults).toContainText('Vrij gezocht product 16')
+      if (width <= 720) await page.getByTestId('mobile-global-back').click()
+      else await page.getByRole('button', { name: 'Terug', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
       await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       await expect(panel).not.toContainText('Tweede suggestie')
-      await expect(panel).toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
+      await expect(panel).not.toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
       await expect(panel).not.toContainText('1234567')
       await open(2)
       await expect(panel.getByRole('alert')).toContainText('OFF is tijdelijk niet bereikbaar.')

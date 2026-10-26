@@ -1203,3 +1203,14 @@ op naam overeenkomen wordt in dit paneel niet herhaald; eventuele aanvullende
 bronwaarschuwingen blijven zichtbaar. Tussen paneeltitel en toelichting en
 tussen toelichting en direct volgende tabel staat telkens één compacte
 regel tussenruimte; geen lege melding mag een extra rij toevoegen.
+
+### Externe databases 2: vrij zoeken in OFF — PO, 26 oktober 2026
+
+De vaste productgegevensregel is de enige toelichting in het automatische
+kandidatenpaneel: eventuele bronstatusalinea's, bronbewijsdetails en links
+worden daar niet meer getoond. Direct daarna staat de knop **Zelf zoeken in
+OFF**. Deze opent een afzonderlijk scherm met één vrij zoektekstveld en
+een zoekknop. OFF-resultaten komen in een gewone DataTable, zonder eigen
+kolomfilters en met zeven kandidaten per pagina en paginering als er meer
+resultaten zijn. Het zoekscherm biedt **Terug** naar het geselecteerde
+bonartikel. Deze handmatige zoekactie is uitsluitend lezen.

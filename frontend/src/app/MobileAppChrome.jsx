@@ -59,6 +59,7 @@ const MOBILE_ROUTE_TITLES = Object.freeze([
   ['/productgroepen', 'Productgroepen'],
   ['/spaartegoeden', 'Spaartegoeden'],
   ['/externe-databases', 'Externe databases'],
+  ['/externe-databases-2/off-zoeken', 'Zelf zoeken in OFF'],
   ['/externe-databases-2', 'Externe databases 2'],
   ['/onboarding', 'Welkom bij Inhuis'],
   ['/home', 'Dashboard'],
@@ -259,7 +260,9 @@ export default function MobileAppChrome({ children }) {
   }
 
   const isSuperuserRoute = location.pathname === '/superuser' || location.pathname.startsWith('/superuser/')
-  const backHandler = location.pathname === '/home'
+  const backHandler = location.pathname.startsWith('/externe-databases-2/off-zoeken/')
+    ? () => navigate('/externe-databases-2', { state: { selectedItemId: location.state?.item?.id || null } })
+    : location.pathname === '/home'
     ? handleHomeBack
     : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw'
       ? handleKassaBack
