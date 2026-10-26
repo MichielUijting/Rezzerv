@@ -1,0 +1,78 @@
+import { test, expect } from '@playwright/test'
+
+test.use({ storageState: { cookies: [], origins: [] } })
+for (const width of [390, 1280]) {
+  for (const role of ['superuser', 'frontteam']) {
+    test(`${role}: bulk koppelen op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const writes = []
+      const pairs = Array.from({ length: 12 }, (_, i) => ({
+        id: `pair-${i}`, score: .95-i/100, fingerprint: 'a'.repeat(64),
+        left: { id: `left-${i}`, name: `AH Melk ${i}`, primary_gtin: '08719587325926', size_value: '1', size_unit: 'l' },
+        right: { id: `right-${i}`, name: `Jumbo Melk ${i}`, primary_gtin: '08718452513666', size_value: '2', size_unit: 'l' },
+      }))
+      const linked = new Set()
+      let failed = false
+      await page.route('**/api/**', async (route) => {
+        const path = new URL(route.request().url()).pathname
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'synonym-test', active_household_id: role === 'superuser' ? '0' : 'test-household',
+          context_type: role === 'superuser' ? 'system' : 'regular', role: 'admin',
+          is_platform_superuser: role === 'superuser', is_frontteam: role === 'frontteam',
+          permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
+        } })
+        if (path.endsWith('/article-synonyms/link')) {
+          writes.push(route.request().postDataJSON())
+          if (!failed) { failed = true; return route.fulfill({ status: 409, json: { detail: 'Een suggestie is gewijzigd. Vernieuw de lijst.' } }) }
+          for (const item of writes.at(-1).selections) linked.add(item.left_product_id)
+          return route.fulfill({ json: { linked: writes.at(-1).selections.length } })
+        }
+        if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: pairs.filter((p) => !linked.has(p.left.id)) } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/artikelsynoniemen')
+      const table = page.getByTestId('article-synonyms-table')
+      await expect(table.locator('tbody tr')).toHaveCount(10)
+      await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
+      await table.getByRole('checkbox').nth(0).check()
+      await table.getByRole('checkbox').nth(1).check()
+      await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
+      await expect(table.locator('tbody tr')).toHaveCount(2)
+      await table.getByRole('checkbox').first().check()
+      await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('AH Melk 0')
+      await expect(table.locator('tbody tr')).toHaveCount(1)
+      expect(writes).toEqual([])
+      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+      await expect(page.getByRole('alert')).toContainText('Een suggestie is gewijzigd')
+      await expect(page.getByText('3 geselecteerd', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+      await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
+      expect(writes[1].selections.map((item) => item.left_product_id)).toEqual(['left-0', 'left-1', 'left-10'])
+      await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
+      await expect(table.locator('tbody tr')).toHaveCount(9)
+      await expect(table).not.toContainText('AH Melk 0')
+      await page.reload()
+      await expect(table.locator('tbody tr')).toHaveCount(9)
+      await expect(page.getByRole('link', { name: 'Externe databases 2', exact: true })).toBeVisible()
+      if (width <= 720) await expect(page.getByRole('button', { name: 'Terug', exact: true }).first()).toBeVisible()
+    })
+  }
+}
+
+test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
+  let reads = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.includes('/article-synonyms')) reads++
+    if (path === '/api/session') return route.fulfill({ json: { user_id: 'regular', active_household_id: 'h', context_type: 'regular', role: 'admin', permissions: {} } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('article-synonyms-table')).toHaveCount(0)
+  expect(reads).toBe(0)
+})

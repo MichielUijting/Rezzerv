@@ -145,3 +145,12 @@ Winkelkoppelingen en importinstellingen bepalen hoe aankopen en kassabonnen binn
 ## Meldingen
 
 Er bestaat op 22 juli 2026 nog geen actieve meldingen-API. Een toekomstig meldingsdomein moet eerst opnieuw worden geïnventariseerd en beveiligd.
+
+## Artikelsynoniemen
+
+Superusers en alle actieve Frontteamleden kunnen via de actie **Artikelsynoniemen**
+centrale artikelen met een code/barcode vergelijken. De standaardtabel toont
+voorgestelde paren; selectie plus **Koppelen** bevestigt de gekozen paren als bulk.
+Er is geen automatische bevestiging. Bestaande product-, verpakking- en
+huishoudidentiteiten blijven behouden. Ontbrekende codes worden eerst aangevuld
+via Externe databases 2. Zie [het functionele contract](ARTICLE-SYNONYMS.md).

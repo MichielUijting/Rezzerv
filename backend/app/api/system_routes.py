@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query
+from app.api.article_synonym_routes import router as article_synonym_router
 
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
@@ -59,6 +60,7 @@ from app.services.external_article_search_service import search_article_candidat
 from app.services.external_unlinked_articles_service import list_articles_without_catalog_barcode
 
 router = APIRouter()
+router.include_router(article_synonym_router)
 logger = logging.getLogger('rezzerv.api')
 
 VERSION_FILE_PATH = Path(__file__).resolve().parents[2] / 'VERSION.txt'

@@ -14,6 +14,7 @@ const LEGACY_TILES = [
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙', clickable: true },
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️', clickable: true },
   { key: 'externe-databases-2', label: 'Externe databases 2', icon: '🗄️', clickable: true },
+  { key: 'artikelsynoniemen', label: 'Artikelsynoniemen', icon: '🔗', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳', clickable: false },
   { key: 'recepten', label: 'Gerechten', icon: '🍳', clickable: false, feature: FEATURE_GERECHTEN },
@@ -35,7 +36,7 @@ function isVisible(tile, visibility) {
   if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'berichten') return visibility.canOpenMessages
   if (tile.key === 'meldingen') return true
-  if (tile.key === 'externe-databases' || tile.key === 'externe-databases-2') return visibility.canOpenExternalDatabases
+  if (tile.key === 'externe-databases' || tile.key === 'externe-databases-2' || tile.key === 'artikelsynoniemen') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
   return true
 }

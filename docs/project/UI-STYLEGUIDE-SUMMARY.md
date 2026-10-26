@@ -1203,3 +1203,14 @@ op naam overeenkomen wordt in dit paneel niet herhaald; eventuele aanvullende
 bronwaarschuwingen blijven zichtbaar. Tussen paneeltitel en toelichting en
 tussen toelichting en direct volgende tabel staat telkens één compacte
 regel tussenruimte; geen lege melding mag een extra rij toevoegen.
+
+### Artikelsynoniemen — PO, 26 oktober 2026
+
+De actiebutton **Artikelsynoniemen** is beschikbaar voor Superusers en
+Frontteamleden. Het scherm gebruikt AppShell, ScreenCard en de centrale DataTable
+met selectie, kolomfilters, sortering, resize en standaardpaginering. De bulkknop
+**Koppelen** staat bij de tabelacties onder de tabel en is inactief zonder selectie.
+Artikel- en synoniemcodes, beide verpakkingen en tekstovereenkomst blijven zichtbaar.
+Er is één korte toelichting over handmatig controleren en een link naar
+Externe databases 2 voor ontbrekende codes. De mobiele header/Terug en feedback
+komen uit de bestaande gedeelde componenten.
