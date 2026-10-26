@@ -97,7 +97,6 @@ export default function OffManualSearchPage() {
     <AppShell title="Zelf zoeken in OFF" showExit={false}>
       <ScreenCard fullWidth>
         <div className="rz-external-off-manual-header">
-          <h2>Zelf zoeken in OFF</h2>
           <Button type="button" variant="secondary" onClick={goBack}>Terug</Button>
         </div>
         {itemError ? <p role="alert">{itemError}</p> : null}
