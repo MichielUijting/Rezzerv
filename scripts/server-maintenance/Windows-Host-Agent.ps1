@@ -5,6 +5,8 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-z0-9][a-z0-9_-]+$')][string]$ComposeProject,
     [Parameter(Mandatory)][uri]$FrontendUrl,
     [Parameter(Mandatory)][uri]$ExternalUrl,
+    [string]$BackendContainerName = '',
+    [string]$PostgresContainerName = '',
     [string]$DataDirectory = (Join-Path $env:LOCALAPPDATA 'Inhuis/Serveronderhoud'),
     [switch]$Once,
     [switch]$InstallAtLogon
@@ -18,6 +20,14 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $EnvFile = (Resolve-Path -LiteralPath $EnvFile).Path
 if (-not (Test-Path (Join-Path $RepoRoot 'docker-compose.postgresql.yml'))) { throw 'Officiele repository ontbreekt.' }
 $ComposeArgs = @('compose','--project-name',$ComposeProject,'--env-file',$EnvFile,'-f',(Join-Path $RepoRoot 'docker-compose.yml'),'-f',(Join-Path $RepoRoot 'docker-compose.postgresql.yml'),'--profile','postgresql')
+if ([bool]$BackendContainerName -ne [bool]$PostgresContainerName) { throw 'Directe containerselectie vereist backend- EN PostgreSQL-containernaam.' }
+$DirectContainerSelection = [bool]$BackendContainerName
+if ($DirectContainerSelection) {
+    foreach ($containerName in @($BackendContainerName,$PostgresContainerName)) {
+        if ($containerName -cnotmatch '^[a-zA-Z0-9][a-zA-Z0-9_.-]{1,127}$') { throw 'Ongeldige expliciete containernaam.' }
+    }
+    if ($BackendContainerName -ceq $PostgresContainerName) { throw 'Backend en PostgreSQL moeten verschillende containers zijn.' }
+}
 
 function Invoke-DockerText([string[]]$Arguments, [string]$InputText = '') {
     $psi = [Diagnostics.ProcessStartInfo]::new('docker.exe')
@@ -56,9 +66,25 @@ function Copy-DockerBinary([string[]]$Arguments, [string]$Archive, [switch]$Rest
 }
 
 function Get-Container([string]$Service) {
-    $ids=@((Invoke-DockerText ($ComposeArgs+@('ps','-q',$Service))).Split("`n") | Where-Object { $_.Trim() })
+    if ($DirectContainerSelection) {
+        $name = if ($Service -ceq 'backend') { $BackendContainerName } elseif ($Service -ceq 'postgres') { $PostgresContainerName } else { throw 'Onbekende service.' }
+        $objects = @((Invoke-DockerText -Arguments @('inspect',$name)) | ConvertFrom-Json)
+        if ($objects.Count -ne 1) { throw 'Expliciete container niet uniek.' }
+        $data = $objects[0]
+        if ($data.Name -cne ('/'+$name) -or -not $data.State.Running) { throw 'Expliciete containeridentiteit of status wijkt af.' }
+        if ($Service -ceq 'backend') {
+            if ($data.Config.Labels.'com.docker.compose.project' -cne $ComposeProject -or
+                $data.Config.Labels.'com.docker.compose.service' -cne 'backend') { throw 'Backend hoort niet bij opgegeven Compose-project.' }
+        } else {
+            $mounts = @($data.Mounts | Where-Object { $_.Type -in @('volume','bind') -and $_.Destination -eq '/var/lib/postgresql/data' })
+            if ($mounts.Count -ne 1) { throw 'Expliciete PostgreSQL-container heeft geen unieke duurzame datamount.' }
+            if ($data.Config.Image -notmatch '^postgres(:|@)') { throw 'Expliciete databasecontainer gebruikt geen herkenbaar PostgreSQL-image.' }
+        }
+        return $data
+    }
+    $ids=@((Invoke-DockerText -Arguments ($ComposeArgs+@('ps','-q',$Service))).Split("`n") | Where-Object { $_.Trim() })
     if ($ids.Count -ne 1) { throw 'Exact een actieve container per dienst vereist.' }
-    $data=@((Invoke-DockerText @('inspect',$ids[0])) | ConvertFrom-Json)[0]
+    $data=@((Invoke-DockerText -Arguments @('inspect',$ids[0])) | ConvertFrom-Json)[0]
     if ($data.Config.Labels.'com.docker.compose.project' -ne $ComposeProject -or $data.Config.Labels.'com.docker.compose.service' -ne $Service -or -not $data.State.Running) { throw 'Containeridentiteit wijkt af.' }
     return $data
 }
@@ -68,12 +94,40 @@ function Get-Sha([string]$Value) {
 }
 
 function Assert-Fingerprint([string]$Container, [string]$User, [string]$Database, $Probe) {
-    $raw=Invoke-DockerText @('exec','-i',$Container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$User,'-d',$Database) $Probe.fingerprint_sql
+    $raw=Invoke-DockerText -Arguments @('exec','-i',$Container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$User,'-d',$Database) -InputText $Probe.fingerprint_sql
     $actual=@($raw.Split("`n") | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
     if ($actual.Count -ne $Probe.fingerprints.Count) { throw 'Herstelproef mist tabellen.' }
     for ($i=0;$i -lt $actual.Count;$i++) {
         if ($actual[$i].table -cne $Probe.fingerprints[$i].table -or $actual[$i].rows -ne $Probe.fingerprints[$i].rows -or $actual[$i].digest -cne $Probe.fingerprints[$i].digest) { throw 'Herstelproef/datafingerprint wijkt af.' }
     }
+}
+
+function Assert-DirectDatabaseBinding($Postgres, $Probe) {
+    # Only for the opt-in split-container path. Establish the physical DB identity
+    # before signing even availability evidence for this host/backend.
+    $users=@($Postgres.Config.Env | Where-Object { $_.StartsWith('POSTGRES_USER=') })
+    if ($users.Count -ne 1) { throw 'PostgreSQL bootstrap-identiteit ontbreekt.' }
+    $pgUser=$users[0].Substring('POSTGRES_USER='.Length)
+    $db=[string]$Probe.database_runtime.database
+    if (-not $db -or -not $Probe.database_runtime.database_oid -or -not $Probe.database_runtime.server_started_at) { throw 'Backend runtime database-identiteit is onvolledig.' }
+    $sql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
+    $identity=(Invoke-DockerText -Arguments @('exec',$Postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$sql)) | ConvertFrom-Json
+    $addresses=@($Postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($identity.database -cne $db -or $identity.oid -cne $Probe.database_runtime.database_oid -or
+        ([datetimeoffset]$identity.started) -ne ([datetimeoffset]$Probe.database_runtime.server_started_at) -or
+        -not (Test-InhuisDatabaseServerAddress -DatabaseAddress $Probe.database_runtime.server_address -ContainerAddresses $addresses)) {
+        throw 'Direct gekozen PostgreSQL-container is niet de fysieke database van de backend.'
+    }
+}
+
+if ($InstallAtLogon -and $DirectContainerSelection) {
+    # A scheduled task is a durable server mutation. Fail before creating the
+    # signing-key directory or modifying task settings if the selected pair is
+    # not the backend's actual physical database.
+    $preflightBackend = Get-Container 'backend'
+    $preflightPostgres = Get-Container 'postgres'
+    $preflightProbe = (Invoke-DockerText -Arguments @('exec',$preflightBackend.Id,'python','-m','app.maintenance.server_maintenance_host_probe')) | ConvertFrom-Json
+    Assert-DirectDatabaseBinding $preflightPostgres $preflightProbe
 }
 
 New-Item -ItemType Directory -Force -Path $DataDirectory | Out-Null
@@ -102,6 +156,9 @@ if ($InstallAtLogon) {
     # Explicit optional deployment step, never run by a local PO test or backend.
     $user=[Security.Principal.WindowsIdentity]::GetCurrent().Name
     $scheduledArguments="-NoProfile -File `"$PSCommandPath`" -EnvFile `"$EnvFile`" -ComposeProject $ComposeProject -FrontendUrl `"$FrontendUrl`" -ExternalUrl `"$ExternalUrl`" -DataDirectory `"$DataDirectory`""
+    if ($DirectContainerSelection) {
+        $scheduledArguments += " -BackendContainerName `"$BackendContainerName`" -PostgresContainerName `"$PostgresContainerName`""
+    }
     $action=New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument $scheduledArguments -WorkingDirectory $RepoRoot
     Register-ScheduledTask -TaskName ('Inhuis-Onderhoud-'+$ComposeProject) -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive) -Description 'Levert ondertekend onderhoudsbewijs; herstart Windows nooit.' | Out-Null
     return
@@ -113,7 +170,11 @@ do {
         $checkStage = 'container-identiteit'
         $backend=Get-Container 'backend'; $postgres=Get-Container 'postgres'
         $checkStage = 'onderhoudstoestand'
-        $probe=(Invoke-DockerText @('exec',$backend.Id,'python','-m','app.maintenance.server_maintenance_host_probe')) | ConvertFrom-Json
+        $probe=(Invoke-DockerText -Arguments @('exec',$backend.Id,'python','-m','app.maintenance.server_maintenance_host_probe')) | ConvertFrom-Json
+        if ($DirectContainerSelection) {
+            $checkStage = 'directe-databasekoppeling'
+            Assert-DirectDatabaseBinding $postgres $probe
+        }
         $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
         $available=[ordered]@{kind='availability';issued_at=[datetimeoffset]::UtcNow.ToString('o');host_id=$hostId;backend_container_id=$backend.Id;windows_boot=$boot}
         $availableBytes=[Text.Encoding]::UTF8.GetBytes(($available | ConvertTo-Json -Compress))
@@ -131,7 +192,7 @@ do {
         $db=[string]$probe.database_runtime.database
         $identitySql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
         $checkStage = 'database-identiteit'
-        $identity=(Invoke-DockerText @('exec',$postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql)) | ConvertFrom-Json
+        $identity=(Invoke-DockerText -Arguments @('exec',$postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql)) | ConvertFrom-Json
         $ips=@($postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $checkStage = 'database-netwerkidentiteit'
         $sameAddress=Test-InhuisDatabaseServerAddress -DatabaseAddress $probe.database_runtime.server_address -ContainerAddresses $ips
@@ -147,27 +208,27 @@ do {
         $checkStage = 'back-up-en-herstelproef'
         if (-not (Test-Path -LiteralPath $receipt)) {
             # Full custom archive is streamed as bytes, never through PowerShell text.
-            Copy-DockerBinary @('exec',$postgres.Id,'pg_dump','-U',$pgUser,'-d',$db,'--format=custom','--no-owner','--no-privileges') $archive
+            Copy-DockerBinary -Arguments @('exec',$postgres.Id,'pg_dump','-U',$pgUser,'-d',$db,'--format=custom','--no-owner','--no-privileges') -Archive $archive
             $testName='inhuis-restore-'+[guid]::NewGuid().ToString('N')
             $testId=''
             try {
                 # New isolated container only; no production mounts/network/ports.
-                $testId=Invoke-DockerText @('run','-d','--name',$testName,'--label',('inhuis.maintenance.restore='+$cycle),'--network','none','--tmpfs','/var/lib/postgresql/data','-e','POSTGRES_HOST_AUTH_METHOD=trust','-e','POSTGRES_USER=postgres',$postgres.Image,'-c','shared_buffers=32MB','-c','max_connections=10')
+                $testId=Invoke-DockerText -Arguments @('run','-d','--name',$testName,'--label',('inhuis.maintenance.restore='+$cycle),'--network','none','--tmpfs','/var/lib/postgresql/data','-e','POSTGRES_HOST_AUTH_METHOD=trust','-e','POSTGRES_USER=postgres',$postgres.Image,'-c','shared_buffers=32MB','-c','max_connections=10')
                 $ready=$false
                 for ($i=0;$i -lt 60;$i++) {
-                    try { [void](Invoke-DockerText @('exec',$testId,'pg_isready','-U','postgres')); $ready=$true; break } catch { Start-Sleep -Seconds 1 }
+                    try { [void](Invoke-DockerText -Arguments @('exec',$testId,'pg_isready','-U','postgres')); $ready=$true; break } catch { Start-Sleep -Seconds 1 }
                 }
                 if (-not $ready) { throw 'Geisoleerde herstelomgeving niet gereed.' }
-                Copy-DockerBinary @('exec','-i',$testId,'pg_restore','--exit-on-error','--clean','--if-exists','--no-owner','--no-privileges','-U','postgres','-d','postgres') $archive -Restore
+                Copy-DockerBinary -Arguments @('exec','-i',$testId,'pg_restore','--exit-on-error','--clean','--if-exists','--no-owner','--no-privileges','-U','postgres','-d','postgres') -Archive $archive -Restore
                 Assert-Fingerprint $testId 'postgres' 'postgres' $probe
                 Assert-Fingerprint $postgres.Id $pgUser $db $probe
                 $backup=[ordered]@{ cycle_id=$cycle; sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant(); restored_and_compared=$true; restored_at=[datetimeoffset]::UtcNow.ToString('o'); domain_fingerprint=$probe.domain_fingerprint }
                 [IO.File]::WriteAllText($receipt,($backup | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
             } finally {
                 if ($testId) {
-                    $testInspect=@((Invoke-DockerText @('inspect',$testId)) | ConvertFrom-Json)[0]
+                    $testInspect=@((Invoke-DockerText -Arguments @('inspect',$testId)) | ConvertFrom-Json)[0]
                     if ($testInspect.Id -cne $testId -or $testInspect.Config.Labels.'inhuis.maintenance.restore' -cne $cycle -or $testInspect.Name -cne ('/'+$testName)) { throw 'Herstelcontainer-identiteit onzeker; niets verwijderd.' }
-                    [void](Invoke-DockerText @('rm','-f',$testId))
+                    [void](Invoke-DockerText -Arguments @('rm','-f',$testId))
                 }
             }
         }
