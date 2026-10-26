@@ -356,3 +356,11 @@ gates verplicht. Na een succesvolle exact-head 9.1.9-acceptatie en merge geldt:
 - `Roles v2 9.1 acceptance closure validation` als umbrella executable gate;
 - de v1.1 matrix/protocollen uitsluitend als historische household
   compatibility-subgate.
+
+### Artikelsynoniemen — aanvullend PO-besluit 26 oktober 2026
+
+Superusers en ieder actief Frontteamlid mogen mogelijke centrale artikelsynoniemen
+bekijken en geselecteerde paren met **Koppelen** bevestigen. Dit gebruikt de bestaande
+externe-productpermissions en verleent Frontteam geen onbeperkt Catalogusbeheer.
+De centrale productidentiteiten en huishoudisolatie blijven behouden.
+Zie `docs/project/ARTICLE-SYNONYMS.md`.
