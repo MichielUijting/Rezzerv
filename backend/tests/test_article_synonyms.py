@@ -1,15 +1,18 @@
 """Synthetic matching, authorization, atomic persistence and migration contracts."""
 import importlib.util
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 from app.api import article_synonym_routes as routes
 from app.services import article_synonym_service as service
@@ -23,8 +26,8 @@ def product(pid, name, gtin='', brick='milk', retailer_code='ah', **extra):
                 retailer_code=retailer_code, store_name=service._store_name(retailer_code), image_url='', **extra)
 
 
-def migration_module():
-    spec = importlib.util.spec_from_file_location('article_synonym_migration', ROOT/'alembic/versions/20261026_01_article_synonyms.py')
+def migration_module(name):
+    spec = importlib.util.spec_from_file_location('article_synonym_migration', ROOT/f'alembic/versions/{name}.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -72,15 +75,35 @@ class MatchingTest(unittest.TestCase):
 
 
 class StoreTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        url = os.getenv('INHUIS_ARTICLE_SYNONYMS_TEST_DATABASE_URL', '')
+        if not url:
+            raise unittest.SkipTest('Expliciete, geïsoleerde PostgreSQL-testdatabase vereist')
+        parsed = make_url(url)
+        if parsed.get_backend_name() != 'postgresql' or not (parsed.database or '').endswith('_article_synonyms_test'):
+            raise RuntimeError('Weiger verbinding met niet-geïsoleerde artikel-synoniemen database')
+        cls.base_engine = create_engine(url)
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, 'base_engine'):
+            cls.base_engine.dispose()
+
     def setUp(self):
-        self.engine = create_engine('sqlite://')
+        self.schema = 'article_synonyms_test_' + uuid4().hex
+        with self.base_engine.begin() as conn:
+            conn.exec_driver_sql(f'CREATE SCHEMA "{self.schema}"')
+        self.engine = create_engine(self.base_engine.url, connect_args={'options': f'-csearch_path={self.schema}'})
         with self.engine.begin() as conn:
-            conn.exec_driver_sql('PRAGMA foreign_keys=ON')
             conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT, image_url TEXT, source TEXT)')
             conn.exec_driver_sql('CREATE TABLE global_product_gpc_bricks(global_product_id TEXT PRIMARY KEY, brick_code TEXT)')
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
-            module = migration_module()
+            # Install the real PostgreSQL maintenance gate before the new catalog table.
+            maintenance = migration_module('20261021_01_server_maintenance')
+            module = migration_module('20261026_01_article_synonyms')
             with Operations.context(MigrationContext.configure(conn)):
+                maintenance.upgrade()
                 module.upgrade()
             for pid, gtin in [('a','8719587325926'), ('b','8718452513666'), ('c','')]:
                 conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source) VALUES (:id,'Halfvolle melk','','',:gtin,1,'l','active','', 'catalog')"), dict(id=pid, gtin=gtin))
@@ -88,6 +111,8 @@ class StoreTest(unittest.TestCase):
 
     def tearDown(self):
         self.engine.dispose()
+        with self.base_engine.begin() as conn:
+            conn.exec_driver_sql(f'DROP SCHEMA "{self.schema}" CASCADE')
 
     def selection(self, conn):
         p = service.suggest_pairs(service.load_products(conn))[0]
@@ -155,7 +180,7 @@ class StoreTest(unittest.TestCase):
     def test_downgrade_only_removes_synonym_table(self):
         with self.engine.begin() as conn:
             with Operations.context(MigrationContext.configure(conn)):
-                migration_module().downgrade()
+                migration_module('20261026_01_article_synonyms').downgrade()
             self.assertEqual(conn.execute(text('SELECT COUNT(*) FROM global_products')).scalar_one(), 3)
 
 
