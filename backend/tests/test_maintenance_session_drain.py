@@ -66,6 +66,17 @@ def test_warning_grace_period_is_enforced_without_writes():
     assert conn.execute.call_count == 2
 
 
+def test_missing_maintenance_announcement_never_revokes_sessions():
+    conn = connection()
+    conn.execute.side_effect = [
+        RowResult(mapping={"state": "announced", "generation": 2}),
+        RowResult(scalar=None),
+    ]
+    with pytest.raises(MaintenanceTransitionError, match="geen geldige onderhoudsaankondiging"):
+        execute(conn)
+    assert conn.execute.call_count == 2
+
+
 @pytest.mark.parametrize("state", ["announced", "draining"])
 def test_only_other_sessions_are_revoked_and_audit_is_recorded(state):
     conn = connection(state=state)
