@@ -54,3 +54,25 @@ def test_host_docker_argument_arrays_use_explicit_named_binding():
     assert not re.search(r"Copy-DockerBinary\s+@\(", source)
     assert "Invoke-DockerText -Arguments @('inspect',$name)" in source
     assert "Copy-DockerBinary -Arguments @('exec'" in source
+
+
+def test_users_frontend_port_is_physically_bound_to_exact_compose_frontend():
+    source = AGENT.read_text(encoding="utf-8")
+    assert "function Assert-FrontendBinding()" in source
+    assert "('publish='+$FrontendUrl.Port)" in source
+    assert "'com.docker.compose.project' -cne $ComposeProject" in source
+    assert "'com.docker.compose.service' -cne 'frontend'" in source
+    assert "NetworkSettings.Ports.'80/tcp'" in source
+    assert "Assert-FrontendBinding -CheckRoutes" in source
+    assert source.index("$checkStage = 'gebruikerspoort-identiteit'") < source.index("$available=[ordered]")
+
+
+def test_install_never_replaces_a_stale_or_duplicate_windows_agent_task():
+    source = AGENT.read_text(encoding="utf-8")
+    start = source.index("if ($InstallAtLogon) {")
+    registration = source.index("Register-ScheduledTask")
+    preflight = source[start:registration]
+    assert "Assert-FrontendBinding -CheckRoutes" in preflight
+    assert "Get-ScheduledTask -TaskName 'Inhuis-Onderhoud-*'" in preflight
+    assert "Andere Inhuis-onderhoudstaak bestaat nog" in preflight
+    assert "Onderhoudstaak bestaat al" in preflight
