@@ -64,6 +64,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           context_type: 'system', role: 'owner', is_platform_superuser: true,
           permissions: { 'platform.system_household.access': true },
         } })
+        if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
         if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
@@ -112,7 +113,11 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
-      await expect(page.getByRole('heading', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+      if (width <= 720) {
+        await expect(page.getByTestId('mobile-global-header').getByRole('heading', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+      } else {
+        await expect(page.getByTestId('app-header')).toContainText('Zelf zoeken in OFF')
+      }
       await expect(page.getByRole('textbox')).toHaveCount(1)
       const freeSearch = page.getByRole('textbox', { name: 'Zoektekst in OFF' })
       await freeSearch.fill('halfvolle melk bio')
