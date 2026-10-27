@@ -20,7 +20,7 @@ import {
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
-import { jumboDateWindow, importJumboBatch } from './jumboReceiptBatch.js'
+import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
@@ -80,6 +80,7 @@ export default function StoreConnectionsPage() {
     const phaseLabels = {
       waiting: 'Verbinding maken', fetching: 'Bonnen ophalen',
       validating: 'Controleren', importing: 'Verwerken',
+      queued: 'Veilig ontvangen',
       completed: 'Afgerond', failed: 'Controle nodig',
     }
     return deriveReceiptConnectionOverview(rows, ahConnection, latestImportDates).map(row => ({
@@ -381,7 +382,7 @@ export default function StoreConnectionsPage() {
   }, [showFeedback])
 
   useEffect(() => {
-    let lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
+    let lidlCounts = { queued: 0, failed: 0 }
     let cancelled = false
     let lidlSourceWindow = null
 
@@ -392,7 +393,7 @@ export default function StoreConnectionsPage() {
 
       if (data.type === 'inhuis:lidl-handshake') {
         setActiveProvider('lidl')
-        lidlCounts = { new: 0, known: 0, refreshed: 0, failed: 0 }
+        lidlCounts = { queued: 0, failed: 0 }
         setLidlCountsView(null)
         setLidlPhase('waiting')
         if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
@@ -455,19 +456,18 @@ export default function StoreConnectionsPage() {
         }
 
         try {
-          const result = await fetchJson('/api/receipts/retailers/import', {
+          const result = await fetchJson('/api/receipts/retailers/import-queue', {
             method: 'POST',
-            body: JSON.stringify({
+            body: JSON.stringify([{
               schema_version: '1.0',
               provider: 'lidl',
               external_receipt_id: receiptId,
               receipt,
-            }),
+            }]),
           })
-          if (result?.refreshed_existing_receipt) lidlCounts.refreshed += 1
-          else if (result?.duplicate === true) lidlCounts.known += 1
-          else if (result?.duplicate === false && result?.raw_receipt_id) lidlCounts.new += 1
-          else {
+          if (result?.received !== 1 || result?.import_completed !== false ||
+              result?.items?.length !== 1 || !result.items[0]?.queue_id ||
+              !['pending', 'processing', 'completed', 'review_required'].includes(result.items[0]?.status)) {
             // Unknown acknowledgement is not proof of a new receipt.
             lidlCounts.failed += 1
             setLidlCountsView({ ...lidlCounts })
@@ -481,9 +481,10 @@ export default function StoreConnectionsPage() {
             }, LIDL_WEB_ORIGIN)
             return
           }
+          lidlCounts.queued += 1
           setLidlCountsView({ ...lidlCounts })
-          setLidlWebProgress('Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
-            + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.')
+          setLidlWebProgress('Lidl: ' + lidlCounts.queued
+            + ' bonnen veilig ontvangen; verwerking in Kassa volgt automatisch.')
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
@@ -509,7 +510,9 @@ export default function StoreConnectionsPage() {
       }
 
       if (data.type === 'inhuis:lidl-complete') {
-        if (data.mode === 'history' && lidlCounts.failed === 0) {
+        // The old import-window checkpoint means *processed*, not merely queued.
+        // Do not advance it until the worker has confirmed completion.
+        if (data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
           try {
             const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
               method: 'POST',
@@ -526,7 +529,7 @@ export default function StoreConnectionsPage() {
               message: normalizeErrorMessage(err?.message) || 'De volgende synchronisatie leest deze periode opnieuw.' })
           }
         }
-        if (lidlCounts.failed === 0) {
+        if (lidlCounts.failed === 0 && lidlCounts.queued === 0) {
           try {
             await refreshLatestImportDates({ resetPeriods: true })
           } catch {
@@ -534,19 +537,18 @@ export default function StoreConnectionsPage() {
           }
         }
         setLidlCountsView({ ...lidlCounts })
-        setLidlPhase(lidlCounts.failed ? 'failed' : 'completed')
-        const summary = 'Lidl: ' + lidlCounts.new + ' nieuw, ' + lidlCounts.known
-          + ' al bekend, ' + lidlCounts.refreshed + ' bijgewerkt, ' + lidlCounts.failed + ' mislukt.'
+        setLidlPhase(lidlCounts.failed ? 'failed' : lidlCounts.queued ? 'queued' : 'completed')
+        const summary = 'Lidl: ' + lidlCounts.queued
+          + ' bonnen veilig ontvangen, ' + lidlCounts.failed
+          + ' mislukt. Inhuis verwerkt ontvangen bonnen automatisch zodra onderhoud dit toestaat.'
         setLidlWebProgress(summary)
         if (!lidlImportPageMountedRef.current) return
         showFeedback({
           key: 'lidl-receipt-import',
           variant: lidlCounts.failed ? 'warning' : 'success',
-          title: lidlCounts.failed ? 'Lidl-synchronisatie deels gelukt' : 'Lidl-synchronisatie afgerond',
+          title: lidlCounts.failed ? 'Lidl-synchronisatie deels gelukt' : 'Lidl-bonnen ontvangen',
           message: summary,
-          detail: lidlCounts.new
-            ? 'Alleen nieuwe bonnen zijn toegevoegd aan Kassa. Al bekende bonnen zijn niet dubbel toegevoegd.'
-            : 'Er zijn geen nieuwe bonnen toegevoegd. Bekende bonnen blijven in hun bestaande verwerkingsfase.',
+          detail: 'Veilig ontvangen betekent nog niet dat de bonnen in Kassa zijn verwerkt. De datum Laatst bijgewerkt wordt niet voortijdig doorgeschoven.',
         })
         return
       }
@@ -633,30 +635,22 @@ export default function StoreConnectionsPage() {
     setJumboProgress(null)
     try {
       // Never use the URL fragment as an implicit instruction to write data.
-      const counts = await importJumboBatch(
+      const queued = await stageJumboBatch(
         jumboImportCandidate,
-        async (envelope) => fetchJson('/api/receipts/retailers/import', {
+        async (envelopes) => fetchJson('/api/receipts/retailers/import-queue', {
           method: 'POST',
-          body: JSON.stringify(envelope),
+          body: JSON.stringify(envelopes),
         }),
         buildJumboImportEnvelope,
-        (progress) => {
-          setJumboProgress(progress)
-          setJumboPhase(progress.phase)
-        },
       )
-      const message = 'Jumbo: ' + counts.new + ' nieuw, ' + counts.known
-        + ' al bekend, ' + counts.refreshed + ' bijgewerkt, ' + counts.failed + ' mislukt.'
-      setJumboPhase('completed')
+      const message = 'Jumbo: ' + queued.length + ' bonnen veilig ontvangen. Inhuis verwerkt ze '
+        + 'automatisch zodra onderhoud dat toestaat. Dit is nog geen bevestiging van verwerking in Kassa.'
+      setJumboProgress(null)
+      setJumboPhase('queued')
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       setJumboPocResult(null)
-      try {
-        await refreshLatestImportDates({ resetPeriods: true })
-      } catch {
-        // A display refresh must not turn a confirmed Kassa import into a failure.
-      }
-      showFeedback({ variant: 'success', title: 'Jumbo kassabon', message })
+      showFeedback({ variant: 'success', title: 'Jumbo-bonnen ontvangen', message })
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De Jumbo-bon kon niet veilig worden geïmporteerd.'
       const progress = err?.jumboProcessed != null

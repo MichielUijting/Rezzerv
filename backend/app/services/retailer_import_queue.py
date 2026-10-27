@@ -1,7 +1,8 @@
 """Atomic encrypted staging of retailer receipts already confirmed by a user.
 
-This module intentionally does not start processing. A separate maintenance-
-aware worker must exist and be verified before the staging API is exposed.
+The worker is the only consumer; no staged receipt is considered imported until
+the canonical ingestion result has been recorded and its maintenance operation
+closed in the same transaction.
 """
 from __future__ import annotations
 
@@ -15,7 +16,9 @@ from app.integrations.retailer_receipts import RetailerReceiptEnvelope
 from app.services.jumbo_receipt_validation import validate_jumbo_receipt_for_import
 from app.services.retailer_account_secure_store import _fernet
 
-MAX_STAGED_RECEIPT_BYTES = 2 * 1024 * 1024
+# Existing canonical receipt importer accepts an 8 MiB source-preview image;
+# allow the base64 overhead without introducing a silent regression.
+MAX_STAGED_RECEIPT_BYTES = 12 * 1024 * 1024
 MAX_STAGED_JUMBO_BATCH = 10
 
 

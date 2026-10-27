@@ -1,9 +1,10 @@
 # Winkelkoppelingen: duurzame import en onderhoudshervatting
 
-Status: uitvoeringscontract. De eerste niet-bereikbare bouwstenen
-(`retailer_import_queue`-migratie en versleutelde atomische opslagservice) zijn
-in PR #614 in Draft opgenomen. **Nog geen endpoint of worker: er worden dus
-nog geen echte winkelbonnen via deze queue ontvangen of hervat.**
+Status: uitvoeringscontract. De migratie, versleutelde opslagservice,
+onderhoudsbewuste worker, de Jumbo-batchoverdracht, de Lidl-bonoverdracht en
+huishoudgebonden API zijn in **Draft PR #614** opgenomen, maar nog niet via de
+verplichte geïsoleerde PostgreSQL-, crash- en Windows-herstartproeven gevalideerd.
+**Niet productierijp en nog niet gedeployed.**
 Risico-indicatie: `TEST_LEVEL_PROVISIONAL: L`.
 
 ## Gebruikersbelofte en grens

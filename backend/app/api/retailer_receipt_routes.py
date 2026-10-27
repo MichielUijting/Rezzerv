@@ -36,6 +36,7 @@ from app.services.picnic_account_secure_store import (
 )
 
 from app.services.retailer_receipt_import_service import import_retailer_receipt
+from app.services.retailer_import_queue import stage_confirmed_receipts
 from app.services.retailer_receipt_import_dates import latest_retailer_import_dates
 from app.services.lidl_import_window_service import get_window, save_window, complete_import
 from app.api.household_profile_routes import _context_and_membership
@@ -156,6 +157,52 @@ def import_structured_retailer_receipt(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/import-queue")
+def stage_structured_retailer_receipts(
+    payload: list[RetailerReceiptEnvelope],
+    authorization: Optional[str] = Header(None),
+):
+    """Durably accept confirmed receipts; does NOT claim Kassa completion."""
+    household_id = _authorized_household_id(authorization)
+    try:
+        rows = stage_confirmed_receipts(
+            engine, household_id=household_id, envelopes=payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"received": len(rows), "items": rows, "import_completed": False}
+
+
+@router.get("/import-queue/status")
+def get_structured_retailer_receipt_queue_status(
+    ids: str = Query(min_length=36, max_length=400),
+    authorization: Optional[str] = Header(None),
+):
+    """Read only the caller's household queue entries; never reveal payloads."""
+    from uuid import UUID
+    from sqlalchemy import text
+
+    household_id = _authorized_household_id(authorization)
+    candidates = ids.split(",")
+    if not 1 <= len(candidates) <= 10:
+        raise HTTPException(status_code=422, detail="Ongeldige bonnenbatch")
+    try:
+        normalized = [str(UUID(value)) for value in candidates]
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail="Ongeldige bonidentiteit") from exc
+    if len(set(normalized)) != len(normalized):
+        raise HTTPException(status_code=422, detail="Dubbele bonidentiteit")
+    with engine.connect() as conn:
+        # Dynamic input *values* are bound, never interpolated into SQL.
+        placeholders = ",".join(f":q{i}" for i in range(len(normalized)))
+        result = conn.execute(text(f"""
+            SELECT id,provider,status,raw_receipt_id,last_error_code
+            FROM retailer_import_queue
+            WHERE household_id=:household_id AND id IN ({placeholders})
+        """), {"household_id": household_id, **{f"q{i}": value for i, value in enumerate(normalized)}}).mappings().all()
+    return {"items": [dict(row) for row in result]}
 
 
 @router.get("/ah/connect")

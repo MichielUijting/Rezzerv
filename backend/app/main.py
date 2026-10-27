@@ -11176,9 +11176,11 @@ def backfill_receipt_unpack_statuses(conn, household_id: Optional[str] = None, l
 
 
 from app.services.ah_receipt_background_sync import register_ah_background_sync
+from app.services.retailer_import_queue_worker import register_retailer_import_queue
 
 app.add_event_handler("startup", log_runtime_datastore_configuration_event)
 register_ah_background_sync(app, engine, RECEIPT_STORAGE_ROOT)
+register_retailer_import_queue(app, engine, RECEIPT_STORAGE_ROOT)
 
 
 @app.post("/api/admin/backfill-purchase-import-live-aliases")

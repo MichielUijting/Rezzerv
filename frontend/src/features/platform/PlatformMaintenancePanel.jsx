@@ -64,6 +64,12 @@ export default function PlatformMaintenancePanel() {
           : 'Winkelimports mogen automatisch starten.'}
         {' '}Een open registratie kan ook van een onderbroken oude import zijn; dit is geen telling van actieve gebruikerssessies.
       </p>}
+      {status.retailer_import_queue && <p data-testid="retailer-import-queue-status">
+        Veilig bewaarde winkelbonnen: {status.retailer_import_queue.pending} wachten op verwerking,
+        {' '}{status.retailer_import_queue.processing} worden verwerkt,
+        {' '}{status.retailer_import_queue.review_required} vragen controle.
+        {' '}Wachtende bonnen blokkeren het stilleggen niet; hun verwerking hervat na vrijgave.
+      </p>}
       {status.announcement && <p>{status.announcement}</p>}
       {sessionCloseResult !== null && <p role="status">{sessionCloseResult} andere inlogsessie(s) beëindigd. Lopende verwerkingen zijn niet afgebroken.</p>}
       {status.state === 'normal' && <>

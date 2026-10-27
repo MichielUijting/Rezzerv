@@ -27,6 +27,7 @@ def upgrade() -> None:
         sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("last_error_code", sa.String(60), nullable=True),
         sa.Column("raw_receipt_id", sa.Text(), nullable=True),
+        sa.Column("maintenance_operation_id", sa.String(36), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
                   server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,

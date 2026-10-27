@@ -110,6 +110,7 @@ def state(conn):
         FROM maintenance_operations
         WHERE finished_at IS NULL AND (
             kind = 'call:_admitted_ah_sync'
+            OR kind = 'worker:retailer_import_queue'
             OR kind LIKE 'http:POST /api/receipts/retailers/import%'
             OR kind LIKE 'http:POST /api/receipts/retailers/ah/sync%'
         )
@@ -122,6 +123,20 @@ def state(conn):
         'ah_background': sum(int(row[1]) for row in import_rows if row[0] == 'call:_admitted_ah_sync'),
         'other_retailer': sum(int(row[1]) for row in import_rows if row[0] != 'call:_admitted_ah_sync'),
         'new_imports_paused': row['state'] not in {'normal', 'announced'},
+    }
+    queue_rows = conn.execute(text("""
+        SELECT status,COUNT(*) AS count
+        FROM retailer_import_queue
+        WHERE status IN ('pending','processing','review_required')
+        GROUP BY status
+    """)).all()
+    counts = {status: int(count) for status, count in queue_rows}
+    # Pending is safely parked, not a running session or maintenance operation.
+    # Processing/review_required may require separately audited reconciliation.
+    result['retailer_import_queue'] = {
+        'pending': counts.get('pending', 0),
+        'processing': counts.get('processing', 0),
+        'review_required': counts.get('review_required', 0),
     }
     result.update(active_operations=outstanding_operations(conn), restart_allowed=False)
     if row['state'] == 'locked' and not result['active_operations'] and not result['restart_detected']:
