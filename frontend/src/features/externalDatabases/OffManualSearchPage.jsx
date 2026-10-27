@@ -134,10 +134,15 @@ export default function OffManualSearchPage() {
         }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok || payload.linked !== true) {
+      if (!response.ok || (payload.linked !== true && payload.cataloged !== true)) {
         throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppeling kon niet worden bevestigd.')
       }
-      outcome = { status: 'success', message: 'Artikel gekoppeld aan de Catalogus.' }
+      outcome = {
+        status: 'success',
+        message: payload.classification_pending === true
+          ? 'Artikel opgeslagen in Catalogus. GS1-classificatie ontbreekt nog.'
+          : 'Artikel gekoppeld aan de Catalogus.',
+      }
     } catch (err) {
       // Session expiration is handled by fetchJsonWithAuth, which redirects to login.
       if (err.status !== 401) {

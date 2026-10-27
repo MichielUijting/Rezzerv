@@ -101,7 +101,7 @@ def test_existing_classified_catalog_article_uses_canonical_link():
     create.assert_not_called()
 
 
-def test_missing_gpc_is_rejected_without_catalog_mutation():
+def test_missing_gpc_is_staged_in_catalog_without_pretending_to_confirm():
     db = _mock_db()
     with (
         patch.object(linker, "verify_manual_off_proof", return_value=product()),
@@ -111,20 +111,60 @@ def test_missing_gpc_is_rejected_without_catalog_mutation():
         }),
         patch.object(linker, "assert_external_product_identity_compatible"),
         patch.object(linker, "link_off_product_with_product_type") as write,
+        patch.object(linker, "stage_off_product_until_official_gpc", return_value={
+            "ok": True, "cataloged": True, "linked": False,
+            "classification_pending": True, "global_product_id": "new-pending",
+        }) as stage,
     ):
         begin.return_value.__enter__.return_value = db
-        with pytest.raises(ValueError, match="GS1 GPC"):
-            linker.confirm_selected_off_catalog_product({"receipt_item_id": RECEIPT, "gtin": GTIN})
+        result = linker.confirm_selected_off_catalog_product({"receipt_item_id": RECEIPT, "gtin": GTIN})
         write.assert_not_called()
+        stage.assert_called_once()
+    assert result['cataloged'] is True and result['classification_pending'] is True
+    assert result['linked'] is False
+
+
+def test_unclassified_off_article_is_upserted_and_staged_atomically_without_stock_mutation():
+    from app.services import off_product_link_service as off_link
+    db = _mock_db()
+    with (
+        patch.object(off_link.engine, "begin") as begin,
+        patch.object(off_link, "resolve_external_article_identity", return_value={
+            "retailer_code": "lidl", "receipt_text": "Achterham BL", "external_article_code": "6604471",
+        }),
+        patch.object(off_link, "assert_external_product_identity_compatible") as identity,
+        patch.object(off_link, "_upsert_global_product", return_value=("catalog-pending", GTIN, None, None)) as upsert,
+        patch.object(off_link, "_complete_global_product_link_data", return_value={"complete": False}),
+        patch.object(off_link, "stage_external_article_product_link_without_gpc", return_value={
+            "status": "classification_pending", "global_product_id": "catalog-pending",
+        }) as stage,
+        patch.object(off_link, "confirm_external_article_for_receipt_item") as confirmed,
+    ):
+        begin.return_value.__enter__.return_value = db
+        result = off_link.stage_off_product_until_official_gpc(
+            receipt_item_id=RECEIPT,
+            off_product={"gtin": GTIN, "product_name": "Achterham", "brand": "Zwagerman"},
+        )
+    identity.assert_called_once()
+    upsert.assert_called_once()
+    stage.assert_called_once_with(db, retailer_code="lidl", receipt_text="Achterham BL",
+                                  external_article_code="6604471", global_product_id="catalog-pending")
+    confirmed.assert_not_called()
+    assert result == {
+        "ok": True, "linked": False, "cataloged": True, "classification_pending": True,
+        "global_product_id": "catalog-pending", "gtin": GTIN,
+        "creates_inventory_event": False, "mutates_inventory": False,
+    }
 
 
 def test_verified_off_product_and_gpc_are_sent_to_existing_atomic_domain_service():
     db = _mock_db()
+    ham = {**product("10005781"), "product_name": "Achterham", "brand": "Zwagerman (Lidl)"}
     with (
-        patch.object(linker, "verify_manual_off_proof", return_value=product("10000001")),
+        patch.object(linker, "verify_manual_off_proof", return_value=ham),
         patch.object(linker.engine, "begin") as begin,
         patch.object(linker, "resolve_external_article_identity", return_value={
-            "retailer_code": "jumbo", "receipt_text": "Halfvolle melk"
+            "retailer_code": "lidl", "receipt_text": "Achterham"
         }),
         patch.object(linker, "assert_external_product_identity_compatible"),
         patch.object(linker, "link_off_product_with_product_type", return_value={
@@ -137,8 +177,8 @@ def test_verified_off_product_and_gpc_are_sent_to_existing_atomic_domain_service
             "product_name": "VERVALSTE NAAM", "product_type_assignment": {"product_type_id": "fake"},
         })
     assert result["linked"] and result["global_product_id"] == "new-catalog"
-    assert write.call_args.kwargs["off_product"]["product_name"] == "Halfvolle melk"
-    assert write.call_args.kwargs["product_type_assignment"]["product_type_id"] == "gpc:10000001"
+    assert write.call_args.kwargs["off_product"]["product_name"] == "Achterham"
+    assert write.call_args.kwargs["product_type_assignment"]["product_type_id"] == "gpc:10005781"
 
 
 def test_manual_proof_is_signed_bounded_and_has_no_second_OFF_call():

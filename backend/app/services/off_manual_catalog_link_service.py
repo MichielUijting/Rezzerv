@@ -23,7 +23,10 @@ from app.services.external_product_identity_policy import (
     assert_external_product_identity_compatible,
 )
 from app.services.gtin_validation_service import is_valid_gtin
-from app.services.off_product_link_service import link_off_product_with_product_type
+from app.services.off_product_link_service import (
+    link_off_product_with_product_type,
+    stage_off_product_until_official_gpc,
+)
 from app.services.off_manual_search_proof import verify_manual_off_proof
 from app.services.automatic_product_type_service import official_bricks
 from app.services.product_taxonomy_store import normalize_taxonomy_text, _seed_payload
@@ -109,12 +112,14 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
     # Een nieuw Catalogusproduct mag uitsluitend met een échte officiële GS1
     # GPC-brick worden aangemaakt. Nooit een klasse raden op basis van bonnaam.
     brick = str(product.get("explicit_gpc_brick_code") or "").strip()
-    if not re.fullmatch(r"[0-9]{8}", brick):
+    if not re.fullmatch(r"[0-9]{8}", brick) or brick not in official_bricks():
         brick = _verified_official_gpc_for_exact_name(product)
     if not re.fullmatch(r"[0-9]{8}", brick):
-        raise ValueError(
-            "Dit OFF-artikel heeft geen officiële GS1 GPC-classificatie. "
-            "Koppelen is daarom nog niet mogelijk; er is niets opgeslagen."
+        # Formal PO decision: verified GTIN may enter Catalogus before GPC.
+        # A staged link is excluded from Kassa/Voorraad until an official Brick
+        # has been assigned; it does not claim a confirmed product-type match.
+        return stage_off_product_until_official_gpc(
+            receipt_item_id=receipt_item_id, off_product=product,
         )
     linked = link_off_product_with_product_type(
         receipt_item_id=receipt_item_id,

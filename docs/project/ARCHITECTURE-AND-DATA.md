@@ -56,6 +56,19 @@ Een centrale winkel-/bonartikelkoppeling kent twee expliciete identiteitsmodi:
 
 De generieke modus is geen fallback op een incompleet exact product. Alleen een bewuste generieke gebruikersactie mag een GTIN-loos product als geldige centrale bonartikelkoppeling bevestigen. Andere incomplete Catalogusproducten blijven fail-closed.
 
+Een afzonderlijke **stagingstatus** `classification_pending` is toegestaan voor
+een expliciet door de gebruiker gekozen OFF-product met een gecontroleerde
+GTIN, overeenkomende primaire GTIN-identiteit en compatibele artikel-/merknaam.
+Dit product is zichtbaar in Catalogus met *Classificatie ontbreekt*. De
+winkelartikelrelatie wordt duurzaam opgeslagen maar is geen volledige `exact`
+of `generic` koppeling. De centrale kassabon- en voorraadconsumenten krijgen
+haar uitsluitend terug wanneer een officiële actieve GS1 GPC Brick aanwezig
+is. Externe databases 2 kan de pendingstatus wél lezen om het al gecatalogiseerde
+artikel niet opnieuw als barcode-loos aan te bieden. Later classificeren maakt
+de relatie automatisch effectief; er wordt niets stilzwijgend geclassificeerd
+of in huishoudelijke voorraad geschreven. Het scheidingcontract tussen
+`global_product`, huishouden en voorraad blijft ongewijzigd.
+
 Een expliciete huismerkmarker in de bontekst is onderdeel van de **exacte** identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet een exact extern product een passende merkidentiteit aantonen. Een conflict wordt voor exacte koppelingen in automatische kandidaatselectie, write-route en read-projectie fail-closed behandeld. Handmatig zoeken mag conflicterende producten wel als niet-koppelbare zoekresultaten tonen. Een expliciet generieke koppeling valt niet onder deze exacte merkregel, omdat zij bewust geen merkidentiteit claimt.
 
 ## Migraties

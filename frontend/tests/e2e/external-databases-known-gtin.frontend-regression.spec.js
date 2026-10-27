@@ -10,6 +10,75 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
   for (const width of [390, 1280]) {
+    test(`OFF-product zonder GPC blijft zichtbaar in Catalogus en verdwijnt uit ongekoppeld op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const item = { id: 'receipt-table-line:achterham-test', receipt_line_text: 'Achterham BL',
+        retailer_code: 'lidl', receipt_article_number: '6604471', quantity_label: '1 stuk' }
+      let saved = false
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+          role: 'owner', is_platform_superuser: true,
+          permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: {
+          items: saved ? [] : [item], total: saved ? 0 : 1,
+        } })
+        if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+          provider: 'openfoodfacts', results: [{ gtin: '8718452504435',
+            product_name: 'Achterham', brand: 'Zwagerman', score: .9 }],
+        } })
+        if (path === '/api/external-products/off/search') return route.fulfill({ json: {
+          provider: 'openfoodfacts', mutated: false, results: [{
+            gtin: '8718452504435', product_name: 'Achterham', brand: 'Zwagerman',
+            score: .98, selection_proof: 'signed-achterham',
+          }],
+        } })
+        if (path === '/api/external-databases/off/link-selected') {
+          expect(request.postDataJSON()).toEqual({
+            receipt_item_id: item.id, gtin: '8718452504435', selection_proof: 'signed-achterham',
+          })
+          saved = true
+          return route.fulfill({ json: {
+            ok: true, linked: false, cataloged: true, classification_pending: true,
+            global_product_id: 'pending-achterham',
+          } })
+        }
+        if (path === '/api/catalog') return route.fulfill({ json: {
+          items: [{ id: 'pending-achterham', name: 'Achterham', brand: 'Zwagerman',
+            primary_gtin: '8718452504435', catalog_kind: 'exact', product_type: '',
+            gpc_brick_code: '', gpc_brick_name: '', gpc_class_name: '', gpc_family_name: '',
+          }], total: 1,
+        } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const table = page.getByTestId('external-databases-2-table')
+      const row = table.locator('tbody tr').filter({ hasText: 'Achterham BL' })
+      if (width <= 720) await row.click()
+      else await row.dblclick()
+      await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('Achterham')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      const candidate = page.getByTestId('external-off-free-search-results').locator('tbody tr').first()
+      if (width <= 720) await candidate.click()
+      else await candidate.dblclick()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
+      await expect(table).not.toContainText('Achterham BL')
+      await page.goto('/catalogus')
+      await expect(page.getByText('Achterham', { exact: true })).toBeVisible()
+      await expect(page.getByText('Classificatie ontbreekt')).toBeVisible()
+    })
+  }
+  for (const width of [390, 1280]) {
     test(`OFF-paneel gebruikt bestaande automatische zoekflow op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const searches = []

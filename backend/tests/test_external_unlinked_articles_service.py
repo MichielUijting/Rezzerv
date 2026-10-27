@@ -22,6 +22,7 @@ def article_sources(monkeypatch, names, receipts=()):
 
     conn = SimpleNamespace(execute=execute)
     monkeypatch.setattr(service, 'engine', SimpleNamespace(connect=lambda: nullcontext(conn)))
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link', lambda *a, **kw: None)
     return statements
 
 
@@ -81,6 +82,23 @@ def test_only_active_central_link_with_valid_barcode_is_excluded(monkeypatch):
     assert {item['receipt_line_text'] for item in result['items']} == {
         'Generiek', 'Alleen bronbarcode', 'Ongeldige barcode',
     }
+
+
+def test_verified_catalog_gtin_waiting_for_gpc_is_not_an_unlinked_barcode(monkeypatch):
+    article_sources(monkeypatch, [('Achterham BL', '6604471'), ('Onbekend', '42')])
+    monkeypatch.setattr(service, 'project_central_link_truth', lambda conn, row: row)
+    pending_calls = []
+
+    def pending(conn, **identity):
+        pending_calls.append(identity)
+        return {'status': 'classification_pending', 'global_product_id': 'catalog-1'} \
+            if identity['receipt_text'] == 'Achterham BL' else None
+
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link', pending)
+    result = service.list_articles_without_catalog_barcode()
+    assert [item['receipt_line_text'] for item in result['items']] == ['Onbekend']
+    assert pending_calls[0]['retailer_code'].lower() == 'lidl'
+    assert pending_calls[0]['external_article_code'] == '6604471'
 
 
 def test_new_overview_requires_existing_platform_read_permission():

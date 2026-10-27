@@ -18,7 +18,11 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
 bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
 actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
-Cataloguskoppeling zonder barcode blijft zichtbaar. Exact dezelfde getoonde
+Cataloguskoppeling zonder barcode blijft zichtbaar. Bronartikelidentiteiten
+die na handmatige OFF-bevestiging met een geldige GTIN al
+in Catalogus zijn opgeslagen maar nog op GS1-classificatie wachten, blijven
+eveneens buiten deze lijst. Zo'n wachtende identiteit is uitdrukkelijk **geen**
+voor Kassa/Voorraad bevestigde Cataloguskoppeling. Exact dezelfde getoonde
 artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschillende
 artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
 blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
@@ -89,7 +93,7 @@ uitsluitend **Weet u zeker dat u dit artikel wilt koppelen?** met knoppen
 **Annuleren** en **OK**; geen titel of extra uitleg in die bevestiging.
 Alleen bij OK controleert de server het bronartikel, de geldige GTIN,
 het maximaal tien minuten geldige cryptografisch ondertekende zoekbewijs,
-eventuele merkconflicten en de officiële GS1 GPC-classificatie. Dit bewijs
+eventuele merkconflicten en of er een officiële GS1 GPC-classificatie bestaat. Dit bewijs
 komt van het al door de backend gelezen OFF-zoekresultaat en is aan het
 bronartikel en de GTIN gebonden; het is geen door de browser vertrouwde
 productwaarde. Voor deze bevestiging volgt géén tweede externe OFF-aanvraag.
@@ -105,23 +109,28 @@ wordt nooit verward met een opgeslagen Catalogusartikel.
 Bij een verzoek-timeout toont InHuis **niet bevestigd**: een afgebroken
 clientverzoek bewijst niet dat de server geen koppeling heeft gemaakt.
 **Annuleren** sluit alleen de dialoog en blijft op Zelf zoeken in OFF.
-Daarna bevestigt de bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
-deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
-Catalogusartikel mag op dezelfde GTIN worden hergebruikt. Voor een nieuw OFF-artikel
-is een officiële GS1 GPC-classificatie verplicht. Naast een expliciete geldige
+Daarna slaat de centrale Catalogusdienst het gevalideerde product platformbreed
+op; deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
+Catalogusartikel mag op dezelfde GTIN worden hergebruikt. Voor een volledige
+Kassa-/Voorraadkoppeling is een officiële GS1 GPC-classificatie verplicht.
+Naast een expliciete geldige
 GS1-code mag alleen een exact in de producttaxonomie vastgelegd en met de
 actuele officiële Nederlandse GS1-referentie geverifieerd producttype worden
 gebruikt; voor **Achterham** is dit de officiële code **10005781**
 (voorbereid/verwerkt varkensvlees). Een onbekend, onjuist of dubbelzinnig
-product wordt niet automatisch geclassificeerd en blijft ongekoppeld.
+product wordt niet automatisch geclassificeerd: het product wordt met een
+GTIN en `classification_pending` opgeslagen, maar nog niet voor Kassa/Voorraad
+bevestigd.
 Na opslag van een bestaand Catalogusartikel wordt bovendien gecontroleerd
 of de bevestigde centrale koppeling daadwerkelijk naar precies dat artikel
 verwijst; anders rolt de database de transactie terug.
 De lijst zonder barcode en de centrale koppeling gebruiken dezelfde
 winkelketensleutel (`store_chain` vóór `store_name`) en dezelfde
-oorspronkelijke bonartikeltekst. Alleen een echt afgeronde koppeling mag
-daardoor verdwijnen uit Externe databases 2. Bij ontbrekende officiële
-GS1-classificatie stopt de actie zonder koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na
+oorspronkelijke bonartikeltekst. Alleen een bevestigd geclassificeerd artikel of
+een aantoonbaar opgeslagen GTIN-identiteit met `classification_pending` mag
+daardoor verdwijnen uit Externe databases 2. Een ontbrekende officiële
+GS1-classificatie geeft de melding *Classificatie ontbreekt*, zonder de
+Catalogusopslag te blokkeren. Annuleren wijzigt niets. Na
 **OK** keert de gebruiker na afloop terug naar Externe databases 2 met
 een waarheidsgetrouwe succes- of foutstatus; op mobiel blijft de gedeelde
 header-Terug beschikbaar.
@@ -150,6 +159,20 @@ Voor bonartikelen bestaan twee geldige centrale koppelvormen:
 
 - **Exact product:** wanneer een specifieke productidentiteit betrouwbaar bekend is, wordt gekoppeld aan een Catalogusproduct met geldige GTIN/EAN, bijpassende GTIN-identiteit en officiële GS1 GPC Brick. Een expliciete huismerkidentiteit in de bontekst (bijvoorbeeld `AH` bij Albert Heijn) blijft daarbij fail-closed: een extern exact product met conflicterend merk mag niet worden bevestigd.
 - **Generiek artikel:** wanneer de kassabon het soort artikel wel betrouwbaar bepaalt maar merk, variant of GTIN niet, mag de gebruiker bewust informatieverlies accepteren en koppelen aan een generiek centraal Catalogusartikel. Dit artikel heeft een generieke naam en een officiële GS1 GPC Brick als classificatie-authority, maar **geen verplichte GTIN/EAN, merk of variant**. Voorbeeld: `AH BOUILLON` kan centraal worden gekoppeld aan `Bouillon` met de gekozen officiële Brick, zonder te doen alsof bekend is of het kip-, rund- of een andere exacte bouillonvariant was.
+
+**PO-besluit 27 oktober 2026 — Catalogusopslag vóór GPC:** na expliciete
+gebruikersbevestiging mag een betrouwbaar via OFF geïdentificeerd exact product
+met een geldige GTIN én overeenkomende GTIN-identiteit reeds in de centrale
+Catalogus worden opgeslagen, ook als een officiële GS1 GPC Brick ontbreekt.
+De bronbonidentiteit en product/merkcompatibiliteit blijven verplicht. De
+bijbehorende winkelartikelrelatie krijgt dan `classification_pending`; de UI
+toont *Classificatie ontbreekt*. Dit is **niet** één van de twee volledige
+koppelvormen: Kassa, Uitpakken en Voorraad mogen deze relatie niet als bevestigd
+gebruiken zolang er geen officiële GPC Brick is. Het bronartikel verdwijnt wel
+uit Externe databases 2, dat uitsluitend naar ontbrekende barcode-opslag zoekt.
+Wanneer later een geldige officiële classificatie is vastgelegd, wordt de
+bestaande wachtende relatie zonder bon-/huishoud-/voorraadmutatie als volledige
+koppeling uitleesbaar. Zonder classificatie wordt nooit een Brick geraden.
 
 Productfoto's uit betrouwbare enrichment worden centraal op het Catalogusproduct opgeslagen en daarna geprojecteerd naar gekoppelde huishoudartikelen en Voorraad. Een bestaande niet-lege Catalogusfoto wordt niet automatisch door een externe bron overschreven. Bij runtime-start worden ontbrekende Catalogusfoto's terugwerkend aangevuld uit reeds opgeslagen succesvolle enrichment-data; aansluitend wordt de bestaande representatieve Voorraadfoto-backfill uitgevoerd. Producten waarvoor geen bron ooit een afbeelding heeft geleverd blijven zonder foto totdat een bron later wel een afbeelding levert of een bevoegde gebruiker handmatig een Catalogusfoto vastlegt.
 
