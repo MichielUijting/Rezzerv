@@ -42,6 +42,7 @@ jobs:
       - name: Verify safe AH worker scheduling, locks and maintenance admission
         env:
           PYTHONPATH: backend
+          DATABASE_URL: sqlite:///:memory:
         run: |
           python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
           python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
