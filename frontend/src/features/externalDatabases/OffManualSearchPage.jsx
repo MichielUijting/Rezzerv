@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useMobileAppViewport } from '../../app/mobileViewport'
 import './externalDatabases.css'
 
 const columns = [
@@ -14,13 +15,14 @@ const columns = [
   { key: 'gtin', label: 'Barcode', width: 180, sortable: true },
   { key: 'quantity', label: 'Inhoud', width: 155, sortable: true },
   { key: 'score', label: 'Overeenkomst', width: 145, align: 'right', sortable: true,
-    renderCell: (row) => `${Math.round((Number(row.score) || 0) * 100)}%` },
+    renderCell: (row) => row.score == null ? '-' : `${Math.round(row.score * 100)}%` },
 ]
 
 export default function OffManualSearchPage() {
   const { receiptItemId = '' } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
+  const isMobile = useMobileAppViewport()
   const [item, setItem] = useState(() => state?.item?.id === receiptItemId ? state.item : null)
   const [itemError, setItemError] = useState('')
   const [query, setQuery] = useState('')
@@ -30,6 +32,9 @@ export default function OffManualSearchPage() {
   const [searchedQuery, setSearchedQuery] = useState('')
   const [error, setError] = useState('')
   const searchController = useRef(null)
+  const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [linking, setLinking] = useState(false)
+  const [linkError, setLinkError] = useState('')
 
   useEffect(() => () => searchController.current?.abort(), [])
 
@@ -80,9 +85,15 @@ export default function OffManualSearchPage() {
       if (controller.signal.aborted) return
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Zoeken in OFF is niet gelukt.')
       if (payload.provider === 'unavailable') throw new Error('Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.')
-      setResults((Array.isArray(payload.results) ? payload.results : []).map((candidate, index) => ({
-        ...candidate, rank: index + 1,
-      })))
+      const ordered = (Array.isArray(payload.results) ? payload.results : [])
+        .map((candidate) => ({
+          ...candidate,
+          score: candidate.score == null || !Number.isFinite(Number(candidate.score))
+            ? null : Number(candidate.score),
+        }))
+        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+        .map((candidate, index) => ({ ...candidate, rank: index + 1 }))
+      setResults(ordered)
       setSearchedQuery(searchText)
       setSearched(true)
     } catch (err) {
@@ -93,12 +104,38 @@ export default function OffManualSearchPage() {
     }
   }
 
+  async function confirmLink() {
+    if (!selectedCandidate || linking) return
+    setLinking(true)
+    setLinkError('')
+    try {
+      const response = await fetchJsonWithAuth('/api/external-databases/off/link-selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_item_id: receiptItemId, gtin: selectedCandidate.gtin }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || payload.linked !== true) {
+        throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppeling kon niet worden opgeslagen.')
+      }
+      setSelectedCandidate(null)
+      goBack()
+    } catch (err) {
+      setLinkError(err.message || 'Koppeling kon niet worden opgeslagen.')
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  function selectCandidate(candidate) {
+    if (linking) return
+    setLinkError('')
+    setSelectedCandidate(candidate)
+  }
+
   return (
     <AppShell title="Zelf zoeken in OFF" showExit={false}>
       <ScreenCard fullWidth>
-        <div className="rz-external-off-manual-header">
-          <Button type="button" variant="secondary" onClick={goBack}>Terug</Button>
-        </div>
         {itemError ? <p role="alert">{itemError}</p> : null}
         {item ? <>
           <p>Artikel: {item.receipt_line_text}</p>
@@ -123,9 +160,47 @@ export default function OffManualSearchPage() {
               defaultSort={{ key: 'rank', direction: 'asc' }}
               emptyMessage="Geen kandidaten gevonden in Open Food Facts."
               dataTestId="external-off-free-search-results"
+              renderRow={(candidate) => <tr
+                key={candidate.gtin}
+                tabIndex={0}
+                className="rz-external-off-link-row"
+                onDoubleClick={() => selectCandidate(candidate)}
+                onClick={() => { if (isMobile) selectCandidate(candidate) }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    selectCandidate(candidate)
+                  }
+                }}
+              >{columns.map((column) => <td key={column.key}>
+                {typeof column.renderCell === 'function' ? column.renderCell(candidate) : String(candidate[column.key] ?? '')}
+              </td>)}</tr>}
             />
           </section> : null}
         </> : !itemError ? <p role="status">Artikel laden...</p> : null}
+        {selectedCandidate ? <div className="rz-modal-backdrop">
+          <div className="rz-modal-card" role="alertdialog" aria-modal="true"
+            aria-labelledby="off-link-confirm-title" aria-describedby="off-link-confirm-description">
+            <h3 className="rz-modal-title" id="off-link-confirm-title">Cataloguskoppeling bevestigen</h3>
+            <p className="rz-modal-text" id="off-link-confirm-description">
+              Wil je bonartikel <strong>{item?.receipt_line_text}</strong> van {item?.retailer || item?.retailer_code}
+              koppelen aan <strong>{selectedCandidate.product_name}</strong>
+              {selectedCandidate.brand ? ` — ${selectedCandidate.brand}` : ''}
+              {' '}({selectedCandidate.gtin})? Deze koppeling geldt in de centrale Catalogus voor alle huishoudens.
+            </p>
+            {selectedCandidate.identity_compatible === false ? <p role="alert">
+              {selectedCandidate.identity_conflict_message || 'Het productmerk conflicteert met het bonartikel.'}
+              {' '}Koppelen is niet toegestaan.
+            </p> : null}
+            {linkError ? <p role="alert">{linkError}</p> : null}
+            <div className="rz-modal-actions">
+              <Button type="button" variant="secondary" disabled={linking}
+                onClick={() => { setSelectedCandidate(null); setLinkError('') }}>Annuleren</Button>
+              <Button type="button" disabled={linking || selectedCandidate.identity_compatible === false}
+                onClick={confirmLink}>{linking ? 'Koppelen...' : 'OK'}</Button>
+            </div>
+          </div>
+        </div> : null}
       </ScreenCard>
     </AppShell>
   )

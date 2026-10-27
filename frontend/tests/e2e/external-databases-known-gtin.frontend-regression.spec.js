@@ -13,6 +13,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     test(`OFF-paneel gebruikt bestaande automatische zoekflow op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const searches = []
+      const links = []
       const unexpectedWrites = []
       let errorAttempts = 0
       let slowMilk = false
@@ -25,6 +26,12 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.route('**/api/**', async (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname
+        if (path === '/api/external-databases/off/link-selected') {
+          const body = request.postDataJSON()
+          links.push(body)
+          expect(body).toEqual({ receipt_item_id: rows[0].id, gtin: '8712345678900' })
+          return route.fulfill({ json: { ok: true, linked: true, global_product_id: 'catalog-existing' } })
+        }
         if (path === '/api/external-products/off/search') {
           const body = request.postDataJSON()
           expect(body).toEqual({ receipt_item_id: rows[0].id, mode: 'manual', query: 'halfvolle melk bio', limit: 20 })
@@ -129,9 +136,22 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await freePaging.getByRole('button', { name: '3', exact: true }).click()
       await expect(freeResults.locator('tbody tr')).toHaveCount(2)
       await expect(freeResults).toContainText('Vrij gezocht product 16')
-      if (width <= 720) await page.getByTestId('mobile-global-back').click()
-      else await page.getByRole('button', { name: 'Terug', exact: true }).click()
+      await expect(page.locator('.rz-external-off-manual-header')).toHaveCount(0)
+      const selectRow = async () => {
+        if (width <= 720) await freeResults.locator('tbody tr').first().click()
+        else await freeResults.locator('tbody tr').first().dblclick()
+      }
+      await selectRow()
+      await expect(page.getByRole('alertdialog')).toContainText('Cataloguskoppeling bevestigen')
+      await expect(page.getByRole('alertdialog')).toContainText('centrale Catalogus')
+      await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
+      await expect(page.getByRole('alertdialog')).toHaveCount(0)
+      expect(links).toHaveLength(0)
+      await freePaging.getByRole('button', { name: '1', exact: true }).click()
+      await selectRow()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
+      expect(links).toHaveLength(1)
       await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')

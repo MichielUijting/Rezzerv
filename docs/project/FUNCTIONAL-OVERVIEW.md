@@ -80,8 +80,21 @@ merk en andere trefwoorden invullen. Zoeken start pas bij **Zoeken** of Enter;
 de resultaten komen uitsluitend uit OFF en tonen maximaal **7 kandidaten per
 pagina**, met paginering voor de overige resultaten (maximaal twintig per
 zoekopdracht). De resultatentabel heeft geen tweede reeks filterinvoervelden.
-Terug brengt de gebruiker terug naar het geselecteerde artikel. De zoekroute
-controleert het bonartikel opnieuw op de server en schrijft niets weg.
+Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft
+uitsluitend lezen; de Overeenkomstkolom is de relevante OFF-productnaam-score
+zonder de winkelnaam als schijnbaar productbewijs en bepaalt de eerste rangorde.
+Resultaten met uitsluitend winkelnamen en 0% overeenkomst worden weggefilterd.
+Een dubbelklik (mobiel: tik, toetsenbord: Enter) op een kandidaat toont een
+waarschuwing met **OK** en **Annuleren**. Alleen na OK controleert de server
+het bronartikel, de GTIN, de OFF-identiteit, eventuele merkconflicten en
+de officiële GS1 GPC-Producttypeclassificatie opnieuw. Daarna bevestigt de
+bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
+deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
+Catalogusartikel mag op dezelfde GTIN worden hergebruikt; ontbreekt voor
+een nieuw product de officiële GPC-classificatie, dan stopt de actie zonder
+koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na een
+geslaagde koppeling keert de gebruiker automatisch terug naar Externe
+databases 2; op mobiel blijft de gedeelde header-Terug beschikbaar.
 
 De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
 met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,

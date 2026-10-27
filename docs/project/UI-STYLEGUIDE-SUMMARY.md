@@ -1230,5 +1230,14 @@ worden daar niet meer getoond. Direct daarna staat de knop **Zelf zoeken in
 OFF**. Deze opent een afzonderlijk scherm met één vrij zoektekstveld en
 een zoekknop. OFF-resultaten komen in een gewone DataTable, zonder eigen
 kolomfilters en met zeven kandidaten per pagina en paginering als er meer
-resultaten zijn. Het zoekscherm biedt **Terug** naar het geselecteerde
-bonartikel. Deze handmatige zoekactie is uitsluitend lezen.
+resultaten zijn. Het zoekscherm heeft **geen extra Terugknop**: de mobiele gedeelde
+header-Terug blijft bestaan. De Overeenkomstkolom toont een niet-nul
+productrelevantiescore (winkelnamen worden niet als naamovereenkomst geteld)
+en bepaalt standaard de rangorde; niet-berekenbare scores verschijnen als
+streepje, niet als verzonnen 0%. Dubbelklik op desktop, tik op mobiel of
+Enter op een rij opent de standaard waarschuwingsoverlay **Cataloguskoppeling
+bevestigen** met **OK** en **Annuleren**. Alleen bij OK voert de backend
+een bevoegde centrale Cataloguskoppeling uit na verplichte GTIN-, bron-,
+merk- en officiële GS1 GPC-controles. Een niet veilig classificeerbaar OFF-product
+wordt niet gekoppeld. Na succes terug naar Externe databases 2; Annuleren
+wijzigt niets. OFF-zoeken zelf blijft uitsluitend lezen.

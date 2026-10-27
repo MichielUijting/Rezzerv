@@ -512,6 +512,20 @@ def _name_score(query: str, product_name: str) -> float:
     return len(overlap) / len(query_tokens)
 
 
+def _manual_relevance_query(query: str, retailer_code: str) -> str:
+    """Scheid de winkelnaam van de gevraagde artikelomschrijving."""
+    normalized = _normalize(query)
+    aliases = RETAILER_BRAND_ALIASES.get(_normalize(retailer_code), {_normalize(retailer_code)})
+    for alias in sorted(aliases, key=len, reverse=True):
+        normalized_alias = _normalize(alias)
+        if normalized_alias:
+            normalized = re.sub(
+                r"(?<!\w)" + re.escape(normalized_alias) + r"(?!\w)",
+                " ", normalized,
+            )
+    return " ".join(normalized.split())
+
+
 def _score_product(
     *,
     query: str,
@@ -925,15 +939,16 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
             raise OffSearchError("query is verplicht bij handmatig zoeken")
 
         raw_products, provider = _query_off(query, max(limit * 3, 10))
+        relevance_query = _manual_relevance_query(query, item.get('retailer_code', ''))
         best_by_gtin: dict[str, dict[str, Any]] = {}
         for product in raw_products:
             result = _normalize_result(
-                query=query,
+                query=relevance_query,
                 retailer_code=item.get("retailer_code", ""),
                 quantity_label=item.get("quantity_label", ""),
                 product=product,
             )
-            if result is None:
+            if result is None or float(result.get('score') or 0) <= 0:
                 continue
             identity_check = external_product_identity_compatibility(
                 retailer_code=item.get("retailer_code", ""),
