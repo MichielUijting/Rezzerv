@@ -6,7 +6,13 @@ De testfixture maakt zijn eigen schema; productiecode mag geen schema self-heale
 
 from __future__ import annotations
 
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from app.services.external_article_product_link_domain_service import (
     confirm_global_external_article_product_link,
@@ -37,6 +43,65 @@ def _expect_value_error(callable_value, expected_text: str) -> None:
         raise AssertionError(
             f"Verwachte ValueError ontbreekt: {expected_text}"
         )
+
+
+def _assert_sqlite_pending_migration_compatibility() -> None:
+    """Preserve the legacy anonymous identity CHECK while replacing GPC status."""
+    migration_file = Path(__file__).resolve().parents[2] / "alembic" / "versions" / (
+        "20261027_02_external_catalog_pending_classification.py"
+    )
+    spec = spec_from_file_location("external_pending_schema_contract", migration_file)
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    for named_status in (False, True):
+        engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+        constraint = "CONSTRAINT ck_external_article_product_links_status " if named_status else ""
+        with engine.begin() as conn:
+            conn.execute(text(f"""
+                CREATE TABLE external_article_product_links (
+                    id TEXT PRIMARY KEY, retailer_code TEXT NOT NULL,
+                    receipt_text_normalized TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    {constraint}CHECK (status IN ('confirmed', 'inactive')),
+                    CHECK (length(trim(receipt_text_normalized)) > 0)
+                )
+            """))
+            migration.op = Operations(MigrationContext.configure(conn))
+            migration.upgrade()
+            conn.execute(text("""
+                INSERT INTO external_article_product_links
+                    (id, retailer_code, receipt_text_normalized, status)
+                VALUES ('1', 'lidl', 'achterham', 'classification_pending')
+            """))
+            try:
+                conn.execute(text("""
+                    INSERT INTO external_article_product_links
+                        (id, retailer_code, receipt_text_normalized, status)
+                    VALUES ('2', 'lidl', '', 'classification_pending')
+                """))
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("De originele SQLite-identiteitscheck is verloren")
+            try:
+                migration.downgrade()
+            except RuntimeError as exc:
+                _assert("Veilig gestopt" in str(exc), "Onveilige downgrade-fout")
+            else:
+                raise AssertionError("Downgrade met pending artikelen werd toegestaan")
+            conn.execute(text("DELETE FROM external_article_product_links WHERE id = '1'"))
+            migration.downgrade()
+            try:
+                conn.execute(text("""
+                    INSERT INTO external_article_product_links
+                        (id, retailer_code, receipt_text_normalized, status)
+                    VALUES ('3', 'lidl', 'achterham', 'classification_pending')
+                """))
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("De oude statuscheck is niet teruggezet")
+        engine.dispose()
 
 
 def _create_test_database():
@@ -339,6 +404,7 @@ def _create_test_database():
 
 
 def run_contract() -> None:
+    _assert_sqlite_pending_migration_compatibility()
     engine = _create_test_database()
 
     with engine.begin() as conn:
@@ -643,6 +709,7 @@ def run_contract() -> None:
     print("PASS: passende GTIN-identiteit is verplicht")
     print("PASS: officieel GS1 GPC-Producttype is verplicht")
     print("PASS: OFF-GTIN zonder GPC blijft pending en wordt na officiële GPC beschikbaar")
+    print("PASS: de bestaande SQLite-identiteitscheck blijft bij de migratie behouden")
     print("PASS: inactieve universele artikelen worden geweigerd")
     print("PASS: historische incomplete koppelingen worden gedeactiveerd")
     print("PASS: volledige bestaande koppelingen blijven actief")
