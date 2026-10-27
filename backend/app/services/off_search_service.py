@@ -328,7 +328,7 @@ def _resolve_receipt_table_line(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 rtl.id AS source_id,
                 rtl.external_article_code,
-                COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
+                COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                 COALESCE(CAST(rtl.quantity AS TEXT), '') AS quantity,
                 COALESCE(rtl.unit, '') AS unit,
                 COALESCE(rt.store_name, '') AS retailer_code

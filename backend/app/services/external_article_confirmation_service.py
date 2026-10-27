@@ -55,9 +55,9 @@ def _receipt_table_identity(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 COALESCE(rt.store_chain, rt.store_name, '') AS retailer_code,
                 COALESCE(
-                    rtl.corrected_raw_label,
-                    rtl.raw_label,
-                    rtl.normalized_label,
+                    NULLIF(rtl.corrected_raw_label, ''),
+                    NULLIF(rtl.normalized_label, ''),
+                    NULLIF(rtl.raw_label, ''),
                     ''
                 ) AS receipt_text,
                 COALESCE(rtl.external_article_code, '') AS external_article_code

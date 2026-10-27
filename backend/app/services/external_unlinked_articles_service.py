@@ -46,7 +46,7 @@ def _source_articles(conn):
     receipts = conn.execute(text("""
         SELECT rtl.id AS receipt_line_id,
                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
-               COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.raw_label, ''), rtl.normalized_label, '') AS receipt_line_text,
+               COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                rtl.external_article_code AS retailer_article_number,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
