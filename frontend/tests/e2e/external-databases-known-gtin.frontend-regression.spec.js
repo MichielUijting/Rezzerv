@@ -29,7 +29,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         if (path === '/api/external-databases/off/link-selected') {
           const body = request.postDataJSON()
           links.push(body)
-          expect(body).toEqual({ receipt_item_id: rows[0].id, gtin: '8712345678900' })
+          expect(body).toEqual({ receipt_item_id: rows[0].id, gtin: '8712345678900', selection_proof: 'signed-fixture-proof' })
           return route.fulfill({ json: { ok: true, linked: true, global_product_id: 'catalog-existing' } })
         }
         if (path === '/api/external-products/off/search') {
@@ -37,7 +37,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           expect(body).toEqual({ receipt_item_id: rows[0].id, mode: 'manual', query: 'halfvolle melk bio', limit: 20 })
           return route.fulfill({ json: { provider: 'openfoodfacts', mutated: false, results: Array.from({ length: 16 }, (_, index) => ({
             gtin: `87123456789${String(index).padStart(2, '0')}`, product_name: `Vrij gezocht product ${index + 1}`,
-            brand: 'OFF-merk', quantity: '1 l', score: 1 - index / 20,
+            brand: 'OFF-merk', quantity: '1 l', score: 1 - index / 20, selection_proof: 'signed-fixture-proof',
           })) } })
         }
         if (path === '/api/external-databases/products/search-preview') {
@@ -142,8 +142,9 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         else await freeResults.locator('tbody tr').first().dblclick()
       }
       await selectRow()
-      await expect(page.getByRole('alertdialog')).toContainText('Cataloguskoppeling bevestigen')
-      await expect(page.getByRole('alertdialog')).toContainText('centrale Catalogus')
+      await expect(page.getByRole('alertdialog')).toHaveText(/Weet u zeker dat u dit artikel wilt koppelen\?\s*Annuleren\s*OK/)
+      await expect(page.getByRole('alertdialog')).not.toContainText('Cataloguskoppeling bevestigen')
+      await expect(page.getByRole('alertdialog')).not.toContainText('OFF kon')
       await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
       await expect(page.getByRole('alertdialog')).toHaveCount(0)
       expect(links).toHaveLength(0)

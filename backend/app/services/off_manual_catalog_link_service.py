@@ -24,7 +24,7 @@ from app.services.external_product_identity_policy import (
 )
 from app.services.gtin_validation_service import is_valid_gtin
 from app.services.off_product_link_service import link_off_product_with_product_type
-from app.services.off_search_service import lookup_off_product_by_gtin
+from app.services.off_manual_search_proof import verify_manual_off_proof
 
 
 def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, Any]:
@@ -34,16 +34,14 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
     if not receipt_item_id or not is_valid_gtin(gtin):
         raise ValueError("Een geldig bonartikel en een geldige OFF-barcode zijn verplicht")
 
-    # Herlaad product via een vast OFF-URL op de opgegeven GTIN.
-    # Naam, merk, classificatie en global_product_id uit browserinput zijn onbetrouwbaar.
-    fetched = lookup_off_product_by_gtin(gtin)
-    if fetched.get("status") != "found":
-        raise ValueError("OFF kon het gekozen artikel niet op de barcode bevestigen. Er is niets gekoppeld.")
-    product = fetched.get("product")
-    if not isinstance(product, dict) or str(product.get("gtin") or "") != gtin:
-        raise ValueError("OFF-productidentiteit komt niet overeen. Er is niets gekoppeld.")
-    if not str(product.get("product_name") or "").strip():
-        raise ValueError("OFF-productnaam ontbreekt. Er is niets gekoppeld.")
+    # De server heeft dit resultaat zojuist zelf van OFF ontvangen en
+    # ondertekend. Controleer het kortlevende bron- en GTIN-gebonden bewijs
+    # zonder een tweede externe OFF-call. Browservelden worden genegeerd.
+    product = verify_manual_off_proof(
+        payload.get("selection_proof"),
+        receipt_item_id=receipt_item_id,
+        gtin=gtin,
+    )
 
     # Centrale artikelidentiteit komt uitsluitend uit de oorspronkelijke bronregel.
     with engine.begin() as conn:

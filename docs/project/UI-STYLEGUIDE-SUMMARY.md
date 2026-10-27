@@ -1235,9 +1235,13 @@ header-Terug blijft bestaan. De Overeenkomstkolom toont een niet-nul
 productrelevantiescore (winkelnamen worden niet als naamovereenkomst geteld)
 en bepaalt standaard de rangorde; niet-berekenbare scores verschijnen als
 streepje, niet als verzonnen 0%. Dubbelklik op desktop, tik op mobiel of
-Enter op een rij opent de standaard waarschuwingsoverlay **Cataloguskoppeling
-bevestigen** met **OK** en **Annuleren**. Alleen bij OK voert de backend
-een bevoegde centrale Cataloguskoppeling uit na verplichte GTIN-, bron-,
-merk- en officiële GS1 GPC-controles. Een niet veilig classificeerbaar OFF-product
-wordt niet gekoppeld. Na succes terug naar Externe databases 2; Annuleren
-wijzigt niets. OFF-zoeken zelf blijft uitsluitend lezen.
+Enter op een rij opent de waarschuwingsoverlay met uitsluitend de vraag
+**Weet u zeker dat u dit artikel wilt koppelen?** en **Annuleren** / **OK**,
+zonder extra titel of toelichting. Bij OK valideert de backend een kortlevend,
+cryptografisch ondertekend OFF-zoekbewijs, bronbonartikel en GTIN, zonder
+tweede externe OFF-opvraag. De centrale Catalogus koppelt alleen bij de
+verplichte identiteit-, merk- en officiële GS1 GPC-controles. Een verlopen
+bewijs of ontbrekende officiële classificatie geeft een aparte foutmelding
+buiten de bevestigingsdialoog; geen onterecht succes of databasewrites.
+Na succes terug naar Externe databases 2; Annuleren wijzigt niets.
+OFF-zoeken zelf blijft uitsluitend lezen.

@@ -69,6 +69,8 @@ export default function OffManualSearchPage() {
     if (!item || !searchText || loading) return
     setLoading(true)
     setError('')
+    setLinkError('')
+    setSelectedCandidate(null)
     setResults([])
     setSearched(false)
     const controller = new AbortController()
@@ -112,7 +114,11 @@ export default function OffManualSearchPage() {
       const response = await fetchJsonWithAuth('/api/external-databases/off/link-selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receipt_item_id: receiptItemId, gtin: selectedCandidate.gtin }),
+        body: JSON.stringify({
+          receipt_item_id: receiptItemId,
+          gtin: selectedCandidate.gtin,
+          selection_proof: selectedCandidate.selection_proof,
+        }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok || payload.linked !== true) {
@@ -121,6 +127,7 @@ export default function OffManualSearchPage() {
       setSelectedCandidate(null)
       goBack()
     } catch (err) {
+      setSelectedCandidate(null)
       setLinkError(err.message || 'Koppeling kon niet worden opgeslagen.')
     } finally {
       setLinking(false)
@@ -130,6 +137,14 @@ export default function OffManualSearchPage() {
   function selectCandidate(candidate) {
     if (linking) return
     setLinkError('')
+    if (candidate.identity_compatible === false) {
+      setLinkError('Dit artikel kan niet veilig aan het bonartikel worden gekoppeld.')
+      return
+    }
+    if (!candidate.selection_proof) {
+      setLinkError('Zoek dit artikel opnieuw in OFF om het te koppelen.')
+      return
+    }
     setSelectedCandidate(candidate)
   }
 
@@ -149,6 +164,7 @@ export default function OffManualSearchPage() {
           </form>
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
           {error ? <p role="alert">{error}</p> : null}
+          {linkError ? <p role="alert">{linkError}</p> : null}
           {searched && !loading && !error ? <section aria-label="OFF-zoekresultaten">
             <h3>Resultaten uit OFF</h3>
             <DataTable
@@ -180,23 +196,14 @@ export default function OffManualSearchPage() {
         </> : !itemError ? <p role="status">Artikel laden...</p> : null}
         {selectedCandidate ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true"
-            aria-labelledby="off-link-confirm-title" aria-describedby="off-link-confirm-description">
-            <h3 className="rz-modal-title" id="off-link-confirm-title">Cataloguskoppeling bevestigen</h3>
+            aria-labelledby="off-link-confirm-description">
             <p className="rz-modal-text" id="off-link-confirm-description">
-              Wil je bonartikel <strong>{item?.receipt_line_text}</strong> van {item?.retailer || item?.retailer_code}
-              koppelen aan <strong>{selectedCandidate.product_name}</strong>
-              {selectedCandidate.brand ? ` — ${selectedCandidate.brand}` : ''}
-              {' '}({selectedCandidate.gtin})? Deze koppeling geldt in de centrale Catalogus voor alle huishoudens.
+              Weet u zeker dat u dit artikel wilt koppelen?
             </p>
-            {selectedCandidate.identity_compatible === false ? <p role="alert">
-              {selectedCandidate.identity_conflict_message || 'Het productmerk conflicteert met het bonartikel.'}
-              {' '}Koppelen is niet toegestaan.
-            </p> : null}
-            {linkError ? <p role="alert">{linkError}</p> : null}
             <div className="rz-modal-actions">
               <Button type="button" variant="secondary" disabled={linking}
                 onClick={() => { setSelectedCandidate(null); setLinkError('') }}>Annuleren</Button>
-              <Button type="button" disabled={linking || selectedCandidate.identity_compatible === false}
+              <Button type="button" disabled={linking}
                 onClick={confirmLink}>{linking ? 'Koppelen...' : 'OK'}</Button>
             </div>
           </div>

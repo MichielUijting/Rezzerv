@@ -84,11 +84,19 @@ Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft
 uitsluitend lezen; de Overeenkomstkolom is de relevante OFF-productnaam-score
 zonder de winkelnaam als schijnbaar productbewijs en bepaalt de eerste rangorde.
 Resultaten met uitsluitend winkelnamen en 0% overeenkomst worden weggefilterd.
-Een dubbelklik (mobiel: tik, toetsenbord: Enter) op een kandidaat toont een
-waarschuwing met **OK** en **Annuleren**. Alleen na OK controleert de server
-het bronartikel, de GTIN, de OFF-identiteit, eventuele merkconflicten en
-de officiële GS1 GPC-Producttypeclassificatie opnieuw. Daarna bevestigt de
-bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
+Een dubbelklik (mobiel: tik, toetsenbord: Enter) op een kandidaat toont
+uitsluitend **Weet u zeker dat u dit artikel wilt koppelen?** met knoppen
+**Annuleren** en **OK**; geen titel of extra uitleg in die bevestiging.
+Alleen bij OK controleert de server het bronartikel, de geldige GTIN,
+het maximaal tien minuten geldige cryptografisch ondertekende zoekbewijs,
+eventuele merkconflicten en de officiële GS1 GPC-classificatie. Dit bewijs
+komt van het al door de backend gelezen OFF-zoekresultaat en is aan het
+bronartikel en de GTIN gebonden; het is geen door de browser vertrouwde
+productwaarde. Voor deze bevestiging volgt géén tweede externe OFF-aanvraag.
+Een verlopen, onjuist of door een backendherstart vervallen bewijs wordt
+afgewezen; dan moet opnieuw worden gezocht. Technische koppelproblemen worden
+buiten de bevestigingsdialoog getoond, zonder de dialoog dubbel te gebruiken.
+Daarna bevestigt de bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
 deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
 Catalogusartikel mag op dezelfde GTIN worden hergebruikt; ontbreekt voor
 een nieuw product de officiële GPC-classificatie, dan stopt de actie zonder

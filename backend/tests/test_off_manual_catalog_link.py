@@ -51,21 +51,26 @@ def test_manual_search_scores_article_terms_not_just_retailer_brand():
     assert len(result["results"]) == 1
     assert result["results"][0]["product_name"] == "Nederlandse aardbeien"
     assert result["results"][0]["score"] > 0
+    from app.services.off_manual_search_proof import verify_manual_off_proof
+    candidate = result["results"][0]
+    signed = candidate["selection_proof"]
+    assert signed and signed != candidate["gtin"]
+    assert verify_manual_off_proof(
+        signed, receipt_item_id=RECEIPT, gtin=candidate["gtin"]
+    )["product_name"] == "Nederlandse aardbeien"
     assert result["mutated"] is False
 
 
 def test_invalid_barcode_fails_before_off_or_database_access():
-    with patch.object(linker, "lookup_off_product_by_gtin") as lookup, patch.object(linker.engine, "begin") as begin:
+    with patch.object(linker, "verify_manual_off_proof") as verify, patch.object(linker.engine, "begin") as begin:
         with pytest.raises(ValueError, match="geldige"):
             linker.confirm_selected_off_catalog_product({"receipt_item_id": RECEIPT, "gtin": "123"})
-        lookup.assert_not_called()
+        verify.assert_not_called()
         begin.assert_not_called()
 
 
 def test_off_identity_mismatch_fails_before_mutation():
-    with patch.object(linker, "lookup_off_product_by_gtin", return_value={
-        "status": "found", "product": {**product(), "gtin": "1234567890123"}
-    }), patch.object(linker.engine, "begin") as begin:
+    with patch.object(linker, "verify_manual_off_proof", side_effect=ValueError("OFF-productidentiteit klopt niet")) as verify, patch.object(linker.engine, "begin") as begin:
         with pytest.raises(ValueError, match="identiteit"):
             linker.confirm_selected_off_catalog_product({"receipt_item_id": RECEIPT, "gtin": GTIN})
         begin.assert_not_called()
@@ -75,7 +80,7 @@ def test_existing_classified_catalog_article_uses_canonical_link():
     db = _mock_db()
     db.execute.return_value.mappings.return_value.first.return_value = {"id": "existing-product"}
     with (
-        patch.object(linker, "lookup_off_product_by_gtin", return_value={"status": "found", "product": product()}),
+        patch.object(linker, "verify_manual_off_proof", return_value=product()),
         patch.object(linker.engine, "begin") as begin,
         patch.object(linker, "resolve_external_article_identity", return_value={
             "retailer_code": "jumbo", "receipt_text": "Halfvolle melk"
@@ -99,7 +104,7 @@ def test_existing_classified_catalog_article_uses_canonical_link():
 def test_missing_gpc_is_rejected_without_catalog_mutation():
     db = _mock_db()
     with (
-        patch.object(linker, "lookup_off_product_by_gtin", return_value={"status": "found", "product": product()}),
+        patch.object(linker, "verify_manual_off_proof", return_value=product()),
         patch.object(linker.engine, "begin") as begin,
         patch.object(linker, "resolve_external_article_identity", return_value={
             "retailer_code": "jumbo", "receipt_text": "Halfvolle melk"
@@ -116,9 +121,7 @@ def test_missing_gpc_is_rejected_without_catalog_mutation():
 def test_verified_off_product_and_gpc_are_sent_to_existing_atomic_domain_service():
     db = _mock_db()
     with (
-        patch.object(linker, "lookup_off_product_by_gtin", return_value={
-            "status": "found", "product": product("10000001")
-        }),
+        patch.object(linker, "verify_manual_off_proof", return_value=product("10000001")),
         patch.object(linker.engine, "begin") as begin,
         patch.object(linker, "resolve_external_article_identity", return_value={
             "retailer_code": "jumbo", "receipt_text": "Halfvolle melk"
@@ -136,3 +139,30 @@ def test_verified_off_product_and_gpc_are_sent_to_existing_atomic_domain_service
     assert result["linked"] and result["global_product_id"] == "new-catalog"
     assert write.call_args.kwargs["off_product"]["product_name"] == "Halfvolle melk"
     assert write.call_args.kwargs["product_type_assignment"]["product_type_id"] == "gpc:10000001"
+
+
+def test_manual_proof_is_signed_bounded_and_has_no_second_OFF_call():
+    from app.services.off_manual_search_proof import (
+        issue_manual_off_proof, verify_manual_off_proof,
+    )
+    ticket = issue_manual_off_proof(RECEIPT, product("10000001"))
+    assert ticket and "." in ticket
+    assert verify_manual_off_proof(ticket, receipt_item_id=RECEIPT, gtin=GTIN)["product_name"] == "Halfvolle melk"
+    with pytest.raises(ValueError):
+        verify_manual_off_proof(ticket, receipt_item_id="purchase-import-line:another-line", gtin=GTIN)
+    with pytest.raises(ValueError):
+        verify_manual_off_proof(ticket, receipt_item_id=RECEIPT, gtin="7613037010367")
+    with pytest.raises(ValueError):
+        verify_manual_off_proof(ticket[:-3] + "abc", receipt_item_id=RECEIPT, gtin=GTIN)
+    with pytest.raises(ValueError):
+        verify_manual_off_proof("", receipt_item_id=RECEIPT, gtin=GTIN)
+
+
+def test_proof_expiry_and_untrusted_fields_are_rejected():
+    from app.services import off_manual_search_proof as proof
+    with patch.object(proof.time, "time", return_value=1000):
+        ticket = proof.issue_manual_off_proof(RECEIPT, product())
+    with patch.object(proof.time, "time", return_value=1602):
+        with pytest.raises(ValueError, match="verlopen"):
+            proof.verify_manual_off_proof(ticket, receipt_item_id=RECEIPT, gtin=GTIN)
+    assert proof.issue_manual_off_proof(RECEIPT, {"gtin": "invalid", "product_name": "X"}) == ""

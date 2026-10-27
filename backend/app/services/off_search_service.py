@@ -15,6 +15,7 @@ from app.services.external_product_identity_policy import (
     external_product_identity_compatibility,
     leading_private_label_marker,
 )
+from app.services.off_manual_search_proof import issue_manual_off_proof
 
 
 SEARCH_A_LICIOUS_URL = os.getenv(
@@ -968,6 +969,10 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
             key=lambda row: (row["score"], row["product_name"].lower()),
             reverse=True,
         )[:limit]
+        # The trusted search result itself is enough evidence for later confirmation;
+        # avoid a second, fragile OFF network roundtrip for the same barcode.
+        for result in results:
+            result["selection_proof"] = issue_manual_off_proof(receipt_item_id, result)
     else:
         query, provider, results, query_diagnostics = _automatic_search(item, limit)
 
