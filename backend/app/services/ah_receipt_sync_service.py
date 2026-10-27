@@ -58,7 +58,6 @@ def count_pending_ah_receipts(
     household_id: str,
     limit: int = 100,
     client: AHReceiptClient | None = None,
-    classify_preimport_failures: bool = False,
 ) -> dict[str, Any]:
     """Count AH receipts that can still be imported without importing them."""
     session = get_ah_session(engine, household_id)
@@ -114,6 +113,7 @@ def sync_ah_receipts(
     household_id: str,
     limit: int = 100,
     client: AHReceiptClient | None = None,
+    classify_preimport_failures: bool = False,
 ) -> dict[str, Any]:
     try:
         session = get_ah_session(engine, household_id)
