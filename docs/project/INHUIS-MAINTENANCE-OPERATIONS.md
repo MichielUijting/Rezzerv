@@ -45,6 +45,34 @@ An interrupted/crashed operation requires investigation and reconciliation using
 its original domain contract; removing its record merely because it is old is
 not an acceptable recovery procedure.
 
+### Albert Heijn background sync: pre-import failure and historical operations
+
+The AH scheduler retries due households every 15 minutes. A connection,
+account-decoding or receipt-list error occurring **before** the first persisted
+sync mutation and before downloading/importing any receipt is a demonstrably
+pre-import failure. In that narrow case its background admission finishes
+normally, while the scheduler still counts and reports a failed attempt. An
+exception after the first persistence boundary, or an unknown interruption,
+continues to leave the durable maintenance operation unresolved. No generic
+crash-lease expiry or automatic cleanup is permitted.
+
+On 26 October 2026 a read-only host report showed **38** unfinished operations,
+all `call:_admitted_ah_sync`, generation 3, dated 24–26 October. The report
+showed no other *active PostgreSQL work sessions at that instant*. It did not
+prove whether any historical receipt imports had committed or whether external
+network work was still running. Older records contain no durable per-operation
+stage/outcome, so the new pre-import classification must **not** be inferred
+retroactively from the operation kind, age, scheduler interval or zero sessions.
+
+For those historical records, preserve the operation IDs and original rows;
+first inspect the AH account's nonsecret sync metadata, canonical receipt-import
+status, backend process lifetime and redacted failure classification. Compare
+the evidence with the exact operation intervals and independently establish
+which imports were committed, incomplete or never started. Reconciliation may
+only be proposed for an explicitly verified set of IDs, with a recoverable
+backup, audit record and separate platform-operator authorization. The actual
+server reconciliation is **not** performed by this code change.
+
 ### Shortest safe interruption window
 
 - Announce while normal usage continues; the two-minute notice period does
