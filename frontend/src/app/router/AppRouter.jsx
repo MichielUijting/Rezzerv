@@ -40,6 +40,7 @@ import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
 import AlmostOutResponsive from '../../features/almostOut/AlmostOutResponsive.jsx'
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
+import ArticleSynonymsPage from '../../features/articleSynonyms/ArticleSynonymsPage.jsx'
 import ExternalDatabases2Page from '../../features/externalDatabases/ExternalDatabases2Page.jsx'
 import OffManualSearchPage from '../../features/externalDatabases/OffManualSearchPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
@@ -194,6 +195,7 @@ const router = createBrowserRouter([
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
+  { path: '/artikelsynoniemen', element: <ProtectedFrontteam><ArticleSynonymsPage /></ProtectedFrontteam> },
   { path: '/externe-databases-2', element: <ProtectedFrontteam><ExternalDatabases2Page /></ProtectedFrontteam> },
   { path: '/externe-databases-2/off-zoeken/:receiptItemId', element: <ProtectedFrontteam><OffManualSearchPage /></ProtectedFrontteam> },
   { path: '/catalogus', element: <Protected><CatalogResponsive /></Protected> },

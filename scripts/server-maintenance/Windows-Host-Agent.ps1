@@ -120,14 +120,49 @@ function Assert-DirectDatabaseBinding($Postgres, $Probe) {
     }
 }
 
-if ($InstallAtLogon -and $DirectContainerSelection) {
+function Assert-FrontendBinding() {
+    # A reachable page alone is not proof that the agent targets the users'
+    # frontend. Pin the local published port to exactly one running Compose
+    # frontend belonging to the same backend project.
+    param([switch]$CheckRoutes)
+    if ($FrontendUrl.Host -notin @('127.0.0.1','localhost')) { throw 'Lokale frontend-URL moet naar deze Windows-host wijzen.' }
+    $ids=@((Invoke-DockerText -Arguments @('ps','-q','--filter',('publish='+$FrontendUrl.Port))).Split("`n") | Where-Object { $_.Trim() })
+    if ($ids.Count -ne 1) { throw 'Gebruikerspoort heeft geen unieke actieve frontend-container.' }
+    $front=@((Invoke-DockerText -Arguments @('inspect',$ids[0])) | ConvertFrom-Json)[0]
+    if (-not $front.State.Running -or
+        $front.Config.Labels.'com.docker.compose.project' -cne $ComposeProject -or
+        $front.Config.Labels.'com.docker.compose.service' -cne 'frontend') {
+        throw 'Gebruikerspoort hoort niet bij de gekozen Inhuis-frontend.'
+    }
+    $bindings=@($front.NetworkSettings.Ports.'80/tcp' | Where-Object { [int]$_.HostPort -eq $FrontendUrl.Port })
+    if ($bindings.Count -ne 1) { throw 'Frontend-publicatie wijkt af van de gebruikerspoort.' }
+    if (-not $CheckRoutes) { return }
+    $response=Invoke-WebRequest -Uri $FrontendUrl -TimeoutSec 15
+    $external=Invoke-WebRequest -Uri $ExternalUrl -TimeoutSec 15
+    if ($response.StatusCode -ne 200 -or $external.StatusCode -ne 200 -or
+        $response.Content -notmatch '<title>Inhuis</title>' -or
+        $external.Content -notmatch '<title>Inhuis</title>') {
+        throw 'Lokale en externe gebruikersroutes zijn niet beide bereikbaar.'
+    }
+    $localVersion=Invoke-RestMethod -Uri ([uri]::new($FrontendUrl,'/version.json')) -TimeoutSec 15
+    $externalVersion=Invoke-RestMethod -Uri ([uri]::new($ExternalUrl,'/version.json')) -TimeoutSec 15
+    if (-not $localVersion.version -or $localVersion.version -cne $externalVersion.version) {
+        throw 'Lokale en externe gebruikersroutes bieden niet dezelfde Inhuis-versie.'
+    }
+}
+
+if ($InstallAtLogon) {
     # A scheduled task is a durable server mutation. Fail before creating the
-    # signing-key directory or modifying task settings if the selected pair is
-    # not the backend's actual physical database.
+    # signing-key directory or modifying task settings if identities differ.
     $preflightBackend = Get-Container 'backend'
     $preflightPostgres = Get-Container 'postgres'
     $preflightProbe = (Invoke-DockerText -Arguments @('exec',$preflightBackend.Id,'python','-m','app.maintenance.server_maintenance_host_probe')) | ConvertFrom-Json
-    Assert-DirectDatabaseBinding $preflightPostgres $preflightProbe
+    if ($DirectContainerSelection) { Assert-DirectDatabaseBinding $preflightPostgres $preflightProbe }
+    Assert-FrontendBinding -CheckRoutes
+    $otherTasks=@(Get-ScheduledTask -TaskName 'Inhuis-Onderhoud-*' -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -cne ('Inhuis-Onderhoud-'+$ComposeProject) })
+    if ($otherTasks.Count -gt 0) { throw 'Andere Inhuis-onderhoudstaak bestaat nog. Los dit afzonderlijk en bewust op.' }
+    $existingTask=Get-ScheduledTask -TaskName ('Inhuis-Onderhoud-'+$ComposeProject) -ErrorAction SilentlyContinue
+    if ($existingTask) { throw 'Onderhoudstaak bestaat al; overschrijven zonder gecontroleerde migratie is verboden.' }
 }
 
 New-Item -ItemType Directory -Force -Path $DataDirectory | Out-Null
@@ -175,6 +210,8 @@ do {
             $checkStage = 'directe-databasekoppeling'
             Assert-DirectDatabaseBinding $postgres $probe
         }
+        $checkStage = 'gebruikerspoort-identiteit'
+        Assert-FrontendBinding
         $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
         $available=[ordered]@{kind='availability';issued_at=[datetimeoffset]::UtcNow.ToString('o');host_id=$hostId;backend_container_id=$backend.Id;windows_boot=$boot}
         $availableBytes=[Text.Encoding]::UTF8.GetBytes(($available | ConvertTo-Json -Compress))
@@ -236,6 +273,7 @@ do {
         $backup=Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
         if ($backup.sha256 -cne (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -or $backup.domain_fingerprint -cne $probe.domain_fingerprint) { throw 'Back-up of actuele data gewijzigd.' }
         $checkStage = 'frontend-bereikbaarheid'
+        Assert-FrontendBinding -CheckRoutes
         $front=Invoke-WebRequest -Uri $FrontendUrl -TimeoutSec 15
         $external=Invoke-WebRequest -Uri $ExternalUrl -TimeoutSec 15
         if ($front.StatusCode -ne 200 -or $external.StatusCode -ne 200 -or $front.Content -notmatch '<title>Inhuis</title>' -or $external.Content -notmatch '<title>Inhuis</title>') { throw 'Frontend/externe route niet functioneel bereikbaar.' }

@@ -155,3 +155,23 @@ Winkelkoppelingen en importinstellingen bepalen hoe aankopen en kassabonnen binn
 ## Meldingen
 
 Er bestaat op 22 juli 2026 nog geen actieve meldingen-API. Een toekomstig meldingsdomein moet eerst opnieuw worden geïnventariseerd en beveiligd.
+
+## Artikel-synoniemen
+
+Superusers en alle actieve Frontteamleden kunnen via de actie **Artikel-synoniemen**
+centrale artikelen met een code/barcode vergelijken. De standaardtabel toont
+voorgestelde paren uit verschillende aantoonbare winkels met zeven kolommen:
+selectie en per artikel naam, Catalogusfoto en winkelnaam. De centrale
+DataTable biedt zoeken, sorteren, kolombreedtes en paginering. Selectie plus
+**Koppelen** bevestigt alle geselecteerde paren als bulk en is zonder selectie
+inactief. Een aparte knop Vernieuwen ontbreekt. De bevestigde relatie staat in
+de centrale Catalogus (`article_synonym_links`).
+In het Catalogusoverzicht, de mobiele lijst en het artikeldetail staat
+**Gekoppelde winkels**: het aantal unieke **andere** winkels dat rechtstreeks
+via bevestigde synoniemparen aan het artikel is gekoppeld (zonder transitieve
+afleiding). Nul betekent dat geen geldige directe winkelkoppeling kan worden
+geteld. De selectorkolom in Artikel-synoniemen heeft geen zichtbare titel en is
+smal, met behoud van de toegankelijke checkboxnamen.
+Er is geen automatische bevestiging. Bestaande product-, verpakking- en
+huishoudidentiteiten blijven behouden. Ontbrekende codes worden eerst aangevuld
+via Externe databases 2. Zie [het functionele contract](ARTICLE-SYNONYMS.md).

@@ -61,6 +61,7 @@ const MOBILE_ROUTE_TITLES = Object.freeze([
   ['/externe-databases', 'Externe databases'],
   ['/externe-databases-2/off-zoeken', 'Zelf zoeken in OFF'],
   ['/externe-databases-2', 'Externe databases 2'],
+  ['/artikelsynoniemen', 'Artikel-synoniemen'],
   ['/onboarding', 'Welkom bij Inhuis'],
   ['/home', 'Dashboard'],
 ])

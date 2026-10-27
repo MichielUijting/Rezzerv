@@ -13,6 +13,7 @@ from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.db import engine
+from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_platform_permission_from_session,
@@ -94,6 +95,85 @@ def _household_table() -> str | None:
         if candidate in tables and "global_product_id" in _columns(candidate):
             return candidate
     return None
+
+
+def _catalog_retailer_code(expression: str) -> str:
+    """Match the canonical retailer keys used by article-synonym suggestions."""
+    cleaned = (
+        f"LOWER(REPLACE(REPLACE(TRIM(COALESCE({expression}, '')), ' ', '-'), '_', '-'))"
+    )
+    return f"CASE WHEN {cleaned} = 'albert-heijn' THEN 'ah' ELSE {cleaned} END"
+
+
+def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> tuple[str, str]:
+    """Count unique other stores reached by *direct* confirmed synonym links.
+
+    Each endpoint needs exactly one documented retailer, as when a synonym is
+    suggested. Do not count peers, infer transitive equivalence, or read any
+    household-specific data. A missing/ambiguous retailer is not a shop.
+    """
+    if "article_synonym_links" not in tables:
+        return "", "0"
+
+    shop_codes = ", ".join(f"'{code}'" for code in sorted(RETAILER_NAMES) if code != "albert-heijn")
+    source = _catalog_retailer_code("shop_product.source") if "source" in gp_columns else "''"
+    source_fallback = f"CASE WHEN {source} IN ({shop_codes}) THEN {source} ELSE NULL END"
+    if "external_article_product_links" in tables:
+        external_shop = _catalog_retailer_code("retailer_link.retailer_code")
+        external_join = """
+            LEFT JOIN external_article_product_links retailer_link
+              ON retailer_link.global_product_id = shop_product.id
+             AND retailer_link.status = 'confirmed'
+        """
+        documented_shop = f"NULLIF({external_shop}, '')"
+    else:
+        external_join = ""
+        documented_shop = "NULL"
+
+    active = (
+        "AND LOWER(TRIM(COALESCE(shop_product.status, 'active'))) <> 'deleted'"
+        if "status" in gp_columns else ""
+    )
+    joins = f"""
+        LEFT JOIN (
+            WITH synonym_participants AS (
+                SELECT left_product_id AS id FROM article_synonym_links
+                UNION
+                SELECT right_product_id AS id FROM article_synonym_links
+            ), documented_retailers AS (
+                SELECT shop_product.id,
+                       CASE
+                         WHEN COUNT(DISTINCT {documented_shop}) = 1
+                           THEN MIN({documented_shop})
+                         WHEN COUNT(DISTINCT {documented_shop}) = 0
+                           THEN {source_fallback}
+                         ELSE NULL
+                       END AS retailer_code
+                FROM synonym_participants participant
+                JOIN global_products shop_product ON shop_product.id = participant.id
+                {external_join}
+                WHERE 1=1 {active}
+                GROUP BY shop_product.id, {source}
+            ), direct_pairs AS (
+                SELECT left_product_id AS product_id, right_product_id AS peer_id
+                FROM article_synonym_links
+                UNION ALL
+                SELECT right_product_id AS product_id, left_product_id AS peer_id
+                FROM article_synonym_links
+            )
+            SELECT direct_pairs.product_id,
+                   COUNT(DISTINCT peer.retailer_code) AS linked_store_count
+            FROM direct_pairs
+            JOIN documented_retailers origin ON origin.id = direct_pairs.product_id
+            JOIN documented_retailers peer ON peer.id = direct_pairs.peer_id
+            WHERE origin.retailer_code IS NOT NULL
+              AND peer.retailer_code IS NOT NULL
+              AND origin.retailer_code <> peer.retailer_code
+            GROUP BY direct_pairs.product_id
+        ) catalog_synonym_stores
+          ON catalog_synonym_stores.product_id = gp.id
+    """
+    return joins, "COALESCE(catalog_synonym_stores.linked_store_count, 0)"
 
 
 def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
@@ -292,6 +372,11 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
 
     select_parts.append(f"{household_count_expression} AS household_article_count")
 
+    linked_store_join, linked_store_count = _catalog_linked_store_projection(tables, gp_columns)
+    if linked_store_join:
+        joins.append(linked_store_join)
+    select_parts.append(f"{linked_store_count} AS linked_store_count")
+
     if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
         joins.append("""
             LEFT JOIN (
@@ -320,6 +405,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "gpc_family_name": f"COALESCE({gpc_family_name}, '')",
         "source": source_expression,
         "household_article_count": household_count_expression,
+        "linked_store_count": linked_store_count,
         "catalog_visible": alias_visibility_expression,
     }
     return select_parts, joins, expressions
@@ -339,6 +425,7 @@ def _catalog_where(
     gpc_family: str,
     source: str,
     household_article_count: str,
+    linked_store_count: str,
 ) -> tuple[str, dict[str, Any]]:
     conditions: list[str] = [f"({expressions['catalog_visible']})"]
     params: dict[str, Any] = {}
@@ -368,6 +455,7 @@ def _catalog_where(
             "product_type", "gpc_brick_code", "gpc_brick_name",
             "gpc_class_code", "gpc_class_name", "gpc_family_code",
             "gpc_family_name", "source", "household_article_count",
+            "linked_store_count",
         )
         conditions.append("(" + " OR ".join(
             f"LOWER(CAST({expressions[key]} AS TEXT)) LIKE :search"
@@ -382,6 +470,14 @@ def _catalog_where(
             f"CAST({expressions['household_article_count']} AS TEXT) LIKE :household_article_count"
         )
         params["household_article_count"] = f"%{household_value}%"
+    linked_value = (
+        linked_store_count if isinstance(linked_store_count, str) else ""
+    ).strip()
+    if linked_value:
+        conditions.append(
+            f"CAST({expressions['linked_store_count']} AS TEXT) LIKE :linked_store_count"
+        )
+        params["linked_store_count"] = f"%{linked_value}%"
     return ("WHERE " + " AND ".join(conditions)) if conditions else "", params
 
 
@@ -424,6 +520,7 @@ def list_catalog(
     gpc_family: str = Query(default="", max_length=200),
     source: str = Query(default="", max_length=200),
     household_article_count: str = Query(default="", max_length=50),
+    linked_store_count: str = Query(default="", max_length=50),
     sort_by: str = Query(default="name", max_length=50),
     sort_direction: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=10, ge=1, le=2000),
@@ -452,6 +549,7 @@ def list_catalog(
         gpc_family,
         source,
         household_article_count,
+        linked_store_count,
     )
     normalized_sort_by = sort_by if isinstance(sort_by, str) else "name"
     normalized_sort_direction = sort_direction if isinstance(sort_direction, str) else "asc"

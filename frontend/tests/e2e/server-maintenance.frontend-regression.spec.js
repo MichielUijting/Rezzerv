@@ -4,13 +4,14 @@ const session = {
   user: { id: 'maintenance-platform-user', email: 'maintenance@example.test' },
   user_id: 'maintenance-platform-user', email: 'maintenance@example.test', context_type: 'none',
   active_household_id: null, role: null, display_role: null,
-  permissions: { 'platform.recovery.manage': true }, supported_permissions: ['platform.recovery.manage'],
+  permissions: { 'platform.recovery.manage': true, 'platform.sessions.revoke': true }, supported_permissions: ['platform.recovery.manage', 'platform.sessions.revoke'],
   is_platform_superuser: false, is_frontteam: false,
 }
 
 test('maintenance actions use exact generation and never offer an unproved Windows reboot', async ({ page }) => {
   let state = { state: 'normal', generation: 0, active_operations: 0, restart_allowed: false, host_agent_ready: true }
   const requests = []
+  const sessionClosures = []
   await page.route('**/api/session', route => route.fulfill({ json: session }))
   await page.route('**/api/maintenance/status', route => route.fulfill({ json: { state: 'normal' } }))
   await page.route('**/api/platform/maintenance', async route => {
@@ -23,11 +24,20 @@ test('maintenance actions use exact generation and never offer an unproved Windo
     }
     await route.fulfill({ json: state })
   })
+  await page.route('**/api/platform/maintenance/sessions/close', route => {
+    sessionClosures.push(route.request().postDataJSON())
+    return route.fulfill({ json: { sessions_revoked: 2, current_session_preserved: true, operations_untouched: true } })
+  })
   await page.goto('/platform/herstel')
   const panel = page.getByTestId('platform-maintenance-panel')
   await expect(panel.getByRole('button', { name: 'Onderhoud aankondigen' })).toBeDisabled()
   await panel.getByLabel('Onderhoudsvenster en verwachte duur').fill('Morgen 10:00 Europe/Amsterdam, 15 minuten')
   await panel.getByRole('button', { name: 'Onderhoud aankondigen' }).click()
+  await panel.getByRole('button', { name: 'Resterende sessies beëindigen' }).click()
+  await expect(panel.getByText('Niet-opgeslagen invoer van andere gebruikers kan verloren gaan.', { exact: false })).toBeVisible()
+  await panel.getByRole('button', { name: 'Ja, andere sessies beëindigen' }).click()
+  await expect(panel.getByText('2 andere inlogsessie(s) beëindigd.', { exact: false })).toBeVisible()
+  expect(sessionClosures).toEqual([{ expected_generation: 1, confirmed: true }])
   await panel.getByRole('button', { name: 'Verwerkingen veilig stoppen' }).click()
   await panel.getByRole('button', { name: 'Actuele veiligheidscontroles uitvoeren' }).click()
   await expect(panel.getByText('Herstarttoestemming ontbreekt of is verlopen.', { exact: false })).toBeVisible()
