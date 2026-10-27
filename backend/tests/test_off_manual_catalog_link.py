@@ -274,8 +274,10 @@ def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
     writer_code = inspect.getsource(writer._receipt_table_identity)
     off_code = inspect.getsource(off._resolve_receipt_table_line)
     assert "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')" in overview_code
+    import re
     expected = "NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, '')"
+    normalized_expected = re.sub(r"\s+", "", expected)
     for route_code in (overview_code, writer_code, off_code):
-        assert expected.replace(", ", ",") in route_code.replace(", ", ",").replace("\\n", "").replace("    ", "")
+        assert normalized_expected in re.sub(r"\s+", "", route_code)
     assert "store_chain" in writer_code
     assert "store_chain" in overview_code
