@@ -85,6 +85,31 @@ def git(*args: str) -> str:
     return process.stdout.strip()
 
 
+def changed_pr_paths(base_sha: str, head_sha: str) -> list[str]:
+    """Classify only the PR's own delta, never the synthetic checkout merge.
+
+    GitHub's pull_request checkout may be a merge of the PR head with a newer
+    main. Comparing the event's (possibly older) base directly to HEAD would
+    incorrectly charge unrelated main-branch changes to this PR.
+    """
+    for label, sha in (("base", base_sha), ("head", head_sha)):
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            fail(f"Ontbrekende of ongeldige PR-{label}-SHA.")
+        git("cat-file", "-e", f"{sha}^{{commit}}")
+
+    # Both commits must be available, and the requested PR head must actually
+    # be part of the checked-out candidate. Missing history fails closed.
+    git("merge-base", "--is-ancestor", head_sha, "HEAD")
+    common = git("merge-base", base_sha, head_sha)
+    if not re.fullmatch(r"[0-9a-f]{40}", common):
+        fail("Gemeenschappelijke PR-basis ontbreekt; styleguidecontrole geblokkeerd.")
+    return [
+        path.strip()
+        for path in git("diff", "--name-only", "--no-ext-diff", common, head_sha).splitlines()
+        if path.strip()
+    ]
+
+
 def matches_any(path: str, patterns: tuple[re.Pattern[str], ...]) -> bool:
     return any(pattern.search(path) for pattern in patterns)
 
@@ -196,6 +221,48 @@ def validate_canonical_styleguide() -> None:
     print("UI_STYLEGUIDE_DOCUMENT_GREEN")
 
 
+def test_pr_delta_is_not_synthetic_merge() -> None:
+    """Regression: late main UI changes must not be attributed to a tooling PR."""
+    from unittest.mock import patch
+
+    base, head, common = "a" * 40, "b" * 40, "c" * 40
+    calls: list[tuple[str, ...]] = []
+
+    def simulated_git(*args: str) -> str:
+        calls.append(args)
+        if args in (
+            ("cat-file", "-e", f"{base}^{{commit}}"),
+            ("cat-file", "-e", f"{head}^{{commit}}"),
+            ("merge-base", "--is-ancestor", head, "HEAD"),
+        ):
+            return ""
+        if args == ("merge-base", base, head):
+            return common
+        if args == ("diff", "--name-only", "--no-ext-diff", common, head):
+            return "scripts/diagnostics/retailer_probe.py\n"
+        raise AssertionError(f"Unexpected git command: {args!r}")
+
+    with patch(f"{__name__}.git", side_effect=simulated_git):
+        changed = changed_pr_paths(base, head)
+    if changed != ["scripts/diagnostics/retailer_probe.py"]:
+        raise AssertionError("Unrelated main-only frontend changes leaked into the PR delta.")
+    if evaluate_change_policy(changed, ""):
+        raise AssertionError("Tooling-only PR was incorrectly classified as UI.")
+    if ("diff", "--name-only", "--no-ext-diff", common, head) not in calls:
+        raise AssertionError("PR diff did not end at the actual PR head.")
+    if any(command[-1] == "HEAD" for command in calls if command[0] == "diff"):
+        raise AssertionError("PR diff used synthetic HEAD rather than the actual PR head.")
+
+    with patch(f"{__name__}.git", side_effect=simulated_git):
+        try:
+            changed_pr_paths(base, "")
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError("Missing PR head did not fail closed.")
+    print("[OK] PR-delta gebruikt uitsluitend de echte head en faalt gesloten bij ontbrekend bewijs.")
+
+
 def run_self_test() -> None:
     cases = [
         (
@@ -241,17 +308,13 @@ def run_self_test() -> None:
             raise AssertionError(
                 f"Self-test {name} verwacht fail={should_fail}, kreeg fail={failed}"
             )
+    test_pr_delta_is_not_synthetic_merge()
     print("[OK] UI-styleguide policy self-tests geslaagd.")
     print("UI_STYLEGUIDE_POLICY_SELFTEST_GREEN")
 
 
-def validate_pr_delta(base_sha: str, pr_body: str) -> None:
-    git("cat-file", "-e", f"{base_sha}^{{commit}}")
-    changed_paths = [
-        line.strip()
-        for line in git("diff", "--name-only", base_sha, "HEAD").splitlines()
-        if line.strip()
-    ]
+def validate_pr_delta(base_sha: str, head_sha: str, pr_body: str) -> None:
+    changed_paths = changed_pr_paths(base_sha, head_sha)
     errors = evaluate_change_policy(changed_paths, pr_body)
     hard, ui_review = classify_paths(changed_paths)
 
@@ -280,6 +343,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", choices=("pull_request", "push"), default="pull_request")
     parser.add_argument("--base-sha")
+    parser.add_argument("--head-sha")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
@@ -290,9 +354,9 @@ def main() -> None:
     validate_canonical_styleguide()
 
     if args.event == "pull_request":
-        if not args.base_sha:
-            fail("--base-sha is verplicht voor pull_request-validatie.")
-        validate_pr_delta(args.base_sha, os.environ.get("PR_BODY", ""))
+        if not args.base_sha or not args.head_sha:
+            fail("--base-sha en --head-sha zijn verplicht voor pull_request-validatie.")
+        validate_pr_delta(args.base_sha, args.head_sha, os.environ.get("PR_BODY", ""))
     else:
         print("[OK] Push naar main: canonieke styleguide/token-sync gevalideerd.")
         print("UI_STYLEGUIDE_CHANGE_POLICY_GREEN")
