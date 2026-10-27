@@ -116,6 +116,7 @@ def test_background_scheduler_pauses_during_maintenance(monkeypatch, tmp_path):
         "due": 0, "completed": 0, "failed": 0, "locked": 0,
     }
     engine.maintenance_state = "normal"
+    monkeypatch.setattr(worker, "_admitted_ah_sync", lambda *_args: None)
     assert worker.sync_due_ah_households(engine, tmp_path)["completed"] == 1
 
 
