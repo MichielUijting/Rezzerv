@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -16,11 +17,22 @@ const columns = [
 ]
 
 export default function ExternalDatabases2Page() {
+  const location = useLocation()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
+  const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
+
+  useEffect(() => {
+    const result = location.state?.offLinkOutcome
+    if (!result) return undefined
+    setOffLinkOutcome(result)
+    if (result.status !== 'success') return undefined
+    const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [location.key, location.state?.offLinkOutcome])
 
   useEffect(() => {
     let cancelled = false
@@ -29,9 +41,15 @@ export default function ExternalDatabases2Page() {
         const response = await fetchJsonWithAuth('/api/external-databases/unlinked-articles', { method: 'GET' })
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
-        if (!cancelled) setItems((payload.items || []).map((item) => ({
-          ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
-        })))
+        if (!cancelled) {
+          const loadedItems = (payload.items || []).map((item) => ({
+            ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+          }))
+          setItems(loadedItems)
+          if (location.state?.selectedItemId) {
+            setSelectedItem(loadedItems.find((item) => item.id === location.state.selectedItemId) || null)
+          }
+        }
       } catch {
         if (!cancelled) setError('De artikelen konden niet worden geladen.')
       } finally {
@@ -40,13 +58,23 @@ export default function ExternalDatabases2Page() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [location.state?.selectedItemId])
 
   return (
     <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
         <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken.</p>
+        {offLinkOutcome ? <p data-testid="external-off-link-outcome"
+          role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
+          onClick={() => setOffLinkOutcome(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') setOffLinkOutcome(null)
+          }}
+          tabIndex={0}
+          title={offLinkOutcome.status === 'success' ? '' : 'Klik om deze melding te sluiten'}>
+          {offLinkOutcome.message}
+        </p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <div className="rz-external-receipt-overview">
         <DataTable

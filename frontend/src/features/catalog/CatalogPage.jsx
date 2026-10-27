@@ -275,7 +275,7 @@ export default function CatalogPage() {
             <div className="rz-catalog-header">
               <div>
                 <h2>Catalogus</h2>
-                <p>Overzicht van generieke artikelen en exacte producten met hun centrale GS1 GPC-classificatie.</p>
+                <p>Overzicht van generieke en exacte artikelen. Ontbrekende GS1-classificaties zijn duidelijk gemarkeerd.</p>
               </div>
             </div>
 
@@ -352,7 +352,7 @@ export default function CatalogPage() {
                           <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
                           <span>{text(item.name)}</span>
                         </div>
-                      </td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
+                      </td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type, 'Classificatie ontbreekt')}</td>
                       <td>{text(item.gpc_brick_code, 'Niet geclassificeerd')}</td>
                       <td>{text(item.gpc_brick_name, 'Niet geclassificeerd')}</td>
                       <td>{text(item.gpc_class_name, 'Niet geclassificeerd')}</td>

@@ -6,7 +6,13 @@ De testfixture maakt zijn eigen schema; productiecode mag geen schema self-heale
 
 from __future__ import annotations
 
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from app.services.external_article_product_link_domain_service import (
     confirm_global_external_article_product_link,
@@ -15,6 +21,8 @@ from app.services.external_article_product_link_domain_service import (
 )
 from app.services.external_article_product_link_service import (
     deactivate_incomplete_confirmed_external_links,
+    get_pending_classification_external_article_link,
+    stage_external_article_product_link_without_gpc,
 )
 
 
@@ -35,6 +43,67 @@ def _expect_value_error(callable_value, expected_text: str) -> None:
         raise AssertionError(
             f"Verwachte ValueError ontbreekt: {expected_text}"
         )
+
+
+def _assert_sqlite_pending_migration_compatibility() -> None:
+    """An operational PostgreSQL extension must not rewrite SQLite baseline."""
+    migration_file = Path(__file__).resolve().parents[2] / "alembic" / "versions" / (
+        "20261027_02_external_catalog_pending_classification.py"
+    )
+    spec = spec_from_file_location("external_pending_schema_contract", migration_file)
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    for named_status in (False, True):
+        engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+        constraint = "CONSTRAINT ck_external_article_product_links_status " if named_status else ""
+        with engine.begin() as conn:
+            conn.execute(text(f"""
+                CREATE TABLE external_article_product_links (
+                    id TEXT PRIMARY KEY, retailer_code TEXT NOT NULL,
+                    receipt_text_normalized TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    {constraint}CHECK (status IN ('confirmed', 'inactive')),
+                    CHECK (length(trim(receipt_text_normalized)) > 0)
+                )
+            """))
+            before = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
+            migration.op = Operations(MigrationContext.configure(conn))
+            migration.upgrade()
+            after = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
+            _assert(after == before, "SQLite baseline is door de upgrade gewijzigd")
+            try:
+                conn.execute(text("""
+                    INSERT INTO external_article_product_links
+                        (id, retailer_code, receipt_text_normalized, status)
+                    VALUES ('1', 'lidl', 'achterham', 'classification_pending')
+                """))
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("De oude SQLite-statuscheck is verloren")
+            migration.downgrade()
+            after_downgrade = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
+            _assert(after_downgrade == before, "SQLite baseline is door de downgrade gewijzigd")
+            try:
+                conn.execute(text("""
+                    INSERT INTO external_article_product_links
+                        (id, retailer_code, receipt_text_normalized, status)
+                    VALUES ('2', 'lidl', '', 'confirmed')
+                """))
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("De originele SQLite-identiteitscheck is verloren")
+        engine.dispose()
 
 
 def _create_test_database():
@@ -108,7 +177,7 @@ def _create_test_database():
                     source_candidate_id TEXT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    CHECK (status IN ('confirmed', 'inactive')),
+                    CHECK (status IN ('confirmed', 'inactive', 'classification_pending')),
                     CHECK (
                         length(trim(receipt_text_normalized)) > 0
                         OR length(trim(external_article_code)) > 0
@@ -337,6 +406,7 @@ def _create_test_database():
 
 
 def run_contract() -> None:
+    _assert_sqlite_pending_migration_compatibility()
     engine = _create_test_database()
 
     with engine.begin() as conn:
@@ -490,6 +560,36 @@ def run_contract() -> None:
             "officieel GS1 GPC-Producttype ontbreekt",
         )
 
+        waiting = stage_external_article_product_link_without_gpc(
+            conn, retailer_code="LIDL", receipt_text="Artikel zonder GPC",
+            external_article_code="sku-123", global_product_id="product-no-gpc",
+        )
+        _assert(waiting["status"] == "classification_pending", "Geen pendingstatus opgeslagen")
+        same = stage_external_article_product_link_without_gpc(
+            conn, retailer_code="LIDL", receipt_text="Artikel zonder GPC",
+            external_article_code="sku-123", global_product_id="product-no-gpc",
+        )
+        _assert(same["id"] == waiting["id"], "De pending-koppeling is niet idempotent")
+        _assert(find_global_external_article_product_link(
+            conn, retailer_code="lidl", external_article_code="sku-123",
+        ) is None, "Kassa kreeg een incomplete pending-koppeling")
+        _assert(get_pending_classification_external_article_link(
+            conn, retailer_code="lidl", receipt_text="Artikel zonder GPC",
+        )["global_product_id"] == "product-no-gpc", "Barcode-overzicht mist pending product")
+        _assert(get_pending_classification_external_article_link(
+            conn, retailer_code="jumbo", receipt_text="Artikel zonder GPC",
+        ) is None, "Wachtende relatie lekt naar andere winkelketen")
+        conn.execute(text("""
+            INSERT INTO product_group_memberships (
+                id, global_product_id, inventory_group_key, active
+            ) VALUES ('membership-later-gpc', 'product-no-gpc', 'gpc:10000001', 1)
+        """))
+        now_complete = find_global_external_article_product_link(
+            conn, retailer_code="lidl", external_article_code="sku-123",
+        )
+        _assert(now_complete is not None and now_complete["global_product_id"] == "product-no-gpc",
+                "Latere officiële GS1-classificatie activeerde de relatie niet")
+
         _expect_value_error(
             lambda: confirm_global_external_article_product_link(
                 conn,
@@ -610,6 +710,8 @@ def run_contract() -> None:
     print("PASS: expliciete generieke producten zonder GTIN zijn geldig met officiële GPC")
     print("PASS: passende GTIN-identiteit is verplicht")
     print("PASS: officieel GS1 GPC-Producttype is verplicht")
+    print("PASS: OFF-GTIN zonder GPC blijft pending en wordt na officiële GPC beschikbaar")
+    print("PASS: de onveranderlijke SQLite-baseline blijft bij upgrade/downgrade intact")
     print("PASS: inactieve universele artikelen worden geweigerd")
     print("PASS: historische incomplete koppelingen worden gedeactiveerd")
     print("PASS: volledige bestaande koppelingen blijven actief")

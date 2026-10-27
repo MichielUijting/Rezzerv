@@ -30,6 +30,7 @@ from app.services.product_inventory_group_store import (
 
 CONFIRMED_STATUS = "confirmed"
 INACTIVE_STATUS = "inactive"
+CLASSIFICATION_PENDING_STATUS = "classification_pending"
 
 
 def normalize_external_link_retailer_code(value: Any) -> str:
@@ -661,7 +662,7 @@ def save_external_article_product_link(
             f"""
             UPDATE external_article_product_links
             SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-            WHERE status = 'confirmed' AND ({conflict_where})
+            WHERE status IN ('confirmed', 'classification_pending') AND ({conflict_where})
             """
         ),
         {
@@ -715,6 +716,131 @@ def save_external_article_product_link(
     return serialized
 
 
+def stage_external_article_product_link_without_gpc(
+    conn,
+    *,
+    retailer_code: Any,
+    global_product_id: Any,
+    receipt_text: Any = None,
+    external_article_code: Any = None,
+) -> dict[str, Any]:
+    """Persist a verified GTIN identity without claiming a complete GPC link.
+
+    Only the Externe databases 2 user-confirmed OFF flow calls this. The row is
+    NOT returned to receipt/inventory consumers until a real official GPC Brick
+    has subsequently been assigned. No household or inventory row is touched.
+    """
+    retailer = normalize_external_link_retailer_code(retailer_code)
+    code = normalize_external_link_article_code(external_article_code)
+    label = normalize_external_link_receipt_text(receipt_text)
+    product_id = str(global_product_id or "").strip()
+    if not retailer or not product_id or not (code or label):
+        raise ValueError("Winkel, bonartikel en Catalogusproduct zijn verplicht")
+    completeness = _complete_global_product_link_data(conn, product_id)
+    if (
+        completeness.get("is_generic_catalog_product")
+        or not completeness.get("has_valid_primary_gtin")
+        or not completeness.get("has_matching_gtin_identity")
+    ):
+        raise ValueError("Een controleerbaar exact Catalogusartikel met GTIN is verplicht")
+    if completeness.get("has_active_official_gpc"):
+        raise ValueError("Een al geclassificeerd artikel moet volledig worden gekoppeld")
+    product = conn.execute(text("""
+        SELECT id, status FROM global_products WHERE id = :global_product_id LIMIT 1
+    """), {"global_product_id": product_id}).mappings().first()
+    if not product or str(product.get("status") or "").strip().lower() != "active":
+        raise ValueError("Catalogusproduct is niet actief")
+
+    conflicts = []
+    if code:
+        conflicts.append("(retailer_code = :retailer_code AND external_article_code = :external_article_code)")
+    if label:
+        conflicts.append("(retailer_code = :retailer_code AND receipt_text_normalized = :receipt_text_normalized)")
+    identity_where = " OR ".join(conflicts)
+    params = {"retailer_code": retailer, "external_article_code": code,
+              "receipt_text_normalized": label, "global_product_id": product_id}
+    # A partial OFF candidate must never silently demote an already confirmed
+    # different product for the same retailer/code or normalized receipt text.
+    active_conflict = conn.execute(text(f"""
+        SELECT id FROM external_article_product_links
+        WHERE status = 'confirmed' AND ({identity_where})
+          AND global_product_id <> :global_product_id LIMIT 1
+    """), params).mappings().first()
+    if active_conflict:
+        raise ValueError("Dit winkelartikel heeft al een andere bevestigde Cataloguskoppeling")
+    existing = conn.execute(text(f"""
+        SELECT link.*, gp.name AS global_product_name
+        FROM external_article_product_links link
+        JOIN global_products gp ON gp.id = link.global_product_id
+        WHERE link.status = 'classification_pending' AND ({identity_where})
+          AND link.global_product_id = :global_product_id
+        ORDER BY link.created_at DESC, link.id DESC LIMIT 1
+    """), params).mappings().first()
+    if existing:
+        return _serialize_external_article_product_link(existing)
+
+    conn.execute(text(f"""
+        UPDATE external_article_product_links
+        SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'classification_pending' AND ({identity_where})
+    """), params)
+    link_id = str(uuid.uuid4())
+    conn.execute(text("""
+        INSERT INTO external_article_product_links (
+            id, retailer_code, receipt_text_normalized, external_article_code,
+            global_product_id, status, confirmed_by, confirmed_at,
+            source_candidate_id, created_at, updated_at
+        ) VALUES (
+            :id, :retailer_code, :receipt_text_normalized, :external_article_code,
+            :global_product_id, 'classification_pending',
+            'external_databases_off_pending_gpc', CURRENT_TIMESTAMP,
+            NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+    """), {**params, "id": link_id})
+    saved = conn.execute(text("""
+        SELECT link.*, gp.name AS global_product_name
+        FROM external_article_product_links link
+        JOIN global_products gp ON gp.id = link.global_product_id
+        WHERE link.id = :id LIMIT 1
+    """), {"id": link_id}).mappings().first()
+    serialized = _serialize_external_article_product_link(saved)
+    if not serialized or serialized.get("status") != CLASSIFICATION_PENDING_STATUS:
+        raise RuntimeError("Catalogusopslag kon niet worden bevestigd; transactie teruggedraaid")
+    return serialized
+
+
+def get_pending_classification_external_article_link(
+    conn, *, retailer_code: Any, receipt_text: Any = None,
+    external_article_code: Any = None,
+) -> Optional[dict[str, Any]]:
+    """Read staged identity for Externe databases 2, never for Kassa/Voorraad."""
+    retailer = normalize_external_link_retailer_code(retailer_code)
+    code = normalize_external_link_article_code(external_article_code)
+    label = normalize_external_link_receipt_text(receipt_text)
+    if not retailer:
+        return None
+    for column, value in (("external_article_code", code), ("receipt_text_normalized", label)):
+        if not value:
+            continue
+        row = conn.execute(text(f"""
+            SELECT link.*, gp.name AS global_product_name, gp.primary_gtin
+            FROM external_article_product_links link
+            JOIN global_products gp ON gp.id = link.global_product_id
+            WHERE link.retailer_code = :retailer_code
+              AND link.{column} = :identity_value
+              AND link.status = 'classification_pending'
+              AND LOWER(COALESCE(gp.status, 'active')) = 'active'
+            ORDER BY link.confirmed_at DESC, link.id DESC LIMIT 1
+        """), {"retailer_code": retailer, "identity_value": value}).mappings().first()
+        if row:
+            complete = _complete_global_product_link_data(conn, row.get("global_product_id"))
+            if (complete.get("has_valid_primary_gtin")
+                    and complete.get("has_matching_gtin_identity")
+                    and not complete.get("is_generic_catalog_product")):
+                return _serialize_external_article_product_link(row)
+    return None
+
+
 def get_confirmed_external_article_product_link(
     conn,
     *,
@@ -737,9 +863,10 @@ def get_confirmed_external_article_product_link(
                 JOIN global_products gp ON gp.id = link.global_product_id
                 WHERE link.retailer_code = :retailer_code
                   AND link.external_article_code = :external_article_code
-                  AND link.status = 'confirmed'
+                  AND link.status IN ('confirmed', 'classification_pending')
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
-                ORDER BY link.confirmed_at DESC, link.id DESC
+                ORDER BY CASE WHEN link.status = 'confirmed' THEN 0 ELSE 1 END,
+                         link.confirmed_at DESC, link.id DESC
                 LIMIT 1
                 """
             ),
@@ -764,9 +891,10 @@ def get_confirmed_external_article_product_link(
                 JOIN global_products gp ON gp.id = link.global_product_id
                 WHERE link.retailer_code = :retailer_code
                   AND link.receipt_text_normalized = :receipt_text_normalized
-                  AND link.status = 'confirmed'
+                  AND link.status IN ('confirmed', 'classification_pending')
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
-                ORDER BY link.confirmed_at DESC, link.id DESC
+                ORDER BY CASE WHEN link.status = 'confirmed' THEN 0 ELSE 1 END,
+                         link.confirmed_at DESC, link.id DESC
                 LIMIT 1
                 """
             ),

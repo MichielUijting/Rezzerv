@@ -1221,3 +1221,33 @@ de waarde staat ook op mobiel, in het artikeldetail en in de export.
 Er is één korte toelichting over handmatig controleren en een link naar
 Externe databases 2 voor ontbrekende codes. De mobiele header/Terug en feedback
 komen uit de bestaande gedeelde componenten.
+
+### Externe databases 2: vrij zoeken in OFF — PO, 26 oktober 2026
+
+De vaste productgegevensregel is de enige toelichting in het automatische
+kandidatenpaneel: eventuele bronstatusalinea's, bronbewijsdetails en links
+worden daar niet meer getoond. Direct daarna staat de knop **Zelf zoeken in
+OFF**. Deze opent een afzonderlijk scherm met één vrij zoektekstveld en
+een zoekknop. OFF-resultaten komen in een gewone DataTable, zonder eigen
+kolomfilters en met zeven kandidaten per pagina en paginering als er meer
+resultaten zijn. Het zoekscherm heeft **geen extra Terugknop**: de mobiele gedeelde
+header-Terug blijft bestaan. De Overeenkomstkolom toont een niet-nul
+productrelevantiescore (winkelnamen worden niet als naamovereenkomst geteld)
+en bepaalt standaard de rangorde; niet-berekenbare scores verschijnen als
+streepje, niet als verzonnen 0%. Dubbelklik op desktop, tik op mobiel of
+Enter op een rij opent de waarschuwingsoverlay met uitsluitend de vraag
+**Weet u zeker dat u dit artikel wilt koppelen?** en **Annuleren** / **OK**,
+zonder extra titel of toelichting. Bij OK valideert de backend een kortlevend,
+cryptografisch ondertekend OFF-zoekbewijs, bronbonartikel en GTIN, zonder
+tweede externe OFF-opvraag. De centrale Catalogus koppelt alleen bij de
+verplichte identiteit-, merk- en officiële GS1 GPC-controles. Een verlopen
+bewijs of ontbrekende officiële classificatie geeft na OK een foutmelding
+in **Externe databases 2**; nooit een onterechte succesmelding of databasewrite.
+Ook na een bevestigingsfout of timeout keert **OK** terug naar het overzicht.
+Een niet ontvangen serverbevestiging wordt altijd als **niet bevestigd**
+getoond. Een succesmelding verdwijnt na maximaal vier seconden. Een mislukte
+Catalogusmutatie is een blijvende, aanklikbare foutregel tot de gebruiker die
+zelf sluit of het scherm verlaat, zodat de afwijzing niet onopgemerkt verdwijnt.
+Alleen bij bevestigd `linked: true` verschijnt de succesmelding. **Annuleren** sluit
+alleen de dialoog en blijft op het zoekscherm zonder koppeling.
+OFF-zoeken zelf blijft uitsluitend lezen.

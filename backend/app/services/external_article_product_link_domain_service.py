@@ -102,7 +102,7 @@ def deactivate_global_external_article_product_link(
             SET status = 'inactive',
                 updated_at = CURRENT_TIMESTAMP
             WHERE retailer_code = :retailer_code
-              AND status = 'confirmed'
+              AND status IN ('confirmed', 'classification_pending')
               AND ({' OR '.join(conditions)})
             """
         ),

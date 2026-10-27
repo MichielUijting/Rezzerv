@@ -10,9 +10,80 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
   for (const width of [390, 1280]) {
+    test(`OFF-product zonder GPC blijft zichtbaar in Catalogus en verdwijnt uit ongekoppeld op ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const item = { id: 'receipt-table-line:achterham-test', receipt_line_text: 'Achterham BL',
+        retailer_code: 'lidl', receipt_article_number: '6604471', quantity_label: '1 stuk' }
+      let saved = false
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+          role: 'owner', is_platform_superuser: true,
+          permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: {
+          items: saved ? [] : [item], total: saved ? 0 : 1,
+        } })
+        if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+          provider: 'openfoodfacts', results: [{ gtin: '8718452504435',
+            product_name: 'Achterham', brand: 'Zwagerman', score: .9 }],
+        } })
+        if (path === '/api/external-products/off/search') return route.fulfill({ json: {
+          provider: 'openfoodfacts', mutated: false, results: [{
+            gtin: '8718452504435', product_name: 'Achterham', brand: 'Zwagerman',
+            score: .98, selection_proof: 'signed-achterham',
+          }],
+        } })
+        if (path === '/api/external-databases/off/link-selected') {
+          expect(request.postDataJSON()).toEqual({
+            receipt_item_id: item.id, gtin: '8718452504435', selection_proof: 'signed-achterham',
+          })
+          saved = true
+          return route.fulfill({ json: {
+            ok: true, linked: false, cataloged: true, classification_pending: true,
+            global_product_id: 'pending-achterham',
+          } })
+        }
+        if (path === '/api/catalog') return route.fulfill({ json: {
+          items: [{ id: 'pending-achterham', name: 'Achterham', brand: 'Zwagerman',
+            primary_gtin: '8718452504435', catalog_kind: 'exact', product_type: '',
+            gpc_brick_code: '', gpc_brick_name: '', gpc_class_name: '', gpc_family_name: '',
+          }], total: 1,
+        } })
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const table = page.getByTestId('external-databases-2-table')
+      const row = table.locator('tbody tr').filter({ hasText: 'Achterham BL' })
+      if (width <= 720) await row.click()
+      else await row.dblclick()
+      await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('Achterham')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      const candidate = page.getByTestId('external-off-free-search-results').locator('tbody tr').first()
+      if (width <= 720) await candidate.click()
+      else await candidate.dblclick()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
+      await expect(table).not.toContainText('Achterham BL')
+      await page.goto('/catalogus')
+      await expect(page.getByText('Achterham', { exact: true })).toBeVisible()
+      await expect(page.getByText('Classificatie ontbreekt')).toBeVisible()
+    })
+  }
+  for (const width of [390, 1280]) {
     test(`OFF-paneel gebruikt bestaande automatische zoekflow op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const searches = []
+      const links = []
+      let linkResultMode = 'success'
       const unexpectedWrites = []
       let errorAttempts = 0
       let slowMilk = false
@@ -25,6 +96,21 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.route('**/api/**', async (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname
+        if (path === '/api/external-databases/off/link-selected') {
+          const body = request.postDataJSON()
+          links.push(body)
+          expect(body).toEqual({ receipt_item_id: rows[0].id, gtin: '8712345678900', selection_proof: 'signed-fixture-proof' })
+          if (linkResultMode === 'fail') return route.fulfill({ status: 422, json: { detail: 'Officiële GS1-classificatie ontbreekt.' } })
+          return route.fulfill({ json: { ok: true, linked: true, global_product_id: 'catalog-existing' } })
+        }
+        if (path === '/api/external-products/off/search') {
+          const body = request.postDataJSON()
+          expect(body).toEqual({ receipt_item_id: rows[0].id, mode: 'manual', query: 'halfvolle melk bio', limit: 20 })
+          return route.fulfill({ json: { provider: 'openfoodfacts', mutated: false, results: Array.from({ length: 16 }, (_, index) => ({
+            gtin: `87123456789${String(index).padStart(2, '0')}`, product_name: `Vrij gezocht product ${index + 1}`,
+            brand: 'OFF-merk', quantity: '1 l', score: 1 - index / 20, selection_proof: 'signed-fixture-proof',
+          })) } })
+        }
         if (path === '/api/external-databases/products/search-preview') {
           const body = request.postDataJSON()
           searches.push(body)
@@ -56,6 +142,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           context_type: 'system', role: 'owner', is_platform_superuser: true,
           permissions: { 'platform.system_household.access': true },
         } })
+        if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
         if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
@@ -83,9 +170,8 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
       await expect(candidates.locator('tbody tr').first()).toContainText('95%')
       await expect(candidates).toContainText('Lidl + OFF')
-      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('1234567')
-      await expect(panel.getByTestId('retailer-product-evidence')).toContainText('8720326035617')
-      await expect(panel.getByRole('link', { name: 'Bekijk product bij Lidl' })).toHaveAttribute('href', 'https://www.lidl.nl/p/test/p1234567')
+      await expect(panel.getByTestId('retailer-product-evidence')).toHaveCount(0)
+      await expect(panel).not.toContainText('Lidl vermeldt één geldige barcode')
       expect(searches[0]).toEqual({ receipt_item_id: rows[0].id, mode: 'automatic', limit: 20 })
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       const paging = panel.getByRole('navigation', { name: 'Paginering' })
@@ -103,11 +189,66 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       expect(searches).toHaveLength(1)
       expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
+      if (width <= 720) {
+        await expect(page.getByTestId('mobile-global-header').getByRole('heading', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+      } else {
+        await expect(page.getByTestId('app-header')).toContainText('Zelf zoeken in OFF')
+      }
+      await expect(page.getByRole('textbox')).toHaveCount(1)
+      const freeSearch = page.getByRole('textbox', { name: 'Zoektekst in OFF' })
+      await freeSearch.fill('halfvolle melk bio')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      const freeResults = page.getByTestId('external-off-free-search-results')
+      await expect(freeResults.locator('tbody tr')).toHaveCount(7)
+      await expect(freeResults).toContainText('Vrij gezocht product 1')
+      const freePaging = page.getByRole('navigation', { name: 'Paginering' })
+      await freePaging.getByRole('button', { name: '3', exact: true }).click()
+      await expect(freeResults.locator('tbody tr')).toHaveCount(2)
+      await expect(freeResults).toContainText('Vrij gezocht product 16')
+      await expect(page.locator('.rz-external-off-manual-header')).toHaveCount(0)
+      const selectRow = async () => {
+        if (width <= 720) await freeResults.locator('tbody tr').first().click()
+        else await freeResults.locator('tbody tr').first().dblclick()
+      }
+      await selectRow()
+      await expect(page.getByRole('alertdialog')).toHaveText(/Weet u zeker dat u dit artikel wilt koppelen\?\s*Annuleren\s*OK/)
+      await expect(page.getByRole('alertdialog')).not.toContainText('Cataloguskoppeling bevestigen')
+      await expect(page.getByRole('alertdialog')).not.toContainText('OFF kon')
+      await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
+      await expect(page.getByRole('alertdialog')).toHaveCount(0)
+      expect(links).toHaveLength(0)
+      await freePaging.getByRole('button', { name: '1', exact: true }).click()
+      await selectRow()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toHaveText('Artikel gekoppeld aan de Catalogus.')
+      expect(links).toHaveLength(1)
+      await expect(panel).toHaveCount(0)
+
+      // A link that the server rejects must ALSO return to the overview;
+      // it must not look successful or leave the user stuck in OFF search.
+      linkResultMode = 'fail'
+      await open(0)
+      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
+      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('halfvolle melk bio')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      await expect(freeResults.locator('tbody tr')).toHaveCount(7)
+      await selectRow()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toContainText('Koppeling niet bevestigd: Officiële GS1-classificatie ontbreekt.')
+      await expect(page.getByTestId('external-off-link-outcome')).toHaveAttribute('role', 'alert')
+      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      expect(links).toHaveLength(2)
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
       await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       await expect(panel).not.toContainText('Tweede suggestie')
-      await expect(panel).toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
+      await expect(panel).not.toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
       await expect(panel).not.toContainText('1234567')
       await open(2)
       await expect(panel.getByRole('alert')).toContainText('OFF is tijdelijk niet bereikbaar.')
