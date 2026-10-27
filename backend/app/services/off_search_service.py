@@ -651,12 +651,15 @@ def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(kind: str, query: str, weight: float) -> None:
+    def add(kind: str, query: str, weight: float, *, score_query: str = "") -> None:
         normalized = _normalize(query)
         if not normalized or normalized in seen:
             return
         seen.add(normalized)
-        variants.append({"kind": kind, "query": normalized, "weight": weight})
+        variant = {"kind": kind, "query": normalized, "weight": weight}
+        if score_query:
+            variant["score_query"] = _normalize(score_query)
+        variants.append(variant)
 
     if private_label_marker:
         add("private_label_phrase", source_receipt_text, 1.2)
@@ -665,6 +668,13 @@ def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
     if len(raw_tokens) >= 2:
         add("clean_phrase", " ".join(raw_tokens), 0.9)
     if len(core_tokens) == 1:
+        # The manual query "Achterham Lidl" returned exact product evidence that
+        # an unqualified "Achterham" search may miss. Reuse this context while
+        # evaluating product similarity on the core item name, NEVER on "Lidl".
+        retailer = _normalize(item.get("retailer_code", ""))
+        if retailer in RETAILER_BRAND_ALIASES:
+            add("retailer_phrase", f"{core_tokens[0]} {retailer}", 0.90,
+                score_query=core_tokens[0])
         add("single_core", core_tokens[0], 0.55)
     elif len(core_tokens) >= 2:
         for token in core_tokens:
@@ -798,7 +808,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
         accepted_count = 0
         for product in products:
             result = _normalize_result(
-                query=query,
+                query=variant.get("score_query", query),
                 retailer_code=item.get("retailer_code", ""),
                 quantity_label=item.get("quantity_label", ""),
                 product=product,
@@ -833,7 +843,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
             )
 
             entry["query_hits"] += 1
-            if variant["kind"] in {"private_label_phrase", "core_phrase", "clean_phrase"}:
+            if variant["kind"] in {"private_label_phrase", "core_phrase", "clean_phrase", "retailer_phrase"}:
                 entry["phrase_hits"] += 1
 
             current_name_score = float(

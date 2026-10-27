@@ -99,15 +99,29 @@ na de serverrespons altijd terug naar **Externe databases 2**, ook als de
 koppeling is afgewezen. Alleen een door de server bevestigde koppeling wordt
 als geslaagd gemeld; het gekoppelde bronartikel kan na herladen verdwijnen
 uit de lijst zonder barcode. Bij een afwijzing blijft het bronartikel
-beschikbaar en verschijnt in het overzicht maximaal vier seconden de reden.
+beschikbaar en blijft de reden als aanklikbare foutregel zichtbaar totdat de
+gebruiker die sluit of naar een ander scherm gaat. Een mislukte schrijfactie
+wordt nooit verward met een opgeslagen Catalogusartikel.
 Bij een verzoek-timeout toont InHuis **niet bevestigd**: een afgebroken
 clientverzoek bewijst niet dat de server geen koppeling heeft gemaakt.
 **Annuleren** sluit alleen de dialoog en blijft op Zelf zoeken in OFF.
 Daarna bevestigt de bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
 deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
-Catalogusartikel mag op dezelfde GTIN worden hergebruikt; ontbreekt voor
-een nieuw product de officiële GPC-classificatie, dan stopt de actie zonder
-koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na
+Catalogusartikel mag op dezelfde GTIN worden hergebruikt. Voor een nieuw OFF-artikel
+is een officiële GS1 GPC-classificatie verplicht. Naast een expliciete geldige
+GS1-code mag alleen een exact in de producttaxonomie vastgelegd en met de
+actuele officiële Nederlandse GS1-referentie geverifieerd producttype worden
+gebruikt; voor **Achterham** is dit de officiële code **10005781**
+(voorbereid/verwerkt varkensvlees). Een onbekend, onjuist of dubbelzinnig
+product wordt niet automatisch geclassificeerd en blijft ongekoppeld.
+Na opslag van een bestaand Catalogusartikel wordt bovendien gecontroleerd
+of de bevestigde centrale koppeling daadwerkelijk naar precies dat artikel
+verwijst; anders rolt de database de transactie terug.
+De lijst zonder barcode en de centrale koppeling gebruiken dezelfde
+winkelketensleutel (`store_chain` vóór `store_name`) en dezelfde
+oorspronkelijke bonartikeltekst. Alleen een echt afgeronde koppeling mag
+daardoor verdwijnen uit Externe databases 2. Bij ontbrekende officiële
+GS1-classificatie stopt de actie zonder koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na
 **OK** keert de gebruiker na afloop terug naar Externe databases 2 met
 een waarheidsgetrouwe succes- of foutstatus; op mobiel blijft de gedeelde
 header-Terug beschikbaar.

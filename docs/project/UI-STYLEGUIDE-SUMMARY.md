@@ -1245,7 +1245,9 @@ bewijs of ontbrekende officiële classificatie geeft na OK een foutmelding
 in **Externe databases 2**; nooit een onterechte succesmelding of databasewrite.
 Ook na een bevestigingsfout of timeout keert **OK** terug naar het overzicht.
 Een niet ontvangen serverbevestiging wordt altijd als **niet bevestigd**
-getoond. De statusmelding verdwijnt na maximaal vier seconden. Alleen bij
-bevestigd `linked: true` verschijnt de succesmelding. **Annuleren** sluit
+getoond. Een succesmelding verdwijnt na maximaal vier seconden. Een mislukte
+Catalogusmutatie is een blijvende, aanklikbare foutregel tot de gebruiker die
+zelf sluit of het scherm verlaat, zodat de afwijzing niet onopgemerkt verdwijnt.
+Alleen bij bevestigd `linked: true` verschijnt de succesmelding. **Annuleren** sluit
 alleen de dialoog en blijft op het zoekscherm zonder koppeling.
 OFF-zoeken zelf blijft uitsluitend lezen.

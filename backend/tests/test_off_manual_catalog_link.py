@@ -89,7 +89,7 @@ def test_existing_classified_catalog_article_uses_canonical_link():
         patch.object(linker, "_complete_global_product_link_data", return_value={
             "complete": True, "primary_gtin": GTIN,
         }),
-        patch.object(linker, "confirm_external_article_for_receipt_item", return_value={"status": "confirmed"}) as confirm,
+        patch.object(linker, "confirm_external_article_for_receipt_item", return_value={"status": "confirmed", "global_product_id": "existing-product"}) as confirm,
         patch.object(linker, "link_off_product_with_product_type") as create,
     ):
         begin.return_value.__enter__.return_value = db
@@ -166,3 +166,107 @@ def test_proof_expiry_and_untrusted_fields_are_rejected():
         with pytest.raises(ValueError, match="verlopen"):
             proof.verify_manual_off_proof(ticket, receipt_item_id=RECEIPT, gtin=GTIN)
     assert proof.issue_manual_off_proof(RECEIPT, {"gtin": "invalid", "product_name": "X"}) == ""
+
+
+def test_official_ham_gpc_bridge_is_exact_and_verified_against_bundled_gs1():
+    from app.services.automatic_product_type_service import official_bricks
+    # GS1 cured pork ham: official Brick 10005781; both known Dutch name
+    # and current official reference are required.
+    assert "10005781" in official_bricks()
+    assert linker._verified_official_gpc_for_exact_name({
+        "product_name": "Achterham", "brand": "Zwagerman (Lidl)"
+    }) == "10005781"
+    assert linker._verified_official_gpc_for_exact_name({"product_name": "Kalkoenham"}) == ""
+    assert linker._verified_official_gpc_for_exact_name({"product_name": "Onbekend product"}) == ""
+    with patch.object(linker, "official_bricks", return_value={}):
+        assert linker._verified_official_gpc_for_exact_name({"product_name": "Achterham"}) == ""
+
+
+def test_achterham_lidl_off_product_becomes_complete_catalog_link_with_official_gpc():
+    db = _mock_db()
+    ham = {
+        "gtin": GTIN, "product_name": "Achterham",
+        "brand": "Zwagerman (Lidl)", "explicit_gpc_brick_code": "",
+    }
+    with (
+        patch.object(linker, "verify_manual_off_proof", return_value=ham),
+        patch.object(linker.engine, "begin") as begin,
+        patch.object(linker, "resolve_external_article_identity", return_value={
+            "retailer_code": "lidl", "receipt_text": "Achterham",
+        }),
+        patch.object(linker, "assert_external_product_identity_compatible"),
+        patch.object(linker, "link_off_product_with_product_type", return_value={
+            "ok": True, "linked": True, "global_product": {"id": "zwagerman-achterham"},
+        }) as write,
+    ):
+        begin.return_value.__enter__.return_value = db
+        result = linker.confirm_selected_off_catalog_product({
+            "receipt_item_id": RECEIPT, "gtin": GTIN, "selection_proof": "signed",
+        })
+    assert result["linked"] and result["global_product_id"] == "zwagerman-achterham"
+    assert write.call_args.kwargs["product_type_assignment"]["product_type_id"] == "gpc:10005781"
+
+
+def test_automatic_lidl_search_uses_retailer_context_without_fake_product_score():
+    item = {
+        "receipt_item_id": RECEIPT,
+        "retailer_code": "lidl",
+        "receipt_line_text": "Achterham",
+        "quantity_label": "",
+    }
+    variants = search._automatic_query_variants(item)
+    assert variants[0]["kind"] == "retailer_phrase"
+    assert variants[0]["query"] == "achterham lidl"
+    assert variants[0]["score_query"] == "achterham"
+
+    queries = []
+    def fake_off(query, limit):
+        queries.append(query)
+        if query == "achterham lidl":
+            return ([{
+                "code": GTIN, "product_name": "Achterham",
+                "brands": "Zwagerman (Lidl)", "quantity": "100 g",
+            }], "test-provider")
+        return ([], "test-provider")
+
+    with patch.object(search, "_query_off", side_effect=fake_off):
+        result = search.search_off_candidates_for_item({
+            "mode": "automatic", "limit": 20,
+        }, item)
+    assert "achterham lidl" in queries
+    assert any(row["product_name"] == "Achterham" for row in result["results"])
+    assert result["results"][0]["score_breakdown"]["required_product_match"] == 1.0
+
+
+def test_saved_catalog_link_must_match_target_product_before_claiming_success():
+    db = _mock_db()
+    db.execute.return_value.mappings.return_value.first.return_value = {"id": "existing-product"}
+    with (
+        patch.object(linker, "verify_manual_off_proof", return_value=product()),
+        patch.object(linker.engine, "begin") as begin,
+        patch.object(linker, "resolve_external_article_identity", return_value={
+            "retailer_code": "lidl", "receipt_text": "Halfvolle melk"
+        }),
+        patch.object(linker, "assert_external_product_identity_compatible"),
+        patch.object(linker, "_complete_global_product_link_data", return_value={
+            "complete": True, "primary_gtin": GTIN,
+        }),
+        patch.object(linker, "confirm_external_article_for_receipt_item", return_value={
+            "status": "confirmed", "global_product_id": "wrong-product",
+        }),
+    ):
+        begin.return_value.__enter__.return_value = db
+        with pytest.raises(RuntimeError, match="niet worden bevestigd"):
+            linker.confirm_selected_off_catalog_product({
+                "receipt_item_id": RECEIPT, "gtin": GTIN, "selection_proof": "valid",
+            })
+
+
+def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
+    # The canonical writer uses store_chain before store_name and corrected
+    # label before raw/normalized label; the overview must use identical keys.
+    import inspect
+    from app.services import external_unlinked_articles_service as overview
+    code = inspect.getsource(overview._source_articles)
+    assert "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')" in code
+    assert "COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.raw_label, ''), rtl.normalized_label, '')" in code

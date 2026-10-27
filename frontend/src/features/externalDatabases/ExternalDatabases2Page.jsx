@@ -29,6 +29,7 @@ export default function ExternalDatabases2Page() {
     const result = location.state?.offLinkOutcome
     if (!result) return undefined
     setOffLinkOutcome(result)
+    if (result.status !== 'success') return undefined
     const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
     return () => window.clearTimeout(timeout)
   }, [location.key, location.state?.offLinkOutcome])
@@ -65,7 +66,13 @@ export default function ExternalDatabases2Page() {
         <h2>Externe databases 2</h2>
         <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken.</p>
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
-          role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}>
+          role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
+          onClick={() => setOffLinkOutcome(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') setOffLinkOutcome(null)
+          }}
+          tabIndex={0}
+          title={offLinkOutcome.status === 'success' ? '' : 'Klik om deze melding te sluiten'}>
           {offLinkOutcome.message}
         </p> : null}
         {error ? <p role="alert">{error}</p> : null}

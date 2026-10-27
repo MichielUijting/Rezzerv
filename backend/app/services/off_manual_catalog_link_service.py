@@ -25,6 +25,32 @@ from app.services.external_product_identity_policy import (
 from app.services.gtin_validation_service import is_valid_gtin
 from app.services.off_product_link_service import link_off_product_with_product_type
 from app.services.off_manual_search_proof import verify_manual_off_proof
+from app.services.automatic_product_type_service import official_bricks
+from app.services.product_taxonomy_store import normalize_taxonomy_text, _seed_payload
+
+
+def _verified_official_gpc_for_exact_name(product: dict[str, Any]) -> str:
+    """Return only a GS1-verified, seed-declared exact product-name bridge.
+
+    This is intentionally NOT fuzzy GS1 classification. Current official
+    GS1 guidance explicitly identifies cured pork ham as brick 10005781.
+    Ambiguous variants, other meat species and unknown terms remain blocked.
+    """
+    title = normalize_taxonomy_text(product.get("product_name"))
+    if not title:
+        return ""
+    possible = {
+        str(code)
+        for entry in _seed_payload().get("taxonomy", [])
+        for name, code in (entry.get("verified_official_gpc_by_exact_name") or {}).items()
+        if normalize_taxonomy_text(name) == title
+    }
+    if len(possible) != 1:
+        return ""
+    code = possible.pop()
+    if not re.fullmatch(r"[0-9]{8}", code) or code not in official_bricks():
+        return ""
+    return code
 
 
 def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, Any]:
@@ -69,6 +95,12 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
                     global_product_id=product_id,
                     confirmed_by="external_databases_off_manual_link",
                 )
+                if (
+                    not isinstance(linked, dict)
+                    or linked.get("status") != "confirmed"
+                    or str(linked.get("global_product_id") or "") != product_id
+                ):
+                    raise RuntimeError("Cataloguskoppeling kon niet worden bevestigd; transactie teruggedraaid")
                 return {
                     "ok": True, "linked": True, "global_product_id": product_id,
                     "gtin": gtin, "link": linked, "creates_inventory_event": False,
@@ -77,6 +109,8 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
     # Een nieuw Catalogusproduct mag uitsluitend met een échte officiële GS1
     # GPC-brick worden aangemaakt. Nooit een klasse raden op basis van bonnaam.
     brick = str(product.get("explicit_gpc_brick_code") or "").strip()
+    if not re.fullmatch(r"[0-9]{8}", brick):
+        brick = _verified_official_gpc_for_exact_name(product)
     if not re.fullmatch(r"[0-9]{8}", brick):
         raise ValueError(
             "Dit OFF-artikel heeft geen officiële GS1 GPC-classificatie. "
