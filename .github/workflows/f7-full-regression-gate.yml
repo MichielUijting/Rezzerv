@@ -94,8 +94,9 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$BASE_SHA"
+          test -n "$CANDIDATE_SHA"
           python -m py_compile scripts/ci/validate_ui_styleguide.py
-          python scripts/ci/validate_ui_styleguide.py --event pull_request --base-sha "$BASE_SHA" | tee f7-ui-styleguide-preflight.log
+          python scripts/ci/validate_ui_styleguide.py --event pull_request --base-sha "$BASE_SHA" --head-sha "$CANDIDATE_SHA" | tee f7-ui-styleguide-preflight.log
           grep -Fx 'UI_STYLEGUIDE_DOCUMENT_GREEN' f7-ui-styleguide-preflight.log
           grep -Fx 'UI_STYLEGUIDE_CHANGE_POLICY_GREEN' f7-ui-styleguide-preflight.log
 
