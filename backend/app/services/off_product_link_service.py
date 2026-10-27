@@ -559,6 +559,10 @@ def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: d
     if not isinstance(off_product, dict):
         raise ValueError("OFF-product is verplicht")
     with engine.begin() as conn:
+        if getattr(conn.dialect, "name", None) == "sqlite":
+            # The historical SQLite baseline is immutable. Only the normal
+            # PostgreSQL application schema has the pending-status extension.
+            raise ValueError("Deze Catalogusopslag vereist de reguliere Inhuis-database")
         identity = resolve_external_article_identity(conn, receipt_item_id)
         assert_external_product_identity_compatible(
             retailer_code=identity["retailer_code"],

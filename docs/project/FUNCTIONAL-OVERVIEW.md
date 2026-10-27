@@ -173,6 +173,8 @@ uit Externe databases 2, dat uitsluitend naar ontbrekende barcode-opslag zoekt.
 Wanneer later een geldige officiële classificatie is vastgelegd, wordt de
 bestaande wachtende relatie zonder bon-/huishoud-/voorraadmutatie als volledige
 koppeling uitleesbaar. Zonder classificatie wordt nooit een Brick geraden.
+De historische SQLite-migratiebaseline blijft onveranderd; deze nieuwe
+wachtstatus hoort bij de reguliere PostgreSQL-database van Inhuis.
 
 Productfoto's uit betrouwbare enrichment worden centraal op het Catalogusproduct opgeslagen en daarna geprojecteerd naar gekoppelde huishoudartikelen en Voorraad. Een bestaande niet-lege Catalogusfoto wordt niet automatisch door een externe bron overschreven. Bij runtime-start worden ontbrekende Catalogusfoto's terugwerkend aangevuld uit reeds opgeslagen succesvolle enrichment-data; aansluitend wordt de bestaande representatieve Voorraadfoto-backfill uitgevoerd. Producten waarvoor geen bron ooit een afbeelding heeft geleverd blijven zonder foto totdat een bron later wel een afbeelding levert of een bevoegde gebruiker handmatig een Catalogusfoto vastlegt.
 

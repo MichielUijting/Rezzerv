@@ -46,7 +46,7 @@ def _expect_value_error(callable_value, expected_text: str) -> None:
 
 
 def _assert_sqlite_pending_migration_compatibility() -> None:
-    """Preserve the legacy anonymous identity CHECK while replacing GPC status."""
+    """An operational PostgreSQL extension must not rewrite SQLite baseline."""
     migration_file = Path(__file__).resolve().parents[2] / "alembic" / "versions" / (
         "20261027_02_external_catalog_pending_classification.py"
     )
@@ -66,41 +66,43 @@ def _assert_sqlite_pending_migration_compatibility() -> None:
                     CHECK (length(trim(receipt_text_normalized)) > 0)
                 )
             """))
+            before = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
             migration.op = Operations(MigrationContext.configure(conn))
             migration.upgrade()
-            conn.execute(text("""
-                INSERT INTO external_article_product_links
-                    (id, retailer_code, receipt_text_normalized, status)
-                VALUES ('1', 'lidl', 'achterham', 'classification_pending')
-            """))
+            after = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
+            _assert(after == before, "SQLite baseline is door de upgrade gewijzigd")
             try:
                 conn.execute(text("""
                     INSERT INTO external_article_product_links
                         (id, retailer_code, receipt_text_normalized, status)
-                    VALUES ('2', 'lidl', '', 'classification_pending')
+                    VALUES ('1', 'lidl', 'achterham', 'classification_pending')
+                """))
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("De oude SQLite-statuscheck is verloren")
+            migration.downgrade()
+            after_downgrade = conn.execute(text("""
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'external_article_product_links'
+            """)).scalar_one()
+            _assert(after_downgrade == before, "SQLite baseline is door de downgrade gewijzigd")
+            try:
+                conn.execute(text("""
+                    INSERT INTO external_article_product_links
+                        (id, retailer_code, receipt_text_normalized, status)
+                    VALUES ('2', 'lidl', '', 'confirmed')
                 """))
             except IntegrityError:
                 pass
             else:
                 raise AssertionError("De originele SQLite-identiteitscheck is verloren")
-            try:
-                migration.downgrade()
-            except RuntimeError as exc:
-                _assert("Veilig gestopt" in str(exc), "Onveilige downgrade-fout")
-            else:
-                raise AssertionError("Downgrade met pending artikelen werd toegestaan")
-            conn.execute(text("DELETE FROM external_article_product_links WHERE id = '1'"))
-            migration.downgrade()
-            try:
-                conn.execute(text("""
-                    INSERT INTO external_article_product_links
-                        (id, retailer_code, receipt_text_normalized, status)
-                    VALUES ('3', 'lidl', 'achterham', 'classification_pending')
-                """))
-            except IntegrityError:
-                pass
-            else:
-                raise AssertionError("De oude statuscheck is niet teruggezet")
         engine.dispose()
 
 
@@ -709,7 +711,7 @@ def run_contract() -> None:
     print("PASS: passende GTIN-identiteit is verplicht")
     print("PASS: officieel GS1 GPC-Producttype is verplicht")
     print("PASS: OFF-GTIN zonder GPC blijft pending en wordt na officiële GPC beschikbaar")
-    print("PASS: de bestaande SQLite-identiteitscheck blijft bij de migratie behouden")
+    print("PASS: de onveranderlijke SQLite-baseline blijft bij upgrade/downgrade intact")
     print("PASS: inactieve universele artikelen worden geweigerd")
     print("PASS: historische incomplete koppelingen worden gedeactiveerd")
     print("PASS: volledige bestaande koppelingen blijven actief")

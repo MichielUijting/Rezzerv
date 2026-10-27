@@ -68,6 +68,9 @@ artikel niet opnieuw als barcode-loos aan te bieden. Later classificeren maakt
 de relatie automatisch effectief; er wordt niets stilzwijgend geclassificeerd
 of in huishoudelijke voorraad geschreven. Het scheidingcontract tussen
 `global_product`, huishouden en voorraad blijft ongewijzigd.
+De statusuitbreiding is een PostgreSQL-applicatiemigratie. De historische
+SQLite-bronbaseline is onveranderlijk; de wachtstatus wordt daarin niet
+geschreven en de handmatige OFF-route stopt daar veilig.
 
 Een expliciete huismerkmarker in de bontekst is onderdeel van de **exacte** identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet een exact extern product een passende merkidentiteit aantonen. Een conflict wordt voor exacte koppelingen in automatische kandidaatselectie, write-route en read-projectie fail-closed behandeld. Handmatig zoeken mag conflicterende producten wel als niet-koppelbare zoekresultaten tonen. Een expliciet generieke koppeling valt niet onder deze exacte merkregel, omdat zij bewust geen merkidentiteit claimt.
 

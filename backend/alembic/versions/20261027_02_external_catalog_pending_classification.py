@@ -21,31 +21,9 @@ def _replace_status_check(expression: str) -> None:
     if conn.dialect.name == 'postgresql':
         op.drop_constraint(_CHECK, _TABLE, type_='check')
         op.create_check_constraint(_CHECK, _TABLE, expression)
-    else:
-        # The historical SQLite baseline has an *unnamed* status check, while
-        # PostgreSQL has the named constraint. SQLite batch reflection drops
-        # unnamed CHECKs; explicitly carry forward every OTHER unnamed CHECK
-        # (especially the required non-empty store-article identity check).
-        current_checks = sa.inspect(conn).get_check_constraints(_TABLE)
-        named_status = False
-        preserved_anonymous_checks = []
-        for check in current_checks:
-            sql = str(check.get('sqltext') or '')
-            name = check.get('name')
-            is_status = name == _CHECK or (
-                'status' in sql.lower() and "'confirmed'" in sql.lower()
-            )
-            if is_status:
-                named_status = named_status or name == _CHECK
-            elif not name:
-                preserved_anonymous_checks.append(sa.CheckConstraint(sql))
-        with op.batch_alter_table(
-            _TABLE, recreate='always',
-            table_args=tuple(preserved_anonymous_checks),
-        ) as batch:
-            if named_status:
-                batch.drop_constraint(_CHECK, type_='check')
-            batch.create_check_constraint(_CHECK, expression)
+    # The SQLite source is an immutable historical migration baseline. Its
+    # existing table definitions are verified byte-for-byte by CI and must
+    # not be rewritten by an additive PostgreSQL operational feature.
 
 
 def upgrade() -> None:
@@ -54,6 +32,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
+    if conn.dialect.name != 'postgresql':
+        return
     count = conn.execute(sa.text(
         "SELECT COUNT(*) FROM external_article_product_links "
         "WHERE status = 'classification_pending'"
