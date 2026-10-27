@@ -31,6 +31,7 @@ ACTION_HOME_KASSA = "action.home.kassa"
 ACTION_HOME_SPAARTEGOEDEN = "action.home.spaartegoeden"
 ACTION_HOME_EXTERNE_DATABASES = "action.home.externe_databases"
 ACTION_HOME_EXTERNE_DATABASES_2 = "action.home.externe_databases_2"
+ACTION_HOME_ARTIKELSYNONIEMEN = "action.home.artikelsynoniemen"
 ACTION_HOME_CATALOGUS = "action.home.catalogus"
 ACTION_HOME_KLANTKAARTEN = "action.home.klantkaarten"
 ACTION_HOME_BESTELLEN = "action.home.bestellen"
@@ -81,6 +82,7 @@ FEATURE_FLAG_DEFINITIONS = {
     ACTION_HOME_SPAARTEGOEDEN: _home_action("Spaartegoeden", "spaartegoeden"),
     ACTION_HOME_EXTERNE_DATABASES: _home_action("Externe databases", "externe-databases"),
     ACTION_HOME_EXTERNE_DATABASES_2: _home_action("Externe databases 2", "externe-databases-2"),
+    ACTION_HOME_ARTIKELSYNONIEMEN: _home_action("Artikel-synoniemen", "artikelsynoniemen"),
     ACTION_HOME_CATALOGUS: _home_action("Catalogus", "catalogus"),
     ACTION_HOME_KLANTKAARTEN: _home_action("Klantkaarten", "klantkaarten"),
     ACTION_HOME_BESTELLEN: _home_action("Bestellen", "bestellen"),
@@ -105,6 +107,7 @@ HOME_ACTION_DEFAULT_ORDER = (
     ACTION_HOME_SPAARTEGOEDEN,
     ACTION_HOME_EXTERNE_DATABASES,
     ACTION_HOME_EXTERNE_DATABASES_2,
+    ACTION_HOME_ARTIKELSYNONIEMEN,
     ACTION_HOME_CATALOGUS,
     ACTION_HOME_KLANTKAARTEN,
     FEATURE_GERECHTEN,

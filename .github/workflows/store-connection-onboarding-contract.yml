@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install isolated worker unit test dependencies
-        run: python -m pip install --quiet pytest sqlalchemy alembic
+        run: python -m pip install --quiet pytest sqlalchemy alembic httpx==0.28.1 cryptography==46.0.3
       - name: Verify safe AH worker scheduling, locks and maintenance admission
         env:
           PYTHONPATH: backend
