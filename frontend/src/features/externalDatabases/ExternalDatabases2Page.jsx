@@ -22,7 +22,16 @@ export default function ExternalDatabases2Page() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
+  const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
+
+  useEffect(() => {
+    const result = location.state?.offLinkOutcome
+    if (!result) return undefined
+    setOffLinkOutcome(result)
+    const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [location.key, location.state?.offLinkOutcome])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +64,10 @@ export default function ExternalDatabases2Page() {
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
         <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken.</p>
+        {offLinkOutcome ? <p data-testid="external-off-link-outcome"
+          role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}>
+          {offLinkOutcome.message}
+        </p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <div className="rz-external-receipt-overview">
         <DataTable

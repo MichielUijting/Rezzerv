@@ -94,15 +94,23 @@ komt van het al door de backend gelezen OFF-zoekresultaat en is aan het
 bronartikel en de GTIN gebonden; het is geen door de browser vertrouwde
 productwaarde. Voor deze bevestiging volgt géén tweede externe OFF-aanvraag.
 Een verlopen, onjuist of door een backendherstart vervallen bewijs wordt
-afgewezen; dan moet opnieuw worden gezocht. Technische koppelproblemen worden
-buiten de bevestigingsdialoog getoond, zonder de dialoog dubbel te gebruiken.
+afgewezen; dan moet opnieuw worden gezocht. Na **OK** keert de interface
+na de serverrespons altijd terug naar **Externe databases 2**, ook als de
+koppeling is afgewezen. Alleen een door de server bevestigde koppeling wordt
+als geslaagd gemeld; het gekoppelde bronartikel kan na herladen verdwijnen
+uit de lijst zonder barcode. Bij een afwijzing blijft het bronartikel
+beschikbaar en verschijnt in het overzicht maximaal vier seconden de reden.
+Bij een verzoek-timeout toont InHuis **niet bevestigd**: een afgebroken
+clientverzoek bewijst niet dat de server geen koppeling heeft gemaakt.
+**Annuleren** sluit alleen de dialoog en blijft op Zelf zoeken in OFF.
 Daarna bevestigt de bestaande centrale Cataloguskoppeldienst de koppeling platformbreed;
 deze mutatie maakt geen voorraad- of huishoudartikel aan. Een al compleet
 Catalogusartikel mag op dezelfde GTIN worden hergebruikt; ontbreekt voor
 een nieuw product de officiële GPC-classificatie, dan stopt de actie zonder
-koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na een
-geslaagde koppeling keert de gebruiker automatisch terug naar Externe
-databases 2; op mobiel blijft de gedeelde header-Terug beschikbaar.
+koppeling en met een duidelijke melding. Annuleren wijzigt niets. Na
+**OK** keert de gebruiker na afloop terug naar Externe databases 2 met
+een waarheidsgetrouwe succes- of foutstatus; op mobiel blijft de gedeelde
+header-Terug beschikbaar.
 
 De productpagina wordt anoniem gelezen, uitsluitend via HTTPS op www.lidl.nl,
 met gecontroleerde redirects naar hetzelfde product, maximaal drie verzoeken,

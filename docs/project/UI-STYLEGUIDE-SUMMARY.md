@@ -1241,7 +1241,11 @@ zonder extra titel of toelichting. Bij OK valideert de backend een kortlevend,
 cryptografisch ondertekend OFF-zoekbewijs, bronbonartikel en GTIN, zonder
 tweede externe OFF-opvraag. De centrale Catalogus koppelt alleen bij de
 verplichte identiteit-, merk- en officiële GS1 GPC-controles. Een verlopen
-bewijs of ontbrekende officiële classificatie geeft een aparte foutmelding
-buiten de bevestigingsdialoog; geen onterecht succes of databasewrites.
-Na succes terug naar Externe databases 2; Annuleren wijzigt niets.
+bewijs of ontbrekende officiële classificatie geeft na OK een foutmelding
+in **Externe databases 2**; nooit een onterechte succesmelding of databasewrite.
+Ook na een bevestigingsfout of timeout keert **OK** terug naar het overzicht.
+Een niet ontvangen serverbevestiging wordt altijd als **niet bevestigd**
+getoond. De statusmelding verdwijnt na maximaal vier seconden. Alleen bij
+bevestigd `linked: true` verschijnt de succesmelding. **Annuleren** sluit
+alleen de dialoog en blijft op het zoekscherm zonder koppeling.
 OFF-zoeken zelf blijft uitsluitend lezen.

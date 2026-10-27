@@ -14,6 +14,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.setViewportSize({ width, height: 900 })
       const searches = []
       const links = []
+      let linkResultMode = 'success'
       const unexpectedWrites = []
       let errorAttempts = 0
       let slowMilk = false
@@ -30,6 +31,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           const body = request.postDataJSON()
           links.push(body)
           expect(body).toEqual({ receipt_item_id: rows[0].id, gtin: '8712345678900', selection_proof: 'signed-fixture-proof' })
+          if (linkResultMode === 'fail') return route.fulfill({ status: 422, json: { detail: 'Officiële GS1-classificatie ontbreekt.' } })
           return route.fulfill({ json: { ok: true, linked: true, global_product_id: 'catalog-existing' } })
         }
         if (path === '/api/external-products/off/search') {
@@ -152,8 +154,27 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await selectRow()
       await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toHaveText('Artikel gekoppeld aan de Catalogus.')
       expect(links).toHaveLength(1)
+      await expect(panel).toHaveCount(0)
+
+      // A link that the server rejects must ALSO return to the overview;
+      // it must not look successful or leave the user stuck in OFF search.
+      linkResultMode = 'fail'
+      await open(0)
       await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
+      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('halfvolle melk bio')
+      await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+      await expect(freeResults.locator('tbody tr')).toHaveCount(7)
+      await selectRow()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page).toHaveURL(/\/externe-databases-2$/)
+      await expect(page.getByTestId('external-off-link-outcome')).toContainText('Koppeling niet bevestigd: Officiële GS1-classificatie ontbreekt.')
+      await expect(page.getByTestId('external-off-link-outcome')).toHaveAttribute('role', 'alert')
+      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      expect(links).toHaveLength(2)
       await open(1)
       await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
       await expect(panel).toContainText('Geen passende productkandidaten gevonden.')

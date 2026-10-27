@@ -59,8 +59,15 @@ export default function OffManualSearchPage() {
     return () => controller.abort()
   }, [item, receiptItemId])
 
-  function goBack() {
-    navigate('/externe-databases-2', { state: { selectedItemId: receiptItemId } })
+  function goBack(linkOutcome = null) {
+    navigate('/externe-databases-2', {
+      replace: linkOutcome !== null,
+      state: {
+        // After a successful link the article may have left the unlinked list.
+        ...(linkOutcome?.status === 'success' ? {} : { selectedItemId: receiptItemId }),
+        ...(linkOutcome ? { offLinkOutcome: linkOutcome } : {}),
+      },
+    })
   }
 
   async function search(event) {
@@ -110,10 +117,16 @@ export default function OffManualSearchPage() {
     if (!selectedCandidate || linking) return
     setLinking(true)
     setLinkError('')
+    // Never let a pending backend request keep the user on the search page.
+    // Aborting a request does NOT prove the server did not commit a link.
+    const controller = new AbortController()
+    const deadline = window.setTimeout(() => controller.abort(), 30000)
+    let outcome = null
     try {
       const response = await fetchJsonWithAuth('/api/external-databases/off/link-selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           receipt_item_id: receiptItemId,
           gtin: selectedCandidate.gtin,
@@ -122,16 +135,25 @@ export default function OffManualSearchPage() {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok || payload.linked !== true) {
-        throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppeling kon niet worden opgeslagen.')
+        throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppeling kon niet worden bevestigd.')
       }
-      setSelectedCandidate(null)
-      goBack()
+      outcome = { status: 'success', message: 'Artikel gekoppeld aan de Catalogus.' }
     } catch (err) {
-      setSelectedCandidate(null)
-      setLinkError(err.message || 'Koppeling kon niet worden opgeslagen.')
+      // Session expiration is handled by fetchJsonWithAuth, which redirects to login.
+      if (err.status !== 401) {
+        const message = err.name === 'AbortError'
+          ? 'De koppeling kon niet op tijd worden bevestigd. Controleer de Catalogus voordat u opnieuw koppelt.'
+          : (err.message || 'De koppeling kon niet worden bevestigd.')
+        outcome = { status: 'error', message: `Koppeling niet bevestigd: ${message}` }
+      }
     } finally {
+      window.clearTimeout(deadline)
       setLinking(false)
+      setSelectedCandidate(null)
     }
+    // OK always finishes at Externe databases 2, without ever claiming an
+    // unconfirmed or failed operation succeeded. Cancel stays on OFF search.
+    if (outcome) goBack(outcome)
   }
 
   function selectCandidate(candidate) {
