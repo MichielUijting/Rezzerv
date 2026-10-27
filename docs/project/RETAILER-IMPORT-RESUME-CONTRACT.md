@@ -1,7 +1,10 @@
 # Winkelkoppelingen: duurzame import en onderhoudshervatting
 
-Status: uitvoeringscontract voor de vervolgstap na PR #614; nog **niet**
-geïmplementeerd. Risico-indicatie: `TEST_LEVEL_PROVISIONAL: L`.
+Status: uitvoeringscontract. De eerste niet-bereikbare bouwstenen
+(`retailer_import_queue`-migratie en versleutelde atomische opslagservice) zijn
+in PR #614 in Draft opgenomen. **Nog geen endpoint of worker: er worden dus
+nog geen echte winkelbonnen via deze queue ontvangen of hervat.**
+Risico-indicatie: `TEST_LEVEL_PROVISIONAL: L`.
 
 ## Gebruikersbelofte en grens
 
