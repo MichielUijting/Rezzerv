@@ -93,6 +93,96 @@ def _exercise_receipt_items_http_path() -> None:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise AssertionError(f"External receipt-items response shape is invalid: {payload!r}")
     print("POSTGRESQL_EXTERNAL_RECEIPT_ITEMS_REQUEST_GREEN")
+    _exercise_weight_detail_repair_and_source_filter()
+
+
+def _exercise_weight_detail_repair_and_source_filter() -> None:
+    from app.maintenance.repair_weight_detail_rows import build_plan, apply_plan, plan_digest
+    from app.maintenance import repair_legacy_deposit_rows as deposits
+    from app.services.external_unlinked_articles_service import _source_articles
+
+    prefix = f"__weight_{uuid.uuid4()}"
+    with engine.connect() as conn:
+        transaction = conn.begin()
+        try:
+            for suffix in ('live', 'removed'):
+                receipt = prefix + suffix
+                conn.execute(text('''INSERT INTO raw_receipts
+                    (id, household_id, original_filename, mime_type, storage_path, sha256_hash, raw_status)
+                    VALUES (:id, '0', 'weight-test', 'application/json', 'test-only', :hash, 'stored')'''),
+                    {'id': receipt, 'hash': uuid.uuid4().hex * 2})
+                conn.execute(text('''INSERT INTO receipt_tables
+                    (id, raw_receipt_id, household_id, workflow_state, store_name, currency, parse_status, line_count)
+                    VALUES (:id, :id, '0', 'active', 'Lidl', 'EUR', 'review_needed', 6)'''), {'id': receipt})
+                for index, role, deleted, raw in (
+                    (0, 'product', False, 'GEMBER'),
+                    (1, 'product', False, '0,094 kg x 5,99 EUR'),
+                    (2, 'loyalty', False, 'Koopzegel'),
+                    (3, 'product', True, 'Verwijderd'),
+                    (4, 'financial', False, 'Statiegeld'),
+                    (5, 'product', False, 'Statiegeld')):
+                    conn.execute(text('''INSERT INTO receipt_table_lines
+                        (id, receipt_table_id, line_index, raw_label, normalized_label, quantity,
+                         unit_price, line_total, external_article_code, article_match_status,
+                         line_role, inventory_eligible, is_deleted)
+                        VALUES (:id, :receipt, :idx, :raw, :normalized, .094, 5.99, .56,
+                                'WEIGHT-TEST', 'unmatched', :role, :eligible, :deleted)'''),
+                        {'id': receipt + str(index), 'receipt': receipt, 'idx': index,
+                         'raw': raw, 'normalized': 'Gember' if index < 2 else raw,
+                         'role': role, 'eligible': int(role == 'product'), 'deleted': deleted})
+                if suffix == 'removed':
+                    conn.execute(text('UPDATE raw_receipts SET deleted_at=CURRENT_TIMESTAMP WHERE id=:id'), {'id': receipt})
+            conn.execute(text('''INSERT INTO store_providers (id, code, name, status, import_mode)
+                VALUES (:id, :id, 'Test', 'active', 'receipt')'''), {'id': prefix})
+            conn.execute(text('''INSERT INTO household_store_connections
+                (id, household_id, store_provider_id, connection_status)
+                VALUES (:id, '0', :id, 'active')'''), {'id': prefix})
+            for source_type in ('receipt', 'mock'):
+                conn.execute(text('''INSERT INTO purchase_import_batches
+                    (id, household_id, store_provider_id, connection_id, source_type, import_status)
+                    VALUES (:batch, '0', :id, :id, :source_type, 'new')'''),
+                    {'batch': prefix + source_type, 'id': prefix, 'source_type': source_type})
+            for suffix, source_type, reference, label in (
+                ('deposit-copy', 'receipt', 'receipt-line:' + prefix + 'live4', 'Statiegeld'),
+                ('orphan-copy', 'receipt', None, 'Verouderde bonkopie'),
+                ('mislabelled-copy', 'mock', 'receipt-line:' + prefix + 'removed0', 'Verwijderde bonkopie'),
+                ('real-purchase', 'mock', 'independent-product', 'Melk'),
+                ('legacy-import-deposit', 'mock', 'independent-deposit', 'Statiegeld')):
+                conn.execute(text('''INSERT INTO purchase_import_lines
+                    (id, batch_id, external_line_ref, article_name_raw, quantity_raw, line_price_raw, match_status)
+                    VALUES (:id, :batch, :reference, :label, 1, .15, 'unmatched')'''),
+                    {'id': prefix + suffix, 'batch': prefix + source_type, 'reference': reference, 'label': label})
+            purchase_plan = deposits.build_purchase_plan(conn)
+            assert prefix + 'legacy-import-deposit' in {row['id'] for row in purchase_plan}
+            deposits.apply_purchase_plan(conn, plan_digest(purchase_plan))
+            assert not any(row['id'].startswith(prefix) for row in deposits.build_purchase_plan(conn))
+            purchases = [row for row in _source_articles(conn)
+                         if str(row.get('purchase_import_line_id', '')).startswith(prefix)]
+            assert [row['purchase_import_line_id'] for row in purchases] == [prefix + 'real-purchase'], purchases
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 3, sources
+            deposit_plan = deposits.build_plan(conn)
+            assert {prefix + suffix + '5' for suffix in ('live', 'removed')} <= {row['id'] for row in deposit_plan}
+            deposits.apply_plan(conn, plan_digest(deposit_plan))
+            assert not any(row['id'].startswith(prefix) for row in deposits.build_plan(conn))
+            repaired_deposit = conn.execute(text('''SELECT line_role, inventory_eligible, is_deleted, line_total
+                FROM receipt_table_lines WHERE id=:id'''), {'id': prefix + 'live5'}).one()
+            assert repaired_deposit[:3] == ('financial', 0, False), repaired_deposit
+            assert str(repaired_deposit[3]) == '0.56', repaired_deposit
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 2, sources
+            assert all(row['receipt_line_text'] == 'Gember' for row in sources)
+            plan = build_plan(conn)
+            assert {prefix + suffix + '1' for suffix in ('live', 'removed')} <= {row['id'] for row in plan}
+            apply_plan(conn, plan_digest(plan))
+            assert not any(row['id'].startswith(prefix) for row in build_plan(conn))
+            sources = [row for row in _source_articles(conn) if str(row.get('receipt_line_id', '')).startswith(prefix)]
+            assert len(sources) == 1 and sources[0]['receipt_line_id'] == prefix + 'live0', sources
+            original = conn.execute(text('SELECT is_deleted, line_role FROM receipt_table_lines WHERE id=:id'), {'id': prefix + 'live0'}).one()
+            assert original == (False, 'product'), original
+        finally:
+            transaction.rollback()
+    print('POSTGRESQL_WEIGHT_DETAIL_REPAIR_AND_SOURCE_FILTER_GREEN')
 
 
 def _insert_candidate_fixture() -> None:

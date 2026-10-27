@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.db import engine
+from app.services.automatic_product_type_service import persist_product_type, gpc_brick_conflict
 from app.services.global_product_service import get_or_create_global_product
 from app.services.gtin_validation_service import (
     has_supported_gtin_length,
@@ -476,6 +477,9 @@ def link_off_product_with_product_type(
         global_product_id, gtin, size_value, size_unit = _upsert_global_product(conn, off_product)
         product_type_id = _resolve_product_type(conn, product_type_assignment)
         brick_code = product_type_id.split(":", 1)[1]
+        conflict = gpc_brick_conflict(off_product, brick_code)
+        if conflict:
+            raise ValueError(conflict)
         gpc_source = _normalize_gpc_source(product_type_assignment)
         confidence = float(product_type_assignment.get("confidence_score") or 1.0)
         membership = link_global_product_to_inventory_group_with_connection(
@@ -497,6 +501,8 @@ def link_off_product_with_product_type(
             gpc_source=gpc_source,
             confidence=confidence,
         )
+
+        automatic_product_type = persist_product_type(conn, global_product_id, off_product, brick_code)
 
         receipt_link = _receipt_item_reference(conn, receipt_item_id)
         confirmed_external_link = confirm_external_article_for_receipt_item(
@@ -532,6 +538,7 @@ def link_off_product_with_product_type(
             "gpc_source": gpc_source,
             "confirmed_by_user": True,
         },
+        "automatic_product_type": automatic_product_type,
         "membership_id": membership.get("membership_id"),
         "creates_external_candidate": False,
         "creates_inventory_event": False,
@@ -563,6 +570,9 @@ def link_generic_product_with_product_type(
     with engine.begin() as conn:
         product_type_id = _resolve_product_type(conn, product_type_assignment)
         brick_code = product_type_id.split(":", 1)[1]
+        conflict = gpc_brick_conflict({'name': generic_name}, brick_code)
+        if conflict:
+            raise ValueError(conflict)
         gpc_source = _normalize_gpc_source(product_type_assignment)
         confidence = float(product_type_assignment.get("confidence_score") or 1.0)
 
@@ -632,6 +642,8 @@ def link_generic_product_with_product_type(
             confidence=confidence,
         )
 
+        automatic_product_type = persist_product_type(conn, global_product_id, {'name': generic_name}, brick_code)
+
         receipt_link = _receipt_item_reference(conn, receipt_item_id)
         confirmed_external_link = confirm_external_article_for_receipt_item(
             conn,
@@ -663,6 +675,7 @@ def link_generic_product_with_product_type(
             "source": gpc_source,
             "confidence": confidence,
         },
+        "automatic_product_type": automatic_product_type,
         "membership": membership,
         "mutates_household_data": False,
         "mutates_inventory": False,

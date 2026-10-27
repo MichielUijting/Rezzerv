@@ -24,7 +24,7 @@ import MobileHomePage from './MobileHomePage.jsx'
 const TILE_ROUTES = {
   berichten: '/meldingen', meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
   productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
-  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
+  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', 'externe-databases-2': '/externe-databases-2', artikelsynoniemen: '/artikelsynoniemen', catalogus: '/catalogus',
   instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
 }
 

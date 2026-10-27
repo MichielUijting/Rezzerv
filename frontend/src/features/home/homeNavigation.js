@@ -13,6 +13,8 @@ const LEGACY_TILES = [
   { key: 'kassa', label: 'Kassa', icon: '🧾', clickable: true },
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙', clickable: true },
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️', clickable: true },
+  { key: 'externe-databases-2', label: 'Externe databases 2', icon: '🗄️', clickable: true },
+  { key: 'artikelsynoniemen', label: 'Artikel-synoniemen', icon: '🔗', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳', clickable: false },
   { key: 'recepten', label: 'Gerechten', icon: '🍳', clickable: false, feature: FEATURE_GERECHTEN },
@@ -34,7 +36,7 @@ function isVisible(tile, visibility) {
   if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'berichten') return visibility.canOpenMessages
   if (tile.key === 'meldingen') return true
-  if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
+  if (tile.key === 'externe-databases' || tile.key === 'externe-databases-2' || tile.key === 'artikelsynoniemen') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
   return true
 }
@@ -51,7 +53,7 @@ function uniqueTiles(tiles) {
 function sortTilesByActionOrder(tiles, actionOrder) {
   if (!Array.isArray(actionOrder) || actionOrder.length === 0) return tiles
   const rank = new Map(actionOrder.map((key, index) => [String(key), index]))
-  return tiles
+  const sorted = tiles
     .map((tile, originalIndex) => ({ tile, originalIndex }))
     .sort((a, b) => {
       const aRank = rank.has(a.tile.key) ? rank.get(a.tile.key) : 10000 + a.originalIndex
@@ -59,6 +61,13 @@ function sortTilesByActionOrder(tiles, actionOrder) {
       return aRank - bRank || a.originalIndex - b.originalIndex
     })
     .map(({ tile }) => tile)
+  const originalIndex = sorted.findIndex((tile) => tile.key === 'externe-databases')
+  const secondIndex = sorted.findIndex((tile) => tile.key === 'externe-databases-2')
+  if (originalIndex >= 0 && secondIndex >= 0) {
+    const [second] = sorted.splice(secondIndex, 1)
+    sorted.splice(sorted.findIndex((tile) => tile.key === 'externe-databases') + 1, 0, second)
+  }
+  return sorted
 }
 
 function findTile(key) {

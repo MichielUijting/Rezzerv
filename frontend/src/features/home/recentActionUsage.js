@@ -11,6 +11,8 @@ export const ACTION_ROUTE_BY_KEY = Object.freeze({
   kassa: '/kassa',
   spaartegoeden: '/spaartegoeden',
   'externe-databases': '/externe-databases',
+  'externe-databases-2': '/externe-databases-2',
+  artikelsynoniemen: '/artikelsynoniemen',
   catalogus: '/catalogus',
   instellingen: '/instellingen',
   locaties: '/instellingen/locaties',

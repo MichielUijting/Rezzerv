@@ -254,6 +254,62 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
         with self.engine.connect() as conn:
             self.assertEqual(state(conn)['state'],'announced')
 
+    def test_consumption_profile_upgrade_repairs_startup_and_blocks_maintenance_writes(self):
+        from backend.app.services.maintenance_startup import assert_write_barrier, begin_startup, finish_startup
+        from sqlalchemy.exc import DBAPIError
+
+        def migrate(filename, direction):
+            spec = importlib.util.spec_from_file_location('profile_migration', ROOT/'backend/alembic/versions'/filename)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            with self.engine.begin() as conn:
+                with Operations.context(MigrationContext.configure(conn)):
+                    getattr(module, direction)()
+
+        # Reproduce the PO's persisted 01 database, after maintenance was installed.
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql('CREATE TABLE global_products(id text PRIMARY KEY)')
+            conn.exec_driver_sql(f'CREATE TRIGGER inhuis_maintenance_write_gate BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON "{self.schema}".global_products FOR EACH STATEMENT EXECUTE FUNCTION "{self.schema}".inhuis_maintenance_write_barrier()')
+            conn.exec_driver_sql("INSERT INTO global_products VALUES('profile-test')")
+        migrate('20261023_01_automatic_consumption_profiles.py', 'upgrade')
+        with self.engine.begin() as conn:
+            with self.assertRaisesRegex(RuntimeError, 'onderhoudsbarriere'):
+                assert_write_barrier(conn)
+            conn.exec_driver_sql("""INSERT INTO global_product_consumption_profiles
+                (global_product_id,status,label,facts_json,profile_json,source_fingerprint,policy_version)
+                VALUES('profile-test','pending','Preserved profile','{}','{}','test','test')""")
+
+        # A separate committed migration repairs both old and fresh upgrade paths.
+        repair = '20261023_02_consumption_profile_write_barrier.py'
+        migrate(repair, 'upgrade')
+        begin_startup(self.engine)
+        finish_startup(self.engine)
+        with self.engine.begin() as conn:
+            assert_write_barrier(conn)
+            self.assertEqual(conn.exec_driver_sql('SELECT label FROM global_product_consumption_profiles').scalar_one(), 'Preserved profile')
+            conn.exec_driver_sql("UPDATE global_product_consumption_profiles SET status='ready'")
+        self.action('announce',0,announcement='Test maintenance')
+        self.action('drain',1)
+        for sql in (
+            'INSERT INTO global_product_consumption_profiles SELECT * FROM global_product_consumption_profiles WHERE false',
+            "UPDATE global_product_consumption_profiles SET status='pending'",
+            'DELETE FROM global_product_consumption_profiles',
+            'TRUNCATE global_product_consumption_profiles',
+        ):
+            with self.assertRaises(DBAPIError):
+                with self.engine.begin() as conn:
+                    conn.exec_driver_sql(sql)
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.exec_driver_sql('SELECT status FROM global_product_consumption_profiles').scalar_one(), 'ready')
+        migrate(repair, 'downgrade')
+        with self.engine.connect() as conn:
+            with self.assertRaisesRegex(RuntimeError, 'onderhoudsbarriere'):
+                assert_write_barrier(conn)
+            self.assertEqual(conn.exec_driver_sql('SELECT count(*) FROM global_product_consumption_profiles').scalar_one(), 1)
+        migrate(repair, 'upgrade')
+        with self.engine.connect() as conn:
+            assert_write_barrier(conn)
+
     def test_unregistered_process_write_is_rejected_by_database(self):
         from sqlalchemy.exc import DBAPIError
         self.action('announce',0,announcement='Test maintenance')

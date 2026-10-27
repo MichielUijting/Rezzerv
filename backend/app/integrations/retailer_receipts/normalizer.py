@@ -33,6 +33,7 @@ from app.integrations.receipt_scanners.schemas.canonical_receipt_v1 import (
 )
 from app.integrations.retailer_receipts.contracts import RetailerReceiptEnvelope
 from app.receipt_ingestion.line_classifier import receipt_financial_candidate_line_type
+from app.receipt_ingestion.weight_detail import parse_weight_detail, confirmed_weight_continuation
 
 _PROVIDER_NAMES = {
     "ah": "Albert Heijn",
@@ -152,12 +153,14 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
     the priced article row and then a weight x unit-price detail row with the
     same article id.  The latter is metadata, not a second purchase component.
     Discounts rendered directly after that detail row also belong to the priced
-    article.  Use structured fields only so ordinary repeated products remain
-    separate lines.
+    article. Require matching structured facts for explicit weight text so
+    ordinary repeated products and conflicting details remain separate lines.
     """
     merged_lines: list[dict[str, Any]] = []
     for raw_item in raw_lines:
         item = dict(raw_item)
+        if parse_weight_detail(_first(item, 'raw_text', 'rawText', 'text', 'label', 'name')):
+            item['_inhuis_unresolved_weight_detail'] = True
         if not merged_lines:
             merged_lines.append(item)
             continue
@@ -171,8 +174,27 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
         quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
         unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
 
-        is_weight_detail = (
-            bool(identity)
+        raw_detail = _first(item, 'raw_text', 'rawText', 'text', 'label', 'name')
+        explicit_detail = parse_weight_detail(raw_detail)
+        explicit_confirmed = False
+        if explicit_detail:
+            def evidence(entry):
+                return {
+                    'raw_label': _first(entry, 'raw_text', 'rawText', 'text', 'label', 'name'),
+                    'external_article_code': _line_identity(entry),
+                    'quantity': _first(entry, 'quantity', 'count', 'qty', 'units'),
+                    'unit_price': _first(entry, 'unit_price', 'unitPrice', 'currentUnitPrice', 'pricePerUnit'),
+                    'line_total': _first(entry, 'line_total', 'lineTotal', 'totalPrice', 'total', 'amount', 'finalPrice', 'grossAmount'),
+                }
+            if confirmed_weight_continuation(evidence(previous), evidence(item)):
+                # The priced article already contains these facts. Never add the
+                # duplicated amount/quantity again or combine independent buys.
+                explicit_confirmed = True
+            item['_inhuis_unresolved_weight_detail'] = True
+
+        is_weight_detail = explicit_confirmed or (
+            not explicit_detail
+            and bool(identity)
             and identity == previous_identity
             and package_size not in (None, "")
             and gross_amount is None
@@ -212,6 +234,8 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
 
 
 def _line_type(item: dict[str, Any]) -> str:
+    if item.get('_inhuis_unresolved_weight_detail'):
+        return 'unknown'
     raw = str(_first(item, "line_type", "lineType", "type", "kind") or "").strip().lower()
     # A retailer may mark every priced entry as a generic product. At this
     # source-normalization boundary, recognize explicit financial labels before
@@ -350,6 +374,11 @@ def normalize_retailer_receipt(
         raise ValueError("Digitale kassabon bevat geen artikelregels")
     if envelope.provider == "lidl":
         raw_lines = _merge_lidl_weight_continuations(raw_lines)
+    # Other source providers must also fail closed for an isolated detail.
+    raw_lines = [dict(item) for item in raw_lines]
+    for item in raw_lines:
+        if parse_weight_detail(_first(item, 'raw_text', 'rawText', 'text', 'label', 'name', 'description', 'productName', 'title')):
+            item['_inhuis_unresolved_weight_detail'] = True
     lines = [_normalize_line(item, index) for index, item in enumerate(raw_lines, start=1)]
     grand_total = _total(payload, lines)
 
@@ -389,6 +418,8 @@ def normalize_retailer_receipt(
 
     missing_line_totals = sum(1 for line in lines if line.line_total is None)
     warnings: list[dict[str, Any]] = []
+    if any(item.get('_inhuis_unresolved_weight_detail') for item in raw_lines):
+        warnings.append({'code': 'UNRESOLVED_WEIGHT_DETAIL', 'message': 'Een gewichtsregel kon niet veilig aan het artikel worden gekoppeld.'})
     if missing_line_totals:
         warnings.append({
             "code": "MISSING_LINE_TOTAL",

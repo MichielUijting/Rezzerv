@@ -153,6 +153,7 @@ export default function MobileCatalogPage() {
                   <span>Brick-naam: {text(item.gpc_brick_name, 'Niet geclassificeerd')}</span>
                   <span>GPC-groep: {text(item.gpc_class_name, 'Niet geclassificeerd')}</span>
                   <span>Productfamilie: {text(item.gpc_family_name, 'Niet geclassificeerd')}</span>
+                  <span>Gekoppelde winkels: {Number(item.linked_store_count || 0)}</span>
                 </span>
 
               </button>

@@ -36,12 +36,14 @@ def build_connection():
     ("method", "path", "permission"),
     [
         ("GET", "/api/external-databases/summary", "platform.external_products.view"),
+        ("GET", "/api/external-databases/unlinked-articles", "platform.external_products.view"),
         ("GET", "/api/external-databases/candidates", "platform.external_products.view"),
         ("POST", "/api/external-databases/retailers/lidl/match-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/diagnose-real-candidates", "platform.external_products.search"),
         ("POST", "/api/external-databases/off/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/coverage/receipt-items", "platform.external_products.search"),
         ("POST", "/api/external-products/off/search", "platform.external_products.search"),
+        ("POST", "/api/external-databases/products/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/save-candidates", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/candidates/confirm-external", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/promote-candidate", "platform.external_products.link_existing"),
@@ -63,6 +65,7 @@ def test_unrelated_and_cors_preflight_requests_are_not_claimed_by_policy():
     ("method", "path"),
     [
         ("GET", "/api/external-databases/summary"),
+        ("GET", "/api/external-databases/unlinked-articles"),
         ("POST", "/api/external-databases/retailers/lidl/match-preview"),
         ("POST", "/api/external-databases/retailers/lidl/save-candidates"),
     ],
@@ -83,7 +86,8 @@ def test_frontteam_platform_role_can_use_all_intended_external_database_capabili
 
 
 @pytest.mark.parametrize("user_id", ["regular-admin", "platform-admin"])
-def test_roles_without_v2_external_product_permission_are_denied(user_id):
+@pytest.mark.parametrize("path", ["/api/external-databases/summary", "/api/external-databases/unlinked-articles"])
+def test_roles_without_v2_external_product_permission_are_denied(user_id, path):
     engine, conn = build_connection()
     try:
         with pytest.raises(HTTPException) as exc:
@@ -91,7 +95,7 @@ def test_roles_without_v2_external_product_permission_are_denied(user_id):
                 conn,
                 user_id=user_id,
                 method="GET",
-                path="/api/external-databases/summary",
+                path=path,
             )
         assert exc.value.status_code == 403
         assert exc.value.detail == "Onvoldoende platformbevoegdheid voor externe databases"

@@ -288,3 +288,29 @@ Deze ontwerpbaseline is akkoord wanneer:
 - elk `.py`-bestand een header of generated catalog entry heeft;
 - refactor-/delete-kandidaten niet direct verwijderd maar gemarkeerd zijn;
 - SSOT-regels expliciet geborgd zijn in ontwerp en catalogus.
+
+
+### TD-07 aanvulling — Automatische producttypen voor Bijna op
+
+`backend/app/services/automatic_product_type_service.py` bepaalt centrale
+consumptietypen met de uitbreidbare datadefinities in
+`backend/app/data/product_consumption_policy.json`. Complete, consistente
+kenmerken produceren een stabiele sleutel; onzekere data blijft pending.
+`global_product_consumption_profiles` bewaart uitsluitend centrale productfeiten,
+het afgeleide profiel, de regelversie en bronfingerprint. Alembic beheert dit
+schema. Externe-productkoppeling bewaart het profiel in dezelfde transactie.
+
+`backend/app/services/almost_out_group_service.py` projecteert dezelfde types
+binnen één geautoriseerd huishouden, rekent verpakkingen om en berekent het
+hoeveelheidgewogen koopritme. Bestaande centrale producten zonder profiel worden
+read-only uit actuele Catalogusgegevens beoordeeld. Opgeslagen bronkenmerken
+worden altijd opnieuw tegen de actuele centrale naam/variant/Brick beoordeeld.
+Geen profiel wijzigt huishoudartikelen, Artikelgroepen, voorraad of bonstatus.
+
+De GPC-matcher vereist productinhoudelijke ankers; bereidingswoorden en fuzzy
+spellingovereenkomst alleen zijn onvoldoende. Referentielabels van de gebundelde
+publicatie worden aan de officiële Nederlandse snapshot getoetst.
+
+Regressies: `backend/tests/test_automatic_product_type_service.py`,
+`backend/tests/test_almost_out_group_service.py`,
+`backend/tests/almost_out_api_projection_selftest.py` en de bestaande GPC-tests.

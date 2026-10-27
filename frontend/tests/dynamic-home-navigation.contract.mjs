@@ -9,6 +9,16 @@ const baseVisibility = {
   canOpenMessages: false,
 }
 
+for (const actionOrder of [[], ['catalogus', 'externe-databases', 'voorraad'], ['externe-databases-2', 'catalogus', 'externe-databases']]) {
+  const navigation = buildHomeNavigation({ visibility: { ...baseVisibility, canOpenExternalDatabases: true }, actionOrder })
+  const tileKeys = navigation.primaryTiles.map((tile) => tile.key)
+  assert.equal(tileKeys[tileKeys.indexOf('externe-databases') + 1], 'externe-databases-2')
+}
+{
+  const navigation = buildHomeNavigation({ visibility: baseVisibility })
+  assert.ok(!navigation.primaryTiles.some((tile) => tile.key === 'externe-databases-2'))
+}
+
 function keys(tiles) {
   return tiles.map((tile) => tile.key)
 }

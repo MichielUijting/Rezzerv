@@ -63,6 +63,7 @@
 .rz-catalog-col-gpc-class { width: 200px; }
 .rz-catalog-col-gpc-family { width: 220px; }
 .rz-catalog-col-household-count { width: 150px; }
+.rz-catalog-col-linked-store-count { width: 160px; }
 
 .rz-catalog-name-with-image {
   display: flex;

@@ -30,6 +30,7 @@ RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
 INVENTORY_QUANTITY_CONTRACT_TABLES = ("inventory", "inventory_events")
+ARTICLE_SYNONYM_LINKS_TABLE = "article_synonym_links"
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
@@ -45,6 +46,8 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "maintenance_control",
     "maintenance_operations",
     "maintenance_audit",
+    "global_product_consumption_profiles",
+    ARTICLE_SYNONYM_LINKS_TABLE,
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -662,6 +665,113 @@ def _assert_maintenance_schema(connection) -> None:
     print('MAINTENANCE_SCHEMA_AND_WRITE_BARRIER_GREEN')
 
 
+def _assert_consumption_profile_schema(connection) -> None:
+    # This new head extension is validated semantically, never by changing the
+    # immutable historical baseline or dropping its unrelated comparisons.
+    inspector = inspect(connection)
+    table = 'global_product_consumption_profiles'
+    columns = {column['name']: column for column in inspector.get_columns(table)}
+    required = {'global_product_id','classification_key','status','label','facts_json',
+                'profile_json','source_fingerprint','policy_version','updated_at'}
+    if set(columns) != required:
+        raise AssertionError(f'Consumption profile column drift: {set(columns)}')
+    for name in required - {'classification_key','label'}:
+        if columns[name]['nullable']:
+            raise AssertionError(f'Consumption profile nullability drift: {name}')
+    if inspector.get_pk_constraint(table)['constrained_columns'] != ['global_product_id']:
+        raise AssertionError('Consumption profile primary key drift')
+    foreign_keys = inspector.get_foreign_keys(table)
+    if len(foreign_keys) != 1 or not (
+        foreign_keys[0]['constrained_columns'] == ['global_product_id']
+        and foreign_keys[0]['referred_table'] == 'global_products'
+        and foreign_keys[0]['referred_columns'] == ['id']
+        and foreign_keys[0].get('options', {}).get('ondelete') == 'CASCADE'
+    ):
+        raise AssertionError('Consumption profile cascade foreign key drift')
+    indexes = inspector.get_indexes(table)
+    if not any(index['name'] == 'idx_consumption_profile_key'
+               and index['column_names'] == ['classification_key'] for index in indexes):
+        raise AssertionError('Consumption profile classification index missing')
+    checks = inspector.get_check_constraints(table)
+    if len(checks) != 1 or checks[0]['name'] != 'ck_consumption_profile_status':
+        raise AssertionError('Consumption profile status constraint missing')
+    normalized = re.sub(r'[\s()\[\]"`]', '', checks[0]['sqltext'].lower())
+    # PostgreSQL reflection expands IN to ANY(ARRAY[...]); verify both allowed
+    # literals without modifying the database in this read-only authority.
+    if set(re.findall(r"'([^']*)'", normalized)) != {'ready','pending'}:
+        raise AssertionError('Consumption profile status values drift')
+    print('CONSUMPTION_PROFILE_SCHEMA_GREEN')
+
+
+def _assert_article_synonym_schema(connection) -> None:
+    """Own the post-baseline synonym table without weakening the baseline comparison."""
+    inspector = inspect(connection)
+    table = ARTICLE_SYNONYM_LINKS_TABLE
+    if not inspector.has_table(table):
+        raise AssertionError(f"Missing article-synonym relation table: {table}")
+
+    columns = {column['name']: column for column in inspector.get_columns(table)}
+    expected_columns = {
+        'left_product_id', 'right_product_id', 'confirmed_by', 'confirmed_at',
+        'source_fingerprint', 'method', 'score',
+    }
+    if set(columns) != expected_columns:
+        raise AssertionError(f"Article-synonym column drift: {set(columns)!r}")
+    if any(column['nullable'] for column in columns.values()):
+        raise AssertionError('Article-synonym columns must all be NOT NULL')
+    for name in (
+        'left_product_id', 'right_product_id', 'confirmed_by',
+        'source_fingerprint', 'method',
+    ):
+        if not isinstance(columns[name]['type'], sa.Text):
+            raise AssertionError(f"Article-synonym {name} must be TEXT")
+    if not isinstance(columns['score']['type'], sa.Float):
+        raise AssertionError('Article-synonym score must be FLOAT')
+    confirmed_at_type = columns['confirmed_at']['type']
+    if not isinstance(confirmed_at_type, sa.DateTime):
+        raise AssertionError('Article-synonym confirmed_at must be DATETIME')
+    if connection.dialect.name == 'postgresql' and not confirmed_at_type.timezone:
+        raise AssertionError('Article-synonym confirmed_at must be TIMESTAMPTZ')
+
+    primary_key = tuple(inspector.get_pk_constraint(table).get('constrained_columns') or ())
+    if primary_key != ('left_product_id', 'right_product_id'):
+        raise AssertionError(f"Article-synonym pair primary key drift: {primary_key!r}")
+
+    foreign_keys = inspector.get_foreign_keys(table)
+    expected_fk_columns = {'left_product_id', 'right_product_id'}
+    actual_fk_columns = set()
+    for fk in foreign_keys:
+        constrained = tuple(fk.get('constrained_columns') or ())
+        if (len(constrained) != 1
+                or fk.get('referred_table') != 'global_products'
+                or tuple(fk.get('referred_columns') or ()) != ('id',)
+                or fk.get('options', {}).get('ondelete') != 'CASCADE'):
+            raise AssertionError(f"Article-synonym foreign key drift: {fk!r}")
+        actual_fk_columns.add(constrained[0])
+    if len(foreign_keys) != 2 or actual_fk_columns != expected_fk_columns:
+        raise AssertionError(f"Article-synonym pair foreign keys drift: {foreign_keys!r}")
+
+    indexes = {index['name']: index for index in inspector.get_indexes(table)}
+    right_index = indexes.get('idx_article_synonym_right')
+    if (set(indexes) != {'idx_article_synonym_right'}
+            or right_index is None
+            or tuple(right_index.get('column_names') or ()) != ('right_product_id',)
+            or right_index.get('unique')):
+        raise AssertionError(f"Article-synonym lookup index drift: {indexes!r}")
+
+    checks = {item['name']: item['sqltext'] for item in inspector.get_check_constraints(table)}
+    if set(checks) != {'ck_article_synonym_pair_order', 'ck_article_synonym_score'}:
+        raise AssertionError(f"Article-synonym check constraints drift: {checks!r}")
+    pair_order = re.sub(r'[\s()"`]', '', checks['ck_article_synonym_pair_order'].lower())
+    score = re.sub(r'[\s()"`]', '', checks['ck_article_synonym_score'].lower())
+    if 'left_product_id<right_product_id' not in pair_order:
+        raise AssertionError('Article-synonym canonical pair-order check drift')
+    if 'score>=0' not in score or 'score<=1' not in score:
+        raise AssertionError('Article-synonym score bounds check drift')
+
+    print('ARTICLE_SYNONYM_SCHEMA_AUTHORITY_GREEN')
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -684,6 +794,8 @@ def main() -> None:
             _assert_household_representative_image_authority(connection)
             _assert_household_profile_schema(connection)
             _assert_lidl_import_window_schema(connection)
+            _assert_consumption_profile_schema(connection)
+            _assert_article_synonym_schema(connection)
             _assert_maintenance_schema(connection)
     finally:
         engine.dispose()

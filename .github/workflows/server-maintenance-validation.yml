@@ -50,6 +50,7 @@ jobs:
         run: >-
           python -m pytest -q
           backend/tests/test_maintenance_platform_api.py
+          backend/tests/test_maintenance_session_drain.py
           backend/tests/test_maintenance_login_identity.py
           backend/tests/test_maintenance_host_proof.py
           backend/tests/test_maintenance_postgres_admission.py
@@ -58,6 +59,7 @@ jobs:
           backend/tests/test_maintenance_runtime_preflight.py
           backend/tests/test_maintenance_schema_contract.py
           backend/tests/test_maintenance_state_contract.py
+          backend/tests/test_server_maintenance_split_container_selection_contract.py
 
   windows-host-parser:
     runs-on: windows-latest
@@ -73,3 +75,15 @@ jobs:
       - name: Exact database IP identity including PostgreSQL CIDR notation
         shell: pwsh
         run: ./scripts/server-maintenance/Test-Host-Network-Identity.ps1
+      - name: Parse isolated rehearsal CMD embedded PowerShell without Docker actions
+        shell: pwsh
+        run: |
+          $script=Get-Content 'scripts/server-maintenance/Inhuis_Server_Geisoleerde_Herstartproef.cmd' -Raw
+          $marker='# INHUIS_POWERSHELL_START'
+          $index=$script.LastIndexOf($marker)
+          if ($index -lt 0) { throw 'Rehearsal script marker missing' }
+          $body=$script.Substring($index+$marker.Length)
+          $tokens=$null; $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseInput($body,[ref]$tokens,[ref]$errors)
+          if ($errors.Count) { $errors | Format-List; throw 'Rehearsal PowerShell syntax invalid' }
+          Write-Host 'ISOLATED_REHEARSAL_POWERSHELL_PARSE_GREEN'

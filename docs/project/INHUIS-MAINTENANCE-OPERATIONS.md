@@ -11,6 +11,18 @@ implicit technical privileges.
    Existing household notification inboxes receive the announcement. The signed-in
    global banner also covers technical accounts without a household. Offline
    delivery is an inbox projection, not a receipt/acknowledgement guarantee.
+   Leave at least two minutes between announcement and involuntary session
+   sign-out. A signed-in session is not evidence of current user activity.
+   The administrator can explicitly choose **Resterende sessies beëindigen**,
+   which requires **both** `platform.recovery.manage` and
+   `platform.sessions.revoke`. A second confirmation is mandatory. All other
+   unexpired sign-in sessions are revoked in one audited transaction; the
+   administrator's own session remains valid. A client with unsaved form data
+   may lose that unsaved input, so warn users beforehand. Session revocation
+   blocks future authenticated requests but does **not** abort operations
+   already admitted. A stale maintenance generation or a grace period shorter
+   than two minutes fails closed. This action is allowed only in `announced`
+   or `draining`, never as a shortcut around maintenance admission checks.
 2. Select **Verwerkingen veilig stoppen**. A fresh, pinned Windows-agent heartbeat
    is required before this can close admission. Existing requests/worker handoffs
    finish; new domain requests and database writes are rejected. The screen polls
@@ -33,6 +45,27 @@ An interrupted/crashed operation requires investigation and reconciliation using
 its original domain contract; removing its record merely because it is old is
 not an acceptable recovery procedure.
 
+### Shortest safe interruption window
+
+- Announce while normal usage continues; the two-minute notice period does
+  **not** itself take the application offline.
+- Near the planned time, optionally revoke remaining login sessions after the
+  confirmation and then initiate the normal drain. Once draining, **new**
+  domain work is denied, while previously admitted operations finish.
+- Minimize actual downtime by initiating drain only when maintenance is ready;
+  do not treat revoked sessions as evidence that operations are zero. A clean
+  session list and an empty maintenance-operation list are distinct facts.
+- If an operation is stuck, stay in a blocked state and reconcile the original
+  workflow. Never terminate a backend, delete a maintenance-operation row,
+  force-release or reboot based on session count alone.
+- Proceed with the existing host-proof/backup gate, an operator-performed
+  Windows reboot, exact image/data/route checks, and explicit release.
+- The scanner path and the actual user-facing HTTP/HTTPS routes must be tested
+  after each reboot; a green Docker container icon alone is not sufficient.
+- A host agent which cannot establish the exact backend/physical PostgreSQL
+  identity (including a stale scheduled task pointing to another Compose
+  project) is **not** a valid source of restart permission.
+
 ## One-time deployment configuration (separate approval required)
 
 Nothing here authorizes applying this configuration to an operational server.
@@ -49,6 +82,25 @@ local frontend URL and external HTTPS URL. It reads actual Compose labels,
 container IDs, PostgreSQL storage mounts, cluster system identifier, database OID
 and server startup time; it cross-checks the backend's actual runtime connection.
 No server/container name is accepted as identity evidence by itself.
+
+The local frontend URL must target `localhost` or `127.0.0.1` on the **actual
+user-facing published port**, not an assumed development port. The host agent
+finds exactly one running container publishing that port and checks both its
+Compose project and `frontend` service label, plus the actual `80/tcp` binding.
+During installation and before a signed maintenance-cycle proof it also checks
+that both the local and external HTTPS user routes render Inhuis and report the
+same frontend release. During routine heartbeat it checks container/port identity
+without making repeated external network requests. The backend's physical
+PostgreSQL connection is checked separately; no same-Compose-project assumption
+is made for the explicit split-database mode.
+
+An existing or competing `Inhuis-Onderhoud-*` Windows Scheduled Task is **not**
+overwritten, removed or silently disabled by `-InstallAtLogon`. If a stale task
+points to another Compose project, installation stops with a clear diagnostic.
+An operator must first reconcile the old task's identity and choose a separately
+approved replacement procedure. This prevents two agents from publishing
+conflicting maintenance evidence. A green browser login or Docker indicator is
+not a substitute for that reconciliation.
 
 The runtime PostgreSQL address may use `inet::text` CIDR notation. The host
 agent validates the numeric address and prefix and compares the exact host IP
