@@ -263,10 +263,19 @@ def test_saved_catalog_link_must_match_target_product_before_claiming_success():
 
 
 def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
-    # The canonical writer uses store_chain before store_name and corrected
-    # label before raw/normalized label; the overview must use identical keys.
+    # Same stable store-chain and receipt-label identity must be used by
+    # overview, confirmation writer and OFF lookup. Corrected labels win;
+    # otherwise prefer normalized labels, then unprocessed OCR raw text.
     import inspect
     from app.services import external_unlinked_articles_service as overview
-    code = inspect.getsource(overview._source_articles)
-    assert "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')" in code
-    assert "COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.raw_label, ''), rtl.normalized_label, '')" in code
+    from app.services import external_article_confirmation_service as writer
+    from app.services import off_search_service as off
+    overview_code = inspect.getsource(overview._source_articles)
+    writer_code = inspect.getsource(writer._receipt_table_identity)
+    off_code = inspect.getsource(off._resolve_receipt_table_line)
+    assert "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')" in overview_code
+    expected = "NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, '')"
+    for route_code in (overview_code, writer_code, off_code):
+        assert expected.replace(", ", ",") in route_code.replace(", ", ",").replace("\\n", "").replace("    ", "")
+    assert "store_chain" in writer_code
+    assert "store_chain" in overview_code
