@@ -1301,3 +1301,41 @@ voor code of Nederlandse omschrijving. De kandidaatregels volgen de gewone
 **Classificatie opslaan** vraagt expliciet **Annuleren/OK**. Bij bewezen
 succes sluit het paneel en vernieuwt de bovenste tabel inclusief tellers;
 bij fouten blijft de gebruiker op het paneel met een leesbare melding.
+
+
+### Catalogus: artikelclassificaties en leesbare OFF-voorstellen — PO, 28 oktober 2026
+
+Het scherm **Artikelclassificaties toekennen** gebruikt de bestaande, gedeelde
+`DataTable` met een selectiekolom zonder titel, standaard kolomfilters,
+sortering, verstelbare kolombreedtes en paginering van acht rijen. Er zijn
+geen afzonderlijke zoekvelden en geen extra navigatie per honderd rijen.
+De titel en de tekst daaronder zijn respectievelijk **Artikelclassificaties
+toekennen** en **Via OFF kun je suggesties opvragen voor de artikelclassificatie.**
+
+De tabel toont **Artikel**, **Barcode**, **Artikelclassificatie** en
+**Voorgestelde artikelclassificatie**. De volledige tabelbreedte, het
+tabelkader, de paginering en de vier bulkacties zijn op elkaar uitgelijnd,
+zonder een lege randstrook aan de rechterzijde. Onder de paginering staan
+**Voorstel ophalen**, **Voorstel bevestigen**, **Exporteren** en
+**Classificatie verwijderen**; ze blijven zichtbaar en worden alleen actief
+bij een passende selectie. Bevestiging slaat uitsluitend een expliciet
+beoordeelde classificatie op; verwijderen vraagt een aparte bevestiging en
+laat het artikel, de barcode en de wijzigingshistorie ongemoeid.
+
+Lange voorgestelde classificaties mogen compact worden afgekapt in een
+tabelcel, maar de voorsteltekst is altijd aanklikbaar. Die klik opent een
+duidelijke, gecentreerde Inhuis-melding met **volledig witte ondoorzichtige
+achtergrond**, een herkenbare donkergroene rand en goed afbrekende regels.
+De volledige categorie, artikelnaam, barcode en eventuele waarschuwing
+moeten leesbaar zijn zonder onderliggende tabeltekst die doorschijnt.
+De gebruiker sluit de melding via **Sluiten** of een klik buiten de melding.
+Een herhaalde klik op hetzelfde voorstel opent dezelfde melding opnieuw.
+
+Wanneer meerdere geselecteerde artikelen via **Voorstel ophalen** worden
+beoordeeld, verschijnt uitsluitend het **eerste geslaagde OFF-voorstel
+direct bij ontvangst** automatisch in de melding. De overige OFF-verzoeken
+lopen vervolgens op de achtergrond door en vullen hun eigen tabelrij,
+zonder de bestaande melding te vervangen of een tweede automatische
+overlay te tonen. Na sluiten kan de gebruiker elk afzonderlijk voorstel
+zelf opnieuw openen. Het tonen of sluiten van voorstellen is geen
+classificatiebevestiging.
