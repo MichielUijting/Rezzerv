@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { buildJumboImportEnvelope } from '../src/features/storeConnections/jumboReceiptImport.js'
-import { jumboDateWindow, selectJumboHistory, jumboDay, importJumboBatch } from '../src/features/storeConnections/jumboReceiptBatch.js'
+import { jumboDateWindow, selectJumboHistory, jumboDay, importJumboBatch, stageJumboBatch } from '../src/features/storeConnections/jumboReceiptBatch.js'
 import {
   JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
@@ -236,12 +236,12 @@ rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: 
 rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, total: 7.13 + 0.02 } } })
 rejected({ ...observation, first_detail: { ...observation.first_detail, parsed: { ...parsed, parseError: 'invalid' } } })
 const ui = storeConnectionsSource
-assert.match(ui, /importJumboBatch\(/)
+assert.match(ui, /stageJumboBatch\(/)
 assert.match(ui, /buildJumboImportEnvelope,/)
 assert.match(ui, /jumbo-confirm-import/)
-assert.match(ui, /fetchJson\('\/api\/receipts\/retailers\/import'/)
+assert.match(ui, /fetchJson\('\/api\/receipts\/retailers\/import-queue'/)
 assert.match(ui, /setJumboImportCandidate\(null\)/)
-assert.match(ui, /importJumboBatch\(/)
+assert.match(ui, /bonnen veilig ontvangen/)
 assert.match(ui, /jumbo-from-date/)
 assert.match(ui, /jumbo-to-date/)
 assert.match(bookmarkletBody, /Jumbo geschiedenis ophalen/)
@@ -313,6 +313,28 @@ const counts = await importJumboBatch(batch, async (env) => {
 }, buildJumboImportEnvelope)
 assert.deepEqual(counts, { new: 1, known: 1, refreshed: 0, failed: 0 })
 assert.deepEqual(imported, ['TXN-20261013-01', 'TXN-20261013-02'])
+const queueIdA = '00000000-0000-4000-8000-000000000001'
+const queueIdB = '00000000-0000-4000-8000-000000000002'
+const stagedBatches = []
+const staged = await stageJumboBatch(batch, async (envelopes) => {
+  stagedBatches.push(envelopes)
+  return { received: 2, import_completed: false, items: [
+    { queue_id: queueIdA, status: 'pending' },
+    { queue_id: queueIdB, status: 'pending' },
+  ] }
+}, buildJumboImportEnvelope)
+assert.equal(stagedBatches.length, 1) // entire confirmed batch, one durable HTTP request
+assert.deepEqual(stagedBatches[0].map(envelope => envelope.external_receipt_id), imported)
+assert.deepEqual(staged.map(entry => entry.status), ['pending', 'pending'])
+await assert.rejects(
+  () => stageJumboBatch({ ...batch, details: [observation.first_detail, observation.first_detail] },
+    async () => { throw new Error('No network request allowed') }, buildJumboImportEnvelope),
+  /Dubbel Jumbo-bonnummer/,
+)
+await assert.rejects(
+  () => stageJumboBatch(batch, async () => ({ received: 2, import_completed: true, items: [] }), buildJumboImportEnvelope),
+  /niet aantoonbaar veilig opgeslagen/,
+)
 await assert.rejects(() => importJumboBatch({ ...batch, details: [observation.first_detail, observation.first_detail] }, async () => { throw new Error('Should never write') }, buildJumboImportEnvelope))
 let countProcessed = 0
 await assert.rejects(

@@ -27,6 +27,13 @@ implicit technical privileges.
    is required before this can close admission. Existing requests/worker handoffs
    finish; new domain requests and database writes are rejected. The screen polls
    and automatically attempts the final safety checks when operations reach zero.
+   Winkelkoppelingen are not login sessions: their separate durable import
+   admissions appear as **openstaande importregistraties**. An unfinished entry
+   after a crash is not proof that an import is still actively running.
+   The AH automatic scheduler checks maintenance admission before beginning a
+   batch and between households. During draining it starts no further household
+   imports; the currently admitted household finishes. On graceful app shutdown
+   its stop request similarly prevents the next household from starting.
 3. Only an unexpired **Alle veiligheidscontroles zijn geslaagd** result permits
    the administrator to decide on a Windows restart. The application and host
    agent never restart Windows. If the display expires, refresh it.
@@ -38,6 +45,12 @@ implicit technical privileges.
 5. Select **Onderhoud beëindigen en gebruikers toelaten**. The backend repeats
    all checks in the same locked transition before admission reopens and the
    existing inbox receives the completion message.
+   After release, the running AH scheduler notices reopened admission within
+   its short poll cycle and schedules due receipts again. On app/server startup
+   the scheduler starts with its normal startup delay and reconciles known AH
+   receipt IDs. This does not automatically replay a browser-assisted manual
+   Jumbo/Lidl HTTP request interrupted by an abrupt host termination: that
+   requires a separate durable work-queue/checkpoint design.
 
 Errors, incomplete operations, missing/stale signatures and mismatched data
 leave admission closed. There is no forced reboot, lease expiry or force-release.
@@ -86,6 +99,11 @@ server reconciliation is **not** performed by this code change.
 - If an operation is stuck, stay in a blocked state and reconcile the original
   workflow. Never terminate a backend, delete a maintenance-operation row,
   force-release or reboot based on session count alone.
+- Windows forced power-off cannot be made graceful by application hooks. A
+  crashed or interrupted receipt import requires source-idempotency checks and
+  manual reconciliation of any unresolved durable admission. The historical
+  38 AH admissions may be reconciled only after a verified independent backup,
+  proof of receipt/source consistency and separately approved targeted cleanup.
 - Proceed with the existing host-proof/backup gate, an operator-performed
   Windows reboot, exact image/data/route checks, and explicit release.
 - The scanner path and the actual user-facing HTTP/HTTPS routes must be tested

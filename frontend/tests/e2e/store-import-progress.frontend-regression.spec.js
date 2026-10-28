@@ -63,15 +63,19 @@ const payload = {
 const previewUrl = '/instellingen/winkelkoppelingen#jumbo-poc-v14=' + encodeURIComponent(JSON.stringify(payload))
 
 for (const width of [1280, 390]) {
-  test(`Jumbo counts confirmed receipts and retains concise UI at ${width}px`, async ({ page }) => {
+  test(`Jumbo confirms durable receipt staging without claiming processing at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await mockStorePage(page)
     let calls = 0
     let release
-    await page.route('**/api/receipts/retailers/import', async route => {
+    await page.route('**/api/receipts/retailers/import-queue', async route => {
       calls += 1
-      if (calls === 2) await new Promise(resolve => { release = resolve })
-      await route.fulfill({ json: { duplicate: calls === 2, raw_receipt_id: `test-${calls}` } })
+      expect(route.request().postDataJSON()).toHaveLength(2)
+      await new Promise(resolve => { release = resolve })
+      await route.fulfill({ json: {
+        received: 2, import_completed: false,
+        items: [1, 2].map(n => ({ queue_id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, status: 'pending' })),
+      } })
     })
     await page.goto(previewUrl)
     const preview = page.getByTestId('jumbo-poc-result')
@@ -82,36 +86,35 @@ for (const width of [1280, 390]) {
     await page.getByTestId('jumbo-confirm-import').click()
     const status = page.getByTestId('jumbo-poc-progress')
     await expect(status).toHaveAttribute('role', 'status')
-    await expect(status).toContainText('1 van 2 bonnen verwerkt')
-    await expect(status.getByRole('progressbar')).toHaveAttribute('value', '1')
+    await expect(status).toContainText('Bonnen controleren')
+    await expect(status.getByRole('progressbar')).toHaveCount(0)
     await expect(page.getByTestId('jumbo-confirm-import')).toBeDisabled()
     await expect.poll(() => typeof release).toBe('function')
     release()
-    await expect(status).toContainText('Afgerond')
-    await expect(status).toContainText('2 van 2 bonnen verwerkt')
-    await expect(status).toContainText('1 nieuw · 1 bekend · 0 bijgewerkt · 0 mislukt')
+    await expect(status).toContainText('Veilig ontvangen, verwerking volgt')
+    await expect(status).toContainText('2 bonnen veilig ontvangen')
+    await expect(status).not.toContainText('bonnen verwerkt')
     await expect(preview).toHaveCount(0)
-    expect(calls).toBe(2)
+    expect(calls).toBe(1)
   })
 }
 
-test('Jumbo retains confirmed count after a later receipt fails', async ({ page }) => {
+test('Jumbo rejects an unconfirmed atomic batch without claiming partial processing', async ({ page }) => {
   await mockStorePage(page)
   let calls = 0
-  await page.route('**/api/receipts/retailers/import', route => {
+  await page.route('**/api/receipts/retailers/import-queue', route => {
     calls += 1
-    return calls === 1
-      ? route.fulfill({ json: { duplicate: false, raw_receipt_id: 'test-first' } })
-      : route.fulfill({ status: 503, json: { detail: 'Testverbinding onderbroken' } })
+    return route.fulfill({ status: 503, json: { detail: 'Testverbinding onderbroken' } })
   })
   await page.goto(previewUrl)
   await page.getByTestId('jumbo-confirm-import').click()
   const status = page.getByTestId('jumbo-poc-progress')
   await expect(status).toContainText('Mislukt')
-  await expect(status).toContainText('1 van 2 bonnen verwerkt')
-  await expect(status).toContainText('1 nieuw · 0 bekend · 0 bijgewerkt · 1 mislukt')
+  await expect(status).not.toContainText('veilig ontvangen')
+  await expect(status.getByRole('progressbar')).toHaveCount(0)
   await expect(page.getByTestId('jumbo-poc-result')).toBeVisible()
   await expect(page.getByTestId('jumbo-confirm-import')).toBeEnabled()
+  expect(calls).toBe(1)
 })
 
 test('AH shows waiting status without an invented progress total', async ({ page }) => {
@@ -154,7 +157,7 @@ for (const receiptId of ['123456789012', 'TEST:LIDL']) {
       } },
     })), receiptId)
     await expect(status).toContainText('Mislukt')
-    await expect(status).toContainText('0 nieuw · 0 bekend · 0 bijgewerkt · 1 mislukt')
+    await expect(status).toContainText('0 veilig ontvangen · 1 mislukt')
     await expect(status.getByRole('progressbar')).toHaveCount(0)
   })
 }

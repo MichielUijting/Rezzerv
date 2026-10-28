@@ -281,6 +281,9 @@ def _strip_migration_extensions(schema: str) -> str:
         | PR2I_GPC_SCHEMA_AUTHORITY_TABLES
         | PR2K_SCHEMA_AUTHORITY_TABLES
         | PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES
+        # PR614 adds this table after the frozen SQLite baseline. Its table
+        # and indexes must not be compared with baseline-owned objects.
+        | {"retailer_import_queue"}
     )
 
     def _is_migration_owned(block: str) -> bool:
