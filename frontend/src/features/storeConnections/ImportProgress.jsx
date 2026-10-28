@@ -10,6 +10,7 @@ export default function ImportProgress({ store, phase, message, processed, total
     fetching: 'Bonnen ophalen',
     validating: 'Bonnen controleren',
     importing: 'Bonnen verwerken',
+    queued: 'Veilig ontvangen, verwerking volgt',
     completed: 'Afgerond',
     failed: 'Mislukt',
   }
@@ -26,7 +27,9 @@ export default function ImportProgress({ store, phase, message, processed, total
       ) : null}
       {message ? <div>{message}</div> : null}
       {counts ? (
-        <div>{counts.new || 0} nieuw · {counts.known || 0} bekend · {counts.refreshed || 0} bijgewerkt · {counts.failed || 0} mislukt</div>
+        'queued' in counts
+          ? <div>{counts.queued || 0} veilig ontvangen · {counts.failed || 0} mislukt</div>
+          : <div>{counts.new || 0} nieuw · {counts.known || 0} bekend · {counts.refreshed || 0} bijgewerkt · {counts.failed || 0} mislukt</div>
       ) : null}
     </div>
   )

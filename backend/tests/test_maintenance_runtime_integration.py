@@ -61,6 +61,21 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
                 module.upgrade()
             with Operations.context(MigrationContext.configure(conn)):
                 self.migration.upgrade()
+            # Upgrade the actual queue migration in the isolated schema, not
+            # an ad-hoc test table without the production write barrier.
+            spec = importlib.util.spec_from_file_location('retailer_queue_migration', ROOT/'backend/alembic/versions/20261027_01_retailer_import_queue.py')
+            queue_migration = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(queue_migration)
+            with Operations.context(MigrationContext.configure(conn)):
+                queue_migration.upgrade()
+            barrier = conn.execute(text("""
+                SELECT COUNT(*) FROM pg_trigger t
+                JOIN pg_class c ON c.oid=t.tgrelid
+                WHERE c.relname='retailer_import_queue'
+                  AND t.tgname='inhuis_maintenance_write_gate'
+                  AND t.tgenabled='O'
+            """)).scalar_one()
+            self.assertEqual(barrier, 1)
 
     def tearDown(self):
         self.engine.dispose()

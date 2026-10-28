@@ -55,6 +55,21 @@ export default function PlatformMaintenancePanel() {
     {error && <p role="alert">{error}</p>}
     {status && <>
       <p role="status">{LABELS[status.state] || 'Onbekend — geblokkeerd'}. Lopende verwerkingen: {status.active_operations}.</p>
+      {status.retailer_import_registrations && <p data-testid="retailer-import-maintenance-status">
+        Winkelkoppelingen: {status.retailer_import_registrations.open} openstaande importregistratie(s)
+        ({status.retailer_import_registrations.ah_background} AH-achtergrond,
+        {' '}{status.retailer_import_registrations.other_retailer} overige winkelimports).
+        {' '}{status.retailer_import_registrations.new_imports_paused
+          ? 'Nieuwe winkelimports zijn geblokkeerd; reeds begonnen werk wordt veilig afgerond.'
+          : 'Winkelimports mogen automatisch starten.'}
+        {' '}Een open registratie kan ook van een onderbroken oude import zijn; dit is geen telling van actieve gebruikerssessies.
+      </p>}
+      {status.retailer_import_queue && <p data-testid="retailer-import-queue-status">
+        Veilig bewaarde winkelbonnen: {status.retailer_import_queue.pending} wachten op verwerking,
+        {' '}{status.retailer_import_queue.processing} worden verwerkt,
+        {' '}{status.retailer_import_queue.review_required} vragen controle.
+        {' '}Wachtende bonnen blokkeren het stilleggen niet; hun verwerking hervat na vrijgave.
+      </p>}
       {status.announcement && <p>{status.announcement}</p>}
       {sessionCloseResult !== null && <p role="status">{sessionCloseResult} andere inlogsessie(s) beëindigd. Lopende verwerkingen zijn niet afgebroken.</p>}
       {status.state === 'normal' && <>
