@@ -1,4 +1,4 @@
-"""Read-only platform overview of receipt articles without a Catalogus barcode.
+"""Read-only platform overviews of receipt articles and their central Catalogus status.
 
 Uses the existing central link projection, never household product references or
 the legacy candidate listing (which can promote candidates during a read).
@@ -16,6 +16,7 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
 
 def _overview_retailer_code(value):
@@ -104,3 +105,54 @@ def list_articles_without_catalog_barcode() -> dict:
                 "quantity_label": str(source.get("quantity_label") or ""),
             })
     return {"items": items, "total": len(items)}
+
+
+def list_all_external_articles() -> dict:
+    """Platformoverzicht van alle unieke bronartikelen, inclusief Cataloguskoppelingen.
+
+    Een bonartikelnummer is geen GTIN. De Art.code-kolom is uitsluitend een
+    gevalideerde Catalogus-GTIN; generieke koppelingen blijven zonder barcode.
+    """
+    items = []
+    seen = set()
+    counts = {"unlinked": 0, "classification_pending": 0, "linked": 0}
+    with engine.connect() as conn:
+        for source in _source_articles(conn):
+            receipt_text = str(source.get("receipt_line_text") or "")
+            if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
+                continue
+            retailer = _overview_retailer_code(source.get("retailer_code"))
+            article_number = str(source.get("external_article_code") or "")
+            # Presentatiegroepering; afzonderlijke boncodes kunnen verschillende
+            # centrale koppelingen hebben en mogen niet worden samengevoegd.
+            key = (retailer, receipt_text, article_number)
+            if key in seen:
+                continue
+            projected = project_central_link_truth(conn, source)
+            if projected.get("central_link_active") is True:
+                status = "linked"
+                linked_gtin = str(projected.get("linked_gtin") or "")
+                article_code = linked_gtin if is_valid_gtin(linked_gtin) else ""
+            else:
+                pending = get_pending_classification_external_article_link(
+                    conn,
+                    retailer_code=source.get("retailer_code"),
+                    receipt_text=receipt_text,
+                    external_article_code=article_number,
+                )
+                status = "classification_pending" if pending else "unlinked"
+                pending_gtin = str((pending or {}).get("primary_gtin") or "")
+                article_code = pending_gtin if is_valid_gtin(pending_gtin) else ""
+            seen.add(key)
+            counts[status] += 1
+            items.append({
+                "id": source["receipt_item_id"],
+                "receipt_line_text": receipt_text,
+                "retailer_code": retailer,
+                "receipt_article_number": article_number,
+                "quantity_label": str(source.get("quantity_label") or ""),
+                "article_code": article_code,
+                "link_status": status,
+                "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
+            })
+    return {"items": items, "total": len(items), "counts": counts}

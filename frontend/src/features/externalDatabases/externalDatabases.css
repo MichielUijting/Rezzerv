@@ -33,6 +33,16 @@
   max-width: 560px;
 }
 
+.rz-external-ed2-counters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rz-external-ed2-counter--active {
+  box-shadow: inset 0 0 0 2px var(--color-brand-primary);
+}
+
 .rz-external-databases-card--off > p {
   margin: 0;
 }

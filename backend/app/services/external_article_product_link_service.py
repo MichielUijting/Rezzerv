@@ -595,6 +595,7 @@ def _serialize_external_article_product_link(
         "external_article_code": str(row.get("external_article_code") or ""),
         "global_product_id": str(row.get("global_product_id") or ""),
         "global_product_name": row.get("global_product_name"),
+        "primary_gtin": str(row.get("primary_gtin") or ""),
         "status": str(row.get("status") or ""),
         "confirmed_by": row.get("confirmed_by"),
         "confirmed_at": row.get("confirmed_at"),

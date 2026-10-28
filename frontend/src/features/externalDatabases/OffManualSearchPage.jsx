@@ -26,6 +26,7 @@ export default function OffManualSearchPage() {
   const [item, setItem] = useState(() => state?.item?.id === receiptItemId ? state.item : null)
   const [itemError, setItemError] = useState('')
   const [query, setQuery] = useState('')
+  const [barcode, setBarcode] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
@@ -43,7 +44,7 @@ export default function OffManualSearchPage() {
     const controller = new AbortController()
     async function restoreSelectedItem() {
       try {
-        const response = await fetchJsonWithAuth('/api/external-databases/unlinked-articles', {
+        const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', {
           method: 'GET', signal: controller.signal,
         })
         if (!response.ok) throw new Error('Het artikel is niet beschikbaar.')
@@ -63,7 +64,8 @@ export default function OffManualSearchPage() {
     navigate('/externe-databases-2', {
       replace: linkOutcome !== null,
       state: {
-        // After a successful link the article may have left the unlinked list.
+        // Na bevestiging blijft het artikel in het totale overzicht, maar
+        // het kandidatenpaneel opent niet automatisch opnieuw.
         ...(linkOutcome?.status === 'success' ? {} : { selectedItemId: receiptItemId }),
         ...(linkOutcome ? { offLinkOutcome: linkOutcome } : {}),
       },
@@ -73,7 +75,16 @@ export default function OffManualSearchPage() {
   async function search(event) {
     event.preventDefault()
     const searchText = query.trim()
-    if (!item || !searchText || loading) return
+    const searchBarcode = barcode.trim()
+    if (!item || (!searchText && !searchBarcode) || loading) return
+    if (searchText && searchBarcode) {
+      setError('Zoek op productnaam of op barcode. Maak één van beide velden leeg.')
+      return
+    }
+    if (searchBarcode && !/^\d{8}$|^\d{12,14}$/.test(searchBarcode)) {
+      setError('Vul een geldige barcode van 8, 12, 13 of 14 cijfers in.')
+      return
+    }
     setLoading(true)
     setError('')
     setLinkError('')
@@ -88,7 +99,8 @@ export default function OffManualSearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ receipt_item_id: receiptItemId, mode: 'manual', query: searchText, limit: 20 }),
+        body: JSON.stringify({ receipt_item_id: receiptItemId, mode: 'manual',
+          ...(searchBarcode ? { gtin: searchBarcode } : { query: searchText }), limit: 20 }),
       })
       const payload = await response.json().catch(() => ({}))
       if (controller.signal.aborted) return
@@ -103,7 +115,7 @@ export default function OffManualSearchPage() {
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
         .map((candidate, index) => ({ ...candidate, rank: index + 1 }))
       setResults(ordered)
-      setSearchedQuery(searchText)
+      setSearchedQuery(searchBarcode || searchText)
       setSearched(true)
     } catch (err) {
       if (!controller.signal.aborted) setError(err.message || 'Zoeken in OFF is niet gelukt.')
@@ -187,7 +199,13 @@ export default function OffManualSearchPage() {
               <input className="rz-input" type="text" autoFocus aria-label="Zoektekst in OFF" value={query}
                 onChange={(event) => setQuery(event.target.value)} placeholder="Typ een productnaam, merk of trefwoorden" />
             </label>
-            <Button type="submit" disabled={!query.trim() || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
+            <label className="rz-input-field">
+              <span className="rz-label">Barcode / GTIN in OFF</span>
+              <input className="rz-input" type="text" inputMode="numeric" aria-label="Barcode / GTIN in OFF"
+                value={barcode} onChange={(event) => setBarcode(event.target.value)}
+                placeholder="8, 12, 13 of 14 cijfers" />
+            </label>
+            <Button type="submit" disabled={(!query.trim() && !barcode.trim()) || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
           </form>
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
           {error ? <p role="alert">{error}</p> : null}

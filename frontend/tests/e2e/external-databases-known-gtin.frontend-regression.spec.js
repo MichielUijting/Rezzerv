@@ -9,8 +9,68 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
+  test('tellers en kolom Art.code filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
+    const rows = [
+      { id: 'receipt-table-line:ed2-empty', receipt_line_text: 'Melk zonder code', retailer_code: 'jumbo',
+        receipt_article_number: '123', article_code: '', link_status: 'unlinked' },
+      { id: 'receipt-table-line:ed2-pending', receipt_line_text: 'Melk zonder classificatie', retailer_code: 'jumbo',
+        receipt_article_number: '456', article_code: '8718452504435', link_status: 'classification_pending' },
+      { id: 'receipt-table-line:ed2-linked', receipt_line_text: 'Melk met code', retailer_code: 'jumbo',
+        receipt_article_number: '789', article_code: '8720326035617', link_status: 'linked' },
+    ]
+    const requests = []
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+        role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+        items: rows, total: 3, counts: { unlinked: 1, classification_pending: 1, linked: 1 },
+      } })
+      if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+        results: [], provider: 'none',
+      } })
+      if (path === '/api/external-products/off/search') {
+        requests.push(route.request().postDataJSON())
+        return route.fulfill({ json: { provider: 'off_exact_gtin', results: [{
+          gtin: '8718452504435', product_name: 'Halfvolle melk', brand: 'Jumbo',
+          score: 0.9, selection_proof: 'signed-exact', identity_compatible: true,
+        }] } })
+      }
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2')
+    const table = page.getByTestId('external-databases-2-table')
+    await expect(table.locator('tbody tr')).toHaveCount(3)
+    await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Gekoppeld: 1' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Gekoppeld: 1' }).click()
+    await expect(table).toContainText('Melk met code')
+    await expect(table).not.toContainText('Melk zonder code')
+    await page.getByRole('button', { name: 'Wis filters' }).click()
+    await page.getByRole('button', { name: 'Filter op Art.code' }).click()
+    await page.getByRole('option', { name: 'Zonder art.code' }).click()
+    await expect(table).toContainText('Melk zonder code')
+    await expect(table).not.toContainText('Melk met code')
+    await page.getByRole('button', { name: 'Wis filters' }).click()
+
+    await table.locator('tbody tr').filter({ hasText: 'Melk zonder code' }).dblclick()
+    await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+    await page.getByRole('textbox', { name: 'Barcode / GTIN in OFF' }).fill('8718452504435')
+    await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+    await expect(page.getByTestId('external-off-free-search-results')).toContainText('Halfvolle melk')
+    expect(requests).toEqual([{ receipt_item_id: rows[0].id, mode: 'manual', gtin: '8718452504435', limit: 20 }])
+  })
   for (const width of [390, 1280]) {
-    test(`OFF-product zonder GPC blijft zichtbaar in Catalogus en verdwijnt uit ongekoppeld op ${width}px`, async ({ page }) => {
+    test(`OFF-product zonder GPC blijft in Catalogus en ED2 zichtbaar op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const item = { id: 'receipt-table-line:achterham-test', receipt_line_text: 'Achterham BL',
         retailer_code: 'lidl', receipt_article_number: '6604471', quantity_label: '1 stuk' }
@@ -27,8 +87,11 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: {
-          items: saved ? [] : [item], total: saved ? 0 : 1,
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+          items: [saved ? { ...item, article_code: '8718452504435',
+            link_status: 'classification_pending' } : { ...item, article_code: '', link_status: 'unlinked' }],
+          total: 1, counts: saved ? { unlinked: 0, classification_pending: 1, linked: 0 }
+            : { unlinked: 1, classification_pending: 0, linked: 0 },
         } })
         if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
           provider: 'openfoodfacts', results: [{ gtin: '8718452504435',
@@ -72,7 +135,9 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
       await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
-      await expect(table).not.toContainText('Achterham BL')
+      await expect(table).toContainText('Achterham BL')
+      await expect(table).toContainText('8718452504435')
+      await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
       await page.goto('/catalogus')
       await expect(page.getByText('Achterham', { exact: true })).toBeVisible()
       await expect(page.getByText('Classificatie ontbreekt')).toBeVisible()
@@ -143,7 +208,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           permissions: { 'platform.system_household.access': true },
         } })
         if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
@@ -285,7 +350,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           active_household_id: '0', context_type: 'system', role: 'owner',
           is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
         } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
@@ -317,7 +382,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           active_household_id: '0', context_type: 'system', role: 'owner',
           is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
         } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: [
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: [
           { id: 'receipt-table-line:jumbo-display', receipt_line_text: 'JUMBO FUET PLAKJES',
             retailer_code: 'jumbo', receipt_article_number: '123', quantity_label: '1' },
         ] } })

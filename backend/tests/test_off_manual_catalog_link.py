@@ -61,6 +61,45 @@ def test_manual_search_scores_article_terms_not_just_retailer_brand():
     assert result["mutated"] is False
 
 
+def test_manual_exact_barcode_lookup_is_read_only_and_provides_signed_selection():
+    item = {'receipt_item_id': RECEIPT, 'retailer_code': 'jumbo',
+            'receipt_line_text': 'Halfvolle melk', 'quantity_label': '1 l'}
+    lookup = {'status': 'found', 'product': product()}
+    with patch.object(search, 'lookup_off_product_by_gtin', return_value=lookup) as exact, \
+            patch.object(search, '_query_off') as fuzzy:
+        result = search.search_off_candidates_for_item(
+            {'mode': 'manual', 'gtin': GTIN, 'limit': 20}, item)
+    exact.assert_called_once_with(GTIN)
+    fuzzy.assert_not_called()
+    assert result['provider'] == 'off_exact_gtin'
+    assert result['mutated'] is False
+    assert len(result['results']) == 1
+    assert result['results'][0]['gtin'] == GTIN
+    assert result['results'][0]['identity_compatible'] is True
+    from app.services.off_manual_search_proof import verify_manual_off_proof
+    assert verify_manual_off_proof(result['results'][0]['selection_proof'],
+                                   receipt_item_id=RECEIPT, gtin=GTIN)['gtin'] == GTIN
+
+
+def test_manual_exact_barcode_rejects_bad_gtin_without_external_request():
+    item = {'receipt_item_id': RECEIPT, 'retailer_code': 'jumbo',
+            'receipt_line_text': 'Halfvolle melk'}
+    with patch.object(search, 'lookup_off_product_by_gtin') as exact:
+        with pytest.raises(search.OffSearchError, match='geldige barcode'):
+            search.search_off_candidates_for_item({'mode': 'manual', 'gtin': '12345'}, item)
+    exact.assert_not_called()
+
+
+def test_manual_exact_barcode_flags_wrong_brand_and_blocks_ui_selection():
+    item = {'receipt_item_id': RECEIPT, 'retailer_code': 'ah',
+            'receipt_line_text': 'AH Halfvolle melk'}
+    with patch.object(search, 'lookup_off_product_by_gtin', return_value={
+        'status': 'found', 'product': product()
+    }):
+        result = search.search_off_candidates_for_item({'mode': 'manual', 'gtin': GTIN}, item)
+    assert result['results'][0]['identity_compatible'] is False
+
+
 def test_invalid_barcode_fails_before_off_or_database_access():
     with patch.object(linker, "verify_manual_off_proof") as verify, patch.object(linker.engine, "begin") as begin:
         with pytest.raises(ValueError, match="geldige"):

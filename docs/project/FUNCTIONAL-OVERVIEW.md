@@ -76,6 +76,21 @@ De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
 per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
 Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
 De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+**PO-besluit 28 oktober 2026 — volledig ED2-overzicht:** Externe databases 2
+toont alle unieke bonartikelen, ook wanneer ze al een centrale Cataloguskoppeling
+hebben of wachten op een officiële GS1-classificatie. De aparte, bestaande
+`unlinked-articles`-API behoudt zijn beperkte contract voor andere afnemers;
+ED2 gebruikt het alleen-lezen `articles-overview`. De status wordt niet
+afgeleid uit huishoudartikelen, bonartikelcodes of losse OFF-kandidaten.
+De drie elkaar uitsluitende tellers **Niet gekoppeld**,
+**Classificatie ontbreekt** en **Gekoppeld** tellen de volledige, op
+winkelketen + exacte bontekst + bonartikelnummer ontdubbelde lijst en zijn
+tegelijk statusfilters. De filterbare kolom **Art.code** toont uitsluitend
+een gevalideerde GTIN van een centraal bevestigd of aantoonbaar opgeslagen,
+nog te classificeren Catalogusproduct. Een bonartikelnummer wordt niet als
+Catalogus-Art.code overgenomen. Generieke koppelingen blijven zonder GTIN
+maar tellen wél als **Gekoppeld**. De Art.code-filter ondersteunt met/zonder
+code, onafhankelijk van de statusfilter.
 Het kandidaatpaneel toont na de vaste regel over beschikbare productgegevens
 geen afzonderlijke uitleg, bronstatusalinea's of extra bronbewijsteksten. Een
 knop **Zelf zoeken in OFF** opent een eigen scherm voor het geselecteerde
@@ -84,6 +99,13 @@ merk en andere trefwoorden invullen. Zoeken start pas bij **Zoeken** of Enter;
 de resultaten komen uitsluitend uit OFF en tonen maximaal **7 kandidaten per
 pagina**, met paginering voor de overige resultaten (maximaal twintig per
 zoekopdracht). De resultatentabel heeft geen tweede reeks filterinvoervelden.
+In **Zelf zoeken in OFF** kan de gebruiker in plaats van vrije tekst een
+**Barcode / GTIN** invoeren. Barcodezoeken gebruikt de exacte OFF-opvraag,
+controleert het GTIN-controlecijfer en gebruikt dezelfde servergegenereerde,
+kortlevende koppelingproof en identiteits-/huismerkcontroles. Tekst en barcode
+mogen niet tegelijk worden gezocht. Zoeken wijzigt geen Catalogus- of
+voorraadgegevens; een onbekende barcode geeft een leeg resultaat en een
+bronstoring een afzonderlijke foutmelding.
 Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft
 uitsluitend lezen; de Overeenkomstkolom is de relevante OFF-productnaam-score
 zonder de winkelnaam als schijnbaar productbewijs en bepaalt de eerste rangorde.
@@ -101,8 +123,9 @@ Een verlopen, onjuist of door een backendherstart vervallen bewijs wordt
 afgewezen; dan moet opnieuw worden gezocht. Na **OK** keert de interface
 na de serverrespons altijd terug naar **Externe databases 2**, ook als de
 koppeling is afgewezen. Alleen een door de server bevestigde koppeling wordt
-als geslaagd gemeld; het gekoppelde bronartikel kan na herladen verdwijnen
-uit de lijst zonder barcode. Bij een afwijzing blijft het bronartikel
+als geslaagd gemeld; het gekoppelde bronartikel blijft na herladen in het
+volledige ED2-overzicht met zijn werkelijke status en eventuele Art.code.
+Bij een afwijzing blijft het bronartikel
 beschikbaar en blijft de reden als aanklikbare foutregel zichtbaar totdat de
 gebruiker die sluit of naar een ander scherm gaat. Een mislukte schrijfactie
 wordt nooit verward met een opgeslagen Catalogusartikel.
@@ -128,7 +151,8 @@ De lijst zonder barcode en de centrale koppeling gebruiken dezelfde
 winkelketensleutel (`store_chain` vóór `store_name`) en dezelfde
 oorspronkelijke bonartikeltekst. Alleen een bevestigd geclassificeerd artikel of
 een aantoonbaar opgeslagen GTIN-identiteit met `classification_pending` mag
-daardoor verdwijnen uit Externe databases 2. Een ontbrekende officiële
+daardoor verdwijnen uit de oudere lijst zonder barcode, maar niet uit het
+volledige ED2-overzicht. Een ontbrekende officiële
 GS1-classificatie geeft de melding *Classificatie ontbreekt*, zonder de
 Catalogusopslag te blokkeren. Annuleren wijzigt niets. Na
 **OK** keert de gebruiker na afloop terug naar Externe databases 2 met
@@ -169,7 +193,8 @@ bijbehorende winkelartikelrelatie krijgt dan `classification_pending`; de UI
 toont *Classificatie ontbreekt*. Dit is **niet** één van de twee volledige
 koppelvormen: Kassa, Uitpakken en Voorraad mogen deze relatie niet als bevestigd
 gebruiken zolang er geen officiële GPC Brick is. Het bronartikel verdwijnt wel
-uit Externe databases 2, dat uitsluitend naar ontbrekende barcode-opslag zoekt.
+uit de oudere lijst zonder barcode, maar blijft in het volledige ED2-overzicht
+staan als *Classificatie ontbreekt* met de gevalideerde Catalogus-Art.code.
 Wanneer later een geldige officiële classificatie is vastgelegd, wordt de
 bestaande wachtende relatie zonder bon-/huishoud-/voorraadmutatie als volledige
 koppeling uitleesbaar. Zonder classificatie wordt nooit een Brick geraden.

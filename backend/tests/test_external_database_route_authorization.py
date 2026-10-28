@@ -37,6 +37,7 @@ def build_connection():
     [
         ("GET", "/api/external-databases/summary", "platform.external_products.view"),
         ("GET", "/api/external-databases/unlinked-articles", "platform.external_products.view"),
+        ("GET", "/api/external-databases/articles-overview", "platform.external_products.view"),
         ("GET", "/api/external-databases/candidates", "platform.external_products.view"),
         ("POST", "/api/external-databases/retailers/lidl/match-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/diagnose-real-candidates", "platform.external_products.search"),
