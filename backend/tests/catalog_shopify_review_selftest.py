@@ -17,6 +17,19 @@ def main():
     catalog = (root / 'app/api/catalog_routes.py').read_text(encoding='utf8')
     assert 'catalog_classification.shopify_path' in catalog
     assert 'article_classification' in catalog
+    assert 'CASE WHEN catalog_classification.is_active THEN' in catalog
+    assert "@router.post('/bulk-remove')" in route
+    assert "def remove_batch(payload: RemovalBatch):" in route
+    assert "platform.external_products.link_existing" in route
+    assert "with engine.begin() as conn:" in route
+    assert "is_active = FALSE, version = :version" in route
+    assert "action)" in route and "'removed')" in route
+    assert "affected.rowcount != 1" in route
+    migration02 = (root / 'alembic/versions/20261028_02_catalog_classification_removal.py').read_text(encoding='utf8')
+    assert "down_revision = '20261028_01'" in migration02
+    assert "'is_active'" in migration02 and "'action'" in migration02
+    assert "WHERE is_active = FALSE" in migration02
+
     for forbidden in ('global_product_gpc_bricks', 'household_articles', 'product_group_memberships', 'inventory_events'):
         assert forbidden not in route
     print('CATALOG_SHOPIFY_REVIEW_CONTRACT_GREEN')

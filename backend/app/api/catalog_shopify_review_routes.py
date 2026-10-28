@@ -33,10 +33,20 @@ class Batch(BaseModel):
     model_config = ConfigDict(extra='forbid')
     selections: list[Decision] = Field(min_length=1, max_length=100)
 
+class RemovalDecision(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    global_product_id: str = Field(min_length=1, max_length=200)
+    expected_gtin: str = Field(min_length=8, max_length=14)
+    expected_version: int = Field(ge=1)
+
+class RemovalBatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    selections: list[RemovalDecision] = Field(min_length=1, max_length=100)
+
 def _actor(permission):
     context = require_platform_permission_from_session(permission)
     if not (context.is_platform_superuser or context.is_frontteam):
-        raise HTTPException(403, 'Alleen Superusers en Frontteamleden mogen Shopify-classificaties beoordelen.')
+        raise HTTPException(403, 'Alleen Superusers en Frontteamleden mogen artikelclassificaties beoordelen.')
     if context.is_platform_superuser and context.context_type != 'system':
         raise HTTPException(403, 'Systeemcontext van Superuser is vereist.')
     if context.is_frontteam and not context.is_platform_superuser and context.context_type != 'regular':
@@ -56,7 +66,7 @@ def _reference():
     try:
         return _indexes()
     except (RuntimeError, FileNotFoundError, ImportError, OSError) as exc:
-        raise HTTPException(503, 'Shopify-taxonomie niet beschikbaar; er is niets gewijzigd.') from exc
+        raise HTTPException(503, 'Artikelclassificatiereferentie niet beschikbaar; er is niets gewijzigd.') from exc
 
 def _product(conn, product_id, lock=False):
     row = conn.execute(text('''
@@ -75,7 +85,9 @@ def list_reviews(search: str = Query(default='', max_length=100),
     with engine.connect() as conn:
         rows = conn.execute(text('''
             SELECT gp.id, gp.name, gp.brand, gp.primary_gtin, gp.status,
-                   c.shopify_id, c.shopify_path, c.version
+                   CASE WHEN c.is_active THEN c.shopify_id ELSE NULL END AS shopify_id,
+                   CASE WHEN c.is_active THEN c.shopify_path ELSE NULL END AS shopify_path,
+                   c.version
             FROM global_products gp
             LEFT JOIN global_product_shopify_classifications c
               ON c.global_product_id = gp.id
@@ -189,7 +201,7 @@ def confirm_batch(payload: Batch):
                     UPDATE global_product_shopify_classifications
                        SET shopify_id = :code, shopify_path = :path,
                            taxonomy_version = :taxonomy, barcode_at_confirmation = :gtin,
-                           version = :version, confirmed_by = :actor,
+                           version = :version, is_active = TRUE, confirmed_by = :actor,
                            confirmed_at = CURRENT_TIMESTAMP
                      WHERE global_product_id = :id
                 '''), values)
@@ -202,3 +214,59 @@ def confirm_batch(payload: Batch):
                         :version, :actor, CURRENT_TIMESTAMP)
             '''), {**values, 'audit_id': str(uuid.uuid4())})
     return {'confirmed': len(prepared), 'taxonomy_version': TAXONOMY_VERSION}
+
+
+@router.post('/bulk-remove')
+def remove_batch(payload: RemovalBatch):
+    """Deactivate only selected confirmed categories, preserving audit and concurrency version."""
+    actor = _actor('platform.external_products.link_existing')
+    decisions = sorted(payload.selections, key=lambda item: item.global_product_id)
+    if len({item.global_product_id for item in decisions}) != len(decisions):
+        raise HTTPException(422, 'Dubbele artikelen in selectie zijn niet toegestaan.')
+    with engine.begin() as conn:
+        prepared = []
+        for decision in decisions:
+            if not _valid_gtin(decision.expected_gtin):
+                raise HTTPException(422, 'Ongeldige bestaande barcode.')
+            product = _product(conn, decision.global_product_id, lock=True)
+            if str(product['primary_gtin']) != decision.expected_gtin:
+                raise HTTPException(409, 'Barcode gewijzigd; geen classificaties verwijderd.')
+            current = conn.execute(text("""
+                SELECT shopify_id, shopify_path, taxonomy_version, version, is_active
+                FROM global_product_shopify_classifications
+                WHERE global_product_id = :id FOR UPDATE
+            """), {'id': decision.global_product_id}).mappings().first()
+            if not current or not current['is_active']:
+                raise HTTPException(409, 'Geen bevestigde artikelclassificatie meer aanwezig. Ververs de tabel.')
+            if int(current['version']) != decision.expected_version:
+                raise HTTPException(409, 'Artikelclassificatie is gewijzigd; geen classificaties verwijderd.')
+            prepared.append((decision, current))
+        for decision, current in prepared:
+            new_version = int(current['version']) + 1
+            params = {
+                'id': decision.global_product_id,
+                'expected': decision.expected_version,
+                'version': new_version,
+                'gtin': decision.expected_gtin,
+                'code': current['shopify_id'],
+                'path': current['shopify_path'],
+                'taxonomy': current['taxonomy_version'],
+                'actor': str(actor.user_id),
+                'audit_id': str(uuid.uuid4()),
+            }
+            affected = conn.execute(text("""
+                UPDATE global_product_shopify_classifications
+                   SET is_active = FALSE, version = :version
+                 WHERE global_product_id = :id AND version = :expected AND is_active = TRUE
+            """), params)
+            if affected.rowcount != 1:
+                raise HTTPException(409, 'Artikelclassificatie is tussentijds gewijzigd. Niets verwijderd.')
+            conn.execute(text("""
+                INSERT INTO global_product_shopify_history
+                  (id, global_product_id, shopify_id, shopify_path,
+                   taxonomy_version, barcode_at_confirmation,
+                   version, confirmed_by, confirmed_at, action)
+                VALUES (:audit_id, :id, :code, :path, :taxonomy, :gtin,
+                        :version, :actor, CURRENT_TIMESTAMP, 'removed')
+            """), params)
+    return {'removed': len(prepared)}

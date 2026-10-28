@@ -23,6 +23,13 @@ async function call(url, options) {
 
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
+// Quote CSV cells for Excel, and do not let product names run as spreadsheet formulas.
+function csvCell(value) {
+  const raw = String(value ?? '').replace(/\r?\n/g, ' ')
+  const safe = /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw
+  return '"' + safe.replaceAll('"', '""') + '"'
+}
+
 export default function ShopifyReviewPage() {
   const { showFeedback } = useAppFeedback()
   const [items, setItems] = useState([])
@@ -82,6 +89,72 @@ export default function ShopifyReviewPage() {
   const allHaveProposals = selectedItems.length > 0 && selectedItems.every(
     (item) => proposals[item.id]?.shopify_id && proposals[item.id]?.gtin === item.gtin
   )
+  const allHaveClassifications = selectedItems.length > 0 && selectedItems.every(
+    (item) => Boolean(item.shopify_id)
+  )
+
+  function exportSelected() {
+    if (busyRef.current || !selectedItems.length) return
+    const rows = [
+      ['Artikel', 'Merk', 'Barcode', 'Artikelclassificatie', 'Voorgestelde artikelclassificatie'],
+      ...selectedItems.map((item) => [
+        item.name, item.brand, item.gtin, item.shopify_path || '',
+        proposals[item.id]?.shopify_path || '',
+      ]),
+    ]
+    const csv = String.fromCharCode(0xFEFF) + rows.map((row) => row.map(csvCell).join(';')).join(String.fromCharCode(13, 10))
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'Inhuis_Artikelclassificaties_Geselecteerd.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    setNote(selectedItems.length + ' geselecteerde artikelen geëxporteerd.')
+  }
+
+  function removeClassifications() {
+    if (busyRef.current || !allHaveClassifications) return
+    const selections = selectedItems.map((item) => ({
+      global_product_id: item.id,
+      expected_gtin: item.gtin,
+      expected_version: item.version,
+    }))
+    const count = selections.length
+    showFeedback({
+      variant: 'warning',
+      title: 'Classificatie verwijderen',
+      message: count === 1
+        ? 'De artikelclassificatie van 1 geselecteerd artikel verwijderen?'
+        : 'De artikelclassificaties van ' + count + ' geselecteerde artikelen verwijderen?',
+      detail: 'De Catalogusartikelen en hun barcodes blijven bestaan. De wijzigingshistorie blijft bewaard.',
+      testId: 'article-classification-bulk-remove-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        if (busyRef.current) return false
+        busyRef.current = true
+        setSaving(true)
+        setError('')
+        try {
+          const data = await call(API + '/bulk-remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selections }),
+          })
+          setNote(data.removed + ' artikelclassificaties verwijderd; artikelen en geschiedenis behouden.')
+          setReload((value) => value + 1)
+        } catch (err) {
+          setError(err.message)
+          throw err
+        } finally {
+          busyRef.current = false
+          setSaving(false)
+        }
+      },
+    })
+  }
 
   async function fetchProposals() {
     if (busyRef.current || !selectedItems.length) return
@@ -176,7 +249,7 @@ export default function ShopifyReviewPage() {
     },
     { key: 'gtin', label: 'Barcode', width: 125, sortable: true, filterable: true },
     {
-      key: 'shopify_path', label: 'Huidige artikelclassificatie', width: 250, sortable: true, filterable: true,
+      key: 'shopify_path', label: 'Artikelclassificatie', width: 250, sortable: true, filterable: true,
       renderCell: (item) => <span title={item.shopify_path || ''}>{item.shopify_path || 'Niet geclassificeerd'}</span>,
     },
     {
@@ -207,15 +280,22 @@ export default function ShopifyReviewPage() {
       <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
         getRowKey={(item) => item.id} pageSize={8}
         emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen met geldige barcode gevonden.'}
-        paginationActions={<>
-          <span aria-live="polite">{selected.size} geselecteerd</span>
-          <Button type="button" disabled={busy || !selected.size} onClick={fetchProposals}>
-            {fetching ? 'Voorstellen ophalen...' : 'Voorstel ophalen'}
-          </Button>
-          <Button type="button" disabled={busy || !allHaveProposals} onClick={confirmProposals}>
-            {saving ? 'Bevestigen...' : 'Voorstel bevestigen'}
-          </Button>
-        </>} />
+        paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
+      <div className="rz-external-databases-actions"
+        aria-label="Acties artikelclassificaties"
+        style={{ justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
+        <Button type="button" disabled={busy || !selected.size} onClick={fetchProposals}>
+          {fetching ? 'Voorstellen ophalen...' : 'Voorstel ophalen'}
+        </Button>
+        <Button type="button" disabled={busy || !allHaveProposals} onClick={confirmProposals}>
+          {saving ? 'Bevestigen...' : 'Voorstel bevestigen'}
+        </Button>
+        <Button type="button" variant="secondary" disabled={busy || !selected.size}
+          onClick={exportSelected}>Exporteren</Button>
+        <Button type="button" variant="secondary" disabled={busy || !allHaveClassifications}
+          title="Selecteer uitsluitend artikelen met een bevestigde classificatie."
+          onClick={removeClassifications}>Classificatie verwijderen</Button>
+      </div>
     </ScreenCard>
   </AppShell>
 }

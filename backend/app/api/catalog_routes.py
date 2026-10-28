@@ -386,7 +386,10 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
             LEFT JOIN global_product_shopify_classifications catalog_classification
               ON catalog_classification.global_product_id = gp.id
         """)
-        article_classification = "catalog_classification.shopify_path"
+        article_classification = (
+            "CASE WHEN catalog_classification.is_active THEN "
+            "catalog_classification.shopify_path ELSE NULL END"
+        )
     select_parts.append(f"{article_classification} AS article_classification")
 
     if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
