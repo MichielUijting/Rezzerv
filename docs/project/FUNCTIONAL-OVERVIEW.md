@@ -99,11 +99,13 @@ merk en andere trefwoorden invullen. Zoeken start pas bij **Zoeken** of Enter;
 de resultaten komen uitsluitend uit OFF en tonen maximaal **7 kandidaten per
 pagina**, met paginering voor de overige resultaten (maximaal twintig per
 zoekopdracht). De resultatentabel heeft geen tweede reeks filterinvoervelden.
-In **Zelf zoeken in OFF** kan de gebruiker in plaats van vrije tekst een
-**Barcode / GTIN** invoeren. Barcodezoeken gebruikt de exacte OFF-opvraag,
-controleert het GTIN-controlecijfer en gebruikt dezelfde servergegenereerde,
-kortlevende koppelingproof en identiteits-/huismerkcontroles. Tekst en barcode
-mogen niet tegelijk worden gezocht. Zoeken wijzigt geen Catalogus- of
+In **Zelf zoeken in OFF** gebruikt de gebruiker één invoerveld voor een
+omschrijving, merk of barcode. Invoer die uitsluitend uit cijfers bestaat,
+wordt als barcode herkend: uitsluitend 8, 12, 13 of 14 cijfers zijn toegestaan.
+Overige invoer wordt als tekst gezocht, ook als de omschrijving cijfers bevat.
+Barcodezoeken gebruikt de exacte OFF-opvraag, controleert server-side het
+GTIN-controlecijfer en gebruikt dezelfde servergegenereerde, kortlevende
+koppelingproof en identiteits-/huismerkcontroles. Zoeken wijzigt geen Catalogus- of
 voorraadgegevens; een onbekende barcode geeft een leeg resultaat en een
 bronstoring een afzonderlijke foutmelding.
 Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft

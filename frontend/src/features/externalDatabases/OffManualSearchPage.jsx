@@ -26,7 +26,6 @@ export default function OffManualSearchPage() {
   const [item, setItem] = useState(() => state?.item?.id === receiptItemId ? state.item : null)
   const [itemError, setItemError] = useState('')
   const [query, setQuery] = useState('')
-  const [barcode, setBarcode] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
@@ -75,13 +74,9 @@ export default function OffManualSearchPage() {
   async function search(event) {
     event.preventDefault()
     const searchText = query.trim()
-    const searchBarcode = barcode.trim()
-    if (!item || (!searchText && !searchBarcode) || loading) return
-    if (searchText && searchBarcode) {
-      setError('Zoek op productnaam of op barcode. Maak één van beide velden leeg.')
-      return
-    }
-    if (searchBarcode && !/^\d{8}$|^\d{12,14}$/.test(searchBarcode)) {
+    if (!item || !searchText || loading) return
+    const isBarcodeSearch = /^\d+$/.test(searchText)
+    if (isBarcodeSearch && !/^(?:\d{8}|\d{12,14})$/.test(searchText)) {
       setError('Vul een geldige barcode van 8, 12, 13 of 14 cijfers in.')
       return
     }
@@ -100,7 +95,7 @@ export default function OffManualSearchPage() {
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({ receipt_item_id: receiptItemId, mode: 'manual',
-          ...(searchBarcode ? { gtin: searchBarcode } : { query: searchText }), limit: 20 }),
+          ...(isBarcodeSearch ? { gtin: searchText } : { query: searchText }), limit: 20 }),
       })
       const payload = await response.json().catch(() => ({}))
       if (controller.signal.aborted) return
@@ -115,7 +110,7 @@ export default function OffManualSearchPage() {
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
         .map((candidate, index) => ({ ...candidate, rank: index + 1 }))
       setResults(ordered)
-      setSearchedQuery(searchBarcode || searchText)
+      setSearchedQuery(searchText)
       setSearched(true)
     } catch (err) {
       if (!controller.signal.aborted) setError(err.message || 'Zoeken in OFF is niet gelukt.')
@@ -195,17 +190,11 @@ export default function OffManualSearchPage() {
           <p>Artikel: {item.receipt_line_text}</p>
           <form className="rz-external-off-manual-form" onSubmit={search} data-testid="external-off-free-search-form">
             <label className="rz-input-field">
-              <span className="rz-label">Zoektekst in OFF</span>
-              <input className="rz-input" type="text" autoFocus aria-label="Zoektekst in OFF" value={query}
-                onChange={(event) => setQuery(event.target.value)} placeholder="Typ een productnaam, merk of trefwoorden" />
+              <span className="rz-label">Omschrijving of barcode in OFF</span>
+              <input className="rz-input" type="text" autoFocus aria-label="Omschrijving of barcode in OFF" value={query}
+                onChange={(event) => setQuery(event.target.value)} placeholder="Productnaam, merk, trefwoord of barcode" />
             </label>
-            <label className="rz-input-field">
-              <span className="rz-label">Barcode / GTIN in OFF</span>
-              <input className="rz-input" type="text" inputMode="numeric" aria-label="Barcode / GTIN in OFF"
-                value={barcode} onChange={(event) => setBarcode(event.target.value)}
-                placeholder="8, 12, 13 of 14 cijfers" />
-            </label>
-            <Button type="submit" disabled={(!query.trim() && !barcode.trim()) || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
+            <Button type="submit" disabled={!query.trim() || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
           </form>
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
           {error ? <p role="alert">{error}</p> : null}

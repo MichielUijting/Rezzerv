@@ -107,7 +107,7 @@ export default function ExternalDatabases2Page() {
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
             key={status} type="button" variant="secondary"
-            className={filters.link_status === status ? 'rz-external-ed2-counter--active' : ''}
+            className={`rz-external-ed2-counter--${status}${filters.link_status === status ? ' rz-external-ed2-counter--active' : ''}`}
             aria-pressed={filters.link_status === status}
             onClick={() => setFilters((previous) => ({ ...previous,
               link_status: previous.link_status === status ? '' : status }))}

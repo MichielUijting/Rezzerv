@@ -13,10 +13,10 @@
 }
 
 .rz-external-off-manual-form {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 560px) max-content;
   align-items: end;
   gap: 14px;
-  flex-wrap: wrap;
 }
 
 .rz-external-off-link-row {
@@ -29,8 +29,18 @@
 }
 
 .rz-external-off-manual-form .rz-input-field {
-  flex: 1 1 320px;
+  min-width: 0;
   max-width: 560px;
+}
+
+.rz-external-off-manual-form .rz-input,
+.rz-external-off-manual-form > button.rz-button-primary {
+  box-sizing: border-box;
+  height: 44px;
+}
+
+.rz-external-off-manual-form > button.rz-button-primary {
+  align-self: end;
 }
 
 .rz-external-ed2-counters {
@@ -39,7 +49,24 @@
   flex-wrap: wrap;
 }
 
-.rz-external-ed2-counter--active {
+.rz-external-ed2-counters button.rz-button-secondary {
+  color: var(--color-ui-primary) !important;
+  border: 1px solid var(--color-ui-primary);
+}
+
+.rz-external-ed2-counters button.rz-external-ed2-counter--unlinked {
+  background: #ffd9a8;
+}
+
+.rz-external-ed2-counters button.rz-external-ed2-counter--classification_pending {
+  background: #ffffff;
+}
+
+.rz-external-ed2-counters button.rz-external-ed2-counter--linked {
+  background: #d9f5e0;
+}
+
+.rz-external-ed2-counters button.rz-external-ed2-counter--active {
   box-shadow: inset 0 0 0 2px var(--color-brand-primary);
 }
 
