@@ -1,0 +1,1765 @@
+{
+  "bron": "CBS ECOICOPv2, gepubliceerd 12-02-2026",
+  "codes": [
+    {
+      "code": "010000",
+      "naam": "Voedingsmiddelen en alcoholvrije dranken"
+    },
+    {
+      "code": "011000",
+      "naam": "Voedingsmiddelen"
+    },
+    {
+      "code": "011100",
+      "naam": "Granen en graanproducten (ND)"
+    },
+    {
+      "code": "011110",
+      "naam": "Granen (ND)"
+    },
+    {
+      "code": "011120",
+      "naam": "Meel van granen (ND)"
+    },
+    {
+      "code": "011130",
+      "naam": "Brood en bakkerijproducten (ND)"
+    },
+    {
+      "code": "011140",
+      "naam": "Ontbijtgranen (ND)"
+    },
+    {
+      "code": "011150",
+      "naam": "Macaroni, noedels, couscous en soortgelijke pastaproducten (ND)"
+    },
+    {
+      "code": "011190",
+      "naam": "Overige gemalen granen en graanproducten (ND)"
+    },
+    {
+      "code": "011200",
+      "naam": "Levende dieren en vlees en andere delen van geslachte landdieren (ND)"
+    },
+    {
+      "code": "011210",
+      "naam": "Levende landdieren (ND)"
+    },
+    {
+      "code": "011220",
+      "naam": "Vlees, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011221",
+      "naam": "Vlees van runderen, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011222",
+      "naam": "Vlees van varkens, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011223",
+      "naam": "Vlees van geiten, lammeren en schapen, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011224",
+      "naam": "Vlees van pluimvee, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011225",
+      "naam": "Vlees van hazen en konijnen, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011226",
+      "naam": "Vlees van paarden en andere paardachtigen, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011227",
+      "naam": "Vlees van kamelen en kameelachtigen, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011229",
+      "naam": "Overig vlees, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011230",
+      "naam": "Vlees, gedroogd, gezouten, gepekeld of gerookt (ND)"
+    },
+    {
+      "code": "011240",
+      "naam": "Orgaanvlees, bloed en andere delen van geslachte dieren, vers, gekoeld of bevroren, gedroogd, gezouten, gepekeld of gerookt (ND)"
+    },
+    {
+      "code": "011250",
+      "naam": "Bereidingen van vlees, orgaanvlees, bloed en andere delen van geslachte dieren (ND)"
+    },
+    {
+      "code": "011300",
+      "naam": "Vis en andere schaal‑ en schelpdieren (ND)"
+    },
+    {
+      "code": "011310",
+      "naam": "Vis, levend, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011320",
+      "naam": "Vis, gedroogd, gezouten, gepekeld of gerookt (ND)"
+    },
+    {
+      "code": "011330",
+      "naam": "Visbereidingen (ND)"
+    },
+    {
+      "code": "011340",
+      "naam": "Overige schaal‑ en schelpdieren, levend, vers, gekoeld of bevroren (ND)"
+    },
+    {
+      "code": "011350",
+      "naam": "Overige schaal‑ en schelpdieren, gedroogd, gezouten, gepekeld of gerookt (ND)"
+    },
+    {
+      "code": "011360",
+      "naam": "Overige bereidingen van schaal- en schelpdieren (ND)"
+    },
+    {
+      "code": "011370",
+      "naam": "Lever, kuit en ander orgaanvlees van vis of van andere schaal‑ of schelpdieren, in alle vormen (ND)"
+    },
+    {
+      "code": "011400",
+      "naam": "Melk, andere zuivelproducten en eieren (ND)"
+    },
+    {
+      "code": "011410",
+      "naam": "Rauwe en volle melk (ND)"
+    },
+    {
+      "code": "011420",
+      "naam": "Halfvolle en magere melk (ND)"
+    },
+    {
+      "code": "011430",
+      "naam": "Overige melk en room (ND)"
+    },
+    {
+      "code": "011440",
+      "naam": "Niet‑dierlijke melk (ND)"
+    },
+    {
+      "code": "011450",
+      "naam": "Kaas (ND)"
+    },
+    {
+      "code": "011460",
+      "naam": "Yoghurt en soortgelijke producten (ND)"
+    },
+    {
+      "code": "011470",
+      "naam": "Desserts en dranken op basis van melk (ND)"
+    },
+    {
+      "code": "011480",
+      "naam": "Eieren (ND)"
+    },
+    {
+      "code": "011490",
+      "naam": "Overige zuivelproducten (ND)"
+    },
+    {
+      "code": "011500",
+      "naam": "Oliën en vetten (ND)"
+    },
+    {
+      "code": "011510",
+      "naam": "Plantaardige oliën (ND)"
+    },
+    {
+      "code": "011520",
+      "naam": "Boter en andere van melk afkomstige oliën en vetten (ND)"
+    },
+    {
+      "code": "011530",
+      "naam": "Margarine en dergelijke bereidingen (ND)"
+    },
+    {
+      "code": "011590",
+      "naam": "Overige dierlijke oliën en vetten (ND)"
+    },
+    {
+      "code": "011600",
+      "naam": "Fruit en noten (ND)"
+    },
+    {
+      "code": "011610",
+      "naam": "Dadels, vijgen en tropische vruchten, vers (ND)"
+    },
+    {
+      "code": "011620",
+      "naam": "Citrusvruchten, vers (ND)"
+    },
+    {
+      "code": "011630",
+      "naam": "Steenvruchten en pitvruchten, vers (ND)"
+    },
+    {
+      "code": "011640",
+      "naam": "Bessen, vers (ND)"
+    },
+    {
+      "code": "011650",
+      "naam": "Overig fruit, vers (ND)"
+    },
+    {
+      "code": "011660",
+      "naam": "Fruit, bevroren (ND)"
+    },
+    {
+      "code": "011670",
+      "naam": "Vruchten, gedroogd en gedehydrateerd (ND)"
+    },
+    {
+      "code": "011680",
+      "naam": "Noten, met of zonder dop (ND)"
+    },
+    {
+      "code": "011690",
+      "naam": "Vruchten en noten, gemalen, en in andere bereidingen (ND)"
+    },
+    {
+      "code": "011700",
+      "naam": "Groenten, knollen, plantains, bakbananen en peulvruchten (ND)"
+    },
+    {
+      "code": "011710",
+      "naam": "Blad‑ of stengelgroenten, vers of gekoeld (ND)"
+    },
+    {
+      "code": "011720",
+      "naam": "Vruchtdragende groenten, vers of gekoeld (ND)"
+    },
+    {
+      "code": "011730",
+      "naam": "Groene peulgroenten, vers of gekoeld (ND)"
+    },
+    {
+      "code": "011740",
+      "naam": "Overige groenten, vers of gekoeld (ND)"
+    },
+    {
+      "code": "011750",
+      "naam": "Knollen, plantains en bakbananen vers of gekoeld (ND)"
+    },
+    {
+      "code": "011760",
+      "naam": "Peulvruchten (ND)"
+    },
+    {
+      "code": "011770",
+      "naam": "Overige groenten, knollen, plantains en bakbananen, gedroogd en gedehydrateerd (ND)"
+    },
+    {
+      "code": "011780",
+      "naam": "Groenten, knollen, plantains en bakbananen, bevroren (ND)"
+    },
+    {
+      "code": "011790",
+      "naam": "Groenten, knollen, plantains, bakbananen en peulvruchten, gemalen, en in andere bereidingen (ND)"
+    },
+    {
+      "code": "011800",
+      "naam": "Suiker, suikerwerk en desserts (ND)"
+    },
+    {
+      "code": "011810",
+      "naam": "Rietsuiker en bietsuiker (ND)"
+    },
+    {
+      "code": "011820",
+      "naam": "Overige suikers en suikervervangers (ND)"
+    },
+    {
+      "code": "011830",
+      "naam": "Jam, marmelade, vruchtengelei, vruchtenmoes en vruchtenpasta, en honing (ND)"
+    },
+    {
+      "code": "011840",
+      "naam": "Notenpuree, notenboter en notenpasta (ND)"
+    },
+    {
+      "code": "011850",
+      "naam": "Chocolade, cacao en voedingsmiddelen op basis van cacao (ND)"
+    },
+    {
+      "code": "011860",
+      "naam": "IJs, roomijs en sorbets (ND)"
+    },
+    {
+      "code": "011890",
+      "naam": "Overig suikerwerk en desserts n.e.g. (ND)"
+    },
+    {
+      "code": "011900",
+      "naam": "Kant- en klare voeding en andere voedingsmiddelen (ND)"
+    },
+    {
+      "code": "011910",
+      "naam": "Kant- en klare voeding (ND)"
+    },
+    {
+      "code": "011920",
+      "naam": "Babyvoeding (ND)"
+    },
+    {
+      "code": "011930",
+      "naam": "Zout, samengestelde kruiderijen en sauzen (ND)"
+    },
+    {
+      "code": "011940",
+      "naam": "Specerijen, keukenkruiden en zaden (ND)"
+    },
+    {
+      "code": "011990",
+      "naam": "Overige voedingsmiddelen n.e.g. (ND)"
+    },
+    {
+      "code": "012000",
+      "naam": "Alcoholvrije dranken"
+    },
+    {
+      "code": "012100",
+      "naam": "Groente‑ en fruitsappen (ND)"
+    },
+    {
+      "code": "012200",
+      "naam": "Koffie en koffiesurrogaten (ND)"
+    },
+    {
+      "code": "012300",
+      "naam": "Thee, maté en andere plantaardige producten voor het maken van kruidenthee (ND)"
+    },
+    {
+      "code": "012400",
+      "naam": "Cacaodranken (ND)"
+    },
+    {
+      "code": "012500",
+      "naam": "Water (ND)"
+    },
+    {
+      "code": "012600",
+      "naam": "Frisdranken (ND)"
+    },
+    {
+      "code": "012900",
+      "naam": "Overige alcoholvrije dranken (ND)"
+    },
+    {
+      "code": "013000",
+      "naam": "Diensten voor verwerking van primaire producten voor voedingsmiddelen en alcoholvrije dranken (S)"
+    },
+    {
+      "code": "020000",
+      "naam": "Alcoholhoudende dranken, tabak en verdovende en stimulerende middelen"
+    },
+    {
+      "code": "021000",
+      "naam": "Alcoholhoudende dranken"
+    },
+    {
+      "code": "021100",
+      "naam": "Gedistilleerde dranken en likeuren (ND)"
+    },
+    {
+      "code": "021200",
+      "naam": "Wijn (ND)"
+    },
+    {
+      "code": "021210",
+      "naam": "Wijn van druiven (ND)"
+    },
+    {
+      "code": "021220",
+      "naam": "Wijn van andere bronnen (ND)"
+    },
+    {
+      "code": "021300",
+      "naam": "Bier (ND)"
+    },
+    {
+      "code": "021900",
+      "naam": "Overige alcoholhoudende dranken (ND)"
+    },
+    {
+      "code": "022000",
+      "naam": "Diensten in verband met de productie van alcohol (S)"
+    },
+    {
+      "code": "023000",
+      "naam": "Tabak"
+    },
+    {
+      "code": "023010",
+      "naam": "Sigaretten (ND)"
+    },
+    {
+      "code": "023020",
+      "naam": "Sigaren (ND)"
+    },
+    {
+      "code": "023090",
+      "naam": "Andere tabaksproducten (ND)"
+    },
+    {
+      "code": "024000",
+      "naam": "Verdovende en stimulerende middelen (ND)"
+    },
+    {
+      "code": "030000",
+      "naam": "Kleding en schoenen"
+    },
+    {
+      "code": "031000",
+      "naam": "Kleding"
+    },
+    {
+      "code": "031100",
+      "naam": "Kledingstoffen (SD)"
+    },
+    {
+      "code": "031200",
+      "naam": "Kleding (SD)"
+    },
+    {
+      "code": "031210",
+      "naam": "Heren‑ of jongenskleding (SD)"
+    },
+    {
+      "code": "031220",
+      "naam": "Dames‑ of meisjeskleding (SD)"
+    },
+    {
+      "code": "031230",
+      "naam": "Babykleding (jonger dan 2 jaar) (SD)"
+    },
+    {
+      "code": "031240",
+      "naam": "Schooluniformen (SD)"
+    },
+    {
+      "code": "031300",
+      "naam": "Overige kledingartikelen en fournituren (SD)"
+    },
+    {
+      "code": "031310",
+      "naam": "Overige kledingartikelen (SD)"
+    },
+    {
+      "code": "031320",
+      "naam": "Fournituren (SD)"
+    },
+    {
+      "code": "031400",
+      "naam": "Wasserijen en stomerijen, reparatie, op maat maken en huur van kleding (S)"
+    },
+    {
+      "code": "031410",
+      "naam": "Wasserijen en stomerijen (S)"
+    },
+    {
+      "code": "031420",
+      "naam": "Reparatie, op maat maken en huur van kleding (S)"
+    },
+    {
+      "code": "032000",
+      "naam": "Schoenen"
+    },
+    {
+      "code": "032100",
+      "naam": "Schoenen en ander schoeisel (SD)"
+    },
+    {
+      "code": "032110",
+      "naam": "Herenschoenen (SD)"
+    },
+    {
+      "code": "032120",
+      "naam": "Damesschoenen (SD)"
+    },
+    {
+      "code": "032130",
+      "naam": "Kinderschoenen (SD)"
+    },
+    {
+      "code": "032200",
+      "naam": "Reiniging, reparatie en huur van schoeisel (S)"
+    },
+    {
+      "code": "040000",
+      "naam": "Huisvesting, water, elektriciteit, gas en andere brandstoffen"
+    },
+    {
+      "code": "041000",
+      "naam": "Werkelijke woninghuur"
+    },
+    {
+      "code": "041100",
+      "naam": "Werkelijke huur betaald door huurders voor hoofdverblijf (S)"
+    },
+    {
+      "code": "041200",
+      "naam": "Overige werkelijke huur (S)"
+    },
+    {
+      "code": "041210",
+      "naam": "Werkelijke huur betaald door huurders voor een tweede woning (S)"
+    },
+    {
+      "code": "041220",
+      "naam": "Garagehuur en andere huur die door huurders wordt betaald (S)"
+    },
+    {
+      "code": "042000",
+      "naam": "Toegerekende huur"
+    },
+    {
+      "code": "042100",
+      "naam": "Huurwaarde voor bewoners van een eigen woning voor hun hoofdverblijf (S)"
+    },
+    {
+      "code": "042200",
+      "naam": "Overige huurwaarde (S)"
+    },
+    {
+      "code": "043000",
+      "naam": "Onderhoud, reparatie en beveiliging van de woning"
+    },
+    {
+      "code": "043100",
+      "naam": "Beveiligingsapparatuur en materiaal voor onderhoud en reparatie van woningen"
+    },
+    {
+      "code": "043110",
+      "naam": "Materiaal voor onderhoud en reparatie van de woning (ND)"
+    },
+    {
+      "code": "043120",
+      "naam": "Beveiligingsapparatuur (SD)"
+    },
+    {
+      "code": "043200",
+      "naam": "Diensten voor onderhoud, reparatie en beveiliging van de woning (S)"
+    },
+    {
+      "code": "044000",
+      "naam": "Watervoorziening en diverse diensten in verband met de woning"
+    },
+    {
+      "code": "044100",
+      "naam": "Watervoorziening (ND)"
+    },
+    {
+      "code": "044110",
+      "naam": "Watervoorziening via netwerksystemen (ND)"
+    },
+    {
+      "code": "044120",
+      "naam": "Watervoorziening via andere systemen (ND)"
+    },
+    {
+      "code": "044200",
+      "naam": "Ophalen van huisvuil (S)"
+    },
+    {
+      "code": "044300",
+      "naam": "Riolering (S)"
+    },
+    {
+      "code": "044310",
+      "naam": "Riolering via rioolstelsels (S)"
+    },
+    {
+      "code": "044320",
+      "naam": "Riolering via sanitaire voorzieningen ter plaatse (S)"
+    },
+    {
+      "code": "044400",
+      "naam": "Overige diensten in verband met de woning (S)"
+    },
+    {
+      "code": "044410",
+      "naam": "Onderhoudskosten voor meergezinswoningen (S)"
+    },
+    {
+      "code": "044490",
+      "naam": "Overige diensten in verband met de woning n.e.g. (S)"
+    },
+    {
+      "code": "045000",
+      "naam": "Elektriciteit, gas en andere brandstoffen"
+    },
+    {
+      "code": "045100",
+      "naam": "Elektriciteit (ND)"
+    },
+    {
+      "code": "045200",
+      "naam": "Gas (ND)"
+    },
+    {
+      "code": "045210",
+      "naam": "Aardgas via netwerken (ND)"
+    },
+    {
+      "code": "045220",
+      "naam": "Vloeibaar gemaakte koolwaterstoffen (ND)"
+    },
+    {
+      "code": "045300",
+      "naam": "Vloeibare brandstoffen (ND)"
+    },
+    {
+      "code": "045400",
+      "naam": "Vaste brandstoffen (ND)"
+    },
+    {
+      "code": "045410",
+      "naam": "Steenkool, steenkoolbriketten, turf en turfbriketten (ND)"
+    },
+    {
+      "code": "045420",
+      "naam": "Houtbrandstof, met inbegrip van pellets en briketten (ND)"
+    },
+    {
+      "code": "045430",
+      "naam": "Houtskool (ND)"
+    },
+    {
+      "code": "045490",
+      "naam": "Overige vaste brandstoffen (ND)"
+    },
+    {
+      "code": "045500",
+      "naam": "Overige energie voor verwarming en koeling (ND)"
+    },
+    {
+      "code": "050000",
+      "naam": "Stoffering, huishoudelijke apparaten en dagelijks onderhoud van de woning"
+    },
+    {
+      "code": "051000",
+      "naam": "Meubelen, stoffering en losse tapijten"
+    },
+    {
+      "code": "051100",
+      "naam": "Meubelen, stoffering en losse tapijten (D)"
+    },
+    {
+      "code": "051110",
+      "naam": "Meubelen voor het huis (D)"
+    },
+    {
+      "code": "051120",
+      "naam": "Tuin- en kampeermeubelen (D)"
+    },
+    {
+      "code": "051130",
+      "naam": "Verlichtingsapparatuur (D)"
+    },
+    {
+      "code": "051140",
+      "naam": "Stoffering, losse tapijten en vloerkleden (D)"
+    },
+    {
+      "code": "051200",
+      "naam": "Reparatie, installatie en huur van meubelen, stoffering en losse tapijten (S)"
+    },
+    {
+      "code": "052000",
+      "naam": "Huishoudtextiel"
+    },
+    {
+      "code": "052100",
+      "naam": "Huishoudtextiel (SD)"
+    },
+    {
+      "code": "052110",
+      "naam": "Meubelstoffen en gordijnen (SD)"
+    },
+    {
+      "code": "052120",
+      "naam": "Beddengoed (SD)"
+    },
+    {
+      "code": "052130",
+      "naam": "Tafel‑ en toiletlinnen (SD)"
+    },
+    {
+      "code": "052190",
+      "naam": "Overig huishoudtextiel (SD)"
+    },
+    {
+      "code": "052200",
+      "naam": "Reparatie, huur en naaiwerk van huishoudtextiel (S)"
+    },
+    {
+      "code": "053000",
+      "naam": "Huishoudelijke apparaten"
+    },
+    {
+      "code": "053100",
+      "naam": "Grote elektrische en andere huishoudelijke apparaten (D)"
+    },
+    {
+      "code": "053110",
+      "naam": "Grote keukenapparaten (D)"
+    },
+    {
+      "code": "053120",
+      "naam": "Grote wasmachines (D)"
+    },
+    {
+      "code": "053130",
+      "naam": "Verwarming en airconditioners (D)"
+    },
+    {
+      "code": "053140",
+      "naam": "Schoonmaakapparaten (D)"
+    },
+    {
+      "code": "053190",
+      "naam": "Overige grote huishoudelijke apparaten (D)"
+    },
+    {
+      "code": "053200",
+      "naam": "Kleine huishoudelijke apparaten (SD)"
+    },
+    {
+      "code": "053210",
+      "naam": "Kleine apparaten voor het bereiden en verwerken van voedsel (SD)"
+    },
+    {
+      "code": "053220",
+      "naam": "Kleine apparaten voor het bereiden van dranken (SD)"
+    },
+    {
+      "code": "053290",
+      "naam": "Overige kleine huishoudelijke apparaten (SD)"
+    },
+    {
+      "code": "053300",
+      "naam": "Reparatie, installatie en huur van huishoudelijke apparaten (S)"
+    },
+    {
+      "code": "054000",
+      "naam": "Glas, servies en huishoudelijke artikelen"
+    },
+    {
+      "code": "054010",
+      "naam": "Glaswerk, kristal, aardewerk of porselein (SD)"
+    },
+    {
+      "code": "054020",
+      "naam": "Messen, bestek en zilverwerk (SD)"
+    },
+    {
+      "code": "054030",
+      "naam": "Keukengerei en -artikelen (SD)"
+    },
+    {
+      "code": "054040",
+      "naam": "Reparatie en huur van glas, servies en huishoudelijke artikelen (S)"
+    },
+    {
+      "code": "055000",
+      "naam": "Gereedschappen en werktuigen voor huis en tuin"
+    },
+    {
+      "code": "055100",
+      "naam": "Gereedschappen en werktuigen met motor (D)"
+    },
+    {
+      "code": "055200",
+      "naam": "Gereedschappen zonder motor en diverse toebehoren (SD)"
+    },
+    {
+      "code": "055210",
+      "naam": "Gereedschappen zonder motor (SD)"
+    },
+    {
+      "code": "055220",
+      "naam": "Diverse toebehoren (SD)"
+    },
+    {
+      "code": "055300",
+      "naam": "Reparatie en huur van gereedschappen en werktuigen met of zonder motor (S)"
+    },
+    {
+      "code": "056000",
+      "naam": "Goederen en diensten voor het dagelijks onderhoud van de woning"
+    },
+    {
+      "code": "056100",
+      "naam": "Niet-duurzame huishoudproducten (ND)"
+    },
+    {
+      "code": "056110",
+      "naam": "Huishoudelijke schoonmaak- en onderhoudsproducten (ND)"
+    },
+    {
+      "code": "056190",
+      "naam": "Overige niet-duurzame huishoudproducten (ND)"
+    },
+    {
+      "code": "056200",
+      "naam": "Diensten ten behoeve van het huishouden (S)"
+    },
+    {
+      "code": "056210",
+      "naam": "Huishoudelijke diensten van betaald personeel (S)"
+    },
+    {
+      "code": "056290",
+      "naam": "Overige huishoudelijke diensten (S)"
+    },
+    {
+      "code": "060000",
+      "naam": "Gezondheid"
+    },
+    {
+      "code": "061000",
+      "naam": "Geneesmiddelen en gezondheidsproducten"
+    },
+    {
+      "code": "061100",
+      "naam": "Geneesmiddelen (ND)"
+    },
+    {
+      "code": "061110",
+      "naam": "Geneesmiddelen, vaccins en andere farmaceutische preparaten (ND)"
+    },
+    {
+      "code": "061120",
+      "naam": "Kruidengeneesmiddelen en homeopathische producten (ND)"
+    },
+    {
+      "code": "061200",
+      "naam": "Medische producten (ND)"
+    },
+    {
+      "code": "061210",
+      "naam": "Medische diagnostische producten (ND)"
+    },
+    {
+      "code": "061220",
+      "naam": "Preventieve en beschermende hulpmiddelen (ND)"
+    },
+    {
+      "code": "061230",
+      "naam": "Behandelingsapparaten voor persoonlijk gebruik (ND)"
+    },
+    {
+      "code": "061300",
+      "naam": "Hulpmiddelen (D)"
+    },
+    {
+      "code": "061310",
+      "naam": "Hulpmiddelen voor gezichtsvermogen (D)"
+    },
+    {
+      "code": "061320",
+      "naam": "Hulpmiddelen voor gehoor en communicatie (D)"
+    },
+    {
+      "code": "061330",
+      "naam": "Hulpmiddelen voor mobiliteit en dagelijks leven (D)"
+    },
+    {
+      "code": "061400",
+      "naam": "Reparatie, verhuur en onderhoud van medische producten en hulpmiddelen (S)"
+    },
+    {
+      "code": "062000",
+      "naam": "Extramurale zorgdiensten"
+    },
+    {
+      "code": "062100",
+      "naam": "Preventieve zorgdiensten (S)"
+    },
+    {
+      "code": "062110",
+      "naam": "Vaccinatiediensten (S)"
+    },
+    {
+      "code": "062190",
+      "naam": "Overige preventieve zorgdiensten (S)"
+    },
+    {
+      "code": "062200",
+      "naam": "Poliklinische tandheelkundige diensten (S)"
+    },
+    {
+      "code": "062210",
+      "naam": "Preventieve tandheelkundige diensten (S)"
+    },
+    {
+      "code": "062290",
+      "naam": "Overige poliklinische tandheelkundige diensten (S)"
+    },
+    {
+      "code": "062300",
+      "naam": "Overige extramurale zorgdiensten (S)"
+    },
+    {
+      "code": "062310",
+      "naam": "Poliklinische curatieve zorg en revalidatiediensten (S)"
+    },
+    {
+      "code": "062320",
+      "naam": "Langdurige extramurale zorgdiensten (S)"
+    },
+    {
+      "code": "063000",
+      "naam": "Intramurale zorgdiensten"
+    },
+    {
+      "code": "063100",
+      "naam": "Intramurale curatieve zorg en revalidatiediensten (S)"
+    },
+    {
+      "code": "063200",
+      "naam": "Intramurale langdurige zorgdiensten (S)"
+    },
+    {
+      "code": "064000",
+      "naam": "Overige gezondheidsdiensten"
+    },
+    {
+      "code": "064100",
+      "naam": "Diensten van medische beeldvorming en medische laboratoria (S)"
+    },
+    {
+      "code": "064200",
+      "naam": "Spoedeisend vervoer van patiënten en nooddiensten (S)"
+    },
+    {
+      "code": "070000",
+      "naam": "Vervoer"
+    },
+    {
+      "code": "071000",
+      "naam": "Aankoop van voertuigen"
+    },
+    {
+      "code": "071100",
+      "naam": "Auto’s (D)"
+    },
+    {
+      "code": "071110",
+      "naam": "Nieuwe auto’s (D)"
+    },
+    {
+      "code": "071120",
+      "naam": "Tweedehandsauto’s (D)"
+    },
+    {
+      "code": "071200",
+      "naam": "Motorfietsen (D)"
+    },
+    {
+      "code": "071300",
+      "naam": "Fietsen (D)"
+    },
+    {
+      "code": "071400",
+      "naam": "Door dieren getrokken voertuigen (D)"
+    },
+    {
+      "code": "072000",
+      "naam": "Gebruik van privévoertuigen"
+    },
+    {
+      "code": "072100",
+      "naam": "Onderdelen en accessoires voor privévoertuigen (SD)"
+    },
+    {
+      "code": "072110",
+      "naam": "Banden (SD)"
+    },
+    {
+      "code": "072120",
+      "naam": "Onderdelen voor privévoertuigen (SD)"
+    },
+    {
+      "code": "072130",
+      "naam": "Accessoires voor privévoertuigen (SD)"
+    },
+    {
+      "code": "072200",
+      "naam": "Brandstoffen en smeermiddelen voor privévoertuigen (ND)"
+    },
+    {
+      "code": "072210",
+      "naam": "Diesel (ND)"
+    },
+    {
+      "code": "072220",
+      "naam": "Benzine (ND)"
+    },
+    {
+      "code": "072230",
+      "naam": "Overige brandstoffen voor privévoertuigen (ND)"
+    },
+    {
+      "code": "072240",
+      "naam": "Smeermiddelen (ND)"
+    },
+    {
+      "code": "072300",
+      "naam": "Onderhoud en reparatie van privévoertuigen (S)"
+    },
+    {
+      "code": "072400",
+      "naam": "Overige diensten in verband met privévoertuigen (S)"
+    },
+    {
+      "code": "072410",
+      "naam": "Parkeerdiensten (S)"
+    },
+    {
+      "code": "072420",
+      "naam": "Tolvoorzieningen (S)"
+    },
+    {
+      "code": "072430",
+      "naam": "Rijlessen, rijexamens, rijbewijzen en technische keuringen (S)"
+    },
+    {
+      "code": "072440",
+      "naam": "Huur van privévoertuigen zonder chauffeur (S)"
+    },
+    {
+      "code": "073000",
+      "naam": "Personenvervoersdiensten"
+    },
+    {
+      "code": "073100",
+      "naam": "Personenvervoer per spoor (S)"
+    },
+    {
+      "code": "073110",
+      "naam": "Personenvervoer per trein (S)"
+    },
+    {
+      "code": "073120",
+      "naam": "Personenvervoer met sneltram en tram (S)"
+    },
+    {
+      "code": "073200",
+      "naam": "Personenvervoer over de weg (S)"
+    },
+    {
+      "code": "073210",
+      "naam": "Personenvervoer per bus en touringcar (S)"
+    },
+    {
+      "code": "073220",
+      "naam": "Personenvervoer per taxi of huurauto met chauffeur (S)"
+    },
+    {
+      "code": "073230",
+      "naam": "Personenvervoer voor leerlingen van en naar school (S)"
+    },
+    {
+      "code": "073290",
+      "naam": "Overig personenvervoer over de weg (S)"
+    },
+    {
+      "code": "073300",
+      "naam": "Personenvervoer door de lucht (S)"
+    },
+    {
+      "code": "073310",
+      "naam": "Personenvervoer door de lucht, nationaal (S)"
+    },
+    {
+      "code": "073320",
+      "naam": "Personenvervoer door de lucht, internationaal (S)"
+    },
+    {
+      "code": "073400",
+      "naam": "Personenvervoer over zee of over binnenwateren (S)"
+    },
+    {
+      "code": "073500",
+      "naam": "Gecombineerd personenvervoer (S)"
+    },
+    {
+      "code": "073600",
+      "naam": "Overige personenvervoersdiensten (S)"
+    },
+    {
+      "code": "074000",
+      "naam": "Goederenvervoersdiensten"
+    },
+    {
+      "code": "074100",
+      "naam": "Post‑ en koeriersdiensten (S)"
+    },
+    {
+      "code": "074110",
+      "naam": "Bezorging van brieven (S)"
+    },
+    {
+      "code": "074120",
+      "naam": "Koeriers‑ en pakketdiensten (S)"
+    },
+    {
+      "code": "074900",
+      "naam": "Overig goederenvervoer (S)"
+    },
+    {
+      "code": "074910",
+      "naam": "Verhuizing en opslag (S)"
+    },
+    {
+      "code": "074920",
+      "naam": "Levering van goederen (S)"
+    },
+    {
+      "code": "080000",
+      "naam": "Informatie en communicatie"
+    },
+    {
+      "code": "081000",
+      "naam": "Informatie- en communicatieapparatuur"
+    },
+    {
+      "code": "081100",
+      "naam": "Apparatuur voor vaste telefonie (D)"
+    },
+    {
+      "code": "081200",
+      "naam": "Apparatuur voor mobiele telefonie (D)"
+    },
+    {
+      "code": "081300",
+      "naam": "Gegevensverwerkende apparatuur (D)"
+    },
+    {
+      "code": "081310",
+      "naam": "Computers, laptops en tablets (D)"
+    },
+    {
+      "code": "081320",
+      "naam": "Randapparatuur en verbruiksartikelen (D)"
+    },
+    {
+      "code": "081400",
+      "naam": "Audio‑ en video‑opname‑ en ‑weergaveapparatuur (D)"
+    },
+    {
+      "code": "081500",
+      "naam": "Onbespeelde dragers van beeld of geluid (SD)"
+    },
+    {
+      "code": "081900",
+      "naam": "Overige informatie- en communicatieapparatuur en toebehoren (D)"
+    },
+    {
+      "code": "081910",
+      "naam": "Overige informatie‑ en communicatieapparatuur (D)"
+    },
+    {
+      "code": "081920",
+      "naam": "Overige informatie‑ en communicatietoebehoren (SD)"
+    },
+    {
+      "code": "082000",
+      "naam": "Software, met uitzondering van spellen (S)"
+    },
+    {
+      "code": "083000",
+      "naam": "Informatie‑ en communicatiediensten"
+    },
+    {
+      "code": "083100",
+      "naam": "Vaste communicatiediensten (S)"
+    },
+    {
+      "code": "083200",
+      "naam": "Mobiele communicatiediensten (S)"
+    },
+    {
+      "code": "083300",
+      "naam": "Diensten voor internettoegang en onlineopslag (S)"
+    },
+    {
+      "code": "083400",
+      "naam": "Gebundelde telecommunicatiediensten (S)"
+    },
+    {
+      "code": "083500",
+      "naam": "Reparatie en verhuur van informatie- en communicatieapparatuur (S)"
+    },
+    {
+      "code": "083900",
+      "naam": "Overige informatie- en communicatiediensten (S)"
+    },
+    {
+      "code": "083910",
+      "naam": "Kijk‑ en luistergelden (S)"
+    },
+    {
+      "code": "083920",
+      "naam": "Abonnementen op audiovisuele streamingdiensten en verhuur van audiovisuele inhoud (S)"
+    },
+    {
+      "code": "083990",
+      "naam": "Overige informatie‑ en communicatiediensten n.e.g. (S)"
+    },
+    {
+      "code": "090000",
+      "naam": "Recreatie, sport en cultuur"
+    },
+    {
+      "code": "091000",
+      "naam": "Duurzame recreatieartikelen"
+    },
+    {
+      "code": "091100",
+      "naam": "Foto‑ en filmapparatuur en optische instrumenten (D)"
+    },
+    {
+      "code": "091110",
+      "naam": "Camera’s (D)"
+    },
+    {
+      "code": "091120",
+      "naam": "Toebehoren voor foto‑ en filmapparatuur (D)"
+    },
+    {
+      "code": "091130",
+      "naam": "Optische instrumenten (D)"
+    },
+    {
+      "code": "091200",
+      "naam": "Grote duurzame recreatieartikelen (D)"
+    },
+    {
+      "code": "091210",
+      "naam": "Kampeerwagens, caravans en aanhangwagens (D)"
+    },
+    {
+      "code": "091220",
+      "naam": "Vliegtuigen, ultralichte vliegtuigen, zweefvliegtuigen, deltavliegers en heteluchtballonnen (D)"
+    },
+    {
+      "code": "091230",
+      "naam": "Boten, jachten, buitenboordmotoren en andere watersportuitrusting (D)"
+    },
+    {
+      "code": "091240",
+      "naam": "Paarden, pony’s, kamelen en dromedarissen en toebehoren (D)"
+    },
+    {
+      "code": "091290",
+      "naam": "Overige grote duurzame recreatieartikelen (D)"
+    },
+    {
+      "code": "092000",
+      "naam": "Overige recreatieartikelen"
+    },
+    {
+      "code": "092100",
+      "naam": "Spellen, speelgoed en hobbygerelateerde artikelen (SD)"
+    },
+    {
+      "code": "092110",
+      "naam": "Spelcomputers, spelconsoles, speltoepassingen en ‑software (SD)"
+    },
+    {
+      "code": "092120",
+      "naam": "Overige spellen, speelgoed en hobbygerelateerde artikelen (SD)"
+    },
+    {
+      "code": "092130",
+      "naam": "Feestartikelen (ND)"
+    },
+    {
+      "code": "092200",
+      "naam": "Sport‑ en kampeerartikelen en artikelen voor recreatie in de open lucht (SD)"
+    },
+    {
+      "code": "092210",
+      "naam": "Sportartikelen (SD)"
+    },
+    {
+      "code": "092220",
+      "naam": "Kampeerartikelen en artikelen voor recreatie in de open lucht (SD)"
+    },
+    {
+      "code": "093000",
+      "naam": "Tuinproducten en huisdieren"
+    },
+    {
+      "code": "093100",
+      "naam": "Tuinproducten, planten en bloemen (ND)"
+    },
+    {
+      "code": "093110",
+      "naam": "Tuinproducten (ND)"
+    },
+    {
+      "code": "093120",
+      "naam": "Planten, zaden en bloemen (ND)"
+    },
+    {
+      "code": "093200",
+      "naam": "Huisdieren en producten voor huisdieren (D)"
+    },
+    {
+      "code": "093210",
+      "naam": "Huisdieren (D)"
+    },
+    {
+      "code": "093220",
+      "naam": "Producten voor huisdieren en andere huishoudelijke dieren (ND)"
+    },
+    {
+      "code": "094000",
+      "naam": "Recreatiediensten"
+    },
+    {
+      "code": "094100",
+      "naam": "Huur en reparatie van foto‑ en filmapparatuur en optische instrumenten (S)"
+    },
+    {
+      "code": "094200",
+      "naam": "Huur, onderhoud en reparatie van grote duurzame recreatieartikelen (S)"
+    },
+    {
+      "code": "094210",
+      "naam": "Huur, onderhoud en reparatie van campers en caravans (S)"
+    },
+    {
+      "code": "094220",
+      "naam": "Huur, onderhoud en reparatie van andere grote duurzame recreatieartikelen (S)"
+    },
+    {
+      "code": "094300",
+      "naam": "Huur en reparatie van spellen, speelgoed en hobbygerelateerde artikelen (S)"
+    },
+    {
+      "code": "094310",
+      "naam": "Huur van spelsoftware en abonnementen op onlinespellen (S)"
+    },
+    {
+      "code": "094320",
+      "naam": "Huur en reparatie van andere spellen, speelgoed en hobbygerelateerde artikelen (S)"
+    },
+    {
+      "code": "094400",
+      "naam": "Huur en reparatie van sport‑ en kampeerartikelen en artikelen voor recreatie in de open lucht (S)"
+    },
+    {
+      "code": "094500",
+      "naam": "Diensten van dierenartsen en andere diensten in verband met huisdieren (S)"
+    },
+    {
+      "code": "094600",
+      "naam": "Diensten op het gebied van sport en recreatie (S)"
+    },
+    {
+      "code": "094610",
+      "naam": "Diensten op het gebied van recreatie en vrije tijd (S)"
+    },
+    {
+      "code": "094620",
+      "naam": "Diensten in verband met sportbeoefening (S)"
+    },
+    {
+      "code": "094630",
+      "naam": "Diensten in verband met het bijwonen van sportevenementen (S)"
+    },
+    {
+      "code": "094700",
+      "naam": "Kansspelen (S)"
+    },
+    {
+      "code": "095000",
+      "naam": "Cultuurgoederen"
+    },
+    {
+      "code": "095100",
+      "naam": "Muziekinstrumenten (D)"
+    },
+    {
+      "code": "095200",
+      "naam": "Audiovisuele media (SD)"
+    },
+    {
+      "code": "096000",
+      "naam": "Culturele diensten"
+    },
+    {
+      "code": "096100",
+      "naam": "Diensten verleend door bioscopen, theaters en concertzalen (S)"
+    },
+    {
+      "code": "096200",
+      "naam": "Diensten verleend door musea, bibliotheken en culturele locaties (S)"
+    },
+    {
+      "code": "096300",
+      "naam": "Diensten op het gebied van fotografie (S)"
+    },
+    {
+      "code": "096900",
+      "naam": "Overige culturele diensten (S)"
+    },
+    {
+      "code": "097000",
+      "naam": "Kranten, boeken en schrijfwaren"
+    },
+    {
+      "code": "097100",
+      "naam": "Boeken (SD)"
+    },
+    {
+      "code": "097110",
+      "naam": "Educatieve boeken en leerboeken (SD)"
+    },
+    {
+      "code": "097190",
+      "naam": "Overige boeken (SD)"
+    },
+    {
+      "code": "097200",
+      "naam": "Kranten en tijdschriften (ND)"
+    },
+    {
+      "code": "097210",
+      "naam": "Kranten (ND)"
+    },
+    {
+      "code": "097220",
+      "naam": "Tijdschriften (ND)"
+    },
+    {
+      "code": "097300",
+      "naam": "Divers drukwerk (ND)"
+    },
+    {
+      "code": "097400",
+      "naam": "Schrijfwaren en tekenartikelen (ND)"
+    },
+    {
+      "code": "098000",
+      "naam": "Pakketreizen (S)"
+    },
+    {
+      "code": "100000",
+      "naam": "Onderwijs"
+    },
+    {
+      "code": "101000",
+      "naam": "Kleuter- en primair onderwijs"
+    },
+    {
+      "code": "101010",
+      "naam": "Kleuteronderwijs (S)"
+    },
+    {
+      "code": "101020",
+      "naam": "Primair onderwijs (S)"
+    },
+    {
+      "code": "102000",
+      "naam": "Secundair onderwijs (S)"
+    },
+    {
+      "code": "103000",
+      "naam": "Postsecundair niet-tertiair onderwijs (S)"
+    },
+    {
+      "code": "104000",
+      "naam": "Tertiair onderwijs (S)"
+    },
+    {
+      "code": "105000",
+      "naam": "Onderwijs dat niet naar niveau wordt ingedeeld"
+    },
+    {
+      "code": "105010",
+      "naam": "Studiebegeleiding (S)"
+    },
+    {
+      "code": "105090",
+      "naam": "Overig onderwijs dat niet naar niveau wordt ingedeeld (S)"
+    },
+    {
+      "code": "110000",
+      "naam": "Restaurants en accommodatiediensten"
+    },
+    {
+      "code": "111000",
+      "naam": "Eet- en drinkgelegenheden"
+    },
+    {
+      "code": "111100",
+      "naam": "Restaurants, cafés en dergelijke (S)"
+    },
+    {
+      "code": "111110",
+      "naam": "Restaurants, cafés en dergelijke – met volledige bediening (S)"
+    },
+    {
+      "code": "111120",
+      "naam": "Restaurants, cafés en dergelijke – met beperkte bediening (S)"
+    },
+    {
+      "code": "111200",
+      "naam": "Kantines, cafetaria’s en eetzalen (S)"
+    },
+    {
+      "code": "111210",
+      "naam": "Kantines en cafetaria’s van universiteiten, scholen en kleuterscholen (S)"
+    },
+    {
+      "code": "111290",
+      "naam": "Overige kantines, cafetaria’s en eetzalen (S)"
+    },
+    {
+      "code": "112000",
+      "naam": "Accommodatie"
+    },
+    {
+      "code": "112010",
+      "naam": "Hotels, motels, herbergen en dergelijke (S)"
+    },
+    {
+      "code": "112020",
+      "naam": "Vakantiecentra, kampeerterreinen, jeugdherbergen en dergelijke (S)"
+    },
+    {
+      "code": "112030",
+      "naam": "Accommodatie verstrekt door kostscholen, universiteiten en andere onderwijsinstellingen (S)"
+    },
+    {
+      "code": "112090",
+      "naam": "Overige accommodatie (S)"
+    },
+    {
+      "code": "120000",
+      "naam": "Verzekeringen en financiële diensten"
+    },
+    {
+      "code": "121000",
+      "naam": "Verzekeringen"
+    },
+    {
+      "code": "121100",
+      "naam": "Levens- en ongevallenverzekering (S)"
+    },
+    {
+      "code": "121200",
+      "naam": "Verzekeringen in verband met gezondheid (S)"
+    },
+    {
+      "code": "121300",
+      "naam": "Verzekeringen in verband met de woning (S)"
+    },
+    {
+      "code": "121400",
+      "naam": "Verzekeringen in verband met vervoer (S)"
+    },
+    {
+      "code": "121410",
+      "naam": "Verzekeringen voor privévoertuigen (S)"
+    },
+    {
+      "code": "121420",
+      "naam": "Reisverzekeringen (S)"
+    },
+    {
+      "code": "121900",
+      "naam": "Overige verzekeringen (S)"
+    },
+    {
+      "code": "122000",
+      "naam": "Financiële diensten"
+    },
+    {
+      "code": "122100",
+      "naam": "Indirect gemeten diensten van financiële intermediairs (S)"
+    },
+    {
+      "code": "122200",
+      "naam": "Expliciete heffingen door deposito‑instellingen (S)"
+    },
+    {
+      "code": "122900",
+      "naam": "Overige financiële diensten (S)"
+    },
+    {
+      "code": "122910",
+      "naam": "Overmakingskosten (S)"
+    },
+    {
+      "code": "122990",
+      "naam": "Overige financiële diensten n.e.g. (S)"
+    },
+    {
+      "code": "130000",
+      "naam": "Lichaamsverzorging, sociale bescherming en diverse goederen en diensten"
+    },
+    {
+      "code": "131000",
+      "naam": "Lichaamsverzorging"
+    },
+    {
+      "code": "131100",
+      "naam": "Elektrische apparaten voor lichaamsverzorging (SD)"
+    },
+    {
+      "code": "131110",
+      "naam": "Aankoop van elektrische apparaten voor lichaamsverzorging (SD)"
+    },
+    {
+      "code": "131120",
+      "naam": "Reparatie van elektrische apparaten voor lichaamsverzorging (S)"
+    },
+    {
+      "code": "131200",
+      "naam": "Overige apparaten, artikelen en producten voor lichaamsverzorging (ND)"
+    },
+    {
+      "code": "131300",
+      "naam": "Kapsalons en schoonheidsinstituten (S)"
+    },
+    {
+      "code": "131310",
+      "naam": "Kappersdiensten (S)"
+    },
+    {
+      "code": "131320",
+      "naam": "Schoonheidsbehandelingen (S)"
+    },
+    {
+      "code": "132000",
+      "naam": "Overige artikelen voor persoonlijk gebruik"
+    },
+    {
+      "code": "132100",
+      "naam": "Sieraden en horloges (D)"
+    },
+    {
+      "code": "132110",
+      "naam": "Aankoop van sieraden en horloges (D)"
+    },
+    {
+      "code": "132120",
+      "naam": "Reparatie en huur van sieraden, klokken en horloges (S)"
+    },
+    {
+      "code": "132200",
+      "naam": "Devotionele artikelen en artikelen voor religieuze en rituele vieringen (SD)"
+    },
+    {
+      "code": "132900",
+      "naam": "Overige artikelen voor persoonlijk gebruik n.e.g. (SD)"
+    },
+    {
+      "code": "132910",
+      "naam": "Reisartikelen, babyartikelen en andere artikelen voor persoonlijk gebruik n.e.g. (SD)"
+    },
+    {
+      "code": "132920",
+      "naam": "Reparatie en huur van andere artikelen voor persoonlijk gebruik (S)"
+    },
+    {
+      "code": "133000",
+      "naam": "Sociale bescherming"
+    },
+    {
+      "code": "133010",
+      "naam": "Kinderopvang (S)"
+    },
+    {
+      "code": "133020",
+      "naam": "Bejaardentehuizen en tehuizen voor personen met een handicap, zonder medische verzorging (S)"
+    },
+    {
+      "code": "133030",
+      "naam": "Thuiszorg voor ouderen en gehandicapten (S)"
+    },
+    {
+      "code": "133090",
+      "naam": "Overige diensten voor sociale bescherming (S)"
+    },
+    {
+      "code": "139000",
+      "naam": "Overige diensten"
+    },
+    {
+      "code": "139010",
+      "naam": "Prostitutie (S)"
+    },
+    {
+      "code": "139020",
+      "naam": "Religieuze diensten (S)"
+    },
+    {
+      "code": "139090",
+      "naam": "Overige diensten (S)"
+    },
+    {
+      "code": "140000",
+      "naam": "Consumptiegebonden belastingen en contributies"
+    },
+    {
+      "code": "141000",
+      "naam": "Consumptiegebonden belastingen"
+    },
+    {
+      "code": "141100",
+      "naam": "Motorrijtuigenbelasting"
+    },
+    {
+      "code": "141200",
+      "naam": "Watersysteemheffing"
+    },
+    {
+      "code": "141300",
+      "naam": "Hondenbelasting"
+    },
+    {
+      "code": "142000",
+      "naam": "Contributies"
+    },
+    {
+      "code": "150000",
+      "naam": "Consumptie in het buitenland"
+    },
+    {
+      "code": "151000",
+      "naam": "Voeding buitenland"
+    },
+    {
+      "code": "152000",
+      "naam": "Vervoer buitenland"
+    },
+    {
+      "code": "153000",
+      "naam": "Accommodaties buitenland"
+    },
+    {
+      "code": "154000",
+      "naam": "Cafés en restaurants buitenland"
+    },
+    {
+      "code": "155000",
+      "naam": "Overige consumptie buitenland"
+    }
+  ]
+}
