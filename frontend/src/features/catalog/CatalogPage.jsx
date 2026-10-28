@@ -287,7 +287,7 @@ export default function CatalogPage() {
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
-              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Artikelclassificaties toekennen</Button> : null}
+              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
               {isPlatformSuperuser ? (
                 <Button
                   type="button"

@@ -91,7 +91,7 @@ export default function MobileCatalogPage() {
     <div className="rz-screen rz-mobile-catalog-screen" data-testid="mobile-catalog-page">
       <MobileModuleHeader title="Catalogus" testId="mobile-catalog-header" />
       <main className="rz-mobile-catalog-content">
-        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Artikelclassificaties toekennen</Button> : null}
+        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
         <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
             <span className="rz-mobile-catalog-visually-hidden">Zoek</span>
