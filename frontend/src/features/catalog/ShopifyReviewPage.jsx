@@ -5,6 +5,7 @@ import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import './catalog.css'
 
 const API = '/api/catalog/shopify'
 const BATCH_SIZE = 100
@@ -93,6 +94,29 @@ export default function ShopifyReviewPage() {
     (item) => Boolean(item.shopify_id)
   )
 
+  function openProposal(item, proposal) {
+    const hasCategory = Boolean(proposal?.shopify_id && proposal?.shopify_path)
+    showFeedback({
+      variant: 'info',
+      title: 'Voorgestelde artikelclassificatie',
+      message: hasCategory
+        ? proposal.shopify_path
+        : proposal?.message || 'Geen artikelclassificatie voorgesteld.',
+      detail: [
+        'Artikel: ' + item.name,
+        'Barcode: ' + item.gtin,
+        proposal?.warning ? 'Let op: ' + proposal.warning : '',
+        hasCategory ? 'Dit voorstel is nog niet bevestigd.' : '',
+      ].filter(Boolean).join(' — '),
+      testId: 'article-classification-proposal-detail',
+      dismissMode: 'outside-or-ok',
+      // Een expliciete sluitactie houdt lange categorieën leesbaar zonder timeout.
+      primaryActionLabel: 'Sluiten',
+      onPrimaryAction: () => {},
+      dedupeMs: 0,
+    })
+  }
+
   function exportSelected() {
     if (busyRef.current || !selectedItems.length) return
     const rows = [
@@ -169,6 +193,7 @@ export default function ShopifyReviewPage() {
     setFetching(true)
     setError('')
     let found = 0
+    let firstProposal = null
     try {
       for (let index = 0; index < pending.length; index += 1) {
         if (index > 0) await sleep(OFF_INTERVAL_MS)
@@ -186,7 +211,10 @@ export default function ShopifyReviewPage() {
           if (result.gtin !== item.gtin) {
             throw new Error('De barcode is gewijzigd. Ververs de pagina.')
           }
-          if (result.shopify_id) found += 1
+          if (result.shopify_id) {
+            found += 1
+            if (!firstProposal) firstProposal = { item, proposal: result }
+          }
           setProposals((current) => ({ ...current, [item.id]: result }))
         } catch (err) {
           setProposals((current) => ({
@@ -197,6 +225,9 @@ export default function ShopifyReviewPage() {
         }
       }
       setNote(found + ' van ' + pending.length + ' artikelen hebben een onbevestigd voorstel. Controleer de tabel voordat je bevestigt.')
+      // Toon het eerste verkregen voorstel direct; ieder voorstel is daarna
+      // opnieuw in zijn geheel te openen vanuit de betreffende tabelrij.
+      if (firstProposal) openProposal(firstProposal.item, firstProposal.proposal)
     } finally {
       busyRef.current = false
       setFetching(false)
@@ -259,14 +290,20 @@ export default function ShopifyReviewPage() {
       renderCell: (item) => {
         const proposal = proposals[item.id]
         if (!proposal) return 'Nog geen voorstel opgehaald'
-        if (!proposal.shopify_id) {
-          return <span title={proposal.message || ''}>{proposal.message || 'Geen voorstel beschikbaar'}</span>
-        }
-        return <div>
-          <span title={proposal.shopify_path}>{proposal.shopify_path}</span>
-          {proposal.warning ? <div className="rz-external-databases-muted">{proposal.warning}</div> : null}
-          <div className="rz-external-databases-muted">Nog niet bevestigd</div>
-        </div>
+        return <button
+          type="button"
+          className="rz-classification-proposal-trigger"
+          title="Toon het volledige voorstel in een melding"
+          aria-label={'Bekijk het volledige voorstel voor ' + item.name}
+          onClick={() => openProposal(item, proposal)}
+        >
+          <span className="rz-classification-proposal-label">
+            {proposal.shopify_path || proposal.message || 'Geen voorstel beschikbaar'}
+          </span>
+          {proposal.shopify_id
+            ? <span className="rz-external-databases-muted">Nog niet bevestigd</span>
+            : null}
+        </button>
       },
     },
   ]
@@ -277,13 +314,15 @@ export default function ShopifyReviewPage() {
       <p>Via OFF kun je suggesties opvragen voor de artikelclassificatie.</p>
       {error ? <p role="alert">{error}</p> : null}
       {note ? <p role="status">{note}</p> : null}
+      <div className="rz-article-classification-layout">
       <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
+        wrapperClassName="rz-classification-table-wrapper"
+        tableStyle={{ width: '100%', minWidth: '100%' }}
         getRowKey={(item) => item.id} pageSize={8}
         emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen met geldige barcode gevonden.'}
         paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
-      <div className="rz-external-databases-actions"
-        aria-label="Acties artikelclassificaties"
-        style={{ justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
+      <div className="rz-article-classification-actions"
+        aria-label="Acties artikelclassificaties">
         <Button type="button" disabled={busy || !selected.size} onClick={fetchProposals}>
           {fetching ? 'Voorstellen ophalen...' : 'Voorstel ophalen'}
         </Button>
@@ -295,6 +334,7 @@ export default function ShopifyReviewPage() {
         <Button type="button" variant="secondary" disabled={busy || !allHaveClassifications}
           title="Selecteer uitsluitend artikelen met een bevestigde classificatie."
           onClick={removeClassifications}>Classificatie verwijderen</Button>
+      </div>
       </div>
     </ScreenCard>
   </AppShell>
