@@ -107,7 +107,7 @@ export default function ShopifyReviewPage() {
         'Barcode: ' + item.gtin,
         proposal?.warning ? 'Let op: ' + proposal.warning : '',
         hasCategory ? 'Dit voorstel is nog niet bevestigd.' : '',
-      ].filter(Boolean).join(' — '),
+      ].filter(Boolean).join(String.fromCharCode(10)),
       testId: 'article-classification-proposal-detail',
       dismissMode: 'outside-or-ok',
       // Een expliciete sluitactie houdt lange categorieën leesbaar zonder timeout.
@@ -193,7 +193,7 @@ export default function ShopifyReviewPage() {
     setFetching(true)
     setError('')
     let found = 0
-    let firstProposal = null
+    let firstProposalShown = false
     try {
       for (let index = 0; index < pending.length; index += 1) {
         if (index > 0) await sleep(OFF_INTERVAL_MS)
@@ -213,7 +213,12 @@ export default function ShopifyReviewPage() {
           }
           if (result.shopify_id) {
             found += 1
-            if (!firstProposal) firstProposal = { item, proposal: result }
+            // Toon het eerste beschikbare voorstel zodra het antwoord binnen is.
+            // De resterende geselecteerde artikelen gaan daarna gewoon verder.
+            if (!firstProposalShown) {
+              firstProposalShown = true
+              openProposal(item, result)
+            }
           }
           setProposals((current) => ({ ...current, [item.id]: result }))
         } catch (err) {
@@ -225,9 +230,8 @@ export default function ShopifyReviewPage() {
         }
       }
       setNote(found + ' van ' + pending.length + ' artikelen hebben een onbevestigd voorstel. Controleer de tabel voordat je bevestigt.')
-      // Toon het eerste verkregen voorstel direct; ieder voorstel is daarna
-      // opnieuw in zijn geheel te openen vanuit de betreffende tabelrij.
-      if (firstProposal) openProposal(firstProposal.item, firstProposal.proposal)
+      // Geen tweede melding na afloop: volgende resultaten verschijnen alleen
+      // in de tabel en zijn daar op verzoek opnieuw volledig te openen.
     } finally {
       busyRef.current = false
       setFetching(false)
