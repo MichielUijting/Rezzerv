@@ -1285,3 +1285,19 @@ bonartikelen per keer. Bij een serverfout of verouderde selectie blijft de
 actie zonder succesvolle melding. Na een geslaagde ontkoppeling worden de
 tellers en de tabel ververst. Bestaande DataTable-opmaak, sortering, filters,
 resize, paginering en mobiele bediening blijven leidend.
+
+### Externe databases 2: GS1-classificatie aanvullen en tekstfilters — PO, 28 oktober 2026
+
+De kolomtitel **Status** wordt **GS1-class.**; de kolom blijft de bekende
+Nederlandse statusteksten weergeven. Onder zowel **Art.code** als
+**GS1-class.** staat het standaard tekstfilter van de gedeelde `DataTable`,
+zonder afwijkende keuzelijst. De drie gekleurde tellers blijven aparte
+klikfilters en kunnen samen met de tekstfilters worden gebruikt.
+
+Bij **Classificatie ontbreekt** opent een compact GS1-aanvulpaneel in ED2,
+met de bonartikelnaam vetgedrukt, officiële GS1-voorstellen en één zoekveld
+voor code of Nederlandse omschrijving. De kandidaatregels volgen de gewone
+`DataTable` met maximaal zeven per pagina. Een regel kiezen is géén mutatie;
+**Classificatie opslaan** vraagt expliciet **Annuleren/OK**. Bij bewezen
+succes sluit het paneel en vernieuwt de bovenste tabel inclusief tellers;
+bij fouten blijft de gebruiker op het paneel met een leesbare melding.

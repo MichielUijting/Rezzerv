@@ -158,6 +158,9 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "article_code": article_code,
                 "link_status": status,
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
+                "pending_global_product_id": str(central_link.get("global_product_id") or "")
+                if status == "classification_pending" and str(central_link.get("confirmed_by") or "")
+                == "external_databases_off_pending_gpc" else "",
                 # Alleen expliciete OFF-koppelingen mogen vanuit ED2 worden
                 # ontkoppeld. Een GTIN-fallback of generieke Cataloguskoppeling
                 # geeft geen verwijderbevoegdheid.

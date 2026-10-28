@@ -68,6 +68,16 @@ artikel niet opnieuw als barcode-loos aan te bieden. Later classificeren maakt
 de relatie automatisch effectief; er wordt niets stilzwijgend geclassificeerd
 of in huishoudelijke voorraad geschreven. Het scheidingcontract tussen
 `global_product`, huishouden en voorraad blijft ongewijzigd.
+De nieuwe ED2-route `POST /api/external-databases/off/classify-pending`
+is gebonden aan `platform.external_products.link_existing`. Zij valideert
+de geselecteerde stagingrelatie, actieve centrale exacte GTIN-identiteit,
+merkcompatibiliteit en de officiële achtcijferige GS1 GPC Brick opnieuw
+onder één transactie. De canonieke officiële producttypegroep/
+`product_group_memberships` én `global_product_gpc_bricks` worden
+consistent ingevuld via bestaande services. Alleen als de bestaande
+read-projectie daarna de bonartikelkoppeling daadwerkelijk als `linked`
+beschouwt, wordt de transactie gecommit; anders volgt volledige rollback.
+Er worden geen kassabonregels, huishouden- of voorraadposities gemuteerd.
 De statusuitbreiding is een PostgreSQL-applicatiemigratie. De historische
 SQLite-bronbaseline is onveranderlijk; de wachtstatus wordt daarin niet
 geschreven en de handmatige OFF-route stopt daar veilig.

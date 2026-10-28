@@ -3,36 +3,32 @@ import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
-import Select from '../../ui/Select'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
+import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
 const STATUSES = { unlinked: 'Niet gekoppeld', classification_pending: 'Classificatie ontbreekt', linked: 'Gekoppeld' }
-const CODE_OPTIONS = [
-  { value: '', label: 'Alle art.codes' },
-  { value: 'with_code', label: 'Met art.code' },
-  { value: 'without_code', label: 'Zonder art.code' },
-]
-const STATUS_OPTIONS = [
-  { value: '', label: 'Alle statussen' },
-  ...Object.entries(STATUSES).map(([value, label]) => ({ value, label })),
-]
 const columns = [
   { key: 'select', label: '', width: 54 },
   { key: 'receipt_line_text', label: 'Artikel', width: 320, sortable: true, filterable: true },
   { key: 'retailer', label: 'Winkelketen', width: 170, sortable: true, filterable: true },
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
-  { key: 'article_code', label: 'Art.code', width: 180, sortable: true, filterable: true,
-    filterPredicate: (row, filter) => filter === 'with_code' ? Boolean(row.article_code)
-      : filter === 'without_code' ? !row.article_code : true,
-    renderFilter: ({ value, onChange }) => <Select ariaLabel="Filter op Art.code" value={value} onChange={onChange} options={CODE_OPTIONS} /> },
-  { key: 'link_status', label: 'Status', width: 210, sortable: true, filterable: true,
-    filterPredicate: (row, filter) => row.link_status === filter,
-    renderFilter: ({ value, onChange }) => <Select ariaLabel="Filter op status" value={value} onChange={onChange} options={STATUS_OPTIONS} />,
+  { key: 'article_code', label: 'Art.code', width: 180, sortable: true, filterable: true },
+  { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
+    filterLabel: 'Filter op GS1-class.',
+    getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
+    filterPredicate: (row, filter) => {
+      const normalized = String(filter || '').trim().toLocaleLowerCase('nl')
+      const label = STATUSES[row.link_status] || STATUSES.unlinked
+      const target = label.toLocaleLowerCase('nl')
+      // Een volledige statusnaam filtert exact. Zo toont 'Gekoppeld' niet óók 'Niet gekoppeld'.
+      const exactName = Object.values(STATUSES).some((name) => name.toLocaleLowerCase('nl') === normalized)
+      return exactName ? target === normalized : target.includes(normalized)
+    },
     renderCell: (row) => STATUSES[row.link_status] || STATUSES.unlinked },
   { key: 'quantity_label', label: 'Omvang / gewicht', width: 170, sortable: true, filterable: true },
 ]
@@ -40,7 +36,7 @@ const columns = [
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art.code'],
-  ['link_status', 'Status'], ['quantity_label', 'Omvang / gewicht'],
+  ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
 function csvCell(value) {
@@ -55,6 +51,7 @@ export default function ExternalDatabases2Page() {
   const [items, setItems] = useState([])
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState({})
+  const [activeStatusCounter, setActiveStatusCounter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
@@ -68,6 +65,8 @@ export default function ExternalDatabases2Page() {
 
   const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
+  const counterFilteredItems = useMemo(() => activeStatusCounter
+    ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
   const allPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.includes(row.id))
@@ -193,13 +192,13 @@ export default function ExternalDatabases2Page() {
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
             key={status} type="button" variant="secondary"
-            className={`rz-external-ed2-counter--${status}${filters.link_status === status ? ' rz-external-ed2-counter--active' : ''}`}
-            aria-pressed={filters.link_status === status}
-            onClick={() => setFilters((previous) => ({ ...previous,
-              link_status: previous.link_status === status ? '' : status }))}
+            className={`rz-external-ed2-counter--${status}${activeStatusCounter === status ? ' rz-external-ed2-counter--active' : ''}`}
+            aria-pressed={activeStatusCounter === status}
+            onClick={() => { setActiveStatusCounter((previous) => previous === status ? '' : status)
+              setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
-          {Object.values(filters).some(Boolean) ? <Button type="button" variant="secondary"
-            onClick={() => setFilters({})}>Wis filters</Button> : null}
+          {activeStatusCounter || Object.values(filters).some(Boolean) ? <Button type="button" variant="secondary"
+            onClick={() => { setFilters({}); setActiveStatusCounter('') }}>Wis filters</Button> : null}
         </div>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking}
@@ -207,7 +206,7 @@ export default function ExternalDatabases2Page() {
         </div>
         <DataTable
           columns={columns}
-          data={items}
+          data={counterFilteredItems}
           onPageRowsChange={onPageRowsChange}
           filterState={filters}
           onFilterChange={(key, value) => setFilters((previous) => ({ ...previous, [key]: value }))}
@@ -246,7 +245,16 @@ export default function ExternalDatabases2Page() {
           Ontkoppelen is alleen mogelijk voor geselecteerde OFF-koppelingen (maximaal 100 tegelijk).
           Exporteren kan voor alle geselecteerde artikelen.
         </p> : null}
-        {selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} /> : null}
+        {selectedItem?.link_status === 'classification_pending'
+          && selectedItem.pending_global_product_id && selectedItem.off_link_id
+          ? <Ed2GpcClassificationPanel key={selectedItem.id} item={selectedItem}
+            onClassified={(message) => {
+              setSelectedItem(null)
+              setSelectedIds([])
+              setOffLinkOutcome({ status: 'success', message })
+              setRefreshVersion((value) => value + 1)
+            }} />
+          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} /> : null}
         </div>
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">

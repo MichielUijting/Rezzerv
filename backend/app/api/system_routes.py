@@ -63,6 +63,7 @@ from app.services.external_unlinked_articles_service import (
     list_all_external_articles,
 )
 from app.services.external_off_bulk_unlink_service import unlink_selected_off_article_links
+from app.services.external_off_gpc_assignment_service import classify_pending_off_article
 
 router = APIRouter()
 router.include_router(article_synonym_router)
@@ -398,6 +399,19 @@ def external_databases_unlink_selected_off_products(payload: dict[str, Any] = Bo
     """Explicit OFF-only unlink; existing platform link permission is enforced by middleware."""
     try:
         return unlink_selected_off_article_links(payload.get('selections'))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post('/api/external-databases/off/classify-pending')
+def external_databases_classify_pending_off_product(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Explicit manual GPC confirmation, guarded by the platform link permission."""
+    try:
+        return classify_pending_off_article(
+            receipt_item_id=payload.get('receipt_item_id'),
+            link_id=payload.get('link_id'),
+            brick_code=payload.get('brick_code'),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

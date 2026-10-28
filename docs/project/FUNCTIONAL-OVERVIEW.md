@@ -87,14 +87,33 @@ tegelijk statusfilters. De filterbare kolom **Art.code** toont uitsluitend
 een gevalideerde GTIN van een centraal bevestigd of aantoonbaar opgeslagen,
 nog te classificeren Catalogusproduct. Een bonartikelnummer wordt niet als
 Catalogus-Art.code overgenomen. Generieke koppelingen blijven zonder GTIN
-maar tellen wél als **Gekoppeld**. De Art.code-filter ondersteunt met/zonder
-code, onafhankelijk van de statusfilter.
+maar tellen wél als **Gekoppeld**. **Art.code** heeft een normaal tekstfilter
+voor volledige of gedeeltelijke barcodes; **GS1-class.** (voorheen **Status**)
+heeft een gewoon tekstfilter op de Nederlandse statusomschrijving. De
+drie gekleurde statusknoppen werken onafhankelijk van beide tekstfilters;
+een volledige statusnaam wordt exact gematcht (dus *Gekoppeld* niet ook
+*Niet gekoppeld*).
+**PO-besluit 28 oktober 2026 — GS1 aanvullen in ED2:** bij een expliciete
+OFF-koppeling in status **Classificatie ontbreekt** opent de artikelselectie
+het paneel **GS1-classificatie aanvullen**. Hier worden mogelijke officiële
+Nederlandse GS1 GPC Brick-codes getoond en kan de gebruiker op code of
+omschrijving in de officiële catalogus zoeken. Een suggestie is nooit een
+automatische toewijzing: de gebruiker selecteert de Brick en bevestigt
+**Classificatie opslaan** met **OK**; **Annuleren** schrijft niets. De server
+controleert de oorspronkelijke bon-/OFF-identiteit en de wachtstatus opnieuw,
+en schrijft de officiële GS1-productgroep plus de centrale GS1-toewijzing
+in één transactie. Alleen als het bonartikel daarna aantoonbaar **Gekoppeld**
+is volgt succes en verversen de tellers. De actie verandert geen bonnen,
+huishoudartikelen of voorraad; ongeldige codes, conflicten en verouderde
+koppelingen stoppen zonder gedeeltelijke opslag. Alleen gebruikers met de
+reeds bestaande platformbevoegdheid voor externe productkoppelingen mogen
+deze schrijfhandeling uitvoeren.
 **PO-besluit 28 oktober 2026 — bulkacties ED2:** de volledige tabel heeft
 een selectorkolom met een lege, smalle kolomkop. **Alles op pagina** selecteert
 uitsluitend de zichtbare pagina en bewaart selectie van andere pagina's.
 De acties staan onder de tabel: **Exporteren** levert uitsluitend de
 geselecteerde artikelen met Artikel, Winkelketen, Bonartikelnummer, Art.code,
-Status en Omvang / gewicht als semikolon-CSV (veilig tegen spreadsheetformules).
+GS1-class. en Omvang / gewicht als semikolon-CSV (veilig tegen spreadsheetformules).
 **Ontkoppelen** vereist minimaal één en maximaal honderd geselecteerde regels,
 allemaal voorzien van een expliciete centrale OFF-koppelidentiteit. Een
 bevestigingsdialoog met **Annuleren** en **OK** is verplicht. De backend

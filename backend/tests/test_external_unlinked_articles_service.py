@@ -171,11 +171,14 @@ def test_overview_exposes_unlink_identity_only_for_confirmed_off_links(monkeypat
     monkeypatch.setattr(service, 'get_pending_classification_external_article_link',
                         lambda conn, **identity: {
                             'id': 'link-b', 'confirmed_by': 'external_databases_off_pending_gpc',
+                            'global_product_id': 'catalog-b',
                             'primary_gtin': '8718452504435',
                         } if identity['external_article_code'] == 'b' else None)
     rows = {row['receipt_article_number']: row
             for row in service.list_all_external_articles()['items']}
     assert rows['a']['off_link_id'] == 'link-a'
     assert rows['b']['off_link_id'] == 'link-b'
+    assert rows['b']['pending_global_product_id'] == 'catalog-b'
+    assert all(rows[code]['pending_global_product_id'] == '' for code in ('a', 'c', 'd'))
     assert rows['c']['off_link_id'] == ''
     assert rows['d']['off_link_id'] == ''
