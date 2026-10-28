@@ -20,6 +20,10 @@ from app.services.external_article_confirmation_service import (
     confirm_external_article_for_receipt_item,
     resolve_external_article_identity,
 )
+from app.services.external_article_product_link_service import (
+    _complete_global_product_link_data,
+    stage_external_article_product_link_without_gpc,
+)
 from app.services.external_product_identity_policy import (
     assert_external_product_identity_compatible,
 )
@@ -544,6 +548,56 @@ def link_off_product_with_product_type(
         "creates_inventory_event": False,
         "mutates_inventory": False,
     }
+
+
+def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: dict[str, Any]) -> dict[str, Any]:
+    """Catalogusopslag op verified OFF GTIN, zonder een GPC te verzinnen.
+
+    Houd de bronidentiteit, product-upsert en pending-koppeling atomair. De
+    pending-koppeling telt niet als de volledige Kassa-/Voorraadbevestiging.
+    """
+    if not isinstance(off_product, dict):
+        raise ValueError("OFF-product is verplicht")
+    with engine.begin() as conn:
+        if getattr(conn.dialect, "name", None) == "sqlite":
+            # The historical SQLite baseline is immutable. Only the normal
+            # PostgreSQL application schema has the pending-status extension.
+            raise ValueError("Deze Catalogusopslag vereist de reguliere Inhuis-database")
+        identity = resolve_external_article_identity(conn, receipt_item_id)
+        assert_external_product_identity_compatible(
+            retailer_code=identity["retailer_code"],
+            receipt_text=identity["receipt_text"],
+            candidate_brand=off_product.get("brand") or off_product.get("candidate_brand"),
+            candidate_name=(off_product.get("product_name")
+                            or off_product.get("candidate_name") or off_product.get("name")),
+        )
+        product_id, gtin, _size_value, _size_unit = _upsert_global_product(conn, off_product)
+        state = _complete_global_product_link_data(conn, product_id)
+        if state.get("complete") and state.get("primary_gtin") == gtin:
+            link = confirm_external_article_for_receipt_item(
+                conn, receipt_item_id=receipt_item_id,
+                global_product_id=product_id,
+                confirmed_by="external_databases_off_manual_link",
+            )
+            if link.get("status") != "confirmed" or link.get("global_product_id") != product_id:
+                raise RuntimeError("Cataloguskoppeling kon niet worden bevestigd")
+            return {"ok": True, "linked": True, "cataloged": True,
+                    "classification_pending": False, "global_product_id": product_id,
+                    "gtin": gtin, "creates_inventory_event": False}
+
+        staged = stage_external_article_product_link_without_gpc(
+            conn,
+            retailer_code=identity["retailer_code"],
+            receipt_text=identity["receipt_text"],
+            external_article_code=identity["external_article_code"],
+            global_product_id=product_id,
+        )
+        if staged.get("global_product_id") != product_id or staged.get("status") != "classification_pending":
+            raise RuntimeError("Catalogusopslag kon niet worden bevestigd")
+    return {"ok": True, "linked": False, "cataloged": True,
+            "classification_pending": True, "global_product_id": product_id,
+            "gtin": gtin, "creates_inventory_event": False,
+            "mutates_inventory": False}
 
 def link_generic_product_with_product_type(
     *,

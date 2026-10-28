@@ -1,14 +1,14 @@
 """Durable, household-scoped encrypted staging for confirmed retailer receipts.
 
 Revision ID: 20261027_01
-Revises: 20261026_01
+Revises: 20261027_02
 """
 from alembic import op
 import sqlalchemy as sa
 
 
 revision = "20261027_01"
-down_revision = "20261026_01"
+down_revision = "20261027_02"
 branch_labels = None
 depends_on = None
 CI_IMPACT_DOMAINS = ["receipt", "auth"]

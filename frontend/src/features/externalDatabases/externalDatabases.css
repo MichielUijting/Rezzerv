@@ -12,6 +12,27 @@
   gap: 14px;
 }
 
+.rz-external-off-manual-form {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rz-external-off-link-row {
+  cursor: pointer;
+}
+
+.rz-external-off-link-row:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+
+.rz-external-off-manual-form .rz-input-field {
+  flex: 1 1 320px;
+  max-width: 560px;
+}
+
 .rz-external-databases-card--off > p {
   margin: 0;
 }

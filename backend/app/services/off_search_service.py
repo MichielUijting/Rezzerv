@@ -15,6 +15,7 @@ from app.services.external_product_identity_policy import (
     external_product_identity_compatibility,
     leading_private_label_marker,
 )
+from app.services.off_manual_search_proof import issue_manual_off_proof
 
 
 SEARCH_A_LICIOUS_URL = os.getenv(
@@ -327,7 +328,7 @@ def _resolve_receipt_table_line(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 rtl.id AS source_id,
                 rtl.external_article_code,
-                COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
+                COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                 COALESCE(CAST(rtl.quantity AS TEXT), '') AS quantity,
                 COALESCE(rtl.unit, '') AS unit,
                 COALESCE(rt.store_name, '') AS retailer_code
@@ -512,6 +513,20 @@ def _name_score(query: str, product_name: str) -> float:
     return len(overlap) / len(query_tokens)
 
 
+def _manual_relevance_query(query: str, retailer_code: str) -> str:
+    """Scheid de winkelnaam van de gevraagde artikelomschrijving."""
+    normalized = _normalize(query)
+    aliases = RETAILER_BRAND_ALIASES.get(_normalize(retailer_code), {_normalize(retailer_code)})
+    for alias in sorted(aliases, key=len, reverse=True):
+        normalized_alias = _normalize(alias)
+        if normalized_alias:
+            normalized = re.sub(
+                r"(?<!\w)" + re.escape(normalized_alias) + r"(?!\w)",
+                " ", normalized,
+            )
+    return " ".join(normalized.split())
+
+
 def _score_product(
     *,
     query: str,
@@ -636,12 +651,15 @@ def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(kind: str, query: str, weight: float) -> None:
+    def add(kind: str, query: str, weight: float, *, score_query: str = "") -> None:
         normalized = _normalize(query)
         if not normalized or normalized in seen:
             return
         seen.add(normalized)
-        variants.append({"kind": kind, "query": normalized, "weight": weight})
+        variant = {"kind": kind, "query": normalized, "weight": weight}
+        if score_query:
+            variant["score_query"] = _normalize(score_query)
+        variants.append(variant)
 
     if private_label_marker:
         add("private_label_phrase", source_receipt_text, 1.2)
@@ -650,6 +668,13 @@ def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
     if len(raw_tokens) >= 2:
         add("clean_phrase", " ".join(raw_tokens), 0.9)
     if len(core_tokens) == 1:
+        # The manual query "Achterham Lidl" returned exact product evidence that
+        # an unqualified "Achterham" search may miss. Reuse this context while
+        # evaluating product similarity on the core item name, NEVER on "Lidl".
+        retailer = _normalize(item.get("retailer_code", ""))
+        if retailer in RETAILER_BRAND_ALIASES:
+            add("retailer_phrase", f"{core_tokens[0]} {retailer}", 0.90,
+                score_query=core_tokens[0])
         add("single_core", core_tokens[0], 0.55)
     elif len(core_tokens) >= 2:
         for token in core_tokens:
@@ -783,7 +808,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
         accepted_count = 0
         for product in products:
             result = _normalize_result(
-                query=query,
+                query=variant.get("score_query", query),
                 retailer_code=item.get("retailer_code", ""),
                 quantity_label=item.get("quantity_label", ""),
                 product=product,
@@ -818,7 +843,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
             )
 
             entry["query_hits"] += 1
-            if variant["kind"] in {"private_label_phrase", "core_phrase", "clean_phrase"}:
+            if variant["kind"] in {"private_label_phrase", "core_phrase", "clean_phrase", "retailer_phrase"}:
                 entry["phrase_hits"] += 1
 
             current_name_score = float(
@@ -925,15 +950,16 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
             raise OffSearchError("query is verplicht bij handmatig zoeken")
 
         raw_products, provider = _query_off(query, max(limit * 3, 10))
+        relevance_query = _manual_relevance_query(query, item.get('retailer_code', ''))
         best_by_gtin: dict[str, dict[str, Any]] = {}
         for product in raw_products:
             result = _normalize_result(
-                query=query,
+                query=relevance_query,
                 retailer_code=item.get("retailer_code", ""),
                 quantity_label=item.get("quantity_label", ""),
                 product=product,
             )
-            if result is None:
+            if result is None or float(result.get('score') or 0) <= 0:
                 continue
             identity_check = external_product_identity_compatibility(
                 retailer_code=item.get("retailer_code", ""),
@@ -953,6 +979,10 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
             key=lambda row: (row["score"], row["product_name"].lower()),
             reverse=True,
         )[:limit]
+        # The trusted search result itself is enough evidence for later confirmation;
+        # avoid a second, fragile OFF network roundtrip for the same barcode.
+        for result in results:
+            result["selection_proof"] = issue_manual_off_proof(receipt_item_id, result)
     else:
         query, provider, results, query_diagnostics = _automatic_search(item, limit)
 

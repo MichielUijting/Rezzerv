@@ -11,6 +11,7 @@ from app.db import engine
 from app.services.external_article_ui_projection import project_central_link_truth
 from app.services.external_article_product_link_service import (
     normalize_external_link_retailer_code,
+    get_pending_classification_external_article_link,
 )
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
@@ -44,8 +45,9 @@ def _source_articles(conn):
     # business role and lifecycle. Stale copies must not reintroduce deposits,
     # loyalty, deleted details or deleted receipts into the article overview.
     receipts = conn.execute(text("""
-        SELECT rtl.id AS receipt_line_id, rt.store_name AS retailer_code,
-               COALESCE(NULLIF(rtl.normalized_label, ''), rtl.raw_label) AS receipt_line_text,
+        SELECT rtl.id AS receipt_line_id,
+               COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
+               COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                rtl.external_article_code AS retailer_article_number,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
@@ -81,6 +83,16 @@ def list_articles_without_catalog_barcode() -> dict:
             projected = project_central_link_truth(conn, source)
             if projected.get("central_link_active") is True and is_valid_gtin(
                 str(projected.get("linked_gtin") or "")
+            ):
+                continue
+            # This article has a verified Catalogus GTIN but is waiting for a
+            # real GS1 Brick. It no longer belongs in the barcode-to-find list.
+            # Pending is never projected as an operational confirmed link.
+            if get_pending_classification_external_article_link(
+                conn,
+                retailer_code=source.get("retailer_code"),
+                receipt_text=source.get("receipt_line_text"),
+                external_article_code=source.get("external_article_code"),
             ):
                 continue
             seen.add(key)

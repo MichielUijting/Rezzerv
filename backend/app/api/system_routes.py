@@ -56,6 +56,7 @@ from app.services.open_food_facts_candidate_store import save_open_food_facts_pr
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
+from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
 from app.services.external_article_search_service import search_article_candidates
 from app.services.external_unlinked_articles_service import list_articles_without_catalog_barcode
 
@@ -320,6 +321,19 @@ def external_products_open_food_facts_search(payload: dict[str, Any] = Body(defa
         return search_off_candidates(payload)
     except OffSearchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post('/api/external-databases/off/link-selected')
+def external_databases_confirm_off_product_link(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Bevestig een expliciet geselecteerd OFF-product via de centrale Catalogusauthority.
+
+    Deze schrijfactie vereist platform.external_products.link_existing (middleware).
+    De client levert nooit betrouwbare artikelnaam, merk, product-ID of GPC-classificatie.
+    """
+    try:
+        return confirm_selected_off_catalog_product(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post('/api/external-databases/products/search-preview')
