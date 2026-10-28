@@ -390,7 +390,12 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
             "CASE WHEN catalog_classification.is_active THEN "
             "catalog_classification.shopify_path ELSE NULL END"
         )
-    select_parts.append(f"{article_classification} AS article_classification")
+    # The value shown to users must be the value returned for filtering,
+    # sorting and the central Catalogus projection as well.
+    visible_article_classification = (
+        f"COALESCE({article_classification}, 'Niet geclassificeerd')"
+    )
+    select_parts.append(f"{visible_article_classification} AS article_classification")
 
     if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
         joins.append("""
@@ -421,7 +426,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "source": source_expression,
         "household_article_count": household_count_expression,
         "linked_store_count": linked_store_count,
-        "article_classification": f"COALESCE({article_classification}, '')",
+        "article_classification": visible_article_classification,
         "catalog_visible": alias_visibility_expression,
     }
     return select_parts, joins, expressions

@@ -310,17 +310,17 @@ export default function CatalogPage() {
               resizableColumns
             >
                 <colgroup>
-                  <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-kind" />
+                  <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col style={{ width: 240 }} /><col className="rz-catalog-col-kind" />
                   <col className="rz-catalog-col-brand" /><col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" />
                   <col className="rz-catalog-col-gpc-brick-code" /><col className="rz-catalog-col-gpc-brick-name" />
                   <col className="rz-catalog-col-gpc-class" /><col className="rz-catalog-col-gpc-family" />
                   <col className="rz-catalog-col-household-count" /><col className="rz-catalog-col-linked-store-count" />
-                  <col style={{ width: 240 }} />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
                     <th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} aria-label="Selecteer alle zichtbare catalogusartikelen" /></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('name')}>Universeel artikel <span>{sortMark('name')}</span></button></th>
+                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('article_classification')}>Artikelclassificatie <span>{sortMark('article_classification')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalog_kind')}>Soort <span>{sortMark('catalog_kind')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortMark('brand')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('primary_gtin')}>Primaire GTIN <span>{sortMark('primary_gtin')}</span></button></th>
@@ -331,11 +331,11 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_family_name')}>Productfamilie <span>{sortMark('gpc_family_name')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('linked_store_count')}>Gekoppelde winkels <span>{sortMark('linked_store_count')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('article_classification')}>Artikelclassificatie <span>{sortMark('article_classification')}</span></button></th>
                   </tr>
                   <tr className="rz-table-filters rz-external-databases-filter-row">
                     <th />
                     <th><input className="rz-table-filter" placeholder="Zoek" value={filters.name} onChange={(event) => updateFilter('name', event.target.value)} /></th>
+                    <th><input className="rz-table-filter" aria-label="Filter artikelclassificatie" placeholder="Filter" value={filters.articleClassification} onChange={(event) => updateFilter('articleClassification', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.catalogKind} onChange={(event) => updateFilter('catalogKind', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.brand} onChange={(event) => updateFilter('brand', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.primaryGtin} onChange={(event) => updateFilter('primaryGtin', event.target.value)} /></th>
@@ -346,7 +346,6 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcFamily} onChange={(event) => updateFilter('gpcFamily', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                     <th className="rz-num"><input className="rz-table-filter" aria-label="Filter gekoppelde winkels" placeholder="Filter" value={filters.linkedStoreCount} onChange={(event) => updateFilter('linkedStoreCount', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" aria-label="Filter artikelclassificatie" placeholder="Filter" value={filters.articleClassification} onChange={(event) => updateFilter('articleClassification', event.target.value)} /></th>
                   </tr>
                 </thead>
                 <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
@@ -358,14 +357,13 @@ export default function CatalogPage() {
                           <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
                           <span>{text(item.name)}</span>
                         </div>
-                      </td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type, 'Classificatie ontbreekt')}</td>
+                      </td><td data-testid={`catalog-article-classification-${item.id}`} title={item.article_classification || ''}>{text(item.article_classification, 'Niet geclassificeerd')}</td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type, 'Classificatie ontbreekt')}</td>
                       <td>{text(item.gpc_brick_code, 'Niet geclassificeerd')}</td>
                       <td>{text(item.gpc_brick_name, 'Niet geclassificeerd')}</td>
                       <td>{text(item.gpc_class_name, 'Niet geclassificeerd')}</td>
                       <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                       <td className="rz-num" data-testid={`catalog-linked-stores-${item.id}`}>{Number(item.linked_store_count || 0)}</td>
-                      <td data-testid={`catalog-article-classification-${item.id}`}>{text(item.article_classification, 'Niet geclassificeerd')}</td>
                     </tr>
                   )) : <tr><td colSpan="13">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
                   {Array.from({ length: fillerRowCount }, (_, index) => (

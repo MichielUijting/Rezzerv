@@ -1339,3 +1339,21 @@ zonder de bestaande melding te vervangen of een tweede automatische
 overlay te tonen. Na sluiten kan de gebruiker elk afzonderlijk voorstel
 zelf opnieuw openen. Het tonen of sluiten van voorstellen is geen
 classificatiebevestiging.
+
+### Catalogus: zichtbare artikelclassificatie en standaardfilter — PO, 28 oktober 2026
+
+De aparte, handmatig bevestigde **Artikelclassificatie** staat in de
+hoofdtabel **Catalogus** direct naast **Universeel artikel**, zodat deze niet
+buiten beeld aan het verre rechtereinde van de tabel verdwijnt. Dezelfde
+bevestigde categorie wordt in het mobiele overzicht en het artikeldetail
+getoond, zonder bestaande GS1/GPC-velden te veranderen.
+
+In **Artikelclassificaties toekennen** start het standaard tekstfilter onder
+**Artikelclassificatie** met **Niet geclassificeerd**. De waarde in het filter
+moet gelijk zijn aan de zichtbare tekst in de cel en aan de filterbare waarde:
+een lege, oningevulde classificatie is dus niet intern een lege string voor de
+gebruiker. Na bevestigen verdwijnt het artikel uit de standaardselectie met
+ontbrekende classificaties, maar is via wissen van het filter of in de
+Catalogus weer terug te vinden. Sortering en zoeken behandelen de status
+op beide schermen identiek.
+

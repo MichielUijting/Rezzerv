@@ -36,6 +36,7 @@ export default function ShopifyReviewPage() {
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(new Set())
   const [proposals, setProposals] = useState({})
+  const [tableFilters, setTableFilters] = useState({ shopify_path: 'Niet geclassificeerd' })
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -285,6 +286,8 @@ export default function ShopifyReviewPage() {
     { key: 'gtin', label: 'Barcode', width: 125, sortable: true, filterable: true },
     {
       key: 'shopify_path', label: 'Artikelclassificatie', width: 250, sortable: true, filterable: true,
+      getFilterValue: (item) => item.shopify_path || 'Niet geclassificeerd',
+      getSortValue: (item) => item.shopify_path || 'Niet geclassificeerd',
       renderCell: (item) => <span title={item.shopify_path || ''}>{item.shopify_path || 'Niet geclassificeerd'}</span>,
     },
     {
@@ -320,6 +323,8 @@ export default function ShopifyReviewPage() {
       {note ? <p role="status">{note}</p> : null}
       <div className="rz-article-classification-layout">
       <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
+        filterState={tableFilters}
+        onFilterChange={(key, value) => setTableFilters((current) => ({ ...current, [key]: value }))}
         wrapperClassName="rz-classification-table-wrapper"
         tableStyle={{ width: '100%', minWidth: '100%' }}
         getRowKey={(item) => item.id} pageSize={8}

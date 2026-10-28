@@ -18,6 +18,12 @@ def main():
     assert 'catalog_classification.shopify_path' in catalog
     assert 'article_classification' in catalog
     assert 'CASE WHEN catalog_classification.is_active THEN' in catalog
+    # Confirmed category is projected in the normal Catalogus API, and the
+    # displayed missing-category label is also the SQL filter/sort value.
+    assert "COALESCE({article_classification}, 'Niet geclassificeerd')" in catalog
+    assert '"article_classification": visible_article_classification' in catalog
+    assert 'select_parts.append(f"{visible_article_classification} AS article_classification")' in catalog
+
     assert "@router.post('/bulk-remove')" in route
     assert "def remove_batch(payload: RemovalBatch):" in route
     assert "platform.external_products.link_existing" in route

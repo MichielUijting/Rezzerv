@@ -38,6 +38,12 @@ assert.match(page, /tableStyle=\{\{ width: '100%', minWidth: '100%' \}\}/)
 
 assert.match(page, /onClick=\{confirmProposals\}/)
 assert.match(page, /key: 'shopify_path', label: 'Artikelclassificatie'/)
+assert.match(page, /useState\(\{ shopify_path: 'Niet geclassificeerd' \}\)/)
+assert.match(page, /getFilterValue: \(item\) => item\.shopify_path \|\| 'Niet geclassificeerd'/)
+assert.match(page, /getSortValue: \(item\) => item\.shopify_path \|\| 'Niet geclassificeerd'/)
+assert.match(page, /filterState=\{tableFilters\}/)
+assert.match(page, /onFilterChange=\{\(key, value\) => setTableFilters/)
+
 assert.match(page, /<DataTable [\s\S]*paginationActions=\{<span aria-live="polite">\{selected\.size\} geselecteerd<\/span>\} \/>/)
 assert.match(page, /aria-label="Acties artikelclassificaties"/)
 assert.match(page, /onClick=\{exportSelected\}>Exporteren<\/Button>/)
@@ -68,6 +74,11 @@ assert.match(router, /path: '\/catalogus\/artikelclassificaties-toekennen'/)
 assert.match(catalog, /Artikelclassificaties toekennen/)
 assert.match(mobile, /Artikelclassificaties toekennen/)
 assert.match(catalog, /catalog-article-classification-/)
+// The confirmed classification must be visible next to the product name in
+// the main Catalogus, not hidden after the last right-hand column.
+assert.match(catalog, /onClick=\{\(\) => updateSort\('name'\)\}[\s\S]*?onClick=\{\(\) => updateSort\('article_classification'\)\}/)
+assert.match(catalog, /<\/td><td data-testid=\{`catalog-article-classification-\$\{item\.id\}\`\}[\s\S]*?<\/td><td>\{catalogKindLabel/)
+
 assert.match(mobile, /Artikelclassificatie: \{text\(item\.article_classification/)
 assert.match(detail, /Artikelclassificatie<\/dt>/)
 
