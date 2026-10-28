@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
+from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
@@ -23,6 +24,7 @@ from app.services.session_request_context import (
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 router.include_router(catalog_gpc_router)
+router.include_router(shopify_review_router)
 
 CATALOG_IMAGE_UPDATE_PERMISSION = "platform.catalog.update"
 CATALOG_IMAGE_MAX_BYTES = 350_000

@@ -5,7 +5,7 @@ import CatalogProductImage from './CatalogProductImage'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
 import Pagination from '../../ui/Pagination.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import './mobileCatalog.css'
 
 const PAGE_SIZE = 10
@@ -21,6 +21,8 @@ function kindLabel(value) {
 
 export default function MobileCatalogPage() {
   const navigate = useNavigate()
+  const authContext = readStoredAuthContext()
+  const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [query, setQuery] = useState('')
@@ -89,6 +91,7 @@ export default function MobileCatalogPage() {
     <div className="rz-screen rz-mobile-catalog-screen" data-testid="mobile-catalog-page">
       <MobileModuleHeader title="Catalogus" testId="mobile-catalog-header" />
       <main className="rz-mobile-catalog-content">
+        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Shopify-classificaties</Button> : null}
         <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
             <span className="rz-mobile-catalog-visually-hidden">Zoek</span>

@@ -56,6 +56,7 @@ export default function CatalogPage() {
   const authContext = readStoredAuthContext()
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
   const isPlatformSuperuser = Boolean(authContext?.is_platform_superuser)
+  const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
@@ -285,6 +286,7 @@ export default function CatalogPage() {
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
+              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Shopify-classificaties</Button> : null}
               {isPlatformSuperuser ? (
                 <Button
                   type="button"
