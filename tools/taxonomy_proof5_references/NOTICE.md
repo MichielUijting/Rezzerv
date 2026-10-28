@@ -38,6 +38,18 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Aanvullende Shopify EN-voedselindex voor proef 6
+
+- Dezelfde vastgepinde Shopify-release `v2026-08`, géén nieuwe taxonomievariant.
+- Officiële Engelse bron: https://github.com/Shopify/product-taxonomy/releases/download/v2026-08/categories.en.json.gz
+- SHA256 van originele Engelse bron: `bb400431cf6c28cc1ddad9f2d9c5c3c918db94454ebeb68238ffa8740ee89d05`.
+- Afgeleide `shopify_2026_08_en_food.json.gz`: 764 voedsel-/drankencategorieën,
+  alleen ID en Engelse naam. Deze koppelen via dezelfde officiële ID aan de
+  bestaande Nederlandstalige categoriepaden.
+- Generator: `tools/inhuis_taxonomy_proof6_build_en_reference.py`.
+- Hergebruik onder dezelfde Shopify MIT-voorwaarden als hierboven.
+- Geen barcode-index; OFF-databankdata worden niet in deze bron opgenomen.
+
 ## CBS ECOICOPv2
 
 - Bron: Centraal Bureau voor de Statistiek, *De ECOICOPv2 indeling*,
