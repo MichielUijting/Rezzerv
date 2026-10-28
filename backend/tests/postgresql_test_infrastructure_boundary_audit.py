@@ -148,9 +148,6 @@ ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
     "backend/tests/database_production_cutover_selftest.py": (
         "Asserts SQLite runtime configuration is rejected by the production cutover policy."
     ),
-    "backend/tests/migration_foundation_core_selftest.py": (
-        "Checks historical SQLite schema/index contracts as migration-source evidence."
-    ),
     "backend/tests/migration_foundation_head_selftest.py": (
         "Checks SQLite compatibility and PostgreSQL head as a dual migration-foundation gate."
     ),
