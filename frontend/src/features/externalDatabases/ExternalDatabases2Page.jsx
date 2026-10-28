@@ -251,6 +251,8 @@ export default function ExternalDatabases2Page() {
             onClassified={(message) => {
               setSelectedItem(null)
               setSelectedIds([])
+              setActiveStatusCounter('')
+              setFilters((previous) => ({ ...previous, link_status: '' }))
               setOffLinkOutcome({ status: 'success', message })
               setRefreshVersion((value) => value + 1)
             }} />

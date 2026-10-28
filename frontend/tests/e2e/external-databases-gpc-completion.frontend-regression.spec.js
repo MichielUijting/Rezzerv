@@ -52,6 +52,7 @@ for (const width of [390, 1280]) {
 
     await page.goto('/externe-databases-2')
     await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
+    await page.getByRole('button', { name: 'Classificatie ontbreekt: 1' }).click()
     const table = page.getByTestId('external-databases-2-table')
     const source = table.locator('tbody tr').filter({ hasText: 'Achterham BL' })
     if (width <= 720) await source.click()
@@ -74,6 +75,7 @@ for (const width of [390, 1280]) {
     await page.getByRole('button', { name: 'OK', exact: true }).click()
     await expect(page.getByTestId('external-off-link-outcome')).toContainText('het bonartikel is gekoppeld')
     await expect(page.getByRole('button', { name: 'Gekoppeld: 1' })).toBeVisible()
+    await expect(table.locator('tbody tr').filter({ hasText: 'Achterham BL' })).toContainText('Gekoppeld')
     await expect(page.getByTestId('ed2-gpc-panel')).toHaveCount(0)
     expect(posts).toEqual([{ receipt_item_id: id, link_id: linkId, brick_code: '10000001' }])
   })
