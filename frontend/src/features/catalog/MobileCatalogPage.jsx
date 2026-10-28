@@ -91,7 +91,7 @@ export default function MobileCatalogPage() {
     <div className="rz-screen rz-mobile-catalog-screen" data-testid="mobile-catalog-page">
       <MobileModuleHeader title="Catalogus" testId="mobile-catalog-header" />
       <main className="rz-mobile-catalog-content">
-        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Shopify-classificaties</Button> : null}
+        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Artikelclassificaties toekennen</Button> : null}
         <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
             <span className="rz-mobile-catalog-visually-hidden">Zoek</span>
@@ -157,6 +157,7 @@ export default function MobileCatalogPage() {
                   <span>GPC-groep: {text(item.gpc_class_name, 'Niet geclassificeerd')}</span>
                   <span>Productfamilie: {text(item.gpc_family_name, 'Niet geclassificeerd')}</span>
                   <span>Gekoppelde winkels: {Number(item.linked_store_count || 0)}</span>
+                  <span>Artikelclassificatie: {text(item.article_classification, 'Niet geclassificeerd')}</span>
                 </span>
 
               </button>

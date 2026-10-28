@@ -63,7 +63,7 @@ export default function CatalogPage() {
   const [filters, setFilters] = useState({
     name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
     gpcBrickCode: '', gpcBrickName: '', gpcClass: '', gpcFamily: '',
-    householdArticleCount: '', linkedStoreCount: '',
+    householdArticleCount: '', linkedStoreCount: '', articleClassification: '',
   })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [page, setPage] = useState(1)
@@ -98,6 +98,7 @@ export default function CatalogPage() {
           gpcFamily: 'gpc_family',
           householdArticleCount: 'household_article_count',
           linkedStoreCount: 'linked_store_count',
+          articleClassification: 'article_classification',
         }
         Object.entries(mappings).forEach(([stateKey, parameter]) => {
           const value = String(filters[stateKey] || '').trim()
@@ -286,7 +287,7 @@ export default function CatalogPage() {
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
-              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Shopify-classificaties</Button> : null}
+              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/shopify-beoordelen')}>Artikelclassificaties toekennen</Button> : null}
               {isPlatformSuperuser ? (
                 <Button
                   type="button"
@@ -314,6 +315,7 @@ export default function CatalogPage() {
                   <col className="rz-catalog-col-gpc-brick-code" /><col className="rz-catalog-col-gpc-brick-name" />
                   <col className="rz-catalog-col-gpc-class" /><col className="rz-catalog-col-gpc-family" />
                   <col className="rz-catalog-col-household-count" /><col className="rz-catalog-col-linked-store-count" />
+                  <col style={{ width: 240 }} />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
@@ -329,6 +331,7 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_family_name')}>Productfamilie <span>{sortMark('gpc_family_name')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('linked_store_count')}>Gekoppelde winkels <span>{sortMark('linked_store_count')}</span></button></th>
+                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('article_classification')}>Artikelclassificatie <span>{sortMark('article_classification')}</span></button></th>
                   </tr>
                   <tr className="rz-table-filters rz-external-databases-filter-row">
                     <th />
@@ -343,6 +346,7 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcFamily} onChange={(event) => updateFilter('gpcFamily', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                     <th className="rz-num"><input className="rz-table-filter" aria-label="Filter gekoppelde winkels" placeholder="Filter" value={filters.linkedStoreCount} onChange={(event) => updateFilter('linkedStoreCount', event.target.value)} /></th>
+                    <th><input className="rz-table-filter" aria-label="Filter artikelclassificatie" placeholder="Filter" value={filters.articleClassification} onChange={(event) => updateFilter('articleClassification', event.target.value)} /></th>
                   </tr>
                 </thead>
                 <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
@@ -361,11 +365,12 @@ export default function CatalogPage() {
                       <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                       <td className="rz-num" data-testid={`catalog-linked-stores-${item.id}`}>{Number(item.linked_store_count || 0)}</td>
+                      <td data-testid={`catalog-article-classification-${item.id}`}>{text(item.article_classification, 'Niet geclassificeerd')}</td>
                     </tr>
-                  )) : <tr><td colSpan="12">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
+                  )) : <tr><td colSpan="13">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
                   {Array.from({ length: fillerRowCount }, (_, index) => (
                     <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
-                      <td colSpan="12">&nbsp;</td>
+                      <td colSpan="13">&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>

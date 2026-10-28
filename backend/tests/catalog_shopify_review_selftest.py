@@ -14,6 +14,9 @@ def main():
     assert 'inhuis_maintenance_write_barrier' in migration
     assert 'with engine.begin() as conn:' in route and 'FOR UPDATE' in route
     assert 'barcode_confirmed' in route and 'expected_version' in route
+    catalog = (root / 'app/api/catalog_routes.py').read_text(encoding='utf8')
+    assert 'catalog_classification.shopify_path' in catalog
+    assert 'article_classification' in catalog
     for forbidden in ('global_product_gpc_bricks', 'household_articles', 'product_group_memberships', 'inventory_events'):
         assert forbidden not in route
     print('CATALOG_SHOPIFY_REVIEW_CONTRACT_GREEN')
