@@ -49,6 +49,7 @@ def build_connection():
         ("POST", "/api/external-databases/candidates/confirm-external", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/promote-candidate", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/unlink", "platform.external_products.link_existing"),
+        ("POST", "/api/external-databases/off/unlink-selected", "platform.external_products.link_existing"),
     ],
 )
 def test_external_database_route_permission_mapping(method, path, permission):

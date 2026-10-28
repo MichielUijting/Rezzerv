@@ -7,6 +7,7 @@ from app.services import external_article_ui_projection as projection
 
 def test_catalog_gtin_fallback_cannot_promote_pending_gpc(monkeypatch):
     monkeypatch.setattr(projection, "get_confirmed_external_article_product_link", lambda *args, **kwargs: None)
+    monkeypatch.setattr(projection, "has_explicitly_unlinked_off_article", lambda *args, **kwargs: False)
     monkeypatch.setattr(projection, "_catalog_product_by_gtin", lambda *args: {
         "global_product_id": "pending-achterham",
         "global_product_name": "Achterham",
@@ -26,6 +27,7 @@ def test_catalog_gtin_fallback_cannot_promote_pending_gpc(monkeypatch):
 
 def test_catalog_gtin_fallback_requires_official_gpc_and_valid_identity(monkeypatch):
     monkeypatch.setattr(projection, "get_confirmed_external_article_product_link", lambda *args, **kwargs: None)
+    monkeypatch.setattr(projection, "has_explicitly_unlinked_off_article", lambda *args, **kwargs: False)
     monkeypatch.setattr(projection, "_catalog_product_by_gtin", lambda *args: {
         "global_product_id": "classified-achterham",
         "global_product_name": "Achterham",
@@ -43,3 +45,19 @@ def test_catalog_gtin_fallback_requires_official_gpc_and_valid_identity(monkeypa
     })
     assert result["central_link_active"] is True
     assert result["linked_gtin"] == "8718452504435"
+
+
+def test_explicit_off_unlink_overrides_historical_catalog_gtin_fallback(monkeypatch):
+    monkeypatch.setattr(projection, "get_confirmed_external_article_product_link", lambda *args, **kwargs: None)
+    monkeypatch.setattr(projection, "has_explicitly_unlinked_off_article", lambda *args, **kwargs: True)
+    monkeypatch.setattr(projection, "_catalog_product_by_gtin", lambda *args: {
+        "global_product_id": "formerly-linked", "global_product_name": "Melk",
+        "global_product_brand": "Jumbo", "primary_gtin": "8720326035617",
+    })
+    monkeypatch.setattr(projection, "_complete_global_product_link_data", lambda *args: {"complete": True})
+    result = projection.project_central_link_truth(MagicMock(), {
+        "retailer_code": "jumbo", "receipt_line_text": "Halfvolle melk",
+        "external_article_code": "8720326035617",
+    })
+    assert result["central_link_active"] is False
+    assert result["linked_gtin"] == ""

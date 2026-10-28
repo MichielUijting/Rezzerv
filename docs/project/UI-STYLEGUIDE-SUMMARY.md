@@ -1269,3 +1269,19 @@ koppelbevestiging. De centrale knop **Zoeken** staat direct rechts naast het
 veld, met exact gelijke invoer-/knophoogte en gelijk uitgelijnde onderranden,
 ook bij een smalle mobiele viewport. Er komen geen extra zoekvelden of
 afwijkende knopcomponenten bij.
+
+### Externe databases 2: artikelkop en bulkverwerking — PO, 28 oktober 2026
+
+In **Zelf zoeken in OFF** staat direct boven het gecombineerde zoekveld de
+geselecteerde bonartikelnaam **vetgedrukt**; het voorafgaande label `Artikel:`
+blijft normaal. De ED2-hoofdtabel heeft een smalle selectiekolom zonder titel.
+**Alles op pagina** selecteert uitsluitend de getoonde tabelpagina; een selectie
+op andere pagina's blijft bewaard. **Exporteren** en **Ontkoppelen** staan als
+bulkacties onder de tabel en zijn zichtbaar maar inactief zonder passende
+selectie. Exporteren levert uitsluitend de geselecteerde artikelen als CSV;
+ontkoppelen vraagt eerst expliciete bevestiging met **Annuleren** en **OK**.
+Alleen een aantoonbare OFF-koppeling kan ontkoppeld worden, maximaal honderd
+bonartikelen per keer. Bij een serverfout of verouderde selectie blijft de
+actie zonder succesvolle melding. Na een geslaagde ontkoppeling worden de
+tellers en de tabel ververst. Bestaande DataTable-opmaak, sortering, filters,
+resize, paginering en mobiele bediening blijven leidend.

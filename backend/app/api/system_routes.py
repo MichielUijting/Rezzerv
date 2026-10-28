@@ -62,6 +62,7 @@ from app.services.external_unlinked_articles_service import (
     list_articles_without_catalog_barcode,
     list_all_external_articles,
 )
+from app.services.external_off_bulk_unlink_service import unlink_selected_off_article_links
 
 router = APIRouter()
 router.include_router(article_synonym_router)
@@ -390,6 +391,15 @@ def external_databases_unlinked_articles():
 @router.get('/api/external-databases/articles-overview')
 def external_databases_articles_overview():
     return list_all_external_articles()
+
+
+@router.post('/api/external-databases/off/unlink-selected')
+def external_databases_unlink_selected_off_products(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Explicit OFF-only unlink; existing platform link permission is enforced by middleware."""
+    try:
+        return unlink_selected_off_article_links(payload.get('selections'))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')

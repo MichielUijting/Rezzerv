@@ -150,3 +150,32 @@ def test_all_articles_overview_requires_platform_view_permission():
     assert required_external_database_permission(
         'GET', '/api/external-databases/articles-overview'
     ) == 'platform.external_products.view'
+
+
+def test_overview_exposes_unlink_identity_only_for_confirmed_off_links(monkeypatch):
+    article_sources(monkeypatch, [('OFF gekoppeld', 'a'), ('OFF wacht', 'b'),
+                                 ('Generiek', 'c'), ('GTIN fallback', 'd')])
+
+    def projection(conn, source):
+        code = source['external_article_code']
+        return {**source,
+                'central_link_active': code in {'a', 'c', 'd'},
+                'central_external_article_product_link': {
+                    'id': f'link-{code}',
+                    'confirmed_by': 'external_databases_off_manual_link' if code == 'a'
+                    else 'external_databases_generic_link' if code == 'c' else '',
+                },
+                'linked_gtin': '8720326035617'}
+
+    monkeypatch.setattr(service, 'project_central_link_truth', projection)
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link',
+                        lambda conn, **identity: {
+                            'id': 'link-b', 'confirmed_by': 'external_databases_off_pending_gpc',
+                            'primary_gtin': '8718452504435',
+                        } if identity['external_article_code'] == 'b' else None)
+    rows = {row['receipt_article_number']: row
+            for row in service.list_all_external_articles()['items']}
+    assert rows['a']['off_link_id'] == 'link-a'
+    assert rows['b']['off_link_id'] == 'link-b'
+    assert rows['c']['off_link_id'] == ''
+    assert rows['d']['off_link_id'] == ''

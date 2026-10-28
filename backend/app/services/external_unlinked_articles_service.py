@@ -5,6 +5,8 @@ the legacy candidate listing (which can promote candidates during a read).
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 from sqlalchemy import text
 
 from app.db import engine
@@ -107,7 +109,7 @@ def list_articles_without_catalog_barcode() -> dict:
     return {"items": items, "total": len(items)}
 
 
-def list_all_external_articles() -> dict:
+def list_all_external_articles(*, conn=None) -> dict:
     """Platformoverzicht van alle unieke bronartikelen, inclusief Cataloguskoppelingen.
 
     Een bonartikelnummer is geen GTIN. De Art.code-kolom is uitsluitend een
@@ -116,7 +118,7 @@ def list_all_external_articles() -> dict:
     items = []
     seen = set()
     counts = {"unlinked": 0, "classification_pending": 0, "linked": 0}
-    with engine.connect() as conn:
+    with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         for source in _source_articles(conn):
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
@@ -133,6 +135,7 @@ def list_all_external_articles() -> dict:
                 status = "linked"
                 linked_gtin = str(projected.get("linked_gtin") or "")
                 article_code = linked_gtin if is_valid_gtin(linked_gtin) else ""
+                central_link = projected.get("central_external_article_product_link") or {}
             else:
                 pending = get_pending_classification_external_article_link(
                     conn,
@@ -143,6 +146,7 @@ def list_all_external_articles() -> dict:
                 status = "classification_pending" if pending else "unlinked"
                 pending_gtin = str((pending or {}).get("primary_gtin") or "")
                 article_code = pending_gtin if is_valid_gtin(pending_gtin) else ""
+                central_link = pending or {}
             seen.add(key)
             counts[status] += 1
             items.append({
@@ -154,5 +158,13 @@ def list_all_external_articles() -> dict:
                 "article_code": article_code,
                 "link_status": status,
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
+                # Alleen expliciete OFF-koppelingen mogen vanuit ED2 worden
+                # ontkoppeld. Een GTIN-fallback of generieke Cataloguskoppeling
+                # geeft geen verwijderbevoegdheid.
+                "off_link_id": str(central_link.get("id") or "") if str(
+                    central_link.get("confirmed_by") or "") in {
+                    "external_databases_off_link", "external_databases_off_manual_link",
+                    "external_databases_off_pending_gpc",
+                } and status != "unlinked" else "",
             })
     return {"items": items, "total": len(items), "counts": counts}

@@ -187,7 +187,7 @@ export default function OffManualSearchPage() {
       <ScreenCard fullWidth>
         {itemError ? <p role="alert">{itemError}</p> : null}
         {item ? <>
-          <p>Artikel: {item.receipt_line_text}</p>
+          <p>Artikel: <strong>{item.receipt_line_text}</strong></p>
           <form className="rz-external-off-manual-form" onSubmit={search} data-testid="external-off-free-search-form">
             <label className="rz-input-field">
               <span className="rz-label">Omschrijving of barcode in OFF</span>

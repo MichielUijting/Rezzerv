@@ -14,18 +14,16 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
-**Externe databases 2** is een afzonderlijke, alleen-lezen platformactie naast
-Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
-bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
-actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
-Cataloguskoppeling zonder barcode blijft zichtbaar. Bronartikelidentiteiten
-die na handmatige OFF-bevestiging met een geldige GTIN al
-in Catalogus zijn opgeslagen maar nog op GS1-classificatie wachten, blijven
-eveneens buiten deze lijst. Zo'n wachtende identiteit is uitdrukkelijk **geen**
+**Externe databases 2** is een afzonderlijke platformactie naast Externe databases,
+met dezelfde toegangsvoorwaarden. Overzicht en zoeken zijn alleen-lezen;
+expliciet bevestigde koppeling en ontkoppeling zijn afzonderlijke bevoegde
+schrijfacties. De standaardtabel toont alle bonartikelen uit de volledige
+aankoopimport- en kassabonregelset, ook de gekoppelde en de wachtende.
+Een bonartikel zonder officiële GS1-classificatie is uitdrukkelijk geen
 voor Kassa/Voorraad bevestigde Cataloguskoppeling. Exact dezelfde getoonde
-artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschillende
-artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
-blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
+artikeltekst, winkelketen en bonartikelcode worden eenmaal getoond. Hoofdletters,
+accenten en spaties binnen de naam blijven onderscheidend. Dit is uitsluitend
+presentatiegroepering, geen wijziging
 van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
 DataTable. Het laden van de artikellijst start geen externe zoekacties en
 schrijft geen gegevens. Productkandidaten worden pas na artikelselectie gezocht.
@@ -91,6 +89,26 @@ nog te classificeren Catalogusproduct. Een bonartikelnummer wordt niet als
 Catalogus-Art.code overgenomen. Generieke koppelingen blijven zonder GTIN
 maar tellen wél als **Gekoppeld**. De Art.code-filter ondersteunt met/zonder
 code, onafhankelijk van de statusfilter.
+**PO-besluit 28 oktober 2026 — bulkacties ED2:** de volledige tabel heeft
+een selectorkolom met een lege, smalle kolomkop. **Alles op pagina** selecteert
+uitsluitend de zichtbare pagina en bewaart selectie van andere pagina's.
+De acties staan onder de tabel: **Exporteren** levert uitsluitend de
+geselecteerde artikelen met Artikel, Winkelketen, Bonartikelnummer, Art.code,
+Status en Omvang / gewicht als semikolon-CSV (veilig tegen spreadsheetformules).
+**Ontkoppelen** vereist minimaal één en maximaal honderd geselecteerde regels,
+allemaal voorzien van een expliciete centrale OFF-koppelidentiteit. Een
+bevestigingsdialoog met **Annuleren** en **OK** is verplicht. De backend
+herleidt de bronidentiteiten opnieuw en vergelijkt elke actuele OFF-koppeling
+met de selectie. Wordt één koppeling door andere bronartikelen gedeeld,
+dan moeten ook die artikelen expliciet zijn geselecteerd. Een ongeldige,
+onvolledige of verouderde bulkkeuze stopt als geheel zonder gedeeltelijke
+ontkoppeling. Alleen de geselecteerde centrale OFF-relaties worden inactief;
+Catalogusproducten, bronbonnen, aankoopregels, huishoudartikelen en voorraad
+blijven intact. Een bewuste ontkoppeling onderdrukt tevens een eventuele oude
+impliciete GTIN-herkoppeling; een nieuwe, expliciet bevestigde koppeling blijft
+mogelijk. De tellers en tabel worden na de actie opnieuw geladen. Bij timeout
+wordt geen succes geclaimd. Niet-OFF-koppelingen en uitsluitend via GTIN
+afgeleide koppelingen zijn niet via deze bulkactie te verwijderen.
 Het kandidaatpaneel toont na de vaste regel over beschikbare productgegevens
 geen afzonderlijke uitleg, bronstatusalinea's of extra bronbewijsteksten. Een
 knop **Zelf zoeken in OFF** opent een eigen scherm voor het geselecteerde
@@ -108,7 +126,8 @@ GTIN-controlecijfer en gebruikt dezelfde servergegenereerde, kortlevende
 koppelingproof en identiteits-/huismerkcontroles. Zoeken wijzigt geen Catalogus- of
 voorraadgegevens; een onbekende barcode geeft een leeg resultaat en een
 bronstoring een afzonderlijke foutmelding.
-Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft
+Het afzonderlijke OFF-scherm toont geen extra Terugknop. De geselecteerde
+bonartikelnaam staat boven het zoekveld **vetgedrukt**. De zoekactie blijft
 uitsluitend lezen; de Overeenkomstkolom is de relevante OFF-productnaam-score
 zonder de winkelnaam als schijnbaar productbewijs en bepaalt de eerste rangorde.
 Resultaten met uitsluitend winkelnamen en 0% overeenkomst worden weggefilterd.

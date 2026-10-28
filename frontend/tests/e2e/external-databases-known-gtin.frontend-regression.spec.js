@@ -67,6 +67,8 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
 
     await table.locator('tbody tr').filter({ hasText: 'Melk zonder code' }).dblclick()
     await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+    const selectedReceiptName = page.getByText('Melk zonder code', { exact: true })
+    await expect(selectedReceiptName).toHaveCSS('font-weight', '700')
     const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
     const searchButton = page.getByRole('button', { name: 'Zoeken', exact: true })
     await expect(page.getByRole('textbox')).toHaveCount(1)
