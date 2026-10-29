@@ -106,7 +106,6 @@ export default function ArticleSynonymsPage() {
       <p>Controleer variant, bereiding en inhoud. Selecteer de juiste suggesties en bevestig met Koppelen. Een hoge score is geen zekerheid.</p>
       <p>Artikelen zonder artikelcode of barcode vul je eerst aan in <Link to="/externe-databases-2">Externe databases 2</Link>.</p>
       {error ? <p role="alert">{error}</p> : null}
-      {articleId ? <p>Voorstellen voor het gekozen Catalogusartikel. <Link to="/catalogus/synoniemenanalyse">Terug naar Synoniemenanalyse</Link></p> : null}
       <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
         pageSize={10}
         dataTestId="article-synonyms-table"
