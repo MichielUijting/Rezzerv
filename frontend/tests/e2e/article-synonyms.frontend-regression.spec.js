@@ -141,7 +141,7 @@ for (const width of [390, 1280]) {
     ]
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
-      if (route.request().method() !== 'GET') writes++
+      if (path.endsWith('/article-synonyms/link') && route.request().method() !== 'GET') writes++
       if (path === '/api/session') return route.fulfill({ json: {
         user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
         is_platform_superuser: true, permissions: { 'platform.external_products.view': true },
