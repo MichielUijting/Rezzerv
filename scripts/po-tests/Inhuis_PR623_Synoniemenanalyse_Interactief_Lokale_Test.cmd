@@ -6,8 +6,8 @@ rem Based on the proven local PO-test script for PR622; only PR, SHA, version an
 set "ROOT=%USERPROFILE%\Rezzerv_CODEX_WORK"
 if exist "%CD%\start.bat" if exist "%CD%\docker-compose.yml" set "ROOT=%CD%"
 set "BRANCH=codex/synoniemenanalyse-catalogus-overzicht"
-set "VERSION=Rezzerv-MVP-v01.12.333"
-set "EXPECTED=a68f31d5d7b981265e5789d8cd920986294f56a0"
+set "VERSION=Rezzerv-MVP-v01.12.334"
+set "EXPECTED=930b9d084d6b77eec2ce082ccf09f3c53349fa12"
 set "REPORT=%USERPROFILE%\Downloads\Inhuis_PR623_Synoniemenanalyse_Interactief_Resultaat.txt"
 set "STEP=Voorcontrole"
 set "REASON=Onbekende reden"
@@ -179,18 +179,18 @@ if "%RESULT%"=="VEILIG GESTOPT" goto :finish
 echo Open http://localhost:5174 en meld je aan als Superuser of Frontteamlid.
 echo Open Catalogus en klik op Synoniemenanalyse.
 echo.
-echo CONTROLE A: Vier tellers 0, 1, 2 en 3 of meer synoniemen.
-echo CONTROLE B: Een teller aanklikken filtert de artikeltabel.
-echo   Nogmaals dezelfde teller aanklikken toont weer alle artikelen.
-echo CONTROLE C: Klik op een artikelnaam: maximaal 5 kandidaten eronder.
-echo CONTROLE D: Een rondje selecteren schrijft nog niets.
-echo CONTROLE E: Kies uitsluitend een werkelijk gelijkwaardig artikel.
-echo   Klik op Merk kandidaat aan als synoniem om de relatie op te slaan.
-echo CONTROLE F: Tellerwaarden en beide Catalogusartikelen veranderen.
-echo CONTROLE G: Dubbelklikken op een ANDERE kandidaat slaat direct op.
-echo   LET OP: dit wijzigt ECHTE lokale Catalogusrelaties.
-echo CONTROLE H: Herhaal in een smal browservenster (mobiele weergave).
-echo CONTROLE I: Reguliere gebruiker kan dit scherm niet openen.
+echo CONTROLE A: Vier tellers, filters, en direct de hoofdtabel.
+echo CONTROLE B: Geen zwarte toelichtingen boven of tussen de tabellen.
+echo CONTROLE C: Artikelnamen zijn gewone tekst, geen groene knoppen.
+echo CONTROLE D: Een klik op een artikelregel opent nog GEEN kandidaatpaneel.
+echo CONTROLE E: Dubbelklik op de HELE rij opent de kandidaat-tabel eronder.
+echo CONTROLE F: Maximaal vijf kandidaatartikelen, met foto en winkel.
+echo CONTROLE G: Alleen het keuzerondje selecteren schrijft nog niets.
+echo CONTROLE H: Merk kandidaat aan als synoniem bevestigt bewust.
+echo CONTROLE I: Dubbelklik op een ANDERE kandidaat bevestigt direct.
+echo   LET OP: H en I wijzigen ECHTE lokale Catalogusrelaties.
+echo CONTROLE J: Controleer de aangepaste tellers en beide Catalogusartikelen.
+echo CONTROLE K: Test ook mobiel en autorisatie voor gewone gebruikers.
 echo.
 echo Deel het rapport uit Downloads en eventuele schermafbeeldingen.
 
