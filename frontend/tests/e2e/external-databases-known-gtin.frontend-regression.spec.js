@@ -408,7 +408,12 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       // zichtbare rij; zonder selectie is exporteren terecht uitgeschakeld.
       await expect(table.getByRole('checkbox')).toHaveCount(1)
       await expect(table.getByRole('checkbox', { name: 'Selecteer Artikel 22' })).not.toBeChecked()
-      await expect(page.getByRole('button', { name: 'Exporteren', exact: true })).toBeDisabled()
+      // Inhuis policy: Exporteren is desktop-only at 720px and below.
+      // The button remains in the DOM, but must be hidden on mobile.
+      const exportButton = page.locator('button[data-mobile-export-action="true"]')
+      await expect(exportButton).toHaveCount(1)
+      if (width <= 720) await expect(exportButton).toBeHidden()
+      else await expect(exportButton).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Ontkoppelen', exact: true })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
       await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken/ })).toHaveCount(0)
