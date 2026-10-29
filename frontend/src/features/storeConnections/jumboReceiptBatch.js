@@ -84,6 +84,25 @@ export function jumboImportResult(result) {
   throw new Error('Inhuis gaf geen herkenbare Jumbo-importbevestiging.')
 }
 
+export async function stageJumboBatch(payload, stageBatch, buildEnvelope) {
+  // Validate the entire user-confirmed batch before *any* server write.
+  if (!payload?.ok || !Array.isArray(payload.details) || !payload.details.length ||
+      payload.details.length > JUMBO_BATCH_LIMIT) {
+    throw new Error('Er zijn geen bevestigde Jumbo-bonnen voor opslag.')
+  }
+  const envelopes = payload.details.map(detail => buildEnvelope({ ...payload, first_detail: detail }))
+  const ids = envelopes.map(envelope => envelope.external_receipt_id)
+  if (new Set(ids).size !== ids.length) throw new Error('Dubbel Jumbo-bonnummer binnen deze import.')
+  const result = await stageBatch(envelopes)
+  if (result?.received !== envelopes.length || !Array.isArray(result.items) ||
+      result.items.length !== envelopes.length || result.import_completed !== false ||
+      !result.items.every(row => /^[0-9a-f-]{36}$/.test(row?.queue_id || '') &&
+        ['pending', 'processing', 'completed', 'review_required'].includes(row?.status))) {
+    throw new Error('Inhuis heeft de bevestigde Jumbo-bonnen niet aantoonbaar veilig opgeslagen.')
+  }
+  return result.items
+}
+
 export async function importJumboBatch(payload, importOne, buildEnvelope, onProgress = () => {}) {
   if (!payload?.ok || !Array.isArray(payload.details) ||
       payload.details.length > JUMBO_BATCH_LIMIT || !payload.details.length) {

@@ -50,12 +50,12 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(table.locator('tbody tr')).toHaveCount(3)
     const unlinkedCounter = page.getByRole('button', { name: 'Niet gekoppeld: 1' })
     const pendingCounter = page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })
-    const linkedCounter = page.getByRole('button', { name: 'Gekoppeld: 1' })
+    const linkedCounter = page.getByRole('button', { name: 'Gekoppeld: 1', exact: true })
     await expect(unlinkedCounter).toHaveCSS('background-color', 'rgb(255, 217, 168)')
     await expect(pendingCounter).toHaveCSS('background-color', 'rgb(255, 255, 255)')
     await expect(linkedCounter).toHaveCSS('background-color', 'rgb(217, 245, 224)')
 
-    await page.getByRole('button', { name: 'Gekoppeld: 1' }).click()
+    await linkedCounter.click()
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
@@ -79,12 +79,17 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(page.getByRole('textbox')).toHaveCount(1)
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 })
-      const fieldBox = await freeSearch.boundingBox()
-      const buttonBox = await searchButton.boundingBox()
-      expect(fieldBox).not.toBeNull()
-      expect(buttonBox).not.toBeNull()
-      expect(Math.abs(fieldBox.height - buttonBox.height)).toBeLessThanOrEqual(1)
-      expect(Math.abs((fieldBox.y + fieldBox.height) - (buttonBox.y + buttonBox.height))).toBeLessThanOrEqual(1)
+      // A responsive viewport switch may briefly unmount the current layout.
+      // Wait for both controls and keep the original height/alignment contract.
+      await expect(freeSearch).toBeVisible()
+      await expect(searchButton).toBeVisible()
+      await expect.poll(async () => {
+        const fieldBox = await freeSearch.boundingBox()
+        const buttonBox = await searchButton.boundingBox()
+        return Boolean(fieldBox && buttonBox
+          && Math.abs(fieldBox.height - buttonBox.height) <= 1
+          && Math.abs((fieldBox.y + fieldBox.height) - (buttonBox.y + buttonBox.height)) <= 1)
+      }).toBe(true)
     }
     await freeSearch.fill('8718452504435')
     await searchButton.click()
@@ -282,7 +287,16 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await panel.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       expect(searches).toHaveLength(1)
-      expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      // Het OFF-paneel volgt op de gewone tabel en de bulkacties in dezelfde
+      // overzichtscontainer, niet meer als direct volgend sibling-element.
+      const overview = page.locator('.rz-external-receipt-overview')
+      await expect(overview.getByTestId('external-databases-2-table')).toHaveCount(1)
+      await expect(overview.getByTestId('external-databases-2-off-panel')).toHaveCount(1)
+      expect(await overview.evaluate((element) => {
+        const table = element.querySelector('[data-testid="external-databases-2-table"]')
+        const panel = element.querySelector('[data-testid="external-databases-2-off-panel"]')
+        return Boolean(table && panel && (table.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING))
+      })).toBe(true)
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
       if (width <= 720) {
@@ -395,9 +409,19 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(table.locator('tbody tr')).toHaveCount(1)
       await expect(table).toContainText('Artikel 22')
       await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
-      await expect(table.getByRole('checkbox')).toHaveCount(0)
+      // Na zoeken blijft de nieuwe bulkselectie beschikbaar voor de ene
+      // zichtbare rij; zonder selectie is exporteren terecht uitgeschakeld.
+      await expect(table.getByRole('checkbox')).toHaveCount(1)
+      await expect(table.getByRole('checkbox', { name: 'Selecteer Artikel 22' })).not.toBeChecked()
+      // Inhuis policy: Exporteren is desktop-only at 720px and below.
+      // The button remains in the DOM, but must be hidden on mobile.
+      const exportButton = page.locator('button[data-mobile-export-action="true"]')
+      await expect(exportButton).toHaveCount(1)
+      if (width <= 720) await expect(exportButton).toBeHidden()
+      else await expect(exportButton).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Ontkoppelen', exact: true })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken/ })).toHaveCount(0)
       expect(writes).toEqual([])
     })
 

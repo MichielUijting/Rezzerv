@@ -11,6 +11,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from collections.abc import Callable
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -21,6 +22,16 @@ LOGGER = logging.getLogger(__name__)
 AH_AUTO_SYNC_INTERVAL_SECONDS = 15 * 60
 AH_AUTO_SYNC_STARTUP_DELAY_SECONDS = 60
 AH_AUTO_SYNC_LIMIT = 100
+AH_MAINTENANCE_POLL_SECONDS = 5
+
+
+def _imports_allowed(engine: Engine) -> bool:
+    """Read the durable admission state; an absent state must stop scheduling."""
+    with engine.connect() as conn:
+        value = conn.execute(text(
+            "SELECT state FROM maintenance_control WHERE id=1"
+        )).scalar_one_or_none()
+    return value in {"normal", "announced"}
 
 
 def _lock_key(household_id: str) -> int:
@@ -61,10 +72,15 @@ def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> 
     return True
 
 
-def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]:
+def sync_due_ah_households(
+    engine: Engine, receipt_root: Path, stop_requested: Callable[[], bool] | None = None,
+) -> dict[str, int]:
     """One safe iteration; PostgreSQL session locks protect multiple API workers."""
     result = {"due": 0, "completed": 0, "failed": 0, "locked": 0}
     if engine.dialect.name != "postgresql":
+        return result
+
+    if not _imports_allowed(engine):
         return result
 
     with engine.connect() as conn:
@@ -77,6 +93,10 @@ def sync_due_ah_households(engine: Engine, receipt_root: Path) -> dict[str, int]
 
     now = datetime.now(timezone.utc)
     for row in rows:
+        # Re-check between households; a running receipt import completes
+        # safely, while subsequent households do not start during draining.
+        if (stop_requested is not None and stop_requested()) or not _imports_allowed(engine):
+            break
         household_id = str(row.get("household_id") or "").strip()
         if not household_id or not _due(row.get("last_sync_at"), now):
             continue
@@ -126,13 +146,22 @@ async def run_ah_background_sync(engine: Engine, receipt_root: Path, stop: async
     except asyncio.TimeoutError:
         pass
 
+    was_paused = False
+    next_run = 0.0
+    loop = asyncio.get_running_loop()
     while not stop.is_set():
         try:
-            await asyncio.to_thread(sync_due_ah_households, engine, receipt_root)
+            allowed = await asyncio.to_thread(_imports_allowed, engine)
+            if not allowed:
+                was_paused = True
+            elif was_paused or loop.time() >= next_run:
+                await asyncio.to_thread(sync_due_ah_households, engine, receipt_root, stop.is_set)
+                was_paused = False
+                next_run = loop.time() + AH_AUTO_SYNC_INTERVAL_SECONDS
         except Exception:
             LOGGER.warning("AH background sync iteration failed")
         try:
-            await asyncio.wait_for(stop.wait(), timeout=AH_AUTO_SYNC_INTERVAL_SECONDS)
+            await asyncio.wait_for(stop.wait(), timeout=AH_MAINTENANCE_POLL_SECONDS)
         except asyncio.TimeoutError:
             pass
 

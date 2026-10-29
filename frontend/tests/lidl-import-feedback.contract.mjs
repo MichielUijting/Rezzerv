@@ -3,24 +3,23 @@ import fs from 'node:fs'
 
 const source = fs.readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 
-// The Lidl result must be classified from backend ingestion fields, not from HTTP success or browser count.
-assert.match(source, /let lidlCounts = \{ new: 0, known: 0, refreshed: 0, failed: 0 \}/)
-assert.match(source, /const result = await fetchJson\('\/api\/receipts\/retailers\/import'/)
-assert.match(source, /result\?\.refreshed_existing_receipt/)
-assert.match(source, /result\?\.duplicate === true/)
-assert.match(source, /result\?\.duplicate === false && result\?\.raw_receipt_id/)
-assert.match(source, /lidlCounts\.known \+= 1/)
-assert.match(source, /lidlCounts\.new \+= 1/)
-assert.match(source, /lidlCounts\.refreshed \+= 1/)
+// Transport ACK means durable receipt storage, not Kassa processing.
+assert.match(source, /let lidlCounts = \{ queued: 0, failed: 0 \}/)
+assert.match(source, /const result = await fetchJson\('\/api\/receipts\/retailers\/import-queue'/)
+assert.match(source, /result\?\.received !== 1/)
+assert.match(source, /result\?\.import_completed !== false/)
+assert.match(source, /!result\.items\[0\]\?\.queue_id/)
+assert.match(source, /lidlCounts\.queued \+= 1/)
 assert.match(source, /lidlCounts\.failed \+= 1/)
 assert.doesNotMatch(source, /importedCount \+= 1/)
 assert.doesNotMatch(source, /Number\(data\.count \|\| importedCount/)
 
-// Each browser import session starts with clean counters; the UI must not claim an unknown outcome is new.
-assert.match(source, /data\.type === 'inhuis:lidl-handshake'[\s\S]*?lidlCounts = \{ new: 0, known: 0, refreshed: 0, failed: 0 \}/)
+// Each browser session starts clean; unknown outcome is never acknowledged as received.
+assert.match(source, /data\.type === 'inhuis:lidl-handshake'[\s\S]*?lidlCounts = \{ queued: 0, failed: 0 \}/)
 assert.match(source, /Inhuis gaf geen herkenbaar importresultaat terug/)
-assert.match(source, /al bekend, '[\s\S]*?lidlCounts\.refreshed/)
-assert.match(source, /Lidl-synchronisatie afgerond/)
+assert.match(source, /lidlCounts\.queued === 0/)
+assert.match(source, /Lidl-bonnen ontvangen/)
+assert.match(source, /datum Laatst bijgewerkt wordt niet voortijdig doorgeschoven/)
 assert.match(source, /Lidl-synchronisatie deels gelukt/)
 
 // Scoped feedback cleanup mirrors AH, must not dismiss unrelated app notifications.
