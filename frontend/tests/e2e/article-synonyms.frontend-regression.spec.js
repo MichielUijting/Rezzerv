@@ -127,53 +127,97 @@ for (const width of [390, 1280]) {
 
 
 for (const width of [390, 1280]) {
-  test('Synoniemenanalyse: winkelmatrix en artikelbeoordeling op ' + width + 'px', async ({ page }) => {
+  test('Synoniemenanalyse: vier tellerfilters en beide opslagroutes op ' + width + 'px', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    let writes = 0
-    const products = [
-      { id: 'ah', name: 'Halfvolle melk AH', store: 'Albert Heijn',
-        group_key: 'shopify:Melk', group_label: 'Melk', brand: 'AH', variant: '',
-        image_url: '', linked_stores: ['Jumbo'],
-        pending: [{ id: 'lid', name: 'Halfvolle melk Lidl', store_name: 'Lidl', score: .91 }], status: 'review' },
-      { id: 'jumbo', name: 'Halfvolle melk Jumbo', store: 'Jumbo',
-        group_key: 'shopify:Melk', group_label: 'Melk', brand: 'Jumbo', variant: '',
-        image_url: '', linked_stores: ['Albert Heijn'], pending: [], status: 'linked' },
+    const links = new Set()
+    const posts = []
+    const definitions = [
+      ['ah', 'Halfvolle melk AH', 'Albert Heijn'],
+      ['jumbo', 'Halfvolle melk Jumbo', 'Jumbo'],
+      ['lidl', 'Halfvolle melk Lidl', 'Lidl'],
+      ['plus', 'Halfvolle melk PLUS', 'PLUS'],
+      ['aldi', 'Halfvolle melk Aldi', 'Aldi'],
+      ['picnic', 'Halfvolle melk Picnic', 'Picnic'],
+      ['dirk', 'Halfvolle melk Dirk', 'Dirk'],
+      ['extra', 'Halfvolle melk extra', 'Hoogvliet'],
     ]
+    const products = definitions.map(([id, name, store]) => ({
+      id, name, store, store_name: store, group_key: 'shopify:Melk', group_label: 'Melk',
+      brand: '', variant: '', retailer_code: id,
+      image_url: '', size_value: '1', size_unit: 'l',
+    }))
+    const candidates = products.slice(1).map((other) => ({
+      id: 'pair-ah-' + other.id, fingerprint: 'a'.repeat(64),
+      left: products[0], right: other, warning: 'Controleer variant, bereiding en inhoud.',
+    }))
+    const linkKey = (a, b) => [a, b].sort().join('|')
+    links.add(linkKey('ah', 'jumbo'))
+    function analysis() {
+      const items = products.map((p) => {
+        const peers = products.filter((q) => links.has(linkKey(p.id, q.id)) && q.id !== p.id)
+        return { ...p, synonym_count: peers.length,
+          synonym_names: peers.map((q) => q.name), linked_stores: peers.map((q) => q.store),
+          pending: [], status: peers.length ? 'linked' : 'no_candidate' }
+      })
+      return { summary: {
+        synonym_buckets: {
+          '0': items.filter((p) => p.synonym_count === 0).length,
+          '1': items.filter((p) => p.synonym_count === 1).length,
+          '2': items.filter((p) => p.synonym_count === 2).length,
+          '3+': items.filter((p) => p.synonym_count >= 3).length,
+        },
+        eligible_articles: items.length,
+      }, items }
+    }
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
-      if (path.endsWith('/article-synonyms/link') && route.request().method() !== 'GET') writes++
       if (path === '/api/session') return route.fulfill({ json: {
         user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
-        is_platform_superuser: true, permissions: { 'platform.external_products.view': true },
+        is_platform_superuser: true, permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
       } })
-      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
-        summary: { confirmed_pairs: 1, candidate_pairs: 1, no_candidate_articles: 0, insufficient_articles: 0, eligible_articles: 2, classified_articles: 2 },
-        groups: [
-          { id: 'shopify:Melk|Albert Heijn', group_key: 'shopify:Melk', group_label: 'Melk', store: 'Albert Heijn', articles: 1, linked: 1, review: 1 },
-          { id: 'shopify:Melk|Jumbo', group_key: 'shopify:Melk', group_label: 'Melk', store: 'Jumbo', articles: 1, linked: 1, review: 0 },
-        ],
-        items: products,
-      } })
-      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [{
-        id: 'proposal-ah-lidl', score: .91, fingerprint: 'a'.repeat(64),
-        left: { id: 'ah', name: 'Halfvolle melk AH', store_name: 'Albert Heijn', image_url: '' },
-        right: { id: 'lid', name: 'Halfvolle melk Lidl', store_name: 'Lidl', image_url: '' },
-      }] } })
+      if (path.endsWith('/article-synonyms/link')) {
+        const body = route.request().postDataJSON()
+        posts.push(body)
+        for (const item of body.selections) links.add(linkKey(item.left_product_id, item.right_product_id))
+        return route.fulfill({ json: { linked: body.selections.length, already_linked: 0 } })
+      }
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: analysis() })
+      if (path.endsWith('/article-synonyms/analysis/ah/candidates')) {
+        return route.fulfill({ json: { items: candidates.filter((p) => !links.has(linkKey(p.left.id, p.right.id))).slice(0, 5), limit: 5 } })
+      }
       if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
       if (path === '/api/features') return route.fulfill({ json: { features: {} } })
       if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
       return route.fulfill({ json: {} })
     })
     await page.goto('/catalogus/synoniemenanalyse')
-    await expect(page.getByTestId('synonym-analysis-groups')).toContainText('Albert Heijn')
-    await expect(page.getByTestId('synonym-analysis-page')).toContainText('Open kandidaatparen')
-    await expect(page.getByTestId('synonym-analysis-page')).toContainText('tekstovereenkomst')
-    await page.getByTestId('synonym-analysis-groups').getByRole('button', { name: 'Artikelen' }).first().click()
-    await expect(page.getByTestId('synonym-analysis-items')).toContainText('Halfvolle melk AH')
-    await page.getByTestId('synonym-analysis-items').getByRole('button', { name: 'Beoordelen' }).click()
-    await expect(page).toHaveURL(/\/artikelsynoniemen\?artikel=ah$/)
-    await expect(page.getByTestId('article-synonyms-table').locator('tbody tr')).toHaveCount(1)
-    expect(writes).toBe(0)
+    const main = page.getByTestId('synonym-analysis-items')
+    await expect(main).toContainText('Halfvolle melk AH')
+    await expect(page.getByTestId('synonym-count-0')).toContainText('6')
+    await expect(page.getByTestId('synonym-count-1')).toContainText('2')
+    await page.getByTestId('synonym-count-0').click()
+    await expect(page.getByTestId('synonym-count-0')).toHaveAttribute('aria-pressed', 'true')
+    await expect(main).not.toContainText('Halfvolle melk AH')
+    await page.getByTestId('synonym-count-0').click()
+    await expect(main).toContainText('Halfvolle melk AH')
+    await main.getByTestId('synonym-analysis-open-ah').click()
+    const table = page.getByTestId('synonym-analysis-candidate-table')
+    await expect(table.locator('tbody tr')).toHaveCount(5)
+    await expect(page.getByTestId('synonym-analysis-confirm')).toBeDisabled()
+    await table.getByRole('radio', { name: 'Selecteer Halfvolle melk Lidl als synoniem' }).check()
+    await expect(page.getByTestId('synonym-analysis-confirm')).toBeEnabled()
+    await page.getByTestId('synonym-analysis-confirm').click()
+    await expect(page.getByTestId('synonym-count-0')).toContainText('5')
+    await expect(page.getByTestId('synonym-count-2')).toContainText('1')
+    await expect(main).toContainText('Halfvolle melk Lidl')
+    await expect(table).not.toContainText('Halfvolle melk Lidl')
+    const next = table.getByTestId('synonym-candidate-plus')
+    await expect(next).toBeVisible()
+    await next.dblclick()
+    await expect(page.getByTestId('synonym-count-0')).toContainText('4')
+    await expect(page.getByTestId('synonym-count-3plus')).toContainText('1')
+    expect(posts).toHaveLength(2)
+    expect(posts.map((p) => p.selections[0].right_product_id)).toEqual(['lidl', 'plus'])
   })
 }
 

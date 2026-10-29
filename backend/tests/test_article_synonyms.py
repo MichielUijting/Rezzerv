@@ -245,6 +245,7 @@ class ApiTest(unittest.TestCase):
             with patch.object(routes, 'require_platform_permission_from_session', side_effect=HTTPException(status)):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis').status_code, status)
+                self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/candidates').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
@@ -288,6 +289,42 @@ class SynonymAnalysisContractTest(unittest.TestCase):
         self.assertEqual(result['summary']['insufficient_articles'], 1)
         self.assertEqual(result['summary']['no_candidate_articles'], 1)
 
+
+    def test_buckets_0_1_2_3_plus_are_direct_product_counts(self):
+        products = [
+            product('a', 'Halfvolle melk', retailer_code='ah'),
+            product('b', 'Halfvolle melk', retailer_code='jumbo'),
+            product('c', 'Halfvolle melk', retailer_code='lidl'),
+            product('d', 'Halfvolle melk', retailer_code='plus'),
+            product('e', 'Halfvolle melk', retailer_code='aldi'),
+            product('f', 'Halfvolle melk', retailer_code='picnic'),
+        ]
+        analysis = service.build_synonym_analysis(
+            products, {('a', 'b'), ('a', 'c'), ('a', 'd'), ('c', 'd')}, [])
+        self.assertEqual(analysis['summary']['synonym_buckets'], {'0': 2, '1': 1, '2': 2, '3+': 1})
+        rows = {p['id']: p for p in analysis['items']}
+        self.assertEqual(rows['a']['synonym_count'], 3)
+        self.assertEqual(rows['b']['synonym_count'], 1)
+        self.assertEqual(rows['c']['synonym_count'], 2)
+        self.assertEqual(rows['e']['synonym_count'], 0)
+        self.assertEqual(rows['a']['synonym_names'], ['Halfvolle melk'] * 3)
+        # One new direct pair updates BOTH participants, without transitivity.
+        updated = service.build_synonym_analysis(
+            products, {('a', 'b'), ('a', 'c'), ('a', 'd'), ('c', 'd'), ('b', 'e')}, [])
+        self.assertEqual(updated['summary']['synonym_buckets'], {'0': 1, '1': 2, '2': 2, '3+': 1})
+        self.assertEqual({p['id']: p['synonym_count'] for p in updated['items']}['e'], 1)
+
+    def test_candidate_list_maximum_five_and_only_existing_valid_pairs(self):
+        products = [product('a', 'Halfvolle melk', retailer_code='ah')]
+        products.extend(product(str(i), 'Halfvolle melk', retailer_code='jumbo') for i in range(10))
+        pairs = service.candidate_pairs_for_product(products, set(), 'a')
+        self.assertIsNotNone(pairs)
+        self.assertLessEqual(len(pairs), 5)
+        self.assertTrue(all('a' in (p['left']['id'], p['right']['id']) for p in pairs))
+        self.assertEqual(pairs, service.candidate_pairs_for_product(products, set(), 'a'))
+        self.assertEqual(service.candidate_pairs_for_product(products, set(), 'unknown'), None)
+        self.assertEqual(service.candidate_pairs_for_product(products, {('a', '0')}, 'a'),
+                         [pair for pair in pairs if (pair['left']['id'], pair['right']['id']) != ('0', 'a')][:5])
 
 if __name__ == '__main__':
     unittest.main()

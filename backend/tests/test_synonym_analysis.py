@@ -23,6 +23,9 @@ class AnalysisTest(unittest.TestCase):
             {'a': 'Melk', 'b': 'Melk', 'c': 'Melk', 'd': 'Melk'})
         rows = {row['id']: row for row in analysis['items']}
         self.assertEqual(analysis['summary']['confirmed_pairs'], 3)
+        self.assertEqual(analysis['summary']['synonym_buckets'], {'0': 1, '1': 0, '2': 3, '3+': 0})
+        self.assertEqual(rows['a']['synonym_count'], 2)
+        self.assertEqual(rows['d']['synonym_count'], 0)
         self.assertEqual(analysis['summary']['candidate_pairs'], 1)
         self.assertEqual(rows['a']['linked_stores'], ['Jumbo', 'Lidl'])
         self.assertEqual(rows['a']['status'], 'review')
@@ -36,6 +39,7 @@ class AnalysisTest(unittest.TestCase):
         analysis = build_synonym_analysis(products, {('a', 'b')}, [])
         self.assertEqual(analysis['summary']['confirmed_pairs'], 0)
         self.assertEqual(analysis['summary']['insufficient_articles'], 1)
+        self.assertEqual(analysis['summary']['synonym_buckets'], {'0': 2, '1': 0, '2': 0, '3+': 0})
         self.assertEqual(analysis['summary']['no_candidate_articles'], 1)
         self.assertEqual(analysis['items'][0]['store'], 'Winkel onbekend')
 
