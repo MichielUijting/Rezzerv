@@ -1407,3 +1407,18 @@ Dubbelklik op een kandidaat bevestigt direct; een enkele selectie gevolgd door
 gebeurt, verandert de Catalogus niet. Succes ververst de tellers, het artikel
 en de beide directe gekoppelde Catalogusartikelen; errors blijven zichtbaar.
 De actie is uitsluitend beschikbaar voor Superuser en Frontteam, ook op mobiel.
+
+
+### Synoniemenanalyse: compacte tabel en dubbelklik — PO, 29 oktober 2026
+
+De artikelnaam in de hoofdtabel is **gewone tekst**, nooit een knop of een
+gekleurde actietegel. De volledige tabelrij opent het kandidaatpaneel
+**uitsluitend na dubbelklik**, niet na één klik; toetsenbordbediening blijft
+mogelijk met Enter op een gefocuste rij. Dit gebruikt de bestaande gedeelde
+DataTable en verandert geen overige tabellen. Op de hoofdpagina ontbreken de
+redundante zwarte toelichtingsalinea's en de dubbele paginatitel; tellers,
+filters en hoofdtabel staan direct onder elkaar. Foutmeldingen en laadstatus
+blijven beschikbaar. Het paneel onder de tabel krijgt uitsluitend een korte
+titel met artikelnaam, de kandidaat-DataTable en de benodigde selectie-/koppel-
+acties; verklarende zwarte alinea's vervallen. De bevestigingsknop blijft
+**onder** de kandidaat-tabel aanwezig.

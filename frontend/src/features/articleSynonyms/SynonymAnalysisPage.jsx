@@ -140,12 +140,7 @@ export default function SynonymAnalysisPage() {
   }
 
   const mainColumns = [
-    { key: 'name', label: 'Artikel', width: 320, sortable: true, filterable: true, renderCell: (item) =>
-      <div className="rz-synonym-analysis-product">
-        <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
-        <button type="button" className="rz-button-secondary" onClick={() => setSelectedId(item.id)}
-          aria-pressed={selectedId === item.id} data-testid={`synonym-analysis-open-${item.id}`}>{item.name}</button>
-      </div> },
+    { key: 'name', label: 'Artikel', width: 320, sortable: true, filterable: true },
     { key: 'store', label: 'Winkel', width: 175, sortable: true, filterable: true },
     { key: 'group_label', label: 'Artikelsoort', width: 245, sortable: true, filterable: true },
     { key: 'synonym_count', label: 'Synoniemen', width: 115, sortable: true, align: 'right' },
@@ -163,9 +158,7 @@ export default function SynonymAnalysisPage() {
   return <AppShell title="Synoniemenanalyse" showExit={false}>
     <ScreenCard fullWidth>
       <div className="rz-synonym-analysis" data-testid="synonym-analysis-page">
-        <h2>Synoniemenanalyse</h2>
-        <p>Bekijk hoeveel bevestigde synoniemen ieder artikel bij andere winkels heeft. Klik op een teller om de artikelen te filteren; klik nogmaals om alle artikelen te zien.</p>
-        {loading ? <p role="status">Synoniemenanalyse laden…</p> : null}
+         {loading ? <p role="status">Synoniemenanalyse laden…</p> : null}
         {error ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{error}</p> : null}
         {!loading && !error && data ? <>
           <div className="rz-synonym-analysis-summary" aria-label="Filter op aantal synoniemen">
@@ -177,24 +170,41 @@ export default function SynonymAnalysisPage() {
                 <span>{label}</span>
               </button>)}
           </div>
-          <p className="rz-synonym-analysis-note">Een synoniem is één rechtstreeks bevestigd ander artikel, geen automatisch afgeleide keten. Alleen actieve artikelen met een barcode of bevestigde winkelartikelcode worden geanalyseerd ({data.summary.eligible_articles} artikelen).</p>
           <div className="rz-synonym-analysis-filters">
             <label>Artikelsoort<Select value={category} onChange={setCategory} options={categoryOptions} ariaLabel="Filter artikelsoort" /></label>
             <label>Winkel<Select value={store} onChange={setStore} options={storeOptions} ariaLabel="Filter winkel" /></label>
             <label>Zoek artikel<input className="rz-input" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Artikel, merk of winkel" /></label>
           </div>
-          <h3>Artikelen ({visibleProducts.length})</h3>
           <DataTable columns={mainColumns} data={visibleProducts} pageSize={10}
-            dataTestId="synonym-analysis-items" emptyMessage="Geen artikelen voor dit filter." />
+            dataTestId="synonym-analysis-items" emptyMessage="Geen artikelen voor dit filter."
+            renderRow={(item) => (
+              <tr key={item.id} tabIndex={0} className="rz-synonym-analysis-main-row"
+                data-testid={`synonym-analysis-open-${item.id}`}
+                aria-selected={selectedId === item.id}
+                aria-label={`Kandidaten voor ${item.name} openen`}
+                title="Dubbelklik om kandidaten te bekijken"
+                onDoubleClick={() => setSelectedId(item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    setSelectedId(item.id)
+                  }
+                }}>
+                <td><div className="rz-synonym-analysis-product">
+                  <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
+                  <span>{item.name}</span>
+                </div></td>
+                <td>{item.store}</td>
+                <td>{item.group_label}</td>
+                <td className="rz-num">{item.synonym_count}</td>
+                <td>{item.synonym_names?.length ? item.synonym_names.join(', ') : 'Nog geen synoniemen'}</td>
+              </tr>
+            )} />
           {selectedProduct ? <section className="rz-synonym-analysis-details" data-testid="synonym-analysis-candidates">
             <div className="rz-synonym-analysis-details-heading">
-              <h3>Maximaal 5 kandidaatartikelen voor {selectedProduct.name}</h3>
+              <h3>Kandidaten voor {selectedProduct.name}</h3>
               <Button type="button" variant="secondary" onClick={() => setSelectedId('')}>Sluiten</Button>
             </div>
-            <p>Geselecteerd: {productName(selectedProduct)} · {selectedProduct.store}
-              {productSize(selectedProduct) ? ` · ${productSize(selectedProduct)}` : ''}
-              . Al gekoppeld met: {selectedProduct.synonym_names?.length ? selectedProduct.synonym_names.join(', ') : 'geen artikelen'}.</p>
-            <p className="rz-synonym-analysis-note">Controleer of het werkelijk hetzelfde product is (soort, inhoud, variant en samenstelling). Dubbelklik op een kandidaat om direct te koppelen, of selecteer één kandidaat en gebruik de knop onder de tabel. Een voorstel is geen bewijs van gelijkwaardigheid.</p>
             {candidateError ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{candidateError}</p> : null}
             {candidateLoading ? <p role="status">Kandidaten zoeken…</p> : null}
             <DataTable columns={candidateColumns} data={candidates} pageSize={5}
@@ -223,7 +233,7 @@ export default function SynonymAnalysisPage() {
                 </tr>
               }} />
             <div className="rz-synonym-analysis-actions">
-              <span>{candidateId ? '1 kandidaat geselecteerd' : 'Geen kandidaat geselecteerd'}</span>
+              <span aria-live="polite">{candidateId ? '1 kandidaat geselecteerd' : ''}</span>
               <Button type="button" disabled={!candidateId || saving || candidateLoading}
                 onClick={() => saveCandidate(candidates.find((pair) => pair.id === candidateId))}
                 data-testid="synonym-analysis-confirm">

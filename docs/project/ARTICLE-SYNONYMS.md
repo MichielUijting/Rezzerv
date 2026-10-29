@@ -142,3 +142,14 @@ het selectierondje + **Merk kandidaat aan als synoniem**. Een enkele selectie
 schrijft niets. Succes ververst de server-afgeleide lijst en tellers;
 beide Catalogusproducten tonen bij nieuwe lezing de directe koppeling.
 Geen update aan barcode, productidentiteit, huishouden, voorraad of kassabon.
+
+
+### PO-verfijning: hoofdregel opent pas op dubbelklik
+
+Het kandidaatpaneel wordt pas door een **dubbelklik op de hele hoofdartikelrij**
+geopend. Een enkele klik verandert de selectie niet en toont geen kandidaatpaneel.
+Artikelnaam en foto staan in de bestaande DataTable zonder aparte artikelknop.
+Ook via Enter op een gefocuste rij is het paneel toegankelijk. Er zijn geen
+wijzigingen aan de dubbele bevestigingsroute binnen de kandidaat-tabel of aan
+opslag, autorisatie en Catalogusprojectie. Overbodige losse toelichtingen rondom
+de tabellen zijn uit het werkscherm verwijderd.
