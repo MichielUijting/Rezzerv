@@ -79,12 +79,17 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(page.getByRole('textbox')).toHaveCount(1)
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 })
-      const fieldBox = await freeSearch.boundingBox()
-      const buttonBox = await searchButton.boundingBox()
-      expect(fieldBox).not.toBeNull()
-      expect(buttonBox).not.toBeNull()
-      expect(Math.abs(fieldBox.height - buttonBox.height)).toBeLessThanOrEqual(1)
-      expect(Math.abs((fieldBox.y + fieldBox.height) - (buttonBox.y + buttonBox.height))).toBeLessThanOrEqual(1)
+      // A responsive viewport switch may briefly unmount the current layout.
+      // Wait for both controls and keep the original height/alignment contract.
+      await expect(freeSearch).toBeVisible()
+      await expect(searchButton).toBeVisible()
+      await expect.poll(async () => {
+        const fieldBox = await freeSearch.boundingBox()
+        const buttonBox = await searchButton.boundingBox()
+        return Boolean(fieldBox && buttonBox
+          && Math.abs(fieldBox.height - buttonBox.height) <= 1
+          && Math.abs((fieldBox.y + fieldBox.height) - (buttonBox.y + buttonBox.height)) <= 1)
+      }).toBe(true)
     }
     await freeSearch.fill('8718452504435')
     await searchButton.click()
