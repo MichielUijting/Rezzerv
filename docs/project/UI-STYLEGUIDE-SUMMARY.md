@@ -1356,4 +1356,3 @@ gebruiker. Na bevestigen verdwijnt het artikel uit de standaardselectie met
 ontbrekende classificaties, maar is via wissen van het filter of in de
 Catalogus weer terug te vinden. Sortering en zoeken behandelen de status
 op beide schermen identiek.
-
