@@ -202,7 +202,7 @@ for (const width of [390, 1280]) {
     await expect(main).toContainText('Halfvolle melk AH')
     const articleRow = main.getByTestId('synonym-analysis-open-ah')
     await expect(articleRow.locator('button')).toHaveCount(0)
-    await expect(articleRow.locator('span')).toContainText('Halfvolle melk AH')
+    await expect(articleRow.locator('td').first().locator('span').last()).toHaveText('Halfvolle melk AH')
     await expect(page.getByText('Bekijk hoeveel bevestigde synoniemen')).toHaveCount(0)
     await expect(page.getByText('Een synoniem is één rechtstreeks bevestigd')).toHaveCount(0)
     await expect(page.getByTestId('synonym-analysis-candidates')).toHaveCount(0)
