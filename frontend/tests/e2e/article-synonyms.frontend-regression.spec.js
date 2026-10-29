@@ -124,3 +124,72 @@ for (const width of [390, 1280]) {
     }
   })
 }
+
+
+for (const width of [390, 1280]) {
+  test('Synoniemenanalyse: winkelmatrix en artikelbeoordeling op ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let writes = 0
+    const products = [
+      { id: 'ah', name: 'Halfvolle melk AH', store: 'Albert Heijn',
+        group_key: 'shopify:Melk', group_label: 'Melk', brand: 'AH', variant: '',
+        image_url: '', linked_stores: ['Jumbo'],
+        pending: [{ id: 'lid', name: 'Halfvolle melk Lidl', store_name: 'Lidl', score: .91 }], status: 'review' },
+      { id: 'jumbo', name: 'Halfvolle melk Jumbo', store: 'Jumbo',
+        group_key: 'shopify:Melk', group_label: 'Melk', brand: 'Jumbo', variant: '',
+        image_url: '', linked_stores: ['Albert Heijn'], pending: [], status: 'linked' },
+    ]
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (route.request().method() !== 'GET') writes++
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
+        is_platform_superuser: true, permissions: { 'platform.external_products.view': true },
+      } })
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
+        summary: { confirmed_pairs: 1, candidate_pairs: 1, no_candidate_articles: 0, insufficient_articles: 0, eligible_articles: 2, classified_articles: 2 },
+        groups: [
+          { id: 'shopify:Melk|Albert Heijn', group_key: 'shopify:Melk', group_label: 'Melk', store: 'Albert Heijn', articles: 1, linked: 1, review: 1 },
+          { id: 'shopify:Melk|Jumbo', group_key: 'shopify:Melk', group_label: 'Melk', store: 'Jumbo', articles: 1, linked: 1, review: 0 },
+        ],
+        items: products,
+      } })
+      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [{
+        id: 'proposal-ah-lidl', score: .91, fingerprint: 'a'.repeat(64),
+        left: { id: 'ah', name: 'Halfvolle melk AH', store_name: 'Albert Heijn', image_url: '' },
+        right: { id: 'lid', name: 'Halfvolle melk Lidl', store_name: 'Lidl', image_url: '' },
+      }] } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/catalogus/synoniemenanalyse')
+    await expect(page.getByTestId('synonym-analysis-groups')).toContainText('Albert Heijn')
+    await expect(page.getByTestId('synonym-analysis-page')).toContainText('Open kandidaatparen')
+    await expect(page.getByTestId('synonym-analysis-page')).toContainText('tekstovereenkomst')
+    await page.getByTestId('synonym-analysis-groups').getByRole('button', { name: 'Artikelen' }).first().click()
+    await expect(page.getByTestId('synonym-analysis-items')).toContainText('Halfvolle melk AH')
+    await page.getByTestId('synonym-analysis-items').getByRole('button', { name: 'Beoordelen' }).click()
+    await expect(page).toHaveURL(/\/artikelsynoniemen\?artikel=ah$/)
+    await expect(page.getByTestId('article-synonyms-table').locator('tbody tr')).toHaveCount(1)
+    expect(writes).toBe(0)
+  })
+}
+
+test('Synoniemenanalyse is beschermd tegen reguliere gebruikers', async ({ page }) => {
+  let reads = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/article-synonyms/analysis')) reads++
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'regular', active_household_id: 'h', context_type: 'regular',
+      role: 'admin', permissions: {},
+    } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/catalogus/synoniemenanalyse')
+  await expect(page).toHaveURL(/\/home$/)
+  expect(reads).toBe(0)
+})
