@@ -411,3 +411,93 @@
   background: inherit;
 }
 
+
+
+/* Artikelclassificaties: table grid, visible frame, pagination and actions
+   all use exactly the same available width. Other tables keep their defaults. */
+.rz-article-classification-layout {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rz-article-classification-layout .rz-data-table-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+.rz-article-classification-layout .rz-classification-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  scrollbar-gutter: auto;
+  padding-bottom: 0;
+}
+
+.rz-article-classification-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
+}
+
+/* Proposal rows stay compact, while the full hierarchy opens in the
+   existing app feedback dialog without truncation or auto-dismiss. */
+.rz-classification-proposal-trigger {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-ui-primary);
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rz-classification-proposal-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rz-classification-proposal-trigger:focus-visible {
+  outline: 2px solid var(--color-ui-primary);
+  outline-offset: 2px;
+}
+
+/* The general info feedback variant has no background by default.
+   This specific, potentially long OFF category must be fully opaque. */
+.rz-inline-feedback[data-testid='article-classification-proposal-detail'] {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 2px solid var(--color-ui-primary);
+  border-radius: 12px;
+  padding: 24px;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rz-inline-feedback[data-testid='article-classification-proposal-detail'] > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rz-inline-feedback[data-testid='article-classification-proposal-detail'] > div:first-child > div:last-child {
+  white-space: pre-line;
+}

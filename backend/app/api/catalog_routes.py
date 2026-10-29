@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
+from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
@@ -23,6 +24,7 @@ from app.services.session_request_context import (
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 router.include_router(catalog_gpc_router)
+router.include_router(shopify_review_router)
 
 CATALOG_IMAGE_UPDATE_PERMISSION = "platform.catalog.update"
 CATALOG_IMAGE_MAX_BYTES = 350_000
@@ -377,6 +379,24 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         joins.append(linked_store_join)
     select_parts.append(f"{linked_store_count} AS linked_store_count")
 
+    # Bevestigde artikelclassificaties zijn onafhankelijk van GS1/GPC.
+    article_classification = "NULL"
+    if "global_product_shopify_classifications" in tables:
+        joins.append("""
+            LEFT JOIN global_product_shopify_classifications catalog_classification
+              ON catalog_classification.global_product_id = gp.id
+        """)
+        article_classification = (
+            "CASE WHEN catalog_classification.is_active THEN "
+            "catalog_classification.shopify_path ELSE NULL END"
+        )
+    # The value shown to users must be the value returned for filtering,
+    # sorting and the central Catalogus projection as well.
+    visible_article_classification = (
+        f"COALESCE({article_classification}, 'Niet geclassificeerd')"
+    )
+    select_parts.append(f"{visible_article_classification} AS article_classification")
+
     if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
         joins.append("""
             LEFT JOIN (
@@ -406,6 +426,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "source": source_expression,
         "household_article_count": household_count_expression,
         "linked_store_count": linked_store_count,
+        "article_classification": visible_article_classification,
         "catalog_visible": alias_visibility_expression,
     }
     return select_parts, joins, expressions
@@ -426,6 +447,7 @@ def _catalog_where(
     source: str,
     household_article_count: str,
     linked_store_count: str,
+    article_classification: str,
 ) -> tuple[str, dict[str, Any]]:
     conditions: list[str] = [f"({expressions['catalog_visible']})"]
     params: dict[str, Any] = {}
@@ -440,6 +462,7 @@ def _catalog_where(
         "gpc_class_name": gpc_class,
         "gpc_family_name": gpc_family,
         "source": source,
+        "article_classification": article_classification,
     }
     for key, raw_value in filters.items():
         value = (raw_value if isinstance(raw_value, str) else "").strip().lower()
@@ -455,7 +478,7 @@ def _catalog_where(
             "product_type", "gpc_brick_code", "gpc_brick_name",
             "gpc_class_code", "gpc_class_name", "gpc_family_code",
             "gpc_family_name", "source", "household_article_count",
-            "linked_store_count",
+            "linked_store_count", "article_classification",
         )
         conditions.append("(" + " OR ".join(
             f"LOWER(CAST({expressions[key]} AS TEXT)) LIKE :search"
@@ -521,6 +544,7 @@ def list_catalog(
     source: str = Query(default="", max_length=200),
     household_article_count: str = Query(default="", max_length=50),
     linked_store_count: str = Query(default="", max_length=50),
+    article_classification: str = Query(default="", max_length=200),
     sort_by: str = Query(default="name", max_length=50),
     sort_direction: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=10, ge=1, le=2000),
@@ -550,6 +574,7 @@ def list_catalog(
         source,
         household_article_count,
         linked_store_count,
+        article_classification,
     )
     normalized_sort_by = sort_by if isinstance(sort_by, str) else "name"
     normalized_sort_direction = sort_direction if isinstance(sort_direction, str) else "asc"
@@ -557,7 +582,7 @@ def list_catalog(
     normalized_offset = offset if isinstance(offset, int) else 0
     order_expression = expressions.get(normalized_sort_by, expressions["name"])
     direction = "DESC" if normalized_sort_direction.lower() == "desc" else "ASC"
-    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"}:
+    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"} or normalized_sort_by == "article_classification":
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"

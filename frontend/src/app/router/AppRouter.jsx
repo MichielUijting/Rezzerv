@@ -48,6 +48,7 @@ import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.js
 import CatalogResponsive from '../../features/catalog/CatalogResponsive.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
+import ShopifyReviewPage from '../../features/catalog/ShopifyReviewPage.jsx'
 import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
 import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
 import ShoppingResponsive from '../../features/shopping/ShoppingResponsive.jsx'
@@ -199,6 +200,8 @@ const router = createBrowserRouter([
   { path: '/externe-databases-2', element: <ProtectedFrontteam><ExternalDatabases2Page /></ProtectedFrontteam> },
   { path: '/externe-databases-2/off-zoeken/:receiptItemId', element: <ProtectedFrontteam><OffManualSearchPage /></ProtectedFrontteam> },
   { path: '/catalogus', element: <Protected><CatalogResponsive /></Protected> },
+  { path: '/catalogus/artikelclassificaties-toekennen', element: <ProtectedFrontteam><ShopifyReviewPage /></ProtectedFrontteam> },
+  { path: '/catalogus/shopify-beoordelen', element: <ProtectedFrontteam><Navigate to="/catalogus/artikelclassificaties-toekennen" replace /></ProtectedFrontteam> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
   { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },

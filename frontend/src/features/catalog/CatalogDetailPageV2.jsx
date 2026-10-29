@@ -331,6 +331,7 @@ export default function CatalogDetailPageV2() {
                     <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                     <div><dt>Gekoppelde winkels</dt><dd>{Number(product.linked_store_count || 0)}</dd></div>
                     <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                    <div><dt>Artikelclassificatie</dt><dd>{text(product.article_classification, 'Niet geclassificeerd')}</dd></div>
                     <div><dt>Brick-code</dt><dd>{text(product.gpc_brick_code, 'Niet geclassificeerd')}</dd></div>
                     <div><dt>Brick-naam</dt><dd>{text(product.gpc_brick_name, 'Niet geclassificeerd')}</dd></div>
                     <div><dt>GPC-groep</dt><dd>{text(product.gpc_class_name, 'Niet geclassificeerd')}</dd></div>
@@ -449,6 +450,7 @@ export default function CatalogDetailPageV2() {
                       <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                       <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                       <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                    <div><dt>Artikelclassificatie</dt><dd>{text(product.article_classification, 'Niet geclassificeerd')}</dd></div>
                       <div><dt>Brick-code</dt><dd>{text(product.gpc_brick_code, 'Niet geclassificeerd')}</dd></div>
                       <div><dt>Brick-naam</dt><dd>{text(product.gpc_brick_name, 'Niet geclassificeerd')}</dd></div>
                       <div><dt>GPC-groep</dt><dd>{text(product.gpc_class_name, 'Niet geclassificeerd')}</dd></div>

@@ -1,0 +1,350 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import AppShell from '../../app/AppShell'
+import ScreenCard from '../../ui/ScreenCard'
+import DataTable from '../../ui/DataTable'
+import Button from '../../ui/Button'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider'
+import { fetchJsonWithAuth } from '../../lib/authSession'
+import './catalog.css'
+
+const API = '/api/catalog/shopify'
+const BATCH_SIZE = 100
+const OFF_INTERVAL_MS = 6200
+
+async function call(url, options) {
+  const response = await fetchJsonWithAuth(url, options)
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const error = new Error(typeof body.detail === 'string' ? body.detail : 'Verzoek mislukt.')
+    error.status = response.status
+    throw error
+  }
+  return body
+}
+
+const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+// Quote CSV cells for Excel, and do not let product names run as spreadsheet formulas.
+function csvCell(value) {
+  const raw = String(value ?? '').replace(/\r?\n/g, ' ')
+  const safe = /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw
+  return '"' + safe.replaceAll('"', '""') + '"'
+}
+
+export default function ShopifyReviewPage() {
+  const { showFeedback } = useAppFeedback()
+  const [items, setItems] = useState([])
+  const [selected, setSelected] = useState(new Set())
+  const [proposals, setProposals] = useState({})
+  const [tableFilters, setTableFilters] = useState({ shopify_path: 'Niet geclassificeerd' })
+  const [loading, setLoading] = useState(true)
+  const [fetching, setFetching] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+  const [reload, setReload] = useState(0)
+  const busyRef = useRef(false)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setItems([])
+    setSelected(new Set())
+    setProposals({})
+    setError('')
+    async function load() {
+      try {
+        const all = []
+        let total = null
+        do {
+          const data = await call(API + '?limit=' + BATCH_SIZE + '&offset=' + all.length,
+            { signal: controller.signal })
+          if (controller.signal.aborted) return
+          const batch = Array.isArray(data.items) ? data.items : []
+          if (!batch.length && Number(data.total || 0) > all.length) {
+            throw new Error('Cataloguslijst is onvolledig geladen.')
+          }
+          all.push(...batch)
+          total = Number(data.total || 0)
+        } while (all.length < total)
+        if (!controller.signal.aborted) setItems(all)
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err.message)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    load()
+    return () => controller.abort()
+  }, [reload])
+
+  function toggle(id) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedItems = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected])
+  const allHaveProposals = selectedItems.length > 0 && selectedItems.every(
+    (item) => proposals[item.id]?.shopify_id && proposals[item.id]?.gtin === item.gtin
+  )
+  const allHaveClassifications = selectedItems.length > 0 && selectedItems.every(
+    (item) => Boolean(item.shopify_id)
+  )
+
+  function openProposal(item, proposal) {
+    const hasCategory = Boolean(proposal?.shopify_id && proposal?.shopify_path)
+    showFeedback({
+      variant: 'info',
+      title: 'Voorgestelde artikelclassificatie',
+      message: hasCategory
+        ? proposal.shopify_path
+        : proposal?.message || 'Geen artikelclassificatie voorgesteld.',
+      detail: [
+        'Artikel: ' + item.name,
+        'Barcode: ' + item.gtin,
+        proposal?.warning ? 'Let op: ' + proposal.warning : '',
+        hasCategory ? 'Dit voorstel is nog niet bevestigd.' : '',
+      ].filter(Boolean).join(String.fromCharCode(10)),
+      testId: 'article-classification-proposal-detail',
+      dismissMode: 'outside-or-ok',
+      // Een expliciete sluitactie houdt lange categorieën leesbaar zonder timeout.
+      primaryActionLabel: 'Sluiten',
+      onPrimaryAction: () => {},
+      dedupeMs: 0,
+    })
+  }
+
+  function exportSelected() {
+    if (busyRef.current || !selectedItems.length) return
+    const rows = [
+      ['Artikel', 'Merk', 'Barcode', 'Artikelclassificatie', 'Voorgestelde artikelclassificatie'],
+      ...selectedItems.map((item) => [
+        item.name, item.brand, item.gtin, item.shopify_path || '',
+        proposals[item.id]?.shopify_path || '',
+      ]),
+    ]
+    const csv = String.fromCharCode(0xFEFF) + rows.map((row) => row.map(csvCell).join(';')).join(String.fromCharCode(13, 10))
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'Inhuis_Artikelclassificaties_Geselecteerd.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    setNote(selectedItems.length + ' geselecteerde artikelen geëxporteerd.')
+  }
+
+  function removeClassifications() {
+    if (busyRef.current || !allHaveClassifications) return
+    const selections = selectedItems.map((item) => ({
+      global_product_id: item.id,
+      expected_gtin: item.gtin,
+      expected_version: item.version,
+    }))
+    const count = selections.length
+    showFeedback({
+      variant: 'warning',
+      title: 'Classificatie verwijderen',
+      message: count === 1
+        ? 'De artikelclassificatie van 1 geselecteerd artikel verwijderen?'
+        : 'De artikelclassificaties van ' + count + ' geselecteerde artikelen verwijderen?',
+      detail: 'De Catalogusartikelen en hun barcodes blijven bestaan. De wijzigingshistorie blijft bewaard.',
+      testId: 'article-classification-bulk-remove-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        if (busyRef.current) return false
+        busyRef.current = true
+        setSaving(true)
+        setError('')
+        try {
+          const data = await call(API + '/bulk-remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selections }),
+          })
+          setNote(data.removed + ' artikelclassificaties verwijderd; artikelen en geschiedenis behouden.')
+          setReload((value) => value + 1)
+        } catch (err) {
+          setError(err.message)
+          throw err
+        } finally {
+          busyRef.current = false
+          setSaving(false)
+        }
+      },
+    })
+  }
+
+  async function fetchProposals() {
+    if (busyRef.current || !selectedItems.length) return
+    const pending = selectedItems.filter((item) => (
+      !proposals[item.id]?.shopify_id || proposals[item.id]?.gtin !== item.gtin
+    ))
+    if (!pending.length) {
+      setNote('Voor alle geselecteerde artikelen is al een voorstel opgehaald.')
+      return
+    }
+    busyRef.current = true
+    setFetching(true)
+    setError('')
+    let found = 0
+    let firstProposalShown = false
+    try {
+      for (let index = 0; index < pending.length; index += 1) {
+        if (index > 0) await sleep(OFF_INTERVAL_MS)
+        const item = pending[index]
+        setNote('OFF-voorstellen ophalen: ' + (index + 1) + ' van ' + pending.length)
+        try {
+          let result
+          try {
+            result = await call(API + '/' + encodeURIComponent(item.id) + '/proposal')
+          } catch (err) {
+            if (err.status !== 429) throw err
+            await sleep(OFF_INTERVAL_MS)
+            result = await call(API + '/' + encodeURIComponent(item.id) + '/proposal')
+          }
+          if (result.gtin !== item.gtin) {
+            throw new Error('De barcode is gewijzigd. Ververs de pagina.')
+          }
+          if (result.shopify_id) {
+            found += 1
+            // Toon het eerste beschikbare voorstel zodra het antwoord binnen is.
+            // De resterende geselecteerde artikelen gaan daarna gewoon verder.
+            if (!firstProposalShown) {
+              firstProposalShown = true
+              openProposal(item, result)
+            }
+          }
+          setProposals((current) => ({ ...current, [item.id]: result }))
+        } catch (err) {
+          setProposals((current) => ({
+            ...current,
+            [item.id]: { gtin: item.gtin, shopify_id: '', status: 'Geen voorstel',
+              message: err.message },
+          }))
+        }
+      }
+      setNote(found + ' van ' + pending.length + ' artikelen hebben een onbevestigd voorstel. Controleer de tabel voordat je bevestigt.')
+      // Geen tweede melding na afloop: volgende resultaten verschijnen alleen
+      // in de tabel en zijn daar op verzoek opnieuw volledig te openen.
+    } finally {
+      busyRef.current = false
+      setFetching(false)
+    }
+  }
+
+  async function confirmProposals() {
+    if (busyRef.current || !allHaveProposals || selectedItems.length > 100) return
+    const selections = selectedItems.map((item) => ({
+      global_product_id: item.id,
+      expected_gtin: item.gtin,
+      expected_version: item.version,
+      shopify_id: proposals[item.id].shopify_id,
+      // De afzonderlijke bevestigingsactie is de menselijke controle.
+      barcode_confirmed: true,
+    }))
+    busyRef.current = true
+    setSaving(true)
+    setError('')
+    try {
+      const data = await call(API + '/bulk-confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selections }),
+      })
+      showFeedback({ variant: 'success', message: data.confirmed + ' artikelclassificaties bevestigd.' })
+      setNote(data.confirmed + ' classificaties definitief in de Catalogus vastgelegd.')
+      setReload((value) => value + 1)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      busyRef.current = false
+      setSaving(false)
+    }
+  }
+
+  const busy = loading || fetching || saving
+  const columns = [
+    {
+      key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check',
+      renderCell: (item) => <input type="checkbox"
+        aria-label={'Selecteer ' + item.name + ' (' + item.gtin + ')'}
+        checked={selected.has(item.id)}
+        disabled={busy || (!selected.has(item.id) && selected.size >= 100)}
+        onChange={() => toggle(item.id)} />,
+    },
+    {
+      key: 'name', label: 'Artikel', width: 235, sortable: true, filterable: true,
+      getFilterValue: (item) => [item.name, item.brand].join(' '),
+      renderCell: (item) => <div>{item.name}{item.brand ? <div className="rz-external-databases-muted">{item.brand}</div> : null}</div>,
+    },
+    { key: 'gtin', label: 'Barcode', width: 125, sortable: true, filterable: true },
+    {
+      key: 'shopify_path', label: 'Artikelclassificatie', width: 250, sortable: true, filterable: true,
+      getFilterValue: (item) => item.shopify_path || 'Niet geclassificeerd',
+      getSortValue: (item) => item.shopify_path || 'Niet geclassificeerd',
+      renderCell: (item) => <span title={item.shopify_path || ''}>{item.shopify_path || 'Niet geclassificeerd'}</span>,
+    },
+    {
+      key: 'proposal', label: 'Voorgestelde artikelclassificatie', width: 300,
+      filterable: true, sortable: true,
+      getValue: (item) => proposals[item.id]?.shopify_path || proposals[item.id]?.status || '',
+      renderCell: (item) => {
+        const proposal = proposals[item.id]
+        if (!proposal) return 'Nog geen voorstel opgehaald'
+        return <button
+          type="button"
+          className="rz-classification-proposal-trigger"
+          title="Toon het volledige voorstel in een melding"
+          aria-label={'Bekijk het volledige voorstel voor ' + item.name}
+          onClick={() => openProposal(item, proposal)}
+        >
+          <span className="rz-classification-proposal-label">
+            {proposal.shopify_path || proposal.message || 'Geen voorstel beschikbaar'}
+          </span>
+          {proposal.shopify_id
+            ? <span className="rz-external-databases-muted">Nog niet bevestigd</span>
+            : null}
+        </button>
+      },
+    },
+  ]
+
+  return <AppShell title="Artikelclassificaties toekennen" showExit={false}>
+    <ScreenCard fullWidth>
+      <h2>Artikelclassificaties toekennen</h2>
+      <p>Via OFF kun je suggesties opvragen voor de artikelclassificatie.</p>
+      {error ? <p role="alert">{error}</p> : null}
+      {note ? <p role="status">{note}</p> : null}
+      <div className="rz-article-classification-layout">
+      <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
+        filterState={tableFilters}
+        onFilterChange={(key, value) => setTableFilters((current) => ({ ...current, [key]: value }))}
+        wrapperClassName="rz-classification-table-wrapper"
+        tableStyle={{ width: '100%', minWidth: '100%' }}
+        getRowKey={(item) => item.id} pageSize={8}
+        emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen met geldige barcode gevonden.'}
+        paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
+      <div className="rz-article-classification-actions"
+        aria-label="Acties artikelclassificaties">
+        <Button type="button" disabled={busy || !selected.size} onClick={fetchProposals}>
+          {fetching ? 'Voorstellen ophalen...' : 'Voorstel ophalen'}
+        </Button>
+        <Button type="button" disabled={busy || !allHaveProposals} onClick={confirmProposals}>
+          {saving ? 'Bevestigen...' : 'Voorstel bevestigen'}
+        </Button>
+        <Button type="button" variant="secondary" disabled={busy || !selected.size}
+          onClick={exportSelected}>Exporteren</Button>
+        <Button type="button" variant="secondary" disabled={busy || !allHaveClassifications}
+          title="Selecteer uitsluitend artikelen met een bevestigde classificatie."
+          onClick={removeClassifications}>Classificatie verwijderen</Button>
+      </div>
+      </div>
+    </ScreenCard>
+  </AppShell>
+}
