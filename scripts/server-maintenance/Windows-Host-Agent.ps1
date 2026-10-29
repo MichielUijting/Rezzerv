@@ -93,8 +93,18 @@ function Get-Sha([string]$Value) {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($Value))).ToLowerInvariant()
 }
 
-function Assert-Fingerprint([string]$Container, [string]$User, [string]$Database, $Probe) {
-    $raw=Invoke-DockerText -Arguments @('exec','-i',$Container,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$User,'-d',$Database) -InputText $Probe.fingerprint_sql
+function Get-PostgresExecPrefix($Postgres) {
+    # Authenticated socket fallback requires the postgres OS identity for every
+    # live-cluster read and dump, not just the initial role verification.
+    $users=@($Postgres.Config.Env | Where-Object { $_.StartsWith('POSTGRES_USER=') })
+    if ($users.Count -eq 0) { return @('exec','--user','postgres',$Postgres.Id) }
+    if ($users.Count -ne 1) { throw 'PostgreSQL bootstraprol is niet eenduidig.' }
+    return @('exec',$Postgres.Id)
+}
+
+function Assert-Fingerprint([string]$Container, [string]$User, [string]$Database, $Probe, [bool]$UsePostgresOsUser = $false) {
+    $execArgs=if ($UsePostgresOsUser) { @('exec','-i','--user','postgres',$Container) } else { @('exec','-i',$Container) }
+    $raw=Invoke-DockerText -Arguments ($execArgs+@('psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$User,'-d',$Database)) -InputText $Probe.fingerprint_sql
     $actual=@($raw.Split("`n") | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
     if ($actual.Count -ne $Probe.fingerprints.Count) { throw 'Herstelproef mist tabellen.' }
     for ($i=0;$i -lt $actual.Count;$i++) {
@@ -126,7 +136,7 @@ function Assert-DirectDatabaseBinding($Postgres, $Probe) {
     $db=[string]$Probe.database_runtime.database
     if (-not $db -or -not $Probe.database_runtime.database_oid -or -not $Probe.database_runtime.server_started_at) { throw 'Backend runtime database-identiteit is onvolledig.' }
     $sql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
-    $identity=(Invoke-DockerText -Arguments @('exec',$Postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$sql)) | ConvertFrom-Json
+    $identity=(Invoke-DockerText -Arguments ((Get-PostgresExecPrefix $Postgres)+@('psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$sql))) | ConvertFrom-Json
     $addresses=@($Postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($identity.database -cne $db -or $identity.oid -cne $Probe.database_runtime.database_oid -or
         ([datetimeoffset]$identity.started) -ne ([datetimeoffset]$Probe.database_runtime.server_started_at) -or
@@ -242,7 +252,7 @@ do {
         $db=[string]$probe.database_runtime.database
         $identitySql="SELECT json_build_object('database',current_database(),'oid',oid::text,'started',pg_postmaster_start_time(),'cluster',(SELECT system_identifier::text FROM pg_control_system())) FROM pg_database WHERE datname=current_database()"
         $checkStage = 'database-identiteit'
-        $identity=(Invoke-DockerText -Arguments @('exec',$postgres.Id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql)) | ConvertFrom-Json
+        $identity=(Invoke-DockerText -Arguments ((Get-PostgresExecPrefix $postgres)+@('psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U',$pgUser,'-d',$db,'-c',$identitySql))) | ConvertFrom-Json
         $ips=@($postgres.NetworkSettings.Networks.PSObject.Properties | ForEach-Object { $_.Value.IPAddress; $_.Value.GlobalIPv6Address } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $checkStage = 'database-netwerkidentiteit'
         $sameAddress=Test-InhuisDatabaseServerAddress -DatabaseAddress $probe.database_runtime.server_address -ContainerAddresses $ips
@@ -258,7 +268,7 @@ do {
         $checkStage = 'back-up-en-herstelproef'
         if (-not (Test-Path -LiteralPath $receipt)) {
             # Full custom archive is streamed as bytes, never through PowerShell text.
-            Copy-DockerBinary -Arguments @('exec',$postgres.Id,'pg_dump','-U',$pgUser,'-d',$db,'--format=custom','--no-owner','--no-privileges') -Archive $archive
+            Copy-DockerBinary -Arguments ((Get-PostgresExecPrefix $postgres)+@('pg_dump','-U',$pgUser,'-d',$db,'--format=custom','--no-owner','--no-privileges')) -Archive $archive
             $testName='inhuis-restore-'+[guid]::NewGuid().ToString('N')
             $testId=''
             try {
@@ -271,7 +281,7 @@ do {
                 if (-not $ready) { throw 'Geisoleerde herstelomgeving niet gereed.' }
                 Copy-DockerBinary -Arguments @('exec','-i',$testId,'pg_restore','--exit-on-error','--clean','--if-exists','--no-owner','--no-privileges','-U','postgres','-d','postgres') -Archive $archive -Restore
                 Assert-Fingerprint $testId 'postgres' 'postgres' $probe
-                Assert-Fingerprint $postgres.Id $pgUser $db $probe
+                Assert-Fingerprint $postgres.Id $pgUser $db $probe (@($postgres.Config.Env | Where-Object { $_.StartsWith('POSTGRES_USER=') }).Count -eq 0)
                 $backup=[ordered]@{ cycle_id=$cycle; sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant(); restored_and_compared=$true; restored_at=[datetimeoffset]::UtcNow.ToString('o'); domain_fingerprint=$probe.domain_fingerprint }
                 [IO.File]::WriteAllText($receipt,($backup | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
             } finally {
