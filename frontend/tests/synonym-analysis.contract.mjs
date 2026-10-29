@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+const read = (path) => fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+const source = read('src/features/articleSynonyms/SynonymAnalysisPage.jsx')
+const router = read('src/app/router/AppRouter.jsx')
+const synonyms = read('src/features/articleSynonyms/ArticleSynonymsPage.jsx')
+const mobile = read('src/features/catalog/MobileCatalogPage.jsx')
+const desktop = read('src/features/catalog/CatalogPage.jsx')
+assert.match(router, /ProtectedFrontteam><SynonymAnalysisPage/)
+assert.match(source, /synonym-analysis-groups/)
+assert.match(source, /synonym-analysis-items/)
+assert.match(source, /DataTable/)
+assert.match(source, /'\/artikelsynoniemen\?artikel=' \+ encodeURIComponent\(item.id\)/)
+assert.match(source, /Voorstellen zijn gebaseerd op tekstovereenkomst/)
+assert.match(synonyms, /searchParams.get\('artikel'\)/)
+assert.match(mobile, /Synoniemenanalyse/)
+assert.match(desktop, /Synoniemenanalyse/)
+console.log('SYNONYM_ANALYSIS_CONTRACT_GREEN')

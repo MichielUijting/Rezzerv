@@ -208,3 +208,106 @@ def confirm_pairs(conn, selections, actor_id):
             ON CONFLICT (left_product_id, right_product_id) DO NOTHING
         '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method=METHOD, score=proposal['score']))
     return {'linked': len(to_insert), 'already_linked': len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
+
+
+def build_synonym_analysis(products, confirmed, suggestions, classifications=None):
+    """Read-only platform-wide analysis. Candidate text scores are NOT equivalence proof.
+
+    A store is counted only when the existing source evidence identifies one retailer.
+    Confirmed links are direct; neither transitive links nor household data are used.
+    """
+    from collections import defaultdict
+
+    classifications = classifications or {}
+    by_id = {p['id']: p for p in products}
+    linked = defaultdict(set)
+    pending = defaultdict(list)
+    valid_links = set()
+    for left, right in confirmed:
+        a, b = by_id.get(left), by_id.get(right)
+        if not a or not b or not a.get('retailer_code') or not b.get('retailer_code'):
+            continue
+        if a['retailer_code'] == b['retailer_code']:
+            continue
+        valid_links.add(tuple(sorted((left, right))))
+        linked[left].add(b['retailer_code'])
+        linked[right].add(a['retailer_code'])
+
+    for proposal in suggestions:
+        a, b = proposal['left'], proposal['right']
+        if a['id'] not in by_id or b['id'] not in by_id:
+            continue
+        for item, other in ((a, b), (b, a)):
+            pending[item['id']].append({
+                'id': other['id'], 'name': other['name'],
+                'store_name': other.get('store_name') or 'Niet vastgelegd',
+                'score': proposal['score'],
+            })
+
+    groups = {}
+    items = []
+    for product in sorted(products, key=lambda p: (str(p.get('name') or '').casefold(), p['id'])):
+        pid = product['id']
+        shopify_path = str(classifications.get(pid) or '').strip()
+        brick = str(product.get('brick_code') or '').strip()
+        if shopify_path:
+            group_key, group_label = 'shopify:' + shopify_path, shopify_path
+            group_source = 'Artikelclassificatie'
+        elif brick:
+            group_key, group_label = 'gpc:' + brick, 'GPC Brick ' + brick
+            group_source = 'GPC'
+        else:
+            group_key, group_label = 'unclassified', 'Niet geclassificeerd'
+            group_source = 'Ontbrekende classificatie'
+        store = product.get('store_name') if product.get('retailer_code') else 'Winkel onbekend'
+        if not product.get('retailer_code'):
+            status = 'insufficient'
+        elif pending[pid]:
+            status = 'review'
+        elif linked[pid]:
+            status = 'linked'
+        else:
+            status = 'no_candidate'
+        row = {
+            'id': pid, 'name': product['name'], 'brand': product.get('brand') or '',
+            'variant': product.get('variant') or '',
+            'size_value': product.get('size_value') or '',
+            'size_unit': product.get('size_unit') or '',
+            'image_url': product.get('image_url') or '',
+            'store': store, 'retailer_code': product.get('retailer_code') or '',
+            'group_key': group_key, 'group_label': group_label,
+            'group_source': group_source,
+            'linked_stores': sorted(_store_name(code) for code in linked[pid]),
+            'pending': sorted(pending[pid], key=lambda p: (-p['score'], p['name'], p['id'])),
+            'status': status,
+        }
+        items.append(row)
+        key = (group_key, store)
+        if key not in groups:
+            groups[key] = {
+                'id': group_key + '|' + store, 'group_key': group_key,
+                'group_label': group_label, 'group_source': group_source,
+                'store': store, 'articles': 0, 'linked': 0,
+                'review': 0, 'no_candidate': 0, 'insufficient': 0,
+            }
+        record = groups[key]
+        record['articles'] += 1
+        if linked[pid]:
+            record['linked'] += 1
+        if pending[pid]:
+            record['review'] += 1
+        if status in ('no_candidate', 'insufficient'):
+            record[status] += 1
+
+    return {
+        'summary': {
+            'confirmed_pairs': len(valid_links),
+            'candidate_pairs': len(suggestions),
+            'no_candidate_articles': sum(p['status'] == 'no_candidate' for p in items),
+            'insufficient_articles': sum(p['status'] == 'insufficient' for p in items),
+            'classified_articles': sum(p['group_source'] == 'Artikelclassificatie' for p in items),
+            'eligible_articles': len(items),
+        },
+        'groups': sorted(groups.values(), key=lambda g: (g['group_label'].casefold(), g['store'].casefold())),
+        'items': items,
+    }

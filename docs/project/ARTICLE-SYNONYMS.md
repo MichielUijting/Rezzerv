@@ -88,3 +88,30 @@ frontend-regressiecommando en dekt 390/1280 px voor beide rollen, selectie over
 pagina/filter, foutbehoud, expliciete bulk, reload en weigering regulier account.
 De bestaande PostgreSQL-foundation-, onderhouds-, rollen-, identity- en F7-gates
 blijven aanvullend vereist; synthetische tests vervangen die niet.
+
+
+## Synoniemenanalyse — eerste leesfase (29 oktober 2026)
+
+De Catalogus biedt voor Superusers en Frontteamleden het scherm **Synoniemenanalyse**.
+Dit gebruikt uitsluitend bestaande centrale, gecodeerde actieve Catalogusproducten,
+rechtstreeks bevestigde artikelparen en bestaande tekstkandidaten. Er worden geen
+huishoudartikelen, bonnen, barcodegegevens, voorraad of relaties gewijzigd.
+
+Het nieuwe, beveiligde read-only endpoint
+`/api/external-databases/article-synonyms/analysis` toont:
+- aantal rechtstreeks bevestigde winkeloverstijgende paren en open tekstkandidaten;
+- aantallen zonder gevonden tekstkandidaat en met onbekend winkelbewijs;
+- artikelgroepen per bevestigde Shopify-artikelclassificatie, anders GS1 Brick,
+  anders expliciet **Niet geclassificeerd**;
+- aantallen artikelen met bevestigde directe koppelingen en open kandidaten per
+  artikelgroep en winkel, plus doorklik naar de bestaande handmatige bevestiging.
+
+Een product kan tegelijk een bevestigde relatie en nog niet beoordeelde kandidaten
+hebben. **Geen kandidaat** betekent uitsluitend dat het bestaande algoritme geen
+kandidaat heeft gevonden; het bewijst niet dat de winkel geen equivalent verkoopt.
+Een ontbrekende winkel wordt niet als echte supermarkt meegeteld.
+De tekstscore is geen waarschijnlijkheidspercentage en geen bewijs van
+functionele gelijkwaardigheid. Geen automatische toekenning, geen transitieve
+koppelingen, geen afwijzingsregistratie en geen assortimentimport in deze fase.
+Verbeterde kenmerkmatching en vastleggen van afwijzingen zijn afzonderlijke
+vervolgstappen.

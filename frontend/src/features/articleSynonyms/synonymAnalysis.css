@@ -1,0 +1,11 @@
+.rz-synonym-analysis { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rz-synonym-analysis h2, .rz-synonym-analysis h3, .rz-synonym-analysis p { margin: 0; }
+.rz-synonym-analysis-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; }
+.rz-synonym-analysis-stat { padding: 12px; border: 1px solid var(--color-ui-border, #d7e0dc); border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.rz-synonym-analysis-stat strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.rz-synonym-analysis-note { color: var(--color-ui-text-secondary, #425650); font-size: .9rem; }
+.rz-synonym-analysis-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.rz-synonym-analysis-filters label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rz-synonym-analysis-product { display: flex; align-items: center; gap: 8px; }
+.rz-synonym-analysis-details-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+@media(max-width:720px) { .rz-synonym-analysis-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rz-synonym-analysis-stat { padding: 8px; } }

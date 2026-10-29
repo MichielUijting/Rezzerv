@@ -36,6 +36,23 @@ def list_suggestions():
     return {'items': items, 'total': len(items)}
 
 
+@router.get('/analysis')
+def synonym_analysis():
+    _actor('platform.external_products.view')
+    from sqlalchemy import text
+    from app.services.article_synonym_service import build_synonym_analysis
+    with engine.connect() as conn:
+        products = load_products(conn)
+        confirmed = confirmed_pairs(conn)
+        suggestions = suggest_pairs(products, confirmed)
+        classifications = {row['global_product_id']: row['shopify_path'] for row in conn.execute(text("""
+            SELECT global_product_id, shopify_path
+              FROM global_product_shopify_classifications
+             WHERE is_active = TRUE
+        """)).mappings()}
+    return build_synonym_analysis(products, confirmed, suggestions, classifications)
+
+
 @router.post('/link')
 def link_suggestions(payload: BulkSelection):
     actor = _actor('platform.external_products.link_existing')
