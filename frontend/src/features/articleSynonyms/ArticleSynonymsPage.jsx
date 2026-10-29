@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -12,6 +12,8 @@ const API = '/api/external-databases/article-synonyms'
 const productName = (product) => [product.name, product.brand, product.variant].filter(Boolean).join(' · ')
 
 export default function ArticleSynonymsPage() {
+  const [searchParams] = useSearchParams()
+  const articleId = searchParams.get('artikel') || ''
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(true)
@@ -81,6 +83,8 @@ export default function ArticleSynonymsPage() {
     }
   }
 
+  const visibleItems = articleId ? items.filter((item) => item.left.id === articleId || item.right.id === articleId) : items
+
   const columns = [
     { key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check', renderCell: (item) => <input type="checkbox"
       aria-label={`Selecteer ${item.article_name} (${item.article_store}) en ${item.synonym_name} (${item.synonym_store})`}
@@ -102,7 +106,7 @@ export default function ArticleSynonymsPage() {
       <p>Controleer variant, bereiding en inhoud. Selecteer de juiste suggesties en bevestig met Koppelen. Een hoge score is geen zekerheid.</p>
       <p>Artikelen zonder artikelcode of barcode vul je eerst aan in <Link to="/externe-databases-2">Externe databases 2</Link>.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <DataTable columns={columns} data={items} getRowKey={(item) => item.id}
+      <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
         pageSize={10}
         dataTestId="article-synonyms-table"
         emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : 'Geen nieuwe suggesties voor artikelen met een code of barcode.'}
