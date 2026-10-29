@@ -50,12 +50,12 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(table.locator('tbody tr')).toHaveCount(3)
     const unlinkedCounter = page.getByRole('button', { name: 'Niet gekoppeld: 1' })
     const pendingCounter = page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })
-    const linkedCounter = page.getByRole('button', { name: 'Gekoppeld: 1' })
+    const linkedCounter = page.getByRole('button', { name: 'Gekoppeld: 1', exact: true })
     await expect(unlinkedCounter).toHaveCSS('background-color', 'rgb(255, 217, 168)')
     await expect(pendingCounter).toHaveCSS('background-color', 'rgb(255, 255, 255)')
     await expect(linkedCounter).toHaveCSS('background-color', 'rgb(217, 245, 224)')
 
-    await page.getByRole('button', { name: 'Gekoppeld: 1' }).click()
+    await linkedCounter.click()
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
@@ -282,7 +282,16 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await panel.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       expect(searches).toHaveLength(1)
-      expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      // Het OFF-paneel volgt op de gewone tabel en de bulkacties in dezelfde
+      // overzichtscontainer, niet meer als direct volgend sibling-element.
+      const overview = page.locator('.rz-external-receipt-overview')
+      await expect(overview.getByTestId('external-databases-2-table')).toHaveCount(1)
+      await expect(overview.getByTestId('external-databases-2-off-panel')).toHaveCount(1)
+      expect(await overview.evaluate((element) => {
+        const table = element.querySelector('[data-testid="external-databases-2-table"]')
+        const panel = element.querySelector('[data-testid="external-databases-2-off-panel"]')
+        return Boolean(table && panel && (table.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING))
+      })).toBe(true)
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
       if (width <= 720) {
@@ -395,9 +404,14 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(table.locator('tbody tr')).toHaveCount(1)
       await expect(table).toContainText('Artikel 22')
       await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
-      await expect(table.getByRole('checkbox')).toHaveCount(0)
+      // Na zoeken blijft de nieuwe bulkselectie beschikbaar voor de ene
+      // zichtbare rij; zonder selectie is exporteren terecht uitgeschakeld.
+      await expect(table.getByRole('checkbox')).toHaveCount(1)
+      await expect(table.getByRole('checkbox', { name: 'Selecteer Artikel 22' })).not.toBeChecked()
+      await expect(page.getByRole('button', { name: 'Exporteren', exact: true })).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Ontkoppelen', exact: true })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken/ })).toHaveCount(0)
       expect(writes).toEqual([])
     })
 
