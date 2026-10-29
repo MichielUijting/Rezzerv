@@ -40,3 +40,7 @@ Status: operationele consolidatie; **geen vrijgave, uitrol of uitvoerbaar hersta
 ## Stopregel en PO-rapport
 
 Bij elke afgebroken stap: noem de eerste concrete falende gate, welke objecten onaangeroerd zijn, de actuele bekende versie/route, waar het bewijs staat en één gerichte vervolgstap. Geen scriptswaterval, geen container- of volumeopruiming. Een herstart-/upgradeprocedure heet pas **bewezen herhaalbaar** na een succesvolle, gedocumenteerde echte uitvoering met voor-/na-bewijs.
+
+## Eén gerichte operationele voorcontrole
+
+`scripts/server-maintenance/Inhuis-Server-Voorcontrole.ps1` is een **alleen-lezen** hostinventarisatie die in Downloads `Inhuis_Server_Voorcontrole_Resultaat.txt` maakt. De controle gebruikt bewust Windows PowerShell 5.1, leest uitsluitend beschikbaarheid van PowerShell 7.4+, de officiële agent, serverconfig, lopende Docker-containers en de naam/status van bestaande onderhoudstaken. Geen credentials, taakaanduidingen met argumenten, databasequeries, Docker-exec, Compose, volumeacties, appstart of download van code. **Dit is géén veiligheidsbewijs voor onderhoud**, slechts de eerste objectieve verificatie vóór het gebruik van de reeds bestaande hostagent. Een schijnbaar groen resultaat mag nooit als GO worden geïnterpreteerd. Het script is niet op de Windows-server uitgevoerd of geaccepteerd; een PowerShell-parser-/Windows-praktijktest blijft nodig.
