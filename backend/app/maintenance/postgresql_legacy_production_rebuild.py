@@ -25,7 +25,11 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 102  # Adds the encrypted retailer_import_queue; legacy source has no queued receipts.
+EXPECTED_APPLICATION_TABLES = 104  # 102 existing + two independently audited article-classification tables.
+REQUIRED_CLASSIFICATION_TABLES = frozenset({
+    "global_product_shopify_classifications",
+    "global_product_shopify_history",
+})
 SYSTEM_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_CONFIG = BACKEND_ROOT / "alembic.ini"
@@ -295,6 +299,12 @@ def _build_canonical_head(path: Path) -> str:
         if fk_rows:
             raise LegacyAdoptionError(f"Fresh canonical head has FK violations: {fk_rows[:10]!r}")
         tables = _application_tables(connection)
+        missing_classification_tables = REQUIRED_CLASSIFICATION_TABLES.difference(tables)
+        if missing_classification_tables:
+            raise LegacyAdoptionError(
+                f"Canonical article-classification tables missing: "
+                f"{sorted(missing_classification_tables)!r}"
+            )
         if len(tables) != EXPECTED_APPLICATION_TABLES:
             raise LegacyAdoptionError(
                 f"Unexpected canonical table count: {len(tables)} "
