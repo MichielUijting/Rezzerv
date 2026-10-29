@@ -244,6 +244,7 @@ class ApiTest(unittest.TestCase):
         for status in [401,403]:
             with patch.object(routes, 'require_platform_permission_from_session', side_effect=HTTPException(status)):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code, status)
+                self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
@@ -260,6 +261,32 @@ class ApiTest(unittest.TestCase):
             self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link',json=body).status_code,422)
         with self.assertRaises(ValueError):
             routes.BulkSelection(selections=[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]*201)
+
+
+
+class SynonymAnalysisContractTest(unittest.TestCase):
+    def test_summary_reuses_direct_links_without_transitive_inference(self):
+        products = [product('a', 'Halfvolle melk', retailer_code='ah'),
+                    product('b', 'Halfvolle melk', retailer_code='jumbo'),
+                    product('c', 'Halfvolle melk', retailer_code='lidl')]
+        suggestion = [{'left': products[0], 'right': products[2], 'score': .8}]
+        result = service.build_synonym_analysis(products, {('a', 'b')}, suggestion,
+                                                {'a': 'Melk', 'b': 'Melk', 'c': 'Melk'})
+        self.assertEqual(result['summary']['confirmed_pairs'], 1)
+        self.assertEqual(result['summary']['candidate_pairs'], 1)
+        rows = {row['id']: row for row in result['items']}
+        self.assertEqual(rows['a']['linked_stores'], ['Jumbo'])
+        self.assertEqual(rows['a']['status'], 'review')
+        self.assertEqual(rows['c']['linked_stores'], [])
+        self.assertEqual(sum(group['articles'] for group in result['groups']), 3)
+
+    def test_missing_retailer_not_assumed_to_be_a_supermarket(self):
+        products = [product('a', 'Melk', retailer_code=''),
+                    product('b', 'Melk', retailer_code='jumbo')]
+        result = service.build_synonym_analysis(products, {('a', 'b')}, [])
+        self.assertEqual(result['summary']['confirmed_pairs'], 0)
+        self.assertEqual(result['summary']['insufficient_articles'], 1)
+        self.assertEqual(result['summary']['no_candidate_articles'], 1)
 
 
 if __name__ == '__main__':
