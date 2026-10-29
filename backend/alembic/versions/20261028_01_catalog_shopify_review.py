@@ -3,7 +3,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '20261028_01'
-down_revision = '20261027_02'
+down_revision = '20261027_01'
 branch_labels = None
 depends_on = None
 CI_IMPACT_DOMAINS = ['catalog', 'auth', 'shared']
