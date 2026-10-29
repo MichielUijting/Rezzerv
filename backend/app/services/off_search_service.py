@@ -16,6 +16,7 @@ from app.services.external_product_identity_policy import (
     leading_private_label_marker,
 )
 from app.services.off_manual_search_proof import issue_manual_off_proof
+from app.services.gtin_validation_service import is_valid_gtin
 
 
 SEARCH_A_LICIOUS_URL = os.getenv(
@@ -946,8 +947,51 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
 
     if mode == "manual":
         query = _text(payload.get("query"))
+        requested_gtin = _text(payload.get("gtin"))
+        if requested_gtin:
+            if query:
+                raise OffSearchError("Zoek op tekst of barcode, niet op beide tegelijk")
+            if not requested_gtin.isdigit() or not is_valid_gtin(requested_gtin):
+                raise OffSearchError("Vul een geldige barcode (GTIN) in")
+            lookup = lookup_off_product_by_gtin(requested_gtin)
+            if lookup.get("status") == "external_source_unavailable":
+                raise OffSearchError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
+            product = lookup.get("product") or {}
+            results = []
+            if lookup.get("status") == "found" and _text(product.get("product_name")):
+                identity_check = external_product_identity_compatibility(
+                    retailer_code=item.get("retailer_code", ""),
+                    receipt_text=item.get("receipt_line_text", ""),
+                    candidate_brand=product.get("brand"),
+                    candidate_name=product.get("product_name"),
+                )
+                candidate = {
+                    "gtin": requested_gtin,
+                    "product_name": product["product_name"],
+                    "brand": product.get("brand", ""),
+                    "quantity": product.get("quantity", ""),
+                    "category": product.get("category", ""),
+                    "category_tags": product.get("category_tags", []),
+                    "explicit_gpc_brick_code": product.get("explicit_gpc_brick_code", ""),
+                    "image_url": product.get("image_url", ""),
+                    "score": _name_score(item.get("receipt_line_text", ""), product["product_name"]),
+                    "identity_compatible": bool(identity_check.get("ok")),
+                    "identity_conflict_reason": str(identity_check.get("reason") or ""),
+                    "identity_conflict_message": str(identity_check.get("message") or ""),
+                }
+                candidate["selection_proof"] = issue_manual_off_proof(receipt_item_id, candidate)
+                results.append(candidate)
+            return {
+                "search_id": str(uuid.uuid4()), "receipt_item_id": receipt_item_id,
+                "query": requested_gtin, "mode": mode, "provider": "off_exact_gtin",
+                "results": results, "result_count": len(results),
+                "status": "found" if results else "no_results",
+                "query_diagnostics": [], "mutated": False,
+                "creates_global_product": False, "creates_household_article": False,
+                "creates_inventory_event": False, "creates_external_candidate": False,
+            }
         if not query:
-            raise OffSearchError("query is verplicht bij handmatig zoeken")
+            raise OffSearchError("query of gtin is verplicht bij handmatig zoeken")
 
         raw_products, provider = _query_off(query, max(limit * 3, 10))
         relevance_query = _manual_relevance_query(query, item.get('retailer_code', ''))

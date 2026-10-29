@@ -14,18 +14,16 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
-**Externe databases 2** is een afzonderlijke, alleen-lezen platformactie naast
-Externe databases, met dezelfde toegangsvoorwaarden. De standaardtabel toont
-bonartikelen uit de volledige aankoopimport- en kassabonregelset waarvoor geen
-actieve centrale Cataloguskoppeling met geldige barcode bestaat. Een generieke
-Cataloguskoppeling zonder barcode blijft zichtbaar. Bronartikelidentiteiten
-die na handmatige OFF-bevestiging met een geldige GTIN al
-in Catalogus zijn opgeslagen maar nog op GS1-classificatie wachten, blijven
-eveneens buiten deze lijst. Zo'n wachtende identiteit is uitdrukkelijk **geen**
+**Externe databases 2** is een afzonderlijke platformactie naast Externe databases,
+met dezelfde toegangsvoorwaarden. Overzicht en zoeken zijn alleen-lezen;
+expliciet bevestigde koppeling en ontkoppeling zijn afzonderlijke bevoegde
+schrijfacties. De standaardtabel toont alle bonartikelen uit de volledige
+aankoopimport- en kassabonregelset, ook de gekoppelde en de wachtende.
+Een bonartikel zonder officiële GS1-classificatie is uitdrukkelijk geen
 voor Kassa/Voorraad bevestigde Cataloguskoppeling. Exact dezelfde getoonde
-artikeltekst en dezelfde winkelketen worden éénmaal getoond, ook bij verschillende
-artikelcodes of verpakkingen. Hoofdletters, accenten en spaties binnen de naam
-blijven onderscheidend. Dit is uitsluitend presentatiegroepering, geen wijziging
+artikeltekst, winkelketen en bonartikelcode worden eenmaal getoond. Hoofdletters,
+accenten en spaties binnen de naam blijven onderscheidend. Dit is uitsluitend
+presentatiegroepering, geen wijziging
 van productidentiteit of Cataloguskoppelingen. Zoeken, sorteren, kolombreedtes en paginering gebruiken de gedeelde
 DataTable. Het laden van de artikellijst start geen externe zoekacties en
 schrijft geen gegevens. Productkandidaten worden pas na artikelselectie gezocht.
@@ -76,6 +74,60 @@ De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
 per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
 Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
 De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+**PO-besluit 28 oktober 2026 — volledig ED2-overzicht:** Externe databases 2
+toont alle unieke bonartikelen, ook wanneer ze al een centrale Cataloguskoppeling
+hebben of wachten op een officiële GS1-classificatie. De aparte, bestaande
+`unlinked-articles`-API behoudt zijn beperkte contract voor andere afnemers;
+ED2 gebruikt het alleen-lezen `articles-overview`. De status wordt niet
+afgeleid uit huishoudartikelen, bonartikelcodes of losse OFF-kandidaten.
+De drie elkaar uitsluitende tellers **Niet gekoppeld**,
+**Classificatie ontbreekt** en **Gekoppeld** tellen de volledige, op
+winkelketen + exacte bontekst + bonartikelnummer ontdubbelde lijst en zijn
+tegelijk statusfilters. De filterbare kolom **Art.code** toont uitsluitend
+een gevalideerde GTIN van een centraal bevestigd of aantoonbaar opgeslagen,
+nog te classificeren Catalogusproduct. Een bonartikelnummer wordt niet als
+Catalogus-Art.code overgenomen. Generieke koppelingen blijven zonder GTIN
+maar tellen wél als **Gekoppeld**. **Art.code** heeft een normaal tekstfilter
+voor volledige of gedeeltelijke barcodes; **GS1-class.** (voorheen **Status**)
+heeft een gewoon tekstfilter op de Nederlandse statusomschrijving. De
+drie gekleurde statusknoppen werken onafhankelijk van beide tekstfilters;
+een volledige statusnaam wordt exact gematcht (dus *Gekoppeld* niet ook
+*Niet gekoppeld*).
+**PO-besluit 28 oktober 2026 — GS1 aanvullen in ED2:** bij een expliciete
+OFF-koppeling in status **Classificatie ontbreekt** opent de artikelselectie
+het paneel **GS1-classificatie aanvullen**. Hier worden mogelijke officiële
+Nederlandse GS1 GPC Brick-codes getoond en kan de gebruiker op code of
+omschrijving in de officiële catalogus zoeken. Een suggestie is nooit een
+automatische toewijzing: de gebruiker selecteert de Brick en bevestigt
+**Classificatie opslaan** met **OK**; **Annuleren** schrijft niets. De server
+controleert de oorspronkelijke bon-/OFF-identiteit en de wachtstatus opnieuw,
+en schrijft de officiële GS1-productgroep plus de centrale GS1-toewijzing
+in één transactie. Alleen als het bonartikel daarna aantoonbaar **Gekoppeld**
+is volgt succes en verversen de tellers. De actie verandert geen bonnen,
+huishoudartikelen of voorraad; ongeldige codes, conflicten en verouderde
+koppelingen stoppen zonder gedeeltelijke opslag. Alleen gebruikers met de
+reeds bestaande platformbevoegdheid voor externe productkoppelingen mogen
+deze schrijfhandeling uitvoeren.
+**PO-besluit 28 oktober 2026 — bulkacties ED2:** de volledige tabel heeft
+een selectorkolom met een lege, smalle kolomkop. **Alles op pagina** selecteert
+uitsluitend de zichtbare pagina en bewaart selectie van andere pagina's.
+De acties staan onder de tabel: **Exporteren** levert uitsluitend de
+geselecteerde artikelen met Artikel, Winkelketen, Bonartikelnummer, Art.code,
+GS1-class. en Omvang / gewicht als semikolon-CSV (veilig tegen spreadsheetformules).
+**Ontkoppelen** vereist minimaal één en maximaal honderd geselecteerde regels,
+allemaal voorzien van een expliciete centrale OFF-koppelidentiteit. Een
+bevestigingsdialoog met **Annuleren** en **OK** is verplicht. De backend
+herleidt de bronidentiteiten opnieuw en vergelijkt elke actuele OFF-koppeling
+met de selectie. Wordt één koppeling door andere bronartikelen gedeeld,
+dan moeten ook die artikelen expliciet zijn geselecteerd. Een ongeldige,
+onvolledige of verouderde bulkkeuze stopt als geheel zonder gedeeltelijke
+ontkoppeling. Alleen de geselecteerde centrale OFF-relaties worden inactief;
+Catalogusproducten, bronbonnen, aankoopregels, huishoudartikelen en voorraad
+blijven intact. Een bewuste ontkoppeling onderdrukt tevens een eventuele oude
+impliciete GTIN-herkoppeling; een nieuwe, expliciet bevestigde koppeling blijft
+mogelijk. De tellers en tabel worden na de actie opnieuw geladen. Bij timeout
+wordt geen succes geclaimd. Niet-OFF-koppelingen en uitsluitend via GTIN
+afgeleide koppelingen zijn niet via deze bulkactie te verwijderen.
 Het kandidaatpaneel toont na de vaste regel over beschikbare productgegevens
 geen afzonderlijke uitleg, bronstatusalinea's of extra bronbewijsteksten. Een
 knop **Zelf zoeken in OFF** opent een eigen scherm voor het geselecteerde
@@ -84,7 +136,17 @@ merk en andere trefwoorden invullen. Zoeken start pas bij **Zoeken** of Enter;
 de resultaten komen uitsluitend uit OFF en tonen maximaal **7 kandidaten per
 pagina**, met paginering voor de overige resultaten (maximaal twintig per
 zoekopdracht). De resultatentabel heeft geen tweede reeks filterinvoervelden.
-Het afzonderlijke OFF-scherm toont geen extra Terugknop. De zoekactie blijft
+In **Zelf zoeken in OFF** gebruikt de gebruiker één invoerveld voor een
+omschrijving, merk of barcode. Invoer die uitsluitend uit cijfers bestaat,
+wordt als barcode herkend: uitsluitend 8, 12, 13 of 14 cijfers zijn toegestaan.
+Overige invoer wordt als tekst gezocht, ook als de omschrijving cijfers bevat.
+Barcodezoeken gebruikt de exacte OFF-opvraag, controleert server-side het
+GTIN-controlecijfer en gebruikt dezelfde servergegenereerde, kortlevende
+koppelingproof en identiteits-/huismerkcontroles. Zoeken wijzigt geen Catalogus- of
+voorraadgegevens; een onbekende barcode geeft een leeg resultaat en een
+bronstoring een afzonderlijke foutmelding.
+Het afzonderlijke OFF-scherm toont geen extra Terugknop. De geselecteerde
+bonartikelnaam staat boven het zoekveld **vetgedrukt**. De zoekactie blijft
 uitsluitend lezen; de Overeenkomstkolom is de relevante OFF-productnaam-score
 zonder de winkelnaam als schijnbaar productbewijs en bepaalt de eerste rangorde.
 Resultaten met uitsluitend winkelnamen en 0% overeenkomst worden weggefilterd.
@@ -101,8 +163,9 @@ Een verlopen, onjuist of door een backendherstart vervallen bewijs wordt
 afgewezen; dan moet opnieuw worden gezocht. Na **OK** keert de interface
 na de serverrespons altijd terug naar **Externe databases 2**, ook als de
 koppeling is afgewezen. Alleen een door de server bevestigde koppeling wordt
-als geslaagd gemeld; het gekoppelde bronartikel kan na herladen verdwijnen
-uit de lijst zonder barcode. Bij een afwijzing blijft het bronartikel
+als geslaagd gemeld; het gekoppelde bronartikel blijft na herladen in het
+volledige ED2-overzicht met zijn werkelijke status en eventuele Art.code.
+Bij een afwijzing blijft het bronartikel
 beschikbaar en blijft de reden als aanklikbare foutregel zichtbaar totdat de
 gebruiker die sluit of naar een ander scherm gaat. Een mislukte schrijfactie
 wordt nooit verward met een opgeslagen Catalogusartikel.
@@ -128,7 +191,8 @@ De lijst zonder barcode en de centrale koppeling gebruiken dezelfde
 winkelketensleutel (`store_chain` vóór `store_name`) en dezelfde
 oorspronkelijke bonartikeltekst. Alleen een bevestigd geclassificeerd artikel of
 een aantoonbaar opgeslagen GTIN-identiteit met `classification_pending` mag
-daardoor verdwijnen uit Externe databases 2. Een ontbrekende officiële
+daardoor verdwijnen uit de oudere lijst zonder barcode, maar niet uit het
+volledige ED2-overzicht. Een ontbrekende officiële
 GS1-classificatie geeft de melding *Classificatie ontbreekt*, zonder de
 Catalogusopslag te blokkeren. Annuleren wijzigt niets. Na
 **OK** keert de gebruiker na afloop terug naar Externe databases 2 met
@@ -169,7 +233,8 @@ bijbehorende winkelartikelrelatie krijgt dan `classification_pending`; de UI
 toont *Classificatie ontbreekt*. Dit is **niet** één van de twee volledige
 koppelvormen: Kassa, Uitpakken en Voorraad mogen deze relatie niet als bevestigd
 gebruiken zolang er geen officiële GPC Brick is. Het bronartikel verdwijnt wel
-uit Externe databases 2, dat uitsluitend naar ontbrekende barcode-opslag zoekt.
+uit de oudere lijst zonder barcode, maar blijft in het volledige ED2-overzicht
+staan als *Classificatie ontbreekt* met de gevalideerde Catalogus-Art.code.
 Wanneer later een geldige officiële classificatie is vastgelegd, wordt de
 bestaande wachtende relatie zonder bon-/huishoud-/voorraadmutatie als volledige
 koppeling uitleesbaar. Zonder classificatie wordt nooit een Brick geraden.

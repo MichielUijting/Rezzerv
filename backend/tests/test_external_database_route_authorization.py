@@ -37,6 +37,7 @@ def build_connection():
     [
         ("GET", "/api/external-databases/summary", "platform.external_products.view"),
         ("GET", "/api/external-databases/unlinked-articles", "platform.external_products.view"),
+        ("GET", "/api/external-databases/articles-overview", "platform.external_products.view"),
         ("GET", "/api/external-databases/candidates", "platform.external_products.view"),
         ("POST", "/api/external-databases/retailers/lidl/match-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/diagnose-real-candidates", "platform.external_products.search"),
@@ -48,6 +49,7 @@ def build_connection():
         ("POST", "/api/external-databases/candidates/confirm-external", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/promote-candidate", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/unlink", "platform.external_products.link_existing"),
+        ("POST", "/api/external-databases/off/unlink-selected", "platform.external_products.link_existing"),
     ],
 )
 def test_external_database_route_permission_mapping(method, path, permission):

@@ -59,6 +59,7 @@ export default function DataTable({
   pagination = true,
   pageSize = 10,
   paginationActions = null,
+  onPageRowsChange = null,
 }) {
   const isMobileViewport = useMobileAppViewport()
   const effectivePagination = Boolean(pagination || isMobileViewport)
@@ -147,6 +148,10 @@ export default function DataTable({
     const start = (page - 1) * normalizedPageSize
     return sortedData.slice(start, start + normalizedPageSize)
   }, [effectivePagination, sortedData, page, normalizedPageSize])
+
+  useEffect(() => {
+    if (typeof onPageRowsChange === 'function') onPageRowsChange(displayData)
+  }, [displayData, onPageRowsChange])
 
   const wrapperClasses = ['rz-data-table-wrapper', wrapperClassName].filter(Boolean).join(' ')
   const tableClasses = [

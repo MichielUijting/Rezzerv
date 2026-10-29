@@ -103,3 +103,82 @@ def test_verified_catalog_gtin_waiting_for_gpc_is_not_an_unlinked_barcode(monkey
 
 def test_new_overview_requires_existing_platform_read_permission():
     assert required_external_database_permission('GET', '/api/external-databases/unlinked-articles') == 'platform.external_products.view'
+
+
+def test_all_articles_overview_includes_linked_unlinked_pending_and_generic(monkeypatch):
+    article_sources(monkeypatch, [
+        ('Melk', 'linked'), ('Melk', 'missing'), ('Kaas', 'pending'),
+        ('Bouillon', 'generic'), ('Leeg artikel', 'none'), ('Leeg artikel', 'none'),
+    ])
+
+    def project(conn, row):
+        code = row['external_article_code']
+        return {
+            **row, 'central_link_active': code in {'linked', 'generic'},
+            'linked_gtin': '8720326035617' if code == 'linked' else '',
+            'is_generic_catalog_link': code == 'generic',
+        }
+
+    monkeypatch.setattr(service, 'project_central_link_truth', project)
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link',
+        lambda conn, **identity: {'primary_gtin': '8718452504435'}
+        if identity['external_article_code'] == 'pending' else None)
+    payload = service.list_all_external_articles()
+    assert payload['total'] == 5
+    assert payload['counts'] == {'unlinked': 2, 'classification_pending': 1, 'linked': 2}
+    by_code = {item['receipt_article_number']: item for item in payload['items']}
+    assert by_code['linked']['article_code'] == '8720326035617'
+    assert by_code['missing']['article_code'] == ''
+    assert by_code['pending']['article_code'] == '8718452504435'
+    assert by_code['pending']['link_status'] == 'classification_pending'
+    assert by_code['generic']['link_status'] == 'linked'
+    assert by_code['generic']['is_generic_catalog_link'] is True
+    assert by_code['generic']['article_code'] == ''
+    assert not any('household_id' in item for item in payload['items'])
+
+
+def test_all_articles_overview_does_not_infer_catalog_code_from_receipt_article_number(monkeypatch):
+    article_sources(monkeypatch, [('Melk', '8720326035617')])
+    monkeypatch.setattr(service, 'project_central_link_truth', lambda conn, row: row)
+    result = service.list_all_external_articles()
+    assert result['total'] == 1
+    assert result['items'][0]['article_code'] == ''
+    assert result['counts']['unlinked'] == 1
+
+
+def test_all_articles_overview_requires_platform_view_permission():
+    assert required_external_database_permission(
+        'GET', '/api/external-databases/articles-overview'
+    ) == 'platform.external_products.view'
+
+
+def test_overview_exposes_unlink_identity_only_for_confirmed_off_links(monkeypatch):
+    article_sources(monkeypatch, [('OFF gekoppeld', 'a'), ('OFF wacht', 'b'),
+                                 ('Generiek', 'c'), ('GTIN fallback', 'd')])
+
+    def projection(conn, source):
+        code = source['external_article_code']
+        return {**source,
+                'central_link_active': code in {'a', 'c', 'd'},
+                'central_external_article_product_link': {
+                    'id': f'link-{code}',
+                    'confirmed_by': 'external_databases_off_manual_link' if code == 'a'
+                    else 'external_databases_generic_link' if code == 'c' else '',
+                },
+                'linked_gtin': '8720326035617'}
+
+    monkeypatch.setattr(service, 'project_central_link_truth', projection)
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link',
+                        lambda conn, **identity: {
+                            'id': 'link-b', 'confirmed_by': 'external_databases_off_pending_gpc',
+                            'global_product_id': 'catalog-b',
+                            'primary_gtin': '8718452504435',
+                        } if identity['external_article_code'] == 'b' else None)
+    rows = {row['receipt_article_number']: row
+            for row in service.list_all_external_articles()['items']}
+    assert rows['a']['off_link_id'] == 'link-a'
+    assert rows['b']['off_link_id'] == 'link-b'
+    assert rows['b']['pending_global_product_id'] == 'catalog-b'
+    assert all(rows[code]['pending_global_product_id'] == '' for code in ('a', 'c', 'd'))
+    assert rows['c']['off_link_id'] == ''
+    assert rows['d']['off_link_id'] == ''

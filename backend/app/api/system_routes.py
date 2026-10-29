@@ -58,7 +58,12 @@ from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
 from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
 from app.services.external_article_search_service import search_article_candidates
-from app.services.external_unlinked_articles_service import list_articles_without_catalog_barcode
+from app.services.external_unlinked_articles_service import (
+    list_articles_without_catalog_barcode,
+    list_all_external_articles,
+)
+from app.services.external_off_bulk_unlink_service import unlink_selected_off_article_links
+from app.services.external_off_gpc_assignment_service import classify_pending_off_article
 
 router = APIRouter()
 router.include_router(article_synonym_router)
@@ -382,6 +387,33 @@ def external_databases_receipt_items(limit: int = Query(default=200)):
 @router.get('/api/external-databases/unlinked-articles')
 def external_databases_unlinked_articles():
     return _without_spaarzegels_receipt_items(list_articles_without_catalog_barcode())
+
+
+@router.get('/api/external-databases/articles-overview')
+def external_databases_articles_overview():
+    return list_all_external_articles()
+
+
+@router.post('/api/external-databases/off/unlink-selected')
+def external_databases_unlink_selected_off_products(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Explicit OFF-only unlink; existing platform link permission is enforced by middleware."""
+    try:
+        return unlink_selected_off_article_links(payload.get('selections'))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post('/api/external-databases/off/classify-pending')
+def external_databases_classify_pending_off_product(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Explicit manual GPC confirmation, guarded by the platform link permission."""
+    try:
+        return classify_pending_off_article(
+            receipt_item_id=payload.get('receipt_item_id'),
+            link_id=payload.get('link_id'),
+            brick_code=payload.get('brick_code'),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')

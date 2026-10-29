@@ -68,9 +68,32 @@ artikel niet opnieuw als barcode-loos aan te bieden. Later classificeren maakt
 de relatie automatisch effectief; er wordt niets stilzwijgend geclassificeerd
 of in huishoudelijke voorraad geschreven. Het scheidingcontract tussen
 `global_product`, huishouden en voorraad blijft ongewijzigd.
+De nieuwe ED2-route `POST /api/external-databases/off/classify-pending`
+is gebonden aan `platform.external_products.link_existing`. Zij valideert
+de geselecteerde stagingrelatie, actieve centrale exacte GTIN-identiteit,
+merkcompatibiliteit en de officiële achtcijferige GS1 GPC Brick opnieuw
+onder één transactie. De canonieke officiële producttypegroep/
+`product_group_memberships` én `global_product_gpc_bricks` worden
+consistent ingevuld via bestaande services. Alleen als de bestaande
+read-projectie daarna de bonartikelkoppeling daadwerkelijk als `linked`
+beschouwt, wordt de transactie gecommit; anders volgt volledige rollback.
+Er worden geen kassabonregels, huishouden- of voorraadposities gemuteerd.
 De statusuitbreiding is een PostgreSQL-applicatiemigratie. De historische
 SQLite-bronbaseline is onveranderlijk; de wachtstatus wordt daarin niet
 geschreven en de handmatige OFF-route stopt daar veilig.
+
+De expliciete ED2-bulkactie voor **ontkoppeling van OFF** wijzigt alleen
+gecontroleerde `external_article_product_links` met OFF-herkomst: van
+`confirmed` of `classification_pending` naar `inactive`. De actie legt de
+ontkoppeling vast met `confirmed_by=external_databases_off_unlinked`, zodat
+een historische impliciete GTIN-match de verbroken koppeling niet onmiddellijk
+kan herstellen. Een later nieuw expliciet bevestigd verband gaat boven die
+ontkoppelmarkering. De selectie wordt onder dezelfde databasetransactie opnieuw
+herleid en volledig geverifieerd; gedeelde centrale links moeten integraal
+geselecteerd zijn. Bij twijfel wordt de volledige transactie teruggedraaid.
+Deze bulkactie schrijft nooit in aankoop-, bon-, Catalogus-, huishoud- of
+voorraadtabellen; de oudere kandidaat-ontkoppelroute met andere semantiek
+wordt hier uitdrukkelijk niet aangeroepen.
 
 Een expliciete huismerkmarker in de bontekst is onderdeel van de **exacte** identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet een exact extern product een passende merkidentiteit aantonen. Een conflict wordt voor exacte koppelingen in automatische kandidaatselectie, write-route en read-projectie fail-closed behandeld. Handmatig zoeken mag conflicterende producten wel als niet-koppelbare zoekresultaten tonen. Een expliciet generieke koppeling valt niet onder deze exacte merkregel, omdat zij bewust geen merkidentiteit claimt.
 

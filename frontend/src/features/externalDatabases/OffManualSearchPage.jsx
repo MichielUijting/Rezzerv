@@ -43,7 +43,7 @@ export default function OffManualSearchPage() {
     const controller = new AbortController()
     async function restoreSelectedItem() {
       try {
-        const response = await fetchJsonWithAuth('/api/external-databases/unlinked-articles', {
+        const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', {
           method: 'GET', signal: controller.signal,
         })
         if (!response.ok) throw new Error('Het artikel is niet beschikbaar.')
@@ -63,7 +63,8 @@ export default function OffManualSearchPage() {
     navigate('/externe-databases-2', {
       replace: linkOutcome !== null,
       state: {
-        // After a successful link the article may have left the unlinked list.
+        // Na bevestiging blijft het artikel in het totale overzicht, maar
+        // het kandidatenpaneel opent niet automatisch opnieuw.
         ...(linkOutcome?.status === 'success' ? {} : { selectedItemId: receiptItemId }),
         ...(linkOutcome ? { offLinkOutcome: linkOutcome } : {}),
       },
@@ -74,6 +75,11 @@ export default function OffManualSearchPage() {
     event.preventDefault()
     const searchText = query.trim()
     if (!item || !searchText || loading) return
+    const isBarcodeSearch = /^\d+$/.test(searchText)
+    if (isBarcodeSearch && !/^(?:\d{8}|\d{12,14})$/.test(searchText)) {
+      setError('Vul een geldige barcode van 8, 12, 13 of 14 cijfers in.')
+      return
+    }
     setLoading(true)
     setError('')
     setLinkError('')
@@ -88,7 +94,8 @@ export default function OffManualSearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ receipt_item_id: receiptItemId, mode: 'manual', query: searchText, limit: 20 }),
+        body: JSON.stringify({ receipt_item_id: receiptItemId, mode: 'manual',
+          ...(isBarcodeSearch ? { gtin: searchText } : { query: searchText }), limit: 20 }),
       })
       const payload = await response.json().catch(() => ({}))
       if (controller.signal.aborted) return
@@ -180,12 +187,12 @@ export default function OffManualSearchPage() {
       <ScreenCard fullWidth>
         {itemError ? <p role="alert">{itemError}</p> : null}
         {item ? <>
-          <p>Artikel: {item.receipt_line_text}</p>
+          <p>Artikel: <strong>{item.receipt_line_text}</strong></p>
           <form className="rz-external-off-manual-form" onSubmit={search} data-testid="external-off-free-search-form">
             <label className="rz-input-field">
-              <span className="rz-label">Zoektekst in OFF</span>
-              <input className="rz-input" type="text" autoFocus aria-label="Zoektekst in OFF" value={query}
-                onChange={(event) => setQuery(event.target.value)} placeholder="Typ een productnaam, merk of trefwoorden" />
+              <span className="rz-label">Omschrijving of barcode in OFF</span>
+              <input className="rz-input" type="text" autoFocus aria-label="Omschrijving of barcode in OFF" value={query}
+                onChange={(event) => setQuery(event.target.value)} placeholder="Productnaam, merk, trefwoord of barcode" />
             </label>
             <Button type="submit" disabled={!query.trim() || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
           </form>

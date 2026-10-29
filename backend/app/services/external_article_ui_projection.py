@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     get_confirmed_external_article_product_link,
+    has_explicitly_unlinked_off_article,
 )
 from app.services.external_product_identity_policy import (
     external_product_identity_compatibility,
@@ -172,7 +173,10 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         # article link. Newly cataloged OFF products may still await GS1 GPC.
         # The historical GTIN fallback must not accidentally elevate them to
         # an operational Kassa/Voorraad match.
-        if catalog_product and _complete_global_product_link_data(
+        if catalog_product and not has_explicitly_unlinked_off_article(
+            conn, retailer_code=retailer_code, receipt_text=receipt_text,
+            external_article_code=external_article_code,
+        ) and _complete_global_product_link_data(
             conn, _text(catalog_product.get("global_product_id"))
         ).get("complete"):
             identity_check = external_product_identity_compatibility(

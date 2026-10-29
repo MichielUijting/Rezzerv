@@ -1251,3 +1251,53 @@ zelf sluit of het scherm verlaat, zodat de afwijzing niet onopgemerkt verdwijnt.
 Alleen bij bevestigd `linked: true` verschijnt de succesmelding. **Annuleren** sluit
 alleen de dialoog en blijft op het zoekscherm zonder koppeling.
 OFF-zoeken zelf blijft uitsluitend lezen.
+
+### Externe databases 2: tellerkleuren en gezamenlijk OFF-zoekveld — PO, 28 oktober 2026
+
+De drie klikbare statusfilters boven de ED2-tabel hebben elk een herkenbare
+achtergrond: **Gekoppeld** lichtgroen (`#D9F5E0`), **Niet gekoppeld**
+lichtoranje (`#FFD9A8`) en **Classificatie ontbreekt** wit (`#FFFFFF`).
+Alle drie gebruiken donkergroene tekst en rand; de actieve selectie behoudt
+een duidelijk zichtbaar extra kader. De statustekst blijft altijd zichtbaar,
+zodat kleur niet als enig betekenissignaal dient.
+
+Het afzonderlijke scherm **Zelf zoeken in OFF** heeft één invoerveld voor
+omschrijving, merk, trefwoorden of barcode. Een invoer met alleen cijfers
+wordt als GTIN/EAN behandeld (8, 12, 13 of 14 cijfers); anders zoekt Inhuis
+op tekst. Het onderscheid verandert geen backendvalidatie of expliciete
+koppelbevestiging. De centrale knop **Zoeken** staat direct rechts naast het
+veld, met exact gelijke invoer-/knophoogte en gelijk uitgelijnde onderranden,
+ook bij een smalle mobiele viewport. Er komen geen extra zoekvelden of
+afwijkende knopcomponenten bij.
+
+### Externe databases 2: artikelkop en bulkverwerking — PO, 28 oktober 2026
+
+In **Zelf zoeken in OFF** staat direct boven het gecombineerde zoekveld de
+geselecteerde bonartikelnaam **vetgedrukt**; het voorafgaande label `Artikel:`
+blijft normaal. De ED2-hoofdtabel heeft een smalle selectiekolom zonder titel.
+**Alles op pagina** selecteert uitsluitend de getoonde tabelpagina; een selectie
+op andere pagina's blijft bewaard. **Exporteren** en **Ontkoppelen** staan als
+bulkacties onder de tabel en zijn zichtbaar maar inactief zonder passende
+selectie. Exporteren levert uitsluitend de geselecteerde artikelen als CSV;
+ontkoppelen vraagt eerst expliciete bevestiging met **Annuleren** en **OK**.
+Alleen een aantoonbare OFF-koppeling kan ontkoppeld worden, maximaal honderd
+bonartikelen per keer. Bij een serverfout of verouderde selectie blijft de
+actie zonder succesvolle melding. Na een geslaagde ontkoppeling worden de
+tellers en de tabel ververst. Bestaande DataTable-opmaak, sortering, filters,
+resize, paginering en mobiele bediening blijven leidend.
+
+### Externe databases 2: GS1-classificatie aanvullen en tekstfilters — PO, 28 oktober 2026
+
+De kolomtitel **Status** wordt **GS1-class.**; de kolom blijft de bekende
+Nederlandse statusteksten weergeven. Onder zowel **Art.code** als
+**GS1-class.** staat het standaard tekstfilter van de gedeelde `DataTable`,
+zonder afwijkende keuzelijst. De drie gekleurde tellers blijven aparte
+klikfilters en kunnen samen met de tekstfilters worden gebruikt.
+
+Bij **Classificatie ontbreekt** opent een compact GS1-aanvulpaneel in ED2,
+met de bonartikelnaam vetgedrukt, officiële GS1-voorstellen en één zoekveld
+voor code of Nederlandse omschrijving. De kandidaatregels volgen de gewone
+`DataTable` met maximaal zeven per pagina. Een regel kiezen is géén mutatie;
+**Classificatie opslaan** vraagt expliciet **Annuleren/OK**. Bij bewezen
+succes sluit het paneel en vernieuwt de bovenste tabel inclusief tellers;
+bij fouten blijft de gebruiker op het paneel met een leesbare melding.

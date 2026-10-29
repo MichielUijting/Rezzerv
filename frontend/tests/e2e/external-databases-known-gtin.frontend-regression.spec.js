@@ -9,8 +9,102 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
+  test('tellers en kolom Art.code filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
+    const rows = [
+      { id: 'receipt-table-line:ed2-empty', receipt_line_text: 'Melk zonder code', retailer_code: 'jumbo',
+        receipt_article_number: '123', article_code: '', link_status: 'unlinked' },
+      { id: 'receipt-table-line:ed2-pending', receipt_line_text: 'Melk zonder classificatie', retailer_code: 'jumbo',
+        receipt_article_number: '456', article_code: '8718452504435', link_status: 'classification_pending' },
+      { id: 'receipt-table-line:ed2-linked', receipt_line_text: 'Melk met code', retailer_code: 'jumbo',
+        receipt_article_number: '789', article_code: '8720326035617', link_status: 'linked' },
+    ]
+    const requests = []
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+        role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+        items: rows, total: 3, counts: { unlinked: 1, classification_pending: 1, linked: 1 },
+      } })
+      if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+        results: [], provider: 'none',
+      } })
+      if (path === '/api/external-products/off/search') {
+        requests.push(route.request().postDataJSON())
+        return route.fulfill({ json: { provider: 'off_exact_gtin', results: [{
+          gtin: '8718452504435', product_name: 'Halfvolle melk', brand: 'Jumbo',
+          score: 0.9, selection_proof: 'signed-exact', identity_compatible: true,
+        }] } })
+      }
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2')
+    const table = page.getByTestId('external-databases-2-table')
+    await expect(table.locator('tbody tr')).toHaveCount(3)
+    const unlinkedCounter = page.getByRole('button', { name: 'Niet gekoppeld: 1' })
+    const pendingCounter = page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })
+    const linkedCounter = page.getByRole('button', { name: 'Gekoppeld: 1', exact: true })
+    await expect(unlinkedCounter).toHaveCSS('background-color', 'rgb(255, 217, 168)')
+    await expect(pendingCounter).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(linkedCounter).toHaveCSS('background-color', 'rgb(217, 245, 224)')
+
+    await linkedCounter.click()
+    await expect(table).toContainText('Melk met code')
+    await expect(table).not.toContainText('Melk zonder code')
+    await page.getByRole('button', { name: 'Wis filters' }).click()
+    await page.getByRole('textbox', { name: 'Filter op Art.code' }).fill('8720326035617')
+    await expect(table).toContainText('Melk met code')
+    await expect(table).not.toContainText('Melk zonder code')
+    await page.getByRole('button', { name: 'Wis filters' }).click()
+    await page.getByRole('textbox', { name: 'Filter op GS1-class.' }).fill('Gekoppeld')
+    await expect(table.locator('tbody tr')).toHaveCount(1)
+    await expect(table).toContainText('Melk met code')
+    await expect(table).not.toContainText('Melk zonder code')
+    await expect(table.locator('thead')).toContainText('GS1-class.')
+    await page.getByRole('button', { name: 'Wis filters' }).click()
+
+    await table.locator('tbody tr').filter({ hasText: 'Melk zonder code' }).dblclick()
+    await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+    const selectedReceiptName = page.getByText('Melk zonder code', { exact: true })
+    await expect(selectedReceiptName).toHaveCSS('font-weight', '700')
+    const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
+    const searchButton = page.getByRole('button', { name: 'Zoeken', exact: true })
+    await expect(page.getByRole('textbox')).toHaveCount(1)
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 })
+      // A responsive viewport switch may briefly unmount the current layout.
+      // Wait for both controls and keep the original height/alignment contract.
+      await expect(freeSearch).toBeVisible()
+      await expect(searchButton).toBeVisible()
+      await expect.poll(async () => {
+        const fieldBox = await freeSearch.boundingBox()
+        const buttonBox = await searchButton.boundingBox()
+        return Boolean(fieldBox && buttonBox
+          && Math.abs(fieldBox.height - buttonBox.height) <= 1
+          && Math.abs((fieldBox.y + fieldBox.height) - (buttonBox.y + buttonBox.height)) <= 1)
+      }).toBe(true)
+    }
+    await freeSearch.fill('8718452504435')
+    await searchButton.click()
+    await expect(page.getByTestId('external-off-free-search-results')).toContainText('Halfvolle melk')
+    expect(requests).toEqual([{ receipt_item_id: rows[0].id, mode: 'manual', gtin: '8718452504435', limit: 20 }])
+    await freeSearch.fill('1234567')
+    await searchButton.click()
+    await expect(page.getByRole('alert')).toContainText('Vul een geldige barcode van 8, 12, 13 of 14 cijfers in.')
+    expect(requests).toHaveLength(1)
+    await freeSearch.fill('Halfvolle melk 2')
+    await searchButton.click()
+    expect(requests[1]).toEqual({ receipt_item_id: rows[0].id, mode: 'manual', query: 'Halfvolle melk 2', limit: 20 })
+  })
   for (const width of [390, 1280]) {
-    test(`OFF-product zonder GPC blijft zichtbaar in Catalogus en verdwijnt uit ongekoppeld op ${width}px`, async ({ page }) => {
+    test(`OFF-product zonder GPC blijft in Catalogus en ED2 zichtbaar op ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       const item = { id: 'receipt-table-line:achterham-test', receipt_line_text: 'Achterham BL',
         retailer_code: 'lidl', receipt_article_number: '6604471', quantity_label: '1 stuk' }
@@ -27,8 +121,11 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: {
-          items: saved ? [] : [item], total: saved ? 0 : 1,
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+          items: [saved ? { ...item, article_code: '8718452504435',
+            link_status: 'classification_pending' } : { ...item, article_code: '', link_status: 'unlinked' }],
+          total: 1, counts: saved ? { unlinked: 0, classification_pending: 1, linked: 0 }
+            : { unlinked: 1, classification_pending: 0, linked: 0 },
         } })
         if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
           provider: 'openfoodfacts', results: [{ gtin: '8718452504435',
@@ -64,7 +161,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       if (width <= 720) await row.click()
       else await row.dblclick()
       await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
-      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('Achterham')
+      await page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' }).fill('Achterham')
       await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
       const candidate = page.getByTestId('external-off-free-search-results').locator('tbody tr').first()
       if (width <= 720) await candidate.click()
@@ -72,7 +169,9 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
       await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
-      await expect(table).not.toContainText('Achterham BL')
+      await expect(table).toContainText('Achterham BL')
+      await expect(table).toContainText('8718452504435')
+      await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
       await page.goto('/catalogus')
       await expect(page.getByText('Achterham', { exact: true })).toBeVisible()
       await expect(page.getByText('Classificatie ontbreekt')).toBeVisible()
@@ -143,7 +242,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           permissions: { 'platform.system_household.access': true },
         } })
         if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
@@ -188,7 +287,16 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await panel.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('')
       await expect(candidates.locator('tbody tr')).toHaveCount(7)
       expect(searches).toHaveLength(1)
-      expect(await panel.evaluate((element) => Boolean(element.previousElementSibling?.querySelector('[data-testid="external-databases-2-table"]')))).toBe(true)
+      // Het OFF-paneel volgt op de gewone tabel en de bulkacties in dezelfde
+      // overzichtscontainer, niet meer als direct volgend sibling-element.
+      const overview = page.locator('.rz-external-receipt-overview')
+      await expect(overview.getByTestId('external-databases-2-table')).toHaveCount(1)
+      await expect(overview.getByTestId('external-databases-2-off-panel')).toHaveCount(1)
+      expect(await overview.evaluate((element) => {
+        const table = element.querySelector('[data-testid="external-databases-2-table"]')
+        const panel = element.querySelector('[data-testid="external-databases-2-off-panel"]')
+        return Boolean(table && panel && (table.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING))
+      })).toBe(true)
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
       if (width <= 720) {
@@ -197,7 +305,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         await expect(page.getByTestId('app-header')).toContainText('Zelf zoeken in OFF')
       }
       await expect(page.getByRole('textbox')).toHaveCount(1)
-      const freeSearch = page.getByRole('textbox', { name: 'Zoektekst in OFF' })
+      const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
       await freeSearch.fill('halfvolle melk bio')
       await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
       const freeResults = page.getByTestId('external-off-free-search-results')
@@ -234,7 +342,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
-      await page.getByRole('textbox', { name: 'Zoektekst in OFF' }).fill('halfvolle melk bio')
+      await page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' }).fill('halfvolle melk bio')
       await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
       await expect(freeResults.locator('tbody tr')).toHaveCount(7)
       await selectRow()
@@ -285,7 +393,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           active_household_id: '0', context_type: 'system', role: 'owner',
           is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
         } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: rows, total: rows.length } })
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: rows, total: rows.length } })
         if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
         if (path === '/api/features') return route.fulfill({ json: { features: {} } })
         if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
@@ -301,9 +409,19 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(table.locator('tbody tr')).toHaveCount(1)
       await expect(table).toContainText('Artikel 22')
       await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
-      await expect(table.getByRole('checkbox')).toHaveCount(0)
+      // Na zoeken blijft de nieuwe bulkselectie beschikbaar voor de ene
+      // zichtbare rij; zonder selectie is exporteren terecht uitgeschakeld.
+      await expect(table.getByRole('checkbox')).toHaveCount(1)
+      await expect(table.getByRole('checkbox', { name: 'Selecteer Artikel 22' })).not.toBeChecked()
+      // Inhuis policy: Exporteren is desktop-only at 720px and below.
+      // The button remains in the DOM, but must be hidden on mobile.
+      const exportButton = page.locator('button[data-mobile-export-action="true"]')
+      await expect(exportButton).toHaveCount(1)
+      if (width <= 720) await expect(exportButton).toBeHidden()
+      else await expect(exportButton).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Ontkoppelen', exact: true })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Afsluiten', exact: true })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken|Exporteren/ })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Koppel|Zoek product|Zelf zoeken/ })).toHaveCount(0)
       expect(writes).toEqual([])
     })
 
@@ -317,7 +435,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           active_household_id: '0', context_type: 'system', role: 'owner',
           is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
         } })
-        if (path === '/api/external-databases/unlinked-articles') return route.fulfill({ json: { items: [
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: [
           { id: 'receipt-table-line:jumbo-display', receipt_line_text: 'JUMBO FUET PLAKJES',
             retailer_code: 'jumbo', receipt_article_number: '123', quantity_label: '1' },
         ] } })

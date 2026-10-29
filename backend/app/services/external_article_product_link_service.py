@@ -595,6 +595,7 @@ def _serialize_external_article_product_link(
         "external_article_code": str(row.get("external_article_code") or ""),
         "global_product_id": str(row.get("global_product_id") or ""),
         "global_product_name": row.get("global_product_name"),
+        "primary_gtin": str(row.get("primary_gtin") or ""),
         "status": str(row.get("status") or ""),
         "confirmed_by": row.get("confirmed_by"),
         "confirmed_at": row.get("confirmed_at"),
@@ -839,6 +840,32 @@ def get_pending_classification_external_article_link(
                     and not complete.get("is_generic_catalog_product")):
                 return _serialize_external_article_product_link(row)
     return None
+
+
+def has_explicitly_unlinked_off_article(
+    conn, *, retailer_code: Any, receipt_text: Any = None,
+    external_article_code: Any = None,
+) -> bool:
+    """An explicit ED2 OFF-unlink wins over historical implicit GTIN matching.
+
+    Only the dedicated OFF bulk operation writes this marker. Re-linking the
+    article creates a new confirmed row, which takes precedence over it.
+    """
+    retailer = normalize_external_link_retailer_code(retailer_code)
+    code = normalize_external_link_article_code(external_article_code)
+    label = normalize_external_link_receipt_text(receipt_text)
+    if not retailer or not (code or label):
+        return False
+    row = conn.execute(text("""
+        SELECT id FROM external_article_product_links
+        WHERE retailer_code = :retailer
+          AND status = 'inactive'
+          AND confirmed_by = 'external_databases_off_unlinked'
+          AND ((:code <> '' AND external_article_code = :code)
+            OR (:label <> '' AND receipt_text_normalized = :label))
+        LIMIT 1
+    """), {"retailer": retailer, "code": code, "label": label}).first()
+    return row is not None
 
 
 def get_confirmed_external_article_product_link(
