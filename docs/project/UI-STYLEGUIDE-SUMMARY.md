@@ -1356,3 +1356,35 @@ gebruiker. Na bevestigen verdwijnt het artikel uit de standaardselectie met
 ontbrekende classificaties, maar is via wissen van het filter of in de
 Catalogus weer terug te vinden. Sortering en zoeken behandelen de status
 op beide schermen identiek.
+
+
+## Synoniemenanalyse in centrale Catalogus — 29 oktober 2026
+
+De Catalogus toont voor Superusers en Frontteamleden zowel op desktop als mobiel
+een actie **Synoniemenanalyse**. De route gebruikt de bestaande gedeelde mobiele
+sticky header en de bestaande platformrol-/permissieafscherming.
+
+Het scherm gebruikt de bestaande **ScreenCard**, **Button**, **Select** en
+**DataTable** in plaats van nieuwe tabel-, filter- of navigatiecomponenten.
+De indeling bestaat uit:
+- een compacte rij tellers voor rechtstreeks bevestigde artikelparen, open
+  tekstkandidaten, artikelen zonder gevonden kandidaat en artikelen waarvan
+  de winkel onbekend is;
+- filters op artikelsoort, winkel, status en zoektekst;
+- een standaard gepagineerde tabel met artikelsoort, winkel en aantallen;
+- een tweede standaard gepagineerde tabel voor de betrokken Catalogusartikelen,
+  met Catalogusfoto, rechtstreeks gekoppelde winkels, voorstelstatus en een
+  doorklikactie naar de bestaande handmatige Artikel-synoniemen-beoordeling.
+
+Getallen zijn uitsluitend gebaseerd op actuele centrale Catalogusgegevens.
+De UI vermeldt dat een tekstkandidaat géén bewezen functionele gelijkwaardigheid
+is, dat ontbrekende kandidaten geen ontbrekend supermarktassortiment bewijzen
+en dat alleen rechtstreeks bevestigde relaties als gekoppeld tellen.
+Een product mag tegelijk gekoppelde winkels en nog te beoordelen voorstellen
+hebben. Ontbrekende winkelidentiteit heet **Winkel onbekend** en wordt niet
+als werkelijk aanwezige winkel gepresenteerd.
+
+De tellers gebruiken een neutrale, compacte opmaak met dezelfde bestaande
+design tokens; de eigen scherm-CSS beperkt zich tot grid/spacing en de
+responsieve stapeling op maximaal 720px. Tabelkolommen, uitlijning,
+paginering en actieknoppen volgen de cumulatieve Inhuis-styleguide.
