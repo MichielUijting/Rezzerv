@@ -48,6 +48,9 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "maintenance_audit",
     "global_product_consumption_profiles",
     ARTICLE_SYNONYM_LINKS_TABLE,
+    # Post-baseline classification tables are checked for schema authority below.
+    "global_product_shopify_classifications",
+    "global_product_shopify_history",
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -772,6 +775,58 @@ def _assert_article_synonym_schema(connection) -> None:
     print('ARTICLE_SYNONYM_SCHEMA_AUTHORITY_GREEN')
 
 
+def _assert_article_classification_schema(connection) -> None:
+    """Validate migration-owned classification objects independently of the frozen baseline."""
+    inspector = inspect(connection)
+    classification = "global_product_shopify_classifications"
+    history = "global_product_shopify_history"
+    shared = {
+        "global_product_id", "shopify_id", "shopify_path", "taxonomy_version",
+        "barcode_at_confirmation", "version", "confirmed_by", "confirmed_at",
+    }
+    expected = {
+        classification: shared | {"is_active"},
+        history: shared | {"id", "action"},
+    }
+    for table, required_columns in expected.items():
+        if not inspector.has_table(table):
+            raise AssertionError(f"Article classification table missing: {table}")
+        columns = {column["name"]: column for column in inspector.get_columns(table)}
+        if set(columns) != required_columns:
+            raise AssertionError(f"Article classification schema drift in {table}: {set(columns)!r}")
+        if any(column["nullable"] for column in columns.values()):
+            raise AssertionError(f"Article classification columns must be NOT NULL: {table}")
+        if not isinstance(columns["version"]["type"], sa.Integer):
+            raise AssertionError(f"Article classification version must be INTEGER: {table}")
+        if not isinstance(columns["confirmed_at"]["type"], sa.DateTime):
+            raise AssertionError(f"Article classification timestamp must be DATETIME: {table}")
+    active_column = next(
+        column for column in inspector.get_columns(classification)
+        if column["name"] == "is_active"
+    )
+    if not isinstance(active_column["type"], sa.Boolean):
+        raise AssertionError("Article classification is_active must be BOOLEAN")
+    if tuple(inspector.get_pk_constraint(classification).get("constrained_columns") or ()) != ("global_product_id",):
+        raise AssertionError("Article classification primary key drift")
+    if tuple(inspector.get_pk_constraint(history).get("constrained_columns") or ()) != ("id",):
+        raise AssertionError("Article classification history primary key drift")
+    foreign_keys = inspector.get_foreign_keys(classification)
+    if len(foreign_keys) != 1 or not (
+        foreign_keys[0].get("constrained_columns") == ["global_product_id"]
+        and foreign_keys[0].get("referred_table") == "global_products"
+        and foreign_keys[0].get("referred_columns") == ["id"]
+        and foreign_keys[0].get("options", {}).get("ondelete") == "CASCADE"
+    ):
+        raise AssertionError(f"Article classification foreign key drift: {foreign_keys!r}")
+    if inspector.get_foreign_keys(history):
+        raise AssertionError("Article classification audit history must not cascade")
+    indexes = {index["name"]: index for index in inspector.get_indexes(history)}
+    audit_index = indexes.get("idx_shopify_history_product")
+    if not audit_index or tuple(audit_index.get("column_names") or ()) != ("global_product_id", "confirmed_at"):
+        raise AssertionError("Article classification audit index drift")
+    print("ARTICLE_CLASSIFICATION_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -796,6 +851,7 @@ def main() -> None:
             _assert_lidl_import_window_schema(connection)
             _assert_consumption_profile_schema(connection)
             _assert_article_synonym_schema(connection)
+            _assert_article_classification_schema(connection)
             _assert_maintenance_schema(connection)
     finally:
         engine.dispose()

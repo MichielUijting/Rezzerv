@@ -582,7 +582,7 @@ def list_catalog(
     normalized_offset = offset if isinstance(offset, int) else 0
     order_expression = expressions.get(normalized_sort_by, expressions["name"])
     direction = "DESC" if normalized_sort_direction.lower() == "desc" else "ASC"
-    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source", "article_classification"}:
+    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"} or normalized_sort_by == "article_classification":
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"

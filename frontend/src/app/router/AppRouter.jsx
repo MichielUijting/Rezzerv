@@ -201,7 +201,7 @@ const router = createBrowserRouter([
   { path: '/externe-databases-2/off-zoeken/:receiptItemId', element: <ProtectedFrontteam><OffManualSearchPage /></ProtectedFrontteam> },
   { path: '/catalogus', element: <Protected><CatalogResponsive /></Protected> },
   { path: '/catalogus/artikelclassificaties-toekennen', element: <ProtectedFrontteam><ShopifyReviewPage /></ProtectedFrontteam> },
-  { path: '/catalogus/shopify-beoordelen', element: <Navigate to="/catalogus/artikelclassificaties-toekennen" replace /> },
+  { path: '/catalogus/shopify-beoordelen', element: <ProtectedFrontteam><Navigate to="/catalogus/artikelclassificaties-toekennen" replace /></ProtectedFrontteam> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
   { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
