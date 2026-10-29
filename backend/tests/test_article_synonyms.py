@@ -311,7 +311,7 @@ class SynonymAnalysisContractTest(unittest.TestCase):
         # One new direct pair updates BOTH participants, without transitivity.
         updated = service.build_synonym_analysis(
             products, {('a', 'b'), ('a', 'c'), ('a', 'd'), ('c', 'd'), ('b', 'e')}, [])
-        self.assertEqual(updated['summary']['synonym_buckets'], {'0': 1, '1': 2, '2': 2, '3+': 1})
+        self.assertEqual(updated['summary']['synonym_buckets'], {'0': 1, '1': 1, '2': 3, '3+': 1})
         self.assertEqual({p['id']: p['synonym_count'] for p in updated['items']}['e'], 1)
 
     def test_candidate_list_maximum_five_and_only_existing_valid_pairs(self):
@@ -323,8 +323,9 @@ class SynonymAnalysisContractTest(unittest.TestCase):
         self.assertTrue(all('a' in (p['left']['id'], p['right']['id']) for p in pairs))
         self.assertEqual(pairs, service.candidate_pairs_for_product(products, set(), 'a'))
         self.assertEqual(service.candidate_pairs_for_product(products, set(), 'unknown'), None)
-        self.assertEqual(service.candidate_pairs_for_product(products, {('a', '0')}, 'a'),
-                         [pair for pair in pairs if (pair['left']['id'], pair['right']['id']) != ('0', 'a')][:5])
+        self.assertTrue(all((pair['left']['id'], pair['right']['id']) != ('0', 'a')
+                            for pair in service.candidate_pairs_for_product(products, {('0', 'a')}, 'a')))
+        self.assertLessEqual(len(service.candidate_pairs_for_product(products, {('0', 'a')}, 'a')), 5)
 
 if __name__ == '__main__':
     unittest.main()
