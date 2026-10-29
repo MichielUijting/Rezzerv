@@ -153,3 +153,18 @@ Ook via Enter op een gefocuste rij is het paneel toegankelijk. Er zijn geen
 wijzigingen aan de dubbele bevestigingsroute binnen de kandidaat-tabel of aan
 opslag, autorisatie en Catalogusprojectie. Overbodige losse toelichtingen rondom
 de tabellen zijn uit het werkscherm verwijderd.
+
+
+### Compacte filters en scrollbar — PO, 29 oktober 2026
+
+De vier tellers blijven het enige aanvullende filter boven de standaardtabel.
+De losse artikelsoort-, winkel- en artikelzoekvelden boven de hoofdtabel
+vervallen: de bestaande filtervelden in de DataTable zijn leidend.
+De bestaande DataTable blijft tien rijen per pagina tonen. Op dit specifieke
+Synoniemenanalyse-scherm wordt de gedeelde maximale scrollhoogte lokaal
+losgelaten, zodat de horizontale scrollbar aan de onderkant van de **hele**
+tabel staat en geen tabelrij of tekst bedekt. Dezelfde lokale regel geldt
+voor de kandidaat-DataTable (maximaal vijf regels). De knop **Sluiten**
+naast de kandidaat-tabeltitel vervalt; dubbelklik op een andere hoofdregel
+laadt de kandidaten voor dat artikel. Bestaande selectie-, dubbelklik- en
+bevestigingsfunctionaliteit blijft gehandhaafd.

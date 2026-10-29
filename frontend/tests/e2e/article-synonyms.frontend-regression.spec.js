@@ -193,6 +193,23 @@ for (const width of [390, 1280]) {
     await page.goto('/catalogus/synoniemenanalyse')
     const main = page.getByTestId('synonym-analysis-items')
     await expect(main).toContainText('Halfvolle melk AH')
+    await expect(page.getByRole('combobox', { name: 'Filter artikelsoort' })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: 'Filter winkel' })).toHaveCount(0)
+    await expect(page.getByPlaceholder('Artikel, merk of winkel')).toHaveCount(0)
+    // The shared table wrapper is capped for many screens; this page must not
+    // put the horizontal scrollbar across its last visible article row.
+    const mainDimensions = await main.evaluate((table) => {
+      const wrapper = table.parentElement
+      const lastRow = table.querySelector('tbody tr:last-child')
+      return {
+        scrollHeight: wrapper.scrollHeight,
+        clientHeight: wrapper.clientHeight,
+        wrapperBottom: wrapper.getBoundingClientRect().bottom,
+        lastRowBottom: lastRow.getBoundingClientRect().bottom,
+      }
+    })
+    expect(mainDimensions.scrollHeight).toBeLessThanOrEqual(mainDimensions.clientHeight + 1)
+    expect(mainDimensions.wrapperBottom).toBeGreaterThanOrEqual(mainDimensions.lastRowBottom)
     await expect(page.getByTestId('synonym-count-0')).toContainText('6')
     await expect(page.getByTestId('synonym-count-1')).toContainText('2')
     await page.getByTestId('synonym-count-0').click()
@@ -209,8 +226,21 @@ for (const width of [390, 1280]) {
     await articleRow.click()
     await expect(page.getByTestId('synonym-analysis-candidates')).toHaveCount(0)
     await articleRow.dblclick()
+    await expect(page.getByRole('button', { name: 'Sluiten', exact: true })).toHaveCount(0)
     const table = page.getByTestId('synonym-analysis-candidate-table')
     await expect(table.locator('tbody tr')).toHaveCount(5)
+    const candidateDimensions = await table.evaluate((tableElement) => {
+      const wrapper = tableElement.parentElement
+      const lastRow = tableElement.querySelector('tbody tr:last-child')
+      return {
+        scrollHeight: wrapper.scrollHeight,
+        clientHeight: wrapper.clientHeight,
+        wrapperBottom: wrapper.getBoundingClientRect().bottom,
+        lastRowBottom: lastRow.getBoundingClientRect().bottom,
+      }
+    })
+    expect(candidateDimensions.scrollHeight).toBeLessThanOrEqual(candidateDimensions.clientHeight + 1)
+    expect(candidateDimensions.wrapperBottom).toBeGreaterThanOrEqual(candidateDimensions.lastRowBottom)
     await expect(page.getByTestId('synonym-analysis-confirm')).toBeDisabled()
     await table.getByRole('radio', { name: 'Selecteer Halfvolle melk Lidl als synoniem' }).check()
     await expect(page.getByTestId('synonym-analysis-confirm')).toBeEnabled()

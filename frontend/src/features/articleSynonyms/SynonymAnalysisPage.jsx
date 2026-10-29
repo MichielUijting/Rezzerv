@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
-import Select from '../../ui/Select.jsx'
 import CatalogProductImage from '../catalog/CatalogProductImage'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -25,9 +24,6 @@ export default function SynonymAnalysisPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [bucket, setBucket] = useState('')
-  const [category, setCategory] = useState('')
-  const [store, setStore] = useState('')
-  const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [candidates, setCandidates] = useState([])
   const [candidateId, setCandidateId] = useState('')
@@ -83,22 +79,8 @@ export default function SynonymAnalysisPage() {
 
   const products = data?.items || []
   const selectedProduct = products.find((item) => item.id === selectedId) || null
-  const categoryOptions = useMemo(() => [
-    { value: '', label: 'Alle artikelsoorten' },
-    ...Array.from(new Map(products.map((row) => [row.group_key, {
-      value: row.group_key, label: row.group_label,
-    }])).values()).sort((a, b) => a.label.localeCompare(b.label, 'nl')),
-  ], [products])
-  const storeOptions = useMemo(() => [
-    { value: '', label: 'Alle winkels' },
-    ...[...new Set(products.map((p) => p.store))].sort().map((name) => ({ value: name, label: name })),
-  ], [products])
   const visibleProducts = products.filter((item) => (
-    (!bucket || (bucket === '3+' ? item.synonym_count >= 3 : item.synonym_count === Number(bucket)))
-    && (!category || item.group_key === category)
-    && (!store || item.store === store)
-    && (!search || [item.name, item.brand, item.variant, item.store, item.group_label]
-      .join(' ').toLocaleLowerCase('nl-NL').includes(search.toLocaleLowerCase('nl-NL')))
+    !bucket || (bucket === '3+' ? item.synonym_count >= 3 : item.synonym_count === Number(bucket))
   ))
 
   function toggleBucket(value) {
@@ -170,12 +152,8 @@ export default function SynonymAnalysisPage() {
                 <span>{label}</span>
               </button>)}
           </div>
-          <div className="rz-synonym-analysis-filters">
-            <label>Artikelsoort<Select value={category} onChange={setCategory} options={categoryOptions} ariaLabel="Filter artikelsoort" /></label>
-            <label>Winkel<Select value={store} onChange={setStore} options={storeOptions} ariaLabel="Filter winkel" /></label>
-            <label>Zoek artikel<input className="rz-input" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Artikel, merk of winkel" /></label>
-          </div>
           <DataTable columns={mainColumns} data={visibleProducts} pageSize={10}
+            wrapperClassName="rz-synonym-analysis-table-wrapper"
             dataTestId="synonym-analysis-items" emptyMessage="Geen artikelen voor dit filter."
             renderRow={(item) => (
               <tr key={item.id} tabIndex={0} className="rz-synonym-analysis-main-row"
@@ -203,11 +181,11 @@ export default function SynonymAnalysisPage() {
           {selectedProduct ? <section className="rz-synonym-analysis-details" data-testid="synonym-analysis-candidates">
             <div className="rz-synonym-analysis-details-heading">
               <h3>Kandidaten voor {selectedProduct.name}</h3>
-              <Button type="button" variant="secondary" onClick={() => setSelectedId('')}>Sluiten</Button>
             </div>
             {candidateError ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{candidateError}</p> : null}
             {candidateLoading ? <p role="status">Kandidaten zoeken…</p> : null}
             <DataTable columns={candidateColumns} data={candidates} pageSize={5}
+              wrapperClassName="rz-synonym-analysis-table-wrapper"
               dataTestId="synonym-analysis-candidate-table"
               emptyMessage={candidateLoading ? 'Kandidaten laden...' : selectedProduct.retailer_code ? 'Geen geschikte kandidaten gevonden met de aanwezige Catalogusgegevens.' : 'De winkel van dit artikel is onbekend. Daardoor kan Inhuis nog geen betrouwbare winkeloverstijgende kandidaten voorstellen.'}
               renderRow={(pair) => {

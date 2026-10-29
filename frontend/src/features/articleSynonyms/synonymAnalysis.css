@@ -6,8 +6,15 @@
 .rz-synonym-analysis-stat[aria-pressed="true"] { background: #d9f0e8; box-shadow: inset 0 0 0 2px var(--color-ui-primary, #005f6a); }
 .rz-synonym-analysis-stat:focus-visible { outline: 2px solid var(--color-ui-primary, #005f6a); outline-offset: 2px; }
 .rz-synonym-analysis-note { color: var(--color-ui-text-secondary, #425650); font-size: .9rem; }
-.rz-synonym-analysis-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px; }
-.rz-synonym-analysis-filters label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* Unlike the shared capped scroll region, this screen must show the entire
+   ten-row page before the horizontal scrollbar. Keep the correction local. */
+.rz-synonym-analysis .rz-synonym-analysis-table-wrapper {
+  max-height: none;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding-bottom: 0;
+}
 .rz-synonym-analysis-product { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .rz-synonym-analysis-main-row { cursor: default; }
 .rz-synonym-analysis-main-row:hover { background: #eff8f4; }

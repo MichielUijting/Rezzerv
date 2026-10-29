@@ -1422,3 +1422,16 @@ blijven beschikbaar. Het paneel onder de tabel krijgt uitsluitend een korte
 titel met artikelnaam, de kandidaat-DataTable en de benodigde selectie-/koppel-
 acties; verklarende zwarte alinea's vervallen. De bevestigingsknop blijft
 **onder** de kandidaat-tabel aanwezig.
+
+
+### Synoniemenanalyse: filters en tabelscroll — PO, 29 oktober 2026
+
+Verwijder alle extra filtervelden boven de Synoniemenanalyse-tabel; het
+centrale DataTable-filter onder de kolomkoppen heeft exact dezelfde functie.
+De vier synoniem-tellers blijven beschikbaar. De standaard paginering en
+kolom-resize blijven behouden. De schermspecifieke tabel-wrapper toont zijn
+volledige pagina van tien artikelen, zodat de horizontale scrollbar **onder**
+de laatste tabelrij wordt geplaatst en nooit door de tekst loopt. Dezelfde
+regel geldt voor de onderste kandidaattabel met maximaal vijf rijen.
+Verwijder de aparte knop **Sluiten** bij de kandidaatsectie, maar behoud de
+bevoegde koppelactie onder de kandidaattabel en foutmeldingen bij problemen.
