@@ -223,6 +223,7 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
     linked = defaultdict(set)
     pending = defaultdict(list)
     valid_links = set()
+    direct_peers = defaultdict(set)
     for left, right in confirmed:
         a, b = by_id.get(left), by_id.get(right)
         if not a or not b or not a.get('retailer_code') or not b.get('retailer_code'):
@@ -230,6 +231,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         if a['retailer_code'] == b['retailer_code']:
             continue
         valid_links.add(tuple(sorted((left, right))))
+        direct_peers[left].add(right)
+        direct_peers[right].add(left)
         linked[left].add(b['retailer_code'])
         linked[right].add(a['retailer_code'])
 
@@ -278,6 +281,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
             'group_key': group_key, 'group_label': group_label,
             'group_source': group_source,
             'linked_stores': sorted(_store_name(code) for code in linked[pid]),
+            'synonym_count': len(direct_peers[pid]),
+            'synonym_names': sorted(by_id[peer]['name'] for peer in direct_peers[pid]),
             'pending': sorted(pending[pid], key=lambda p: (-p['score'], p['name'], p['id'])),
             'status': status,
         }
@@ -299,8 +304,15 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         if status in ('no_candidate', 'insufficient'):
             record[status] += 1
 
+    buckets = {
+        '0': sum(not direct_peers[product['id']] for product in products),
+        '1': sum(len(direct_peers[product['id']]) == 1 for product in products),
+        '2': sum(len(direct_peers[product['id']]) == 2 for product in products),
+        '3+': sum(len(direct_peers[product['id']]) >= 3 for product in products),
+    }
     return {
         'summary': {
+            'synonym_buckets': buckets,
             'confirmed_pairs': len(valid_links),
             'candidate_pairs': len(suggestions),
             'no_candidate_articles': sum(p['status'] == 'no_candidate' for p in items),
@@ -311,3 +323,18 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         'groups': sorted(groups.values(), key=lambda g: (g['group_label'].casefold(), g['store'].casefold())),
         'items': items,
     }
+
+
+def candidate_pairs_for_product(products, confirmed, product_id, limit=5):
+    """Return up to five actual, still-confirmable proposals for one central product.
+
+    The ranking and fingerprints MUST be those of confirm_pairs(); do not
+    generate UI-only suggestions which the canonical write route cannot validate.
+    """
+    if product_id not in {product['id'] for product in products}:
+        return None
+    proposals = [
+        pair for pair in suggest_pairs(products, confirmed)
+        if product_id in (pair['left']['id'], pair['right']['id'])
+    ]
+    return proposals[:max(0, min(int(limit), 5))]

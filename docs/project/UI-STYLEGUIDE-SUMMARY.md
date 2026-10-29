@@ -1388,3 +1388,22 @@ De tellers gebruiken een neutrale, compacte opmaak met dezelfde bestaande
 design tokens; de eigen scherm-CSS beperkt zich tot grid/spacing en de
 responsieve stapeling op maximaal 720px. Tabelkolommen, uitlijning,
 paginering en actieknoppen volgen de cumulatieve Inhuis-styleguide.
+
+
+### Synoniemenanalyse: directe artikelwerklijst — PO, 29 oktober 2026
+
+De startweergave toont **één standaard DataTable met individuele artikelen**,
+geen technische GPC-matrix boven de werklijst. Boven die tabel staan vier
+compacte aanklikbare tellers voor artikelen met **0, 1, 2 of 3+** rechtstreeks
+bevestigde synoniemen. De actieve teller gebruikt dezelfde primaire Inhuis-token
+en een subtiele groene achtergrond. Nogmaals klikken schakelt het filter uit.
+De bestaande gedeelde DataTable levert zoeken, sorteren en pagineren.
+
+Een klik op een artikel toont **onder de tabel** een tweede standaard DataTable
+met maximaal vijf kandidaatartikelen, hun foto, winkel en kenmerken. De
+lege selectiekolom gebruikt een radioknop voor precies één kandidaat.
+Dubbelklik op een kandidaat bevestigt direct; een enkele selectie gevolgd door
+**Merk kandidaat aan als synoniem** doet hetzelfde. Totdat die bevestiging
+gebeurt, verandert de Catalogus niet. Succes ververst de tellers, het artikel
+en de beide directe gekoppelde Catalogusartikelen; errors blijven zichtbaar.
+De actie is uitsluitend beschikbaar voor Superuser en Frontteam, ook op mobiel.

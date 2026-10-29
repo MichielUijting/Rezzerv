@@ -115,3 +115,30 @@ functionele gelijkwaardigheid. Geen automatische toekenning, geen transitieve
 koppelingen, geen afwijzingsregistratie en geen assortimentimport in deze fase.
 Verbeterde kenmerkmatching en vastleggen van afwijzingen zijn afzonderlijke
 vervolgstappen.
+
+
+## PO-acceptatie Synoniemenanalyse: 0/1/2/3+ tellers en kandidaatkeuze
+
+De vier tellers tellen **artikelen** (niet unieke winkels) met respectievelijk
+0, 1, 2 of minstens 3 **rechtstreeks bevestigde andere Catalogusartikelen**.
+Een bevestigd paar telt voor beide deelnemende artikelen; duplicaten en
+transitieve relaties tellen niet dubbel. Alleen actieve, eenduidig aan
+verschillende winkels gekoppelde gecodeerde producten tellen mee, conform
+het centrale synoniemcontract. De vier aantallen omvatten precies de zichtbare
+analysepopulatie; aangeklikte teller filtert de artikeltabel, tweede klik heft
+het tellerfilter op. Overige zoek-/winkelfilters zijn onafhankelijk.
+
+De hoofdtabel toont direct de individuele Catalogusartikelen en hun aantal
+rechtstreeks bevestigde synoniemen. Na artikelkeuze wordt in het paneel eronder
+maximaal vijf voorstellen getoond. De kandidaten zijn exact een subset van de
+bestaande handmatig te bevestigen `suggest_pairs`-voorstellen; de server
+levert dezelfde fingerprints en hercontroleert die binnen de bestaande
+atomische `/link`-transactie. Bij ontbrekende winkelidentiteit komt geen
+zelfbedacht winkeloverstijgend voorstel. Voorstellen zijn geen bewezen
+functionele equivalenten en worden nooit automatisch bevestigd.
+
+Een dubbelklik op één kandidaat schrijft via dezelfde bevoegde route als
+het selectierondje + **Merk kandidaat aan als synoniem**. Een enkele selectie
+schrijft niets. Succes ververst de server-afgeleide lijst en tellers;
+beide Catalogusproducten tonen bij nieuwe lezing de directe koppeling.
+Geen update aan barcode, productidentiteit, huishouden, voorraad of kassabon.
