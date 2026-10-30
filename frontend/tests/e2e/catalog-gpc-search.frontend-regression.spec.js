@@ -189,6 +189,76 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
   });
 
 
+  test('Huishoudbeheerder kan zonder platformrechten een ontbrekende gedeelde GTIN opslaan', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    const productId = 'catalog-household-owner-gtin';
+    let saved = null;
+    let householdWrites = 0;
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'household-owner',
+          email: 'owner@example.test',
+          active_household_id: 'household-1',
+          active_household_name: 'Testhuishouden',
+          context_type: 'regular',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: false,
+          permissions: { 'admin.access': true, 'platform.catalog.update': false },
+        }),
+      });
+    });
+
+    await page.route(`**/api/catalog/${productId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          product: {
+            id: productId, name: 'Aardappelschijfje zonder barcode',
+            primary_gtin: '', brand: '', image_url: '', source: 'manual',
+          },
+          identities: [], household_articles: [], receipt_lines: [],
+        }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}/gpc-brick`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ assignment: null, suggestion: null, suggestions: [] }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}/gtin`, async (route) => {
+      expect(route.request().method()).toBe('PUT');
+      saved = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ global_product_id: productId, gtin: saved.gtin, changed: true }),
+      });
+    });
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && /api\/(inventory|household-articles)/.test(request.url())) {
+        householdWrites += 1;
+      }
+    });
+
+    await page.goto(`/catalogus/${productId}`);
+    await expect(page.getByTestId('catalog-shared-gtin-entry')).toBeVisible();
+    await expect(page.getByTestId('catalog-product-image-action')).toHaveCount(0);
+    await page.getByTestId('catalog-shared-gtin-input').fill('8712345678901');
+    await page.getByTestId('catalog-shared-gtin-save').click();
+    await expect.poll(() => saved?.gtin).toBe('8712345678901');
+    await expect(page.getByText('8712345678901', { exact: true })).toBeVisible();
+    expect(householdWrites).toBe(0);
+    expectNoConsoleErrors(consoleErrors);
+  });
+
   test('Catalogusdetail laat bevoegde gebruiker foto uploaden of camera kiezen en comprimeert voor opslag', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let imagePayload = null;
@@ -269,6 +339,12 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(choice).toBeVisible();
     await expect(choice.getByRole('button', { name: 'Foto uploaden' })).toBeVisible();
     await expect(choice.getByRole('button', { name: 'Foto maken' })).toBeVisible();
+    // The photo-source choice must never let the underlying catalog text
+    // shine through the informational dialog.
+    const dialogBackground = await choice.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    expect(dialogBackground).toBe('rgb(255, 255, 255)');
 
     await page.evaluate(() => {
       window.__catalogCameraRequests = [];
