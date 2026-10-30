@@ -36,6 +36,9 @@ class FakeResult:
     def scalar_one_or_none(self):
         return self.value
 
+    def first(self):
+        return {'enabled': self.value}
+
 
 class FakeConnection:
     def __init__(self, engine):
