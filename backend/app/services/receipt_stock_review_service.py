@@ -134,7 +134,6 @@ def resolve_stock_household_article(
         SELECT 1 FROM household_articles
         WHERE household_id = :household_id
           AND LOWER(TRIM(naam)) = LOWER(TRIM(:name))
-          AND COALESCE(status, 'active') = 'active'
         LIMIT 1
     """), {"household_id": household_id, "name": name}).first()
     if existing:
