@@ -132,6 +132,7 @@ export function buildHomeNavigation({ onboarding, visibility, features = {}, act
   const moreTiles = sortTilesByActionOrder(
     uniqueTiles(LEGACY_TILES)
       .filter((tile) => tile.clickable)
+      .filter((tile) => tile.key !== 'kassabonnen' || Boolean(configuration.unpacking_enabled))
       .filter((tile) => !visiblePrimaryKeys.has(tile.key))
       .filter((tile) => isVisible(tile, safeVisibility)),
     actionOrder,

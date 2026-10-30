@@ -115,6 +115,7 @@ function assertNoLocationsHomeTile(navigation) {
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad', 'bijna-op', 'kassa'])
   assert.ok(keys(navigation.moreTiles).includes('winkelen'))
+  assert.ok(!keys(navigation.moreTiles).includes('kassabonnen'), 'Wat Inhuis mag Uitpakken niet tonen wanneer het uit staat')
   assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(!keys(navigation.moreTiles).includes('kassa'))
   assertNoLocationsHomeTile(navigation)
@@ -164,6 +165,27 @@ function assertNoLocationsHomeTile(navigation) {
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad'])
   assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assertNoLocationsHomeTile(navigation)
+}
+
+{
+  const navigation = buildHomeNavigation({
+    onboarding: {
+      onboarding_status: 'completed',
+      primary_use_case: 'waar_inhuis',
+      product_configuration: {
+        inventory_tracking_level: 'quantity',
+        location_tracking_level: 'none',
+        shopping_enabled: true,
+        almost_out_enabled: true,
+        receipt_processing_enabled: true,
+        unpacking_enabled: false,
+      },
+    },
+    visibility: baseVisibility,
+  })
+  assert.ok(!keys([...navigation.primaryTiles, ...navigation.moreTiles]).includes('kassabonnen'))
+  assert.ok(keys(navigation.primaryTiles).includes('voorraad'))
+  assert.ok(keys(navigation.primaryTiles).includes('kassa'))
 }
 
 {

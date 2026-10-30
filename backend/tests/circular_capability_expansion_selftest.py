@@ -6,6 +6,9 @@ from app.services.household_capability_expansion_service import (
     expand_with_wat_inhuis,
     expand_with_waar_inhuis,
 )
+from app.services.household_workflow_preferences_service import (
+    save_household_workflow_preferences,
+)
 from app.services.household_location_onboarding_service import (
     ensure_location_foundation,
     provision_waar_inhuis_expansion_locations,
@@ -151,6 +154,48 @@ def run() -> None:
                 {"household_id": "h1"},
             ).scalars().all()
             assert persisted == ["Direct", "Keuken", "Voorraadkast"]
+
+            # Switching exact-location workflow off may never remove, archive
+            # or relabel the household's existing space records.
+            disabled = save_household_workflow_preferences(
+                conn,
+                household_id="h1",
+                location_tracking_level="none",
+                unpacking_enabled=False,
+            )
+            assert disabled.location_tracking_level == "none"
+            assert disabled.unpacking_enabled is False
+            assert disabled.receipt_processing_enabled is True
+            after_disable_spaces = conn.execute(
+                text("SELECT naam FROM spaces WHERE household_id = :household_id ORDER BY naam"),
+                {"household_id": "h1"},
+            ).scalars().all()
+            assert after_disable_spaces == persisted
+
+            # Incompatible exact-location mode must fail before writing.
+            try:
+                save_household_workflow_preferences(
+                    conn,
+                    household_id="h1",
+                    location_tracking_level="exact",
+                    unpacking_enabled=False,
+                )
+                raise AssertionError("Exacte locaties zonder Uitpakken mogen niet worden opgeslagen")
+            except ValueError as exc:
+                assert "Exacte voorraadlocaties" in str(exc)
+
+            restored = save_household_workflow_preferences(
+                conn,
+                household_id="h1",
+                location_tracking_level="exact",
+                unpacking_enabled=True,
+            )
+            assert restored.location_tracking_level == "exact"
+            assert restored.unpacking_enabled is True
+            assert conn.execute(
+                text("SELECT naam FROM spaces WHERE household_id = :household_id ORDER BY naam"),
+                {"household_id": "h1"},
+            ).scalars().all() == persisted
 
             activate_household_product_use_case(
                 conn,
