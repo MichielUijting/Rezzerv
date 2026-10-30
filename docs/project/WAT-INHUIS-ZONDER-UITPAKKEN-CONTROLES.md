@@ -48,18 +48,39 @@ blijft Uitpakken verplicht.
 - Artikelgroep en opslaglocatie bij het uitpakken bevestigen.
 - Selecteren, in bulk corrigeren en afzonderlijk naar Voorraad verwerken.
 
-**Belangrijk risico:** de bestaande directe voorbereiding kan, als er geen
-koppeling met een Mijn artikel is, op basis van de bonartikelnaam een
-huishoudartikel opzoeken of aanmaken. Zij markeert importregels daarna als
-geselecteerd. Dat is **geen vervanging voor een expliciete menselijke
-identiteitscontrole**. Een mogelijk onjuiste bonartikelnaam of hoeveelheid moet
-dus vóór het goedkeuren in Kassa worden gecorrigeerd. Bestaande code kan
-ontbrekende hoeveelheden in de bon-naar-importoverdracht op 1 zetten; dit is
-nog geen bewezen veilige vervanging voor de menselijke Uitpakken-review.
+## Centrale controles achter de schermen
 
-Deze PR verandert de bestaande directe match- en voorraadverwerkingssemantiek
-niet. Een verdere verscherping van de Kassa-controles voor onzekere bonregels
-vereist een aparte acceptatiebeslissing en gerichte ketenproeven.
+Beide routes gebruiken `receipt_stock_review_service.py` en dezelfde
+`process_purchase_import_batch`-verwerker. De gedeelde beslissingen zijn:
+
+1. **Artikelidentiteit:** een expliciet bevestigd huishoudartikel-ID, een
+   bestaand bevestigd winkelgeheugen of een aantoonbaar catalogusgekoppeld
+   product. De bronbontekst is hoogstens een naam voor een **nieuw**
+   huishoudartikel na expliciete Kassa-goedkeuring; gelijke tekst is geen
+   bewijs om bestaande huishoudartikelen automatisch samen te voegen.
+2. **Hoeveelheid:** de gemeenschappelijke normalisator controleert dat een
+   hoeveelheid aanwezig, eindig, positief en passend bij de eenheid is.
+   Stuksaantallen moeten gehele getallen zijn. Gewicht/volume blijft per
+   aankoopverpakking een voorraadstuk, conform het bestaande voorraadmodel.
+   Een ontbrekend aantal wordt bij directe Kassa-goedkeuring niet als
+   `1` ingevuld: Kassa weigert dan met een concrete herstelmelding.
+3. **Afhandeling:** niet-voorraadregels blijven uitgesloten; de centrale
+   importverwerker valideert artikel en artikelgroep en schrijft
+   household-scoped events, historie en voorraadposities.
+4. **Herhalingen:** reeds verwerkte regels en bonnen mogen geen extra
+   voorraadgebeurtenis opleveren.
+
+**Uitzonderingen:** wanneer de bron onvoldoende bewijs biedt (bijvoorbeeld
+een ontbrekend aantal of een bestaande naam zonder bevestigde match), wordt
+de automatische route niet als succesvol gepresenteerd. De bon moet dan
+via de bestaande Kassa-correctie worden behandeld. Er verschijnt **geen**
+nieuw Uitpakken-scherm en er wordt niet gegokt.
+
+De aparte menselijke mogelijkheid om artikelgroep of plaats per bonregel in
+Uitpakken te wijzigen vervalt. Bij `location_tracking_level=none` worden
+geen locatiegegevens vereist of verzonnen. Het ontbreken van een
+Uitpakken-scherm betekent niet dat de validaties worden overgeslagen.
+
 
 ## Veilig terugschakelen bij bestaande voorraad
 
