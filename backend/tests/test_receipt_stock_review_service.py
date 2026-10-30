@@ -58,6 +58,7 @@ def main():
         resolve_review_article_option=lambda conn, article_id, household_id: (
             {"id": article_id} if household_id == "house-1" and article_id == "article-1" else None
         ),
+        find_household_article_for_global_product=Mock(return_value={"id": "article-catalog"}),
         ensure_household_article_for_global_product=Mock(return_value="article-catalog"),
         ensure_household_article=Mock(return_value="article-new"),
         normalize_household_article_name=lambda value: str(value or "").strip(),
@@ -151,7 +152,8 @@ def test_confirmed_global_product_reuses_canonical_global_resolver():
         line={"matched_global_product_id": "g-1", "article_name_raw": "Melk"},
         store_provider_code="retailer",
     ) == "article-catalog"
-    module.ensure_household_article_for_global_product.assert_called_once()
+    module.find_household_article_for_global_product.assert_called_once()
+    module.ensure_household_article_for_global_product.assert_not_called()
 
 
 def test_financial_lines_are_excluded_but_missing_stock_quantity_blocks_kassa():
