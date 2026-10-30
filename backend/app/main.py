@@ -75,6 +75,12 @@ from app.services.receipt_inventory_lifecycle_service import (
     remove_receipt_inventory_events,
     retime_receipt_inventory_events,
 )
+from app.services.receipt_stock_review_service import (
+    checked_stock_quantity,
+    get_confirmed_store_memory,
+    normalized_store_memory_key,
+    resolve_stock_household_article,
+)
 from app.services.temporal_inventory_service import reconcile_inventory_total
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
@@ -7787,9 +7793,7 @@ def ensure_receipt_storage_root():
 
 
 def normalize_store_memory_key(article_name: str | None, brand: str | None):
-    name = (article_name or "").strip().lower()
-    brand_value = (brand or "").strip().lower()
-    return f"{name}||{brand_value}"
+    return normalized_store_memory_key(article_name, brand)
 
 
 def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provider_code: str):
@@ -7812,29 +7816,16 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
     fully_prefilled = 0
 
     for line in lines:
-        memory = conn.execute(
-            text(
-                """
-                SELECT matched_household_article_id, preferred_location_id, times_confirmed
-                FROM store_import_memory
-                WHERE household_id = :household_id
-                  AND store_provider_code = :store_provider_code
-                  AND normalized_key = :normalized_key
-                ORDER BY last_used_at DESC
-                LIMIT 1
-                """
-            ),
-            {
-                "household_id": household_id,
-                "store_provider_code": store_provider_code,
-                "normalized_key": normalize_store_memory_key(line["article_name_raw"], line["brand_raw"]),
-            },
-        ).mappings().first()
-
+        memory = get_confirmed_store_memory(
+            conn,
+            household_id=household_id,
+            store_provider_code=store_provider_code,
+            article_name=line["article_name_raw"],
+            brand=line["brand_raw"],
+        )
         if not memory:
             continue
-
-        matched_article_id = memory["matched_household_article_id"]
+        matched_article_id = memory["article_id"]
         preferred_location_id = memory["preferred_location_id"]
         times_confirmed = int(memory["times_confirmed"] or 0)
         can_suggest_article = bool(matched_article_id)
@@ -8161,20 +8152,8 @@ def resolve_space_and_sublocation_ids(conn, household_id: str, space_id: str | N
     return resolved_space_id, resolved_sublocation_id
 
 def normalize_store_import_quantity(quantity_raw, unit_raw):
-    try:
-        quantity = float(quantity_raw or 0)
-    except (TypeError, ValueError):
-        quantity = 0
-
-    if quantity <= 0:
-        return 0
-
-    unit = (unit_raw or '').strip().lower()
-    if unit in {'stuk', 'stuks', 'pcs', 'piece', 'pieces'}:
-        return max(1, int(round(quantity)))
-    if unit in {'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms', 'ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters'}:
-        return 1
-    return 1
+    # Central stock-quantity rule used by Uitpakken and direct Kassa booking.
+    return checked_stock_quantity(quantity_raw, unit_raw)
 
 
 
@@ -18225,31 +18204,29 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     processed_count += 1
                     continue
 
-                article_id = line["matched_household_article_id"]
                 matched_global_product_id = str(line.get("matched_global_product_id") or '').strip()
-                if not article_id and matched_global_product_id:
-                    article_id = ensure_household_article_for_global_product(
-                        conn,
-                        str(batch["household_id"]),
-                        matched_global_product_id,
-                        article_name_hint=line.get("article_name_raw"),
-                        barcode=line.get("external_article_code"),
-                        brand=line.get("brand_raw"),
+                article_id = resolve_stock_household_article(
+                    conn,
+                    main_module=sys.modules[__name__],
+                    household_id=str(batch["household_id"]),
+                    line=line,
+                    store_provider_code=str(batch.get("store_provider_code") or ""),
+                    allow_new_receipt_article=False,
+                )
+                if article_id and not line.get("matched_household_article_id"):
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE purchase_import_lines
+                            SET matched_household_article_id = :matched_household_article_id,
+                                suggested_household_article_id = COALESCE(suggested_household_article_id, :matched_household_article_id),
+                                match_status = 'matched',
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :id
+                            """
+                        ),
+                        {'id': line_id, 'matched_household_article_id': article_id},
                     )
-                    if article_id:
-                        conn.execute(
-                            text(
-                                """
-                                UPDATE purchase_import_lines
-                                SET matched_household_article_id = :matched_household_article_id,
-                                    suggested_household_article_id = COALESCE(suggested_household_article_id, :matched_household_article_id),
-                                    match_status = 'matched',
-                                    updated_at = CURRENT_TIMESTAMP
-                                WHERE id = :id
-                                """
-                            ),
-                            {'id': line_id, 'matched_household_article_id': article_id},
-                        )
                 if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
                     synced_links = sync_purchase_import_line_product_links(conn, line_id, str(batch["household_id"]))
                     if synced_links:
