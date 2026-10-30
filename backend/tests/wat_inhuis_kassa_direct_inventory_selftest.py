@@ -306,7 +306,7 @@ def run() -> int:
                         WHERE receipt_table_id = :receipt_id
                           AND COALESCE(is_deleted, FALSE) = FALSE
                           AND COALESCE(line_role, 'product') = 'product'
-                          AND COALESCE(inventory_eligible, TRUE) = TRUE
+                          AND inventory_eligible = 1
                         ORDER BY line_index, id LIMIT 1
                     """),
                     {"receipt_id": incomplete["receipt_table_id"]},
