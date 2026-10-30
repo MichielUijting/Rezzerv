@@ -20,7 +20,9 @@ De directe route is uitsluitend bedoeld voor huishoudens met kassabonverwerking,
 voorraadregistratie, `unpacking_enabled=false` en locatieniveau `none` of
 `global`. Voor reguliere voorraadregels gaat de nieuwe voorraadpositie
 locatievrij (`space_id=NULL`, `sublocation_id=NULL`) naar de bestaande
-voorraadverwerker. `Direct` is geen fysieke locatie. Bij exacte locaties
+voorraadverwerker. Dit geldt **ook bij `global`**: zonder de
+locatietoewijzing van Uitpakken krijgen nieuwe bonartikelen niet automatisch
+een hoofdlocatie. `Direct` is geen fysieke locatie. Bij exacte locaties
 blijft Uitpakken verplicht.
 
 ## Wat blijft bestaan?
