@@ -44,6 +44,8 @@ class FakeConn:
         self.queries.append((sql, params))
         if "FROM store_import_memory" in sql:
             return Rows([self.memory] if self.memory else [])
+        if "FROM global_products" in sql:
+            return Rows([{"name": "Melk"}])
         if "FROM household_articles" in sql:
             return Rows([{"id": "existing"}] if self.existing else [])
         if "FROM receipt_tables" in sql:
@@ -153,6 +155,18 @@ def test_confirmed_global_product_reuses_canonical_global_resolver():
         store_provider_code="retailer",
     ) == "article-catalog"
     module.find_household_article_for_global_product.assert_called_once()
+    module.ensure_household_article_for_global_product.assert_not_called()
+
+
+def test_catalog_link_cannot_overwrite_existing_same_name_household_article():
+    conn = FakeConn(existing=True)
+    module = main()
+    module.find_household_article_for_global_product.return_value = None
+    assert resolve_stock_household_article(
+        conn, main_module=module, household_id="house-1",
+        line={"matched_global_product_id": "global-1", "article_name_raw": "Melk"},
+        store_provider_code="retailer",
+    ) is None
     module.ensure_household_article_for_global_product.assert_not_called()
 
 
