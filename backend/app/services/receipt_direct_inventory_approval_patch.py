@@ -176,6 +176,54 @@ def _validate_direct_receipt_quantities(main_module, conn, receipt_table_id: str
             )
 
 
+def _remember_successful_direct_receipt_choices(
+    main_module, *, household_id: str, batch_id: str,
+) -> None:
+    """Persist a Kassa-approved canonical choice using Uitpakken's memory SSOT.
+
+    Only completed stock lines qualify. An existing manually confirmed memory
+    entry is not changed, so its preferred location is never discarded.
+    """
+    with main_module.engine.begin() as conn:
+        rows = conn.execute(text("""
+            SELECT pil.article_name_raw, pil.brand_raw,
+                   pil.matched_household_article_id, sp.code AS store_provider_code
+            FROM purchase_import_lines pil
+            JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+            JOIN store_providers sp ON sp.id = pib.store_provider_id
+            WHERE pil.batch_id = :batch_id
+              AND pib.household_id = :household_id
+              AND pil.processing_status = 'processed'
+              AND pil.matched_household_article_id IS NOT NULL
+        """), {"batch_id": batch_id, "household_id": household_id}).mappings().all()
+        for row in rows:
+            key = main_module.normalize_store_memory_key(
+                row["article_name_raw"], row["brand_raw"],
+            )
+            existing = conn.execute(text("""
+                SELECT 1 FROM store_import_memory
+                WHERE household_id = :household_id
+                  AND store_provider_code = :store_provider_code
+                  AND normalized_key = :normalized_key
+                LIMIT 1
+            """), {
+                "household_id": household_id,
+                "store_provider_code": row["store_provider_code"],
+                "normalized_key": key,
+            }).first()
+            if existing:
+                continue
+            main_module.remember_store_import_choice(
+                conn,
+                household_id,
+                str(row["store_provider_code"]),
+                str(row["article_name_raw"] or ""),
+                row["brand_raw"],
+                str(row["matched_household_article_id"]),
+                None,
+            )
+
+
 def _manual_receipt_line_id(result, article_name: str) -> str | None:
     normalized_name = " ".join(str(article_name or "").strip().split()).casefold()
     candidates = []
@@ -497,6 +545,9 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
                 ),
             )
 
+        _remember_successful_direct_receipt_choices(
+            main_module, household_id=household_id, batch_id=direct_batch_id,
+        )
         refreshed = main_module.get_receipt_detail(receipt_table_id, authorization)
         refreshed["approval_destination"] = "inventory"
         refreshed["inventory_processing"] = {
