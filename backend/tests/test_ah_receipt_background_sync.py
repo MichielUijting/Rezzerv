@@ -51,6 +51,8 @@ class FakeConnection:
         sql = str(stmt)
         if "SELECT state FROM maintenance_control" in sql:
             return FakeResult(value=self.engine.maintenance_state)
+        if "FROM platform_feature_flags" in sql:
+            return FakeResult(value=self.engine.imports_enabled)
         if "SELECT household_id, last_sync_at" in sql:
             return FakeResult(rows=self.engine.rows)
         if "pg_try_advisory_lock" in sql:
@@ -63,15 +65,27 @@ class FakeConnection:
 
 
 class FakeEngine:
-    def __init__(self, rows, lock_enabled=True, refreshed_at=None, dialect="postgresql", maintenance_state="normal"):
+    def __init__(self, rows, lock_enabled=True, refreshed_at=None, dialect="postgresql", maintenance_state="normal", imports_enabled=True):
         self.dialect = SimpleNamespace(name=dialect)
         self.rows = rows
         self.lock_enabled = lock_enabled
         self.refreshed_at = refreshed_at
         self.maintenance_state = maintenance_state
+        self.imports_enabled = imports_enabled
 
     def connect(self):
         return FakeConnection(self)
+
+
+def test_platform_import_pause_skips_new_ah_sync_and_resumes(monkeypatch, tmp_path):
+    engine = FakeEngine([{"household_id": "household-a", "last_sync_at": None}], imports_enabled=False)
+    calls = []
+    monkeypatch.setattr(worker, "_admitted_ah_sync", lambda *_args: calls.append("import"))
+    assert worker.sync_due_ah_households(engine, tmp_path)["due"] == 0
+    assert calls == []
+    engine.imports_enabled = True
+    assert worker.sync_due_ah_households(engine, tmp_path)["completed"] == 1
+    assert calls == ["import"]
 
 
 def test_background_worker_processes_only_due_households(monkeypatch, tmp_path):
