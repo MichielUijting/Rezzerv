@@ -24,6 +24,9 @@ jobs:
   shared-barcode-contract:
     name: Central GTIN validation and catalog safety
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://ci_test:ci_test@127.0.0.1:5432/ci_test
+      REZZERV_DATASTORE_POLICY: postgresql-only
     steps:
       - uses: actions/checkout@v4
         with:
