@@ -1,0 +1,52 @@
+name: Catalogus shared barcode validation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'backend/app/api/catalog_routes.py'
+      - 'backend/app/services/barcode_identity_service.py'
+      - 'backend/tests/test_catalog_shared_gtin_assignment.py'
+      - 'frontend/src/features/catalog/CatalogBarcodeEntry.jsx'
+      - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
+      - 'frontend/tests/catalog-clarity.contract.mjs'
+      - '.github/workflows/catalog-shared-barcode-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-shared-barcode-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-barcode-contract:
+    name: Central GTIN validation and catalog safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest
+      - name: Compile and run focused shared Catalogus GTIN contracts
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m py_compile backend/app/api/catalog_routes.py backend/tests/test_catalog_shared_gtin_assignment.py
+          python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify frontend Catalogus identity contract
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node tests/catalog-clarity.contract.mjs
+          npm run build
