@@ -68,6 +68,9 @@ export default function SettingsCapabilitiesPage() {
   const [existingSpaces, setExistingSpaces] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSavingWorkflow, setIsSavingWorkflow] = useState(false)
+  const [workflowLocation, setWorkflowLocation] = useState('none')
+  const [workflowUnpacking, setWorkflowUnpacking] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -76,6 +79,12 @@ export default function SettingsCapabilitiesPage() {
     () => buildExpansionQuestions(selectedUseCase, configuration),
     [selectedUseCase, configuration],
   )
+
+  useEffect(() => {
+    if (!configuration) return
+    setWorkflowLocation(configuration.location_tracking_level || 'none')
+    setWorkflowUnpacking(Boolean(configuration.unpacking_enabled))
+  }, [configuration?.location_tracking_level, configuration?.unpacking_enabled])
 
   async function loadCapabilities() {
     setIsLoading(true)
@@ -195,6 +204,31 @@ export default function SettingsCapabilitiesPage() {
       setError(saveError?.message || 'Inhuis uitbreiden mislukt.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function saveWorkflowPreferences() {
+    setIsSavingWorkflow(true)
+    setError('')
+    setMessage('')
+    try {
+      const next = await requestJson('/api/onboarding/workflow-preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          location_tracking_level: workflowLocation,
+          unpacking_enabled: workflowUnpacking,
+        }),
+      })
+      setState(next)
+      if (context?.context_type === 'regular') {
+        await fetchHouseholdOnboarding(context, { force: true })
+        window.dispatchEvent(new Event('inhuis:household-configuration-changed'))
+      }
+      setMessage('De werkwijze voor dit huishouden is opgeslagen. Bestaande voorraad en locaties zijn behouden.')
+    } catch (saveError) {
+      setError(saveError?.message || 'De huishoudinstellingen konden niet worden opgeslagen.')
+    } finally {
+      setIsSavingWorkflow(false)
     }
   }
 
@@ -324,6 +358,61 @@ export default function SettingsCapabilitiesPage() {
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error" role="alert">{error}</div> : null}
           </div>
         </Card>
+        {configuration ? (
+          <Card>
+            <div style={{ display: 'grid', gap: 14 }} data-testid="household-workflow-preferences">
+              <h3 style={{ margin: 0 }}>Voorraadlocaties en Uitpakken</h3>
+              <p style={{ margin: 0, color: '#475467' }}>
+                Bepaal wat je huishouden gebruikt. Bestaande locaties, artikelen en voorraadhistorie worden nooit verwijderd.
+                Heb je nog voorraad op locaties of open bonartikelen, dan wordt een onveilige omschakeling geweigerd.
+              </p>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span>Voorraadlocaties gebruiken</span>
+                <select
+                  value={workflowLocation}
+                  onChange={(event) => {
+                    const nextLocation = event.target.value
+                    setWorkflowLocation(nextLocation)
+                    if (nextLocation === 'none') setWorkflowUnpacking(false)
+                  }}
+                  disabled={isSavingWorkflow}
+                  data-testid="workflow-location-level"
+                >
+                  <option value="none">Nee, geen locaties</option>
+                  <option value="global">Ja, alleen hoofdlocaties</option>
+                  <option value="exact">Ja, hoofd- en sublocaties</option>
+                </select>
+              </label>
+              {checkbox(
+                'Uitpakken gebruiken',
+                workflowUnpacking,
+                setWorkflowUnpacking,
+                'workflow-unpacking-enabled',
+                isSavingWorkflow,
+              )}
+              <p style={{ margin: 0, color: '#475467', fontSize: 14 }}>
+                Zonder Uitpakken gaan goedgekeurde kassabonartikelen rechtstreeks naar Voorraad, als
+                kassabonverwerking en voorraad actief zijn en geen exacte locatie verplicht is.
+                Controleer de artikelen vooraf in Kassa; de afzonderlijke Uitpakken-controle vervalt.
+              </p>
+              {workflowLocation === 'exact' && !workflowUnpacking ? (
+                <div role="status" style={{ color: '#9a3412' }} data-testid="workflow-incompatible">
+                  Zet ook exacte locaties uit of schakel Uitpakken in. Exacte locaties kunnen niet zonder Uitpakken worden verwerkt.
+                </div>
+              ) : null}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  type="button"
+                  disabled={isSavingWorkflow || (workflowLocation === 'exact' && !workflowUnpacking)}
+                  onClick={saveWorkflowPreferences}
+                  data-testid="workflow-preferences-save"
+                >
+                  {isSavingWorkflow ? 'Opslaan…' : 'Instellingen opslaan'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : null}
         {renderExpansionForm()}
       </div>
     </AppShell>
