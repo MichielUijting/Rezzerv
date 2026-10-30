@@ -7,8 +7,11 @@ on:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
+      - 'backend/tests/test_catalog_shared_name_update.py'
       - 'frontend/src/features/catalog/CatalogBarcodeEntry.jsx'
       - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
+      - 'frontend/src/features/catalog/CatalogNameEditor.jsx'
+      - 'frontend/src/features/catalog/catalog.css'
       - 'frontend/src/ui/AppFeedbackProvider.jsx'
       - 'frontend/tests/catalog-clarity.contract.mjs'
       - 'frontend/tests/catalog-product-image.contract.mjs'
@@ -46,8 +49,8 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m py_compile backend/app/api/catalog_routes.py backend/tests/test_catalog_shared_gtin_assignment.py
-          python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py
+          python -m py_compile backend/app/api/catalog_routes.py backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
+          python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
