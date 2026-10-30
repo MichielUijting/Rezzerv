@@ -9,7 +9,11 @@ on:
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
       - 'frontend/src/features/catalog/CatalogBarcodeEntry.jsx'
       - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
+      - 'frontend/src/ui/AppFeedbackProvider.jsx'
       - 'frontend/tests/catalog-clarity.contract.mjs'
+      - 'frontend/tests/catalog-product-image.contract.mjs'
+      - 'frontend/tests/inhuis-feedback-bar.contract.mjs'
+      - 'frontend/tests/e2e/catalog-gpc-search.frontend-regression.spec.js'
       - '.github/workflows/catalog-shared-barcode-validation.yml'
   workflow_dispatch:
 
@@ -52,4 +56,6 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           node tests/catalog-clarity.contract.mjs
+          node tests/catalog-product-image.contract.mjs
+          node tests/inhuis-feedback-bar.contract.mjs
           npm run build
