@@ -1,49 +1,103 @@
-"""Shared catalog GTIN writes are permissioned, validated and household-independent."""
+"""Isolated shared GTIN route contracts; no SQLite or application data writes."""
+from contextlib import contextmanager
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
 
 from app.api import catalog_routes
 from app.services.barcode_identity_service import calculate_gtin_check_digit
 
 
+class FakeResult:
+    def __init__(self, rows=()):
+        self.rows = list(rows)
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self.rows[0] if self.rows else None
+
+
+class FakeCatalogConnection:
+    dialect = SimpleNamespace(name="postgresql")
+
+    def __init__(self):
+        self.products = {
+            "p1": {"id": "p1", "status": "active", "primary_gtin": None},
+            "p2": {"id": "p2", "status": "active", "primary_gtin": None},
+        }
+        self.identities = []
+        self.household_articles = [
+            {"id": "a1", "household_id": "h1", "global_product_id": "p1", "barcode": None},
+            {"id": "a2", "household_id": "h2", "global_product_id": "p1", "barcode": None},
+        ]
+        self.inventory_events = []
+
+    def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        params = params or {}
+        if sql.startswith("SELECT pg_advisory_xact_lock"):
+            return FakeResult([(1,)])
+        if sql.startswith("SELECT id, status, primary_gtin FROM global_products"):
+            item = self.products.get(params["product_id"])
+            return FakeResult([dict(item)] if item else [])
+        if sql.startswith("SELECT id FROM global_products WHERE primary_gtin ="):
+            matches = [
+                {"id": row["id"]} for row in self.products.values()
+                if row["id"] != params["product_id"] and row["primary_gtin"] == params["gtin"]
+            ]
+            return FakeResult(matches[:1])
+        if sql.startswith("SELECT id FROM product_identities"):
+            matches = [
+                {"id": item["id"]} for item in self.identities
+                if item["identity_value"] == params["gtin"]
+                and item["identity_type"] in {"gtin", "ean", "upc"}
+                and item["global_product_id"] is not None
+                and item["global_product_id"] != params["product_id"]
+            ]
+            return FakeResult(matches[:1])
+        if sql.startswith("UPDATE global_products SET primary_gtin ="):
+            product = self.products[params["product_id"]]
+            if not product["primary_gtin"]:
+                product["primary_gtin"] = params["gtin"]
+            return FakeResult()
+        raise AssertionError(f"Onverwachte SQL: {sql}")
+
+
+class FakeEngine:
+    def __init__(self):
+        self.conn = FakeCatalogConnection()
+
+    @contextmanager
+    def begin(self):
+        yield self.conn
+
+
 @pytest.fixture
 def catalog_db(monkeypatch):
-    engine = create_engine("sqlite+pysqlite:///:memory:")
-    with engine.begin() as conn:
-        conn.execute(text(
-            "CREATE TABLE global_products ("
-            "id TEXT PRIMARY KEY, status TEXT, primary_gtin TEXT, updated_at TEXT)"
-        ))
-        conn.execute(text(
-            "CREATE TABLE product_identities ("
-            "id TEXT PRIMARY KEY, identity_type TEXT, identity_value TEXT, global_product_id TEXT)"
-        ))
-        conn.execute(text(
-            "CREATE TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT, barcode TEXT)"
-        ))
-        conn.execute(text("INSERT INTO global_products VALUES ('p1', 'active', NULL, NULL)"))
-        conn.execute(text("INSERT INTO global_products VALUES ('p2', 'active', NULL, NULL)"))
-        conn.execute(text("INSERT INTO household_articles VALUES ('a1', 'h1', 'p1', NULL)"))
-        conn.execute(text("INSERT INTO household_articles VALUES ('a2', 'h2', 'p1', NULL)"))
-
+    engine = FakeEngine()
+    checked = []
+    household_checks = []
     monkeypatch.setattr(catalog_routes, "engine", engine)
     monkeypatch.setattr(
         catalog_routes, "_tables",
         lambda: {"global_products", "product_identities", "household_articles"},
     )
-    monkeypatch.setattr(catalog_routes, "_columns", lambda name: {
+    monkeypatch.setattr(catalog_routes, "_columns", lambda table: {
         "global_products": {"id", "status", "primary_gtin", "updated_at"},
         "product_identities": {"id", "identity_type", "identity_value", "global_product_id"},
-    }.get(name, set()))
-    checked = []
+    }.get(table, set()))
     monkeypatch.setattr(
-        catalog_routes,
-        "require_platform_permission_from_session",
+        catalog_routes, "require_platform_permission_from_session",
         lambda key: checked.append(key),
     )
-    yield engine, checked
-    engine.dispose()
+    monkeypatch.setattr(
+        catalog_routes, "require_household_admin_from_session",
+        lambda: household_checks.append(True),
+    )
+    return engine.conn, checked, household_checks
 
 
 def gtin(body="871234567890"):
@@ -57,32 +111,25 @@ def write(product_id, value):
 
 
 def test_shared_gtin_saved_without_modifying_any_household_stock(catalog_db):
-    engine, checked = catalog_db
-    saved = write("p1", gtin())
-    assert saved == {"global_product_id": "p1", "gtin": gtin(), "changed": True}
+    conn, checked, household_checks = catalog_db
+    before = [dict(item) for item in conn.household_articles]
+    assert write("p1", gtin()) == {
+        "global_product_id": "p1", "gtin": gtin(), "changed": True,
+    }
     assert checked == ["platform.catalog.update"]
-    with engine.begin() as conn:
-        product = conn.execute(text(
-            "SELECT primary_gtin FROM global_products WHERE id = 'p1'"
-        )).scalar_one()
-        articles = conn.execute(text(
-            "SELECT household_id, barcode FROM household_articles ORDER BY id"
-        )).all()
-        assert product == gtin()
-        assert articles == [("h1", None), ("h2", None)]
-    repeated = write("p1", gtin())
-    assert repeated["changed"] is False
+    assert not household_checks
+    assert conn.products["p1"]["primary_gtin"] == gtin()
+    assert conn.household_articles == before
+    assert conn.inventory_events == []
+    assert write("p1", gtin())["changed"] is False
 
 
 def test_invalid_gtin_rejected_without_write(catalog_db):
-    engine, _ = catalog_db
+    conn, _, _ = catalog_db
     with pytest.raises(HTTPException) as error:
         write("p1", "12345")
     assert error.value.status_code == 422
-    with engine.begin() as conn:
-        assert conn.execute(text(
-            "SELECT primary_gtin FROM global_products WHERE id = 'p1'"
-        )).scalar_one() is None
+    assert conn.products["p1"]["primary_gtin"] is None
 
 
 def test_duplicate_gtin_cannot_be_given_to_another_catalog_product(catalog_db):
@@ -93,11 +140,11 @@ def test_duplicate_gtin_cannot_be_given_to_another_catalog_product(catalog_db):
 
 
 def test_linked_identity_on_another_product_blocks_assignment(catalog_db):
-    engine, _ = catalog_db
-    with engine.begin() as conn:
-        conn.execute(text(
-            "INSERT INTO product_identities VALUES ('i1', 'gtin', :gtin, 'p2')"
-        ), {"gtin": gtin()})
+    conn, _, _ = catalog_db
+    conn.identities.append({
+        "id": "i1", "identity_type": "gtin", "identity_value": gtin(),
+        "global_product_id": "p2",
+    })
     with pytest.raises(HTTPException) as error:
         write("p1", gtin())
     assert error.value.status_code == 409
@@ -111,26 +158,52 @@ def test_existing_primary_cannot_be_silently_replaced(catalog_db):
 
 
 def test_unknown_or_deleted_product_not_changed(catalog_db):
-    engine, _ = catalog_db
+    conn, _, _ = catalog_db
     with pytest.raises(HTTPException) as error:
         write("missing", gtin())
     assert error.value.status_code == 404
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE global_products SET status='deleted' WHERE id='p1'"))
+    conn.products["p1"]["status"] = "deleted"
     with pytest.raises(HTTPException) as error:
         write("p1", gtin())
     assert error.value.status_code == 404
 
 
-def test_server_authorization_runs_before_database_mutation(catalog_db, monkeypatch):
-    engine, _ = catalog_db
-    def deny(_permission):
-        raise HTTPException(status_code=403, detail="Geen rechten")
-    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", deny)
+def test_household_owner_has_narrow_add_only_fallback(catalog_db, monkeypatch):
+    conn, platform_checks, household_checks = catalog_db
+
+    def no_platform_access(_permission):
+        platform_checks.append("denied")
+        raise HTTPException(status_code=403, detail="Geen platformrechten")
+
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", no_platform_access)
+    assert write("p1", gtin())["changed"] is True
+    assert platform_checks == ["denied"]
+    assert household_checks == [True]
+    assert conn.products["p1"]["primary_gtin"] == gtin()
+
+
+def test_non_admin_cannot_modify_catalog(catalog_db, monkeypatch):
+    conn, _, _ = catalog_db
+
+    def no_platform_access(_permission):
+        raise HTTPException(status_code=403, detail="Geen platformrechten")
+
+    def no_household_access():
+        raise HTTPException(status_code=403, detail="Geen huishoudbeheerdersrechten")
+
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", no_platform_access)
+    monkeypatch.setattr(catalog_routes, "require_household_admin_from_session", no_household_access)
     with pytest.raises(HTTPException) as error:
         write("p1", gtin())
     assert error.value.status_code == 403
-    with engine.begin() as conn:
-        assert conn.execute(text(
-            "SELECT primary_gtin FROM global_products WHERE id='p1'"
-        )).scalar_one() is None
+    assert conn.products["p1"]["primary_gtin"] is None
+
+
+def test_other_platform_auth_errors_do_not_grant_household_fallback(catalog_db, monkeypatch):
+    def broken_session(_permission):
+        raise HTTPException(status_code=401, detail="Sessie ontbreekt")
+
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", broken_session)
+    with pytest.raises(HTTPException) as error:
+        write("p1", gtin())
+    assert error.value.status_code == 401
