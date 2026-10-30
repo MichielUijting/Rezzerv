@@ -60,9 +60,13 @@ def save_household_workflow_preferences(
                 "de bestaande bonartikelen worden niet automatisch overgeslagen."
             )
 
-    if _LOCATION_LEVELS[level] < _LOCATION_LEVELS[current.location_tracking_level]:
+    if (
+        _LOCATION_LEVELS[level] < _LOCATION_LEVELS[current.location_tracking_level]
+        or (unpacking_disabled and level in {"none", "global"})
+    ):
         # Old location-bound rows must not become invisible or be silently
-        # merged with new locationless stock. No destructive conversion here.
+        # mixed with new locationless receipts when Uitpakken is turned off.
+        # No destructive conversion here.
         occupied = conn.execute(text("""
             SELECT 1
             FROM inventory
@@ -74,9 +78,10 @@ def save_household_workflow_preferences(
         """), {"household_id": household_id}).first()
         if occupied:
             raise ValueError(
-                "Voorraadlocaties kunnen nog niet worden uitgezet: er staat actieve "
-                "voorraad op locaties. Die voorraad en de historie blijven intact. "
-                "Eerst is een gecontroleerde voorraadomzetting nodig."
+                "Deze wijziging kan nog niet: er staat actieve voorraad op locaties. "
+                "Die voorraad en de historie blijven intact. Eerst is een "
+                "gecontroleerde voorraadomzetting nodig voordat Uitpakken of "
+                "locatiegebruik veilig kan worden uitgezet."
             )
 
     if location_change or current.unpacking_enabled != unpacking:
