@@ -55,15 +55,17 @@ assert.match(themeCss, /\.rz-header \.rz-header-title,[\s\S]*color:\s*var\(--col
 assert.match(themeCss, /button\.rz-button-primary,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 
-// A household-independent GTIN editor must be shared by both Catalogus layouts.
-assert.match(catalogDetail, /import CatalogBarcodeEntry from '\\.\\/CatalogBarcodeEntry'/)
+// One shared Catalogus barcode editor must be mounted for both layout variants.
+assert.ok(catalogDetail.includes("import CatalogBarcodeEntry from './CatalogBarcodeEntry'"))
 assert.equal((catalogDetail.match(/<CatalogBarcodeEntry /g) || []).length, 2)
-assert.match(sharedBarcodeEditor, /useBarcodeScanner/)
-assert.match(sharedBarcodeEditor, /BarcodeScannerModal/)
-assert.match(sharedBarcodeEditor, /api\\/catalog\\/\\$\\{encodeURIComponent\\(globalProductId\\)\\}\\/gtin/)
-assert.match(sharedBarcodeEditor, /data-testid="catalog-shared-gtin-save"/)
-assert.match(sharedBarcodeEditor, /data-testid="catalog-shared-gtin-scan"/)
-assert.doesNotMatch(sharedBarcodeEditor, /\\/api\\/inventory\\//)
-assert.doesNotMatch(sharedBarcodeEditor, /household_article_id/)
+assert.match(catalogDetail, /isHouseholdAdminFromContext/)
+assert.match(catalogDetail, /canEdit=\{canAddCatalogGtin\}/)
+assert.ok(sharedBarcodeEditor.includes('useBarcodeScanner'))
+assert.ok(sharedBarcodeEditor.includes('BarcodeScannerModal'))
+assert.ok(sharedBarcodeEditor.includes('/api/catalog/${encodeURIComponent(globalProductId)}/gtin'))
+assert.ok(sharedBarcodeEditor.includes('data-testid="catalog-shared-gtin-save"'))
+assert.ok(sharedBarcodeEditor.includes('data-testid="catalog-shared-gtin-scan"'))
+assert.ok(!sharedBarcodeEditor.includes('/api/inventory/'))
+assert.ok(!sharedBarcodeEditor.includes('household_article_id'))
 
 console.log('CATALOG_CLARITY_CONTRACT_GREEN')
