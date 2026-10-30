@@ -1442,3 +1442,11 @@ de laatste tabelrij wordt geplaatst en nooit door de tekst loopt. Dezelfde
 regel geldt voor de onderste kandidaattabel met maximaal vijf rijen.
 Verwijder de aparte knop **Sluiten** bij de kandidaatsectie, maar behoud de
 bevoegde koppelactie onder de kandidaattabel en foutmeldingen bij problemen.
+
+
+## Catalogusdetail — universele naam wijzigen (30 oktober 2026)
+
+- Op zowel desktop als mobiel staat naast de **universele artikelnaam** in het Catalogusdetail de actie **Naam wijzigen** voor gebruikers met de bestaande platformpermissie `platform.catalog.update`. Een gewone huishoudbeheerder kan wel een ontbrekende GTIN bijdragen, maar mag zonder catalogusbevoegdheid geen bestaande universele naam overschrijven.
+- De actie toont een compact invoerveld op dezelfde plek met **Opslaan** en **Annuleren**; het standaard Catalogusdetail blijft leesbaar. Invoer en knoppen volgen de bestaande Inhuis-kleurtokens, typografie en responsieve regel.
+- Een wijziging verandert alleen de gedeelde artikelnaam en de daarbij horende productvingerafdruk. De artikel-ID, barcode, voorraad, huishoudkoppelingen en kassabonregels blijven bestaan.
+- Bij een ondertussen gewijzigde naam of conflict met een ander artikel meldt Inhuis de fout en wordt niet stilzwijgend samengevoegd.
