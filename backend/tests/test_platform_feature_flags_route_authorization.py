@@ -10,6 +10,7 @@ from app.services.authorization_foundation_service import ensure_authorization_f
 from app.services.external_database_route_authorization import authorize_external_database_request
 from app.services.platform_feature_flag_service import (
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
+    FEATURE_FLAG_RETAILER_AUTO_IMPORT,
     set_platform_feature_flag,
 )
 from app.services.server_session_service import ServerSessionContext
@@ -134,7 +135,11 @@ def test_feature_flag_routes_use_exact_canonical_permission_matrix(
 
     if allowed:
         payload = platform_feature_flags_routes.get_platform_feature_flags()
-        assert payload["count"] == 1
+        assert payload["count"] == 2
+        assert {item["key"] for item in payload["items"]} == {
+            FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
+            FEATURE_FLAG_RETAILER_AUTO_IMPORT,
+        }
         return
 
     with pytest.raises(HTTPException) as exc:
@@ -161,8 +166,12 @@ def test_default_flag_is_enabled_without_seed_or_get_write(monkeypatch, auth_eng
     assert "household_id" not in columns
     assert payload["household_context_used"] is False
     assert payload["context_type"] == "none"
-    assert payload["items"] == [
-        {
+    assert {item["key"] for item in payload["items"]} == {
+        FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
+        FEATURE_FLAG_RETAILER_AUTO_IMPORT,
+    }
+    external_search = next(item for item in payload["items"] if item["key"] == FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH)
+    assert external_search == {
             "key": FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
             "label": "Externe productzoekfunctie",
             "description": (
@@ -175,7 +184,10 @@ def test_default_flag_is_enabled_without_seed_or_get_write(monkeypatch, auth_eng
             "updated_by": None,
             "updated_at": None,
         }
-    ]
+    retailer_import = next(item for item in payload["items"] if item["key"] == FEATURE_FLAG_RETAILER_AUTO_IMPORT)
+    assert retailer_import["enabled"] is True
+    assert retailer_import["source"] == "default"
+    assert retailer_import["default_enabled"] is True
 
 
 def test_platform_admin_can_persist_override_with_canonical_actor(monkeypatch, auth_engine):
@@ -192,7 +204,7 @@ def test_platform_admin_can_persist_override_with_canonical_actor(monkeypatch, a
     assert payload["item"]["updated_by"] == "platform-admin"
 
     reread = platform_feature_flags_routes.get_platform_feature_flags()
-    assert reread["items"][0]["enabled"] is False
+    assert next(item for item in reread["items"] if item["key"] == FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH)["enabled"] is False
 
     with auth_engine.connect() as conn:
         row = conn.execute(text("""
@@ -281,7 +293,7 @@ def test_enabling_flag_never_grants_external_search_permission_to_platform_admin
 
 def test_platform_admin_revocation_blocks_next_feature_flag_request(monkeypatch, auth_engine):
     _bind_context(monkeypatch, auth_engine, "platform-admin")
-    assert platform_feature_flags_routes.get_platform_feature_flags()["count"] == 1
+    assert platform_feature_flags_routes.get_platform_feature_flags()["count"] == 2
 
     with auth_engine.begin() as conn:
         conn.execute(text("""
