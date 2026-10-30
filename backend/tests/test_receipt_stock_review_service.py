@@ -83,7 +83,9 @@ def main():
     ("3", "", 3),
     (0.5, "kg", 1),
     (1000, "g", 1),
-    (3, "onbekend", 0),
+    (3, "onbekend", 3),
+    (6, "10 st 5 l", 6),
+    (2.5, "10 st 5 l", 0),
 ])
 def test_single_shared_quantity_authority(quantity, unit, expected):
     assert checked_stock_quantity(quantity, unit) == expected
