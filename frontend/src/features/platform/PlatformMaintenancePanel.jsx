@@ -15,6 +15,32 @@ export default function PlatformMaintenancePanel() {
   const [sessionCloseResult, setSessionCloseResult] = React.useState(null)
   const requestId = React.useRef(0)
   const [now, setNow] = React.useState(Date.now())
+  const [importPause, setImportPause] = React.useState(null)
+  const [importBusy, setImportBusy] = React.useState(false)
+  async function loadImportPause() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/platform/maintenance/imports`, { credentials: 'include', cache: 'no-store' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Importstatus niet beschikbaar')
+      setImportPause(data)
+    } catch (e) { setError(e.message) }
+  }
+  async function changeImportPause(paused) {
+    setImportBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/platform/maintenance/imports`, {
+        credentials: 'include', cache: 'no-store', method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Importpauze opslaan mislukt')
+      await loadImportPause()
+      await request()
+    } catch (e) { setError(e.message) }
+    finally { setImportBusy(false) }
+  }
+  React.useEffect(() => { loadImportPause() }, [])
   React.useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
   async function request(action) {
     const id = ++requestId.current
@@ -53,6 +79,14 @@ export default function PlatformMaintenancePanel() {
   return <div data-testid="platform-maintenance-panel"><Card className="rz-card-home">
     <h2>Onderhoud aan Inhuis</h2>
     {error && <p role="alert">{error}</p>}
+    {importPause && <Card>
+      <h3>Automatisch inlezen kassabonnen</h3>
+      <p role="status">{importPause.paused ? "Handmatig gepauzeerd" : importPause.maintenance_paused ? "Gepauzeerd door serveronderhoud" : "Automatisch inlezen toegestaan"}.</p>
+      <p>{importPause.open_import_registrations} openstaande importregistratie(s); {importPause.processing_receipts} bon(nen) in verwerking; {importPause.pending_receipts} veilig wachtend. Openstaande registraties bewijzen niet dat een import nog draait.</p>
+      <p>Bij pauzeren worden geen nieuwe automatische AH- of Jumbo/Lidl-wachtrijverwerkingen gestart. Lopend werk wordt niet afgebroken. Een handmatige pauze blijft ook na een serverherstart bewaard; alleen een beheerder kan die opheffen. De onderhoudspauze hervat automatisch na gecontroleerde vrijgave.</p>
+      <Button disabled={importBusy} onClick={() => changeImportPause(!importPause.paused)}>{importPause.paused ? "Automatisch inlezen hervatten" : "Automatisch inlezen pauzeren"}</Button>
+      <Button variant="secondary" disabled={importBusy} onClick={loadImportPause}>Importstatus vernieuwen</Button>
+    </Card>}
     {status && <>
       <p role="status">{LABELS[status.state] || 'Onbekend — geblokkeerd'}. Lopende verwerkingen: {status.active_operations}.</p>
       {status.retailer_import_registrations && <p data-testid="retailer-import-maintenance-status">
