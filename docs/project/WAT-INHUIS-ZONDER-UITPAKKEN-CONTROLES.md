@@ -55,7 +55,10 @@ Beide routes gebruiken `receipt_stock_review_service.py` en dezelfde
 
 1. **Artikelidentiteit:** een expliciet bevestigd huishoudartikel-ID, een
    bestaand bevestigd winkelgeheugen of een aantoonbaar catalogusgekoppeld
-   product. De bronbontekst is hoogstens een naam voor een **nieuw**
+   product. Na een volledig geslaagde, goedgekeurde Kassa-verwerking wordt
+   de gebruikte canonieke artikelkoppeling opgeslagen via hetzelfde
+   `store_import_memory` als Uitpakken; een al bevestigde koppeling met
+   voorkeurslocatie wordt daarbij niet overschreven. De bronbontekst is hoogstens een naam voor een **nieuw**
    huishoudartikel na expliciete Kassa-goedkeuring; gelijke tekst is geen
    bewijs om bestaande huishoudartikelen automatisch samen te voegen.
 2. **Hoeveelheid:** de gemeenschappelijke normalisator controleert dat een
