@@ -107,6 +107,31 @@ def resolve_stock_household_article(
 
     global_id = str(line.get("matched_global_product_id") or "").strip()
     if global_id:
+        linked = main_module.find_household_article_for_global_product(
+            conn, household_id, global_id,
+        )
+        if linked:
+            return str(linked["id"])
+        # A catalog link is not permission to merge a different household
+        # article that merely shares its name.
+        global_row = conn.execute(text(
+            "SELECT name FROM global_products WHERE id = :id LIMIT 1"
+        ), {"id": global_id}).mappings().first()
+        if not global_row:
+            return None
+        catalog_name = main_module.normalize_household_article_name(
+            global_row.get("name") or line.get("article_name_raw")
+        )
+        if not catalog_name:
+            return None
+        same_name = conn.execute(text("""
+            SELECT 1 FROM household_articles
+            WHERE household_id = :household_id
+              AND LOWER(TRIM(naam)) = LOWER(TRIM(:name))
+            LIMIT 1
+        """), {"household_id": household_id, "name": catalog_name}).first()
+        if same_name:
+            return None
         return main_module.ensure_household_article_for_global_product(
             conn, household_id, global_id,
             article_name_hint=line.get("article_name_raw"),
