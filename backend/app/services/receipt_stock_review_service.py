@@ -43,14 +43,16 @@ def normalized_store_memory_key(article_name, brand) -> str:
     return f"{str(article_name or '').strip().lower()}||{str(brand or '').strip().lower()}"
 
 
-def find_confirmed_household_article_id(
+def get_confirmed_store_memory(
     conn, *, household_id, store_provider_code, article_name, brand,
-) -> str | None:
+) -> dict | None:
     """Only a previously confirmed store choice is reusable automatically."""
     if not household_id or not store_provider_code or not str(article_name or "").strip():
         return None
     row = conn.execute(text("""
-        SELECT m.matched_household_article_id AS article_id
+        SELECT m.matched_household_article_id AS article_id,
+               m.preferred_location_id AS preferred_location_id,
+               m.times_confirmed AS times_confirmed
         FROM store_import_memory m
         JOIN household_articles ha
           ON ha.id = m.matched_household_article_id
@@ -67,7 +69,17 @@ def find_confirmed_household_article_id(
         "store_provider_code": str(store_provider_code),
         "normalized_key": normalized_store_memory_key(article_name, brand),
     }).mappings().first()
-    return str(row["article_id"]) if row and row.get("article_id") else None
+    return dict(row) if row and row.get("article_id") else None
+
+
+def find_confirmed_household_article_id(
+    conn, *, household_id, store_provider_code, article_name, brand,
+) -> str | None:
+    memory = get_confirmed_store_memory(
+        conn, household_id=household_id, store_provider_code=store_provider_code,
+        article_name=article_name, brand=brand,
+    )
+    return str(memory["article_id"]) if memory else None
 
 
 def resolve_stock_household_article(
