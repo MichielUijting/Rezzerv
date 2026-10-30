@@ -340,6 +340,9 @@ export default function SettingsCapabilitiesPage() {
             </div>
             {isLoading ? <div>Mogelijkheden laden…</div> : CAPABILITY_USE_CASES.map((item) => {
               const active = isUseCaseActive(state?.active_use_cases, item.key)
+              const whereNotInUse = active && item.key === 'waar_inhuis'
+                && configuration?.location_tracking_level !== 'exact'
+                && !configuration?.unpacking_enabled
               return (
                 <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', padding: 14, border: '1px solid #dfe4ea', borderRadius: 12 }} data-testid={`capability-card-${item.key}`}>
                   <div>
@@ -347,7 +350,7 @@ export default function SettingsCapabilitiesPage() {
                     <div style={{ color: '#667085', fontSize: 14 }}>{item.description}</div>
                   </div>
                   {active ? (
-                    <span style={{ fontWeight: 700, color: 'var(--color-ui-primary)' }} data-testid={`capability-active-${item.key}`}>Actief</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-ui-primary)' }} data-testid={`capability-active-${item.key}`}>{whereNotInUse ? 'Niet in gebruik' : 'Actief'}</span>
                   ) : (
                     <Button type="button" variant="secondary" onClick={() => chooseUseCase(item.key)} data-testid={`capability-add-${item.key}`}>Toevoegen</Button>
                   )}
