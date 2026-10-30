@@ -6,6 +6,10 @@ from sqlalchemy import text
 from app.services.household_product_configuration_service import (
     resolve_household_product_configuration,
 )
+from app.services.receipt_stock_review_service import (
+    checked_stock_quantity,
+    resolve_stock_household_article,
+)
 from app.services.temporary_consumable_automation_policy import (
     install_temporary_all_articles_consumable_policy,
 )
@@ -35,6 +39,7 @@ def _prepare_receipt_batch_for_direct_inventory(
     batch_id: str,
     household_id: str,
     configuration,
+    store_provider_code: str = "",
 ) -> int:
     normalized_batch_id = str(batch_id or "").strip()
     normalized_household_id = str(household_id or "").strip()
@@ -62,7 +67,8 @@ def _prepare_receipt_batch_for_direct_inventory(
         text(
             """
             SELECT id, article_name_raw, matched_household_article_id,
-                   matched_global_product_id, external_article_code, brand_raw
+                   matched_global_product_id, external_article_code, brand_raw,
+                   quantity_raw, unit_raw, processing_status, processed_event_id
             FROM purchase_import_lines
             WHERE batch_id = :batch_id
             ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
@@ -77,31 +83,27 @@ def _prepare_receipt_batch_for_direct_inventory(
         if not line_id:
             continue
 
-        article_id = str(line.get("matched_household_article_id") or "").strip() or None
-        global_product_id = str(line.get("matched_global_product_id") or "").strip() or None
-        article_name = main_module.normalize_household_article_name(
-            str(line.get("article_name_raw") or "")
-        )
-
-        if not article_id and global_product_id:
-            article_id = main_module.ensure_household_article_for_global_product(
-                conn,
-                normalized_household_id,
-                global_product_id,
-                article_name_hint=article_name or None,
-                barcode=line.get("external_article_code"),
-                brand=line.get("brand_raw"),
+        if checked_stock_quantity(line.get("quantity_raw"), line.get("unit_raw")) <= 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Een kassabonartikel heeft geen betrouwbare hoeveelheid. Controleer de hoeveelheid in Kassa.",
             )
+        article_id = resolve_stock_household_article(
+            conn,
+            main_module=main_module,
+            household_id=normalized_household_id,
+            line=line,
+            store_provider_code=store_provider_code,
+            allow_new_receipt_article=True,
+        )
         if not article_id:
-            if not article_name:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Bonregel zonder artikelnaam kan niet direct naar Voorraad",
-                )
-            article_id = main_module.ensure_household_article(
-                conn,
-                normalized_household_id,
-                article_name,
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Een kassabonartikel kan niet met zekerheid aan Mijn artikel worden "
+                    "gekoppeld. Controleer de artikelkoppeling in Kassa; er is niets "
+                    "naar Voorraad geboekt."
+                ),
             )
 
         conn.execute(
@@ -135,6 +137,43 @@ def _prepare_receipt_batch_for_direct_inventory(
 
     main_module.update_batch_status(conn, normalized_batch_id)
     return prepared_count
+
+
+def _validate_direct_receipt_quantities(main_module, conn, receipt_table_id: str) -> None:
+    """Use the shared stock quantity rule before approving a direct receipt.
+
+    This check runs inside a read transaction BEFORE the legacy Kassa approval
+    transaction, so an invalid receipt is neither approved nor auto-booked.
+    Financial/non-stock lines are skipped using the canonical classifier.
+    """
+    receipt = conn.execute(
+        text("SELECT store_name FROM receipt_tables WHERE id = :id LIMIT 1"),
+        {"id": receipt_table_id},
+    ).mappings().first()
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Kassabon niet gevonden")
+    lines = conn.execute(text("""
+        SELECT * FROM receipt_table_lines
+        WHERE receipt_table_id = :receipt_table_id
+          AND COALESCE(is_deleted, FALSE) = FALSE
+    """), {"receipt_table_id": receipt_table_id}).mappings().all()
+    for line in lines:
+        semantics = main_module.derive_receipt_line_semantics(
+            dict(line), store_name=str(receipt.get("store_name") or ""),
+        )
+        if not semantics["inventory_eligible"]:
+            continue
+        quantity = line.get("corrected_quantity")
+        unit = line.get("corrected_unit")
+        if quantity is None:
+            quantity = line.get("quantity")
+        if not unit:
+            unit = line.get("unit")
+        if checked_stock_quantity(quantity, unit) <= 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Een kassabonartikel heeft geen betrouwbare hoeveelheid. Controleer de hoeveelheid in Kassa.",
+            )
 
 
 def _manual_receipt_line_id(result, article_name: str) -> str | None:
@@ -345,6 +384,27 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
             }
             return refreshed
 
+        # Do not approve a direct receipt whose quantity is only a guessed
+        # one-piece parser default. Uitpakken uses the same stock normalizer.
+        with main_module.engine.begin() as conn:
+            receipt_owner = conn.execute(text(
+                "SELECT household_id FROM receipt_tables WHERE id = :id LIMIT 1"
+            ), {"id": receipt_table_id}).mappings().first()
+            if receipt_owner:
+                main_module.require_receipt_write_context(
+                    conn, receipt_table_id, authorization,
+                )
+                try:
+                    direct_config = resolve_household_product_configuration(
+                        conn, str(receipt_owner["household_id"]),
+                    )
+                except LookupError:
+                    direct_config = None
+                if should_process_approved_receipt_directly_to_inventory(direct_config):
+                    _validate_direct_receipt_quantities(
+                        main_module, conn, receipt_table_id,
+                    )
+
         result = original_approve(receipt_table_id, authorization)
 
         direct_batch_id = None
@@ -381,12 +441,13 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
             batch = conn.execute(
                 text(
                     """
-                    SELECT id
-                    FROM purchase_import_batches
-                    WHERE household_id = :household_id
-                      AND source_type = 'receipt'
-                      AND source_reference = :source_reference
-                    ORDER BY created_at DESC, id DESC
+                    SELECT pib.id AS id, sp.code AS store_provider_code
+                    FROM purchase_import_batches pib
+                    JOIN store_providers sp ON sp.id = pib.store_provider_id
+                    WHERE pib.household_id = :household_id
+                      AND pib.source_type = 'receipt'
+                      AND pib.source_reference = :source_reference
+                    ORDER BY pib.created_at DESC, pib.id DESC
                     LIMIT 1
                     """
                 ),
@@ -408,6 +469,7 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
                 batch_id=direct_batch_id,
                 household_id=household_id,
                 configuration=configuration,
+                store_provider_code=str(batch.get("store_provider_code") or ""),
             )
             if prepared_count < 1:
                 raise HTTPException(
