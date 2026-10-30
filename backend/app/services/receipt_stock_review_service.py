@@ -34,7 +34,11 @@ def checked_stock_quantity(quantity_raw, unit_raw) -> int:
     unit = str(unit_raw or "").strip().lower()
     if unit in PACKAGE_UNITS:
         return 1
-    if unit in COUNT_UNITS and quantity == quantity.to_integral_value():
+    # Receipt source units may contain a package *description* such as
+    # "10 st 5 l", not a recognized measurement token. A positive integral
+    # purchase quantity still represents that many packages; never replace
+    # it with an invented single item.
+    if quantity == quantity.to_integral_value():
         return int(quantity)
     return 0
 
