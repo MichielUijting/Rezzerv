@@ -14,6 +14,7 @@ from sqlalchemy import inspect, text
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
+from app.services.barcode_identity_service import validate_barcode
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
@@ -32,6 +33,10 @@ CATALOG_IMAGE_DATA_URL_PATTERN = re.compile(
     r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\r\n]+)$",
     re.IGNORECASE,
 )
+
+
+class CatalogGtinUpdateRequest(BaseModel):
+    gtin: str
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -660,6 +665,90 @@ def _validated_catalog_image_data_url(value: str) -> str:
             detail="Bestandsinhoud komt niet overeen met het afbeeldingstype",
         )
     return f"data:{mime_type};base64,{base64.b64encode(binary).decode('ascii')}"
+
+
+@router.put("/{global_product_id}/gtin")
+def set_catalog_primary_gtin(
+    global_product_id: str,
+    payload: CatalogGtinUpdateRequest,
+):
+    """Register one verified GTIN on the shared product, never on a household stock row."""
+    require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+    required = {"id", "primary_gtin", "status"}
+    if "global_products" not in _tables() or not required.issubset(_columns("global_products")):
+        raise HTTPException(status_code=503, detail="De gedeelde Catalogus is niet beschikbaar")
+
+    validation = validate_barcode(payload.gtin, "gtin")
+    if not validation["valid"]:
+        message = "; ".join(error["message"] for error in validation["errors"])
+        raise HTTPException(status_code=422, detail=message or "Ongeldige barcode")
+    gtin = validation["normalized_value"]
+
+    product_columns = _columns("global_products")
+    with engine.begin() as conn:
+        # Serialize concurrent assignments of the same GTIN across different
+        # products. A row lock alone does not protect another product's empty GTIN.
+        if conn.dialect.name == "postgresql":
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:gtin))"),
+                {"gtin": gtin},
+            )
+
+        lock = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        existing = conn.execute(
+            text("SELECT id, status, primary_gtin FROM global_products "
+                 "WHERE id = :product_id" + lock),
+            {"product_id": global_product_id},
+        ).mappings().first()
+        if not existing or str(existing.get("status") or "").lower() == "deleted":
+            raise HTTPException(status_code=404, detail="Catalogusartikel niet gevonden")
+
+        previous_gtin = str(existing.get("primary_gtin") or "").strip()
+        if previous_gtin and previous_gtin != gtin:
+            raise HTTPException(
+                status_code=409,
+                detail="Dit artikel heeft al een andere primaire barcode. Deze wordt niet automatisch overschreven.",
+            )
+
+        conflicting = conn.execute(
+            text("SELECT id FROM global_products "
+                 "WHERE primary_gtin = :gtin AND id <> :product_id LIMIT 1"),
+            {"gtin": gtin, "product_id": global_product_id},
+        ).first()
+        if conflicting:
+            raise HTTPException(
+                status_code=409,
+                detail="Deze barcode is al aan een ander catalogusartikel gekoppeld.",
+            )
+
+        # The shared identity table may contain legacy household-linked GTIN
+        # evidence. Do not silently reassign an existing identity to this product.
+        if "product_identities" in _tables():
+            identity_columns = _columns("product_identities")
+            if {"identity_type", "identity_value", "global_product_id"}.issubset(identity_columns):
+                identity_conflict = conn.execute(
+                    text("SELECT id FROM product_identities "
+                         "WHERE identity_type IN ('gtin', 'ean', 'upc') "
+                         "AND identity_value = :gtin "
+                         "AND global_product_id IS NOT NULL "
+                         "AND global_product_id <> :product_id LIMIT 1"),
+                    {"gtin": gtin, "product_id": global_product_id},
+                ).first()
+                if identity_conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Deze barcode is al gekoppeld aan een andere productidentiteit.",
+                    )
+
+        if not previous_gtin:
+            timestamp_sql = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+            conn.execute(
+                text("UPDATE global_products SET primary_gtin = :gtin" + timestamp_sql
+                     + " WHERE id = :product_id AND (primary_gtin IS NULL OR TRIM(primary_gtin) = '')"),
+                {"gtin": gtin, "product_id": global_product_id},
+            )
+
+    return {"global_product_id": global_product_id, "gtin": gtin, "changed": not bool(previous_gtin)}
 
 
 @router.put("/{global_product_id}/image")
