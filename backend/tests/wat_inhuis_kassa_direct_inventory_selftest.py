@@ -292,6 +292,58 @@ def run() -> int:
                 assert purchase_event["event_type"] == "purchase", purchase_event
                 assert float(purchase_event["quantity"] or 0) == 3.0, purchase_event
 
+            # A missing stock quantity may never turn into the historical
+            # one-item fallback when Kassa is approved without Uitpakken.
+            incomplete = _seed_receipt(
+                engine,
+                fixture_name="normal_physical",
+                seed_key="wat-inhuis-missing-quantity",
+            )
+            with engine.begin() as conn:
+                first_stock_line = conn.execute(
+                    text("""
+                        SELECT id FROM receipt_table_lines
+                        WHERE receipt_table_id = :receipt_id
+                          AND COALESCE(is_deleted, FALSE) = FALSE
+                          AND COALESCE(line_role, 'product') = 'product'
+                          AND inventory_eligible = 1
+                        ORDER BY line_index, id LIMIT 1
+                    """),
+                    {"receipt_id": incomplete["receipt_table_id"]},
+                ).scalar_one()
+                conn.execute(
+                    text("""
+                        UPDATE receipt_table_lines
+                        SET quantity = NULL, corrected_quantity = NULL,
+                            unit = 'stuk', corrected_unit = NULL
+                        WHERE id = :line_id
+                    """),
+                    {"line_id": str(first_stock_line)},
+                )
+                events_before_reject = int(conn.execute(
+                    text("SELECT COUNT(*) FROM inventory_events WHERE household_id = :household_id"),
+                    {"household_id": TARGET_HOUSEHOLD},
+                ).scalar_one())
+
+            rejected = client.post(
+                f"/api/receipts/{incomplete['receipt_table_id']}/approve",
+                headers=headers,
+            )
+            assert rejected.status_code == 409, rejected.text
+            assert "hoeveelheid" in str(rejected.json().get("detail") or "").lower()
+            with engine.begin() as conn:
+                receipt_approved = conn.execute(
+                    text("SELECT approved_at FROM receipt_tables WHERE id = :id"),
+                    {"id": incomplete["receipt_table_id"]},
+                ).scalar_one()
+                events_after_reject = int(conn.execute(
+                    text("SELECT COUNT(*) FROM inventory_events WHERE household_id = :household_id"),
+                    {"household_id": TARGET_HOUSEHOLD},
+                ).scalar_one())
+            assert receipt_approved is None
+            assert events_after_reject == events_before_reject
+
+        print("PASS missing_direct_stock_quantity_blocks_approval_without_inventory_change")
         print("PASS wat_inhuis_kassa_approval_routes_directly_to_inventory")
         print("PASS direct_inventory_approval_is_idempotent")
         print("PASS active_and_processed_reimport_preserve_identity_and_inventory_events")
