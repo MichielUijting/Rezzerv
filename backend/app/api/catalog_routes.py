@@ -18,6 +18,7 @@ from app.services.barcode_identity_service import validate_barcode
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
+    require_household_admin_from_session,
     require_platform_permission_from_session,
     resolve_current_server_session,
 )
@@ -667,13 +668,27 @@ def _validated_catalog_image_data_url(value: str) -> str:
     return f"data:{mime_type};base64,{base64.b64encode(binary).decode('ascii')}"
 
 
+def _require_catalog_gtin_contributor() -> None:
+    """Permit a narrow new-identity contribution by a platform catalog editor
+    or an authenticated household owner/admin. No other Catalogus mutations
+    or replacement of existing GTINs are authorized by this fallback.
+    """
+    try:
+        require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
+    require_household_admin_from_session()
+
+
 @router.put("/{global_product_id}/gtin")
 def set_catalog_primary_gtin(
     global_product_id: str,
     payload: CatalogGtinUpdateRequest,
 ):
     """Register one verified GTIN on the shared product, never on a household stock row."""
-    require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+    _require_catalog_gtin_contributor()
     required = {"id", "primary_gtin", "status"}
     if "global_products" not in _tables() or not required.issubset(_columns("global_products")):
         raise HTTPException(status_code=503, detail="De gedeelde Catalogus is niet beschikbaar")
