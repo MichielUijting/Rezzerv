@@ -15,6 +15,9 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/__init__.py'
       - 'backend/app/services/receipt_direct_inventory_approval_patch.py'
+      - 'backend/app/services/receipt_stock_review_service.py'
+      - 'backend/tests/test_receipt_stock_review_service.py'
+      - 'backend/tests/test_receipt_direct_inventory_without_unpacking.py'
       - 'backend/app/services/temporary_consumable_automation_policy.py'
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/canonical_direct_location_service.py'
@@ -83,7 +86,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
           python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          python -m pip install -r backend/requirements.txt pytest
 
       - name: Prepare shared PostgreSQL acceptance foundation
         uses: ./.github/actions/postgresql-acceptance-foundation
@@ -104,10 +107,19 @@ jobs:
             backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py \
             backend/tests/temporary_all_articles_consumable_postgresql_selftest.py \
             backend/app/services/receipt_direct_inventory_approval_patch.py \
+            backend/app/services/receipt_stock_review_service.py \
             backend/app/services/temporary_consumable_automation_policy.py \
             backend/app/main.py \
             backend/app/schemas/receipts.py \
             backend/app/receipt_ingestion/receipt_line_semantics.py
+
+      - name: Validate shared article matching and stock quantity guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            backend/tests/test_receipt_stock_review_service.py \
+            backend/tests/test_receipt_direct_inventory_without_unpacking.py
 
       - name: Validate Kassa review and approval through real PostgreSQL API
         shell: bash
