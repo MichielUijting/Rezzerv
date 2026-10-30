@@ -259,6 +259,113 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     expectNoConsoleErrors(consoleErrors);
   });
 
+  test('Catalogusdetail verandert alleen de centrale artikelnaam na expliciete bevestiging', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    const productId = 'catalog-rename-global';
+    let renamed = null;
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'catalog-editor',
+          email: 'catalog-editor@example.test',
+          active_household_id: '0',
+          context_type: 'system',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: true,
+          permissions: {
+            'platform.catalog.update': true,
+            'platform.system_household.access': true,
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/catalog/${productId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          product: {
+            id: productId,
+            name: 'Aardappelschijfje spek-ui',
+            brand: 'Testmerk',
+            primary_gtin: '8712345678901',
+            source: 'manual',
+          },
+          identities: [], household_articles: [], receipt_lines: [],
+        }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}/gpc-brick`, async (route) => {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ assignment: null, suggestion: null, suggestions: [] }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}/name`, async (route) => {
+      expect(route.request().method()).toBe('PUT');
+      renamed = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          global_product_id: productId, name: renamed.name, changed: true,
+        }),
+      });
+    });
+
+    await page.goto(`/catalogus/${productId}`);
+    await expect(page.getByTestId('catalog-shared-name-edit')).toBeVisible();
+    await page.getByTestId('catalog-shared-name-edit').click();
+    await page.getByTestId('catalog-shared-name-input').fill('Aardappelschijfjes spek-ui');
+    await page.getByTestId('catalog-shared-name-save').click();
+    await expect.poll(() => renamed).toEqual({
+      name: 'Aardappelschijfjes spek-ui',
+      expected_name: 'Aardappelschijfje spek-ui',
+    });
+    await expect(page.getByTestId('catalog-shared-product-name')).toHaveText('Aardappelschijfjes spek-ui');
+    await expect(page.getByText('8712345678901', { exact: true })).toBeVisible();
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Huishoudbeheerder kan centrale artikelnaam niet wijzigen zonder catalogusrechten', async ({ page }) => {
+    const productId = 'catalog-name-permission';
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'household-owner',
+          active_household_id: 'h1', context_type: 'regular',
+          role: 'owner', display_role: 'admin',
+          permissions: { 'admin.access': true, 'platform.catalog.update': false },
+        }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}`, async (route) => {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          product: { id: productId, name: 'Bestaande naam', primary_gtin: '', source: 'manual' },
+          identities: [], household_articles: [], receipt_lines: [],
+        }),
+      });
+    });
+    await page.route(`**/api/catalog/${productId}/gpc-brick`, async (route) => {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ assignment: null, suggestion: null, suggestions: [] }),
+      });
+    });
+
+    await page.goto(`/catalogus/${productId}`);
+    await expect(page.getByTestId('catalog-shared-product-name')).toHaveText('Bestaande naam');
+    await expect(page.getByTestId('catalog-shared-name-edit')).toHaveCount(0);
+    await expect(page.getByTestId('catalog-shared-gtin-entry')).toBeVisible();
+  });
+
   test('Catalogusdetail laat bevoegde gebruiker foto uploaden of camera kiezen en comprimeert voor opslag', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let imagePayload = null;
