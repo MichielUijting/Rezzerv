@@ -12,6 +12,7 @@ const catalogGpcSource = readFrontend('src/features/catalog/CatalogGpcActionPage
 const catalogGpcFrameSource = readFrontend('src/features/catalog/CatalogGpcFrame.jsx')
 const catalogCss = readFrontend('src/features/catalog/catalog.css')
 const sharedBarcodeEditor = readFrontend('src/features/catalog/CatalogBarcodeEntry.jsx')
+const sharedNameEditor = readFrontend('src/features/catalog/CatalogNameEditor.jsx')
 const catalogDetail = readFrontend('src/features/catalog/CatalogDetailPageV2.jsx')
 const tokensCss = readFrontend('src/ui/tokens.css')
 const themeCss = readFrontend('src/ui/theme.css')
@@ -54,6 +55,16 @@ assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
 assert.match(themeCss, /\.rz-header \.rz-header-title,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /button\.rz-button-primary,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
+
+// The shared name editor is the only place to change the universal title.
+assert.ok(catalogDetail.includes("import CatalogNameEditor from './CatalogNameEditor'"))
+assert.equal((catalogDetail.match(/<CatalogNameEditor/g) || []).length, 2)
+assert.ok(sharedNameEditor.includes('Naam wijzigen'))
+assert.ok(sharedNameEditor.includes('expected_name: previous'))
+assert.ok(sharedNameEditor.includes('/api/catalog/${encodeURIComponent(globalProductId)}/name'))
+assert.ok(sharedNameEditor.includes('data-testid="catalog-shared-name-save"'))
+assert.ok(!sharedNameEditor.includes('/api/inventory/'))
+assert.ok(!sharedNameEditor.includes('household_article_id'))
 
 // One shared Catalogus barcode editor must be mounted for both layout variants.
 assert.ok(catalogDetail.includes("import CatalogBarcodeEntry from './CatalogBarcodeEntry'"))
