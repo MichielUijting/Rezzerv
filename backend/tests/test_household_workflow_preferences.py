@@ -57,6 +57,22 @@ def test_location_downgrade_with_stock_fails_without_mutation():
     assert all(params["household_id"] == "h1" for params in conn.parameters)
 
 
+def test_disabling_unpacking_with_global_located_stock_is_also_blocked():
+    conn = FakeConnection(located_stock=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(location="global", unpacking=True),
+    ):
+        with pytest.raises(ValueError, match="actieve voorraad"):
+            save_household_workflow_preferences(
+                conn,
+                household_id="h1",
+                location_tracking_level="global",
+                unpacking_enabled=False,
+            )
+    assert not any("UPDATE " in sql or "DELETE " in sql for sql in conn.statements)
+
+
 def test_open_receipt_blocks_disabling_unpacking():
     conn = FakeConnection(pending=True)
     with patch(
