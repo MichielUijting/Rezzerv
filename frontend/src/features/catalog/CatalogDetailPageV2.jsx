@@ -12,6 +12,7 @@ import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from 
 import CatalogCameraModal from './CatalogCameraModal'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
+import CatalogBarcodeEntry from './CatalogBarcodeEntry'
 import { captureCatalogImageFromVideo, compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
 import './mobileCatalog.css'
@@ -341,6 +342,8 @@ export default function CatalogDetailPageV2() {
                 </div>
               </section>
 
+              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canUpdateCatalogImage} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
+
               <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-gpc">
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
               </section>
@@ -460,6 +463,8 @@ export default function CatalogDetailPageV2() {
                   </div>
                 </div>
               </section>
+
+              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canUpdateCatalogImage} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
