@@ -413,6 +413,13 @@ Op mobiele schermen is passieve feedback altijd een **overlay**:
 
 Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voortgangsmeldingen zijn niet transient. Zij blijven centrale AppFeedback-dialogen en verdwijnen niet automatisch.
 
+### Ondoorzichtige interactieve dialogen — Catalogus fotokeuze, 30 oktober 2026
+
+- Bij een centrale AppFeedback-dialoog met actieknoppen of invoervelden is de dialoogkaart altijd volledig **ondoorzichtig wit**, met donkere leesbare tekst, een subtiele rand, normale binnenruimte en een duidelijke begrenzing.
+- De donkere achtergrondlaag dimt de onderliggende pagina, maar teksten, tabellen en kaarten mogen nooit door de dialoogkaart heen zichtbaar blijven. Dit geldt onder meer voor **Productfoto toevoegen** in Catalogus met de acties **Foto maken** en **Foto uploaden**.
+- De bestaande centrale AppFeedbackProvider verzorgt deze presentatie op desktop en mobiel; afzonderlijke pagina's leggen geen eigen transparante fotokeuzedialoog over het scherm.
+- Dit verandert niet de bestaande snelle, niet-interactieve feedbackbalk en ook niet de opslag- of camera-functionaliteit.
+
 ### Desktop en nog niet gemigreerde niet-mobiele feedback
 
 Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
