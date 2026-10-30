@@ -90,14 +90,14 @@ assert.match(workflowPage, /Voorraadlocaties en Uitpakken/)
 assert.match(workflowPage, /workflow-location-level/)
 assert.match(workflowPage, /workflow-unpacking-enabled/)
 assert.match(workflowPage, /workflow-preferences-save/)
-assert.match(workflowPage, /api\\/onboarding\\/workflow-preferences/)
+assert.ok(workflowPage.includes('/api/onboarding/workflow-preferences'))
 assert.match(workflowPage, /household-configuration-changed/)
 const workflowRoute = fs.readFileSync(
   new URL('../../backend/app/api/household_capability_expansion_routes.py', import.meta.url),
   'utf8',
 )
-assert.match(workflowRoute, /@router.put\\("\/api\/onboarding\/workflow-preferences"\\)/)
-assert.match(workflowRoute, /_require_manage_context\\(\\)/)
+assert.ok(workflowRoute.includes('@router.put("/api/onboarding/workflow-preferences")'))
+assert.ok(workflowRoute.includes('_require_manage_context()'))
 assert.match(workflowRoute, /save_household_workflow_preferences/)
 const mobile = fs.readFileSync(new URL('../src/app/MobileAppChrome.jsx', import.meta.url), 'utf8')
 assert.match(mobile, /inhuis:household-configuration-changed/)
