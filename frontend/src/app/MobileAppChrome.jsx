@@ -84,6 +84,12 @@ function activeActionKey(pathname = '') {
 function MobileBottomNavigationRuntime({ context, pathname }) {
   const navigate = useNavigate()
   const [showMore, setShowMore] = useState(false)
+  const [, refreshWorkflowPreferences] = useState(0)
+  useEffect(() => {
+    const onConfigurationChanged = () => refreshWorkflowPreferences((revision) => revision + 1)
+    window.addEventListener('inhuis:household-configuration-changed', onConfigurationChanged)
+    return () => window.removeEventListener('inhuis:household-configuration-changed', onConfigurationChanged)
+  }, [])
   const features = useFeatureAvailability()
   const actionAvailability = useActionButtonAvailability({
     enabled: Boolean(context && context.context_type !== 'none'),
