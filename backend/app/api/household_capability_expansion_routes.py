@@ -11,6 +11,9 @@ from app.services.household_capability_expansion_service import (
     expand_with_wat_inhuis,
     expand_with_waar_inhuis,
 )
+from app.services.household_workflow_preferences_service import (
+    save_household_workflow_preferences,
+)
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
     resolve_household_onboarding_state,
@@ -45,6 +48,11 @@ class ExpandWatInhuisRequest(BaseModel):
     global_locations_enabled: bool = False
     almost_out_enabled: bool = False
     shopping_enabled: bool = False
+
+
+class HouseholdWorkflowPreferencesRequest(BaseModel):
+    location_tracking_level: str
+    unpacking_enabled: bool
 
 
 class ExpansionSublocationRequest(BaseModel):
@@ -155,6 +163,29 @@ def get_household_capabilities():
     with engine.begin() as conn:
         _require_completed(conn, household_id)
         return _projection(conn, household_id)
+
+
+@router.put("/api/onboarding/workflow-preferences")
+def update_household_workflow_preferences(payload: HouseholdWorkflowPreferencesRequest):
+    context = _require_manage_context()
+    household_id = str(context.active_household_id)
+    try:
+        with engine.begin() as conn:
+            _require_completed(conn, household_id)
+            save_household_workflow_preferences(
+                conn,
+                household_id=household_id,
+                location_tracking_level=payload.location_tracking_level,
+                unpacking_enabled=payload.unpacking_enabled,
+            )
+            return _projection(conn, household_id)
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Richt eerst dit huishouden in voordat je deze instellingen wijzigt.",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/api/onboarding/expand/inhuis-halen")
