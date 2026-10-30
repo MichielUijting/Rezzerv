@@ -36,6 +36,10 @@ class _FakeConnection:
                         "matched_global_product_id": None,
                         "external_article_code": None,
                         "brand_raw": None,
+                        "quantity_raw": 2,
+                        "unit_raw": "stuk",
+                        "processing_status": "pending",
+                        "processed_event_id": None,
                     }
                 ]
             )
@@ -49,6 +53,7 @@ def test_direct_kassa_to_inventory_clears_synthetic_direct_target():
         normalize_household_article_name=lambda value: str(value).strip(),
         ensure_household_article_for_global_product=lambda *args, **kwargs: None,
         ensure_household_article=lambda *args, **kwargs: "article-created",
+        resolve_review_article_option=lambda *args, **kwargs: {"id": "article-1"},
         update_batch_status=lambda connection, batch_id: updated_batches.append(batch_id),
     )
     configuration = SimpleNamespace(
