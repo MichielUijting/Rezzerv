@@ -18,8 +18,12 @@ const columns = [
   { key: 'receipt_line_text', label: 'Artikel', width: 320, sortable: true, filterable: true },
   { key: 'retailer', label: 'Winkelketen', width: 170, sortable: true, filterable: true },
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
-  { key: 'article_code', label: 'Art.code', width: 180, sortable: true, filterable: true },
-  { key: 'manual_barcode', label: 'Ingevoerde barcode', width: 190, sortable: true, filterable: true },
+  { key: 'article_code', label: 'Art./Barcode', width: 185, sortable: true, filterable: true,
+    getSortValue: (row) => row.article_code || row.manual_barcode || '',
+    filterPredicate: (row, filter) => String(row.article_code || row.manual_barcode || '').toLowerCase().includes(String(filter).toLowerCase()),
+    renderCell: (row) => row.article_code || (row.manual_barcode
+      ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
+      : '') },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -37,8 +41,7 @@ const columns = [
 
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
-  ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art.code'],
-  ['manual_barcode', 'Ingevoerde barcode'],
+  ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
   ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
@@ -95,7 +98,8 @@ export default function ExternalDatabases2Page() {
     if (!selectedRows.length) return
     const content = [exportColumns.map(([, label]) => label),
       ...selectedRows.map((row) => exportColumns.map(([key]) =>
-        key === 'link_status' ? STATUSES[row.link_status] || STATUSES.unlinked : row[key]))]
+        key === 'link_status' ? STATUSES[row.link_status] || STATUSES.unlinked
+          : key === 'article_code' ? row.article_code || row.manual_barcode || '' : row[key]))]
       .map((row) => row.map(csvCell).join(';')).join('\r\n')
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
@@ -199,7 +203,7 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art.code toont alleen een bevestigde Catalogusbarcode. Een ingevoerde barcode zonder OFF-match blijft apart zichtbaar en is niet gekoppeld.</p>
+        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art./Barcode toont een bekende artikelcode of handmatig ingevoerde barcode; alleen een bevestigde koppeling verandert de GS1-status.</p>
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
@@ -290,10 +294,8 @@ export default function ExternalDatabases2Page() {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
               setSelectedIds([])
-              if (outcome.status === 'success') {
-                setActiveStatusCounter('')
-                setFilters((previous) => ({ ...previous, link_status: '' }))
-              }
+              // Keep the user's existing filters, sort order and page after
+              // saving; the refreshed list determines whether a row remains visible.
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
             }} /> : null}

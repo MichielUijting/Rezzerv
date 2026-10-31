@@ -1465,3 +1465,12 @@ de actieknop en het expliciete bevestigingsvenster hergebruiken de Inhuis
 standaardknoppen, invoervelden en modals. In het ED2-overzicht staat een aparte
 kolom **Ingevoerde barcode**; dit is niet de canonieke **Art.code** en
 beïnvloedt de gekleurde GS1-statussen niet zonder officiële koppeling.
+
+### Externe databases 2 — barcode direct in hoofdtable tonen (31 oktober 2026)
+
+De kolom **Art./Barcode** combineert de bestaande artikelcode met een apart
+bewaarde, nog niet bevestigde handmatige barcode: uitsluitend de zichtbare
+waarde is gecombineerd, de backendidentiteit en GS1-status blijven strikt
+gescheiden. Bij een handmatige barcode maakt de cel via een standaard tooltip
+zichtbaar dat deze nog niet aan de Catalogus is gekoppeld. De extra kolom
+**Ingevoerde barcode** vervalt om horizontale schermruimte te besparen.

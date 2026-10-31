@@ -342,3 +342,14 @@ bewaard. De kolom **Ingevoerde barcode** toont dit apart; **Art.code**,
 **Gekoppeld** en de Kassa-/Voorraadprojectie worden er niet stilzwijgend door
 aangepast. Conflicten, ongeldige controlesommen of onbereikbaarheid van OFF
 leiden niet tot een verzonnen bevestiging.
+
+#### Verduidelijking barcode opslaan bij OFF-storing (31 oktober 2026)
+
+De hoofdtafelkolom **Art./Barcode** toont de vastgelegde artikelcode, of bij
+ontbreken daarvan de handmatig ingevoerde barcode (met aanduiding dat deze nog
+niet als Cataloguskoppeling is geverifieerd). Een afzonderlijke barcodekolom is
+niet nodig. Wanneer OFF tijdelijk niet bereikbaar is, slaat Inhuis na expliciete
+gebruikersbevestiging uitsluitend de geldige barcode op. De melding maakt
+onderscheid tussen een werkelijk niet bij OFF gevonden code en een niet
+uitgevoerde OFF-controle wegens storing. Bij herstel van OFF kan dezelfde
+barcode opnieuw worden aangeboden voor gecontroleerde productverrijking.

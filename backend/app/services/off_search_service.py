@@ -54,6 +54,11 @@ class OffSearchError(ValueError):
     pass
 
 
+class OffUnavailableError(OffSearchError):
+    """OFF exact-GTIN lookup could not complete; do not claim no match."""
+    pass
+
+
 def _text(value: Any) -> str:
     if isinstance(value, list):
         return " ".join(_text(item) for item in value if _text(item))
@@ -955,7 +960,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
                 raise OffSearchError("Vul een geldige barcode (GTIN) in")
             lookup = lookup_off_product_by_gtin(requested_gtin)
             if lookup.get("status") == "external_source_unavailable":
-                raise OffSearchError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
+                raise OffUnavailableError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
             product = lookup.get("product") or {}
             results = []
             if lookup.get("status") == "found" and _text(product.get("product_name")):

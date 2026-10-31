@@ -35,7 +35,9 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
           ? 'Barcode en beschikbare productgegevens uit OFF opgeslagen in Catalogus'
             + (payload.photo_loaded ? ', inclusief foto.' : '.')
             + (payload.classification_pending ? ' Officiële GS1-classificatie ontbreekt nog.' : '')
-          : 'Barcode handmatig opgeslagen. Niet gevonden in OFF; geen OFF-product, GS1-classificatie of Cataloguskoppeling aangemaakt.',
+          : payload.off_unavailable
+            ? 'Barcode opgeslagen. OFF is tijdelijk niet bereikbaar; foto en productgegevens zijn nog niet opgehaald. Er is geen Cataloguskoppeling gemaakt.'
+            : 'Barcode handmatig opgeslagen. Niet gevonden in OFF; geen OFF-product, GS1-classificatie of Cataloguskoppeling aangemaakt.',
       })
     } catch (err) {
       if (err.status !== 401) {
@@ -54,7 +56,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
   return (
     <section className="rz-external-manual-barcode" aria-label="Barcode handmatig opslaan" data-testid="ed2-manual-barcode-entry">
       <h4>Barcode handmatig opslaan</h4>
-      <p>Inhuis zoekt de barcode eerst exact in Open Food Facts. Als OFF het product niet kent, wordt alleen de ingevoerde barcode bewaard. Er ontstaat geen automatische voorraadkoppeling.</p>
+      <p>Inhuis zoekt de barcode eerst exact in Open Food Facts. Als OFF het product niet kent of tijdelijk niet bereikbaar is, wordt de ingevoerde barcode toch bewaard. Er ontstaat geen automatische voorraadkoppeling.</p>
       <div className="rz-external-off-manual-form">
         <label className="rz-input-field">
           <span className="rz-label">Barcode (EAN/GTIN)</span>
@@ -74,7 +76,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
           aria-labelledby="ed2-manual-barcode-confirm">
           <p id="ed2-manual-barcode-confirm" className="rz-modal-text">
             Barcode <strong>{barcode.trim()}</strong> voor <strong>{item.receipt_line_text}</strong> opslaan?
-            Inhuis zoekt eerst bij OFF. Zonder OFF-match blijft uitsluitend de handmatige barcode bewaard.
+            Inhuis zoekt eerst bij OFF. Zonder OFF-match of bij tijdelijke OFF-storing blijft de barcode bewaard zonder productkoppeling.
           </p>
           <div className="rz-modal-actions">
             <Button type="button" variant="secondary" onClick={() => setConfirm(false)}>Annuleren</Button>

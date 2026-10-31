@@ -23,7 +23,7 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
 )
-from app.services.off_search_service import OffSearchError, search_off_candidates
+from app.services.off_search_service import OffSearchError, OffUnavailableError, search_off_candidates
 from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
@@ -797,12 +797,19 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
 
     # The original source is resolved again by the canonical OFF search service.
     # Do not accept candidate names, image URLs or OFF identities from the browser.
+    off_unavailable = False
     try:
         search = search_off_candidates({
             "receipt_item_id": receipt_item_id, "mode": "manual", "gtin": gtin, "limit": 1,
         })
+    except OffUnavailableError:
+        # A network outage must not block explicit user-entered barcode evidence.
+        # Do NOT claim that OFF has no match: the lookup was not completed.
+        off_unavailable = True
+        search = {"results": []}
     except OffSearchError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        # Unexpected lookup/identity errors must not be treated as OFF downtime.
+        raise HTTPException(status_code=422, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -859,6 +866,7 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
                 "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             ), {**identity, "gtin": gtin})
     return {"saved": True, "source": "manual", "gtin": gtin, "off_found": False,
+            "off_unavailable": off_unavailable,
             "classification_pending": False, "photo_loaded": False}
 
 

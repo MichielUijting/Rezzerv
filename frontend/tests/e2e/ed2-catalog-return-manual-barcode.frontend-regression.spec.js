@@ -69,8 +69,40 @@ test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN
   await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
   expect(requests).toEqual([{ receipt_item_id: item.id, gtin: '8718452504435' }])
   const cells = table.locator('tbody tr').first().locator('td')
-  await expect(cells.nth(4)).toHaveText('')
-  await expect(cells.nth(5)).toHaveText('8718452504435')
+  await expect(cells.nth(4)).toHaveText('8718452504435')
+  await expect(cells.nth(4).locator('span')).toHaveAttribute('title', /Handmatig ingevoerde barcode/)
+  await expect(cells.nth(5)).toHaveText('Niet gekoppeld')
+  await expect(table.locator('thead')).toContainText('Art./Barcode')
+})
+
+test('Een OFF storing bewaart barcode in Art./Barcode en behoudt het bestaande filter', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:manual-off-outage', receipt_line_text: 'SIMON LEVELT',
+    retailer_code: 'ah', receipt_article_number: '768682',
+    article_code: '', link_status: 'unlinked',
+  }
+  const stored = []
+  await page.route('**/api/**', (route) => bootstrap(route, [item], stored, (request) => {
+    const code = request.request().postDataJSON().gtin
+    stored.push({ retailer_code: 'ah', receipt_text_normalized: 'simon levelt',
+      external_article_code: '768682', gtin: code })
+    return request.fulfill({ json: {
+      saved: true, source: 'manual', gtin: code, off_found: false, off_unavailable: true,
+      classification_pending: false, photo_loaded: false,
+    } })
+  }))
+  await page.goto('/externe-databases-2')
+  const table = page.getByTestId('external-databases-2-table')
+  await page.getByRole('textbox', { name: 'Filter op Artikel' }).fill('SIMON')
+  await table.locator('tbody tr', { hasText: 'SIMON LEVELT' }).dblclick()
+  await page.getByTestId('ed2-manual-barcode-input').fill('8711138357776')
+  await page.getByTestId('ed2-manual-barcode-save').click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
+  await expect(page.getByTestId('external-off-link-outcome')).toContainText('Barcode opgeslagen. OFF is tijdelijk niet bereikbaar')
+  await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toHaveValue('SIMON')
+  await expect(table.locator('thead')).toContainText('Art./Barcode')
+  await expect(table.locator('tbody tr', { hasText: 'SIMON LEVELT' }).locator('td').nth(4)).toHaveText('8711138357776')
+  await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
 })
 
 test('ED2 keert van handmatig OFF zoeken terug naar dezelfde gefilterde pagina', async ({ page }) => {

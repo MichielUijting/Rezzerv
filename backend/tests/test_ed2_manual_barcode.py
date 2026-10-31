@@ -127,8 +127,8 @@ def test_unknown_off_barcode_records_only_standalone_evidence(guard):
     gtin = valid_gtin()
     result = save(gtin)
     assert result == {"saved": True, "source": "manual", "gtin": gtin,
-                      "off_found": False, "classification_pending": False,
-                      "photo_loaded": False}
+                      "off_found": False, "off_unavailable": False,
+                      "classification_pending": False, "photo_loaded": False}
     assert permissions == ["platform.external_products.link_existing"]
     assert search_calls == [{"receipt_item_id": "receipt-table-line:r1",
                              "mode": "manual", "gtin": gtin, "limit": 1}]
@@ -207,3 +207,52 @@ def test_unknown_source_is_not_registered(guard):
         ))
     assert error.value.status_code == 404
     assert conn.manual == {}
+
+def test_off_unavailable_preserves_barcode_only_without_claiming_off_match(guard):
+    conn, _, _, linked, monkeypatch = guard
+    from app.services.off_search_service import OffUnavailableError
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: (_ for _ in ()).throw(
+                            OffUnavailableError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
+                        ))
+    result = save(code)
+    assert result["saved"] is True
+    assert result["off_found"] is False
+    assert result["off_unavailable"] is True
+    assert result["source"] == "manual"
+    assert conn.manual == {("jumbo", "melk", "123"): code}
+    assert not linked
+    assert conn.inventory_events == [{"id": "e1"}]
+    assert conn.household_articles == [{"id": "h1", "stock": 4}]
+
+
+def test_non_outage_off_search_error_must_not_save(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    from app.services.off_search_service import OffSearchError
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: (_ for _ in ()).throw(
+                            OffSearchError("Bonartikel niet gevonden")
+                        ))
+    with pytest.raises(HTTPException) as error:
+        save(valid_gtin())
+    assert error.value.status_code == 422
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_retry_after_outage_enriches_existing_barcode_when_off_recovers(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    from app.services.off_search_service import OffUnavailableError
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: (_ for _ in ()).throw(
+                            OffUnavailableError("OFF unavailable")
+                        ))
+    assert save(code)["off_unavailable"] is True
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": code, "selection_proof": "server-proof",
+                     "identity_compatible": True, "image_url": "https://example.test/photo.jpg"}],
+    })
+    assert save(code)["off_found"] is True
+    assert linked and linked[0]["selection_proof"] == "server-proof"

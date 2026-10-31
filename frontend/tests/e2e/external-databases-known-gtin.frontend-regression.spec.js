@@ -9,7 +9,7 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
-  test('tellers en kolom Art.code filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
+  test('tellers en kolom Art./Barcode filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
     const rows = [
       { id: 'receipt-table-line:ed2-empty', receipt_line_text: 'Melk zonder code', retailer_code: 'jumbo',
         receipt_article_number: '123', article_code: '', link_status: 'unlinked' },
@@ -59,7 +59,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
-    await page.getByRole('textbox', { name: 'Filter op Art.code' }).fill('8720326035617')
+    await page.getByRole('textbox', { name: 'Filter op Art./Barcode' }).fill('8720326035617')
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
