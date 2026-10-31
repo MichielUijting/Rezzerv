@@ -11,6 +11,7 @@ from app.db import engine
 from app.services.external_article_ui_projection import project_central_link_truth_rows
 from app.services.external_database_matchers import match_retailer_receipt_line
 from app.services.global_product_service import get_or_create_global_product
+from app.services.purchase_import_store_identity import retailer_from_purchase_import_payload
 
 PROTECTED_CANDIDATE_STATUSES = {
     "user_confirmed",
@@ -406,29 +407,9 @@ def _m2c2h5_col(
 
 
 def _m2c2i_fix7a3_retailer_from_purchase_import(row: dict[str, Any]) -> str:
-    raw_payload = row.get("batch_raw_payload")
-    if raw_payload:
-        try:
-            payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
-        except Exception:
-            payload = {}
-        if isinstance(payload, dict):
-            metadata = (
-                payload.get("batch_metadata")
-                if isinstance(payload.get("batch_metadata"), dict)
-                else {}
-            )
-            for value in (
-                metadata.get("store_name"),
-                metadata.get("store_label"),
-                payload.get("store_name"),
-                payload.get("store_label"),
-                payload.get("retailer_code"),
-                payload.get("retailer"),
-            ):
-                normalized = str(value or "").strip()
-                if normalized:
-                    return normalized
+    from_batch = retailer_from_purchase_import_payload(row.get("batch_raw_payload"))
+    if from_batch:
+        return from_batch
 
     for value in (
         row.get("retailer_code"),
