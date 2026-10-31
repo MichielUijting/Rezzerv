@@ -18,7 +18,7 @@ const columns = [
     renderCell: (row) => `${Math.round(row.match * 100)}%` },
 ]
 
-export default function OffCandidatePanel({ item, onLinkOutcome }) {
+export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) {
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const [results, setResults] = useState([])
@@ -156,7 +156,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome }) {
         <h3 id="off-candidate-heading">Productkandidaten voor {item.receipt_line_text} — {item.retailer}</h3>
         <p>Productgegevens van Albert Heijn, Jumbo en Lidl waar beschikbaar, aangevuld met Open Food Facts (OFF). Zoeken slaat niets op. {isMobile ? 'Tik' : 'Dubbelklik'} op een kandidaat om een koppeling te controleren en te bevestigen.</p>
         <div className="rz-external-databases-actions">
-          <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item } })}>
+          <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item, ed2TableState: returnState } })}>
             Zelf zoeken in OFF
           </Button>
         </div>

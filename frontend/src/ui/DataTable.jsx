@@ -60,6 +60,9 @@ export default function DataTable({
   pageSize = 10,
   paginationActions = null,
   onPageRowsChange = null,
+  pageState = null,
+  onPageChange = null,
+  pageReady = true,
 }) {
   const isMobileViewport = useMobileAppViewport()
   const effectivePagination = Boolean(pagination || isMobileViewport)
@@ -93,6 +96,12 @@ export default function DataTable({
   const [internalFilters, setInternalFilters] = useState({})
   const [internalSort, setInternalSort] = useState(defaultSort || { key: '', direction: 'asc' })
   const [page, setPage] = useState(1)
+  const activePage = pageState == null ? page : pageState
+  const effectivePage = Math.max(1, Number(activePage) || 1)
+  const changePage = (target) => {
+    if (typeof onPageChange === 'function') onPageChange(target)
+    else setPage(target)
+  }
   const activeFilters = filterState || internalFilters
   const activeSort = sortState || internalSort
   const hasFilters = visibleColumns.some((column) => (
@@ -140,14 +149,14 @@ export default function DataTable({
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
   const pageCount = effectivePagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
 
-  useEffect(() => { setPage(1) }, [activeFilters, activeSort, normalizedPageSize, effectivePagination])
-  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+  useEffect(() => { if (pageState == null) setPage(1) }, [activeFilters, activeSort, normalizedPageSize, effectivePagination, pageState])
+  useEffect(() => { if (pageReady && effectivePage > pageCount) changePage(pageCount) }, [pageReady, effectivePage, pageCount])
 
   const displayData = useMemo(() => {
     if (!effectivePagination) return sortedData
-    const start = (page - 1) * normalizedPageSize
+    const start = (Math.min(effectivePage, pageCount) - 1) * normalizedPageSize
     return sortedData.slice(start, start + normalizedPageSize)
-  }, [effectivePagination, sortedData, page, normalizedPageSize])
+  }, [effectivePagination, sortedData, effectivePage, pageCount, normalizedPageSize])
 
   useEffect(() => {
     if (typeof onPageRowsChange === 'function') onPageRowsChange(displayData)
@@ -260,7 +269,7 @@ export default function DataTable({
       {(pageCount > 1 || paginationActions) ? (
         <div className="rz-data-table-controls">
           <span aria-hidden="true" />
-          {pageCount > 1 ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
+          {pageCount > 1 ? <Pagination page={Math.min(effectivePage, pageCount)} pageCount={pageCount} onPageChange={changePage} /> : null}
           <div className="rz-data-table-actions">
             {paginationActions}
           </div>

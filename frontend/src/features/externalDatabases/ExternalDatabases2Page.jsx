@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -48,10 +48,14 @@ function csvCell(value) {
 
 export default function ExternalDatabases2Page() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
-  const [filters, setFilters] = useState({})
-  const [activeStatusCounter, setActiveStatusCounter] = useState('')
+  const [filters, setFilters] = useState(() => restored?.filters || {})
+  const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
+  const [tableSort, setTableSort] = useState(() => restored?.sort || { key: 'receipt_line_text', direction: 'asc' })
+  const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
@@ -62,6 +66,12 @@ export default function ExternalDatabases2Page() {
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
+  const returnState = { filters, activeStatusCounter, sort: tableSort, page: tablePage }
+  useEffect(() => {
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true, state: { ...location.state, ed2TableState: returnState },
+    })
+  }, [filters, activeStatusCounter, tableSort, tablePage])
 
   const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
@@ -195,10 +205,11 @@ export default function ExternalDatabases2Page() {
             className={`rz-external-ed2-counter--${status}${activeStatusCounter === status ? ' rz-external-ed2-counter--active' : ''}`}
             aria-pressed={activeStatusCounter === status}
             onClick={() => { setActiveStatusCounter((previous) => previous === status ? '' : status)
+              setTablePage(1)
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
           {activeStatusCounter || Object.values(filters).some(Boolean) ? <Button type="button" variant="secondary"
-            onClick={() => { setFilters({}); setActiveStatusCounter('') }}>Wis filters</Button> : null}
+            onClick={() => { setFilters({}); setActiveStatusCounter(''); setTablePage(1) }}>Wis filters</Button> : null}
         </div>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking}
@@ -209,7 +220,12 @@ export default function ExternalDatabases2Page() {
           data={counterFilteredItems}
           onPageRowsChange={onPageRowsChange}
           filterState={filters}
-          onFilterChange={(key, value) => setFilters((previous) => ({ ...previous, [key]: value }))}
+          onFilterChange={(key, value) => { setFilters((previous) => ({ ...previous, [key]: value })); setTablePage(1) }}
+          sortState={tableSort}
+          onSortChange={(value) => { setTableSort(value); setTablePage(1) }}
+          pageState={tablePage}
+          onPageChange={setTablePage}
+          pageReady={!loading}
           getRowKey={(item) => item.id}
           defaultSort={{ key: 'receipt_line_text', direction: 'asc' }}
           emptyMessage={loading ? 'Artikelen laden...' : error ? 'Artikelen niet beschikbaar.' : 'Geen artikelen voor de gekozen filters.'}
@@ -256,7 +272,7 @@ export default function ExternalDatabases2Page() {
               setOffLinkOutcome({ status: 'success', message })
               setRefreshVersion((value) => value + 1)
             }} />
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem}
+          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)

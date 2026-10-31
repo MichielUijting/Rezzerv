@@ -67,6 +67,7 @@ export default function OffManualSearchPage() {
         // het kandidatenpaneel opent niet automatisch opnieuw.
         ...(linkOutcome?.status === 'success' ? {} : { selectedItemId: receiptItemId }),
         ...(linkOutcome ? { offLinkOutcome: linkOutcome } : {}),
+        ...(state?.ed2TableState ? { ed2TableState: state.ed2TableState } : {}),
       },
     })
   }

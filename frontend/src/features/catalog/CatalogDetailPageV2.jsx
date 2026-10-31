@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import AppShell from '../../app/AppShell'
@@ -57,6 +57,8 @@ function identityTypeLabel(value) {
 export default function CatalogDetailPageV2() {
   const { globalProductId = '' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnToCatalog = () => navigate('/catalogus', { state: location.state || {} })
   const isMobileViewport = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
@@ -291,7 +293,7 @@ export default function CatalogDetailPageV2() {
           title="Catalogusdetail"
           testId="mobile-catalog-detail-header"
           showBack
-          onBack={() => navigate('/catalogus')}
+          onBack={returnToCatalog}
         />
         <main className="rz-mobile-catalog-detail-content">
           {isLoading ? <section className="rz-mobile-catalog-state">Catalogusartikel laden…</section> : null}
