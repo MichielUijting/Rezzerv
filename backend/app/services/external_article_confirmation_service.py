@@ -53,7 +53,7 @@ def _receipt_table_identity(conn, source_id: str) -> dict[str, Any] | None:
         text(
             """
             SELECT
-                COALESCE(rt.store_chain, rt.store_name, '') AS retailer_code,
+                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
                 COALESCE(
                     NULLIF(rtl.corrected_raw_label, ''),
                     NULLIF(rtl.normalized_label, ''),
@@ -98,7 +98,7 @@ def _purchase_import_identity(conn, source_id: str) -> dict[str, Any] | None:
         receipt = conn.execute(
             text(
                 """
-                SELECT COALESCE(store_chain, store_name, '') AS retailer_code
+                SELECT COALESCE(NULLIF(store_chain, ''), store_name, '') AS retailer_code
                 FROM receipt_tables
                 WHERE id = :id
                 LIMIT 1
