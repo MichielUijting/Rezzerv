@@ -1,0 +1,60 @@
+# Sanering oude Externe databases — afhankelijkheidsinventaris (31 oktober 2026)
+
+**PO-opdracht:** verwijder de oude actie **Externe databases** uit alle actieve applicatiecode; **Externe databases 2** blijft de enige zichtbare productherkenningsfunctie. Geen overbouw van de oude generieke artikelkoppeling. Verwijder geen historische product-, bon-, voorraad- of huishoudgegevens.
+
+## Actuele GitHub-afhankelijkheden bij start
+
+| Ref | Status | Head |
+|---|---|---|
+| main | stabiele baseline, ongewijzigd | `d6bb7434077cabed8cccb94315574f7ea45224e2` |
+| PR #634 | Draft, barcodes en tabelterugkeer | `dbf3de51b7b83732e64f68f05e081eeedc469824` |
+| PR #635 | Draft, gebaseerd op #634, ED2 verwijderen/overlay/prestaties | `f0a7d793d4f1a9884c4240777bc6b2f0d8a25c81` |
+| deze sanering | gestapelde **Draft** op #635; geen merge / productieactie | branch `codex/retire-legacy-external-databases` |
+
+**Merge-/rebasevolgorde:** eerst #634 en vervolgens #635, elk uitsluitend met afzonderlijke PO-merge-GO. Daarna de saneringskandidaat op de nieuwe main controleren, versie synchroniseren, normale/preflightchecks en F7 exact-candidate uitvoeren; pas daarna Ready/merge na afzonderlijke GO. Tijdens de sanering geen afwijkende Docker-start, database-reset of datawijziging.
+
+## Vooraf gecontroleerde actieve callers en eigenaarschap
+
+| Onderdeel | Aangetoonde caller(s) | Besluit |
+|---|---|---|
+| `frontend/src/features/externalDatabases/ExternalDatabasesPage.jsx` | uitsluitend route `/externe-databases` | **verwijderen** |
+| `ReceiptItemsOverview.jsx` | uitsluitend bovenstaande pagina | **verwijderen** |
+| `RecognitionConfirmationDetail.jsx` | alleen `ReceiptItemsOverview.jsx` | **verwijderen** |
+| `externalDatabasesRecovery.css` | import uitsluitend `RecognitionConfirmationDetail.jsx` | **verwijderen** |
+| `externalDatabases.css` | zowel oude pagina als actieve `OffManualSearchPage.jsx` / ED2-presentatie | **behouden**; op afzonderlijk bewezen ongebruikte regels opschonen |
+| `AppRouter.jsx` | oude route en ED2-routes | verwijder **alleen** oude route/import; ED2-routes behouden |
+| `HomePage.jsx` | tegelroute voor beide acties | verwijder **alleen** oude tegelroute |
+| `platform_feature_flag_service.py` | dynamische serverregistratie van `action.home.externe_databases` naast ED2 | verwijder oude definitie en volgordepositie; bewaar andere vlaggen en permissies |
+| `platform_home_action_order`, `platform_feature_flags` | bestaande voorkeuren over actievolgorde en beschikbaarheid | **geen dataverwijdering**; projectie filtert verouderde sleutel met canonieke registratieset; verouderde API-writes geven 404 |
+| `system_routes.py`: `gtin/lookup`, `summary`, `retailers`, `retailers/{code}/match-preview`, `retailers/{code}/save-candidates`, `candidates/confirm-external`, `receipt-items` | expliciete gebruikerscaller in oude pagina/onderpaneel | verwijderen **na** gecontroleerde caller-audit; behoud onderliggende gedeelde diensten bij andere callers |
+| `system_routes.py`: `products/search-preview`, `articles-overview`, `off/link-selected`, `off/classify-pending`, `off/unlink-selected` | actieve ED2-pagina en kandidaat-/classificatiepanelen | **behouden** |
+| `system_routes.py`: `off/search-preview`, `unlinked-articles`, `off/save-candidates`, `catalog/promote-candidate`, `catalog/promote-highest`, `coverage/receipt-items`, `receipt-items/ensure-candidates`, `candidates` | potentiële andere afnemers, batch-/kandidaatdiensten en bestaande contracten | **behouden** totdat aantoonbaar caller-loos; niet op padnaam alleen verwijderen |
+| `/api/external-products/off/search`, `/api/external-products/gpc/classify`, `/api/catalog/gpc/bricks` | gedeeld OFF/GPC-bewijs, ook ED2 | **behouden** |
+| `external_database_matchers.py` en `external_database_off_index_matchers.py` | kandidaatdetectie via `external_product_candidate_store` en bestaande overkoepelende verwerking | **behouden**, hoewel legacy-namen |
+| `external_product_candidate_store.py`, `external_article_search_service.py`, `off_search_service.py`, `external_article_product_link_service.py`, `external_unlinked_articles_service.py` | readprojecties, OFF, ED2 en andere domeinen | **behouden** |
+| `external_recognition_confirmation.py`, `external_database_matchflow_evidence.py` | historische kandidaatbevestiging, import-/diagnoseverwerking en tests | **behouden** tenzij repo-brede callergraaf voor specifieke functies nul bewijst |
+| `frontend/tests/e2e/external-databases*.spec.js` | combinatie van oude-schermtests en ED2-contracttests | oude tests verwijderen; gemengde ED2-tests **gericht behouden** |
+| `frontend/tests/external-databases-gtin-source.contract.mjs` | exclusieve verwijzing naar oud scherm | vervangen door saneringscontract |
+| `frontend/package.json` | expliciete Playwright-regressielijst met oude specs | bijwerken zonder ED2-tests te laten vervallen |
+| `docs/project/FUNCTIONAL-OVERVIEW.md`, `docs/project/ARCHITECTURE-AND-DATA.md`, UI-styleguide | beschrijven ook gedeelde actuele contracten | specificeer alleen vervallen oude actie en behoud gedeelde data-/identiteitsregels |
+
+### Contractuele grenzen
+
+- **Niet** verwijderen: Kassabon → Uitpakken → Voorraad, huishoudartikelidentiteit, Catalogusproducten, productidentiteiten, GS1 Brick/catalogus, OFF-/winkelzoekengine, oude migratiebestanden, productgeschiedenis, bestaande data of PostgreSQL-volumes.
+- Een generiek gekoppeld Catalogusproduct dat ooit door het oude scherm is gemaakt, blijft volledig behouden. De bestaande generieke identiteit-/leesregels blijven geldig waar zij in opgeslagen data worden aangetroffen. **Geen nieuwe generieke gebruikerskoppelroute verplicht.**
+- Niet op naam of `external-databases`-URL-prefix schrappen. Hetzelfde prefix wordt door ED2 gebruikt.
+- Oude UI-route mag niet als verborgen parallelle navigatie blijven bestaan. Bevoegdheidscontroles op ED2 blijven ongewijzigd.
+- De canonieke actieorder filtert de oude voorkeurssleutel zonder schema-/data-opruiming.
+- Een exacte read-only barcodezoekdienst kan door een andere functionaliteit worden gebruikt; pas vervallen van de **oude API-wrapper** rechtvaardigt het schrappen van de route, **niet** de gedeelde bronengine.
+- Historische documenten en vroegere Alembic-migraties blijven als audittrail; volledige codesanering betekent geen destructieve herschrijving van migratiegeschiedenis.
+
+### Nog te verifiëren op de taakbranch vóór Ready
+
+1. Repository-brede actuele caller-scan op routepaden, componentimports, actieknopvlag en legacy endpoints, inclusief tests/scripts/CI. Documenteer onderscheid runtime/canonieke tests/historische audit.
+2. Bewijs dat gedeelde `external-products/*`-, `catalog/*`-, GS1- en OFF-routes alle functionele gebruikers behouden.
+3. Bewijs dat nergens oude-UI routes of ongewenste actieregistraties bestaan; directe `/externe-databases` mag geen oud scherm meer renderen.
+4. Vervang/actualiseer alleen tests die uitsluitend oud gedrag afdwingen. Voeg een permanente regressie toe voor ontbrekende legacy-actie, oude route en behoud van ED2.
+5. Valideer de operationele routegovernance, permissies en Startpagina-volgorde. Verouderde opgeslagen voorkeur mag de oude actie niet zichtbaar maken.
+6. CI: gerichte checks eerst; finale versie-/preflight-/F7-governance volgens niveau **L**, exact definitieve SHA. PO-acceptatie voordat Ready/merge.
+
+**Voorbehoud:** dit document legt de geverifieerde component-/API-callers en de te controleren restcategorie vast. Zonder uitgevoerde repo-brede tests is de complete negatieve afhankelijkheidsclaim nog *niet* bewezen; bij een onverwachte actieve caller wordt een verwijdering gestopt, niet stilzwijgend geforceerd.
