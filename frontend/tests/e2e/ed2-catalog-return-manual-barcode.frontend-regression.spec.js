@@ -15,7 +15,11 @@ function bootstrap(route, rows, manualRows, onSave) {
   if (path === '/api/features') return route.fulfill({ json: { features: {} } })
   if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
   if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
-    items: rows,
+    items: rows.map((row) => ({
+      ...row,
+      manual_barcode: manualRows.find((saved) =>
+        saved.receipt_item_id === row.id)?.gtin || '',
+    })),
     counts: { unlinked: rows.length, classification_pending: 0, linked: 0 },
   } })
   if (path === '/api/catalog/ed2/manual-barcodes') {
@@ -52,7 +56,8 @@ test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN
   await page.route('**/api/**', (route) => bootstrap(route, [item], stored, (request) => {
     const body = request.request().postDataJSON()
     requests.push(body)
-    stored.push({ retailer_code: 'jumbo', receipt_text_normalized: 'melk zonder code',
+    stored.push({ receipt_item_id: item.id, retailer_code: 'jumbo',
+      receipt_text_normalized: 'melk zonder code',
       external_article_code: '123', gtin: body.gtin })
     return request.fulfill({ json: { saved: true, gtin: body.gtin,
       source: 'manual', off_found: false, classification_pending: false, photo_loaded: false } })
@@ -84,7 +89,8 @@ test('Een OFF storing bewaart barcode in Art./Barcode en behoudt het bestaande f
   const stored = []
   await page.route('**/api/**', (route) => bootstrap(route, [item], stored, (request) => {
     const code = request.request().postDataJSON().gtin
-    stored.push({ retailer_code: 'ah', receipt_text_normalized: 'simon levelt',
+    stored.push({ receipt_item_id: item.id, retailer_code: 'albert-heijn',
+      receipt_text_normalized: 'simon levelt',
       external_article_code: '768682', gtin: code })
     return request.fulfill({ json: {
       saved: true, source: 'manual', gtin: code, off_found: false, off_unavailable: true,
@@ -103,6 +109,9 @@ test('Een OFF storing bewaart barcode in Art./Barcode en behoudt het bestaande f
   await expect(table.locator('thead')).toContainText('Art./Barcode')
   await expect(table.locator('tbody tr', { hasText: 'SIMON LEVELT' }).locator('td').nth(4)).toHaveText('8711138357776')
   await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toHaveValue('SIMON')
+  await expect(table.locator('tbody tr', { hasText: 'SIMON LEVELT' }).locator('td').nth(4)).toHaveText('8711138357776')
 })
 
 test('ED2 keert van handmatig OFF zoeken terug naar dezelfde gefilterde pagina', async ({ page }) => {

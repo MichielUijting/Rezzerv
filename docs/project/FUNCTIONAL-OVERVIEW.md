@@ -353,3 +353,14 @@ gebruikersbevestiging uitsluitend de geldige barcode op. De melding maakt
 onderscheid tussen een werkelijk niet bij OFF gevonden code en een niet
 uitgevoerde OFF-controle wegens storing. Bij herstel van OFF kan dezelfde
 barcode opnieuw worden aangeboden voor gecontroleerde productverrijking.
+
+
+#### Herstel persistent zichtbare barcode in Externe databases 2 (31 oktober 2026)
+
+De platformbrede overzichtroute projecteert handmatig opgeslagen barcodebewijs
+zelf op de bestaande winkelartikelidentiteit. Winkelcodes zoals `Albert Heijn`,
+`albert-heijn` en `ah` worden aan de serverkant op dezelfde canonieke
+presentatiecode herleid; bontekst en winkelartikelnummer blijven deel van
+de exacte koppelsleutel. Hierdoor blijft de barcode ook na een nieuwe
+schermopbouw of browserherstart onder **Art./Barcode** zichtbaar zonder
+dat een niet-bevestigde barcode als Catalogus- of GS1-koppeling telt.

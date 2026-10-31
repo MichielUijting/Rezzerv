@@ -5,7 +5,7 @@ from app.services import external_unlinked_articles_service as service
 from app.services.external_database_route_authorization import required_external_database_permission
 
 
-def article_sources(monkeypatch, names, receipts=()):
+def article_sources(monkeypatch, names, receipts=(), manual_rows=()):
     """Unit-test connection double; database execution belongs to PostgreSQL CI."""
     purchases = [dict(purchase_import_line_id=str(i), external_article_code=code,
                       article_name_raw=name, quantity_raw='1', unit_raw='l',
@@ -17,11 +17,14 @@ def article_sources(monkeypatch, names, receipts=()):
         sql = str(statement).strip()
         assert sql.upper().startswith('SELECT'), sql
         statements.append(sql)
-        rows = purchases if 'FROM purchase_import_lines' in sql else list(receipts)
+        rows = (list(manual_rows) if 'FROM ed2_manual_barcodes' in sql else
+                purchases if 'FROM purchase_import_lines' in sql else list(receipts))
         return SimpleNamespace(mappings=lambda: iter(rows))
 
     conn = SimpleNamespace(execute=execute)
     monkeypatch.setattr(service, 'engine', SimpleNamespace(connect=lambda: nullcontext(conn)))
+    monkeypatch.setattr(service, 'inspect', lambda connection: SimpleNamespace(
+        has_table=lambda name: name == "ed2_manual_barcodes" and bool(manual_rows)))
     monkeypatch.setattr(service, 'get_pending_classification_external_article_link', lambda *a, **kw: None)
     return statements
 
@@ -182,3 +185,47 @@ def test_overview_exposes_unlink_identity_only_for_confirmed_off_links(monkeypat
     assert all(rows[code]['pending_global_product_id'] == '' for code in ('a', 'c', 'd'))
     assert rows['c']['off_link_id'] == ''
     assert rows['d']['off_link_id'] == ''
+
+
+
+def test_saved_albert_heijn_barcode_is_projected_after_reload_as_ah(monkeypatch):
+    """The exact reported SIMON LEVELT case: no browser-side retailer alias mismatch."""
+    code = '8711138357776'
+    article_sources(monkeypatch, [], receipts=[
+        dict(receipt_line_id='simon-receipt-id', retailer_code='Albert Heijn',
+             receipt_line_text='SIMON LEVELT', retailer_article_number='768682',
+             quantity_label='1 stuk'),
+    ], manual_rows=[
+        dict(retailer_code='albert-heijn', receipt_text_normalized='simon levelt',
+             external_article_code='768682', gtin=code),
+    ])
+    monkeypatch.setattr(service, 'project_central_link_truth', lambda conn, source: source)
+    overview = service.list_all_external_articles()
+    row = overview['items'][0]
+    assert row['id'] == 'receipt-table-line:simon-receipt-id'
+    assert row['retailer_code'] == 'ah'
+    assert row['article_code'] == ''
+    assert row['manual_barcode'] == code
+    assert row['link_status'] == 'unlinked'
+    assert overview['counts']['unlinked'] == 1
+
+
+def test_manual_barcode_is_not_cross_linked_between_receipt_codes(monkeypatch):
+    code = '8711138357776'
+    article_sources(monkeypatch, [], receipts=[
+        dict(receipt_line_id='simon-one', retailer_code='Albert Heijn',
+             receipt_line_text='SIMON LEVELT', retailer_article_number='768682',
+             quantity_label='1 stuk'),
+        dict(receipt_line_id='simon-other', retailer_code='Albert Heijn',
+             receipt_line_text='SIMON LEVELT', retailer_article_number='different-code',
+             quantity_label='1 stuk'),
+    ], manual_rows=[
+        dict(retailer_code='albert-heijn', receipt_text_normalized='simon levelt',
+             external_article_code='768682', gtin=code),
+    ])
+    monkeypatch.setattr(service, 'project_central_link_truth', lambda conn, source: source)
+    overview = service.list_all_external_articles()
+    by_article = {row['receipt_article_number']: row for row in overview['items']}
+    assert by_article['768682']['manual_barcode'] == code
+    assert by_article['different-code']['manual_barcode'] == ''
+    assert all(row['link_status'] == 'unlinked' for row in overview['items'])

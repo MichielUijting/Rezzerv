@@ -8,7 +8,6 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
-import { manualBarcodeKey } from './ed2ManualBarcodeIdentity'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -165,19 +164,13 @@ export default function ExternalDatabases2Page() {
         const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
-        const manualResponse = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes', { method: 'GET' })
-        // A missing optional projection must not hide the canonical overview.
-        // The separate write endpoint remains fail-closed for missing schema.
-        const manualPayload = manualResponse.ok ? await manualResponse.json() : { items: [] }
-        const manualCodes = new Map((manualPayload.items || []).map((row) => [
-          manualBarcodeKey(row.retailer_code, row.receipt_text_normalized, row.external_article_code), row.gtin,
-        ]))
+        // The overview projects manual barcode evidence by the authoritative
+        // server-side retailer/receipt/article identity. Do not reconstruct
+        // receipt keys or hide a failed secondary lookup in the browser.
         if (!cancelled) {
           const loadedItems = (payload.items || []).map((item) => ({
             ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
-            manual_barcode: item.link_status === 'unlinked' || !item.link_status
-              ? manualCodes.get(manualBarcodeKey(item.retailer_code, item.receipt_line_text,
-                item.receipt_article_number)) || '' : '',
+            manual_barcode: item.manual_barcode || '',
           }))
           setItems(loadedItems)
           setCounts(payload.counts || {
