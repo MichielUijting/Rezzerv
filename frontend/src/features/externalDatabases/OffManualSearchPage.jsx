@@ -7,6 +7,7 @@ import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import './externalDatabases.css'
 
 const columns = [
@@ -24,6 +25,7 @@ export default function OffManualSearchPage() {
   const { state } = useLocation()
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
+  const { showFeedback } = useAppFeedback()
   const [item, setItem] = useState(() => state?.item?.id === receiptItemId ? state.item : null)
   const [itemError, setItemError] = useState('')
   const [query, setQuery] = useState('')
@@ -35,7 +37,6 @@ export default function OffManualSearchPage() {
   const searchController = useRef(null)
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [linking, setLinking] = useState(false)
-  const [linkError, setLinkError] = useState('')
 
   useEffect(() => () => searchController.current?.abort(), [])
 
@@ -84,7 +85,6 @@ export default function OffManualSearchPage() {
     }
     setLoading(true)
     setError('')
-    setLinkError('')
     setSelectedCandidate(null)
     setResults([])
     setSearched(false)
@@ -125,7 +125,6 @@ export default function OffManualSearchPage() {
   async function confirmLink() {
     if (!selectedCandidate || linking) return
     setLinking(true)
-    setLinkError('')
     // Never let a pending backend request keep the user on the search page.
     // Aborting a request does NOT prove the server did not commit a link.
     const controller = new AbortController()
@@ -172,13 +171,21 @@ export default function OffManualSearchPage() {
 
   function selectCandidate(candidate) {
     if (linking) return
-    setLinkError('')
     if (candidate.identity_compatible === false) {
-      setLinkError('Dit artikel kan niet veilig aan het bonartikel worden gekoppeld.')
+      // The backend remains the identity authority; explain the actual reason
+      // through the central Melding overlay, not an inline field error.
+      showFeedback({
+        variant: 'error',
+        message: candidate.identity_conflict_message
+          || 'Het productmerk komt niet overeen met het bonartikel. Kies een product met hetzelfde merk.',
+      })
       return
     }
     if (!candidate.selection_proof) {
-      setLinkError('Zoek dit artikel opnieuw in OFF om het te koppelen.')
+      showFeedback({
+        variant: 'error',
+        message: 'Dit OFF-product kon niet betrouwbaar worden bevestigd. Zoek opnieuw en kies een kandidaat met een geldige barcode.',
+      })
       return
     }
     setSelectedCandidate(candidate)
@@ -201,7 +208,6 @@ export default function OffManualSearchPage() {
           <Ed2ManualBarcodeEntry item={item} onSaved={goBack} />
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
           {error ? <p role="alert">{error}</p> : null}
-          {linkError ? <p role="alert">{linkError}</p> : null}
           {searched && !loading && !error ? <section aria-label="OFF-zoekresultaten">
             <h3>Resultaten uit OFF</h3>
             <DataTable
@@ -239,7 +245,7 @@ export default function OffManualSearchPage() {
             </p>
             <div className="rz-modal-actions">
               <Button type="button" variant="secondary" disabled={linking}
-                onClick={() => { setSelectedCandidate(null); setLinkError('') }}>Annuleren</Button>
+                onClick={() => setSelectedCandidate(null)}>Annuleren</Button>
               <Button type="button" disabled={linking}
                 onClick={confirmLink}>{linking ? 'Koppelen...' : 'OK'}</Button>
             </div>

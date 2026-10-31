@@ -360,3 +360,42 @@ def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
         assert normalized_expected in re.sub(r"\s+", "", route_code)
     assert "store_chain" in writer_code
     assert "store_chain" in overview_code
+
+
+
+@pytest.mark.parametrize("retailer", ["Albert Heijn", "albert-heijn", "ah"])
+@pytest.mark.parametrize("brand", ["AlbertHeijn", "Albert Heijn", "AH"])
+def test_ah_cervelaat_off_brand_alias_safe_for_exact_link(retailer, brand):
+    from app.services.external_product_identity_policy import (
+        external_product_identity_compatibility, assert_external_product_identity_compatible,
+    )
+    identity = dict(retailer_code=retailer, receipt_text="AH CERVELAAT",
+                    candidate_brand=brand, candidate_name="Cervelaat")
+    assert external_product_identity_compatibility(**identity)["ok"] is True
+    assert_external_product_identity_compatible(**identity)
+
+
+@pytest.mark.parametrize("brand", ["Jumbo", "Huismerk PLUS", "NotAlbertHeijn", "Other brand"])
+def test_ah_cervelaat_true_brand_conflict_remains_blocked(brand):
+    from app.services.external_product_identity_policy import (
+        external_product_identity_compatibility, assert_external_product_identity_compatible,
+    )
+    identity = dict(retailer_code="Albert Heijn", receipt_text="AH CERVELAAT",
+                    candidate_brand=brand, candidate_name="Cervelaat")
+    assert external_product_identity_compatibility(**identity)["reason"] == "private_label_brand_conflict"
+    with pytest.raises(ValueError, match="huismerk"):
+        assert_external_product_identity_compatible(**identity)
+
+
+def test_ah_cervelaat_manual_off_search_accepts_compact_brand_and_signed_proof():
+    item = {"receipt_item_id": RECEIPT, "retailer_code": "Albert Heijn",
+            "receipt_line_text": "AH CERVELAAT", "quantity_label": ""}
+    with patch.object(search, "_query_off", return_value=([
+        {"code": "2323685801969", "product_name": "Cervelaat", "brands": "AlbertHeijn"},
+    ], "openfoodfacts")):
+        result = search.search_off_candidates_for_item(
+            {"mode": "manual", "query": "cervelaat albert heijn", "limit": 20}, item,
+        )
+    candidate = next(row for row in result["results"] if row["gtin"] == "2323685801969")
+    assert candidate["identity_compatible"] is True
+    assert candidate["selection_proof"]

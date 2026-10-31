@@ -364,3 +364,14 @@ presentatiecode herleid; bontekst en winkelartikelnummer blijven deel van
 de exacte koppelsleutel. Hierdoor blijft de barcode ook na een nieuwe
 schermopbouw of browserherstart onder **Art./Barcode** zichtbaar zonder
 dat een niet-bevestigde barcode als Catalogus- of GS1-koppeling telt.
+
+
+#### OFF-identiteit: compacte schrijfwijze AlbertHeijn en centrale melding
+
+Wanneer een bonartikel expliciet een AH-huismerk aangeeft, beschouwt Inhuis
+het OFF-merk **AlbertHeijn** (zonder spatie) als dezelfde identiteit als
+**Albert Heijn** of **AH**. Kandidaten van andere merken blijven voor een
+exacte koppeling geblokkeerd door dezelfde backendcontrole; handmatige
+bevestiging omzeilt die controle niet. Als een kandidaat niet kan worden
+gekoppeld, toont het scherm de concrete reden in de centrale overlay
+**Melding** via `AppFeedbackProvider` en niet als inline foutregel.

@@ -153,3 +153,65 @@ test('Catalogus opent detail en herstelt de desktopfilter en tabelpagina bij bro
   await expect(page.getByLabel('Pagina 2 van 2')).toBeVisible()
   await expect(table.getByTestId('catalog-row-catalog-12')).toBeVisible()
 })
+
+
+
+test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krijgen Melding-overlay', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:ah-cervelaat', receipt_line_text: 'AH CERVELAAT',
+    retailer_code: 'ah', receipt_article_number: '718410',
+    article_code: '', link_status: 'unlinked',
+  }
+  const target = {
+    gtin: '2323685801969', product_name: 'Cervelaat', brand: 'AlbertHeijn',
+    score: 0.85, identity_compatible: true, selection_proof: 'signed-ah-cervelaat',
+  }
+  const writes = []
+  let saved = false
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/external-products/off/search') return route.fulfill({ json: {
+      provider: 'openfoodfacts', mutated: false, results: [
+        { gtin: '2385429202951', product_name: 'Scharrel kip cervelaat',
+          brand: 'Albert Heijn', score: 0.88, identity_compatible: true, selection_proof: 'first' },
+        { gtin: '8718907651172', product_name: 'Gerookte cervelaat',
+          brand: 'Albert Heijn', score: 0.88, identity_compatible: true, selection_proof: 'second' },
+        { gtin: '4056489977186', product_name: 'Cervelaat', brand: 'Jumbo',
+          score: 0.86, identity_compatible: false,
+          identity_conflict_message: 'AH CERVELAAT is een Albert Heijn huismerk. Het geselecteerde product is van Jumbo.' },
+        target,
+      ],
+    } })
+    if (path === '/api/external-databases/off/link-selected') {
+      writes.push(route.request().postDataJSON())
+      saved = true
+      return route.fulfill({ json: { cataloged: true, classification_pending: true } })
+    }
+    return bootstrap(route, [{
+      ...item, article_code: saved ? target.gtin : '',
+      link_status: saved ? 'classification_pending' : 'unlinked',
+    }], [], () => route.fulfill({ status: 405, json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'AH CERVELAAT' }).dblclick()
+  await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+  await page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' }).fill('cervelaat albert heijn')
+  await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
+  const candidates = page.getByTestId('external-off-free-search-results')
+  await candidates.locator('tbody tr', { hasText: 'Jumbo' }).dblclick()
+  const overlay = page.getByTestId('app-feedback-error-overlay')
+  await expect(overlay).toBeVisible()
+  await expect(page.getByTestId('app-feedback-error')).toContainText('Het geselecteerde product is van Jumbo.')
+  await expect(page.getByTestId('app-feedback-error')).toContainText('Melding')
+  expect(writes).toHaveLength(0)
+  await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK' }).click()
+  await candidates.locator('tbody tr', { hasText: target.gtin }).dblclick()
+  await expect(page.getByRole('alertdialog')).toContainText('Weet u zeker')
+  await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
+  await expect(page).toHaveURL(/\/externe-databases-2$/)
+  await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
+  expect(writes).toEqual([{
+    receipt_item_id: item.id, gtin: target.gtin, selection_proof: target.selection_proof,
+  }])
+})
