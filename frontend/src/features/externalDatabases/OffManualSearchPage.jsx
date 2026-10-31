@@ -6,6 +6,7 @@ import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useMobileAppViewport } from '../../app/mobileViewport'
+import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import './externalDatabases.css'
 
 const columns = [
@@ -67,6 +68,7 @@ export default function OffManualSearchPage() {
         // het kandidatenpaneel opent niet automatisch opnieuw.
         ...(linkOutcome?.status === 'success' ? {} : { selectedItemId: receiptItemId }),
         ...(linkOutcome ? { offLinkOutcome: linkOutcome } : {}),
+        ...(state?.ed2TableState ? { ed2TableState: state.ed2TableState } : {}),
       },
     })
   }
@@ -196,6 +198,7 @@ export default function OffManualSearchPage() {
             </label>
             <Button type="submit" disabled={!query.trim() || loading}>{loading ? 'Zoeken...' : 'Zoeken'}</Button>
           </form>
+          <Ed2ManualBarcodeEntry item={item} onSaved={goBack} />
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
           {error ? <p role="alert">{error}</p> : null}
           {linkError ? <p role="alert">{linkError}</p> : null}

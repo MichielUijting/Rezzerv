@@ -76,7 +76,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(selectedReceiptName).toHaveCSS('font-weight', '700')
     const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
     const searchButton = page.getByRole('button', { name: 'Zoeken', exact: true })
-    await expect(page.getByRole('textbox')).toHaveCount(1)
+    await expect(page.getByRole('textbox')).toHaveCount(2)
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 })
       // A responsive viewport switch may briefly unmount the current layout.
@@ -304,7 +304,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       } else {
         await expect(page.getByTestId('app-header')).toContainText('Zelf zoeken in OFF')
       }
-      await expect(page.getByRole('textbox')).toHaveCount(1)
+      await expect(page.getByRole('textbox')).toHaveCount(2)
       const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
       await freeSearch.fill('halfvolle melk bio')
       await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
