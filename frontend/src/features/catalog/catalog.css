@@ -501,3 +501,47 @@
 .rz-inline-feedback[data-testid='article-classification-proposal-detail'] > div:first-child > div:last-child {
   white-space: pre-line;
 }
+
+
+/* Shared Catalogus product name editor; same controls on desktop and mobile. */
+.rz-catalog-name-editor {
+  min-width: 0;
+}
+
+.rz-catalog-name-editor-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rz-catalog-name-editor-heading h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
+.rz-catalog-name-editor-form {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  max-width: 600px;
+}
+
+.rz-catalog-name-editor-form .rz-input {
+  width: 100%;
+  max-width: 100%;
+  min-height: 40px;
+}
+
+.rz-catalog-name-editor-form p {
+  margin: 0;
+  font-size: var(--font-size-ui-body);
+}
+
+.rz-catalog-name-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}

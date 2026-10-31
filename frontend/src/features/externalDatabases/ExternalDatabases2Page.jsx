@@ -256,7 +256,18 @@ export default function ExternalDatabases2Page() {
               setOffLinkOutcome({ status: 'success', message })
               setRefreshVersion((value) => value + 1)
             }} />
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} /> : null}
+          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem}
+            onLinkOutcome={(outcome) => {
+              setOffLinkOutcome(outcome)
+              setSelectedItem(null)
+              setSelectedIds([])
+              if (outcome.status === 'success') {
+                setActiveStatusCounter('')
+                setFilters((previous) => ({ ...previous, link_status: '' }))
+              }
+              // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
+              setRefreshVersion((value) => value + 1)
+            }} /> : null}
         </div>
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">

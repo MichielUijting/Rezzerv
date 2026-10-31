@@ -74,6 +74,19 @@ De onderste kandidatentabel toont op desktop en mobiel maximaal **7 kandidaten
 per pagina**, met de bestaande paginering onder de tabel zodra er meer zijn.
 Zoeken/sorteren geldt voor alle opgehaalde kandidaten en brengt pagina 1 terug.
 De bovenste artikellijst behoudt haar bestaande paginering van 10 per pagina.
+De onderste tabel laat een gebruiker op desktop door dubbelklikken, op mobiel
+door één tik en via Enter/spatie een kandidaat ter bevestiging kiezen.
+Dit is geen automatische koppeling: vóór het bevestigingsvenster haalt
+Inhuis via de bestaande handmatige exacte OFF/GTIN-zoekroute een aan de
+oorspronkelijke bonregel gebonden selectieproof op. Een kandidaat zonder
+OFF-bewijs, bij een identiteitconflict of zonder geldige barcode wordt niet
+gekoppeld; uitsluitend winkelbewijs blijft een onopgeslagen suggestie.
+Het venster toont het bronartikel, het geverifieerde OFF-product en barcode.
+Annuleren schrijft niets; alleen OK roept de bestaande bevoegde
+`off/link-selected`-route aan. Na serverbevestiging ververst het overzicht
+de actuele centrale Cataloguscode, classificatiestatus en tellers.
+Een timeout wordt nooit als succesvolle koppeling gepresenteerd.
+
 **PO-besluit 28 oktober 2026 — volledig ED2-overzicht:** Externe databases 2
 toont alle unieke bonartikelen, ook wanneer ze al een centrale Cataloguskoppeling
 hebben of wachten op een officiële GS1-classificatie. De aparte, bestaande

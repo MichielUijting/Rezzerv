@@ -360,3 +360,52 @@ authenticate, inspect the maintenance evidence and use the existing controlled
 completion action. No login or application startup automatically changes the
 maintenance state or admits normal domain writes. Admission reopens only after
 the administrator explicitly completes maintenance and all required checks pass.
+
+## Windows-agent: sessiebestendigheid en veilige grens (30 oktober 2026)
+
+De host-agent wordt onder het eigen Windows/Docker Desktop-account gestart. De
+privésleutel gebruikt DPAPI CurrentUser; de geplande taak gebruikt daarom bewust
+een interactieve **aanmeld**trigger. Dit is **geen** Windows-service die al bij
+boot zonder aangemelde gebruiker kan functioneren. Een boot-trigger of SYSTEM-
+account invoeren zonder bewezen DPAPI-sleuteloverdracht, Docker Desktop-toegang
+en onafhankelijke integratietests is verboden. Een geslaagde heartbeat vóór
+afmelden bewijst geen beschikbaarheid na afmelden of herstart.
+
+Nieuwe installaties krijgen via de bestaande `-InstallAtLogon`-route een
+onbegrensde taaklooptijd, drie herstartpogingen met een minuut interval,
+inhaalstart bij gemiste aanmelding en geen automatische stop door accuwisseling.
+Deze taakinstellingen wijzigen **geen bestaande taak automatisch**: die wordt
+volgens het bestaande verbod op overschrijven eerst afzonderlijk beoordeeld.
+Een eerder lokaal aangetoonde image-digest in `Config.Image` kan worden
+geaccepteerd wanneer een onafhankelijke `docker image inspect` het exacte
+lopende image-ID én een `postgres:17`-tag bevestigt. De bestaande fysieke
+databasebinding en overige fail-closed controles blijven verplicht.
+
+Voor een echte Windows-update/herstart van dezelfde Inhuis-versie:
+
+1. Controleer eerst werkelijk actieve gebruikerssessies, importregistraties,
+   de actuele backend/database-identiteit, de lokale/externe gebruikersroute,
+   de AH-importstatus, de officiële agent en de mogelijkheid tot herstel.
+2. Gebruik uitsluitend de bestaande platformbeheerdersroute om aan te kondigen,
+   gecontroleerd te drainen en een ondertekende back-up/herstelproef te verkrijgen.
+   Onopgeloste registraties blokkeren de herstart; wis ze niet op leeftijd.
+3. Bevestig vóór reboot dat de **huidige images**, configuratie, data-identiteit
+   en de normale `start.bat`-route veilig opnieuw te gebruiken zijn. De PO
+   geeft afzonderlijk GO voor de daadwerkelijke Windows-herstart.
+4. Na herstart moet eerst het Docker Desktop-account worden aangemeld en de
+   officiële applicatie-opstartroute worden uitgevoerd/geverifieerd. Controleer
+   de juiste brondata, versies, lokale/externe routes, scanner, agentstatus,
+   verse handtekeningen en de verplichte onderhoudsproof.
+5. Alleen een bevoegde platformbeheerder mag daarna expliciet onderhoud
+   afronden. Bij ontbrekende bewijsvoering blijft de applicatie fail-closed.
+
+Een **nieuwe Inhuis-versie uitrollen** is een aparte operatie met eigen
+release-/deployment-GO en exact gecontroleerde kandidaat/image; dit document
+geeft geen toestemming om productie te wijzigen. Tijdelijke codepatches in
+lopende containers (zoals een tijdelijke importpauze) verdwijnen bij recreate
+of upgrade. Een deployment is daarom geblokkeerd totdat de duurzame vervanging
+(inclusief autorisatie, data, CI en migraties) geaccepteerd is.
+
+Een test van alleen de actieve aanmeldsessie kan deze twee procedures niet als
+volledig praktijkbewezen afronden. Herstart zonder aanmelding is expliciet
+**niet ondersteund** door de huidige Docker Desktop/CurrentUser-architectuur.

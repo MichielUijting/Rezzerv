@@ -413,6 +413,13 @@ Op mobiele schermen is passieve feedback altijd een **overlay**:
 
 Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voortgangsmeldingen zijn niet transient. Zij blijven centrale AppFeedback-dialogen en verdwijnen niet automatisch.
 
+### Ondoorzichtige interactieve dialogen — Catalogus fotokeuze, 30 oktober 2026
+
+- Bij een centrale AppFeedback-dialoog met actieknoppen of invoervelden is de dialoogkaart altijd volledig **ondoorzichtig wit**, met donkere leesbare tekst, een subtiele rand, normale binnenruimte en een duidelijke begrenzing.
+- De donkere achtergrondlaag dimt de onderliggende pagina, maar teksten, tabellen en kaarten mogen nooit door de dialoogkaart heen zichtbaar blijven. Dit geldt onder meer voor **Productfoto toevoegen** in Catalogus met de acties **Foto maken** en **Foto uploaden**.
+- De bestaande centrale AppFeedbackProvider verzorgt deze presentatie op desktop en mobiel; afzonderlijke pagina's leggen geen eigen transparante fotokeuzedialoog over het scherm.
+- Dit verandert niet de bestaande snelle, niet-interactieve feedbackbalk en ook niet de opslag- of camera-functionaliteit.
+
 ### Desktop en nog niet gemigreerde niet-mobiele feedback
 
 Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
@@ -1435,3 +1442,11 @@ de laatste tabelrij wordt geplaatst en nooit door de tekst loopt. Dezelfde
 regel geldt voor de onderste kandidaattabel met maximaal vijf rijen.
 Verwijder de aparte knop **Sluiten** bij de kandidaatsectie, maar behoud de
 bevoegde koppelactie onder de kandidaattabel en foutmeldingen bij problemen.
+
+
+## Catalogusdetail — universele naam wijzigen (30 oktober 2026)
+
+- Op zowel desktop als mobiel staat naast de **universele artikelnaam** in het Catalogusdetail de actie **Naam wijzigen** voor gebruikers met de bestaande platformpermissie `platform.catalog.update`. Een gewone huishoudbeheerder kan wel een ontbrekende GTIN bijdragen, maar mag zonder catalogusbevoegdheid geen bestaande universele naam overschrijven.
+- De actie toont een compact invoerveld op dezelfde plek met **Opslaan** en **Annuleren**; het standaard Catalogusdetail blijft leesbaar. Invoer en knoppen volgen de bestaande Inhuis-kleurtokens, typografie en responsieve regel.
+- Een wijziging verandert alleen de gedeelde artikelnaam en de daarbij horende productvingerafdruk. De artikel-ID, barcode, voorraad, huishoudkoppelingen en kassabonregels blijven bestaan.
+- Bij een ondertussen gewijzigde naam of conflict met een ander artikel meldt Inhuis de fout en wordt niet stilzwijgend samengevoegd.

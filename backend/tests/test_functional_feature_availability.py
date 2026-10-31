@@ -98,6 +98,7 @@ def test_technical_endpoint_cannot_change_functional_key(authority, user):
     assert client.put('/api/platform/feature-flags/feature.gerechten',
                       json={'enabled': True}).status_code == 404
     assert [i['key'] for i in client.get('/api/platform/feature-flags').json()['items']] == [
+        flags.FEATURE_FLAG_RETAILER_AUTO_IMPORT,
         flags.FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH]
 
 
