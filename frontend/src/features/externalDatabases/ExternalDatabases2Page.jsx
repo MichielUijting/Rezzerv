@@ -162,8 +162,9 @@ export default function ExternalDatabases2Page() {
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
         const manualResponse = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes', { method: 'GET' })
-        if (!manualResponse.ok) throw new Error('Handmatig ingevoerde barcodes konden niet worden geladen.')
-        const manualPayload = await manualResponse.json()
+        // A missing optional projection must not hide the canonical overview.
+        // The separate write endpoint remains fail-closed for missing schema.
+        const manualPayload = manualResponse.ok ? await manualResponse.json() : { items: [] }
         const manualCodes = new Map((manualPayload.items || []).map((row) => [
           manualBarcodeKey(row.retailer_code, row.receipt_text_normalized, row.external_article_code), row.gtin,
         ]))
