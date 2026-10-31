@@ -180,6 +180,8 @@ export default function ExternalDatabases2Page() {
             variant: 'success', title: 'Verwijderd',
             message: count === 1 ? 'Artikel verwijderd uit de overzichten.' : `${count} artikelen verwijderd uit de overzichten.`,
           })
+          // The dialog provider would otherwise dismiss the new success overlay.
+          return false
         } catch (err) {
           setRefreshVersion((value) => value + 1)
           showFeedback({
@@ -188,6 +190,8 @@ export default function ExternalDatabases2Page() {
               ? 'Geen bevestiging ontvangen. Vernieuw de lijst voordat je opnieuw probeert.'
               : (err.message || 'De artikelen konden niet veilig worden verwijderd.'),
           })
+          // Keep the replacement error overlay visible instead of dismissing it.
+          return false
         } finally {
           window.clearTimeout(timeout)
           setDeleting(false)
