@@ -121,6 +121,23 @@ huishoudartikelen of voorraad; ongeldige codes, conflicten en verouderde
 koppelingen stoppen zonder gedeeltelijke opslag. Alleen gebruikers met de
 reeds bestaande platformbevoegdheid voor externe productkoppelingen mogen
 deze schrijfhandeling uitvoeren.
+**PO-besluit 31 oktober 2026 — verwijderen in Externe databases 2 en Catalogus:**
+Een Superuser kan maximaal 100 geselecteerde ED2-artikelen met **Verwijderen** na
+expliciete bevestiging in dezelfde actie verbergen in Externe databases 2 en het
+bijbehorende actieve Catalogusproduct soft-verwijderen. De server leidt de
+productidentiteit uit de actuele centrale koppeling af, nooit uitsluitend uit
+naam, winkelboncode of door de browser aangedragen product-ID. Zonder bewezen
+Catalogusrelatie wordt alleen het geselecteerde ED2-artikel verborgen.
+Een product dat aan andere niet-geselecteerde bonartikelen of bestaande
+artikelsynoniemen gekoppeld is, mag niet stilzwijgend verdwijnen: de volledige
+actie wordt afgewezen. Historische bonnen, importregels, huishoudartikelen,
+voorraad en productidentiteiten worden niet gewist. De verwijderregistratie
+is platformbreed en blijft ook na opnieuw inlezen zichtbaar als verwijderkeuze;
+de bronregels en aankoopgeschiedenis blijven intact. De knop **Ontkoppelen**
+houdt haar aparte, bestaande OFF-semantiek. Fouten en successen worden via
+de centrale component Melding getoond. Andere rollen mogen Catalogusproducten
+niet via deze route verwijderen.
+
 **PO-besluit 28 oktober 2026 — bulkacties ED2:** de volledige tabel heeft
 een selectorkolom met een lege, smalle kolomkop. **Alles op pagina** selecteert
 uitsluitend de zichtbare pagina en bewaart selectie van andere pagina's.
