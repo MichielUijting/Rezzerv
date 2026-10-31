@@ -4,7 +4,8 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
@@ -54,6 +55,8 @@ function csvCell(value) {
 export default function ExternalDatabases2Page() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { showFeedback } = useAppFeedback()
+  const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
@@ -68,6 +71,7 @@ export default function ExternalDatabases2Page() {
   const [pageRows, setPageRows] = useState([])
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
@@ -140,6 +144,56 @@ export default function ExternalDatabases2Page() {
       setUnlinking(false)
       setRefreshVersion((value) => value + 1)
     }
+  }
+
+  function confirmDeleteSelected() {
+    if (!isPlatformSuperuser || !selectedRows.length || selectedRows.length > 100 || unlinking || deleting) return
+    const count = selectedRows.length
+    showFeedback({
+      variant: 'warning',
+      title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
+      message: count === 1
+        ? 'Dit artikel verwijderen uit Externe databases 2 en de Catalogus?'
+        : `${count} artikelen verwijderen uit Externe databases 2 en de Catalogus?`,
+      detail: 'Kassabonnen en voorraad blijven bestaan. Een gedeeld Catalogusartikel wordt niet verwijderd.',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'ed2-delete-confirmation',
+      onPrimaryAction: async () => {
+        setDeleting(true)
+        const controller = new AbortController()
+        const timeout = window.setTimeout(() => controller.abort(), 30000)
+        try {
+          const response = await fetchJsonWithAuth('/api/external-databases/articles/delete-selected', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({ selections: selectedRows.map((row) => ({ receipt_item_id: row.id })) }),
+          })
+          const payload = await response.json().catch(() => ({}))
+          if (!response.ok || payload.ok !== true || payload.removed_articles !== count) {
+            throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Verwijderen is niet bevestigd.')
+          }
+          setSelectedIds([])
+          setSelectedItem(null)
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'success', title: 'Verwijderd',
+            message: count === 1 ? 'Artikel verwijderd uit de overzichten.' : `${count} artikelen verwijderd uit de overzichten.`,
+          })
+        } catch (err) {
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'error', title: 'Niet verwijderd',
+            message: err.name === 'AbortError'
+              ? 'Geen bevestiging ontvangen. Vernieuw de lijst voordat je opnieuw probeert.'
+              : (err.message || 'De artikelen konden niet veilig worden verwijderd.'),
+          })
+        } finally {
+          window.clearTimeout(timeout)
+          setDeleting(false)
+        }
+      },
+    })
   }
 
   useEffect(() => {
@@ -222,7 +276,7 @@ export default function ExternalDatabases2Page() {
             onClick={() => { setFilters({}); setActiveStatusCounter(''); setTablePage(1) }}>Wis filters</Button> : null}
         </div>
         <div className="rz-mobile-table-select-row">
-          <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking}
+          <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking || deleting}
             onChange={togglePageSelection} /> Alles op pagina</label>
         </div>
         <DataTable
@@ -252,7 +306,7 @@ export default function ExternalDatabases2Page() {
             }}
           >{columns.map((column) => <td key={column.key}>
             {column.key === 'select' ? <input type="checkbox" aria-label={`Selecteer ${item.receipt_line_text}`}
-              checked={selectedIds.includes(item.id)} disabled={unlinking}
+              checked={selectedIds.includes(item.id)} disabled={unlinking || deleting}
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
               onChange={() => setSelectedIds((current) => current.includes(item.id)
@@ -262,10 +316,13 @@ export default function ExternalDatabases2Page() {
         />
         <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
           <span>Geselecteerd: {selectedIds.length}</span>
-          <Button type="button" variant="secondary" disabled={!selectedRows.length || unlinking}
+          <Button type="button" variant="secondary" disabled={!selectedRows.length || unlinking || deleting}
             onClick={exportSelected}>Exporteren</Button>
-          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking}
+          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
+          {isPlatformSuperuser ? <Button type="button" variant="secondary"
+            disabled={!selectedRows.length || selectedRows.length > 100 || unlinking || deleting}
+            onClick={confirmDeleteSelected}>{deleting ? 'Verwijderen...' : 'Verwijderen'}</Button> : null}
         </div>
         {selectedRows.length > 0 && !canUnlink ? <p className="rz-external-databases-muted">
           Ontkoppelen is alleen mogelijk voor geselecteerde OFF-koppelingen (maximaal 100 tegelijk).
