@@ -185,7 +185,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome }) {
                 selectCandidate(candidate)
               }
             }}
-          >{columns.map((column) => <td key={column.key}>
+          >{columns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : column.cellClassName || ''}>
             {typeof column.renderCell === 'function' ? column.renderCell(candidate) : String(candidate[column.key] ?? '')}
           </td>)}</tr>}
         /> : null}
