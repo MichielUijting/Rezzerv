@@ -341,6 +341,84 @@ def test_saved_catalog_link_must_match_target_product_before_claiming_success():
             })
 
 
+
+@pytest.mark.parametrize("chain", ["", None])
+def test_receipt_confirmation_resolves_empty_chain_from_store_name(chain):
+    """ED2 displays Jumbo when store_chain is empty; OK must use the same source."""
+    from sqlalchemy import create_engine, text
+    from app.services.external_article_confirmation_service import resolve_external_article_identity
+
+    local = create_engine("sqlite+pysqlite:///:memory:")
+    try:
+        with local.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, store_chain TEXT, store_name TEXT)"
+            )
+            conn.exec_driver_sql(
+                "CREATE TABLE receipt_table_lines (id TEXT PRIMARY KEY, receipt_table_id TEXT, "
+                "corrected_raw_label TEXT, normalized_label TEXT, raw_label TEXT, "
+                "external_article_code TEXT)"
+            )
+            conn.execute(text(
+                "INSERT INTO receipt_tables (id, store_chain, store_name) "
+                "VALUES ('receipt-jumbo', :chain, 'Jumbo')"
+            ), {"chain": chain})
+            conn.exec_driver_sql(
+                "INSERT INTO receipt_table_lines VALUES "
+                "('line-pindakaas', 'receipt-jumbo', NULL, NULL, 'Pindakaas', 'JUMBO-SEED-3')"
+            )
+            resolved = resolve_external_article_identity(
+                conn, "receipt-table-line:line-pindakaas"
+            )
+            assert resolved == {
+                "retailer_code": "Jumbo",
+                "receipt_text": "Pindakaas",
+                "external_article_code": "JUMBO-SEED-3",
+            }
+    finally:
+        local.dispose()
+
+
+def test_purchase_import_confirmation_recovers_store_name_and_rejects_missing_store():
+    """Canonical receipt context can supply the store, but a missing store still fails closed."""
+    from sqlalchemy import create_engine, text
+    from app.services.external_article_confirmation_service import resolve_external_article_identity
+
+    local = create_engine("sqlite+pysqlite:///:memory:")
+    try:
+        with local.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, store_chain TEXT, store_name TEXT)"
+            )
+            conn.exec_driver_sql(
+                "CREATE TABLE purchase_import_batches (id TEXT PRIMARY KEY, source_reference TEXT)"
+            )
+            conn.exec_driver_sql(
+                "CREATE TABLE purchase_import_lines (id TEXT PRIMARY KEY, batch_id TEXT, "
+                "article_name_raw TEXT, external_article_code TEXT)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO receipt_tables VALUES ('receipt-jumbo', '', 'Jumbo')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO purchase_import_batches VALUES ('batch-1', 'receipt:receipt-jumbo')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO purchase_import_lines VALUES "
+                "('line-1', 'batch-1', 'Pindakaas', 'JUMBO-SEED-3')"
+            )
+            resolved = resolve_external_article_identity(conn, "purchase-import-line:line-1")
+            assert resolved["retailer_code"] == "Jumbo"
+            assert resolved["receipt_text"] == "Pindakaas"
+            conn.exec_driver_sql(
+                "UPDATE receipt_tables SET store_name = '' WHERE id = 'receipt-jumbo'"
+            )
+            with pytest.raises(ValueError, match="Winkelketen voor algemene koppeling ontbreekt"):
+                resolve_external_article_identity(conn, "purchase-import-line:line-1")
+    finally:
+        local.dispose()
+
+
 def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
     # Same stable store-chain and receipt-label identity must be used by
     # overview, confirmation writer and OFF lookup. Corrected labels win;
