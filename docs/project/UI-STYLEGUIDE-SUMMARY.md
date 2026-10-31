@@ -1487,3 +1487,16 @@ mag nooit stilzwijgend de knoptekst **Opslaan...** tonen. Tijdens de
 verwerking blijft de primaire knop niet nogmaals aanklikbaar. De
 bestaande fout-, succes-, waarschuwing- en bevestigingspresentatie
 blijft verder ongewijzigd.
+
+
+### Externe databases 2 — barcodecontrole via standaard Melding (31 oktober 2026)
+
+Wanneer **Barcode opslaan** bij een handmatig ingevoerde barcode faalt
+(bijvoorbeeld doordat OFF een andere, niet-compatibele productidentiteit
+oplevert), toont het scherm de fout uitsluitend als passieve foutoverlay
+via de centrale `AppFeedbackProvider/useAppFeedback`, met een begrijpelijke
+tekst en zonder een blijvende foutalinea onder het invoerveld. De ingevoerde
+barcode blijft staan zodat de gebruiker deze kan controleren of wijzigen.
+Een afwijzing maakt geen Cataloguskoppeling of voorraadmutatie en mag niet
+als succesvolle opslag worden gepresenteerd. De bestaande expliciete
+bevestigingsdialoog voor de schrijfhandeling blijft afzonderlijk bestaan.
