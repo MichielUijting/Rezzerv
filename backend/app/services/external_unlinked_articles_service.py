@@ -62,6 +62,21 @@ def _manual_ed2_barcode_lookup(conn) -> dict[tuple[str, str, str], str]:
     return codes
 
 
+def _removed_ed2_keys(conn) -> set[tuple[str, str, str]]:
+    """Hide confirmed removals from the platform overview, not from their receipts."""
+    if not inspect(conn).has_table("ed2_removed_articles"):
+        return set()
+    rows = conn.execute(text("""
+        SELECT retailer_code, receipt_text, external_article_code
+        FROM ed2_removed_articles
+    """)).mappings()
+    return {
+        (str(row["retailer_code"]), str(row["receipt_text"]),
+         str(row["external_article_code"]))
+        for row in rows
+    }
+
+
 def _source_articles(conn):
     # No LIMIT: filtering and UI pagination must cover the complete source set.
     purchases = conn.execute(text("""
@@ -156,6 +171,7 @@ def list_all_external_articles(*, conn=None) -> dict:
     counts = {"unlinked": 0, "classification_pending": 0, "linked": 0}
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         manual_barcodes = _manual_ed2_barcode_lookup(conn)
+        removed_keys = _removed_ed2_keys(conn)
         for source in _source_articles(conn):
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
@@ -165,7 +181,7 @@ def list_all_external_articles(*, conn=None) -> dict:
             # Presentatiegroepering; afzonderlijke boncodes kunnen verschillende
             # centrale koppelingen hebben en mogen niet worden samengevoegd.
             key = (retailer, receipt_text, article_number)
-            if key in seen:
+            if key in seen or key in removed_keys:
                 continue
             projected = project_central_link_truth(conn, source)
             if projected.get("central_link_active") is True:
@@ -192,6 +208,12 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "retailer_code": retailer,
                 "receipt_article_number": article_number,
                 "quantity_label": str(source.get("quantity_label") or ""),
+                # Only the server-resolved confirmed/staged/fallback identity is
+                # eligible for coordinated Catalogus soft-deletion.
+                "catalog_product_id": str(
+                    central_link.get("global_product_id")
+                    or projected.get("central_global_product_id") or ""
+                ),
                 "article_code": article_code,
                 # An explicit user-entered barcode is evidence, not a
                 # confirmed Catalogus product identity or a GS1 status.
