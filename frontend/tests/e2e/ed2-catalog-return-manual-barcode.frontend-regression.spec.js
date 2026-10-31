@@ -215,3 +215,50 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
     receipt_item_id: item.id, gtin: target.gtin, selection_proof: target.selection_proof,
   }])
 })
+
+test('Jumbo Pindakaas: een door de server geweigerde kandidaat toont Melding en vult geen barcode in', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:jumbo-pindakaas', receipt_line_text: 'Pindakaas',
+    retailer_code: 'jumbo', receipt_article_number: 'JUMBO-SEED-3',
+    article_code: '', link_status: 'unlinked',
+  }
+  const gtin = '8711200428953'
+  let linkRequests = 0
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+      provider: 'openfoodfacts', results: [
+        { gtin, product_name: 'Calvé Pindakaas Regular 350 g', brand: 'Calvé',
+          source: 'Jumbo', score: 0.88 },
+      ],
+    } })
+    if (path === '/api/external-products/off/search') return route.fulfill({ json: {
+      results: [{ gtin, product_name: 'Calvé Pindakaas Regular 350 g',
+        brand: 'Calvé', selection_proof: 'signed-jumbo-pindakaas',
+        identity_compatible: true }],
+    } })
+    if (path === '/api/external-databases/off/link-selected') {
+      linkRequests += 1
+      return route.fulfill({ status: 422, json: {
+        detail: 'De centrale Cataloguskoppeling kon niet worden bevestigd.',
+      } })
+    }
+    return bootstrap(route, [item], [], () => route.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  const table = page.getByTestId('external-databases-2-table')
+  await table.locator('tbody tr', { hasText: 'Pindakaas' }).dblclick()
+  await page.getByTestId('external-databases-2-off-candidates')
+    .locator('tbody tr', { hasText: gtin }).dblclick()
+  await expect(page.getByRole('alertdialog')).toContainText('Calvé Pindakaas')
+  await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
+  const warning = page.getByTestId('app-feedback-error-overlay')
+  await expect(warning).toBeVisible()
+  await expect(page.getByTestId('app-feedback-error')).toContainText('Melding')
+  await expect(page.getByTestId('app-feedback-error')).toContainText(
+    'Koppeling niet bevestigd: De centrale Cataloguskoppeling kon niet worden bevestigd.',
+  )
+  await expect(table.locator('tbody tr', { hasText: 'Pindakaas' }).locator('td').nth(4)).toBeEmpty()
+  await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
+  expect(linkRequests).toBe(1)
+})

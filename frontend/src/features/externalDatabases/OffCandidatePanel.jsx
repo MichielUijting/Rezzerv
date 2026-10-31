@@ -6,6 +6,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 const columns = [
   { key: 'rank', label: 'Rangnummer', header: <span className="rz-external-off-visually-hidden">Rangnummer</span>, width: 58, align: 'right', sortable: true },
@@ -22,6 +23,7 @@ const columns = [
 export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) {
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
+  const { showFeedback } = useAppFeedback()
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -141,8 +143,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
         const message = err.name === 'AbortError'
           ? 'Koppeling niet op tijd bevestigd. Controleer de Catalogus voordat u opnieuw koppelt.'
           : (err.message || 'De koppeling kon niet worden bevestigd.')
-        if (err.name === 'AbortError') onLinkOutcome({ status: 'error', message: 'Koppeling niet bevestigd: ' + message })
-        else setLinkError('Koppeling niet bevestigd: ' + message)
+        // An unsuccessful POST is not a confirmed link. Show its reason
+        // immediately as the standard Melding, instead of leaving an inline
+        // error above a scrolled candidate table where it may be invisible.
+        showFeedback({ variant: 'error', message: 'Koppeling niet bevestigd: ' + message })
       }
     } finally {
       window.clearTimeout(deadline)
