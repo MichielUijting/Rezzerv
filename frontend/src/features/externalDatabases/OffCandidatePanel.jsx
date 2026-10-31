@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
+import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 
 const columns = [
   { key: 'rank', label: 'Rangnummer', header: <span className="rz-external-off-visually-hidden">Rangnummer</span>, width: 58, align: 'right', sortable: true },
@@ -160,6 +161,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
             Zelf zoeken in OFF
           </Button>
         </div>
+        <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {verifying ? <p role="status">Kandidaat controleren in OFF...</p> : null}
         {linkError ? <p role="alert">{linkError}</p> : null}

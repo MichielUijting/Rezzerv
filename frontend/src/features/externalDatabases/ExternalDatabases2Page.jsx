@@ -8,6 +8,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
+import { manualBarcodeKey } from './ed2ManualBarcodeIdentity'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -18,6 +19,7 @@ const columns = [
   { key: 'retailer', label: 'Winkelketen', width: 170, sortable: true, filterable: true },
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
   { key: 'article_code', label: 'Art.code', width: 180, sortable: true, filterable: true },
+  { key: 'manual_barcode', label: 'Ingevoerde barcode', width: 190, sortable: true, filterable: true },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -36,6 +38,7 @@ const columns = [
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art.code'],
+  ['manual_barcode', 'Ingevoerde barcode'],
   ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
@@ -158,9 +161,18 @@ export default function ExternalDatabases2Page() {
         const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
+        const manualResponse = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes', { method: 'GET' })
+        if (!manualResponse.ok) throw new Error('Handmatig ingevoerde barcodes konden niet worden geladen.')
+        const manualPayload = await manualResponse.json()
+        const manualCodes = new Map((manualPayload.items || []).map((row) => [
+          manualBarcodeKey(row.retailer_code, row.receipt_text_normalized, row.external_article_code), row.gtin,
+        ]))
         if (!cancelled) {
           const loadedItems = (payload.items || []).map((item) => ({
             ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+            manual_barcode: item.link_status === 'unlinked' || !item.link_status
+              ? manualCodes.get(manualBarcodeKey(item.retailer_code, item.receipt_line_text,
+                item.receipt_article_number)) || '' : '',
           }))
           setItems(loadedItems)
           setCounts(payload.counts || {
@@ -186,7 +198,7 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art.code toont alleen een bekende Catalogusbarcode; het bonartikelnummer is een aparte code.</p>
+        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art.code toont alleen een bevestigde Catalogusbarcode. Een ingevoerde barcode zonder OFF-match blijft apart zichtbaar en is niet gekoppeld.</p>
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
