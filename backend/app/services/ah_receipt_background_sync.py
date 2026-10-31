@@ -17,6 +17,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.maintenance_runtime import writer_operation
+from app.services.platform_feature_flag_service import (
+    FEATURE_FLAG_RETAILER_AUTO_IMPORT, is_platform_feature_enabled,
+)
 
 LOGGER = logging.getLogger(__name__)
 AH_AUTO_SYNC_INTERVAL_SECONDS = 15 * 60
@@ -31,7 +34,7 @@ def _imports_allowed(engine: Engine) -> bool:
         value = conn.execute(text(
             "SELECT state FROM maintenance_control WHERE id=1"
         )).scalar_one_or_none()
-    return value in {"normal", "announced"}
+    return value in {"normal", "announced"} and is_platform_feature_enabled(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT)
 
 
 def _lock_key(household_id: str) -> int:

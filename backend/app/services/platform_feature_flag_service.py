@@ -15,6 +15,7 @@ from app.services.authorization_foundation_service import write_authorization_au
 
 
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
+FEATURE_FLAG_RETAILER_AUTO_IMPORT = "retailer_auto_import"
 FEATURE_GERECHTEN = "feature.gerechten"
 HOME_WELCOME_TEXT_KEY = "welcome_text"
 DEFAULT_HOME_WELCOME_TEXT = "Fijn dat je er weer bent."
@@ -53,6 +54,12 @@ def _home_action(label: str, home_tile_key: str) -> dict:
 
 
 FEATURE_FLAG_DEFINITIONS = {
+    FEATURE_FLAG_RETAILER_AUTO_IMPORT: {
+        "category": "technical",
+        "label": "Automatische kassabonimports",
+        "description": "Platformbeheer kan nieuwe automatische AH- en Jumbo/Lidl-wachtrijverwerkingen pauzeren. Lopende bonnen ronden veilig af.",
+        "default_enabled": True,
+    },
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH: {
         "category": "technical",
         "label": "Externe productzoekfunctie",

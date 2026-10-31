@@ -8,6 +8,11 @@ import pytest
 from app.services import retailer_import_queue_worker as worker
 
 
+@pytest.fixture(autouse=True)
+def platform_import_enabled(monkeypatch):
+    monkeypatch.setattr(worker, "is_platform_feature_enabled", lambda *_args: True)
+
+
 class _Result:
     def __init__(self, value=None):
         self.value = value
@@ -64,6 +69,14 @@ def test_pause_during_maintenance_never_claims_or_imports(monkeypatch, tmp_path)
     assert worker.process_one_staged_receipt(engine, tmp_path) is False
     engine.state = "locked"
     assert worker.process_one_staged_receipt(engine, tmp_path) is False
+
+
+def test_manual_platform_pause_leaves_pending_receipts_untouched(monkeypatch, tmp_path):
+    engine = _Engine()
+    monkeypatch.setattr(worker, "is_platform_feature_enabled", lambda *_args: False)
+    monkeypatch.setattr(worker, "_claim_one", lambda *_: (_ for _ in ()).throw(AssertionError("claim during pause")))
+    assert worker.process_one_staged_receipt(engine, tmp_path) is False
+    assert engine.updated == []
 
 
 def test_success_records_result_and_closes_same_transaction(monkeypatch, tmp_path):

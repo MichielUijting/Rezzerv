@@ -20,6 +20,9 @@ from app.integrations.retailer_receipts import RetailerReceiptEnvelope
 from app.services.maintenance_postgres_admission import admit_operation, complete_operation
 from app.services.maintenance_runtime import _operation
 from app.services.maintenance_state_contract import MaintenanceTransitionError
+from app.services.platform_feature_flag_service import (
+    FEATURE_FLAG_RETAILER_AUTO_IMPORT, is_platform_feature_enabled,
+)
 from app.services.retailer_account_secure_store import _fernet
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 
@@ -42,6 +45,9 @@ def _claim_one(engine: Engine) -> dict | None:
             LIMIT 1
         """)).mappings().first()
         if row is None:
+            return None
+        # Check again inside the claim transaction; a paused queue retains pending receipts.
+        if not is_platform_feature_enabled(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT):
             return None
         operation_id = admit_operation(conn, kind="worker:retailer_import_queue")
         changed = conn.execute(text("""
@@ -102,6 +108,9 @@ def process_one_staged_receipt(engine: Engine, receipt_root: Path) -> bool:
         state = conn.execute(text("SELECT state FROM maintenance_control WHERE id=1")).scalar_one_or_none()
     if state not in {"normal", "announced"}:
         return False
+    with engine.connect() as conn:
+        if not is_platform_feature_enabled(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT):
+            return False
     try:
         row = _claim_one(engine)
     except MaintenanceTransitionError:
