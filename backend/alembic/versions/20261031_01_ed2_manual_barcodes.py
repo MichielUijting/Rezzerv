@@ -26,6 +26,17 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('retailer_code', 'receipt_text_normalized', 'external_article_code',
                                 name='pk_ed2_manual_barcodes'),
     )
+    # The maintenance write barrier applies to every new PostgreSQL domain
+    # table, including barcode-only evidence that can be shared across stores.
+    bind = op.get_bind()
+    schema = bind.execute(sa.text('SELECT current_schema()')).scalar_one()
+    quoted = bind.dialect.identifier_preparer.quote_identifier
+    bind.exec_driver_sql(
+        'CREATE TRIGGER inhuis_maintenance_write_gate '
+        'BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE '
+        f'ON {quoted(schema)}.{quoted("ed2_manual_barcodes")} FOR EACH STATEMENT '
+        f'EXECUTE FUNCTION {quoted(schema)}.inhuis_maintenance_write_barrier()'
+    )
 
 
 def downgrade() -> None:
