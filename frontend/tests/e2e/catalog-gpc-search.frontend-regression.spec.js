@@ -4,6 +4,20 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js';
 
+async function mockCompletedHouseholdOnboarding(page) {
+  await page.route('**/api/onboarding', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        can_manage: true,
+        initial_choice_required: false,
+        onboarding_status: 'completed',
+      }),
+    });
+  });
+}
+
 test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
   test('zoekt Producttype op Nederlandse Brickomschrijving en Brickcode', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
@@ -192,6 +206,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
   test('Huishoudbeheerder kan zonder platformrechten een ontbrekende gedeelde GTIN opslaan', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const productId = 'catalog-household-owner-gtin';
+    await mockCompletedHouseholdOnboarding(page);
     let saved = null;
     let householdWrites = 0;
 
@@ -333,6 +348,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
 
   test('Huishoudbeheerder kan centrale artikelnaam niet wijzigen zonder catalogusrechten', async ({ page }) => {
     const productId = 'catalog-name-permission';
+    await mockCompletedHouseholdOnboarding(page);
     await page.route('**/api/session', async (route) => {
       await route.fulfill({
         status: 200, contentType: 'application/json',
