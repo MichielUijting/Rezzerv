@@ -111,7 +111,7 @@ jobs:
         run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py tests/test_action_button_availability.py
 
   feature-availability-frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
