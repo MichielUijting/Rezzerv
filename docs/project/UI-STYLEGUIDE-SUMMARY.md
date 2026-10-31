@@ -1474,3 +1474,16 @@ waarde is gecombineerd, de backendidentiteit en GS1-status blijven strikt
 gescheiden. Bij een handmatige barcode maakt de cel via een standaard tooltip
 zichtbaar dat deze nog niet aan de Catalogus is gekoppeld. De extra kolom
 **Ingevoerde barcode** vervalt om horizontale schermruimte te besparen.
+
+
+### Bevestigingsknoppen: actienaam tijdens verwerking (31 oktober 2026)
+
+Een interactieve bevestigingsdialoog via de gedeelde component Melding
+(`AppFeedbackProvider`) behoudt bij het uitvoeren van de primaire actie
+de functionele knopnaam. De wachtstand voegt uitsluitend drie puntjes toe:
+**Verwijderen** wordt **Verwijderen...**, **Koppelen** wordt
+**Koppelen...** en **Opslaan** wordt **Opslaan...**. Een verwijderactie
+mag nooit stilzwijgend de knoptekst **Opslaan...** tonen. Tijdens de
+verwerking blijft de primaire knop niet nogmaals aanklikbaar. De
+bestaande fout-, succes-, waarschuwing- en bevestigingspresentatie
+blijft verder ongewijzigd.
