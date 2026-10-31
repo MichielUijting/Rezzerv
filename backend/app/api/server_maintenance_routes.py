@@ -5,6 +5,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db import engine
 from app.services.maintenance_runtime import state, transition
+from app.services.platform_feature_flag_service import (
+    FEATURE_FLAG_RETAILER_AUTO_IMPORT, get_platform_feature_flag,
+    set_platform_feature_flag,
+)
 from app.services.maintenance_state_contract import MaintenanceTransitionError
 from app.services.maintenance_runtime_preflight import MaintenancePreflightError
 from app.services.maintenance_session_drain import revoke_remaining_sessions
@@ -20,9 +24,60 @@ class MaintenanceAction(BaseModel):
     announcement: str = Field(default="", max_length=2000)
 
 
+class ImportPauseAction(BaseModel):
+    paused: bool
+
+
 class MaintenanceSessionClosure(BaseModel):
     expected_generation: int = Field(ge=0)
     confirmed: bool = False
+
+
+@router.get("/api/platform/maintenance/imports")
+def platform_import_pause_status():
+    require_platform_permission_from_session(PERMISSION)
+    if engine.dialect.name != "postgresql":
+        raise HTTPException(503, "Importpauze vereist PostgreSQL")
+    try:
+        with engine.connect() as conn:
+            flag = get_platform_feature_flag(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT)
+            current = state(conn)
+        return {
+            "paused": not flag["enabled"],
+            "maintenance_paused": current["state"] not in ("normal", "announced"),
+            "open_import_registrations": current["retailer_import_registrations"]["open"],
+            "pending_receipts": current["retailer_import_queue"]["pending"],
+            "processing_receipts": current["retailer_import_queue"]["processing"],
+            "review_required": current["retailer_import_queue"]["review_required"],
+            "note": "Een open registratie is niet noodzakelijk een lopende import.",
+        }
+    except SQLAlchemyError as exc:
+        raise HTTPException(503, "Importstatus kan niet betrouwbaar worden gelezen") from exc
+
+
+@router.post("/api/platform/maintenance/imports")
+def platform_import_pause_action(payload: ImportPauseAction):
+    actor = require_platform_permission_from_session(PERMISSION)
+    if engine.dialect.name != "postgresql":
+        raise HTTPException(503, "Importpauze vereist PostgreSQL")
+    try:
+        with engine.begin() as conn:
+            # A manual pause persists across restarts. Maintenance release is
+            # a separate, proof-gated operation and must never clear this flag.
+            flag = set_platform_feature_flag(
+                conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT,
+                enabled=not payload.paused, updated_by=actor.user_id,
+            )
+        return {
+            "paused": not flag["enabled"],
+            "message": ("Nieuwe automatische winkelimports zijn gepauzeerd. "
+                        "Lopende verwerkingen worden niet afgebroken."
+                        if payload.paused else
+                        "Automatische winkelimports zijn vrijgegeven; "
+                        "serveronderhoud kan ze nog afzonderlijk blokkeren."),
+        }
+    except SQLAlchemyError as exc:
+        raise HTTPException(503, "Importpauze kon niet betrouwbaar worden opgeslagen") from exc
 
 
 @router.get("/api/maintenance/status")

@@ -88,3 +88,83 @@ frontend-regressiecommando en dekt 390/1280 px voor beide rollen, selectie over
 pagina/filter, foutbehoud, expliciete bulk, reload en weigering regulier account.
 De bestaande PostgreSQL-foundation-, onderhouds-, rollen-, identity- en F7-gates
 blijven aanvullend vereist; synthetische tests vervangen die niet.
+
+
+## Synoniemenanalyse — eerste leesfase (29 oktober 2026)
+
+De Catalogus biedt voor Superusers en Frontteamleden het scherm **Synoniemenanalyse**.
+Dit gebruikt uitsluitend bestaande centrale, gecodeerde actieve Catalogusproducten,
+rechtstreeks bevestigde artikelparen en bestaande tekstkandidaten. Er worden geen
+huishoudartikelen, bonnen, barcodegegevens, voorraad of relaties gewijzigd.
+
+Het nieuwe, beveiligde read-only endpoint
+`/api/external-databases/article-synonyms/analysis` toont:
+- aantal rechtstreeks bevestigde winkeloverstijgende paren en open tekstkandidaten;
+- aantallen zonder gevonden tekstkandidaat en met onbekend winkelbewijs;
+- artikelgroepen per bevestigde Shopify-artikelclassificatie, anders GS1 Brick,
+  anders expliciet **Niet geclassificeerd**;
+- aantallen artikelen met bevestigde directe koppelingen en open kandidaten per
+  artikelgroep en winkel, plus doorklik naar de bestaande handmatige bevestiging.
+
+Een product kan tegelijk een bevestigde relatie en nog niet beoordeelde kandidaten
+hebben. **Geen kandidaat** betekent uitsluitend dat het bestaande algoritme geen
+kandidaat heeft gevonden; het bewijst niet dat de winkel geen equivalent verkoopt.
+Een ontbrekende winkel wordt niet als echte supermarkt meegeteld.
+De tekstscore is geen waarschijnlijkheidspercentage en geen bewijs van
+functionele gelijkwaardigheid. Geen automatische toekenning, geen transitieve
+koppelingen, geen afwijzingsregistratie en geen assortimentimport in deze fase.
+Verbeterde kenmerkmatching en vastleggen van afwijzingen zijn afzonderlijke
+vervolgstappen.
+
+
+## PO-acceptatie Synoniemenanalyse: 0/1/2/3+ tellers en kandidaatkeuze
+
+De vier tellers tellen **artikelen** (niet unieke winkels) met respectievelijk
+0, 1, 2 of minstens 3 **rechtstreeks bevestigde andere Catalogusartikelen**.
+Een bevestigd paar telt voor beide deelnemende artikelen; duplicaten en
+transitieve relaties tellen niet dubbel. Alleen actieve, eenduidig aan
+verschillende winkels gekoppelde gecodeerde producten tellen mee, conform
+het centrale synoniemcontract. De vier aantallen omvatten precies de zichtbare
+analysepopulatie; aangeklikte teller filtert de artikeltabel, tweede klik heft
+het tellerfilter op. Overige zoek-/winkelfilters zijn onafhankelijk.
+
+De hoofdtabel toont direct de individuele Catalogusartikelen en hun aantal
+rechtstreeks bevestigde synoniemen. Na artikelkeuze wordt in het paneel eronder
+maximaal vijf voorstellen getoond. De kandidaten zijn exact een subset van de
+bestaande handmatig te bevestigen `suggest_pairs`-voorstellen; de server
+levert dezelfde fingerprints en hercontroleert die binnen de bestaande
+atomische `/link`-transactie. Bij ontbrekende winkelidentiteit komt geen
+zelfbedacht winkeloverstijgend voorstel. Voorstellen zijn geen bewezen
+functionele equivalenten en worden nooit automatisch bevestigd.
+
+Een dubbelklik op één kandidaat schrijft via dezelfde bevoegde route als
+het selectierondje + **Merk kandidaat aan als synoniem**. Een enkele selectie
+schrijft niets. Succes ververst de server-afgeleide lijst en tellers;
+beide Catalogusproducten tonen bij nieuwe lezing de directe koppeling.
+Geen update aan barcode, productidentiteit, huishouden, voorraad of kassabon.
+
+
+### PO-verfijning: hoofdregel opent pas op dubbelklik
+
+Het kandidaatpaneel wordt pas door een **dubbelklik op de hele hoofdartikelrij**
+geopend. Een enkele klik verandert de selectie niet en toont geen kandidaatpaneel.
+Artikelnaam en foto staan in de bestaande DataTable zonder aparte artikelknop.
+Ook via Enter op een gefocuste rij is het paneel toegankelijk. Er zijn geen
+wijzigingen aan de dubbele bevestigingsroute binnen de kandidaat-tabel of aan
+opslag, autorisatie en Catalogusprojectie. Overbodige losse toelichtingen rondom
+de tabellen zijn uit het werkscherm verwijderd.
+
+
+### Compacte filters en scrollbar — PO, 29 oktober 2026
+
+De vier tellers blijven het enige aanvullende filter boven de standaardtabel.
+De losse artikelsoort-, winkel- en artikelzoekvelden boven de hoofdtabel
+vervallen: de bestaande filtervelden in de DataTable zijn leidend.
+De bestaande DataTable blijft tien rijen per pagina tonen. Op dit specifieke
+Synoniemenanalyse-scherm wordt de gedeelde maximale scrollhoogte lokaal
+losgelaten, zodat de horizontale scrollbar aan de onderkant van de **hele**
+tabel staat en geen tabelrij of tekst bedekt. Dezelfde lokale regel geldt
+voor de kandidaat-DataTable (maximaal vijf regels). De knop **Sluiten**
+naast de kandidaat-tabeltitel vervalt; dubbelklik op een andere hoofdregel
+laadt de kandidaten voor dat artikel. Bestaande selectie-, dubbelklik- en
+bevestigingsfunctionaliteit blijft gehandhaafd.

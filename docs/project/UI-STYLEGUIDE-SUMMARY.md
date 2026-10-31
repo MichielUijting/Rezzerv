@@ -1356,3 +1356,82 @@ gebruiker. Na bevestigen verdwijnt het artikel uit de standaardselectie met
 ontbrekende classificaties, maar is via wissen van het filter of in de
 Catalogus weer terug te vinden. Sortering en zoeken behandelen de status
 op beide schermen identiek.
+
+
+## Synoniemenanalyse in centrale Catalogus — 29 oktober 2026
+
+De Catalogus toont voor Superusers en Frontteamleden zowel op desktop als mobiel
+een actie **Synoniemenanalyse**. De route gebruikt de bestaande gedeelde mobiele
+sticky header en de bestaande platformrol-/permissieafscherming.
+
+Het scherm gebruikt de bestaande **ScreenCard**, **Button**, **Select** en
+**DataTable** in plaats van nieuwe tabel-, filter- of navigatiecomponenten.
+De indeling bestaat uit:
+- een compacte rij tellers voor rechtstreeks bevestigde artikelparen, open
+  tekstkandidaten, artikelen zonder gevonden kandidaat en artikelen waarvan
+  de winkel onbekend is;
+- filters op artikelsoort, winkel, status en zoektekst;
+- een standaard gepagineerde tabel met artikelsoort, winkel en aantallen;
+- een tweede standaard gepagineerde tabel voor de betrokken Catalogusartikelen,
+  met Catalogusfoto, rechtstreeks gekoppelde winkels, voorstelstatus en een
+  doorklikactie naar de bestaande handmatige Artikel-synoniemen-beoordeling.
+
+Getallen zijn uitsluitend gebaseerd op actuele centrale Catalogusgegevens.
+De UI vermeldt dat een tekstkandidaat géén bewezen functionele gelijkwaardigheid
+is, dat ontbrekende kandidaten geen ontbrekend supermarktassortiment bewijzen
+en dat alleen rechtstreeks bevestigde relaties als gekoppeld tellen.
+Een product mag tegelijk gekoppelde winkels en nog te beoordelen voorstellen
+hebben. Ontbrekende winkelidentiteit heet **Winkel onbekend** en wordt niet
+als werkelijk aanwezige winkel gepresenteerd.
+
+De tellers gebruiken een neutrale, compacte opmaak met dezelfde bestaande
+design tokens; de eigen scherm-CSS beperkt zich tot grid/spacing en de
+responsieve stapeling op maximaal 720px. Tabelkolommen, uitlijning,
+paginering en actieknoppen volgen de cumulatieve Inhuis-styleguide.
+
+
+### Synoniemenanalyse: directe artikelwerklijst — PO, 29 oktober 2026
+
+De startweergave toont **één standaard DataTable met individuele artikelen**,
+geen technische GPC-matrix boven de werklijst. Boven die tabel staan vier
+compacte aanklikbare tellers voor artikelen met **0, 1, 2 of 3+** rechtstreeks
+bevestigde synoniemen. De actieve teller gebruikt dezelfde primaire Inhuis-token
+en een subtiele groene achtergrond. Nogmaals klikken schakelt het filter uit.
+De bestaande gedeelde DataTable levert zoeken, sorteren en pagineren.
+
+Een klik op een artikel toont **onder de tabel** een tweede standaard DataTable
+met maximaal vijf kandidaatartikelen, hun foto, winkel en kenmerken. De
+lege selectiekolom gebruikt een radioknop voor precies één kandidaat.
+Dubbelklik op een kandidaat bevestigt direct; een enkele selectie gevolgd door
+**Merk kandidaat aan als synoniem** doet hetzelfde. Totdat die bevestiging
+gebeurt, verandert de Catalogus niet. Succes ververst de tellers, het artikel
+en de beide directe gekoppelde Catalogusartikelen; errors blijven zichtbaar.
+De actie is uitsluitend beschikbaar voor Superuser en Frontteam, ook op mobiel.
+
+
+### Synoniemenanalyse: compacte tabel en dubbelklik — PO, 29 oktober 2026
+
+De artikelnaam in de hoofdtabel is **gewone tekst**, nooit een knop of een
+gekleurde actietegel. De volledige tabelrij opent het kandidaatpaneel
+**uitsluitend na dubbelklik**, niet na één klik; toetsenbordbediening blijft
+mogelijk met Enter op een gefocuste rij. Dit gebruikt de bestaande gedeelde
+DataTable en verandert geen overige tabellen. Op de hoofdpagina ontbreken de
+redundante zwarte toelichtingsalinea's en de dubbele paginatitel; tellers,
+filters en hoofdtabel staan direct onder elkaar. Foutmeldingen en laadstatus
+blijven beschikbaar. Het paneel onder de tabel krijgt uitsluitend een korte
+titel met artikelnaam, de kandidaat-DataTable en de benodigde selectie-/koppel-
+acties; verklarende zwarte alinea's vervallen. De bevestigingsknop blijft
+**onder** de kandidaat-tabel aanwezig.
+
+
+### Synoniemenanalyse: filters en tabelscroll — PO, 29 oktober 2026
+
+Verwijder alle extra filtervelden boven de Synoniemenanalyse-tabel; het
+centrale DataTable-filter onder de kolomkoppen heeft exact dezelfde functie.
+De vier synoniem-tellers blijven beschikbaar. De standaard paginering en
+kolom-resize blijven behouden. De schermspecifieke tabel-wrapper toont zijn
+volledige pagina van tien artikelen, zodat de horizontale scrollbar **onder**
+de laatste tabelrij wordt geplaatst en nooit door de tekst loopt. Dezelfde
+regel geldt voor de onderste kandidaattabel met maximaal vijf rijen.
+Verwijder de aparte knop **Sluiten** bij de kandidaatsectie, maar behoud de
+bevoegde koppelactie onder de kandidaattabel en foutmeldingen bij problemen.
