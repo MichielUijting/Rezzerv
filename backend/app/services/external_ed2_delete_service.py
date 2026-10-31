@@ -13,9 +13,8 @@ from app.db import engine
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
-    normalize_external_link_retailer_code,
 )
-from app.services.external_unlinked_articles_service import list_all_external_articles
+from app.services.external_unlinked_articles_service import _overview_retailer_code, list_all_external_articles
 
 
 MAX_DELETE = 100
@@ -34,7 +33,7 @@ def _presentation_key(row: dict) -> tuple[str, str, str]:
 def _link_belongs_to_selection(link: dict, selections: list[dict]) -> bool:
     for row in selections:
         retailer, label, code = _presentation_key(row)
-        if normalize_external_link_retailer_code(retailer) != normalize_external_link_retailer_code(link.get("retailer_code")):
+        if _overview_retailer_code(retailer) != _overview_retailer_code(link.get("retailer_code")):
             continue
         normalized_code = normalize_external_link_article_code(code)
         normalized_label = normalize_external_link_receipt_text(label)
