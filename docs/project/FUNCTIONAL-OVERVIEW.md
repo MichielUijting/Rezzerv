@@ -321,3 +321,24 @@ smal, met behoud van de toegankelijke checkboxnamen.
 Er is geen automatische bevestiging. Bestaande product-, verpakking- en
 huishoudidentiteiten blijven behouden. Ontbrekende codes worden eerst aangevuld
 via Externe databases 2. Zie [het functionele contract](ARTICLE-SYNONYMS.md).
+
+### PO-besluit 31 oktober 2026 — tabelcontext en handmatige barcode
+
+Wanneer de gebruiker vanuit het Catalogusoverzicht of Externe databases 2
+naar detail en terug navigeert, blijven pagina, filtering en sortering behouden
+op desktop en mobiel, ook na Zelf zoeken in OFF. Alleen wanneer een pagina
+door een veranderde resultaatset niet meer bestaat wordt de paginapositie
+veilig begrensd.
+
+Externe databases 2 biedt naast handmatig OFF zoeken een expliciete
+bevestigingsactie voor het invoeren van een geldige GTIN/EAN. Eerst zoekt
+de server de barcode exact in Open Food Facts. Een verifieerbaar, met het
+bonartikel verenigbaar OFF-resultaat wordt via de bestaande gecontroleerde
+Cataloguskoppeling opgeslagen; beschikbare productgegevens en afbeelding
+worden overgenomen en ontbrekende officiële GS1-classificatie blijft
+onbevestigd. Is de barcode niet in OFF bekend, dan wordt uitsluitend de
+gebruikersbevestigde barcode als afzonderlijk, platformbreed winkelartikelbewijs
+bewaard. De kolom **Ingevoerde barcode** toont dit apart; **Art.code**,
+**Gekoppeld** en de Kassa-/Voorraadprojectie worden er niet stilzwijgend door
+aangepast. Conflicten, ongeldige controlesommen of onbereikbaarheid van OFF
+leiden niet tot een verzonnen bevestiging.

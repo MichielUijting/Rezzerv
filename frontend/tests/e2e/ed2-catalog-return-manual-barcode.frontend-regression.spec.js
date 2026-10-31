@@ -36,7 +36,7 @@ function bootstrap(route, rows, manualRows, onSave) {
   }
   if (path.startsWith('/api/catalog/catalog-')) return route.fulfill({ json: {
     product: { id: path.split('/').at(-1), name: 'Melk detail', primary_gtin: '', status: 'active' },
-    identities: [], household_articles: [], receipt_lines: [], 
+    identities: [], household_articles: [], receipt_lines: [],
   } })
   return route.fulfill({ json: {} })
 }

@@ -1,6 +1,7 @@
 """Store user-confirmed ED2 GTIN evidence separately from verified OFF/GPC links.
 
-No historical SQLite schema change. Does not change receipt/inventory consumers.
+The immutable historical source is untouched; fresh canonical SQLite and PostgreSQL
+heads receive the same empty table. Does not change receipt/inventory consumers.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -13,8 +14,6 @@ CI_IMPACT_DOMAINS = ['catalog', 'receipt', 'shared']
 
 
 def upgrade() -> None:
-    if op.get_bind().dialect.name != 'postgresql':
-        return
     op.create_table(
         'ed2_manual_barcodes',
         sa.Column('retailer_code', sa.String(128), nullable=False),
@@ -26,6 +25,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('retailer_code', 'receipt_text_normalized', 'external_article_code',
                                 name='pk_ed2_manual_barcodes'),
     )
+    if op.get_bind().dialect.name != 'postgresql':
+        return
     # The maintenance write barrier applies to every new PostgreSQL domain
     # table, including barcode-only evidence that can be shared across stores.
     bind = op.get_bind()
@@ -40,8 +41,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if op.get_bind().dialect.name != 'postgresql':
-        return
     count = op.get_bind().execute(sa.text('SELECT COUNT(*) FROM ed2_manual_barcodes')).scalar_one()
     if count:
         raise RuntimeError('Handmatig opgeslagen barcodes bestaan nog; veilig downgraden is niet mogelijk.')
