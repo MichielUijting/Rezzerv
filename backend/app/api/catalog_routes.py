@@ -14,9 +14,12 @@ from sqlalchemy import inspect, text
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
+from app.services.barcode_identity_service import validate_barcode
+from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
+    require_household_admin_from_session,
     require_platform_permission_from_session,
     resolve_current_server_session,
 )
@@ -32,6 +35,33 @@ CATALOG_IMAGE_DATA_URL_PATTERN = re.compile(
     r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\r\n]+)$",
     re.IGNORECASE,
 )
+
+
+class CatalogNameUpdateRequest(BaseModel):
+    name: str
+    expected_name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = " ".join(str(value or "").split())
+        if not normalized:
+            raise ValueError("Vul een artikelnaam in")
+        if len(normalized) > 200:
+            raise ValueError("De artikelnaam mag maximaal 200 tekens bevatten")
+        return normalized
+
+    @field_validator("expected_name")
+    @classmethod
+    def validate_expected_name(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("De bestaande artikelnaam ontbreekt")
+        return normalized
+
+
+class CatalogGtinUpdateRequest(BaseModel):
+    gtin: str
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -660,6 +690,189 @@ def _validated_catalog_image_data_url(value: str) -> str:
             detail="Bestandsinhoud komt niet overeen met het afbeeldingstype",
         )
     return f"data:{mime_type};base64,{base64.b64encode(binary).decode('ascii')}"
+
+
+def _require_catalog_gtin_contributor() -> None:
+    """Permit a narrow new-identity contribution by a platform catalog editor
+    or an authenticated household owner/admin. No other Catalogus mutations
+    or replacement of existing GTINs are authorized by this fallback.
+    """
+    try:
+        require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
+    require_household_admin_from_session()
+
+
+@router.put("/{global_product_id}/name")
+def update_catalog_product_name(global_product_id: str, payload: CatalogNameUpdateRequest):
+    """Rename a shared Catalogus article without changing its identity or household links.
+
+    Names are mutable presentation metadata, never barcode or receipt identity.
+    The canonical fingerprint must stay in sync, so later imports do not
+    accidentally recreate the article under its old name.
+    """
+    require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+    product_columns = _columns("global_products")
+    required = {
+        "id", "name", "status", "primary_gtin", "brand", "variant",
+        "size_value", "size_unit", "product_fingerprint",
+    }
+    if not required.issubset(product_columns):
+        raise HTTPException(status_code=503, detail="De gezamenlijke Catalogus is niet beschikbaar")
+
+    with engine.begin() as conn:
+        lock = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        current = conn.execute(
+            text(
+                "SELECT id, name, status, primary_gtin, brand, variant, "
+                "size_value, size_unit, product_fingerprint "
+                "FROM global_products WHERE id = :product_id" + lock
+            ),
+            {"product_id": global_product_id},
+        ).mappings().first()
+        if not current or str(current.get("status") or "").strip().lower() == "deleted":
+            raise HTTPException(status_code=404, detail="Catalogusartikel niet gevonden")
+
+        existing_name = str(current.get("name") or "").strip()
+        if existing_name != payload.expected_name:
+            raise HTTPException(
+                status_code=409,
+                detail="De artikelnaam is intussen gewijzigd. Vernieuw het artikel en probeer opnieuw.",
+            )
+        if existing_name == payload.name:
+            return {"global_product_id": global_product_id, "name": existing_name, "changed": False}
+
+        fingerprint = build_global_product_fingerprint(
+            payload.name,
+            current.get("brand"),
+            current.get("variant"),
+            current.get("size_value"),
+            current.get("size_unit"),
+        )
+        # A changed name may not silently collapse onto another active,
+        # unbarcoded product. Explicit identity linking remains a separate flow.
+        conflict = conn.execute(
+            text(
+                "SELECT id FROM global_products "
+                "WHERE product_fingerprint = :fingerprint AND id <> :product_id "
+                "AND status = 'active' "
+                "AND COALESCE(TRIM(primary_gtin), '') = '' LIMIT 1"
+            ),
+            {"fingerprint": fingerprint, "product_id": global_product_id},
+        ).first()
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail="Deze naam hoort al bij een ander catalogusartikel. De artikelen worden niet automatisch samengevoegd.",
+            )
+
+        updated_at_sql = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+        updated = conn.execute(
+            text(
+                "UPDATE global_products SET name = :new_name, "
+                "product_fingerprint = :fingerprint" + updated_at_sql
+                + " WHERE id = :product_id AND name = :expected_name"
+            ),
+            {
+                "new_name": payload.name,
+                "fingerprint": fingerprint,
+                "product_id": global_product_id,
+                "expected_name": existing_name,
+            },
+        )
+        if updated.rowcount != 1:
+            raise HTTPException(
+                status_code=409, detail="De artikelnaam is tussentijds gewijzigd. Probeer opnieuw.",
+            )
+
+    return {"global_product_id": global_product_id, "name": payload.name, "changed": True}
+
+
+@router.put("/{global_product_id}/gtin")
+def set_catalog_primary_gtin(
+    global_product_id: str,
+    payload: CatalogGtinUpdateRequest,
+):
+    """Register one verified GTIN on the shared product, never on a household stock row."""
+    _require_catalog_gtin_contributor()
+    required = {"id", "primary_gtin", "status"}
+    if "global_products" not in _tables() or not required.issubset(_columns("global_products")):
+        raise HTTPException(status_code=503, detail="De gedeelde Catalogus is niet beschikbaar")
+
+    validation = validate_barcode(payload.gtin, "gtin")
+    if not validation["valid"]:
+        message = "; ".join(error["message"] for error in validation["errors"])
+        raise HTTPException(status_code=422, detail=message or "Ongeldige barcode")
+    gtin = validation["normalized_value"]
+
+    product_columns = _columns("global_products")
+    with engine.begin() as conn:
+        # Serialize concurrent assignments of the same GTIN across different
+        # products. A row lock alone does not protect another product's empty GTIN.
+        if conn.dialect.name == "postgresql":
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:gtin))"),
+                {"gtin": gtin},
+            )
+
+        lock = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        existing = conn.execute(
+            text("SELECT id, status, primary_gtin FROM global_products "
+                 "WHERE id = :product_id" + lock),
+            {"product_id": global_product_id},
+        ).mappings().first()
+        if not existing or str(existing.get("status") or "").lower() == "deleted":
+            raise HTTPException(status_code=404, detail="Catalogusartikel niet gevonden")
+
+        previous_gtin = str(existing.get("primary_gtin") or "").strip()
+        if previous_gtin and previous_gtin != gtin:
+            raise HTTPException(
+                status_code=409,
+                detail="Dit artikel heeft al een andere primaire barcode. Deze wordt niet automatisch overschreven.",
+            )
+
+        conflicting = conn.execute(
+            text("SELECT id FROM global_products "
+                 "WHERE primary_gtin = :gtin AND id <> :product_id LIMIT 1"),
+            {"gtin": gtin, "product_id": global_product_id},
+        ).first()
+        if conflicting:
+            raise HTTPException(
+                status_code=409,
+                detail="Deze barcode is al aan een ander catalogusartikel gekoppeld.",
+            )
+
+        # The shared identity table may contain legacy household-linked GTIN
+        # evidence. Do not silently reassign an existing identity to this product.
+        if "product_identities" in _tables():
+            identity_columns = _columns("product_identities")
+            if {"identity_type", "identity_value", "global_product_id"}.issubset(identity_columns):
+                identity_conflict = conn.execute(
+                    text("SELECT id FROM product_identities "
+                         "WHERE identity_type IN ('gtin', 'ean', 'upc') "
+                         "AND identity_value = :gtin "
+                         "AND global_product_id IS NOT NULL "
+                         "AND global_product_id <> :product_id LIMIT 1"),
+                    {"gtin": gtin, "product_id": global_product_id},
+                ).first()
+                if identity_conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Deze barcode is al gekoppeld aan een andere productidentiteit.",
+                    )
+
+        if not previous_gtin:
+            timestamp_sql = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+            conn.execute(
+                text("UPDATE global_products SET primary_gtin = :gtin" + timestamp_sql
+                     + " WHERE id = :product_id AND (primary_gtin IS NULL OR TRIM(primary_gtin) = '')"),
+                {"gtin": gtin, "product_id": global_product_id},
+            )
+
+    return {"global_product_id": global_product_id, "gtin": gtin, "changed": not bool(previous_gtin)}
 
 
 @router.put("/{global_product_id}/image")

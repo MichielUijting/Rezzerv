@@ -261,6 +261,10 @@ function AppFeedbackDialog({
   } = feedback
 
   const mobileTransient = mobileFeedbackViewport && isTransientFeedback(feedback)
+  // Action prompts must be opaque: the informational feedback class does not
+  // provide a background, allowing the page to show through the dialog.
+  // Passive notifications keep their existing compact bottom-bar treatment.
+  const interactiveDialog = Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = dismissMode === 'outside-or-ok'
 
@@ -315,6 +319,13 @@ function AppFeedbackDialog({
           fontSize: '18px',
           lineHeight: 1.45,
           fontWeight: 700,
+          ...(interactiveDialog ? {
+            background: '#FFFFFF',
+            color: '#1A1A1A',
+            border: '1px solid #D0D5DD',
+            borderRadius: '12px',
+            padding: '20px 24px',
+          } : {}),
         }}
       >
         <div style={{ display: 'grid', gap: '8px' }}>

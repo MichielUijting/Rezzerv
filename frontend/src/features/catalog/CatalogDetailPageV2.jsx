@@ -8,10 +8,12 @@ import Table from '../../ui/Table'
 import Pagination from '../../ui/Pagination.jsx'
 import { useMobilePagination, MobilePaginationControls } from '../../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
+import { canCurrentUserPerform, fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../lib/authSession'
 import CatalogCameraModal from './CatalogCameraModal'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
+import CatalogBarcodeEntry from './CatalogBarcodeEntry'
+import CatalogNameEditor from './CatalogNameEditor'
 import { captureCatalogImageFromVideo, compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
 import './mobileCatalog.css'
@@ -59,6 +61,8 @@ export default function CatalogDetailPageV2() {
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
+  // A household owner can add a missing valid GTIN, but cannot edit Catalogus photos or existing GTINs.
+  const canAddCatalogGtin = canUpdateCatalogImage || isHouseholdAdminFromContext(authContext)
   const uploadInputRef = useRef(null)
   const cameraVideoRef = useRef(null)
   const cameraStreamRef = useRef(null)
@@ -325,7 +329,15 @@ export default function CatalogDetailPageV2() {
                   ) : <CatalogProductImage imageUrl={product.image_url} productName={product.name} />}
                 </div>
                 <div className="rz-mobile-catalog-detail-summary-copy">
-                  <h2>{text(product.name, 'Universeel artikel')}</h2>
+                  <CatalogNameEditor
+                      globalProductId={globalProductId}
+                      name={product.name}
+                      canEdit={canUpdateCatalogImage}
+                      onSaved={(name) => {
+                        setDetail((current) => current ? { ...current, product: { ...current.product, name } } : current)
+                        showFeedback({ variant: 'success', title: 'Artikelnaam opgeslagen', message: 'De universele naam is in de Catalogus bijgewerkt.' })
+                      }}
+                    />
                   <dl>
                     <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                     <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
@@ -340,6 +352,8 @@ export default function CatalogDetailPageV2() {
                   </dl>
                 </div>
               </section>
+
+              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
 
               <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-gpc">
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
@@ -445,7 +459,15 @@ export default function CatalogDetailPageV2() {
                     )}
                   </div>
                   <div className="rz-catalog-product-summary-content">
-                    <h2>{text(product.name, 'Universeel artikel')}</h2>
+                    <CatalogNameEditor
+                      globalProductId={globalProductId}
+                      name={product.name}
+                      canEdit={canUpdateCatalogImage}
+                      onSaved={(name) => {
+                        setDetail((current) => current ? { ...current, product: { ...current.product, name } } : current)
+                        showFeedback({ variant: 'success', title: 'Artikelnaam opgeslagen', message: 'De universele naam is in de Catalogus bijgewerkt.' })
+                      }}
+                    />
                     <dl className="rz-catalog-definition-list">
                       <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                       <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
@@ -460,6 +482,8 @@ export default function CatalogDetailPageV2() {
                   </div>
                 </div>
               </section>
+
+              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
