@@ -78,7 +78,15 @@ function Get-Container([string]$Service) {
         } else {
             $mounts = @($data.Mounts | Where-Object { $_.Type -in @('volume','bind') -and $_.Destination -eq '/var/lib/postgresql/data' })
             if ($mounts.Count -ne 1) { throw 'Expliciete PostgreSQL-container heeft geen unieke duurzame datamount.' }
-            if ($data.Config.Image -notmatch '^postgres(:|@)') { throw 'Expliciete databasecontainer gebruikt geen herkenbaar PostgreSQL-image.' }
+            # An immutable digest can replace the original configured image tag.
+            # Require identical running/image IDs and an independently inspected postgres:17 tag.
+            if ($data.Config.Image -notmatch '^postgres(:|@)') {
+                $imageInfo=@((Invoke-DockerText -Arguments @('image','inspect',$data.Image)) | ConvertFrom-Json)
+                if ($imageInfo.Count -ne 1 -or $imageInfo[0].Id -cne $data.Image -or
+                    @($imageInfo[0].RepoTags | Where-Object { $_ -cmatch '^postgres:17(-[a-z0-9.-]+)?$' }).Count -lt 1) {
+                    throw 'Expliciete databasecontainer heeft geen aantoonbaar PostgreSQL-17-image.'
+                }
+            }
         }
         return $data
     }
@@ -220,7 +228,9 @@ if ($InstallAtLogon) {
         $scheduledArguments += " -BackendContainerName `"$BackendContainerName`" -PostgresContainerName `"$PostgresContainerName`""
     }
     $action=New-ScheduledTaskAction -Execute (Get-Command pwsh.exe).Source -Argument $scheduledArguments -WorkingDirectory $RepoRoot
-    Register-ScheduledTask -TaskName ('Inhuis-Onderhoud-'+$ComposeProject) -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive) -Description 'Levert ondertekend onderhoudsbewijs; herstart Windows nooit.' | Out-Null
+    # Keep DPAPI/Docker Desktop user identity. This intentionally requires interactive logon.
+    $taskSettings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([timespan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName ('Inhuis-Onderhoud-'+$ComposeProject) -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive) -Settings $taskSettings -Description 'Levert ondertekend onderhoudsbewijs na aanmelding; herstart Windows nooit.' | Out-Null
     return
 }
 
