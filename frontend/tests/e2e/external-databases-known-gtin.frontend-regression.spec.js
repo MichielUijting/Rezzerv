@@ -569,4 +569,88 @@ test.describe('Externe databases bekende GTIN regressie', () => {
 
     await expectNoConsoleErrors(consoleErrors);
   });
+  for (const width of [390, 1280]) {
+    test('directe ED2-kandidaat bevestigen op ' + width + 'px', async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const item = { id: 'receipt-table-line:direct', receipt_line_text: 'Aardappel iets kruimig',
+        retailer_code: 'lidl', receipt_article_number: '0083242', link_status: 'unlinked' }
+      const gtin = '8718452504435'
+      let saved = false
+      let noProof = false
+      let incompatible = false
+      const writes = []
+      const lookups = []
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        if (path === '/api/session') return route.fulfill({ json: {
+          user_id: 'ed2-test', active_household_id: '0', context_type: 'system', role: 'owner',
+          is_platform_superuser: true, permissions: { 'platform.system_household.access': true },
+        } })
+        if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+        if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+          items: [{ ...item, link_status: saved ? 'classification_pending' : 'unlinked',
+            article_code: saved ? gtin : '' }],
+          counts: { unlinked: saved ? 0 : 1, classification_pending: saved ? 1 : 0, linked: 0 },
+        } })
+        if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
+          provider: 'openfoodfacts', mutated: false,
+          results: [{ gtin, product_name: 'Aardappelen iets kruimig', brand: 'Testmerk',
+            source: 'Open Food Facts', evidence_label: 'Suggestie op artikelnaam', score: 0.85 }],
+        } })
+        if (path === '/api/external-products/off/search') {
+          lookups.push(request.postDataJSON())
+          return route.fulfill({ json: { provider: 'off_exact_gtin',
+            results: noProof ? [] : [{ gtin, product_name: 'Aardappelen iets kruimig',
+              brand: 'Testmerk', selection_proof: 'receipt-bound-proof',
+              identity_compatible: !incompatible }] } })
+        }
+        if (path === '/api/external-databases/off/link-selected') {
+          writes.push(request.postDataJSON())
+          saved = true
+          return route.fulfill({ json: { cataloged: true, classification_pending: true } })
+        }
+        return route.fulfill({ json: {} })
+      })
+      await page.goto('/externe-databases-2')
+      const table = page.getByTestId('external-databases-2-table')
+      const article = table.locator('tbody tr').first()
+      if (width <= 720) await article.click()
+      else await article.dblclick()
+      const candidate = page.getByTestId('external-databases-2-off-candidates').locator('tbody tr').first()
+      await expect(candidate).toContainText(gtin)
+      expect(writes).toHaveLength(0)
+      const select = async () => width <= 720 ? candidate.click() : candidate.dblclick()
+      // Preview candidates without signed OFF evidence must not be linked.
+      noProof = true
+      await select()
+      await expect(page.getByRole('alert')).toContainText('kon niet in OFF worden bevestigd')
+      expect(writes).toHaveLength(0)
+      noProof = false
+      incompatible = true
+      await select()
+      await expect(page.getByRole('alert')).toContainText('past niet veilig')
+      expect(writes).toHaveLength(0)
+      incompatible = false
+      await select()
+      await expect(page.getByRole('alertdialog')).toContainText('Testmerk')
+      await expect(page.getByRole('alertdialog')).toContainText(gtin)
+      expect(writes).toHaveLength(0)
+      await page.getByRole('button', { name: 'Annuleren' }).click()
+      await expect(page.getByRole('alertdialog')).toHaveCount(0)
+      expect(writes).toHaveLength(0)
+      await select()
+      await page.getByRole('button', { name: 'OK', exact: true }).click()
+      await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
+      await expect(table).toContainText(gtin)
+      await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
+      expect(lookups).toHaveLength(4)
+      expect(lookups[0]).toEqual({ receipt_item_id: item.id, mode: 'manual', gtin, limit: 20 })
+      expect(writes).toEqual([{ receipt_item_id: item.id, gtin, selection_proof: 'receipt-bound-proof' }])
+    })
+  }
+
 });
