@@ -31,6 +31,7 @@ MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
 INVENTORY_QUANTITY_CONTRACT_TABLES = ("inventory", "inventory_events")
 ARTICLE_SYNONYM_LINKS_TABLE = "article_synonym_links"
+ED2_MANUAL_BARCODES_TABLE = "ed2_manual_barcodes"
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
@@ -48,6 +49,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "maintenance_audit",
     "global_product_consumption_profiles",
     ARTICLE_SYNONYM_LINKS_TABLE,
+    ED2_MANUAL_BARCODES_TABLE,
     # Post-baseline classification tables are checked for schema authority below.
     "global_product_shopify_classifications",
     "global_product_shopify_history",
@@ -827,6 +829,49 @@ def _assert_article_classification_schema(connection) -> None:
     print("ARTICLE_CLASSIFICATION_SCHEMA_AUTHORITY_GREEN")
 
 
+
+def _assert_ed2_manual_barcode_schema(connection) -> None:
+    """Migration-owned barcode evidence is separate from verified Catalogus identities."""
+    inspector = inspect(connection)
+    table = ED2_MANUAL_BARCODES_TABLE
+    if not inspector.has_table(table):
+        raise AssertionError("ED2 manual barcode evidence table missing")
+    columns = {column["name"]: column for column in inspector.get_columns(table)}
+    expected = {
+        "retailer_code", "receipt_text_normalized", "external_article_code",
+        "gtin", "created_at", "updated_at",
+    }
+    if set(columns) != expected:
+        raise AssertionError(f"ED2 barcode evidence column drift: {set(columns)!r}")
+    if any(column["nullable"] for column in columns.values()):
+        raise AssertionError("ED2 barcode evidence columns must be NOT NULL")
+    for name in ("retailer_code", "external_article_code", "gtin"):
+        if not isinstance(columns[name]["type"], sa.String):
+            raise AssertionError(f"ED2 barcode evidence type drift: {name}")
+    if not isinstance(columns["receipt_text_normalized"]["type"], sa.Text):
+        raise AssertionError("ED2 receipt identity must be TEXT")
+    if any(not isinstance(columns[name]["type"], sa.DateTime)
+           for name in ("created_at", "updated_at")):
+        raise AssertionError("ED2 evidence timestamps must be DATETIME")
+    primary_key = tuple(inspector.get_pk_constraint(table).get("constrained_columns") or ())
+    if primary_key != ("retailer_code", "receipt_text_normalized", "external_article_code"):
+        raise AssertionError(f"ED2 identity primary key drift: {primary_key!r}")
+    if inspector.get_foreign_keys(table):
+        raise AssertionError("ED2 manual barcode evidence must not own household/product foreign keys")
+    if connection.dialect.name == "postgresql":
+        has_guard = connection.execute(text("""
+            SELECT 1 FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = current_schema() AND c.relname = :table
+              AND t.tgname = 'inhuis_maintenance_write_gate'
+              AND NOT t.tgisinternal
+        """), {"table": table}).first()
+        if not has_guard:
+            raise AssertionError("ED2 manual barcode evidence is missing maintenance write guard")
+    print("ED2_MANUAL_BARCODE_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -851,6 +896,7 @@ def main() -> None:
             _assert_lidl_import_window_schema(connection)
             _assert_consumption_profile_schema(connection)
             _assert_article_synonym_schema(connection)
+            _assert_ed2_manual_barcode_schema(connection)
             _assert_article_classification_schema(connection)
             _assert_maintenance_schema(connection)
     finally:
