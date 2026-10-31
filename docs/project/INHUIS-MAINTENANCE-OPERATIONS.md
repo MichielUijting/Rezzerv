@@ -5,6 +5,107 @@ The backend requires `platform.recovery.manage`; household administrators,
 Superusers without that technical permission, and the IP owner receive no
 implicit technical privileges.
 
+## Praktijkbewijs Windows-herstarts 30 oktober 2026 (geen formele vrijgave)
+
+Dit is een **waargenomen praktijkresultaat**, geen bewijs dat iedere toekomstige
+Windows-update veilig is of dat alle formele onderhoudsgates zijn doorlopen.
+Het betreft de op dat moment bestaande Inhuis **1.12.296**-server en niet
+een nieuw uitgerolde softwareversie.
+
+Op 30 oktober 2026 zijn **twee Windows-herstarts** uitgevoerd. Bij beide kon
+de Product Owner na Windows-aanmelding Inhuis weer gebruiken. De eerste
+herstart is aanvullend onderbouwd met een alleen-lezen Dockerstatusrapport
+(14:52:41). De tweede is functioneel bevestigd door de Product Owner;
+voor die tweede herstart is geen nieuw volledig Docker-/database-identiteitsbewijs
+vastgelegd.
+
+### Objectief gecontroleerd bij de eerste herstart
+
+- Docker Desktop-engine bereikbaar, versie 29.8.2.
+- Bestaande backendcontainer `inhuis-1296-hersteltest-backend-1`
+  (**image** `sha256:3f5a12753683bf4afffd23068cddc04e0504b59a1c5839b9faaae0044d8b99eb`),
+  frontendcontainer `inhuis-1296-hersteltest-frontend-1`
+  (**image** `sha256:6e6750c8b1b6097b4581d1d7608f1f2434acda2257b48de249cfcfd522bf8e97`)
+  en de afzonderlijke PostgreSQL-container `inhuis-1296-db-test`
+  (**image** `sha256:79bd7c99e923138f136f8009d6bffa66e21e9d4fda5c0c561b00fc9c90cfe537`)
+  stonden op `running`. Dit zijn **historische identificaties**, nooit een
+  aanwijzing om bij een toekomstige herstart op naam een container te vervangen.
+- De geplande Windows-onderhoudsagent stond op `Running`, met een bewijs
+  van zeven seconden oud. De handtekening was in het statusrapport **niet**
+  opnieuw gevalideerd.
+- De PO kon inloggen op de lokale Inhuis-route
+  `http://127.0.0.1:15174`, zag de bestaande voorraad, gebruikte de
+  kassabonscanner succesvol en bevestigde bereikbaarheid via de gebruikelijke
+  Tailscale-route.
+- De schermen voor AH, Jumbo en Lidl bleven beschikbaar. Er waren **geen
+  nieuwe Jumbo- of Lidl-bonnen** om de feitelijke verse import te testen.
+- Een afzonderlijke alleen-lezen AH-voorcontrole (15:19:49) toonde
+  **115 bestaande AH-bonnen**, **115 bewaarde bekende bonidentiteiten**,
+  **nul dubbele actieve bonhashgroepen**, één gekoppeld AH-huishouden en
+  **beide tijdelijke AH-importblokkeringen actief**.
+- Dezelfde controle toonde 38 historische open AH-achtergrondregistraties
+  en één andere open registratie. Na expliciete toestemming van de PO zijn
+  **exact 38 historische registraties** (generatie 3, 24–26 oktober) met
+  individuele-ID-controle en een voorafgaand herstelarchief verwijderd
+  (rapport 15:46:35). **De 115 AH-bonnen en de andere registratie zijn
+  niet verwijderd.** Het archief staat op de server onder
+  `Downloads/Inhuis_AH_38_Registraties_Backup_20261030_154635.json`.
+  Dit is een afzonderlijk geautoriseerde eenmalige herstelactie; **geen
+  precedent voor automatische opschoning van open registraties**.
+
+### Bevestigd na de tweede herstart
+
+De PO bevestigde opnieuw dat Inhuis toegankelijk was en alles naar behoren
+werkte. Er is in dat bericht **geen afzonderlijk bewijs** geleverd van
+fysieke database-identiteit, de actuele status van beide tijdelijke
+AH-blokkeringen, een ondertekende host-proof, of een uitgevoerde nieuwe
+Jumbo-/Lidl-/AH-bonimport. Claim deze controles dus niet als geslaagd.
+
+### Standaard bij volgende Windows-updates (bestaande runtime behouden)
+
+1. **Vóór herstart:** bepaal de actuele backend-, frontend- en fysieke
+   PostgreSQL-identiteit uit live runtimebewijs, niet uit containernamen,
+   poorten of historische screenshots. Controleer actuele sessies,
+   onderhoudstoestand, lopende **én historisch openstaande** verwerkingen,
+   actieve importpauzes en een verifieerbare back-up. Gebruik de normale
+   formele aankondig-, drain-, bewijs- en vergrendelprocedure hierboven
+   waar die op de actieve runtime aantoonbaar werkt. Bij een onduidelijk
+   bewijs of een onopgeloste verwerking: **geen veiligheidsvrijgave**.
+2. **Windows-update:** uitsluitend na het vereiste PO-besluit. De gebruiker
+   herstart Windows; Inhuis-code doet dat niet. Bestaande Docker-containers,
+   volumes en databases niet wissen, herbouwen, recreëren of opnieuw
+   initialiseren.
+3. **Na aanmelden:** laat de bestaande Docker Desktop-opstartroute werken
+   en controleer of de oorspronkelijke runtime vanzelf is teruggekomen.
+   **Geen extra `start.bat` of handmatige Compose-reconstructie** als de
+   bestaande containers al draaien. Bij mislukte opstart eerst actuele
+   logs en de werkelijke runtimebinding lezen; geen aannames op basis
+   van een korte healthcheckfout.
+4. **Functionele controle:** lokaal inloggen; bestaande voorraad en bonnen
+   bekijken; kassabonscanner proberen; de normale externe Tailscale-route
+   controleren; onderhoudsagent en handtekening/versheid van bewijs
+   objectief valideren. Controleer winkelkoppelingen zonder onnodige
+   imports te starten. Een zichtbaar koppelscherm is **geen bewijs**
+   dat nieuwe bonimports werken.
+5. **Importbeleid:** bij een tijdelijke AH-pauze vóór en na een herstart
+   **beide live blokkeringen** controleren; die kunnen verloren gaan
+   zodra de backendcontainer wordt vervangen. Pas heractiveren na
+   gecontroleerde dubbele-bon-/importregistratiecontrole, afzonderlijke
+   vrijgave en een gerichte praktijktest. De eenmalige opruiming van
+   38 historische registraties herhalen we nooit automatisch.
+6. **Afronding:** noteer datum, exacte versie, runtime-identiteit,
+   gecontroleerde data, feitelijke gebruikersroutes, afwijkingen en
+   eventuele ontbrekende bewijzen. Een succesvolle login of een
+   `running`-container alleen is geen volledige veiligheidsacceptatie.
+
+**Nog open:** de waargenomen automatische gebruikersbeschikbaarheid bij
+de herstarts wijkt mogelijk af van het hierboven beschreven formele
+`locked → verifying → release`-proces. Onderzoek die runtimeverschillen
+vóór deze waarneming als nieuw formeel gedrag te beschouwen. PR #631
+behandelt de onderhoudsagent; documentatie van het praktijkbewijs betekent
+**geen** merge, deployment, wijziging van de server, aanpassing van
+onderhoudsgates of automatische AH-vrijgave.
+
 ## Administrator flow
 
 1. Enter the maintenance window, timezone and expected duration; announce it.
