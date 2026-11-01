@@ -69,3 +69,52 @@ assert.equal(timers.size, 0, 'No more frames after successful detection')
 controls.stop()
 assert.ok(resetCalls >= 1, 'Decoder must release resources')
 console.log('BARCODE_CAMERA_PROCESSED_FRAME_RESULT_GREEN')
+
+
+// Verify the actual Canvas RGBA-to-ZXing grayscale conversion, not only
+// the mocked callback dispatch (which cannot catch row-stride mistakes).
+const luminanceFrom = source.indexOf('function canvasImageToLuminances(')
+const luminanceTo = source.indexOf('\n\nfunction createProcessedFrameCandidates(', luminanceFrom)
+assert.ok(luminanceFrom >= 0 && luminanceTo > luminanceFrom,
+  'Production grayscale decoder must be present')
+const luminanceEnvironment = {
+  Uint8ClampedArray,
+  RGBLuminanceSource: class {
+    constructor(pixels, width, height) {
+      assert.equal(pixels.length, width * height, 'ZXing must receive one pixel per byte')
+      assert.equal(pixels.BYTES_PER_ELEMENT, 1)
+      assert.equal(width, 2)
+      assert.equal(height, 2)
+      this.pixels = pixels
+    }
+  },
+  HybridBinarizer: class {
+    constructor(source) { this.source = source }
+  },
+  BinaryBitmap: class {
+    constructor(bin) { this.bin = bin }
+  },
+}
+vm.runInNewContext(source.slice(luminanceFrom, luminanceTo)
+  + '\nthis.decodeImageDataWithZxing = decodeImageDataWithZxing;', luminanceEnvironment)
+const rgba = new Uint8ClampedArray([
+  0, 0, 0, 255,        // black
+  255, 255, 255, 255,  // white
+  255, 0, 0, 255,      // red -> ~76 gray
+  0, 0, 0, 0,          // transparent -> white
+])
+let decodeAgain = 0
+let resetAgain = 0
+const returned = luminanceEnvironment.decodeImageDataWithZxing(
+  { data: rgba, width: 2, height: 2 },
+  { decodeWithState: (bitmap) => {
+    decodeAgain++
+    const pixels = Array.from(bitmap.bin.source.pixels)
+    assert.deepEqual(pixels, [0, 255, 76, 255])
+    return ean
+  }, reset: () => { resetAgain++ } },
+)
+assert.equal(returned, ean)
+assert.equal(decodeAgain, 1)
+assert.equal(resetAgain, 1)
+console.log('BARCODE_CAMERA_RGBA_TO_ZXING_LUMINANCE_GREEN')

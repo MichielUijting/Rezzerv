@@ -14,6 +14,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
     startScanner, stopScanner, switchCamera, scanImageFile,
   } = useBarcodeScanner({
     screenContext: 'Externe databases 2 bonartikelbarcode',
+    timeoutMs: 0,
     onDetected: (detectedBarcode) => {
       const code = String(detectedBarcode || '').trim()
       if (!/^(?:\d{8}|\d{12,14})$/.test(code)) {
@@ -24,12 +25,12 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
     },
   })
 
-  // ED2 presents scanner errors and no-read warnings through the shared
-  // Melding overlay, never as inline scanner-status banners.
+  // ED2 shows genuine camera errors through the standard Melding overlay.
+  // No-result is not a failure: keep the scanner visible and decoding.
   useEffect(() => {
-    if ((cameraState.status !== 'error' && cameraState.status !== 'not_found') || !cameraState.message) return
+    if (cameraState.status !== 'error' || !cameraState.message) return
     showFeedback({
-      variant: cameraState.status === 'error' ? 'error' : 'warning',
+      variant: 'error',
       title: 'Melding',
       message: cameraState.message,
       testId: 'ed2-barcode-scanner-message',
