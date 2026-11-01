@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import Button from '../../ui/Button'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal'
 import useBarcodeScanner from '../../lib/useBarcodeScanner'
@@ -23,6 +23,18 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
       onScanned(code)
     },
   })
+
+  // ED2 presents scanner errors and no-read warnings through the shared
+  // Melding overlay, never as inline scanner-status banners.
+  useEffect(() => {
+    if ((cameraState.status !== 'error' && cameraState.status !== 'not_found') || !cameraState.message) return
+    showFeedback({
+      variant: cameraState.status === 'error' ? 'error' : 'warning',
+      title: 'Melding',
+      message: cameraState.message,
+      testId: 'ed2-barcode-scanner-message',
+    })
+  }, [cameraState.status, cameraState.message, showFeedback])
 
   function choosePhoto() {
     if (disabled) return
@@ -60,6 +72,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
         availableCameras={availableCameras} onSwitchCamera={switchCamera}
         onRetry={() => void startScanner()}
         onChoosePhoto={cameraState.status === 'error' ? choosePhoto : undefined}
+        hideInlineFeedback
         onClose={() => stopScanner()} />
     </>
   )

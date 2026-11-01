@@ -125,7 +125,11 @@ function startProcessedFrameDecoding({ video, onAttempt, onResult, onNonFatalErr
           if (text) {
             log?.('PROCESSED_FRAME_DECODE_RESULT_FOUND', { variant: candidate.name, text })
             stopped = true
-            emitResultOnce(result)
+            // Deliver the successful processed-frame read through the callback
+            // supplied by startBarcodeDecoding. emitResultOnce belongs to that
+            // outer scope; referencing it here used to throw ReferenceError
+            // and silently discard a valid EAN under the non-fatal catch.
+            onResult?.(result)
             return
           }
         } catch (error) {
@@ -148,7 +152,9 @@ function startProcessedFrameDecoding({ video, onAttempt, onResult, onNonFatalErr
     intervalMs: PROCESSED_FRAME_INTERVAL_MS,
     variants: ['center-wide-normal', 'center-wide-contrast', 'center-tight-normal', 'center-tight-contrast', 'full-frame-normal', 'full-frame-contrast'],
   })
-  run()
+  // Start on the next scheduled tick. A synchronous first decode could
+  // otherwise invoke the outer callback before processedFrameControls exists.
+  schedule()
 
   return {
     stop: () => {

@@ -11,6 +11,7 @@ export default function BarcodeScannerModal({
   onRetry,
   onChoosePhoto,
   onClose,
+  hideInlineFeedback = false,
 }) {
   if (!open) return null
 
@@ -36,14 +37,16 @@ export default function BarcodeScannerModal({
         </div>
         <div className="rz-barcode-scanner-preview">
           <video ref={videoRef} autoPlay muted playsInline />
-          <div className="rz-inline-feedback">
-            Camera: {cameraMeta?.label || cameraMeta?.deviceId || 'onbekend'} · Decodepogingen: {cameraMeta?.decodeAttempts || 0}
-          </div>
+          {!hideInlineFeedback ? (
+            <div className="rz-inline-feedback">
+              Camera: {cameraMeta?.label || cameraMeta?.deviceId || 'onbekend'} · Decodepogingen: {cameraMeta?.decodeAttempts || 0}
+            </div>
+          ) : null}
         </div>
         {cameraState?.status === 'error' && onChoosePhoto
           ? <p className="rz-modal-text">Geen werkende camera? Met Barcode uit foto kun je een bestaande foto kiezen waarop de barcode scherp zichtbaar is. De code wordt pas opgeslagen na jouw bevestiging.</p>
           : null}
-        {cameraState?.message ? (
+        {!hideInlineFeedback && cameraState?.message ? (
           <div className={cameraState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'} style={{ marginTop: 12 }}>
             {cameraState.message}
           </div>

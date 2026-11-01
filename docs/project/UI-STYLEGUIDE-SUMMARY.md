@@ -1543,3 +1543,17 @@ reserveoptie in het cameravenster beschikbaar wanneer de camera niet werkt.
 Er wordt niet ongemerkt een bestandsdialoog geopend. **Camera sluiten** sluit
 het venster expliciet. De scan en fotoherkenning wijzigen geen artikel of
 voorraad zonder de bestaande aparte bevestiging voor opslag.
+
+### Externe databases 2 — scannerbeeld en standaard Melding (1 november 2026)
+
+De ED2-camerascanner toont geen statusbanners of technische decodeertellers
+binnen het cameravenster. De scanpreview, camerabediening en korte vaste uitleg
+blijven zichtbaar. Camerafouten en waarschuwingen wanneer geen barcode werd
+gelezen verschijnen als de **centrale Melding-overlay**, met OK, zonder
+onderliggende statusregel in het scherm. Andere scanners houden hun bestaande
+statuspresentatie totdat die afzonderlijk functioneel is beoordeeld.
+
+De gedeelde cameradecoder levert een herkende barcode uit de bewerkte
+beeldframes aan de bestaande resultaatcallback door. De eerste decodeerbeurt
+start na initialisatie van de controles; barcodeherkenning zelf schrijft niets.
+Een regressie met een geldige EAN-13 controleert deze resultaatdoorvoer.
