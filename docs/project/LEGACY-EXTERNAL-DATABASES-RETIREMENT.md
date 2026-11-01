@@ -2,16 +2,13 @@
 
 **PO-opdracht:** verwijder de oude actie **Externe databases** uit alle actieve applicatiecode; **Externe databases 2** blijft de enige zichtbare productherkenningsfunctie. Geen overbouw van de oude generieke artikelkoppeling. Verwijder geen historische product-, bon-, voorraad- of huishoudgegevens.
 
-## Actuele GitHub-afhankelijkheden bij start
+## Actuele status en branchbasis — 1 november 2026
 
-| Ref | Status | Head |
-|---|---|---|
-| main | stabiele baseline, ongewijzigd | `d6bb7434077cabed8cccb94315574f7ea45224e2` |
-| PR #634 | Draft, barcodes en tabelterugkeer | `dbf3de51b7b83732e64f68f05e081eeedc469824` |
-| PR #635 | Draft, gebaseerd op #634, ED2 verwijderen/overlay/prestaties | `f0a7d793d4f1a9884c4240777bc6b2f0d8a25c81` |
-| deze sanering | gestapelde **Draft** op #635; geen merge / productieactie | branch `codex/retire-legacy-external-databases` |
-
-**Merge-/rebasevolgorde:** eerst #634 en vervolgens #635, elk uitsluitend met afzonderlijke PO-merge-GO. Daarna de saneringskandidaat op de nieuwe main controleren, versie synchroniseren, normale/preflightchecks en F7 exact-candidate uitvoeren; pas daarna Ready/merge na afzonderlijke GO. Tijdens de sanering geen afwijkende Docker-start, database-reset of datawijziging.
+- PR #634 en #635 zijn gemerged. De gecontroleerde `main`-basis bij synchronisatie is `88863344d5cbe9b0bd3797bba0f6e34f9d2aeb64` (versie 1.12.345).
+- PR #636 is een bestaande Draft-PR op `codex/retire-legacy-external-databases`. De oude gestapelde base is vervangen door actuele `main` met behoud van de saneringswijzigingen.
+- De verwijdering beperkt zich tot het oude scherm, de tegel, oude routewrappers, exclusieve tests en herstel van tests die verouderde contracten eisen. Alle gedeelde diensten, classificatie, ED2 en historische data blijven bestaan.
+- Een aanvullende scan heeft exclusieve verwijzingen gevonden in `homeNavigation.js`, dynamische navigatietests, routeautorisatietests en de recognitie-workflow. De navigatie en tests zijn aangepast; de backendherkenningsservicetest blijft bestaan, maar de frontendregressie richt zich voortaan op ED2.
+- Risiconiveau **L**. Na gerichte tests en verplichte normale/preflightchecks volgt F7 Full op de definitieve kandidaat. Ready en merge vereisen de bestaande kwaliteits- en PO-gates.
 
 ## Vooraf gecontroleerde actieve callers en eigenaarschap
 
@@ -58,3 +55,9 @@
 6. CI: gerichte checks eerst; finale versie-/preflight-/F7-governance volgens niveau **L**, exact definitieve SHA. PO-acceptatie voordat Ready/merge.
 
 **Voorbehoud:** dit document legt de geverifieerde component-/API-callers en de te controleren restcategorie vast. Zonder uitgevoerde repo-brede tests is de complete negatieve afhankelijkheidsclaim nog *niet* bewezen; bij een onverwachte actieve caller wordt een verwijdering gestopt, niet stilzwijgend geforceerd.
+
+## Beschermende vervolgregressie
+
+Het saneringscontract controleert de ontbrekende oude schermcomponenten en API-wrappers én de aanwezigheid van ED2. Het dynamische navigatiecontract controleert dat een historische voorkeursvolgorde het oude scherm niet terugbrengt. De herkenningsworkflow toetst de afwezigheid van de oude bevestigings-API, de aanwezigheid van ED2-routes en de nog gebruikte herkenningsservice.
+
+Overige `external_*`-services, datamigraties, historische bonnen en producten worden bewust niet verwijderd zonder bewezen exclusief legacy-gebruik.

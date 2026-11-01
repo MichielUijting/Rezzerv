@@ -12,7 +12,8 @@ const baseVisibility = {
 for (const actionOrder of [[], ['catalogus', 'externe-databases', 'voorraad'], ['externe-databases-2', 'catalogus', 'externe-databases']]) {
   const navigation = buildHomeNavigation({ visibility: { ...baseVisibility, canOpenExternalDatabases: true }, actionOrder })
   const tileKeys = navigation.primaryTiles.map((tile) => tile.key)
-  assert.equal(tileKeys[tileKeys.indexOf('externe-databases') + 1], 'externe-databases-2')
+  assert.ok(tileKeys.includes('externe-databases-2'))
+  assert.ok(!tileKeys.includes('externe-databases'))
 }
 {
   const navigation = buildHomeNavigation({ visibility: baseVisibility })
@@ -212,7 +213,8 @@ function assertNoLocationsHomeTile(navigation) {
   assert.deepEqual(keys(navigation.primaryTiles), ['winkelen', 'instellingen'])
   assert.ok(!keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(!keys(navigation.moreTiles).includes('admin'))
-  assert.ok(keys(navigation.moreTiles).includes('externe-databases'))
+  assert.ok(keys(navigation.moreTiles).includes('externe-databases-2'))
+  assert.ok(!keys(navigation.moreTiles).includes('externe-databases'))
   assert.ok(!keys(navigation.moreTiles).includes('superuser'))
   assertNoLocationsHomeTile(navigation)
 }

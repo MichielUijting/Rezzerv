@@ -216,7 +216,10 @@ assert.match(mobileRecentActionsSource, /aria-label=\{item\.label\}/)
 assert.match(mobileRecentActionsSource, /item\.showLabel \? <span>\{item\.label\}<\/span> : null/)
 assert.match(dataTableSource, /useMobileAppViewport/)
 assert.match(dataTableSource, /const effectivePagination = Boolean\(pagination \|\| isMobileViewport\)/)
-assert.match(dataTableSource, /<Pagination page=\{page\} pageCount=\{pageCount\}/)
+// Controlled pagination restores the saved page, clamped to the current row count.
+assert.match(dataTableSource, /const effectivePage = Math\.max\(1, Number\(activePage\) \|\| 1\)/)
+assert.match(dataTableSource, /<Pagination page=\{Math\.min\(effectivePage, pageCount\)\} pageCount=\{pageCount\} onPageChange=\{changePage\}/)
+assert.match(dataTableSource, /if \(pageReady && effectivePage > pageCount\) changePage\(pageCount\)/)
 assert.match(routerSource, /MobileAppChrome/)
 assert.doesNotMatch(themeCss, /body:has\(\[data-testid="mobile-inventory-page"\]\)/)
 assert.match(
