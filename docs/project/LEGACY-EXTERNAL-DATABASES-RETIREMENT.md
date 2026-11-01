@@ -80,3 +80,13 @@ en testdatareparatiebewijs blijft behouden. Er worden geen permissies,
 productielogica, database, migraties of data verwijderd. Door deze wijziging
 vervalt exact-kandidaat-F7-bewijs van een eerdere head-SHA; F7 moet opnieuw
 op de definitieve SHA worden bewezen na alle normale/preflightchecks.
+
+## F7 frontend-paginering: laatste legacycaller (1 november 2026)
+
+De volgende Ready/F7-controle bleek uitsluitend rood omdat
+`frontend/tests/app-wide-pagination.contract.mjs` nog de verwijderde
+`ReceiptItemsOverview.jsx` las. Het bestaande pagineringscontract is niet
+uitgeschakeld: het controleert nu expliciet dat ED2 de gedeelde `DataTable`
+met gecontroleerde paginastatus, paginawissel, zichtbare paginarijen en
+laadstatus gebruikt. F7 Full was uitsluitend rood door deze frontend-authority.
+Het vorige exact-candidate-bewijs mag na de commit niet worden hergebruikt.
