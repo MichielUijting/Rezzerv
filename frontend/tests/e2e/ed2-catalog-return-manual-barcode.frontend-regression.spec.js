@@ -66,7 +66,7 @@ test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN
   const table = page.getByTestId('external-databases-2-table')
   await expect(table).toContainText('Melk zonder code')
   await table.locator('tbody tr', { hasText: 'Melk zonder code' }).dblclick()
-  const scanActions = page.locator('.rz-external-databases-actions')
+  const scanActions = page.getByTestId('external-databases-2-off-panel').locator('.rz-external-databases-actions')
   await expect(scanActions.getByRole('button', { name: 'Zelf zoeken in OFF' })).toBeVisible()
   await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeVisible()
   await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeEnabled()
