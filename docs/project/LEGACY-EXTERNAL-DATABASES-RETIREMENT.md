@@ -67,3 +67,16 @@ Overige `external_*`-services, datamigraties, historische bonnen en producten wo
 - De zoekkandidaten-standaardtest verifieert alleen nog actieve Winkelen/Voorraad/GS1-bronnen; de oude `ReceiptItemsOverview.jsx`-asserties zijn vervallen zonder de vijf-kandidatenregel voor actieve dropdowns te versoepelen.
 - De releasepakketcontrole verifieert nu aantoonbaar de **afwezigheid** van drie verwijderde legacy-schermen én het **behoud** van Externe databases 2. De bestaande ZIP-integriteits- en databehoudschecks blijven verplicht.
 - De autorisatie-UI-test draait op `ubuntu-24.04`, omdat de vastgelegde Playwright-versie 1.58.2 geen Chromium-installatie voor de huidige `ubuntu-latest` (26.04) ondersteunt. De bestaande autorisatietest zelf is ongewijzigd.
+
+## Aanvullende Ready/F7-afhankelijkheden (1 november 2026)
+
+De eerste Ready/F7-run wees op vier rode authorities waarvan F7 Full een
+gevolgfout op de PostgreSQL-runtimecheck was. Oude componentpaden stonden
+nog in GPC- en brandingcontracten; die contracten toetsen nu de blijvende
+ED2-kandidaten-, officiële GS1- en presentatiefunctionaliteit. De PostgreSQL
+DML-only runtimezelftest leest nu de behouden ED2 `articles-overview` route
+in plaats van de terecht verwijderde `receipt-items` route; bronfilter-
+en testdatareparatiebewijs blijft behouden. Er worden geen permissies,
+productielogica, database, migraties of data verwijderd. Door deze wijziging
+vervalt exact-kandidaat-F7-bewijs van een eerdere head-SHA; F7 moet opnieuw
+op de definitieve SHA worden bewezen na alle normale/preflightchecks.

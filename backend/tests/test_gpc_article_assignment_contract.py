@@ -19,7 +19,7 @@ CSS = ROOT / "frontend/src/features/catalog/catalog.css"
 OFF_LINK_SERVICE = ROOT / "backend/app/services/off_product_link_service.py"
 GPC_REFERENCE_SERVICE = ROOT / "backend/app/services/gpc_reference_catalog_service.py"
 GPC_CANDIDATE_SERVICE = ROOT / "backend/app/services/gpc_candidate_service.py"
-EXTERNAL_DATABASES = ROOT / "frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
+ED2_GPC_PANEL = ROOT / "frontend/src/features/externalDatabases/Ed2GpcClassificationPanel.jsx"
 
 
 def test_catalog_router_contains_real_gpc_runtime_routes():
@@ -174,10 +174,10 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert ".rz-catalog-gpc-suggestion" in css
 
 
-def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_provenance():
+def test_ed2_gpc_classification_uses_official_catalog_and_provenance():
     backend = OFF_LINK_SERVICE.read_text(encoding="utf-8")
     reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
-    frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
+    frontend = ED2_GPC_PANEL.read_text(encoding="utf-8")
 
     assert "ensure_official_gpc_brick" in backend
     assert "FROM gpc_product_groups gpg" in reference
@@ -191,12 +191,15 @@ def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_proven
     assert "manual_gs1_gpc" in backend
     assert "external_gs1_gpc" in backend
 
+    # ED2 keeps the official Dutch brick search and explicit confirmation.
+    # Only the old v1 receipt component and its free-form provenance UI retired.
     assert "/api/catalog/gpc/bricks?query=" in frontend
-    assert "SearchCandidateList" in frontend
-    assert "Zoek op Brickcode of producttype" in frontend
-    assert "external-gpc-search-results" in frontend
-    assert "gpc_source: productTypeSelectionSource" in frontend
-    assert "Handmatig geselecteerd uit de officiële GS1 GPC-catalogus." in frontend
+    assert "DataTable" in frontend
+    assert "Zoeken op GS1-code of productnaam" in frontend
+    assert "ed2-gpc-candidates" in frontend
+    assert "brick_code: selectedBrick.brick_code" in frontend
+    assert "/api/external-databases/off/classify-pending" in frontend
+    assert "De classificatie geldt voor dit centrale Catalogusproduct" in frontend
 
 
 def test_unclassified_catalog_product_returns_ranked_top_five_candidates():

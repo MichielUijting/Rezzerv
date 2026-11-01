@@ -20,7 +20,7 @@ const manifest = JSON.parse(readFrontend('public/manifest.webmanifest'))
 const tableLoadingOverlay = readFrontend('src/ui/DelayedTableLoadingOverlay.jsx')
 const tableLoadingCss = readFrontend('src/ui/tableLoadingOverlay.css')
 const loadingMark = readFrontend('public/inhuis-loading-mark.svg')
-const externalReceiptOverview = readFrontend('src/features/externalDatabases/ReceiptItemsOverview.jsx')
+const externalDatabases2 = readFrontend('src/features/externalDatabases/ExternalDatabases2Page.jsx')
 const loginPage = readFrontend('src/features/auth/LoginPage.jsx')
 const loginCss = readFrontend('src/features/auth/loginPage.css')
 const superuserControl = readFrontend('src/features/superuser/SuperuserControlPage.jsx')
@@ -72,8 +72,10 @@ assert.match(tableLoadingOverlay, /rz-table-loading-message/)
 assert.match(tableLoadingOverlay, /data-testid="table-loading-overlay"/)
 assert.match(tableLoadingCss, /width:\s*min\(420px,\s*80vw\)/)
 assert.doesNotMatch(tableLoadingCss, /border-radius:\s*50%/)
-assert.match(externalReceiptOverview, /DelayedTableLoadingOverlay active=\{isItemsLoading \|\| isOffLoading \|\| isGpcSearching \|\| isClassifyingProductType\}/)
-assert.doesNotMatch(externalReceiptOverview, /showSearchComplete|rz-search-complete-letter|rz-search-progress-indicator/)
+// The old receipt overview was retired; preserve ED2's standard table and branding.
+assert.match(externalDatabases2, /AppShell title="Externe databases 2"/)
+assert.match(externalDatabases2, /dataTestId="external-databases-2-table"/)
+assert.doesNotMatch(externalDatabases2, /showSearchComplete|rz-search-complete-letter|rz-search-progress-indicator/)
 
 // User-visible branding guardrails. Technical REZZERV_* keys, events, storage keys,
 // provider/class names and test credentials may intentionally remain Rezzerv internally.
