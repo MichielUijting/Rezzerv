@@ -78,7 +78,7 @@ def run() -> int:
         "platform superuser inherits external database access": "isPlatformSuperuserFromContext(source)" in auth_text,
         "external databases tile uses frontteam authority": "canOpenExternalDatabases: isFrontteamMemberFromContext" in home_text,
         "frontteam route guard exists": "isFrontteamMemberFromContext" in frontteam_guard_text,
-        "external databases route uses frontteam guard": "<ProtectedFrontteam><ExternalDatabasesPage" in router_text,
+        "external databases 2 route uses frontteam guard": "<ProtectedFrontteam><ExternalDatabases2Page" in router_text,
         "generic permission guard exists": "canCurrentUserPerform" in permission_guard_text,
         "catalog overview is available to members": "path: '/catalogus', element: <Protected><CatalogResponsive" in router_text,
         "catalog detail is available to members": "path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2" in router_text,
@@ -102,7 +102,7 @@ def run() -> int:
     print("PASS header renders identity and active household from server session context")
     print("PASS household admin authority is derived from the active household role")
     print("PASS legacy Admin route is a platform-permission redirect without AdminGuard")
-    print("PASS external databases is available to frontteam and platform superuser")
+    print("PASS external databases 2 is protected by frontteam session authority")
     print("PASS catalog view and GPC mutation controls follow the PO matrix")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
     return 0
