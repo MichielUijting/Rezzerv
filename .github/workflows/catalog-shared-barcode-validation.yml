@@ -8,6 +8,11 @@ on:
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
       - 'backend/tests/test_catalog_shared_name_update.py'
+      - 'backend/app/services/external_ed2_delete_service.py'
+      - 'backend/app/services/external_unlinked_articles_service.py'
+      - 'backend/tests/test_external_ed2_delete_service.py'
+      - 'frontend/src/features/externalDatabases/ExternalDatabases2Page.jsx'
+      - 'frontend/tests/ed2-delete-catalog.contract.mjs'
       - 'frontend/src/features/catalog/CatalogBarcodeEntry.jsx'
       - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
       - 'frontend/src/features/catalog/CatalogNameEditor.jsx'
@@ -50,7 +55,9 @@ jobs:
           PYTHONPATH: backend
         run: |
           python -m py_compile backend/app/api/catalog_routes.py backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
+          python -m py_compile backend/app/services/external_ed2_delete_service.py backend/tests/test_external_ed2_delete_service.py
           python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
+          python -m pytest -q backend/tests/test_external_ed2_delete_service.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -61,4 +68,5 @@ jobs:
           node tests/catalog-clarity.contract.mjs
           node tests/catalog-product-image.contract.mjs
           node tests/inhuis-feedback-bar.contract.mjs
+          node tests/ed2-delete-catalog.contract.mjs
           npm run build

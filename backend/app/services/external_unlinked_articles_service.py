@@ -6,6 +6,8 @@ the legacy candidate listing (which can promote candidates during a read).
 from __future__ import annotations
 
 from contextlib import nullcontext
+import logging
+from time import perf_counter
 
 from sqlalchemy import inspect, text
 
@@ -60,6 +62,74 @@ def _manual_ed2_barcode_lookup(conn) -> dict[tuple[str, str, str], str]:
         if is_valid_gtin(code):
             codes[key] = code
     return codes
+
+
+def _removed_ed2_keys(conn) -> set[tuple[str, str, str]]:
+    """Hide confirmed removals from the platform overview, not from their receipts."""
+    if not inspect(conn).has_table("ed2_removed_articles"):
+        return set()
+    rows = conn.execute(text("""
+        SELECT retailer_code, receipt_text, external_article_code
+        FROM ed2_removed_articles
+    """)).mappings()
+    return {
+        (str(row["retailer_code"]), str(row["receipt_text"]),
+         str(row["external_article_code"]))
+        for row in rows
+    }
+
+
+def _central_link_keys(conn):
+    """One read-only lookup for candidate central identities.
+
+    Only skip per-row resolution when absence can be proven. Unknown schemas
+    use the authoritative existing per-row path without optimisation.
+    """
+    if not inspect(conn).has_table("external_article_product_links"):
+        return None
+    rows = conn.execute(text("""
+        SELECT retailer_code, receipt_text_normalized, external_article_code
+        FROM external_article_product_links
+        WHERE status IN ('confirmed', 'classification_pending')
+    """)).mappings()
+    codes, labels = set(), set()
+    for row in rows:
+        retailer = _overview_retailer_code(row["retailer_code"])
+        code = normalize_external_link_article_code(row["external_article_code"])
+        label = normalize_external_link_receipt_text(row["receipt_text_normalized"])
+        if code:
+            codes.add((retailer, code))
+        if label:
+            labels.add((retailer, label))
+    return codes, labels
+
+
+def _requires_central_resolution(source, keys) -> bool:
+    """Keep the authoritative resolver for any possible link or GTIN fallback."""
+    if keys is None:
+        return True
+    retailer = _overview_retailer_code(source.get("retailer_code"))
+    code = normalize_external_link_article_code(source.get("external_article_code"))
+    label = normalize_external_link_receipt_text(source.get("receipt_line_text"))
+    codes, labels = keys
+    if (retailer, code) in codes or (retailer, label) in labels:
+        return True
+    # Existing projection can discover a Catalogus product by a validated
+    # GTIN even without an explicit external link; never bypass that path.
+    possible_gtins = [source.get(field) for field in (
+        "gtin", "ean", "barcode", "primary_gtin", "linked_gtin",
+    )]
+    for candidate in source.get("candidates") or ():
+        if isinstance(candidate, dict):
+            possible_gtins.extend(candidate.get(field) for field in (
+                "gtin", "ean", "barcode", "code", "external_source_product_code",
+                "candidate_source_product_code", "source_product_code",
+            ))
+    return any(
+        is_valid_gtin("".join(character for character in str(value or "")
+                              if character.isdigit()))
+        for value in possible_gtins
+    )
 
 
 def _source_articles(conn):
@@ -154,8 +224,14 @@ def list_all_external_articles(*, conn=None) -> dict:
     items = []
     seen = set()
     counts = {"unlinked": 0, "classification_pending": 0, "linked": 0}
+    started = perf_counter()
+    skipped = 0
+    resolved = 0
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         manual_barcodes = _manual_ed2_barcode_lookup(conn)
+        central_keys = _central_link_keys(conn)
+        setup_done = perf_counter()
+        removed_keys = _removed_ed2_keys(conn)
         for source in _source_articles(conn):
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
@@ -165,9 +241,15 @@ def list_all_external_articles(*, conn=None) -> dict:
             # Presentatiegroepering; afzonderlijke boncodes kunnen verschillende
             # centrale koppelingen hebben en mogen niet worden samengevoegd.
             key = (retailer, receipt_text, article_number)
-            if key in seen:
+            if key in seen or key in removed_keys:
                 continue
-            projected = project_central_link_truth(conn, source)
+            needs_resolution = _requires_central_resolution(source, central_keys)
+            if needs_resolution:
+                resolved += 1
+                projected = project_central_link_truth(conn, source)
+            else:
+                skipped += 1
+                projected = {}
             if projected.get("central_link_active") is True:
                 status = "linked"
                 linked_gtin = str(projected.get("linked_gtin") or "")
@@ -179,7 +261,7 @@ def list_all_external_articles(*, conn=None) -> dict:
                     retailer_code=source.get("retailer_code"),
                     receipt_text=receipt_text,
                     external_article_code=article_number,
-                )
+                ) if needs_resolution else None
                 status = "classification_pending" if pending else "unlinked"
                 pending_gtin = str((pending or {}).get("primary_gtin") or "")
                 article_code = pending_gtin if is_valid_gtin(pending_gtin) else ""
@@ -192,6 +274,12 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "retailer_code": retailer,
                 "receipt_article_number": article_number,
                 "quantity_label": str(source.get("quantity_label") or ""),
+                # Only the server-resolved confirmed/staged/fallback identity is
+                # eligible for coordinated Catalogus soft-deletion.
+                "catalog_product_id": str(
+                    central_link.get("global_product_id")
+                    or projected.get("central_global_product_id") or ""
+                ),
                 "article_code": article_code,
                 # An explicit user-entered barcode is evidence, not a
                 # confirmed Catalogus product identity or a GS1 status.
@@ -214,4 +302,12 @@ def list_all_external_articles(*, conn=None) -> dict:
                     "external_databases_off_pending_gpc",
                 } and status != "unlinked" else "",
             })
+    elapsed_ms = (perf_counter() - started) * 1000
+    if elapsed_ms >= 250:
+        logging.getLogger("uvicorn.error").info(
+            "ed2_overview_timing total_ms=%.1f setup_ms=%.1f "
+            "total=%d resolved=%d skipped=%d",
+            elapsed_ms, (setup_done - started) * 1000,
+            len(items), resolved, skipped,
+        )
     return {"items": items, "total": len(items), "counts": counts}

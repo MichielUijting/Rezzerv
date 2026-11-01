@@ -654,3 +654,66 @@ test.describe('Externe databases bekende GTIN regressie', () => {
   }
 
 });
+
+
+test.describe('ED2 barcode identity mismatch uses central overlay', () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('incompatible OFF barcode shows Melding instead of a text row under the barcode field', async ({ page }) => {
+    const article = {
+      id: 'receipt-table-line:ah-toetenv-test',
+      receipt_line_text: 'AH TOETENV',
+      retailer_code: 'ah',
+      receipt_article_number: '48291',
+      article_code: '',
+      link_status: 'unlinked',
+    }
+    const barcode = '5099514002476'
+    const attempts = []
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      if (url.pathname === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', active_household_id: '0',
+        context_type: 'system', role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (url.pathname === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+      if (url.pathname === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (url.pathname === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (url.pathname === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      if (url.pathname === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+        items: [article], total: 1,
+        counts: { unlinked: 1, linked: 0, classification_pending: 0 },
+      } })
+      if (url.pathname === '/api/external-databases/products/search-preview') return route.fulfill({
+        json: { results: [], provider: 'none' },
+      })
+      if (url.pathname === '/api/catalog/ed2/manual-barcodes') {
+        attempts.push(request.postDataJSON())
+        return route.fulfill({ status: 409, json: {
+          detail: 'De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.',
+        } })
+      }
+      return route.fulfill({ json: {} })
+    })
+
+    await page.goto('/externe-databases-2')
+    await page.getByTestId('external-databases-2-table')
+      .locator('tbody tr', { hasText: 'AH TOETENV' }).dblclick()
+    await page.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
+    const input = page.getByTestId('ed2-manual-barcode-input')
+    await expect(input).toBeVisible()
+    await input.fill(barcode)
+    await page.getByTestId('ed2-manual-barcode-save').click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
+
+    const message = page.getByTestId('ed2-manual-barcode-error')
+    await expect(message).toBeVisible()
+    await expect(message).toContainText('De gegevens van deze barcode komen niet voldoende overeen')
+    await expect(message).toContainText('Er is niets opgeslagen')
+    await expect(page.getByTestId('ed2-manual-barcode-entry').locator('p[role="alert"]')).toHaveCount(0)
+    await expect(input).toHaveValue(barcode)
+    expect(attempts).toEqual([{ receipt_item_id: article.id, gtin: barcode }])
+  })
+})

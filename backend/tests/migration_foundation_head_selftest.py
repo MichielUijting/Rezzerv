@@ -32,6 +32,7 @@ QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
 INVENTORY_QUANTITY_CONTRACT_TABLES = ("inventory", "inventory_events")
 ARTICLE_SYNONYM_LINKS_TABLE = "article_synonym_links"
 ED2_MANUAL_BARCODES_TABLE = "ed2_manual_barcodes"
+ED2_REMOVED_ARTICLES_TABLE = "ed2_removed_articles"
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
@@ -50,6 +51,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "global_product_consumption_profiles",
     ARTICLE_SYNONYM_LINKS_TABLE,
     ED2_MANUAL_BARCODES_TABLE,
+    ED2_REMOVED_ARTICLES_TABLE,
     # Post-baseline classification tables are checked for schema authority below.
     "global_product_shopify_classifications",
     "global_product_shopify_history",
@@ -872,6 +874,38 @@ def _assert_ed2_manual_barcode_schema(connection) -> None:
     print("ED2_MANUAL_BARCODE_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_ed2_removed_articles_schema(connection) -> None:
+    """Removed ED2 display identities remain isolated from immutable receipts."""
+    inspector = inspect(connection)
+    table = ED2_REMOVED_ARTICLES_TABLE
+    if not inspector.has_table(table):
+        raise AssertionError("ED2 removed identity registry missing")
+    columns = {column["name"]: column for column in inspector.get_columns(table)}
+    expected = {"retailer_code", "receipt_text", "external_article_code", "removed_at"}
+    if set(columns) != expected or any(column["nullable"] for column in columns.values()):
+        raise AssertionError(f"ED2 removal registry column drift: {columns!r}")
+    if not isinstance(columns["receipt_text"]["type"], sa.Text):
+        raise AssertionError("ED2 removed receipt label must be TEXT")
+    if tuple(inspector.get_pk_constraint(table).get("constrained_columns") or ()) != (
+        "retailer_code", "receipt_text", "external_article_code"
+    ):
+        raise AssertionError("ED2 removal key drift")
+    if inspector.get_foreign_keys(table):
+        raise AssertionError("ED2 removal registry must not modify receipt/household relationships")
+    if connection.dialect.name == "postgresql":
+        guard = connection.execute(text("""
+            SELECT 1 FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = current_schema() AND c.relname = :table
+              AND t.tgname = 'inhuis_maintenance_write_gate'
+              AND NOT t.tgisinternal
+        """), {"table": table}).first()
+        if not guard:
+            raise AssertionError("ED2 removal registry lacks maintenance write guard")
+    print("ED2_REMOVED_ARTICLES_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -897,6 +931,7 @@ def main() -> None:
             _assert_consumption_profile_schema(connection)
             _assert_article_synonym_schema(connection)
             _assert_ed2_manual_barcode_schema(connection)
+            _assert_ed2_removed_articles_schema(connection)
             _assert_article_classification_schema(connection)
             _assert_maintenance_schema(connection)
     finally:

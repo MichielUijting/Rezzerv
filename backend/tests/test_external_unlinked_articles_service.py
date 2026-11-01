@@ -229,3 +229,74 @@ def test_manual_barcode_is_not_cross_linked_between_receipt_codes(monkeypatch):
     assert by_article['768682']['manual_barcode'] == code
     assert by_article['different-code']['manual_barcode'] == ''
     assert all(row['link_status'] == 'unlinked' for row in overview['items'])
+
+
+def test_unlinked_rows_with_no_possible_link_do_not_trigger_n_plus_one_queries(monkeypatch):
+    """Most imported receipt rows are unlinked; expensive projection is needless."""
+    article_sources(monkeypatch, [('Onbekend', 'winkelcode-42'), ('Melk', '123')])
+    monkeypatch.setattr(service, '_central_link_keys', lambda conn: (
+        {('lidl', '123')}, set(),
+    ))
+    resolved = []
+    def project(conn, source):
+        resolved.append(source['receipt_line_text'])
+        return {**source, 'central_link_active': True, 'linked_gtin': ''}
+    monkeypatch.setattr(service, 'project_central_link_truth', project)
+    pending = []
+    monkeypatch.setattr(service, 'get_pending_classification_external_article_link',
+                        lambda conn, **kw: pending.append(kw) or None)
+    result = service.list_all_external_articles()
+    assert result['total'] == 2
+    assert resolved == ['Melk']
+    assert len(pending) == 0
+    assert result['counts'] == {'unlinked': 1, 'classification_pending': 0, 'linked': 1}
+
+
+def test_read_optimisation_keeps_text_links_ah_aliases_and_gtin_fallbacks():
+    keys = ({('ah', '123')}, {('lidl', 'melk 1 l')})
+    assert service._requires_central_resolution({
+        'retailer_code': 'Albert Heijn', 'external_article_code': '123',
+        'receipt_line_text': 'Ander product',
+    }, keys)
+    assert service._requires_central_resolution({
+        'retailer_code': 'Lidl', 'external_article_code': '',
+        'receipt_line_text': 'Mélk  1 L',
+    }, keys)
+    assert service._requires_central_resolution({
+        'retailer_code': 'Jumbo', 'external_article_code': '765',
+        'receipt_line_text': 'GTIN zonder centrale koppeling',
+        'gtin': '8711138357776',
+    }, keys)
+    assert service._requires_central_resolution({
+        'retailer_code': 'Jumbo', 'external_article_code': '765',
+        'receipt_line_text': 'Kandidaat met GTIN',
+        'candidates': [{'barcode': '8711138357776'}],
+    }, keys)
+    assert not service._requires_central_resolution({
+        'retailer_code': 'Jumbo', 'external_article_code': '765',
+        'receipt_line_text': 'Geen match',
+    }, keys)
+    assert service._requires_central_resolution({'receipt_line_text': 'Legacy'}, None)
+
+
+def test_central_link_prefetch_reads_only_active_identifiers(monkeypatch):
+    seen = []
+    class Result:
+        def mappings(self):
+            return iter([
+                {'retailer_code': 'albert-heijn', 'external_article_code': ' 123 ',
+                 'receipt_text_normalized': 'Mélk  1 L'},
+                {'retailer_code': 'jumbo', 'external_article_code': '',
+                 'receipt_text_normalized': 'cacao'},
+            ])
+    class FakeConnection:
+        def execute(self, query):
+            seen.append(str(query))
+            return Result()
+    monkeypatch.setattr(service, 'inspect', lambda conn: type('Inspect', (), {
+        'has_table': lambda self, name: name == 'external_article_product_links',
+    })())
+    result = service._central_link_keys(FakeConnection())
+    assert result == ({('ah', '123')}, {('ah', 'melk 1 l'), ('jumbo', 'cacao')})
+    assert len(seen) == 1
+    assert "status IN ('confirmed', 'classification_pending')" in seen[0]

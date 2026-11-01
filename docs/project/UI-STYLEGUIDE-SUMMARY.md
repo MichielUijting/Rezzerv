@@ -1474,3 +1474,29 @@ waarde is gecombineerd, de backendidentiteit en GS1-status blijven strikt
 gescheiden. Bij een handmatige barcode maakt de cel via een standaard tooltip
 zichtbaar dat deze nog niet aan de Catalogus is gekoppeld. De extra kolom
 **Ingevoerde barcode** vervalt om horizontale schermruimte te besparen.
+
+
+### Bevestigingsknoppen: actienaam tijdens verwerking (31 oktober 2026)
+
+Een interactieve bevestigingsdialoog via de gedeelde component Melding
+(`AppFeedbackProvider`) behoudt bij het uitvoeren van de primaire actie
+de functionele knopnaam. De wachtstand voegt uitsluitend drie puntjes toe:
+**Verwijderen** wordt **Verwijderen...**, **Koppelen** wordt
+**Koppelen...** en **Opslaan** wordt **Opslaan...**. Een verwijderactie
+mag nooit stilzwijgend de knoptekst **Opslaan...** tonen. Tijdens de
+verwerking blijft de primaire knop niet nogmaals aanklikbaar. De
+bestaande fout-, succes-, waarschuwing- en bevestigingspresentatie
+blijft verder ongewijzigd.
+
+
+### Externe databases 2 — barcodecontrole via standaard Melding (31 oktober 2026)
+
+Wanneer **Barcode opslaan** bij een handmatig ingevoerde barcode faalt
+(bijvoorbeeld doordat OFF een andere, niet-compatibele productidentiteit
+oplevert), toont het scherm de fout uitsluitend als passieve foutoverlay
+via de centrale `AppFeedbackProvider/useAppFeedback`, met een begrijpelijke
+tekst en zonder een blijvende foutalinea onder het invoerveld. De ingevoerde
+barcode blijft staan zodat de gebruiker deze kan controleren of wijzigen.
+Een afwijzing maakt geen Cataloguskoppeling of voorraadmutatie en mag niet
+als succesvolle opslag worden gepresenteerd. De bestaande expliciete
+bevestigingsdialoog voor de schrijfhandeling blijft afzonderlijk bestaan.

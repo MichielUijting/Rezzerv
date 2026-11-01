@@ -503,7 +503,7 @@ function AppFeedbackDialog({
                 lineHeight: 1.3,
               }}
             >
-              {isActionPending ? 'Opslaan...' : primaryActionLabel}
+              {isActionPending ? `${primaryActionLabel}...` : primaryActionLabel}
             </Button>
           </div>
         ) : canDismissWithOk && !mobileTransient ? (

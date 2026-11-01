@@ -63,6 +63,8 @@ from app.services.external_unlinked_articles_service import (
     list_all_external_articles,
 )
 from app.services.external_off_bulk_unlink_service import unlink_selected_off_article_links
+from app.services.external_ed2_delete_service import remove_selected_ed2_articles
+from app.api.catalog_routes import _require_catalog_delete_superuser
 from app.services.external_off_gpc_assignment_service import classify_pending_off_article
 
 router = APIRouter()
@@ -399,6 +401,16 @@ def external_databases_unlink_selected_off_products(payload: dict[str, Any] = Bo
     """Explicit OFF-only unlink; existing platform link permission is enforced by middleware."""
     try:
         return unlink_selected_off_article_links(payload.get('selections'))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post('/api/external-databases/articles/delete-selected')
+def external_databases_delete_selected_articles(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Superuser-only atomic ED2 removal and guarded Catalogus soft deletion."""
+    _require_catalog_delete_superuser()
+    try:
+        return remove_selected_ed2_articles(payload.get('selections'))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

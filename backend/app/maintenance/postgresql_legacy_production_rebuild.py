@@ -25,7 +25,7 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 105  # 104 canonical tables + user-confirmed ED2 barcode evidence.
+EXPECTED_APPLICATION_TABLES = 106  # 104 canonical + ED2 barcode evidence + ED2 removals.
 REQUIRED_CLASSIFICATION_TABLES = frozenset({
     "global_product_shopify_classifications",
     "global_product_shopify_history",

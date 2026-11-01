@@ -1,20 +1,20 @@
 import { useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** Manual ED2 barcode evidence is NOT a confirmed Catalogus / stock link. */
 export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
+  const { showFeedback } = useAppFeedback()
   const [barcode, setBarcode] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
   const validLength = /^(?:[0-9]{8}|[0-9]{12,14})$/.test(barcode.trim())
   const canSave = !item.link_status || item.link_status === 'unlinked'
 
   async function save() {
     if (!validLength || !canSave || saving) return
     setConfirm(false)
-    setError('')
     setSaving(true)
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 30000)
@@ -44,7 +44,14 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
         const message = err.name === 'AbortError'
           ? 'Opslaan is niet bevestigd. Controleer eerst de artikellijst voordat u opnieuw probeert.'
           : (err.message || 'Barcode opslaan is niet gelukt.')
-        setError(message)
+        showFeedback({
+          variant: 'error',
+          title: 'Barcode niet opgeslagen',
+          message: message.includes('OFF-productgegevens passen niet veilig')
+            ? 'De gegevens van deze barcode komen niet voldoende overeen met het bonartikel. Controleer het product en de barcode. Er is niets opgeslagen.'
+            : message,
+          testId: 'ed2-manual-barcode-error',
+        })
       }
     } finally {
       window.clearTimeout(timeout)
@@ -61,7 +68,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
         <label className="rz-input-field">
           <span className="rz-label">Barcode (EAN/GTIN)</span>
           <input className="rz-input" inputMode="numeric" autoComplete="off" value={barcode}
-            onChange={(event) => { setBarcode(event.target.value); setError('') }}
+            onChange={(event) => setBarcode(event.target.value)}
             maxLength={14} aria-label="Barcode handmatig invoeren"
             data-testid="ed2-manual-barcode-input" />
         </label>
@@ -70,7 +77,6 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
           {saving ? 'Opslaan...' : 'Barcode opslaan'}
         </Button>
       </div>
-      {error ? <p role="alert">{error}</p> : null}
       {confirm ? <div className="rz-modal-backdrop">
         <div className="rz-modal-card" role="alertdialog" aria-modal="true"
           aria-labelledby="ed2-manual-barcode-confirm">

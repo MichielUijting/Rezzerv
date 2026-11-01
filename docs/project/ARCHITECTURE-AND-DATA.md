@@ -82,6 +82,16 @@ De statusuitbreiding is een PostgreSQL-applicatiemigratie. De historische
 SQLite-bronbaseline is onveranderlijk; de wachtstatus wordt daarin niet
 geschreven en de handmatige OFF-route stopt daar veilig.
 
+De ED2-verwijderactie is een afzonderlijke transactie, uitsluitend voor de
+platform-Superuser. Zij legt de exacte getoonde bonartikelidentiteit vast in
+`ed2_removed_articles` en zet alleen een uitsluitend aan de selectie
+gekoppeld `global_products.status` op `deleted` (soft-delete). De
+historische brontabellen, huishoudartikelen, voorraad en productidentiteiten
+worden niet gemuteerd. De backend herleidt de identiteit opnieuw en weigert
+gedeelde Catalogusproducten of synoniemen; een gedeeltelijke verwijdering
+is niet toegestaan. De nieuwe PostgreSQL-tabel gebruikt de
+onderhouds-write-barrier. De hoofdactie **Ontkoppelen** blijft onafhankelijk.
+
 De expliciete ED2-bulkactie voor **ontkoppeling van OFF** wijzigt alleen
 gecontroleerde `external_article_product_links` met OFF-herkomst: van
 `confirmed` of `classification_pending` naar `inactive`. De actie legt de
