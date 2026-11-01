@@ -1500,3 +1500,20 @@ barcode blijft staan zodat de gebruiker deze kan controleren of wijzigen.
 Een afwijzing maakt geen Cataloguskoppeling of voorraadmutatie en mag niet
 als succesvolle opslag worden gepresenteerd. De bestaande expliciete
 bevestigingsdialoog voor de schrijfhandeling blijft afzonderlijk bestaan.
+
+### Externe databases 2 — Barcode scannen bij OFF-kandidaten (1 november 2026)
+
+Naast **Zelf zoeken in OFF** staat bij het geselecteerde bonartikel de secundaire
+knop **Barcode scannen** (desktop en mobiel). Deze hergebruikt de bestaande
+camera-/EAN-decoder van Incidentele aankoop en Catalogus, inclusief
+**Camera wisselen** en de fallback **Barcode uit foto** als de camera niet
+werkt. Een scan vult uitsluitend het bestaande handmatige barcodeveld in en
+opent de bestaande expliciete bevestiging met bonartikel en barcode.
+
+Na bevestiging doet alleen de server de exacte OFF-zoekactie, identiteitscontrole
+en eventuele gecontroleerde Catalogusverrijking, inclusief beschikbare
+afbeelding. Zonder OFF-resultaat of bij een tijdelijke storing wordt alleen
+barcodebewijs voor het bonartikel opgeslagen, niet een verzonnen Catalogus-,
+GS1- of voorraadkoppeling. Bij een ongeldige of conflicterende barcode volgt
+de centrale Melding. De scan zelf wijzigt geen records; voor reeds gekoppelde
+bonartikelen is de scanactie niet beschikbaar.

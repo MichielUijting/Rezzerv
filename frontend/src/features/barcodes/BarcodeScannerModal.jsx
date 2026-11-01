@@ -8,6 +8,7 @@ export default function BarcodeScannerModal({
   cameraMeta,
   availableCameras = [],
   onSwitchCamera,
+  onChoosePhoto,
   onClose,
 }) {
   if (!open) return null
@@ -26,6 +27,7 @@ export default function BarcodeScannerModal({
         <p className="rz-modal-text">Richt de barcode horizontaal en scherp in beeld. De gevonden code wordt alleen gecontroleerd en veroorzaakt geen voorraadmutatie.</p>
         <div className="rz-modal-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onSwitchCamera} disabled={availableCameras.length < 2}>Camera wisselen</Button>
+          {onChoosePhoto ? <Button type="button" variant="secondary" onClick={onChoosePhoto}>Barcode uit foto</Button> : null}
           <Button type="button" variant="secondary" onClick={onClose}>Camera sluiten</Button>
         </div>
         <div className="rz-barcode-scanner-preview">
