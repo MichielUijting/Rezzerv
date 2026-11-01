@@ -278,7 +278,11 @@ jobs:
           test -f "$package_root/backend/app/runtime_preflight.py"
           test -f "$package_root/backend/tests/test_receipt_financial_components_regression.py"
           test -f "$package_root/backend/tests/test_receipt_scanner_line_count_equivalence.py"
-          test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
+          test ! -e "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
+          test ! -e "$package_root/frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
+          test ! -e "$package_root/frontend/src/features/externalDatabases/ExternalDatabasesPage.jsx"
+          test -f "$package_root/frontend/src/features/externalDatabases/ExternalDatabases2Page.jsx"
+          test -f "$package_root/frontend/src/features/externalDatabases/OffCandidatePanel.jsx"
           test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
           test ! -e "$package_root/frontend/VERSION.txt"
 
@@ -287,6 +291,13 @@ jobs:
           archive = sys.argv[1]
           with zipfile.ZipFile(archive) as zf:
               names = zf.namelist()
+          removed_legacy_ui = (
+              'frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx',
+              'frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx',
+              'frontend/src/features/externalDatabases/ExternalDatabasesPage.jsx',
+          )
+          assert not [name for name in names if any(name.endswith('/' + retired) for retired in removed_legacy_ui)]
+          assert any(name.endswith('/frontend/src/features/externalDatabases/ExternalDatabases2Page.jsx') for name in names)
           db_files = [
               name for name in names
               if name.lower().endswith(('.db', '.sqlite', '.sqlite3'))

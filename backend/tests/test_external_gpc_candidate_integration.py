@@ -4,7 +4,8 @@ ROOT = Path(__file__).resolve().parents[2]
 LOCAL_SERVICE = ROOT / "backend/app/services/gpc_local_catalog_service.py"
 REFERENCE_SERVICE = ROOT / "backend/app/services/gpc_reference_catalog_service.py"
 ROUTES = ROOT / "backend/app/api/product_inventory_group_routes.py"
-FRONTEND = ROOT / "frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
+ED2_CANDIDATES = ROOT / "frontend/src/features/externalDatabases/OffCandidatePanel.jsx"
+ED2_GPC = ROOT / "frontend/src/features/externalDatabases/Ed2GpcClassificationPanel.jsx"
 
 
 def test_external_classifier_exposes_top_five_candidate_contract():
@@ -27,14 +28,17 @@ def test_external_classifier_exposes_top_five_candidate_contract():
     assert "category_tags=payload.get('category_tags')" in routes
 
 
-def test_external_ui_contract_requires_automatic_candidates_before_manual_search():
-    frontend = FRONTEND.read_text(encoding="utf-8")
-    assert "gpcSuggestedBricks" in frontend
-    assert "external-auto-gpc-candidates" in frontend
-    assert "Waarschijnlijke GS1 GPC Bricks" in frontend
-    assert "selectSuggestedGpcBrick" in frontend
-    assert "search_text:" in frontend
-    assert "product_intent: productIntent" in frontend
-    assert "category_tags: categoryTags" in frontend
-    assert "...categoryTags" in frontend
-    assert "raw.variant" in frontend
+def test_ed2_candidate_preview_and_official_gpc_proposals_remain_available():
+    candidates = ED2_CANDIDATES.read_text(encoding="utf-8")
+    gpc = ED2_GPC.read_text(encoding="utf-8")
+    # No v1-only automatic GPC controls, but ED2 must still offer automatic
+    # OFF candidates, manual OFF search and official Dutch GS1 suggestions.
+    assert "/api/external-databases/products/search-preview" in candidates
+    assert "mode: 'automatic'" in candidates
+    assert "Zelf zoeken in OFF" in candidates
+    assert "/gpc-brick" in gpc
+    assert "Waarschijnlijke GS1-classificaties" in gpc
+    assert "candidates.slice(0, 5)" in gpc
+    assert "ed2-gpc-candidates" in gpc
+    assert "/api/catalog/gpc/bricks?query=" in gpc
+    assert "/api/external-databases/off/classify-pending" in gpc

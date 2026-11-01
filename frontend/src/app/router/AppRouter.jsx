@@ -39,7 +39,6 @@ import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
 import AlmostOutResponsive from '../../features/almostOut/AlmostOutResponsive.jsx'
-import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import ArticleSynonymsPage from '../../features/articleSynonyms/ArticleSynonymsPage.jsx'
 import SynonymAnalysisPage from '../../features/articleSynonyms/SynonymAnalysisPage.jsx'
 import ExternalDatabases2Page from '../../features/externalDatabases/ExternalDatabases2Page.jsx'
@@ -196,7 +195,6 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
-  { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
   { path: '/artikelsynoniemen', element: <ProtectedFrontteam><ArticleSynonymsPage /></ProtectedFrontteam> },
   { path: '/catalogus/synoniemenanalyse', element: <ProtectedFrontteam><SynonymAnalysisPage /></ProtectedFrontteam> },
   { path: '/externe-databases-2', element: <ProtectedFrontteam><ExternalDatabases2Page /></ProtectedFrontteam> },

@@ -35,20 +35,20 @@ def build_connection():
 @pytest.mark.parametrize(
     ("method", "path", "permission"),
     [
-        ("GET", "/api/external-databases/summary", "platform.external_products.view"),
+        ("GET", "/api/external-databases/articles-overview", "platform.external_products.view"),
         ("GET", "/api/external-databases/unlinked-articles", "platform.external_products.view"),
         ("GET", "/api/external-databases/articles-overview", "platform.external_products.view"),
         ("GET", "/api/external-databases/candidates", "platform.external_products.view"),
-        ("POST", "/api/external-databases/retailers/lidl/match-preview", "platform.external_products.search"),
+        ("POST", "/api/external-databases/products/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/retailers/lidl/diagnose-real-candidates", "platform.external_products.search"),
         ("POST", "/api/external-databases/off/search-preview", "platform.external_products.search"),
         ("POST", "/api/external-databases/coverage/receipt-items", "platform.external_products.search"),
         ("POST", "/api/external-products/off/search", "platform.external_products.search"),
         ("POST", "/api/external-databases/products/search-preview", "platform.external_products.search"),
-        ("POST", "/api/external-databases/retailers/lidl/save-candidates", "platform.external_products.link_existing"),
-        ("POST", "/api/external-databases/candidates/confirm-external", "platform.external_products.link_existing"),
+        ("POST", "/api/external-databases/off/link-selected", "platform.external_products.link_existing"),
+        ("POST", "/api/external-databases/off/classify-pending", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/catalog/promote-candidate", "platform.external_products.link_existing"),
-        ("POST", "/api/external-databases/catalog/unlink", "platform.external_products.link_existing"),
+        ("POST", "/api/external-databases/off/unlink-selected", "platform.external_products.link_existing"),
         ("POST", "/api/external-databases/off/unlink-selected", "platform.external_products.link_existing"),
     ],
 )
@@ -59,17 +59,17 @@ def test_external_database_route_permission_mapping(method, path, permission):
 def test_unrelated_and_cors_preflight_requests_are_not_claimed_by_policy():
     assert required_external_database_permission("GET", "/api/session") is None
     assert required_external_database_permission("POST", "/api/receipts") is None
-    assert required_external_database_permission("OPTIONS", "/api/external-databases/summary") is None
+    assert required_external_database_permission("OPTIONS", "/api/external-databases/articles-overview") is None
     assert required_external_database_permission("OPTIONS", "/api/external-databases/off/save-candidates") is None
 
 
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("GET", "/api/external-databases/summary"),
+        ("GET", "/api/external-databases/articles-overview"),
         ("GET", "/api/external-databases/unlinked-articles"),
-        ("POST", "/api/external-databases/retailers/lidl/match-preview"),
-        ("POST", "/api/external-databases/retailers/lidl/save-candidates"),
+        ("POST", "/api/external-databases/products/search-preview"),
+        ("POST", "/api/external-databases/off/link-selected"),
     ],
 )
 def test_frontteam_platform_role_can_use_all_intended_external_database_capabilities(method, path):
@@ -88,7 +88,7 @@ def test_frontteam_platform_role_can_use_all_intended_external_database_capabili
 
 
 @pytest.mark.parametrize("user_id", ["regular-admin", "platform-admin"])
-@pytest.mark.parametrize("path", ["/api/external-databases/summary", "/api/external-databases/unlinked-articles"])
+@pytest.mark.parametrize("path", ["/api/external-databases/articles-overview", "/api/external-databases/unlinked-articles"])
 def test_roles_without_v2_external_product_permission_are_denied(user_id, path):
     engine, conn = build_connection()
     try:
@@ -110,9 +110,9 @@ def test_superuser_v2_can_use_functional_external_product_capabilities():
     engine, conn = build_connection()
     try:
         for method, path in (
-            ("GET", "/api/external-databases/summary"),
-            ("POST", "/api/external-databases/retailers/lidl/match-preview"),
-            ("POST", "/api/external-databases/catalog/unlink"),
+            ("GET", "/api/external-databases/articles-overview"),
+            ("POST", "/api/external-databases/products/search-preview"),
+            ("POST", "/api/external-databases/off/unlink-selected"),
         ):
             assert authorize_external_database_request(
                 conn,
@@ -129,9 +129,9 @@ def test_ip_owner_has_no_external_database_authority():
     engine, conn = build_connection()
     try:
         for method, path in (
-            ("GET", "/api/external-databases/summary"),
-            ("POST", "/api/external-databases/retailers/lidl/match-preview"),
-            ("POST", "/api/external-databases/catalog/unlink"),
+            ("GET", "/api/external-databases/articles-overview"),
+            ("POST", "/api/external-databases/products/search-preview"),
+            ("POST", "/api/external-databases/off/unlink-selected"),
         ):
             with pytest.raises(HTTPException) as exc:
                 authorize_external_database_request(
@@ -158,7 +158,7 @@ def test_frontteam_permission_revocation_fails_closed_immediately():
                 conn,
                 user_id="frontteam",
                 method="GET",
-                path="/api/external-databases/summary",
+                path="/api/external-databases/articles-overview",
             )
         assert exc.value.status_code == 403
     finally:

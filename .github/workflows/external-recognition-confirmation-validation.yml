@@ -10,9 +10,9 @@ on:
       - 'backend/app/services/external_database_matchflow_evidence.py'
       - 'backend/app/api/system_routes.py'
       - 'backend/tests/test_external_recognition_confirmation.py'
-      - 'frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx'
-      - 'frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx'
-      - 'frontend/tests/e2e/external-recognition-confirmation.frontend-regression.spec.js'
+      - 'frontend/src/features/externalDatabases/ExternalDatabases2Page.jsx'
+      - 'frontend/tests/e2e/external-databases-known-gtin.frontend-regression.spec.js'
+      - 'backend/tests/test_legacy_external_databases_retirement.py'
       - 'frontend/tests/e2e/auth.setup.js'
       - 'frontend/tests/e2e/helpers/**'
       - 'frontend/playwright.config.js'
@@ -95,10 +95,10 @@ jobs:
             -e PYTHONPATH=/app \
             backend python /app/tests/test_external_recognition_confirmation.py
 
-      - name: Validate confirmation API registration
+      - name: Validate retired legacy API and preserved ED2 registration
         shell: bash
         run: |
-          curl --fail --silent http://localhost:8011/openapi.json | python -c "import json,sys; data=json.load(sys.stdin); path='/api/external-databases/candidates/confirm-external'; assert path in data.get('paths', {}), f'{path} ontbreekt'; print('EXTERNAL_RECOGNITION_CONFIRMATION_ROUTE_GREEN')"
+          curl --fail --silent http://localhost:8011/openapi.json | python -c "import json,sys; p=json.load(sys.stdin).get('paths', {}); retired=['/api/external-databases/candidates/confirm-external','/api/external-databases/summary','/api/external-databases/receipt-items']; preserved=['/api/external-databases/articles-overview','/api/external-databases/off/link-selected']; assert all(x not in p for x in retired), 'Oude routes zijn nog actief'; assert all(x in p for x in preserved), 'ED2-route ontbreekt'; print('ED2_PRESERVED_LEGACY_API_RETIRED_GREEN')"
 
       - name: Provision temporary system superuser
         shell: bash
@@ -145,7 +145,7 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "npm ci && ./node_modules/.bin/playwright test tests/e2e/external-recognition-confirmation.frontend-regression.spec.js"
+            bash -lc "npm ci && ./node_modules/.bin/playwright test tests/e2e/external-databases-known-gtin.frontend-regression.spec.js"
 
       - name: Upload Playwright report
         if: always()

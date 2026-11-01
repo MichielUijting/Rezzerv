@@ -172,9 +172,16 @@ for (const [screen, source] of [['desktop', almostOutPage], ['mobiel', mobileAlm
   assert.match(source, /handleBulkAction\('shopping'\)/, screen)
   assert.match(source, /handleBulkAction\('restore'\)/, screen)
 }
-const externalReceiptItems = readFileSync(new URL('../src/features/externalDatabases/ReceiptItemsOverview.jsx', import.meta.url), 'utf8')
-assert.match(externalReceiptItems, /<Pagination page=\{currentPage\}/)
-assert.doesNotMatch(externalReceiptItems, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
+// Legacy Externe databases was removed; pagination remains mandatory in ED2
+// via the shared DataTable and explicit controlled page state.
+const ed2Overview = readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
+assert.match(ed2Overview, /<DataTable/)
+assert.match(ed2Overview, /dataTestId="external-databases-2-table"/)
+assert.match(ed2Overview, /pageState=\{tablePage\}/)
+assert.match(ed2Overview, /onPageChange=\{setTablePage\}/)
+assert.match(ed2Overview, /onPageRowsChange=\{onPageRowsChange\}/)
+assert.match(ed2Overview, /pageReady=\{!loading\}/)
+assert.doesNotMatch(ed2Overview, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
 const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
 assert.match(inventoryPage, /const inventoryPromise = fetchInventoryRows\(\)/)
 assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)

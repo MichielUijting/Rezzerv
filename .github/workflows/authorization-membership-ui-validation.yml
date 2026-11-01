@@ -21,7 +21,9 @@ on:
 
 jobs:
   authorization-membership-ui:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 Chromium dependencies are supported on Ubuntu 24.04,
+    # not on the current ubuntu-latest/26.04 runner image.
+    runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
       COMPOSE_PROFILES: postgresql

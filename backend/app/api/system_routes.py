@@ -24,11 +24,6 @@ from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_candidate_diagnostics import diagnose_real_candidate_coverage
-from app.services.external_recognition_confirmation import confirm_external_recognition
-from app.services.external_database_matchers import (
-    get_external_database_summary,
-    list_external_database_retailers,
-)
 from app.services.external_database_matchflow_evidence import (
     ensure_external_receipt_item_candidates,
     match_retailer_receipt_line,
@@ -36,9 +31,7 @@ from app.services.external_database_matchflow_evidence import (
 )
 from app.services.external_product_candidate_store import (
     build_candidate_context_key,
-    list_external_receipt_items,
     list_saved_external_product_candidates,
-    unlink_external_catalog_links,
     promote_external_product_candidate,
 )
 from app.services.external_product_catalog_store import (
@@ -54,7 +47,6 @@ from app.services.external_relation_batch_store import (
 )
 from app.services.open_food_facts_candidate_store import save_open_food_facts_preview_candidates
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
-from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
 from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
 from app.services.external_article_search_service import search_article_candidates
@@ -239,58 +231,11 @@ def api_version():
     }
 
 
-@router.post('/api/external-databases/gtin/lookup')
-def external_databases_exact_gtin_lookup(payload: dict[str, Any] = Body(default_factory=dict)):
-    """Read-only exact-GTIN lookup across the shared public product sources."""
-    gtin = str(payload.get('gtin') or payload.get('barcode') or '').strip()
-    result = lookup_exact_gtin_sources(gtin)
-    result['creates_global_product'] = False
-    result['creates_household_article'] = False
-    result['creates_inventory_event'] = False
-    return result
-
-
 @router.post('/api/external-databases/catalog/promote-candidate')
 def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
     return promote_external_product_candidate(
         candidate_id=str(payload.get('candidate_id') or ''),
         force_overwrite=bool(payload.get('force_overwrite', False)),
-    )
-
-
-@router.post('/api/external-databases/candidates/confirm-external')
-def external_databases_confirm_external_recognition(payload: dict[str, Any] = Body(default_factory=dict)):
-    """Bevestig alleen de externe herkenning van een bonartikel.
-
-    Dit is nadrukkelijk geen Cataloguskoppeling: de route maakt geen global_product,
-    product_identity, Mijn artikel of voorraadmutatie aan.
-    """
-    return confirm_external_recognition(
-        candidate_id=str(payload.get('candidate_id') or ''),
-        force_overwrite=bool(payload.get('force_overwrite', False)),
-    )
-
-
-@router.get('/api/external-databases/summary')
-def external_databases_summary():
-    return get_external_database_summary()
-
-
-@router.get('/api/external-databases/retailers')
-def external_databases_retailers():
-    return {'retailers': list_external_database_retailers()}
-
-
-@router.post('/api/external-databases/retailers/{retailer_code}/match-preview')
-def external_databases_match_preview(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
-    receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
-    include_below_threshold = bool(payload.get('include_below_threshold', True))
-    if not receipt_line_text:
-        raise HTTPException(status_code=400, detail='Bonregel is verplicht voor matchpreview')
-    return match_retailer_receipt_line(
-        retailer_code=retailer_code,
-        receipt_line_text=receipt_line_text,
-        include_below_threshold=include_below_threshold,
     )
 
 
@@ -304,20 +249,6 @@ def external_databases_diagnose_real_candidates(retailer_code: str, payload: dic
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
         include_below_threshold=include_below_threshold,
-    )
-
-
-@router.post('/api/external-databases/retailers/{retailer_code}/save-candidates')
-def external_databases_save_candidates(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
-    receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
-    if not receipt_line_text:
-        raise HTTPException(status_code=400, detail='Bonregel is verplicht om kandidaten op te slaan')
-    return save_matchpreview_candidates(
-        retailer_code=retailer_code,
-        receipt_line_text=receipt_line_text,
-        receipt_line_id=str(payload.get('receipt_line_id') or '').strip() or None,
-        purchase_import_line_id=str(payload.get('purchase_import_line_id') or '').strip() or None,
-        include_below_threshold=bool(payload.get('include_below_threshold', False)),
     )
 
 
@@ -377,13 +308,6 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
     if not bool(result.get('ok', True)):
         raise HTTPException(status_code=400, detail=result.get('error') or 'OFF kandidaten konden niet worden opgeslagen')
     return result
-
-
-@router.get('/api/external-databases/receipt-items')
-def external_databases_receipt_items(limit: int = Query(default=200)):
-    payload = list_external_receipt_items(limit=limit)
-    payload = _without_taxonomy_seed_candidates(payload)
-    return _without_spaarzegels_receipt_items(payload)
 
 
 @router.get('/api/external-databases/unlinked-articles')
@@ -477,14 +401,6 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
         threshold=threshold,
-    )
-
-
-@router.post('/api/external-databases/catalog/unlink')
-def external_databases_unlink_catalog(payload: dict[str, Any] = Body(default_factory=dict)):
-    return unlink_external_catalog_links(
-        context_keys=list(payload.get('context_keys') or []),
-        candidate_ids=list(payload.get('candidate_ids') or []),
     )
 
 

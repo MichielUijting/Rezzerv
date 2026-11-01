@@ -79,20 +79,26 @@ def _exercise_external_index_read_path() -> None:
     print("POSTGRESQL_EXTERNAL_INDEX_REQUEST_READ_GREEN")
 
 
-def _exercise_receipt_items_http_path() -> None:
+def _exercise_ed2_articles_overview_http_path() -> None:
     app = FastAPI()
     app.include_router(system_router)
     client = TestClient(app)
-    response = client.get("/api/external-databases/receipt-items?limit=500")
+    # Legacy /receipt-items is deliberately retired. Exercise the retained ED2
+    # read path against the DML-only PostgreSQL runtime role instead.
+    response = client.get("/api/external-databases/articles-overview")
     if response.status_code != 200:
         raise AssertionError(
-            "External receipt-items PostgreSQL request failed: "
+            "ED2 articles-overview PostgreSQL request failed: "
             f"status={response.status_code} body={response.text}"
         )
     payload = response.json()
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
-        raise AssertionError(f"External receipt-items response shape is invalid: {payload!r}")
-    print("POSTGRESQL_EXTERNAL_RECEIPT_ITEMS_REQUEST_GREEN")
+        raise AssertionError(f"ED2 articles-overview response shape is invalid: {payload!r}")
+    if not isinstance(payload.get("counts"), dict) or not {
+        "unlinked", "classification_pending", "linked"
+    }.issubset(payload["counts"]):
+        raise AssertionError(f"ED2 classification counters missing: {payload!r}")
+    print("POSTGRESQL_ED2_ARTICLES_OVERVIEW_REQUEST_GREEN")
     _exercise_weight_detail_repair_and_source_filter()
 
 
@@ -348,7 +354,7 @@ def main() -> None:
     _assert_runtime_has_no_schema_create()
     _validate_alembic_owned_schema()
     _exercise_external_index_read_path()
-    _exercise_receipt_items_http_path()
+    _exercise_ed2_articles_overview_http_path()
     try:
         _exercise_candidate_and_recognition_paths()
         _exercise_relation_batch_path()
