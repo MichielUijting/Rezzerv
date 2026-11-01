@@ -42,10 +42,8 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
 
   function openScanner() {
     if (disabled) return
-    if (!navigator.mediaDevices?.getUserMedia) {
-      choosePhoto()
-      return
-    }
+    // Keep one predictable action: let the shared scanner explain a camera
+    // failure inside its dialog rather than unexpectedly opening a file picker.
     void startScanner()
   }
 
@@ -53,17 +51,16 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
     <>
       <Button type="button" variant="secondary" disabled={disabled} onClick={openScanner}
         data-testid="ed2-barcode-scan">Barcode scannen</Button>
-      {cameraState.status === 'error' ? (
-        <Button type="button" variant="secondary" disabled={disabled} onClick={choosePhoto}
-          data-testid="ed2-barcode-photo-fallback">Barcode uit foto</Button>
-      ) : null}
       <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
         aria-label="Foto van barcode kiezen" data-testid="ed2-barcode-photo-input"
         style={{ display: 'none' }} onChange={handlePhotoChange} />
-      <BarcodeScannerModal open={isOpen} title="Barcode scannen voor bonartikel"
+      <BarcodeScannerModal open={isOpen || cameraState.status === 'error'}
+        title="Barcode scannen voor bonartikel"
         videoRef={videoRef} cameraState={cameraState} cameraMeta={cameraMeta}
         availableCameras={availableCameras} onSwitchCamera={switchCamera}
-        onChoosePhoto={choosePhoto} onClose={() => stopScanner()} />
+        onRetry={() => void startScanner()}
+        onChoosePhoto={cameraState.status === 'error' ? choosePhoto : undefined}
+        onClose={() => stopScanner()} />
     </>
   )
 }

@@ -45,6 +45,55 @@ function bootstrap(route, rows, manualRows, onSave) {
   return route.fulfill({ json: {} })
 }
 
+test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als reserveoptie', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:camera-error', receipt_line_text: 'Scharrelei M/L',
+    retailer_code: 'jumbo', receipt_article_number: '777',
+    article_code: '', link_status: 'unlinked',
+  }
+  let saveRequests = 0
+  await page.addInitScript(() => {
+    let attempts = 0
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () => {
+          attempts += 1
+          return Promise.reject(new DOMException('Could not start video source', 'NotReadableError'))
+        },
+        enumerateDevices: () => Promise.resolve([]),
+      },
+    })
+    window.__ed2GetUserMediaAttempts = () => attempts
+  })
+  await page.route('**/api/**', (route) => bootstrap(route, [item], [], (request) => {
+    saveRequests += 1
+    return request.fulfill({ json: {} })
+  }))
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'Scharrelei M/L' }).dblclick()
+  const panel = page.getByTestId('external-databases-2-off-panel')
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  await panel.getByTestId('ed2-barcode-scan').click()
+  const scanner = page.getByTestId('barcode-scanner-backdrop')
+  await expect(scanner).toBeVisible()
+  await expect(scanner).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await expect(scanner.getByRole('button', { name: 'Camera opnieuw proberen' })).toBeVisible()
+  await expect(scanner.getByRole('button', { name: 'Barcode uit foto' })).toBeVisible()
+  await expect(scanner).toContainText('bestaande foto')
+  // The dialog must not disappear after the asynchronous camera error.
+  await expect.poll(() => page.evaluate(() => window.__ed2GetUserMediaAttempts())).toBeGreaterThan(1)
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera opnieuw proberen' }).click()
+  await expect(scanner).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera sluiten' }).click()
+  await expect(scanner).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  expect(saveRequests).toBe(0)
+})
+
 test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN gepresenteerd', async ({ page }) => {
   const item = {
     id: 'receipt-table-line:manual-code-test', receipt_line_text: 'Melk zonder code',

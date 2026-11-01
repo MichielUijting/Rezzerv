@@ -1517,3 +1517,14 @@ barcodebewijs voor het bonartikel opgeslagen, niet een verzonnen Catalogus-,
 GS1- of voorraadkoppeling. Bij een ongeldige of conflicterende barcode volgt
 de centrale Melding. De scan zelf wijzigt geen records; voor reeds gekoppelde
 bonartikelen is de scanactie niet beschikbaar.
+
+### Externe databases 2 — camerafout en foto-alternatief (1 november 2026)
+
+Bij **Barcode scannen** blijft het cameravenster bij een fout zichtbaar, met
+de werkelijke, begrijpelijke foutmelding en de actie **Camera opnieuw proberen**.
+De losse knop **Barcode uit foto** onder de hoofdbediening verdwijnt: deze
+herkenning van een bestaande barcodefoto blijft uitsluitend als toegelichte
+reserveoptie in het cameravenster beschikbaar wanneer de camera niet werkt.
+Er wordt niet ongemerkt een bestandsdialoog geopend. **Camera sluiten** sluit
+het venster expliciet. De scan en fotoherkenning wijzigen geen artikel of
+voorraad zonder de bestaande aparte bevestiging voor opslag.
