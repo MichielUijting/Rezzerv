@@ -109,7 +109,9 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       await video.play()
       logEvent('VIDEO_PLAY_SUCCESS', { paused: video.paused })
 
-      timeoutRef.current = window.setTimeout(async () => {
+      // A live camera should not be obscured by a no-result warning in ED2.
+      // timeoutMs=0 opts out; the default 7s behavior remains for other callers.
+      if (timeoutMs > 0) timeoutRef.current = window.setTimeout(async () => {
         logEvent('SCAN_TIMEOUT_REACHED', { timeoutMs })
         const cameras = devices.length ? devices : await listBarcodeVideoDevices().catch(() => [])
         const currentDeviceId = activeDeviceId || preferredDeviceId || ''

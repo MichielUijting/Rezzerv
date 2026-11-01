@@ -45,6 +45,61 @@ function bootstrap(route, rows, manualRows, onSave) {
   return route.fulfill({ json: {} })
 }
 
+test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als reserveoptie', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:camera-error', receipt_line_text: 'Scharrelei M/L',
+    retailer_code: 'jumbo', receipt_article_number: '777',
+    article_code: '', link_status: 'unlinked',
+  }
+  let saveRequests = 0
+  await page.addInitScript(() => {
+    let attempts = 0
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () => {
+          attempts += 1
+          return Promise.reject(new DOMException('Could not start video source', 'NotReadableError'))
+        },
+        enumerateDevices: () => Promise.resolve([]),
+      },
+    })
+    window.__ed2GetUserMediaAttempts = () => attempts
+  })
+  await page.route('**/api/**', (route) => bootstrap(route, [item], [], (request) => {
+    saveRequests += 1
+    return request.fulfill({ json: {} })
+  }))
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'Scharrelei M/L' }).dblclick()
+  const panel = page.getByTestId('external-databases-2-off-panel')
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  await panel.getByTestId('ed2-barcode-scan').click()
+  const scanner = page.getByTestId('barcode-scanner-backdrop')
+  await expect(scanner).toBeVisible()
+  const cameraWarning = page.getByTestId('ed2-barcode-scanner-message-overlay')
+  await expect(cameraWarning).toBeVisible()
+  await expect(page.getByTestId('ed2-barcode-scanner-message')).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await cameraWarning.getByRole('button', { name: 'OK' }).click()
+  await expect(scanner.locator('.rz-inline-feedback')).toHaveCount(0)
+  await expect(scanner.getByRole('button', { name: 'Camera opnieuw proberen' })).toBeVisible()
+  await expect(scanner.getByRole('button', { name: 'Barcode uit foto' })).toBeVisible()
+  await expect(scanner).toContainText('bestaande foto')
+  // The dialog must not disappear after the asynchronous camera error.
+  await expect.poll(() => page.evaluate(() => window.__ed2GetUserMediaAttempts())).toBeGreaterThan(1)
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera opnieuw proberen' }).click()
+  await expect(page.getByTestId('ed2-barcode-scanner-message-overlay')).toBeVisible()
+  await expect(page.getByTestId('ed2-barcode-scanner-message')).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await page.getByTestId('ed2-barcode-scanner-message-overlay').getByRole('button', { name: 'OK' }).click()
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera sluiten' }).click()
+  await expect(scanner).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  expect(saveRequests).toBe(0)
+})
+
 test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN gepresenteerd', async ({ page }) => {
   const item = {
     id: 'receipt-table-line:manual-code-test', receipt_line_text: 'Melk zonder code',
@@ -66,6 +121,10 @@ test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN
   const table = page.getByTestId('external-databases-2-table')
   await expect(table).toContainText('Melk zonder code')
   await table.locator('tbody tr', { hasText: 'Melk zonder code' }).dblclick()
+  const scanActions = page.getByTestId('external-databases-2-off-panel').locator('.rz-external-databases-actions')
+  await expect(scanActions.getByRole('button', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+  await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeVisible()
+  await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeEnabled()
   await page.getByTestId('ed2-manual-barcode-input').fill('8718452504435')
   await page.getByTestId('ed2-manual-barcode-save').click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()

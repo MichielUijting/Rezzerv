@@ -1515,3 +1515,46 @@ Catalogus blijven bestaande componenten en patronen gebruiken. Herkennings-,
 barcode- en productgegevens blijven behouden; uitsluitend de exclusieve oude
 interface en oude API-wrappers verdwijnen. Het actuele frontteam- en
 platformrechtencontract van ED2 blijft gelden.
+
+### Externe databases 2 — Barcode scannen bij OFF-kandidaten (1 november 2026)
+
+Naast **Zelf zoeken in OFF** staat bij het geselecteerde bonartikel de secundaire
+knop **Barcode scannen** (desktop en mobiel). Deze hergebruikt de bestaande
+camera-/EAN-decoder van Incidentele aankoop en Catalogus, inclusief
+**Camera wisselen** en de fallback **Barcode uit foto** als de camera niet
+werkt. Een scan vult uitsluitend het bestaande handmatige barcodeveld in en
+opent de bestaande expliciete bevestiging met bonartikel en barcode.
+
+Na bevestiging doet alleen de server de exacte OFF-zoekactie, identiteitscontrole
+en eventuele gecontroleerde Catalogusverrijking, inclusief beschikbare
+afbeelding. Zonder OFF-resultaat of bij een tijdelijke storing wordt alleen
+barcodebewijs voor het bonartikel opgeslagen, niet een verzonnen Catalogus-,
+GS1- of voorraadkoppeling. Bij een ongeldige of conflicterende barcode volgt
+de centrale Melding. De scan zelf wijzigt geen records; voor reeds gekoppelde
+bonartikelen is de scanactie niet beschikbaar.
+
+### Externe databases 2 — camerafout en foto-alternatief (1 november 2026)
+
+Bij **Barcode scannen** blijft het cameravenster bij een fout zichtbaar, met
+de werkelijke, begrijpelijke foutmelding en de actie **Camera opnieuw proberen**.
+De losse knop **Barcode uit foto** onder de hoofdbediening verdwijnt: deze
+herkenning van een bestaande barcodefoto blijft uitsluitend als toegelichte
+reserveoptie in het cameravenster beschikbaar wanneer de camera niet werkt.
+Er wordt niet ongemerkt een bestandsdialoog geopend. **Camera sluiten** sluit
+het venster expliciet. De scan en fotoherkenning wijzigen geen artikel of
+voorraad zonder de bestaande aparte bevestiging voor opslag.
+
+### Externe databases 2 — scannerbeeld en standaard Melding (1 november 2026)
+
+De ED2-camerascanner toont geen statusbanners of technische decodeertellers
+binnen het cameravenster. De scanpreview, camerabediening en korte vaste uitleg
+blijven zichtbaar. Camerafouten en waarschuwingen wanneer geen barcode werd
+gelezen verschijnen als de **centrale Melding-overlay**, met OK, zonder
+onderliggende statusregel in het scherm. Andere scanners houden hun bestaande
+statuspresentatie totdat die afzonderlijk functioneel is beoordeeld.
+
+De gedeelde cameradecoder levert een herkende barcode uit de bewerkte
+beeldframes aan de bestaande resultaatcallback door. De eerste decodeerbeurt
+start na initialisatie van de controles; barcodeherkenning zelf schrijft niets.
+Een regressie met een geldige EAN-13 controleert deze resultaatdoorvoer.
+\n### Externe databases 2 — camerabarcode via juiste grijswaarden (2 november 2026)\n\nDe gedeelde ZXing-frameverwerking gebruikte onterecht de ruwe RGBA-bytes\n(4 bytes per pixel) als zwartwitbeeld (1 byte per pixel). Daardoor werden\nrijen en scanlijnen verkeerd gelezen en kon een zichtbare EAN-13 onherkend\nblijven. De invoer wordt nu expliciet omgezet naar een compact grijswaardenbeeld\nmet correcte transparantiewaarden. Een uitvoerbare contracttest toetst\nde pixelwaarden, beelddimensies en daadwerkelijke resultaatcallback.\n\nIn Externe databases 2 is een nog niet herkende barcode tijdens een actieve\ncamerasessie geen foutmelding: de cameravoorvertoning blijft ononderbroken\nscannen totdat de gebruiker sluit of een barcode wordt gelezen. Daardoor\nblokkeert geen automatische waarschuwing na zeven seconden de scanpreview.\nEchte camerafouten blijven via de standaard Melding-overlay zichtbaar.\nVoor andere schermen blijft de bestaande zeven-secondenregeling ongewijzigd.\n
