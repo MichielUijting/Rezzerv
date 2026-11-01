@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import CatalogProductImage from './CatalogProductImage'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
@@ -21,14 +21,23 @@ function kindLabel(value) {
 
 export default function MobileCatalogPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const restored = location.state?.mobileCatalogTableState
   const authContext = readStoredAuthContext()
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
-  const [query, setQuery] = useState('')
-  const [kind, setKind] = useState('')
-  const [sort, setSort] = useState('name-asc')
-  const [page, setPage] = useState(1)
+  const [query, setQuery] = useState(() => restored?.query || '')
+  const [kind, setKind] = useState(() => restored?.kind || '')
+  const [sort, setSort] = useState(() => restored?.sort || 'name-asc')
+  const [page, setPage] = useState(() => Math.max(1, Number(restored?.page) || 1))
+  const returnState = { query, kind, sort, page }
+
+  useEffect(() => {
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true, state: { ...location.state, mobileCatalogTableState: returnState },
+    })
+  }, [query, kind, sort, page])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -72,8 +81,8 @@ export default function MobileCatalogPage() {
   const hasFilters = Boolean(query || kind)
 
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
+    if (!isLoading && page > pageCount) setPage(pageCount)
+  }, [page, pageCount, isLoading])
 
   const kindOptions = useMemo(() => [
     { value: '', label: 'Alle soorten' },
@@ -145,7 +154,7 @@ export default function MobileCatalogPage() {
                 key={item.id}
                 type="button"
                 className="rz-mobile-catalog-row"
-                onClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)}
+                onClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`, { state: { mobileCatalogTableState: returnState } })}
                 data-testid={`mobile-catalog-open-${item.id}`}
               >
                 <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />

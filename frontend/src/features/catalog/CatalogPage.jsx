@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -52,6 +52,8 @@ function csvValue(value) {
 
 export default function CatalogPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const restored = location.state?.catalogTableState
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
@@ -60,19 +62,29 @@ export default function CatalogPage() {
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(() => ({
     name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
     gpcBrickCode: '', gpcBrickName: '', gpcClass: '', gpcFamily: '',
     householdArticleCount: '', linkedStoreCount: '', articleClassification: '',
-  })
-  const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
-  const [page, setPage] = useState(1)
+    ...(restored?.filters || {}),
+  }))
+  const [sort, setSort] = useState(() => restored?.sort || { key: 'name', direction: 'asc' })
+  const [page, setPage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const hasRequestedCatalogRef = useRef(false)
+  const returnState = { filters, sort, page }
+
+  useEffect(() => {
+    // Keep the current history entry, so browser Back and the detail Back button
+    // both restore the exact table view without cross-account session storage.
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true, state: { ...location.state, catalogTableState: returnState },
+    })
+  }, [filters, sort, page])
 
   useEffect(() => {
     let cancelled = false
@@ -144,8 +156,8 @@ export default function CatalogPage() {
   const fillerRowCount = Math.max(0, PAGE_SIZE - occupiedBodyRows)
 
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
+    if (!isLoading && page > pageCount) setPage(pageCount)
+  }, [page, pageCount, isLoading])
 
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
@@ -351,7 +363,7 @@ export default function CatalogPage() {
                 </thead>
                 <tbody aria-busy={isLoading} style={{ pointerEvents: isLoading ? 'none' : undefined }}>
                   {items.length ? items.map((item) => (
-                    <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
+                    <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`, { state: { catalogTableState: returnState } })} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>
                         <div className="rz-catalog-name-with-image">

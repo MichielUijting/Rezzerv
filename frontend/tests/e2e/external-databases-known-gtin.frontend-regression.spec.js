@@ -9,7 +9,7 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
-  test('tellers en kolom Art.code filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
+  test('tellers en kolom Art./Barcode filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
     const rows = [
       { id: 'receipt-table-line:ed2-empty', receipt_line_text: 'Melk zonder code', retailer_code: 'jumbo',
         receipt_article_number: '123', article_code: '', link_status: 'unlinked' },
@@ -59,7 +59,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
-    await page.getByRole('textbox', { name: 'Filter op Art.code' }).fill('8720326035617')
+    await page.getByRole('textbox', { name: 'Filter op Art./Barcode' }).fill('8720326035617')
     await expect(table).toContainText('Melk met code')
     await expect(table).not.toContainText('Melk zonder code')
     await page.getByRole('button', { name: 'Wis filters' }).click()
@@ -76,7 +76,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(selectedReceiptName).toHaveCSS('font-weight', '700')
     const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
     const searchButton = page.getByRole('button', { name: 'Zoeken', exact: true })
-    await expect(page.getByRole('textbox')).toHaveCount(1)
+    await expect(page.getByRole('textbox')).toHaveCount(2)
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 })
       // A responsive viewport switch may briefly unmount the current layout.
@@ -264,7 +264,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       }
       await open(0)
       const panel = page.getByTestId('external-databases-2-off-panel')
-      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      await expect(panel.getByRole('heading', { level: 3, name: /Productkandidaten voor/ })).toContainText('Melk — Lidl')
       const candidates = panel.getByTestId('external-databases-2-off-candidates')
       await expect(candidates.locator('tbody tr').first()).toContainText('Voorkeur uit automatische zoekvarianten')
       await expect(candidates.locator('tbody tr').first()).toContainText('95%')
@@ -304,7 +304,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       } else {
         await expect(page.getByTestId('app-header')).toContainText('Zelf zoeken in OFF')
       }
-      await expect(page.getByRole('textbox')).toHaveCount(1)
+      await expect(page.getByRole('textbox')).toHaveCount(2)
       const freeSearch = page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' })
       await freeSearch.fill('halfvolle melk bio')
       await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
@@ -339,7 +339,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       // it must not look successful or leave the user stuck in OFF search.
       linkResultMode = 'fail'
       await open(0)
-      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      await expect(panel.getByRole('heading', { level: 3, name: /Productkandidaten voor/ })).toContainText('Melk — Lidl')
       await panel.getByRole('button', { name: 'Zelf zoeken in OFF' }).click()
       await expect(page).toHaveURL(/\/externe-databases-2\/off-zoeken\//)
       await page.getByRole('textbox', { name: 'Omschrijving of barcode in OFF' }).fill('halfvolle melk bio')
@@ -350,10 +350,10 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(page).toHaveURL(/\/externe-databases-2$/)
       await expect(page.getByTestId('external-off-link-outcome')).toContainText('Koppeling niet bevestigd: Officiële GS1-classificatie ontbreekt.')
       await expect(page.getByTestId('external-off-link-outcome')).toHaveAttribute('role', 'alert')
-      await expect(panel.getByRole('heading')).toContainText('Melk — Lidl')
+      await expect(panel.getByRole('heading', { level: 3, name: /Productkandidaten voor/ })).toContainText('Melk — Lidl')
       expect(links).toHaveLength(2)
       await open(1)
-      await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
+      await expect(panel.getByRole('heading', { level: 3, name: /Productkandidaten voor/ })).toContainText('Appels — Lidl')
       await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       await expect(panel).not.toContainText('Tweede suggestie')
       await expect(panel).not.toContainText('Lidl-product gevonden, maar geen barcode vermeld.')
@@ -372,7 +372,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(panel).toContainText('Geen passende productkandidaten gevonden.')
       releaseSlow()
       await expect.poll(() => slowCompleted).toBe(true)
-      await expect(panel.getByRole('heading')).toContainText('Appels — Lidl')
+      await expect(panel.getByRole('heading', { level: 3, name: /Productkandidaten voor/ })).toContainText('Appels — Lidl')
       await expect(panel).not.toContainText('Verouderde respons')
       expect(unexpectedWrites).toEqual([])
     })

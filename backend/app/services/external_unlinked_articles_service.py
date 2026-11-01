@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.external_article_ui_projection import project_central_link_truth
 from app.services.external_article_product_link_service import (
     normalize_external_link_retailer_code,
+    normalize_external_link_receipt_text,
+    normalize_external_link_article_code,
     get_pending_classification_external_article_link,
 )
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
@@ -24,6 +26,40 @@ from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 def _overview_retailer_code(value):
     code = normalize_external_link_retailer_code(value)
     return 'ah' if code in {'ah', 'albert-heijn', 'albert-heijn-digitaal'} else code
+
+
+def _ed2_manual_barcode_identity(retailer_code, receipt_text, article_code):
+    """Use precisely the server's store/receipt/code identity for lookup.
+
+    The ED2 presentation may call Albert Heijn 'ah', whereas a confirmed
+    manual barcode is stored using the canonical source's original chain name.
+    Do not rely on a browser-generated key or a receipt name alone.
+    """
+    return (
+        _overview_retailer_code(retailer_code),
+        normalize_external_link_receipt_text(receipt_text),
+        normalize_external_link_article_code(article_code),
+    )
+
+
+def _manual_ed2_barcode_lookup(conn) -> dict[tuple[str, str, str], str]:
+    # Old databases without the new migration still support the overview.
+    if not inspect(conn).has_table("ed2_manual_barcodes"):
+        return {}
+    rows = conn.execute(text("""
+        SELECT retailer_code, receipt_text_normalized, external_article_code, gtin
+        FROM ed2_manual_barcodes
+    """)).mappings()
+    codes = {}
+    for row in rows:
+        key = _ed2_manual_barcode_identity(
+            row["retailer_code"], row["receipt_text_normalized"],
+            row["external_article_code"],
+        )
+        code = str(row["gtin"] or "")
+        if is_valid_gtin(code):
+            codes[key] = code
+    return codes
 
 
 def _source_articles(conn):
@@ -119,6 +155,7 @@ def list_all_external_articles(*, conn=None) -> dict:
     seen = set()
     counts = {"unlinked": 0, "classification_pending": 0, "linked": 0}
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
+        manual_barcodes = _manual_ed2_barcode_lookup(conn)
         for source in _source_articles(conn):
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
@@ -156,6 +193,13 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "receipt_article_number": article_number,
                 "quantity_label": str(source.get("quantity_label") or ""),
                 "article_code": article_code,
+                # An explicit user-entered barcode is evidence, not a
+                # confirmed Catalogus product identity or a GS1 status.
+                "manual_barcode": manual_barcodes.get(
+                    _ed2_manual_barcode_identity(
+                        source.get("retailer_code"), receipt_text, article_number,
+                    ), ""
+                ) if status == "unlinked" else "",
                 "link_status": status,
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")

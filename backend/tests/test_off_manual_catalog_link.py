@@ -341,6 +341,142 @@ def test_saved_catalog_link_must_match_target_product_before_claiming_success():
             })
 
 
+
+def _sql_row(row):
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = row
+    return result
+
+
+def test_receipt_confirmation_uses_same_empty_chain_fallback_as_ed2_overview():
+    """A blank store_chain must not hide the real Jumbo store_name at OK."""
+    from app.services import external_article_confirmation_service as writer
+
+    conn = MagicMock()
+    conn.execute.return_value = _sql_row({
+        "retailer_code": "Jumbo",
+        "receipt_text": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+    })
+    with patch.object(writer, "_candidate_identity", return_value=None):
+        resolved = writer.resolve_external_article_identity(
+            conn, "receipt-table-line:line-pindakaas"
+        )
+    sql = str(conn.execute.call_args.args[0])
+    assert "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')" in sql
+    assert resolved == {
+        "retailer_code": "Jumbo",
+        "receipt_text": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+    }
+
+
+def test_purchase_import_confirmation_falls_back_to_receipt_store_name():
+    from app.services import external_article_confirmation_service as writer
+
+    conn = MagicMock()
+    conn.execute.side_effect = [
+        _sql_row({
+            "receipt_text": "Pindakaas",
+            "external_article_code": "JUMBO-SEED-3",
+            "source_reference": "receipt:receipt-jumbo",
+        }),
+        _sql_row({"retailer_code": "Jumbo"}),
+    ]
+    with patch.object(writer, "_candidate_identity", return_value=None):
+        resolved = writer.resolve_external_article_identity(
+            conn, "purchase-import-line:line-pindakaas"
+        )
+    assert "COALESCE(NULLIF(store_chain, ''), store_name, '')" in str(
+        conn.execute.call_args_list[1].args[0]
+    )
+    assert resolved["retailer_code"] == "Jumbo"
+    assert resolved["receipt_text"] == "Pindakaas"
+
+
+def test_confirmation_rejects_missing_retailer_even_with_receipt_text():
+    from app.services import external_article_confirmation_service as writer
+
+    conn = MagicMock()
+    conn.execute.return_value = _sql_row({
+        "retailer_code": "",
+        "receipt_text": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+    })
+    with patch.object(writer, "_candidate_identity", return_value=None):
+        with pytest.raises(ValueError, match="Winkelketen voor algemene koppeling ontbreekt"):
+            writer.resolve_external_article_identity(
+                conn, "receipt-table-line:line-pindakaas"
+            )
+
+
+@pytest.mark.parametrize("payload", [
+    '{"store_name":"Jumbo"}',
+    '{"batch_metadata":{"store_name":"Jumbo"}}',
+    '{"retailer_code":"Jumbo"}',
+])
+def test_jumbo_seed_pindakaas_confirmation_uses_batch_store_without_receipt_reference(payload):
+    """The row visible as Jumbo JUMBO-SEED-3 must also confirm as Jumbo."""
+    from app.services import external_article_confirmation_service as writer
+    from app.services import off_search_service as off
+    from app.services import external_product_candidate_store as catalog
+
+    purchase_row = {
+        "receipt_text": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+        "source_reference": "",
+        "batch_raw_payload": payload,
+    }
+    conn = MagicMock()
+    conn.execute.return_value = _sql_row(purchase_row)
+    with patch.object(writer, "_candidate_identity", return_value=None):
+        identity = writer.resolve_external_article_identity(
+            conn, "purchase-import-line:line-jumbo-seed-3"
+        )
+
+    assert "pib.raw_payload AS batch_raw_payload" in str(conn.execute.call_args.args[0])
+    assert identity == {
+        "retailer_code": "Jumbo",
+        "receipt_text": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+    }
+    source = {
+        "purchase_import_line_id": "line-jumbo-seed-3",
+        "article_name_raw": "Pindakaas",
+        "external_article_code": "JUMBO-SEED-3",
+        "batch_raw_payload": payload,
+    }
+    assert catalog._m2c2h5_purchase_import_placeholder(source)["retailer_code"] == "Jumbo"
+    off_row = dict(
+        source_id="line-jumbo-seed-3", receipt_line_text="Pindakaas",
+        external_article_code="JUMBO-SEED-3", batch_raw_payload=payload,
+    )
+    off_db = MagicMock()
+    off_db.execute.return_value = _sql_row(off_row)
+    with patch.object(off, "_table_exists", return_value=True):
+        resolved = off._resolve_purchase_import_line(off_db, "line-jumbo-seed-3")
+    assert resolved["retailer_code"] == identity["retailer_code"]
+
+
+def test_purchase_import_confirmation_rejects_missing_or_malformed_store_metadata():
+    """Never infer Jumbo from JUMBO-SEED-3, candidate brand or browser fields."""
+    from app.services import external_article_confirmation_service as writer
+
+    for payload in ("{}", "{invalid", '{"brand_raw":"Jumbo"}'):
+        conn = MagicMock()
+        conn.execute.return_value = _sql_row({
+            "receipt_text": "Pindakaas",
+            "external_article_code": "JUMBO-SEED-3",
+            "source_reference": "",
+            "batch_raw_payload": payload,
+        })
+        with patch.object(writer, "_candidate_identity", return_value=None):
+            with pytest.raises(ValueError, match="Winkelketen voor algemene koppeling ontbreekt"):
+                writer.resolve_external_article_identity(
+                    conn, "purchase-import-line:line-jumbo-seed-3"
+                )
+
+
 def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
     # Same stable store-chain and receipt-label identity must be used by
     # overview, confirmation writer and OFF lookup. Corrected labels win;
@@ -360,3 +496,42 @@ def test_unlinked_overview_uses_the_same_stable_retailer_and_receipt_identity():
         assert normalized_expected in re.sub(r"\s+", "", route_code)
     assert "store_chain" in writer_code
     assert "store_chain" in overview_code
+
+
+
+@pytest.mark.parametrize("retailer", ["Albert Heijn", "albert-heijn", "ah"])
+@pytest.mark.parametrize("brand", ["AlbertHeijn", "Albert Heijn", "AH"])
+def test_ah_cervelaat_off_brand_alias_safe_for_exact_link(retailer, brand):
+    from app.services.external_product_identity_policy import (
+        external_product_identity_compatibility, assert_external_product_identity_compatible,
+    )
+    identity = dict(retailer_code=retailer, receipt_text="AH CERVELAAT",
+                    candidate_brand=brand, candidate_name="Cervelaat")
+    assert external_product_identity_compatibility(**identity)["ok"] is True
+    assert_external_product_identity_compatible(**identity)
+
+
+@pytest.mark.parametrize("brand", ["Jumbo", "Huismerk PLUS", "NotAlbertHeijn", "Other brand"])
+def test_ah_cervelaat_true_brand_conflict_remains_blocked(brand):
+    from app.services.external_product_identity_policy import (
+        external_product_identity_compatibility, assert_external_product_identity_compatible,
+    )
+    identity = dict(retailer_code="Albert Heijn", receipt_text="AH CERVELAAT",
+                    candidate_brand=brand, candidate_name="Cervelaat")
+    assert external_product_identity_compatibility(**identity)["reason"] == "private_label_brand_conflict"
+    with pytest.raises(ValueError, match="huismerk"):
+        assert_external_product_identity_compatible(**identity)
+
+
+def test_ah_cervelaat_manual_off_search_accepts_compact_brand_and_signed_proof():
+    item = {"receipt_item_id": RECEIPT, "retailer_code": "Albert Heijn",
+            "receipt_line_text": "AH CERVELAAT", "quantity_label": ""}
+    with patch.object(search, "_query_off", return_value=([
+        {"code": "2323685801969", "product_name": "Cervelaat", "brands": "AlbertHeijn"},
+    ], "openfoodfacts")):
+        result = search.search_off_candidates_for_item(
+            {"mode": "manual", "query": "cervelaat albert heijn", "limit": 20}, item,
+        )
+    candidate = next(row for row in result["results"] if row["gtin"] == "2323685801969")
+    assert candidate["identity_compatible"] is True
+    assert candidate["selection_proof"]

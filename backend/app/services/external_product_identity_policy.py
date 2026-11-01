@@ -5,8 +5,9 @@ from typing import Any
 
 
 _PRIVATE_LABEL_ALIASES_BY_RETAILER = {
-    "albert heijn": ("albert heijn", "ah"),
-    "ah": ("albert heijn", "ah"),
+    # Open Food Facts also uses the compact store-owned brand 'AlbertHeijn'.
+    "albert heijn": ("albert heijn", "albertheijn", "ah"),
+    "ah": ("albert heijn", "albertheijn", "ah"),
     "jumbo": ("jumbo",),
     "plus": ("plus",),
 }

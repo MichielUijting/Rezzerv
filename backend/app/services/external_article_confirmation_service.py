@@ -10,6 +10,8 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from app.services.purchase_import_store_identity import retailer_from_purchase_import_payload
+
 from app.services.external_article_product_link_domain_service import (
     confirm_global_external_article_product_link,
 )
@@ -53,7 +55,7 @@ def _receipt_table_identity(conn, source_id: str) -> dict[str, Any] | None:
         text(
             """
             SELECT
-                COALESCE(rt.store_chain, rt.store_name, '') AS retailer_code,
+                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
                 COALESCE(
                     NULLIF(rtl.corrected_raw_label, ''),
                     NULLIF(rtl.normalized_label, ''),
@@ -79,7 +81,8 @@ def _purchase_import_identity(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 pil.article_name_raw AS receipt_text,
                 COALESCE(pil.external_article_code, '') AS external_article_code,
-                pib.source_reference
+                pib.source_reference,
+                pib.raw_payload AS batch_raw_payload
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
             WHERE pil.id = :id
@@ -91,14 +94,18 @@ def _purchase_import_identity(conn, source_id: str) -> dict[str, Any] | None:
     if not row:
         return None
     result = dict(row)
-    result["retailer_code"] = ""
+    # Independent imports have batch metadata, not necessarily a receipt: reference.
+    # Match the exact trusted source fields used by ED2 and OFF candidate search.
+    result["retailer_code"] = retailer_from_purchase_import_payload(
+        result.get("batch_raw_payload")
+    )
     source_reference = _clean(result.get("source_reference"))
     if source_reference.startswith("receipt:"):
         receipt_table_id = source_reference.split(":", 1)[1]
         receipt = conn.execute(
             text(
                 """
-                SELECT COALESCE(store_chain, store_name, '') AS retailer_code
+                SELECT COALESCE(NULLIF(store_chain, ''), store_name, '') AS retailer_code
                 FROM receipt_tables
                 WHERE id = :id
                 LIMIT 1
@@ -106,7 +113,8 @@ def _purchase_import_identity(conn, source_id: str) -> dict[str, Any] | None:
             ),
             {"id": receipt_table_id},
         ).mappings().first()
-        if receipt:
+        if receipt and _clean(receipt.get("retailer_code")):
+            # A canonical receipt store outranks optional import metadata.
             result["retailer_code"] = receipt.get("retailer_code")
     return result
 

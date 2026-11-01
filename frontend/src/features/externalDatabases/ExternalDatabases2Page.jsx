@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -17,7 +17,12 @@ const columns = [
   { key: 'receipt_line_text', label: 'Artikel', width: 320, sortable: true, filterable: true },
   { key: 'retailer', label: 'Winkelketen', width: 170, sortable: true, filterable: true },
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
-  { key: 'article_code', label: 'Art.code', width: 180, sortable: true, filterable: true },
+  { key: 'article_code', label: 'Art./Barcode', width: 185, sortable: true, filterable: true,
+    getSortValue: (row) => row.article_code || row.manual_barcode || '',
+    filterPredicate: (row, filter) => String(row.article_code || row.manual_barcode || '').toLowerCase().includes(String(filter).toLowerCase()),
+    renderCell: (row) => row.article_code || (row.manual_barcode
+      ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
+      : '') },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -35,7 +40,7 @@ const columns = [
 
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
-  ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art.code'],
+  ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
   ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
@@ -48,10 +53,14 @@ function csvCell(value) {
 
 export default function ExternalDatabases2Page() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
-  const [filters, setFilters] = useState({})
-  const [activeStatusCounter, setActiveStatusCounter] = useState('')
+  const [filters, setFilters] = useState(() => restored?.filters || {})
+  const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
+  const [tableSort, setTableSort] = useState(() => restored?.sort || { key: 'receipt_line_text', direction: 'asc' })
+  const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
@@ -62,6 +71,12 @@ export default function ExternalDatabases2Page() {
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
+  const returnState = { filters, activeStatusCounter, sort: tableSort, page: tablePage }
+  useEffect(() => {
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true, state: { ...location.state, ed2TableState: returnState },
+    })
+  }, [filters, activeStatusCounter, tableSort, tablePage])
 
   const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
@@ -82,7 +97,8 @@ export default function ExternalDatabases2Page() {
     if (!selectedRows.length) return
     const content = [exportColumns.map(([, label]) => label),
       ...selectedRows.map((row) => exportColumns.map(([key]) =>
-        key === 'link_status' ? STATUSES[row.link_status] || STATUSES.unlinked : row[key]))]
+        key === 'link_status' ? STATUSES[row.link_status] || STATUSES.unlinked
+          : key === 'article_code' ? row.article_code || row.manual_barcode || '' : row[key]))]
       .map((row) => row.map(csvCell).join(';')).join('\r\n')
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
@@ -148,9 +164,13 @@ export default function ExternalDatabases2Page() {
         const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
         const payload = await response.json()
         if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
+        // The overview projects manual barcode evidence by the authoritative
+        // server-side retailer/receipt/article identity. Do not reconstruct
+        // receipt keys or hide a failed secondary lookup in the browser.
         if (!cancelled) {
           const loadedItems = (payload.items || []).map((item) => ({
             ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+            manual_barcode: item.manual_barcode || '',
           }))
           setItems(loadedItems)
           setCounts(payload.counts || {
@@ -176,7 +196,7 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Externe databases 2" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Externe databases 2</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art.code toont alleen een bekende Catalogusbarcode; het bonartikelnummer is een aparte code.</p>
+        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art./Barcode toont een bekende artikelcode of handmatig ingevoerde barcode; alleen een bevestigde koppeling verandert de GS1-status.</p>
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
@@ -195,10 +215,11 @@ export default function ExternalDatabases2Page() {
             className={`rz-external-ed2-counter--${status}${activeStatusCounter === status ? ' rz-external-ed2-counter--active' : ''}`}
             aria-pressed={activeStatusCounter === status}
             onClick={() => { setActiveStatusCounter((previous) => previous === status ? '' : status)
+              setTablePage(1)
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
           {activeStatusCounter || Object.values(filters).some(Boolean) ? <Button type="button" variant="secondary"
-            onClick={() => { setFilters({}); setActiveStatusCounter('') }}>Wis filters</Button> : null}
+            onClick={() => { setFilters({}); setActiveStatusCounter(''); setTablePage(1) }}>Wis filters</Button> : null}
         </div>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking}
@@ -209,7 +230,12 @@ export default function ExternalDatabases2Page() {
           data={counterFilteredItems}
           onPageRowsChange={onPageRowsChange}
           filterState={filters}
-          onFilterChange={(key, value) => setFilters((previous) => ({ ...previous, [key]: value }))}
+          onFilterChange={(key, value) => { setFilters((previous) => ({ ...previous, [key]: value })); setTablePage(1) }}
+          sortState={tableSort}
+          onSortChange={(value) => { setTableSort(value); setTablePage(1) }}
+          pageState={tablePage}
+          onPageChange={setTablePage}
+          pageReady={!loading}
           getRowKey={(item) => item.id}
           defaultSort={{ key: 'receipt_line_text', direction: 'asc' }}
           emptyMessage={loading ? 'Artikelen laden...' : error ? 'Artikelen niet beschikbaar.' : 'Geen artikelen voor de gekozen filters.'}
@@ -256,15 +282,13 @@ export default function ExternalDatabases2Page() {
               setOffLinkOutcome({ status: 'success', message })
               setRefreshVersion((value) => value + 1)
             }} />
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem}
+          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
               setSelectedIds([])
-              if (outcome.status === 'success') {
-                setActiveStatusCounter('')
-                setFilters((previous) => ({ ...previous, link_status: '' }))
-              }
+              // Keep the user's existing filters, sort order and page after
+              // saving; the refreshed list determines whether a row remains visible.
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
             }} /> : null}

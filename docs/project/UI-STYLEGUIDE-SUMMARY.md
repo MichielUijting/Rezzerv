@@ -1450,3 +1450,27 @@ bevoegde koppelactie onder de kandidaattabel en foutmeldingen bij problemen.
 - De actie toont een compact invoerveld op dezelfde plek met **Opslaan** en **Annuleren**; het standaard Catalogusdetail blijft leesbaar. Invoer en knoppen volgen de bestaande Inhuis-kleurtokens, typografie en responsieve regel.
 - Een wijziging verandert alleen de gedeelde artikelnaam en de daarbij horende productvingerafdruk. De artikel-ID, barcode, voorraad, huishoudkoppelingen en kassabonregels blijven bestaan.
 - Bij een ondertussen gewijzigde naam of conflict met een ander artikel meldt Inhuis de fout en wordt niet stilzwijgend samengevoegd.
+
+## Catalogus en Externe databases 2 — terugkeer naar tabelcontext en barcode-invoer (31 oktober 2026)
+
+De hoofdtabellen behouden tijdens navigatie naar een artikeldetail de actuele
+pagina, filters, sortering en geselecteerde status. De terugroute of browser-terug
+herstelt deze context op desktop en mobiel. De gedeelde DataTable ondersteunt
+daarvoor een optionele gecontroleerde paginapositie; bestaande ongecontroleerde
+tabellen behouden hun bestaande gedrag.
+
+Bij Externe databases 2 staat in het artikelpaneel een compacte actie
+**Barcode handmatig opslaan** naast de bestaande OFF-zoekroute. Het invoerveld,
+de actieknop en het expliciete bevestigingsvenster hergebruiken de Inhuis
+standaardknoppen, invoervelden en modals. In het ED2-overzicht staat een aparte
+kolom **Ingevoerde barcode**; dit is niet de canonieke **Art.code** en
+beïnvloedt de gekleurde GS1-statussen niet zonder officiële koppeling.
+
+### Externe databases 2 — barcode direct in hoofdtable tonen (31 oktober 2026)
+
+De kolom **Art./Barcode** combineert de bestaande artikelcode met een apart
+bewaarde, nog niet bevestigde handmatige barcode: uitsluitend de zichtbare
+waarde is gecombineerd, de backendidentiteit en GS1-status blijven strikt
+gescheiden. Bij een handmatige barcode maakt de cel via een standaard tooltip
+zichtbaar dat deze nog niet aan de Catalogus is gekoppeld. De extra kolom
+**Ingevoerde barcode** vervalt om horizontale schermruimte te besparen.

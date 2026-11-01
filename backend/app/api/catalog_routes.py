@@ -17,6 +17,14 @@ from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
+from app.services.external_article_confirmation_service import resolve_external_article_identity
+from app.services.external_article_product_link_service import (
+    normalize_external_link_retailer_code,
+    normalize_external_link_article_code,
+    normalize_external_link_receipt_text,
+)
+from app.services.off_search_service import OffSearchError, OffUnavailableError, search_off_candidates
+from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_household_admin_from_session,
@@ -61,6 +69,11 @@ class CatalogNameUpdateRequest(BaseModel):
 
 
 class CatalogGtinUpdateRequest(BaseModel):
+    gtin: str
+
+
+class Ed2ManualBarcodeRequest(BaseModel):
+    receipt_item_id: str
     gtin: str
 
 
@@ -704,6 +717,157 @@ def _require_catalog_gtin_contributor() -> None:
         if error.status_code != 403:
             raise
     require_household_admin_from_session()
+
+
+
+def _ed2_barcode_tables_ready() -> None:
+    required = {"ed2_manual_barcodes", "external_article_product_links", "global_products"}
+    if not required.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Handmatige barcode-opslag is nog niet beschikbaar")
+
+
+def _ed2_normalized_source(conn, receipt_item_id: str) -> dict[str, str]:
+    try:
+        identity = resolve_external_article_identity(conn, receipt_item_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Bonartikel bestaat niet meer") from error
+    return {
+        "retailer_code": normalize_external_link_retailer_code(identity["retailer_code"]),
+        "receipt_text_normalized": normalize_external_link_receipt_text(identity["receipt_text"]),
+        "external_article_code": normalize_external_link_article_code(identity["external_article_code"]),
+    }
+
+
+def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
+    conditions = []
+    if identity["external_article_code"]:
+        conditions.append("external_article_code = :external_article_code")
+    if identity["receipt_text_normalized"]:
+        conditions.append("receipt_text_normalized = :receipt_text_normalized")
+    if not conditions:
+        raise HTTPException(status_code=422, detail="Een stabiele bonartikelidentiteit ontbreekt")
+    collision = conn.execute(text(
+        "SELECT id FROM external_article_product_links "
+        "WHERE retailer_code = :retailer_code AND status IN ('confirmed', 'classification_pending') "
+        "AND (" + " OR ".join(conditions) + ") LIMIT 1"
+    ), identity).first()
+    if collision:
+        raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
+
+
+@router.get("/ed2/manual-barcodes")
+def list_ed2_manual_barcodes():
+    """Show explicit GTIN evidence separately from verified Catalogus/OFF links."""
+    require_platform_permission_from_session("platform.external_products.view")
+    _ed2_barcode_tables_ready()
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT retailer_code, receipt_text_normalized, external_article_code, gtin "
+            "FROM ed2_manual_barcodes ORDER BY retailer_code, receipt_text_normalized"
+        )).mappings().all()
+    return {"items": [dict(row) for row in rows]}
+
+
+@router.post("/ed2/manual-barcodes")
+def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
+    """Explicitly register a GTIN: verified OFF enriches; OFF absence stores only the code.
+
+    The manual-only branch writes no global product, product identity, confirmed
+    link, receipt row, household article or inventory. It never invents a GPC.
+    """
+    require_platform_permission_from_session("platform.external_products.link_existing")
+    _ed2_barcode_tables_ready()
+    validation = validate_barcode(payload.gtin, "gtin")
+    if not validation["valid"]:
+        message = "; ".join(error["message"] for error in validation["errors"])
+        raise HTTPException(status_code=422, detail=message or "Ongeldige barcode")
+    gtin = validation["normalized_value"]
+    receipt_item_id = str(payload.receipt_item_id or "").strip()
+    with engine.begin() as conn:
+        identity = _ed2_normalized_source(conn, receipt_item_id)
+        _ed2_require_unlinked(conn, identity)
+        existing = conn.execute(text(
+            "SELECT gtin FROM ed2_manual_barcodes "
+            "WHERE retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND external_article_code = :external_article_code"
+        ), identity).scalar()
+        if existing and str(existing) != gtin:
+            raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een andere handmatig opgeslagen barcode")
+
+    # The original source is resolved again by the canonical OFF search service.
+    # Do not accept candidate names, image URLs or OFF identities from the browser.
+    off_unavailable = False
+    try:
+        search = search_off_candidates({
+            "receipt_item_id": receipt_item_id, "mode": "manual", "gtin": gtin, "limit": 1,
+        })
+    except OffUnavailableError:
+        # A network outage must not block explicit user-entered barcode evidence.
+        # Do NOT claim that OFF has no match: the lookup was not completed.
+        off_unavailable = True
+        search = {"results": []}
+    except OffSearchError as error:
+        # Unexpected lookup/identity errors must not be treated as OFF downtime.
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    results = search.get("results") or []
+    if results:
+        candidate = results[0]
+        if candidate.get("identity_compatible") is False:
+            raise HTTPException(
+                status_code=409,
+                detail="De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
+            )
+        if not candidate.get("selection_proof"):
+            raise HTTPException(status_code=409, detail="OFF kon deze barcode niet betrouwbaar bevestigen")
+        # Reuse the established signed, receipt-bound OFF confirmation and its
+        # image/product metadata, classification and identity conflict checks.
+        try:
+            result = confirm_selected_off_catalog_product({
+                "receipt_item_id": receipt_item_id,
+                "gtin": gtin,
+                "selection_proof": candidate["selection_proof"],
+            })
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {
+            "saved": bool(result.get("ok")), "source": "off",
+            "gtin": gtin, "off_found": True,
+            "classification_pending": bool(result.get("classification_pending")),
+            "photo_loaded": bool(candidate.get("image_url")),
+        }
+
+    # A completed OFF query with no exact GTIN match is NOT a verified OFF link.
+    # Preserve the user-entered barcode on a distinct platform-scoped identity.
+    # It is visible in ED2 but cannot become an operational receipt/stock match.
+    with engine.begin() as conn:
+        identity = _ed2_normalized_source(conn, receipt_item_id)
+        if conn.dialect.name == "postgresql":
+            conn.execute(text(
+                "SELECT pg_advisory_xact_lock(hashtext(:identity_key))"
+            ), {"identity_key": "|".join(identity.values())})
+        _ed2_require_unlinked(conn, identity)
+        previous = conn.execute(text(
+            "SELECT gtin FROM ed2_manual_barcodes "
+            "WHERE retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND external_article_code = :external_article_code"
+        ), identity).scalar()
+        if previous and str(previous) != gtin:
+            raise HTTPException(status_code=409, detail="Dit bonartikel heeft intussen een andere barcode gekregen")
+        if not previous:
+            conn.execute(text(
+                "INSERT INTO ed2_manual_barcodes "
+                "(retailer_code, receipt_text_normalized, external_article_code, gtin, created_at, updated_at) "
+                "VALUES (:retailer_code, :receipt_text_normalized, :external_article_code, :gtin, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ), {**identity, "gtin": gtin})
+    return {"saved": True, "source": "manual", "gtin": gtin, "off_found": False,
+            "off_unavailable": off_unavailable,
+            "classification_pending": False, "photo_loaded": False}
 
 
 @router.put("/{global_product_id}/name")

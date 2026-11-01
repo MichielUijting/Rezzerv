@@ -17,6 +17,7 @@ from app.services.external_product_identity_policy import (
 )
 from app.services.off_manual_search_proof import issue_manual_off_proof
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.purchase_import_store_identity import retailer_from_purchase_import_payload
 
 
 SEARCH_A_LICIOUS_URL = os.getenv(
@@ -51,6 +52,11 @@ OFF_FIELDS = [
 
 
 class OffSearchError(ValueError):
+    pass
+
+
+class OffUnavailableError(OffSearchError):
+    """OFF exact-GTIN lookup could not complete; do not claim no match."""
     pass
 
 
@@ -255,23 +261,7 @@ def _resolve_purchase_import_line(conn, source_id: str) -> dict[str, Any] | None
     if not row:
         return None
 
-    retailer = ""
-    raw_payload = row.get("batch_raw_payload")
-    if raw_payload:
-        try:
-            payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
-        except Exception:
-            payload = {}
-        if isinstance(payload, dict):
-            metadata = payload.get("batch_metadata") if isinstance(payload.get("batch_metadata"), dict) else {}
-            retailer = _text(
-                metadata.get("store_name")
-                or metadata.get("store_label")
-                or payload.get("store_name")
-                or payload.get("store_label")
-                or payload.get("retailer_code")
-                or payload.get("retailer")
-            )
+    retailer = retailer_from_purchase_import_payload(row.get("batch_raw_payload"))
 
     return {
         "receipt_item_type": "purchase_import_line",
@@ -955,7 +945,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
                 raise OffSearchError("Vul een geldige barcode (GTIN) in")
             lookup = lookup_off_product_by_gtin(requested_gtin)
             if lookup.get("status") == "external_source_unavailable":
-                raise OffSearchError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
+                raise OffUnavailableError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
             product = lookup.get("product") or {}
             results = []
             if lookup.get("status") == "found" and _text(product.get("product_name")):
