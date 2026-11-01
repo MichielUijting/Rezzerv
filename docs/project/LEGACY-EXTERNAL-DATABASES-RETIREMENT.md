@@ -61,3 +61,9 @@
 Het saneringscontract controleert de ontbrekende oude schermcomponenten en API-wrappers én de aanwezigheid van ED2. Het dynamische navigatiecontract controleert dat een historische voorkeursvolgorde het oude scherm niet terugbrengt. De herkenningsworkflow toetst de afwezigheid van de oude bevestigings-API, de aanwezigheid van ED2-routes en de nog gebruikte herkenningsservice.
 
 Overige `external_*`-services, datamigraties, historische bonnen en producten worden bewust niet verwijderd zonder bewezen exclusief legacy-gebruik.
+
+## CI-afhankelijkheden: gerichte reparaties (1 november 2026)
+
+- De zoekkandidaten-standaardtest verifieert alleen nog actieve Winkelen/Voorraad/GS1-bronnen; de oude `ReceiptItemsOverview.jsx`-asserties zijn vervallen zonder de vijf-kandidatenregel voor actieve dropdowns te versoepelen.
+- De releasepakketcontrole verifieert nu aantoonbaar de **afwezigheid** van drie verwijderde legacy-schermen én het **behoud** van Externe databases 2. De bestaande ZIP-integriteits- en databehoudschecks blijven verplicht.
+- De autorisatie-UI-test draait op `ubuntu-24.04`, omdat de vastgelegde Playwright-versie 1.58.2 geen Chromium-installatie voor de huidige `ubuntu-latest` (26.04) ondersteunt. De bestaande autorisatietest zelf is ongewijzigd.
