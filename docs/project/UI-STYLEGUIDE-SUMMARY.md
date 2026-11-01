@@ -1500,3 +1500,18 @@ barcode blijft staan zodat de gebruiker deze kan controleren of wijzigen.
 Een afwijzing maakt geen Cataloguskoppeling of voorraadmutatie en mag niet
 als succesvolle opslag worden gepresenteerd. De bestaande expliciete
 bevestigingsdialoog voor de schrijfhandeling blijft afzonderlijk bestaan.
+
+## Vervallen oude Externe databases-actie (1 november 2026)
+
+De oude actiebutton en het oude scherm **Externe databases** zijn verwijderd.
+**Externe databases 2** is de enige actieve productherkenningsactie. Zowel
+de startnavigatie als de directe routerregistratie bevatten geen oude
+schermroute meer; ook opgeslagen oude actievolgordes mogen deze niet
+terugbrengen.
+
+Dit is een sanering en **geen** nieuwe visuele stijl: Externe databases 2,
+de gedeelde tabellen, Melding, OFF-kandidaten, GS1-classificatie en de
+Catalogus blijven bestaande componenten en patronen gebruiken. Herkennings-,
+barcode- en productgegevens blijven behouden; uitsluitend de exclusieve oude
+interface en oude API-wrappers verdwijnen. Het actuele frontteam- en
+platformrechtencontract van ED2 blijft gelden.

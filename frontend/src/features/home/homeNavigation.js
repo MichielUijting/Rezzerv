@@ -12,7 +12,6 @@ const LEGACY_TILES = [
   { key: 'kassabonnen', label: 'Uitpakken', icon: '🧾', clickable: true },
   { key: 'kassa', label: 'Kassa', icon: '🧾', clickable: true },
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙', clickable: true },
-  { key: 'externe-databases', label: 'Externe databases', icon: '🗄️', clickable: true },
   { key: 'externe-databases-2', label: 'Externe databases 2', icon: '🗄️', clickable: true },
   { key: 'artikelsynoniemen', label: 'Artikel-synoniemen', icon: '🔗', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
@@ -36,7 +35,7 @@ function isVisible(tile, visibility) {
   if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'berichten') return visibility.canOpenMessages
   if (tile.key === 'meldingen') return true
-  if (tile.key === 'externe-databases' || tile.key === 'externe-databases-2' || tile.key === 'artikelsynoniemen') return visibility.canOpenExternalDatabases
+  if (tile.key === 'externe-databases-2' || tile.key === 'artikelsynoniemen') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
   return true
 }
@@ -61,12 +60,6 @@ function sortTilesByActionOrder(tiles, actionOrder) {
       return aRank - bRank || a.originalIndex - b.originalIndex
     })
     .map(({ tile }) => tile)
-  const originalIndex = sorted.findIndex((tile) => tile.key === 'externe-databases')
-  const secondIndex = sorted.findIndex((tile) => tile.key === 'externe-databases-2')
-  if (originalIndex >= 0 && secondIndex >= 0) {
-    const [second] = sorted.splice(secondIndex, 1)
-    sorted.splice(sorted.findIndex((tile) => tile.key === 'externe-databases') + 1, 0, second)
-  }
   return sorted
 }
 
