@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.cbs_classification_authority import validate_cbs_code
 
@@ -35,8 +35,38 @@ def search_verified_categories(conn, query: str, *, limit: int = 40) -> list[dic
         LIMIT :limit
     """), {"needle": "%" + needle.lower().replace("%", "\\%").replace("_", "\\_") + "%",
            "exact": needle, "limit": limit}).mappings().all()
-    # The full pinned CBS hierarchy is read-only. A classification category
-    # can only be selected when it is a lowest-level (leaf) category.
+    return _enrich_verified_categories(conn, rows)
+
+# Search helpers never change the official CBS reference or confirm classifications.
+# This small, transparent dictionary maps everyday product words to independently
+# verified lowest-level codes from the pinned CBS ECOICOPv2 appendix.
+PRODUCT_TERMS_TO_CBS = {
+    "pindakaas": "011840",  # Notenpuree, notenboter en notenpasta
+}
+
+
+def browse_verified_categories(conn, parent_code: str | None = None) -> list[dict]:
+    """Return just the direct official children (or root categories)."""
+    if parent_code is not None:
+        parent_code = validate_cbs_code(parent_code)
+        exists = conn.execute(text(
+            "SELECT 1 FROM cbs_ecoicop_categories WHERE cbs_code = :code"
+        ), {"code": parent_code}).first()
+        if not exists:
+            raise CBSDecisionError("De gekozen CBS-hoofdcategorie bestaat niet.")
+    rows = conn.execute(text("""
+        SELECT cbs_code, name_nl, parent_code, level, reference_version,
+               valid_from, source_url
+        FROM cbs_ecoicop_categories
+        WHERE (:parent IS NULL AND parent_code IS NULL)
+           OR parent_code = :parent
+        ORDER BY cbs_code
+    """), {"parent": parent_code}).mappings().all()
+    # Reuse the same verified hierarchy and leaf calculation as search.
+    return _enrich_verified_categories(conn, rows)
+
+
+def _enrich_verified_categories(conn, rows) -> list[dict]:
     hierarchy = conn.execute(text("""
         SELECT cbs_code, parent_code, name_nl, reference_version
         FROM cbs_ecoicop_categories
@@ -67,6 +97,35 @@ def search_verified_categories(conn, query: str, *, limit: int = 40) -> list[dic
         category["path"] = " › ".join(reversed(labels))
         results.append(category)
     return results
+
+
+def suggest_verified_categories(conn, product_term: str, *, limit: int = 40) -> list[dict]:
+    """Read-only, explainable candidate retrieval; never infer a confirmed link."""
+    import re
+    normalized = " ".join(re.findall(r"[a-z0-9]+", str(product_term or "").lower()))
+    if len(normalized) < 2:
+        return []
+    limit = max(1, min(50, int(limit)))
+    tokens = set(normalized.split())
+    matched = [(term, code) for term, code in PRODUCT_TERMS_TO_CBS.items()
+               if term in tokens]
+    if not matched:
+        return []
+    codes = {code for _, code in matched}
+    rows = conn.execute(text("""
+        SELECT cbs_code, name_nl, parent_code, level, reference_version,
+               valid_from, source_url
+        FROM cbs_ecoicop_categories
+        WHERE cbs_code IN :codes
+        ORDER BY cbs_code LIMIT :limit
+    """).bindparams(bindparam("codes", expanding=True)),
+        {"codes": sorted(codes), "limit": limit}).mappings().all()
+    result = _enrich_verified_categories(conn, rows)
+    for category in result:
+        category["suggestion_reason"] = (
+            "Zoeksuggestie op basis van productwoord; controleer de betekenis zelf."
+        )
+    return result
 
 
 def confirm_cbs_batch(conn, decisions: Sequence[Mapping], *, actor_id: str) -> dict:
