@@ -99,13 +99,30 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Verificatie in OFF is niet gelukt.')
       const verified = (Array.isArray(payload.results) ? payload.results : []).find((row) =>
         String(row.gtin || '').padStart(14, '0') === gtin.padStart(14, '0'))
-      if (verified?.identity_compatible === false) {
+      if (verified?.identity_compatible === false
+          && verified.identity_conflict_reason !== 'private_label_brand_conflict') {
         throw new Error('Dit product past niet veilig bij het bonartikel.')
       }
       if (!verified?.selection_proof) {
         throw new Error('Dit product kon niet in OFF worden bevestigd. Gebruik Zelf zoeken in OFF om een andere kandidaat te vinden.')
       }
-      if (!controller.signal.aborted) setSelectedCandidate(verified)
+      if (controller.signal.aborted) return
+      if (verified.identity_compatible === false) {
+        showFeedback({
+          variant: 'warning',
+          title: 'Waarschuwing bij koppelen',
+          message: verified.identity_conflict_message || 'Het geselecteerde merk wijkt af van het herkenbare huismerk.',
+          detail: 'Controleer artikel, merk en barcode. Alleen deze huismerkwaarschuwing kan bewust worden genegeerd.',
+          testId: 'ed2-private-label-override-warning',
+          dismissMode: 'blocked',
+          primaryActionLabel: 'Toch koppelen',
+          secondaryActionLabel: 'Annuleren',
+          onPrimaryAction: () => confirmLink(verified, true),
+          onSecondaryAction: () => {},
+        })
+      } else {
+        setSelectedCandidate(verified)
+      }
     } catch (err) {
       if (!controller.signal.aborted && err.status !== 401) setLinkError(
         err.name === 'AbortError' ? 'Verificatie niet bevestigd. Probeer opnieuw.' :
@@ -116,8 +133,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
   }
 
-  async function confirmLink() {
-    if (!selectedCandidate || linking) return
+  async function confirmLink(candidate = selectedCandidate, overridePrivateLabel = false) {
+    if (!candidate || linking) return false
     setLinking(true)
     setLinkError('')
     const controller = new AbortController()
@@ -126,8 +143,9 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
       const response = await fetchJsonWithAuth('/api/external-databases/off/link-selected', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
         body: JSON.stringify({
-          receipt_item_id: item.id, gtin: selectedCandidate.gtin,
-          selection_proof: selectedCandidate.selection_proof,
+          receipt_item_id: item.id, gtin: candidate.gtin,
+          selection_proof: candidate.selection_proof,
+          ...(overridePrivateLabel ? { override_private_label_conflict: true } : {}),
         }),
       })
       const payload = await response.json().catch(() => ({}))
@@ -140,6 +158,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
           ? 'Artikel opgeslagen in Catalogus. GS1-classificatie ontbreekt nog.'
           : 'Artikel gekoppeld aan de Catalogus.',
       })
+      return true
     } catch (err) {
       if (err.status !== 401) {
         const message = err.name === 'AbortError'
@@ -148,8 +167,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
         // An unsuccessful POST is not a confirmed link. Show its reason
         // immediately as the standard Melding, instead of leaving an inline
         // error above a scrolled candidate table where it may be invisible.
+        if (overridePrivateLabel) throw new Error('Koppeling niet bevestigd: ' + message)
         showFeedback({ variant: 'error', message: 'Koppeling niet bevestigd: ' + message })
       }
+      return false
     } finally {
       window.clearTimeout(deadline)
       setSelectedCandidate(null)

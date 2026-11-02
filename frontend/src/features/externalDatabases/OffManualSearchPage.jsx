@@ -122,8 +122,8 @@ export default function OffManualSearchPage() {
     }
   }
 
-  async function confirmLink() {
-    if (!selectedCandidate || linking) return
+  async function confirmLink(candidate = selectedCandidate, overridePrivateLabel = false) {
+    if (!candidate || linking) return false
     setLinking(true)
     // Never let a pending backend request keep the user on the search page.
     // Aborting a request does NOT prove the server did not commit a link.
@@ -137,8 +137,9 @@ export default function OffManualSearchPage() {
         signal: controller.signal,
         body: JSON.stringify({
           receipt_item_id: receiptItemId,
-          gtin: selectedCandidate.gtin,
-          selection_proof: selectedCandidate.selection_proof,
+          gtin: candidate.gtin,
+          selection_proof: candidate.selection_proof,
+          ...(overridePrivateLabel ? { override_private_label_conflict: true } : {}),
         }),
       })
       const payload = await response.json().catch(() => ({}))
@@ -157,6 +158,7 @@ export default function OffManualSearchPage() {
         const message = err.name === 'AbortError'
           ? 'De koppeling kon niet op tijd worden bevestigd. Controleer de Catalogus voordat u opnieuw koppelt.'
           : (err.message || 'De koppeling kon niet worden bevestigd.')
+        if (overridePrivateLabel) throw new Error(message)
         outcome = { status: 'error', message: `Koppeling niet bevestigd: ${message}` }
       }
     } finally {
@@ -167,24 +169,34 @@ export default function OffManualSearchPage() {
     // OK always finishes at Externe databases 2, without ever claiming an
     // unconfirmed or failed operation succeeded. Cancel stays on OFF search.
     if (outcome) goBack(outcome)
+    return outcome?.status === 'success'
   }
 
   function selectCandidate(candidate) {
     if (linking) return
-    if (candidate.identity_compatible === false) {
-      // The backend remains the identity authority; explain the actual reason
-      // through the central Melding overlay, not an inline field error.
-      showFeedback({
-        variant: 'error',
-        message: candidate.identity_conflict_message
-          || 'Het productmerk komt niet overeen met het bonartikel. Kies een product met hetzelfde merk.',
-      })
-      return
-    }
     if (!candidate.selection_proof) {
       showFeedback({
         variant: 'error',
         message: 'Dit OFF-product kon niet betrouwbaar worden bevestigd. Zoek opnieuw en kies een kandidaat met een geldige barcode.',
+      })
+      return
+    }
+    if (candidate.identity_compatible === false) {
+      if (candidate.identity_conflict_reason !== 'private_label_brand_conflict') {
+        showFeedback({ variant: 'error', message: candidate.identity_conflict_message || 'Dit product kon niet veilig worden bevestigd.' })
+        return
+      }
+      showFeedback({
+        variant: 'warning',
+        title: 'Waarschuwing bij koppelen',
+        message: candidate.identity_conflict_message || 'Het geselecteerde merk wijkt af van het herkenbare huismerk.',
+        detail: 'Controleer artikel, merk en barcode. Alleen deze huismerkwaarschuwing kan bewust worden genegeerd.',
+        testId: 'ed2-private-label-override-warning',
+        dismissMode: 'blocked',
+        primaryActionLabel: 'Toch koppelen',
+        secondaryActionLabel: 'Annuleren',
+        onPrimaryAction: () => confirmLink(candidate, true),
+        onSecondaryAction: () => {},
       })
       return
     }
