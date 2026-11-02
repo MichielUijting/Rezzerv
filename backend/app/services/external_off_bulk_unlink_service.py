@@ -63,7 +63,10 @@ def unlink_selected_off_article_links(selections: Any) -> dict[str, Any]:
                   AND confirmed_by IN (
                     'external_databases_off_link',
                     'external_databases_off_manual_link',
-                    'external_databases_off_pending_gpc'
+                    'external_databases_off_pending_gpc',
+                     'external_databases_off_pending_gpc_brand_override',
+                     'external_databases_off_manual_brand_override',
+                     'external_databases_off_brand_override'
                   )
             """), {'link_id': link_id})
             if int(update.rowcount or 0) != 1:

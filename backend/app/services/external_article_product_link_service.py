@@ -724,6 +724,7 @@ def stage_external_article_product_link_without_gpc(
     global_product_id: Any,
     receipt_text: Any = None,
     external_article_code: Any = None,
+    confirmed_by: str = "external_databases_off_pending_gpc",
 ) -> dict[str, Any]:
     """Persist a verified GTIN identity without claiming a complete GPC link.
 
@@ -731,6 +732,8 @@ def stage_external_article_product_link_without_gpc(
     NOT returned to receipt/inventory consumers until a real official GPC Brick
     has subsequently been assigned. No household or inventory row is touched.
     """
+    if confirmed_by not in {"external_databases_off_pending_gpc", "external_databases_off_pending_gpc_brand_override"}:
+        raise ValueError("Ongeldige herkomst voor voorlopige OFF-koppeling")
     retailer = normalize_external_link_retailer_code(retailer_code)
     code = normalize_external_link_article_code(external_article_code)
     label = normalize_external_link_receipt_text(receipt_text)
@@ -794,10 +797,10 @@ def stage_external_article_product_link_without_gpc(
         ) VALUES (
             :id, :retailer_code, :receipt_text_normalized, :external_article_code,
             :global_product_id, 'classification_pending',
-            'external_databases_off_pending_gpc', CURRENT_TIMESTAMP,
+            :confirmed_by, CURRENT_TIMESTAMP,
             NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
-    """), {**params, "id": link_id})
+    """), {**params, "id": link_id, "confirmed_by": confirmed_by})
     saved = conn.execute(text("""
         SELECT link.*, gp.name AS global_product_name
         FROM external_article_product_links link

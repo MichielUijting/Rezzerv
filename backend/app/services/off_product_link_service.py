@@ -451,6 +451,7 @@ def link_off_product_with_product_type(
     off_product: dict[str, Any],
     product_type_assignment: dict[str, Any],
     force_failure_after_link: bool = False,
+    allow_private_label_override: bool = False,
 ) -> dict[str, Any]:
     """Sla de platformbrede OFF-, Catalogus- en Producttypekoppeling atomair op.
 
@@ -476,6 +477,7 @@ def link_off_product_with_product_type(
                 or off_product.get("candidate_name")
                 or off_product.get("name")
             ),
+            allow_private_label_override=allow_private_label_override,
         )
 
         global_product_id, gtin, size_value, size_unit = _upsert_global_product(conn, off_product)
@@ -513,7 +515,7 @@ def link_off_product_with_product_type(
             conn,
             receipt_item_id=receipt_item_id,
             global_product_id=global_product_id,
-            confirmed_by="external_databases_off_link",
+            confirmed_by=("external_databases_off_brand_override" if allow_private_label_override else "external_databases_off_link"),
         )
         receipt_link["external_article_product_link"] = confirmed_external_link
         if force_failure_after_link:
@@ -550,7 +552,7 @@ def link_off_product_with_product_type(
     }
 
 
-def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: dict[str, Any]) -> dict[str, Any]:
+def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: dict[str, Any], allow_private_label_override: bool = False) -> dict[str, Any]:
     """Catalogusopslag op verified OFF GTIN, zonder een GPC te verzinnen.
 
     Houd de bronidentiteit, product-upsert en pending-koppeling atomair. De
@@ -570,6 +572,7 @@ def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: d
             candidate_brand=off_product.get("brand") or off_product.get("candidate_brand"),
             candidate_name=(off_product.get("product_name")
                             or off_product.get("candidate_name") or off_product.get("name")),
+            allow_private_label_override=allow_private_label_override,
         )
         product_id, gtin, _size_value, _size_unit = _upsert_global_product(conn, off_product)
         state = _complete_global_product_link_data(conn, product_id)
@@ -577,7 +580,7 @@ def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: d
             link = confirm_external_article_for_receipt_item(
                 conn, receipt_item_id=receipt_item_id,
                 global_product_id=product_id,
-                confirmed_by="external_databases_off_manual_link",
+                confirmed_by=("external_databases_off_manual_brand_override" if allow_private_label_override else "external_databases_off_manual_link"),
             )
             if link.get("status") != "confirmed" or link.get("global_product_id") != product_id:
                 raise RuntimeError("Cataloguskoppeling kon niet worden bevestigd")
@@ -591,6 +594,7 @@ def stage_off_product_until_official_gpc(*, receipt_item_id: str, off_product: d
             receipt_text=identity["receipt_text"],
             external_article_code=identity["external_article_code"],
             global_product_id=product_id,
+            **({"confirmed_by": "external_databases_off_pending_gpc_brand_override"} if allow_private_label_override else {}),
         )
         if staged.get("global_product_id") != product_id or staged.get("status") != "classification_pending":
             raise RuntimeError("Catalogusopslag kon niet worden bevestigd")
