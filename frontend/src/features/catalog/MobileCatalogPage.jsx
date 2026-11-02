@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import CatalogProductImage from './CatalogProductImage'
+import { gs1ProductTypeLabel } from './gs1ProductTypeLabel.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
 import Pagination from '../../ui/Pagination.jsx'
@@ -162,10 +163,7 @@ export default function MobileCatalogPage() {
                   <strong>{text(item.name)}</strong>
                   <span>{[kindLabel(item.catalog_kind), text(item.brand, '')].filter(Boolean).join(' • ')}</span>
                   <span>{text(item.product_type, 'Classificatie ontbreekt')}</span>
-                  <span>Brick-code: {text(item.gpc_brick_code, 'Niet geclassificeerd')}</span>
-                  <span>Brick-naam: {text(item.gpc_brick_name, 'Niet geclassificeerd')}</span>
-                  <span>GPC-groep: {text(item.gpc_class_name, 'Niet geclassificeerd')}</span>
-                  <span>Productfamilie: {text(item.gpc_family_name, 'Niet geclassificeerd')}</span>
+                  <span>GS1-producttype: {gs1ProductTypeLabel(item)}</span>
                   <span>Gekoppelde winkels: {Number(item.linked_store_count || 0)}</span>
                   <span>Artikelclassificatie: {text(item.article_classification, 'Niet geclassificeerd')}</span>
                 </span>

@@ -8,6 +8,7 @@ import Pagination from '../../ui/Pagination.jsx'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import CatalogProductImage from './CatalogProductImage'
+import { gs1ProductTypeLabel } from './gs1ProductTypeLabel.js'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
@@ -62,13 +63,23 @@ export default function CatalogPage() {
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
-  const [filters, setFilters] = useState(() => ({
-    name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
-    gpcBrickCode: '', gpcBrickName: '', gpcClass: '', gpcFamily: '',
-    householdArticleCount: '', linkedStoreCount: '', articleClassification: '',
-    ...(restored?.filters || {}),
-  }))
-  const [sort, setSort] = useState(() => restored?.sort || { key: 'name', direction: 'asc' })
+  const [filters, setFilters] = useState(() => {
+    const previous = { ...(restored?.filters || {}) }
+    // Do not keep invisible retired-column filters when coming back from detail.
+    const legacyBrickName = previous.gpcBrickName || ''
+    for (const key of ['gpcBrickCode', 'gpcBrickName', 'gpcClass', 'gpcFamily']) delete previous[key]
+    return {
+      name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
+      gs1ProductType: '', householdArticleCount: '', linkedStoreCount: '',
+      articleClassification: '', ...previous,
+      gs1ProductType: previous.gs1ProductType || legacyBrickName,
+    }
+  })
+  const [sort, setSort] = useState(() => {
+    const previous = restored?.sort || { key: 'name', direction: 'asc' }
+    return ['gpc_brick_code', 'gpc_class_name', 'gpc_family_name'].includes(previous.key)
+      ? { ...previous, key: 'gpc_brick_name' } : previous
+  })
   const [page, setPage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -104,10 +115,7 @@ export default function CatalogPage() {
           brand: 'brand',
           primaryGtin: 'primary_gtin',
           productType: 'product_type',
-          gpcBrickCode: 'gpc_brick_code',
-          gpcBrickName: 'gpc_brick_name',
-          gpcClass: 'gpc_class',
-          gpcFamily: 'gpc_family',
+          gs1ProductType: 'gpc_brick_name',
           householdArticleCount: 'household_article_count',
           linkedStoreCount: 'linked_store_count',
           articleClassification: 'article_classification',
@@ -325,8 +333,7 @@ export default function CatalogPage() {
                 <colgroup>
                   <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col style={{ width: 240 }} /><col className="rz-catalog-col-kind" />
                   <col className="rz-catalog-col-brand" /><col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" />
-                  <col className="rz-catalog-col-gpc-brick-code" /><col className="rz-catalog-col-gpc-brick-name" />
-                  <col className="rz-catalog-col-gpc-class" /><col className="rz-catalog-col-gpc-family" />
+                  <col className="rz-catalog-col-gs1-type" />
                   <col className="rz-catalog-col-household-count" /><col className="rz-catalog-col-linked-store-count" />
                 </colgroup>
                 <thead>
@@ -338,10 +345,7 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortMark('brand')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('primary_gtin')}>Primaire GTIN <span>{sortMark('primary_gtin')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('product_type')}>Producttype <span>{sortMark('product_type')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_brick_code')}>Brick-code <span>{sortMark('gpc_brick_code')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_brick_name')}>Brick-naam <span>{sortMark('gpc_brick_name')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_class_name')}>GPC-groep <span>{sortMark('gpc_class_name')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_family_name')}>Productfamilie <span>{sortMark('gpc_family_name')}</span></button></th>
+                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_brick_name')}>GS1-producttype <span>{sortMark('gpc_brick_name')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('linked_store_count')}>Gekoppelde winkels <span>{sortMark('linked_store_count')}</span></button></th>
                   </tr>
@@ -353,10 +357,7 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.brand} onChange={(event) => updateFilter('brand', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.primaryGtin} onChange={(event) => updateFilter('primaryGtin', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcBrickCode} onChange={(event) => updateFilter('gpcBrickCode', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcBrickName} onChange={(event) => updateFilter('gpcBrickName', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcClass} onChange={(event) => updateFilter('gpcClass', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcFamily} onChange={(event) => updateFilter('gpcFamily', event.target.value)} /></th>
+                    <th><input className="rz-table-filter" aria-label="Filter GS1-producttype" placeholder="Filter" value={filters.gs1ProductType} onChange={(event) => updateFilter('gs1ProductType', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                     <th className="rz-num"><input className="rz-table-filter" aria-label="Filter gekoppelde winkels" placeholder="Filter" value={filters.linkedStoreCount} onChange={(event) => updateFilter('linkedStoreCount', event.target.value)} /></th>
                   </tr>
@@ -371,17 +372,14 @@ export default function CatalogPage() {
                           <span>{text(item.name)}</span>
                         </div>
                       </td><td data-testid={`catalog-article-classification-${item.id}`} title={item.article_classification || ''}>{text(item.article_classification, 'Niet geclassificeerd')}</td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type, 'Classificatie ontbreekt')}</td>
-                      <td>{text(item.gpc_brick_code, 'Niet geclassificeerd')}</td>
-                      <td>{text(item.gpc_brick_name, 'Niet geclassificeerd')}</td>
-                      <td>{text(item.gpc_class_name, 'Niet geclassificeerd')}</td>
-                      <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
+                      <td data-testid={`catalog-gs1-producttype-${item.id}`}>{gs1ProductTypeLabel(item)}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                       <td className="rz-num" data-testid={`catalog-linked-stores-${item.id}`}>{Number(item.linked_store_count || 0)}</td>
                     </tr>
-                  )) : <tr><td colSpan="13">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
+                  )) : <tr><td colSpan="10">{isLoading ? 'Catalogus laden…' : 'Geen universele artikelen gevonden.'}</td></tr>}
                   {Array.from({ length: fillerRowCount }, (_, index) => (
                     <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
-                      <td colSpan="13">&nbsp;</td>
+                      <td colSpan="10">&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>

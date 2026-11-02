@@ -45,7 +45,7 @@
 .rz-catalog-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 1510px;
+  min-width: 1320px;
 }
 
 .rz-external-databases .rz-catalog-table tbody td {
@@ -58,10 +58,7 @@
 .rz-catalog-col-brand { width: 130px; }
 .rz-catalog-col-gtin { width: 145px; }
 .rz-catalog-col-product-type { width: 190px; }
-.rz-catalog-col-gpc-brick-code { width: 120px; }
-.rz-catalog-col-gpc-brick-name { width: 200px; }
-.rz-catalog-col-gpc-class { width: 200px; }
-.rz-catalog-col-gpc-family { width: 220px; }
+.rz-catalog-col-gs1-type { width: 220px; }
 .rz-catalog-col-household-count { width: 150px; }
 .rz-catalog-col-linked-store-count { width: 160px; }
 

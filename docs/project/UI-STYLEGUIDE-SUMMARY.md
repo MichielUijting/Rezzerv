@@ -1515,3 +1515,14 @@ Catalogus blijven bestaande componenten en patronen gebruiken. Herkennings-,
 barcode- en productgegevens blijven behouden; uitsluitend de exclusieve oude
 interface en oude API-wrappers verdwijnen. Het actuele frontteam- en
 platformrechtencontract van ED2 blijft gelden.
+
+### Catalogus — GS1-producttype in het overzicht (2 november 2026)
+
+De Catalogus vervangt op desktop de vier afzonderlijke kolommen Brick-code,
+Brick-naam, GPC-groep en Productfamilie door één **GS1-producttype**-kolom
+met de officiële Nederlandse Brick-omschrijving. Sorteren en filteren blijven
+beschikbaar op die omschrijving. Oude verborgen GS1-filters uit browser Terug
+worden niet langer toegepast. De mobiele artikellijst toont eveneens alleen
+het GS1-producttype. Het Catalogusdetail behoudt alle vier GS1-velden in
+beide layouts; de bestaande CSV-export behoudt alle technische velden en
+centrale GS1-data, koppelingen, rechten, synoniemen en Bijna op wijzigen niet.
