@@ -25,7 +25,12 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 106  # 104 canonical + ED2 barcode evidence + ED2 removals.
+EXPECTED_APPLICATION_TABLES = 109  # 106 previous canonical + 3 additive CBS authority tables.
+REQUIRED_CBS_TABLES = frozenset({
+    "cbs_ecoicop_categories",
+    "global_product_cbs_classifications",
+    "global_product_cbs_history",
+})
 REQUIRED_CLASSIFICATION_TABLES = frozenset({
     "global_product_shopify_classifications",
     "global_product_shopify_history",
@@ -304,6 +309,11 @@ def _build_canonical_head(path: Path) -> str:
             raise LegacyAdoptionError(
                 f"Canonical article-classification tables missing: "
                 f"{sorted(missing_classification_tables)!r}"
+            )
+        missing_cbs_tables = REQUIRED_CBS_TABLES.difference(tables)
+        if missing_cbs_tables:
+            raise LegacyAdoptionError(
+                f"Canonical CBS authority tables missing: {sorted(missing_cbs_tables)!r}"
             )
         if len(tables) != EXPECTED_APPLICATION_TABLES:
             raise LegacyAdoptionError(

@@ -1,0 +1,97 @@
+name: CBS classification authority contracts
+# draft-ci-router: routed
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, ready_for_review, synchronize]
+    paths:
+      - '.github/workflows/cbs-classification-authority.yml'
+      - 'backend/alembic/versions/20261102_01_cbs_ecoicop_authority.py'
+      - 'backend/app/services/cbs_classification_authority.py'
+      - 'backend/app/services/cbs_classification_service.py'
+      - 'backend/app/api/cbs_classification_routes.py'
+      - 'backend/app/api/router.py'
+      - 'backend/tests/test_cbs_classification_authority.py'
+      - 'backend/tests/test_cbs_classification_service.py'
+      - 'frontend/src/features/catalog/CbsClassificationPage.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/e2e/cbs-classification.frontend-regression.spec.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_cbs
+          POSTGRES_PASSWORD: rezzerv_cbs_ci
+          POSTGRES_DB: rezzerv_cbs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_cbs -d rezzerv_cbs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_cbs:rezzerv_cbs_ci@127.0.0.1:5432/rezzerv_cbs_test
+      INHUIS_CBS_TEST_DATABASE_URL: postgresql+psycopg://rezzerv_cbs:rezzerv_cbs_ci@127.0.0.1:5432/rezzerv_cbs_test
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused dependencies using canonical constraints
+        run: |
+          mapfile -t packages < <(grep -E '^(sqlalchemy|alembic|fastapi|pydantic|httpx|psycopg\[binary\])==' backend/requirements.txt)
+          test "${#packages[@]}" -eq 6
+          python -m pip install "${packages[@]}" pytest==8.4.2
+      - name: Compile the migration and CBS services
+        run: |
+          python -m py_compile backend/alembic/versions/20261102_01_cbs_ecoicop_authority.py
+          python -m py_compile backend/app/services/cbs_classification_authority.py backend/app/services/cbs_classification_service.py backend/app/api/cbs_classification_routes.py
+      - name: Verify isolated CBS reference and PostgreSQL decision contracts
+        run: |
+          python -m pytest -q backend/tests/test_cbs_classification_authority.py backend/tests/test_cbs_classification_service.py -rs
+
+  frontend-regression:
+    name: CBS classification Playwright mobile and desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Start isolated frontend
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 --strictPort > /tmp/cbs-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -80 /tmp/cbs-vite.log
+          exit 1
+      - name: Test explicit CBS classification with missing barcodes
+        run: ./node_modules/.bin/playwright test tests/e2e/cbs-classification.frontend-regression.spec.js --project=chromium --no-deps
+      - name: Upload failed browser test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbs-classification-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
