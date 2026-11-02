@@ -13,6 +13,9 @@ on:
       - 'backend/app/api/router.py'
       - 'backend/tests/test_cbs_classification_authority.py'
       - 'backend/tests/test_cbs_classification_service.py'
+      - 'frontend/src/features/catalog/CbsClassificationPage.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/e2e/cbs-classification.frontend-regression.spec.js'
   workflow_dispatch:
 permissions:
   contents: read
@@ -56,3 +59,39 @@ jobs:
       - name: Verify isolated CBS reference and PostgreSQL decision contracts
         run: |
           python -m pytest -q backend/tests/test_cbs_classification_authority.py backend/tests/test_cbs_classification_service.py -rs
+
+  frontend-regression:
+    name: CBS classification Playwright mobile and desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Start isolated frontend
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 --strictPort > /tmp/cbs-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -80 /tmp/cbs-vite.log
+          exit 1
+      - name: Test explicit CBS classification with missing barcodes
+        run: ./node_modules/.bin/playwright test tests/e2e/cbs-classification.frontend-regression.spec.js --project=chromium --no-deps
+      - name: Upload failed browser test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbs-classification-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

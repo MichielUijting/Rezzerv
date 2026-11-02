@@ -137,3 +137,21 @@ def test_no_actor_duplicate_ids_and_invalid_versions_are_rejected(database):
                                  ([choice(version=True)], "frontteam")]:
             with pytest.raises(CBSDecisionError):
                 confirm_cbs_batch(conn, decisions, actor_id=actor)
+
+
+def test_nonleaf_cbs_category_cannot_be_confirmed_as_product_classification(database):
+    with database.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO cbs_ecoicop_categories
+              (cbs_code, reference_version, name_nl, level, valid_from, source_url, source_sha256)
+            VALUES ('011400', :ref, 'Melk, andere zuivelproducten en eieren', 3,
+                    '2026-01-01', 'cbs.nl', :sha)
+        """), {"ref": REF, "sha": "a" * 64})
+        conn.execute(text("UPDATE cbs_ecoicop_categories SET parent_code = '011400' WHERE cbs_code = '011420'"))
+        with pytest.raises(CBSDecisionError, match="laagste"):
+            confirm_cbs_batch(conn, [choice(code="011400")], actor_id="superuser")
+        candidates = search_verified_categories(conn, "melk")
+        assert any(c["cbs_code"] == "011420" and c["lowest"] and "›" in c["path"] for c in candidates)
+        assert any(c["cbs_code"] == "011400" and not c["lowest"] for c in candidates)
+    with database.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_history")).scalar_one() == 0

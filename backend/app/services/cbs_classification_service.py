@@ -63,11 +63,16 @@ def confirm_cbs_batch(conn, decisions: Sequence[Mapping], *, actor_id: str) -> d
         if not gp or str(gp["status"] or "").lower() == "deleted" or gp["name"] != expected_name:
             raise CBSConcurrentChange("Catalogusartikel is gewijzigd. Ververs de selectie.")
         category = conn.execute(text("""
-            SELECT cbs_code FROM cbs_ecoicop_categories
-            WHERE cbs_code = :code AND reference_version = :reference
+            SELECT c.cbs_code FROM cbs_ecoicop_categories c
+            WHERE c.cbs_code = :code AND c.reference_version = :reference
+              AND NOT EXISTS (
+                SELECT 1 FROM cbs_ecoicop_categories child
+                WHERE child.parent_code = c.cbs_code
+                  AND child.reference_version = c.reference_version
+              )
         """), {"code": code, "reference": reference_version}).first()
         if not category:
-            raise CBSDecisionError("CBS-categorie ontbreekt in de geverifieerde referentie.")
+            raise CBSDecisionError("CBS-categorie ontbreekt of is geen laagste categorie in de officiële referentie.")
         current = conn.execute(text(
             "SELECT cbs_code, reference_version, version, is_active "
             "FROM global_product_cbs_classifications WHERE global_product_id = :id" + lock

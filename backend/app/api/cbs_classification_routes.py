@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text as __sql
 
 from app.db import engine
 from app.services.cbs_classification_service import (
@@ -56,6 +57,43 @@ class Removal(BaseModel):
 class RemovalBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     selections: list[Removal] = Field(min_length=1, max_length=100)
+
+
+@router.get("/products")
+def products(offset: int = Query(default=0, ge=0),
+             limit: int = Query(default=100, ge=1, le=100)):
+    """List central Catalogus products, including ones without barcode."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        total = int(conn.execute(__sql("""
+            SELECT COUNT(*) FROM global_products
+            WHERE LOWER(COALESCE(status, '')) <> 'deleted'
+        """)).scalar_one())
+        rows = conn.execute(__sql("""
+            SELECT gp.id, gp.name, gp.brand, gp.primary_gtin,
+                   cc.cbs_code, cc.reference_version, cc.version, cc.is_active,
+                   ref.name_nl AS category_name, ref.level AS category_level
+            FROM global_products gp
+            LEFT JOIN global_product_cbs_classifications cc
+                   ON cc.global_product_id = gp.id
+            LEFT JOIN cbs_ecoicop_categories ref
+                   ON ref.cbs_code = cc.cbs_code AND ref.reference_version = cc.reference_version
+            WHERE LOWER(COALESCE(gp.status, '')) <> 'deleted'
+            ORDER BY LOWER(gp.name), gp.id
+            LIMIT :limit OFFSET :offset
+        """), {"limit": limit, "offset": offset}).mappings().all()
+    return {"items": [
+        {"id": str(row["id"]), "name": str(row["name"] or ""),
+         "brand": str(row["brand"] or ""),
+         "gtin": str(row["primary_gtin"] or ""),
+         "cbs_code": str(row["cbs_code"] or "") if row["is_active"] else "",
+         "category_name": str(row["category_name"] or "") if row["is_active"] else "",
+         "category_level": row["category_level"] if row["is_active"] else None,
+         "reference_version": str(row["reference_version"] or "") if row["is_active"] else "",
+         "version": int(row["version"] or 0),
+         "classified": bool(row["is_active"])}
+        for row in rows
+    ], "total": total}
 
 
 @router.get("/categories")
