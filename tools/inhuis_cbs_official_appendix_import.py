@@ -1,4 +1,4 @@
-"""Import all four official CBS ECOICOPv2 2026 Excel tabs as raw, traceable source cells.
+"""Import all five official CBS ECOICOPv2 2026 Excel tabs as raw, traceable source cells.
 
 Not a product classification or hierarchy importer: those require independent
 verification. No database access, product writes, or inferred parents.
@@ -13,7 +13,7 @@ import zipfile
 
 SOURCE_URL = "https://www.cbs.nl/-/media/_excel/2026/04/bijlageecoicopv2indeling.xlsx"
 SOURCE_SHA256 = "6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f"
-TABS = ("1-ECOICOPv2", "2-Lijst-Speciale-Aggregaten", "3-SA-CPI-2025=100", "4-SA-HICP-2025=100")
+TABS = ("Toelichting", "1-ECOICOPv2", "2-Lijst-Speciale-Aggregaten", "3-SA-CPI-2025=100", "4-SA-HICP-2025=100")
 X = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 P = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -69,7 +69,7 @@ def extract(path):
                            "nonempty_cells": sum(len(r["cells"]) for r in rows)})
     names = tuple(s["name"] for s in sheets)
     if names != TABS:
-        raise ValueError(f"CBS four source sheets do not match official order: {names}")
+        raise ValueError(f"CBS five source sheets do not match official order: {names}")
     if any(not s["rows"] for s in sheets):
         raise ValueError("Incomplete CBS appendix: empty tab")
     return {"source_url": SOURCE_URL, "source_sha256": digest,

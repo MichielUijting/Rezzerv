@@ -1,4 +1,4 @@
-"""Import refuses unpinned official source and preserves all four sheet cells."""
+"""Import refuses unpinned official source and preserves all five sheet cells."""
 import hashlib
 from pathlib import Path
 import zipfile
@@ -13,7 +13,7 @@ def make_workbook(path: Path):
     work += ''.join(f'<sheet name="{name}" sheetId="{i}" r:id="rId{i}"/>' for i, name in enumerate(source.TABS, 1))
     work += '</sheets></workbook>'
     relations = '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    relations += ''.join(f'<Relationship Id="rId{i}" Target="worksheets/sheet{i}.xml"/>' for i in range(1, 5))
+    relations += ''.join(f'<Relationship Id="rId{i}" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(source.TABS) + 1))
     relations += '</Relationships>'
     with zipfile.ZipFile(path, 'w') as z:
         z.writestr('xl/workbook.xml', work)
@@ -24,14 +24,14 @@ def make_workbook(path: Path):
                        f'<worksheet xmlns="{x}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>011420</t></is></c><c r="B2" t="s"><v>0</v></c></row></sheetData></worksheet>')
 
 
-def test_all_four_sheets_and_leading_zeroes(tmp_path, monkeypatch):
+def test_all_five_sheets_and_leading_zeroes(tmp_path, monkeypatch):
     path = tmp_path / 'synthetic.xlsx'
     make_workbook(path)
     monkeypatch.setattr(source, "SOURCE_SHA256", hashlib.sha256(path.read_bytes()).hexdigest())
     data = source.extract(path)
     assert [s["name"] for s in data["sheets"]] == list(source.TABS)
     assert all(s["nonempty_cells"] == 2 for s in data["sheets"])
-    assert data["sheets"][0]["rows"][0]["cells"][0]["value"] == "011420"
+    assert data["sheets"][1]["rows"][0]["cells"][0]["value"] == "011420"
 
 
 def test_unverified_workbook_rejected(tmp_path):
