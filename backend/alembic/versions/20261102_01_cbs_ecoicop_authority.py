@@ -48,8 +48,7 @@ def upgrade() -> None:
             deferrable=True,
             initially='DEFERRED',
         ),
-        sa.CheckConstraint(
-            "cbs_code ~ '^[0-9]{6}
+        sa.CheckConstraint("length(cbs_code) = 6 AND (substr(cbs_code, 1, 1) BETWEEN '0' AND '9') AND (substr(cbs_code, 2, 1) BETWEEN '0' AND '9') AND (substr(cbs_code, 3, 1) BETWEEN '0' AND '9') AND (substr(cbs_code, 4, 1) BETWEEN '0' AND '9') AND (substr(cbs_code, 5, 1) BETWEEN '0' AND '9') AND (substr(cbs_code, 6, 1) BETWEEN '0' AND '9')", name='ck_cbs_code_six_digits'),
         sa.CheckConstraint('level BETWEEN 1 AND 5', name='ck_cbs_level_valid'),
         sa.CheckConstraint('length(trim(name_nl)) > 0', name='ck_cbs_name_required'),
         sa.CheckConstraint('length(trim(reference_version)) > 0', name='ck_cbs_reference_version_required'),
