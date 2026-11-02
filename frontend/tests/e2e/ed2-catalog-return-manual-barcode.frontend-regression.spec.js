@@ -264,6 +264,8 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
           brand: 'Albert Heijn', score: 0.88, identity_compatible: true, selection_proof: 'second' },
         { gtin: '4056489977186', product_name: 'Cervelaat', brand: 'Jumbo',
           score: 0.86, identity_compatible: false,
+          identity_conflict_reason: 'private_label_brand_conflict',
+          selection_proof: 'signed-ah-cervelaat-jumbo',
           identity_conflict_message: 'AH CERVELAAT is een Albert Heijn huismerk. Het geselecteerde product is van Jumbo.' },
         target,
       ],
@@ -286,12 +288,14 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
   await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
   const candidates = page.getByTestId('external-off-free-search-results')
   await candidates.locator('tbody tr', { hasText: 'Jumbo' }).dblclick()
-  const overlay = page.getByTestId('app-feedback-error-overlay')
-  await expect(overlay).toBeVisible()
-  await expect(page.getByTestId('app-feedback-error')).toContainText('Het geselecteerde product is van Jumbo.')
-  await expect(page.getByTestId('app-feedback-error')).toContainText('Melding')
+  const warning = page.getByTestId('ed2-private-label-override-warning-overlay')
+  await expect(warning).toBeVisible()
+  await expect(page.getByTestId('ed2-private-label-override-warning')).toContainText('Het geselecteerde product is van Jumbo.')
+  await expect(page.getByTestId('ed2-private-label-override-warning')).toContainText('Waarschuwing bij koppelen')
   expect(writes).toHaveLength(0)
-  await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK' }).click()
+  await page.getByTestId('ed2-private-label-override-warning').getByRole('button', { name: 'Annuleren' }).click()
+  await expect(warning).toHaveCount(0)
+  expect(writes).toHaveLength(0)
   await candidates.locator('tbody tr', { hasText: target.gtin }).dblclick()
   await expect(page.getByRole('alertdialog')).toContainText('Weet u zeker')
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
