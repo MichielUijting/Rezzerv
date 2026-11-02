@@ -18,6 +18,49 @@ async function mockCompletedHouseholdOnboarding(page) {
   });
 }
 
+test.describe('Catalogus compact GS1-producttype', () => {
+  test('houdt één sorteerbaar/filterbaar GS1-type over en toont dezelfde naam op mobiel', async ({ page }) => {
+    const searchTerms = []
+    await mockCompletedHouseholdOnboarding(page)
+    await page.route('**/api/catalog?*', (route) => {
+      const url = new URL(route.request().url())
+      searchTerms.push(url.searchParams.get('gpc_brick_name'))
+      return route.fulfill({ json: { items: [{
+        id: 'catalog-gs1-example', name: 'Boursin kruidenkaas',
+        brand: 'Boursin', catalog_kind: 'exact', primary_gtin: '3073780966000',
+        product_type: 'Zuivelproduct', article_classification: 'Zuivel',
+        gpc_brick_code: '10000167', gpc_brick_name: 'Kaas — Smeerbaar',
+        gpc_class_name: 'Kaas', gpc_family_name: 'Melkproducten',
+        household_article_count: 0, linked_store_count: 0,
+      }], total: 1, limit: 10, offset: 0 } })
+    })
+    await page.goto('/catalogus')
+    const catalog = page.getByTestId('catalog-table')
+    await expect(catalog).toBeVisible()
+    await expect(catalog.locator('thead tr.rz-table-header th')).toHaveCount(10)
+    await expect(catalog.getByRole('columnheader', { name: /GS1-producttype/ })).toBeVisible()
+    for (const oldHeading of ['Brick-code', 'Brick-naam', 'GPC-groep', 'Productfamilie']) {
+      await expect(catalog.getByRole('columnheader', { name: oldHeading })).toHaveCount(0)
+    }
+    await expect(page.getByTestId('catalog-gs1-producttype-catalog-gs1-example'))
+      .toHaveText('Kaas — Smeerbaar')
+    const gs1Filter = catalog.getByRole('textbox', { name: 'Filter GS1-producttype' })
+    await gs1Filter.fill('Smeerbaar')
+    await expect.poll(() => searchTerms.includes('Smeerbaar')).toBe(true)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.reload()
+    const mobile = page.getByTestId('mobile-catalog-page')
+    await expect(mobile).toBeVisible()
+    const row = page.getByTestId('mobile-catalog-open-catalog-gs1-example')
+    await expect(row).toContainText('GS1-producttype: Kaas — Smeerbaar')
+    await expect(row).not.toContainText('Brick-code:')
+    await expect(row).not.toContainText('Brick-naam:')
+    await expect(row).not.toContainText('GPC-groep:')
+    await expect(row).not.toContainText('Productfamilie:')
+  })
+})
+
 test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
   test('zoekt Producttype op Nederlandse Brickomschrijving en Brickcode', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
