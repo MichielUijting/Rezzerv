@@ -19,7 +19,7 @@ def make_workbook(path: Path):
         z.writestr('xl/workbook.xml', work)
         z.writestr('xl/_rels/workbook.xml.rels', relations)
         z.writestr('xl/sharedStrings.xml', f'<sst xmlns="{x}"><si><t>Halfvolle melk</t></si></sst>')
-        for i in range(1, 5):
+        for i in range(1, len(source.TABS) + 1):
             z.writestr(f'xl/worksheets/sheet{i}.xml',
                        f'<worksheet xmlns="{x}"><sheetData><row r="2"><c r="A2" t="inlineStr"><is><t>011420</t></is></c><c r="B2" t="s"><v>0</v></c></row></sheetData></worksheet>')
 
