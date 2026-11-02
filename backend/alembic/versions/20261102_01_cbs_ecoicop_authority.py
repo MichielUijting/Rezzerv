@@ -62,6 +62,7 @@ def upgrade() -> None:
         sa.Column('cbs_code', sa.String(6), nullable=False),
         sa.Column('reference_version', sa.Text(), nullable=False),
         sa.Column('version', sa.Integer(), nullable=False),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column('confirmed_by', sa.Text(), nullable=False),
         sa.Column('confirmed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('confirmation_source', sa.Text(), nullable=False),
