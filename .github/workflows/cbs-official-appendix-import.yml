@@ -36,6 +36,20 @@ jobs:
           python tools/inhuis_cbs_official_appendix_import.py \
             --xlsx /tmp/cbs-2026/original.xlsx \
             --out /tmp/cbs-2026/cbs_ecoicopv2_complete_source.json
+      - name: Inspect official taxonomy columns and hierarchy evidence
+        run: |
+          python - <<'PY'
+          import json
+          source = json.load(open('/tmp/cbs-2026/cbs_ecoicopv2_complete_source.json'))
+          rows = source['sheets'][1]['rows']
+          for row in rows[:13]:
+              print('CBS_HEADER', row['row'], [(c['address'], str(c['value'])[:85], c['style']) for c in row['cells'][:10]])
+          for row in rows:
+              cells = row['cells']
+              if any(str(c['value']).strip() in ('011200','011220','011221','011222','011400','011420') for c in cells):
+                  print('CBS_HIERARCHY_SAMPLE', row['row'], [(c['address'], str(c['value'])[:90], c['style']) for c in cells[:10]])
+          print('CBS_SOURCE_COUNTS', [(s['name'],s['nonempty_rows'],s['nonempty_cells']) for s in source['sheets']])
+          PY
       - name: Save verified original and full extracted source
         uses: actions/upload-artifact@v4
         with:
