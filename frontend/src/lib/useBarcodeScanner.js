@@ -26,6 +26,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
 
   const [isOpen, setIsOpen] = useState(false)
   const [cameraState, setCameraState] = useState({ status: 'idle', message: '' })
+  const [cameraErrorRevision, setCameraErrorRevision] = useState(0)
   const [cameraMeta, setCameraMeta] = useState({ deviceId: '', label: '', decodeAttempts: 0 })
   const [availableCameras, setAvailableCameras] = useState([])
 
@@ -83,6 +84,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
 
     if (!navigator.mediaDevices?.getUserMedia) {
       logEvent('GET_USER_MEDIA_ERROR', { message: 'Live camera is in deze browser niet beschikbaar.' })
+      setCameraErrorRevision((revision) => revision + 1)
       setCameraState({ status: 'error', message: 'Live camera is niet beschikbaar. Tik op Scannen om de camera/fotofunctie van je apparaat te gebruiken.' })
       setIsOpen(false)
       return
@@ -166,7 +168,8 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
         onFatalError: (error) => {
           logEvent('DECODER_START_ERROR', { errorName: error?.name, errorMessage: error?.message })
           stopScanner(false, 'fatal-decode-error')
-          setCameraState({ status: 'error', message: mapBarcodeCameraErrorToUserMessage(error) })
+          setCameraErrorRevision((revision) => revision + 1)
+      setCameraState({ status: 'error', message: mapBarcodeCameraErrorToUserMessage(error) })
         },
       })
 
@@ -175,6 +178,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     } catch (error) {
       logEvent('SCANNER_START_ERROR', { errorName: error?.name, errorMessage: error?.message })
       stopScanner(false, 'start-error')
+      setCameraErrorRevision((revision) => revision + 1)
       setCameraState({ status: 'error', message: mapBarcodeCameraErrorToUserMessage(error) })
     }
   }, [logEvent, onDetected, screenContext, stopScanner, timeoutMs])
@@ -198,6 +202,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       return true
     } catch (error) {
       logEvent('IMAGE_DECODE_ERROR', { errorName: error?.name, errorMessage: error?.message })
+      setCameraErrorRevision((revision) => revision + 1)
       setCameraState({ status: 'error', message: 'Geen barcode in de foto herkend. Tik op Scannen om opnieuw te proberen of vul de barcode handmatig in.' })
       return false
     } finally {
@@ -221,6 +226,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     videoRef,
     isOpen,
     cameraState,
+    cameraErrorRevision,
     cameraMeta,
     availableCameras,
     startScanner,
