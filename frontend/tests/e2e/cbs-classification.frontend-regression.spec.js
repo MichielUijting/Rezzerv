@@ -65,3 +65,51 @@ for (const width of [390, 1280]) {
     })
   }
 }
+
+
+test('CBS: pindakaas-zoeksuggestie en doorbladeren zonder automatische koppeling', async ({ page }) => {
+  const writes = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'tester', active_household_id: '0', context_type: 'system',
+      role: 'admin', is_platform_superuser: true,
+      permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
+    } })
+    if (path === '/api/cbs-classifications/products') return route.fulfill({ json: { total: 1, items: [{
+      id: 'pinda', name: '100 % pindakaas', brand: 'JUMBO', gtin: '8718452861309',
+      cbs_code: '', category_name: '', version: 0, classified: false,
+    }] } })
+    if (path === '/api/cbs-classifications/categories') return route.fulfill({ json: { items: [] } })
+    if (path === '/api/cbs-classifications/categories/suggest') return route.fulfill({ json: {
+      items: [{ cbs_code: '011840', name_nl: 'Notenpuree, notenboter en notenpasta',
+        reference_version: 'CBS-ECOICOPv2-2026', lowest: true, parent_code: '011800',
+        path: 'Voedingsmiddelen › Suiker › Notenpuree, notenboter en notenpasta',
+        suggestion_reason: 'Zoeksuggestie op basis van productwoord; controleer de betekenis zelf.' }],
+    } })
+    if (path === '/api/cbs-classifications/categories/browse') {
+      const parent = new URL(route.request().url()).searchParams.get('parent_code')
+      const item = parent === null
+        ? { cbs_code: '010000', name_nl: 'Voedingsmiddelen', lowest: false, parent_code: null }
+        : { cbs_code: '011840', name_nl: 'Notenpuree, notenboter en notenpasta', lowest: true, parent_code: '010000' }
+      return route.fulfill({ json: { items: [{ ...item, reference_version: 'CBS-ECOICOPv2-2026', path: item.name_nl }] } })
+    }
+    if (path === '/api/cbs-classifications/bulk-confirm') {
+      writes.push(route.request().postDataJSON())
+      return route.fulfill({ json: { confirmed: 1 } })
+    }
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/catalogus/artikelclassificaties-toekennen')
+  await page.getByLabel('Selecteer 100 % pindakaas').check()
+  await page.getByPlaceholder('Bijvoorbeeld melk of 011420').fill('pindakaas')
+  await page.getByRole('button', { name: 'Voorstel ophalen' }).click()
+  await expect(page.getByTestId('cbs-category-candidates')).toContainText('011840')
+  await expect(page.getByText('Dit zijn zoeksuggesties', { exact: false })).toBeVisible()
+  expect(writes).toHaveLength(0)
+  await page.getByRole('button', { name: 'CBS-indeling doorbladeren' }).click()
+  await expect(page.getByTestId('cbs-category-candidates')).toContainText('Voedingsmiddelen')
+  await page.getByTestId('cbs-category-candidates').getByRole('button', { name: 'Openen' }).click()
+  await expect(page.getByTestId('cbs-category-candidates')).toContainText('Notenpuree')
+  expect(writes).toHaveLength(0)
+})

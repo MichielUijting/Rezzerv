@@ -300,7 +300,7 @@ export default function CbsClassificationPage() {
             <span className="rz-label">Zoek productnaam, CBS-code of officiële categorie</span>
             <input className="rz-input" value={query} disabled={isBusy}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Bijvoorbeeld pindakaas, melk of 011420" />
+              placeholder="Bijvoorbeeld melk of 011420" />
           </label>
           <Button type="button" disabled={isBusy || !selectedItems.length}
             onClick={findCategories}>{searching ? 'Zoeken...' : 'Voorstel ophalen'}</Button>
