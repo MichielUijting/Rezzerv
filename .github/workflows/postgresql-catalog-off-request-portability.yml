@@ -169,7 +169,7 @@ jobs:
           grep -F 'POSTGRESQL_OFF_LINK_EXTERNAL_ARTICLE_CONFIRMATION_GREEN' /tmp/off-link-e2e.log
           grep -F 'POSTGRESQL_OFF_LINK_NO_INVENTORY_MUTATION_GREEN' /tmp/off-link-e2e.log
           grep -F 'POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN' /tmp/off-link-e2e.log
-          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_ITEMS_API_LOAD_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_ED2_OVERVIEW_API_LOAD_GREEN' /tmp/off-link-e2e.log
           grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_SOURCE_UNCHANGED_GREEN' /tmp/off-link-e2e.log
           grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_GPC_ASSIGNMENT_GREEN' /tmp/off-link-e2e.log
           grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_EXTERNAL_ARTICLE_CONFIRMATION_GREEN' /tmp/off-link-e2e.log

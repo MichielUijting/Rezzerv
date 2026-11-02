@@ -485,7 +485,7 @@ def main() -> None:
         print("POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN")
 
         install_receipt_table_line_projection()
-        receipt_items_payload = system_routes.external_databases_receipt_items(limit=500)
+        receipt_items_payload = system_routes.external_databases_articles_overview()
         receipt_items = [
             item
             for item in list(receipt_items_payload.get("items") or [])
@@ -495,8 +495,7 @@ def main() -> None:
             (
                 item
                 for item in receipt_items
-                if str(item.get("global_product_id") or item.get("central_global_product_id") or "").strip()
-                == global_product_id
+                if str(item.get("catalog_product_id") or "").strip() == global_product_id
             ),
             None,
         )
@@ -508,21 +507,15 @@ def main() -> None:
                     "items": receipt_items,
                 }
             )
-        projected_product_type = str(
-            linked_receipt_item.get("product_type_id")
-            or linked_receipt_item.get("inventory_group_key")
-            or ""
-        ).strip()
-        if projected_product_type != TEST_PRODUCT_TYPE:
-            raise AssertionError(
-                {
-                    "reason": "receipt-items projection lost GPC product type",
-                    "expected": TEST_PRODUCT_TYPE,
-                    "actual": projected_product_type,
-                    "item": linked_receipt_item,
-                }
-            )
-        print("POSTGRESQL_OFF_LINK_RECEIPT_ITEMS_API_LOAD_GREEN")
+        if linked_receipt_item.get("link_status") != "linked":
+            raise AssertionError({
+                "reason": "ED2 overview did not recognize the confirmed Catalogus link",
+                "item": linked_receipt_item,
+            })
+        # The ED2 overview intentionally exposes status and Catalogus identity,
+        # not the GPC product type. Its membership and official brick were
+        # verified above using the canonical tables.
+        print("POSTGRESQL_OFF_LINK_ED2_OVERVIEW_API_LOAD_GREEN")
 
         from postgresql_off_link_receipt_table_end_to_end_selftest import (
             main as run_receipt_table_end_to_end,

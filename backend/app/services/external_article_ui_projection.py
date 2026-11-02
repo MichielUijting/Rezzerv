@@ -138,7 +138,16 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
                     or central_link.get("global_product_name")
                 ),
             )
-            if not identity_check.get("ok"):
+            # The OFF selection was explicitly re-confirmed by a human despite
+            # this narrow private-label warning. Do not hide that saved link on
+            # subsequent reads; unsigned GTIN fallbacks retain the strict guard.
+            override = _text(central_link.get("confirmed_by")) in {
+                "external_databases_off_manual_brand_override",
+                "external_databases_off_brand_override",
+            }
+            if not identity_check.get("ok") and not (
+                override and identity_check.get("reason") == "private_label_brand_conflict"
+            ):
                 identity_rejection = identity_check
                 central_link = None
                 central_product_details = {}

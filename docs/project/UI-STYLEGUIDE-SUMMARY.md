@@ -413,6 +413,10 @@ Op mobiele schermen is passieve feedback altijd een **overlay**:
 
 Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voortgangsmeldingen zijn niet transient. Zij blijven centrale AppFeedback-dialogen en verdwijnen niet automatisch.
 
+### ED2: expliciete waarschuwing bij merk-/huismerkconflict
+Wanneer de bevoegde gebruiker in Externe databases 2 een met OFF-bewijs gevonden kandidaat selecteert waarvan het merk afwijkt van een herkenbare huismerkmarker op de bon, verschijnt de **bestaande centrale interactieve Melding**. Deze heeft een ondoorzichtige achtergrond, noemt het oorspronkelijke artikel en de afwijkende merkidentiteit, en biedt **Annuleren** en **Toch koppelen**. Zonder expliciete bevestiging is er **geen koppeling**. Alleen deze concrete huismerkheuristiek mag worden overruled; ontbrekend/verlopen OFF-bewijs, ongeldig barcodebewijs, conflicterende centrale identiteit en autorisatiecontroles blijven harde blokkades. Dit geldt voor beide ED2-kandidaatstromen op desktop en mobiel. De bewuste uitzondering wordt server-side bij de koppeling geregistreerd en mag op latere ED2-weergave niet opnieuw als ongeldige reguliere koppeling worden weggefilterd.
+
+
 ### Ondoorzichtige interactieve dialogen — Catalogus fotokeuze, 30 oktober 2026
 
 - Bij een centrale AppFeedback-dialoog met actieknoppen of invoervelden is de dialoogkaart altijd volledig **ondoorzichtig wit**, met donkere leesbare tekst, een subtiele rand, normale binnenruimte en een duidelijke begrenzing.

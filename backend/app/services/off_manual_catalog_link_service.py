@@ -63,6 +63,10 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
     if not receipt_item_id or not is_valid_gtin(gtin):
         raise ValueError("Een geldig bonartikel en een geldige OFF-barcode zijn verplicht")
 
+    override = payload.get("override_private_label_conflict", False)
+    if not isinstance(override, bool):
+        raise ValueError("Ongeldige override-invoer")
+
     # De server heeft dit resultaat zojuist zelf van OFF ontvangen en
     # ondertekend. Controleer het kortlevende bron- en GTIN-gebonden bewijs
     # zonder een tweede externe OFF-call. Browservelden worden genegeerd.
@@ -75,12 +79,15 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
     # Centrale artikelidentiteit komt uitsluitend uit de oorspronkelijke bronregel.
     with engine.begin() as conn:
         identity = resolve_external_article_identity(conn, receipt_item_id)
-        assert_external_product_identity_compatible(
+        identity_check = assert_external_product_identity_compatible(
             retailer_code=identity["retailer_code"],
             receipt_text=identity["receipt_text"],
             candidate_brand=product.get("brand"),
             candidate_name=product.get("product_name"),
+            allow_private_label_override=override,
         )
+        if override and identity_check.get("reason") != "private_label_brand_conflict":
+            raise ValueError("Er bestaat geen huismerkconflict om te overrulen")
 
         # Een bestaand volledig Catalogusproduct heeft al een officieel GPC-type.
         # Hergebruik daarvan is toegestaan en vereist geen nieuw product of taxonomie.
@@ -96,7 +103,7 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
                     conn,
                     receipt_item_id=receipt_item_id,
                     global_product_id=product_id,
-                    confirmed_by="external_databases_off_manual_link",
+                    confirmed_by=("external_databases_off_manual_brand_override" if override else "external_databases_off_manual_link"),
                 )
                 if (
                     not isinstance(linked, dict)
@@ -119,9 +126,10 @@ def confirm_selected_off_catalog_product(payload: dict[str, Any]) -> dict[str, A
         # A staged link is excluded from Kassa/Voorraad until an official Brick
         # has been assigned; it does not claim a confirmed product-type match.
         return stage_off_product_until_official_gpc(
-            receipt_item_id=receipt_item_id, off_product=product,
+            receipt_item_id=receipt_item_id, off_product=product, allow_private_label_override=override,
         )
     linked = link_off_product_with_product_type(
+        allow_private_label_override=override,
         receipt_item_id=receipt_item_id,
         off_product=product,
         product_type_assignment={

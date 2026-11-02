@@ -49,7 +49,7 @@ def classify_pending_off_article(*, receipt_item_id: Any, link_id: Any, brick_co
             JOIN global_products gp ON gp.id = link.global_product_id
             WHERE link.id = :link_id
               AND link.status = 'classification_pending'
-              AND link.confirmed_by = 'external_databases_off_pending_gpc'
+              AND link.confirmed_by IN ('external_databases_off_pending_gpc', 'external_databases_off_pending_gpc_brand_override')
             FOR UPDATE OF link, gp
         """), {'link_id': expected_link}).mappings().first()
         if (not link or str(link['global_product_id']) != source['pending_global_product_id']
@@ -69,6 +69,7 @@ def classify_pending_off_article(*, receipt_item_id: Any, link_id: Any, brick_co
             receipt_text=source.get('receipt_line_text'),
             candidate_brand=link.get('brand'),
             candidate_name=link.get('name'),
+            allow_private_label_override=(link.get('confirmed_by') == 'external_databases_off_pending_gpc_brand_override'),
         )
         conflict = gpc_brick_conflict({'name': link.get('name'), 'brand': link.get('brand')}, brick)
         if conflict:

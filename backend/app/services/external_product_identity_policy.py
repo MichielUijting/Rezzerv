@@ -148,6 +148,7 @@ def assert_external_product_identity_compatible(
     receipt_text: Any,
     candidate_brand: Any,
     candidate_name: Any = "",
+    allow_private_label_override: bool = False,
 ) -> dict[str, Any]:
     result = external_product_identity_compatibility(
         retailer_code=retailer_code,
@@ -156,6 +157,8 @@ def assert_external_product_identity_compatible(
         candidate_name=candidate_name,
     )
     if not result.get("ok"):
+        if allow_private_label_override is True and result.get("reason") == "private_label_brand_conflict":
+            return result
         raise ValueError(
             str(result.get("message") or "Productidentiteit komt niet overeen")
         )

@@ -292,7 +292,7 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")
                 if status == "classification_pending" and str(central_link.get("confirmed_by") or "")
-                == "external_databases_off_pending_gpc" else "",
+                in {"external_databases_off_pending_gpc", "external_databases_off_pending_gpc_brand_override"} else "",
                 # Alleen expliciete OFF-koppelingen mogen vanuit ED2 worden
                 # ontkoppeld. Een GTIN-fallback of generieke Cataloguskoppeling
                 # geeft geen verwijderbevoegdheid.
@@ -300,6 +300,9 @@ def list_all_external_articles(*, conn=None) -> dict:
                     central_link.get("confirmed_by") or "") in {
                     "external_databases_off_link", "external_databases_off_manual_link",
                     "external_databases_off_pending_gpc",
+                    "external_databases_off_pending_gpc_brand_override",
+                    "external_databases_off_manual_brand_override",
+                    "external_databases_off_brand_override",
                 } and status != "unlinked" else "",
             })
     elapsed_ms = (perf_counter() - started) * 1000
