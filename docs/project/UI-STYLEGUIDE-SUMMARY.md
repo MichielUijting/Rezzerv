@@ -1558,3 +1558,10 @@ beeldframes aan de bestaande resultaatcallback door. De eerste decodeerbeurt
 start na initialisatie van de controles; barcodeherkenning zelf schrijft niets.
 Een regressie met een geldige EAN-13 controleert deze resultaatdoorvoer.
 \n### Externe databases 2 — camerabarcode via juiste grijswaarden (2 november 2026)\n\nDe gedeelde ZXing-frameverwerking gebruikte onterecht de ruwe RGBA-bytes\n(4 bytes per pixel) als zwartwitbeeld (1 byte per pixel). Daardoor werden\nrijen en scanlijnen verkeerd gelezen en kon een zichtbare EAN-13 onherkend\nblijven. De invoer wordt nu expliciet omgezet naar een compact grijswaardenbeeld\nmet correcte transparantiewaarden. Een uitvoerbare contracttest toetst\nde pixelwaarden, beelddimensies en daadwerkelijke resultaatcallback.\n\nIn Externe databases 2 is een nog niet herkende barcode tijdens een actieve\ncamerasessie geen foutmelding: de cameravoorvertoning blijft ononderbroken\nscannen totdat de gebruiker sluit of een barcode wordt gelezen. Daardoor\nblokkeert geen automatische waarschuwing na zeven seconden de scanpreview.\nEchte camerafouten blijven via de standaard Melding-overlay zichtbaar.\nVoor andere schermen blijft de bestaande zeven-secondenregeling ongewijzigd.\n
+### Externe databases 2 — alleen drie statustellers (2 november 2026)
+
+De tellerbalk bevat uitsluitend de statusknoppen **Niet gekoppeld**,
+**Classificatie ontbreekt** en **Gekoppeld**. De extra knop **Wis filters**
+wordt niet getoond, ook niet bij een actief tabel- of statusfilter.
+Kolomfilters blijven in de tabel bewerkbaar en iedere statusknop blijft
+afzonderlijk in- en uitschakelbaar. Er verschijnt geen vierde donkergroene knop.

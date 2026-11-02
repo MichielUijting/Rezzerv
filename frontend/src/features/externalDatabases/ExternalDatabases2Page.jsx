@@ -276,8 +276,6 @@ export default function ExternalDatabases2Page() {
               setTablePage(1)
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
-          {activeStatusCounter || Object.values(filters).some(Boolean) ? <Button type="button" variant="secondary"
-            onClick={() => { setFilters({}); setActiveStatusCounter(''); setTablePage(1) }}>Wis filters</Button> : null}
         </div>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking || deleting}

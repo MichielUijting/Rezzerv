@@ -45,6 +45,33 @@ function bootstrap(route, rows, manualRows, onSave) {
   return route.fulfill({ json: {} })
 }
 
+test('ED2 toont alleen drie statustellers bij actieve tabel- en statusfilters', async ({ page }) => {
+  const article = {
+    id: 'receipt-table-line:counter-filter', receipt_line_text: 'Scharrelei M/L',
+    retailer_code: 'jumbo', retailer: 'Jumbo', receipt_article_number: '533',
+    article_code: '', link_status: 'unlinked',
+  }
+  await page.route('**/api/**', (route) => bootstrap(route, [article], [], () =>
+    route.fulfill({ json: {} })))
+  await page.goto('/externe-databases-2')
+  const counters = page.locator('.rz-external-ed2-counters')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await expect(counters).toContainText('Niet gekoppeld: 1')
+  await expect(counters).toContainText('Classificatie ontbreekt: 0')
+  await expect(counters).toContainText('Gekoppeld: 0')
+  await page.getByRole('textbox', { name: 'Filter op Artikel' }).fill('Scharrelei')
+  await expect(counters.locator('button')).toHaveCount(3)
+  const unlinked = counters.getByRole('button', { name: 'Niet gekoppeld: 1' })
+  await unlinked.click()
+  await expect(unlinked).toHaveAttribute('aria-pressed', 'true')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await unlinked.click()
+  await expect(unlinked).toHaveAttribute('aria-pressed', 'false')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toHaveValue('Scharrelei')
+  await expect(page.getByTestId('external-databases-2-table')).toContainText('Scharrelei M/L')
+})
+
 test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als reserveoptie', async ({ page }) => {
   const item = {
     id: 'receipt-table-line:camera-error', receipt_line_text: 'Scharrelei M/L',
