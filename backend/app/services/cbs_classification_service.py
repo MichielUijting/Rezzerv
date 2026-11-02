@@ -35,7 +35,38 @@ def search_verified_categories(conn, query: str, *, limit: int = 40) -> list[dic
         LIMIT :limit
     """), {"needle": "%" + needle.lower().replace("%", "\\%").replace("_", "\\_") + "%",
            "exact": needle, "limit": limit}).mappings().all()
-    return [dict(row) for row in rows]
+    # The full pinned CBS hierarchy is read-only. A classification category
+    # can only be selected when it is a lowest-level (leaf) category.
+    hierarchy = conn.execute(text("""
+        SELECT cbs_code, parent_code, name_nl, reference_version
+        FROM cbs_ecoicop_categories
+    """)).mappings().all()
+    index = {(row["reference_version"], row["cbs_code"]): row for row in hierarchy}
+    parents = {(row["reference_version"], row["parent_code"])
+               for row in hierarchy if row["parent_code"] is not None}
+    results = []
+    for result in rows:
+        category = dict(result)
+        key = (category["reference_version"], category["cbs_code"])
+        category["lowest"] = key not in parents
+        labels = []
+        seen = set()
+        node_key = key
+        while node_key in index:
+            if node_key in seen:
+                raise CBSDecisionError("CBS-referentie bevat een cyclische hiërarchie.")
+            seen.add(node_key)
+            node = index[node_key]
+            labels.append(str(node["name_nl"]))
+            parent = node["parent_code"]
+            if parent is None:
+                break
+            node_key = (category["reference_version"], parent)
+        else:
+            raise CBSDecisionError("CBS-referentie bevat een ontbrekende oudercategorie.")
+        category["path"] = " › ".join(reversed(labels))
+        results.append(category)
+    return results
 
 
 def confirm_cbs_batch(conn, decisions: Sequence[Mapping], *, actor_id: str) -> dict:
@@ -72,7 +103,7 @@ def confirm_cbs_batch(conn, decisions: Sequence[Mapping], *, actor_id: str) -> d
               )
         """), {"code": code, "reference": reference_version}).first()
         if not category:
-            raise CBSDecisionError("CBS-categorie ontbreekt of is geen laagste categorie in de officiële referentie.")
+            raise CBSDecisionError("CBS-categorie ontbreekt in de geverifieerde referentie of is geen laagste categorie.")
         current = conn.execute(text(
             "SELECT cbs_code, reference_version, version, is_active "
             "FROM global_product_cbs_classifications WHERE global_product_id = :id" + lock
