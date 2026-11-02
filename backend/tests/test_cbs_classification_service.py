@@ -1,7 +1,10 @@
 """Database-level CBS classification contracts, without a live user database."""
+import os
+from uuid import uuid4
+
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.engine import make_url
 
 from app.services.cbs_classification_service import (
     CBSConcurrentChange,
@@ -17,30 +20,45 @@ CODE = "011420"
 
 @pytest.fixture()
 def database():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    with engine.begin() as conn:
-        conn.exec_driver_sql("CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT)")
-        conn.exec_driver_sql("""CREATE TABLE cbs_ecoicop_categories (
-            cbs_code TEXT NOT NULL, reference_version TEXT NOT NULL, name_nl TEXT,
-            parent_code TEXT, level INTEGER, valid_from TEXT, source_url TEXT,
-            source_sha256 TEXT, scope_notes TEXT,
-            PRIMARY KEY(cbs_code, reference_version))""")
-        conn.exec_driver_sql("""CREATE TABLE global_product_cbs_classifications (
-            global_product_id TEXT PRIMARY KEY, cbs_code TEXT NOT NULL, reference_version TEXT NOT NULL,
-            version INTEGER NOT NULL, is_active BOOLEAN NOT NULL, confirmed_by TEXT NOT NULL,
-            confirmation_source TEXT NOT NULL, confirmed_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
-        conn.exec_driver_sql("""CREATE TABLE global_product_cbs_history (
-            id TEXT PRIMARY KEY, global_product_id TEXT NOT NULL, cbs_code TEXT,
-            reference_version TEXT NOT NULL, version INTEGER NOT NULL, action TEXT NOT NULL,
-            confirmed_by TEXT NOT NULL, confirmation_source TEXT NOT NULL,
-            confirmed_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
-        conn.execute(text("INSERT INTO global_products VALUES ('p1','Halfvolle melk','active'),('p2','Magere melk','active')"))
-        conn.execute(text("""INSERT INTO cbs_ecoicop_categories
-            (cbs_code, reference_version, name_nl, level, valid_from, source_url, source_sha256)
-            VALUES ('011420',:ref,'Halfvolle en magere melk',4,'2026-01-01','cbs.nl',:hash)"""),
-            {"ref": REF, "hash": "a" * 64})
-    yield engine
-    engine.dispose()
+    url = os.environ.get("INHUIS_CBS_TEST_DATABASE_URL", "")
+    if not url:
+        pytest.skip("Expliciete, geisoleerde PostgreSQL-CBS-testdatabase vereist")
+    parsed = make_url(url)
+    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_cbs_test"):
+        raise RuntimeError("CBS-test weigert niet-geisoleerde database")
+    owner = create_engine(url)
+    schema = "cbs_test_" + uuid4().hex
+    with owner.begin() as conn:
+        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql("CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT)")
+            conn.exec_driver_sql("""CREATE TABLE cbs_ecoicop_categories (
+                cbs_code TEXT NOT NULL, reference_version TEXT NOT NULL, name_nl TEXT,
+                parent_code TEXT, level INTEGER, valid_from TEXT, source_url TEXT,
+                source_sha256 TEXT, scope_notes TEXT,
+                PRIMARY KEY(cbs_code, reference_version))""")
+            conn.exec_driver_sql("""CREATE TABLE global_product_cbs_classifications (
+                global_product_id TEXT PRIMARY KEY, cbs_code TEXT NOT NULL, reference_version TEXT NOT NULL,
+                version INTEGER NOT NULL, is_active BOOLEAN NOT NULL, confirmed_by TEXT NOT NULL,
+                confirmation_source TEXT NOT NULL, confirmed_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
+            conn.exec_driver_sql("""CREATE TABLE global_product_cbs_history (
+                id TEXT PRIMARY KEY, global_product_id TEXT NOT NULL, cbs_code TEXT,
+                reference_version TEXT NOT NULL, version INTEGER NOT NULL, action TEXT NOT NULL,
+                confirmed_by TEXT NOT NULL, confirmation_source TEXT NOT NULL,
+                confirmed_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
+            conn.execute(text("INSERT INTO global_products VALUES ('p1','Halfvolle melk','active'),('p2','Magere melk','active')"))
+            conn.execute(text("""INSERT INTO cbs_ecoicop_categories
+                (cbs_code, reference_version, name_nl, level, valid_from, source_url, source_sha256)
+                VALUES ('011420',:ref,'Halfvolle en magere melk',4,'2026-01-01','cbs.nl',:hash)"""),
+                {"ref": REF, "hash": "a" * 64})
+        yield engine
+    finally:
+        engine.dispose()
+        with owner.begin() as conn:
+            conn.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
+        owner.dispose()
 
 
 def choice(product_id="p1", code=CODE, version=0, name="Halfvolle melk"):
