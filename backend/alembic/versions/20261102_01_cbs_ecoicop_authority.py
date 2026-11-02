@@ -6,6 +6,77 @@ through later, explicitly reviewed authority operations.
 """
 from alembic import op
 import sqlalchemy as sa
+import json
+from pathlib import Path
+from datetime import date
+
+_REFERENCE = Path(__file__).resolve().parents[2] / 'app' / 'data' / 'cbs_ecoicop_v2_2026_reference.json'
+_SOURCE_SHA = '6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f'
+_EXPECTED_LEVELS = {1: 15, 2: 59, 3: 134, 4: 224, 5: 8}
+
+
+def _seed_official_reference() -> None:
+    """Import only the already cross-checked official CBS authority, never guesses."""
+    if not _REFERENCE.is_file():
+        raise RuntimeError('Gecontroleerde CBS-referentie ontbreekt; migratie veilig gestopt.')
+    source = json.loads(_REFERENCE.read_text(encoding='utf-8'))
+    if source.get('reference_version') != 'CBS-ECOICOPv2-2026' or source.get('source_sha256') != _SOURCE_SHA:
+        raise RuntimeError('Onjuiste CBS-bronversie of SHA-256.')
+    rows = source.get('categories')
+    if not isinstance(rows, list) or len(rows) != 440:
+        raise RuntimeError('CBS-referentie heeft niet exact 440 categorieën.')
+    counts = {level: 0 for level in _EXPECTED_LEVELS}
+    seen = set()
+    parents = set()
+    for row in rows:
+        code, name = row.get('cbs_code'), row.get('name_nl')
+        level, parent = row.get('level'), row.get('parent_code')
+        if (not isinstance(code, str) or len(code) != 6 or not code.isascii() or
+            not code.isdecimal() or code in seen or not isinstance(name, str) or not name.strip()
+            or type(level) is not int or level not in counts):
+            raise RuntimeError('Ongeldige CBS-code, naam of classificatieniveau.')
+        seen.add(code)
+        counts[level] += 1
+        if parent is not None:
+            parents.add(parent)
+    if counts != _EXPECTED_LEVELS or not parents.issubset(seen):
+        raise RuntimeError('CBS-hiërarchie of niveauaantallen wijken af van officiële bron.')
+    by_code = {row['cbs_code']: row for row in rows}
+    for row in rows:
+        parent = row['parent_code']
+        if parent is None:
+            if row['level'] != 1:
+                raise RuntimeError('Niet-hoofdcategorie zonder ouder.')
+        elif by_code[parent]['level'] + 1 != row['level']:
+            raise RuntimeError('CBS-ouder en niveau zijn inconsistent.')
+        if bool(row.get('lowest')) != (row['cbs_code'] not in parents):
+            raise RuntimeError('CBS laagste-groep-markering inconsistent.')
+    if sum(row['lowest'] for row in rows) != 314:
+        raise RuntimeError('CBS aantal laagste categorieën wijkt af.')
+    bind = op.get_bind()
+    existing = bind.execute(sa.text('SELECT COUNT(*) FROM cbs_ecoicop_categories')).scalar_one()
+    if existing:
+        raise RuntimeError('CBS-referentie bevat al gegevens; migratie stopt zonder overschrijven.')
+    entries = [
+        dict(
+            cbs_code=row['cbs_code'], reference_version=source['reference_version'],
+            name_nl=row['name_nl'], parent_code=row['parent_code'],
+            level=row['level'], valid_from=date(2026, 1, 1),
+            source_url=source['source_url'], source_sha256=_SOURCE_SHA,
+            scope_notes='CBS ECOICOPv2 2026, officiële Excelrij ' + str(row['source_excel_row']),
+        ) for row in rows
+    ]
+    # The parent FK is deferrable in PostgreSQL. SQLite's FK checks are
+    # deferred by default in the migration harness; source rows are parent-first.
+    table = sa.table('cbs_ecoicop_categories',
+        sa.column('cbs_code', sa.String), sa.column('reference_version', sa.Text),
+        sa.column('name_nl', sa.Text), sa.column('parent_code', sa.String),
+        sa.column('level', sa.SmallInteger), sa.column('valid_from', sa.Date),
+        sa.column('source_url', sa.Text), sa.column('source_sha256', sa.String),
+        sa.column('scope_notes', sa.Text))
+    op.bulk_insert(table, entries)
+
+
 
 revision = '20261102_01'
 down_revision = '20261031_02'
@@ -94,6 +165,7 @@ def upgrade() -> None:
         sa.CheckConstraint("(cbs_code IS NOT NULL AND action = 'confirmed') OR (cbs_code IS NULL AND action = 'removed')", name='ck_cbs_history_action_code'),
     )
     op.create_index('idx_cbs_history_product', 'global_product_cbs_history', ['global_product_id', 'confirmed_at'])
+    _seed_official_reference()  # DML before PostgreSQL maintenance-write triggers
     for table in ('cbs_ecoicop_categories', 'global_product_cbs_classifications', 'global_product_cbs_history'):
         _guard(table)
 

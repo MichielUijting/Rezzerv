@@ -1,0 +1,3538 @@
+{
+  "reference_version": "CBS-ECOICOPv2-2026",
+  "source_url": "https://www.cbs.nl/-/media/_excel/2026/04/bijlageecoicopv2indeling.xlsx",
+  "source_sha256": "6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f",
+  "source_sheet": "1-ECOICOPv2",
+  "source_license": "CC BY 4.0 (CBS)",
+  "observed_source_rows": 440,
+  "levels": {
+    "1": 15,
+    "2": 59,
+    "3": 134,
+    "4": 224,
+    "5": 8
+  },
+  "validated_against_official_lowest_jn": true,
+  "categories": [
+    {
+      "cbs_code": "010000",
+      "name_nl": "Voedingsmiddelen en alcoholvrije dranken",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 2,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011000",
+      "name_nl": "Voedingsmiddelen",
+      "parent_code": "010000",
+      "level": 2,
+      "source_excel_row": 3,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011100",
+      "name_nl": "Granen en graanproducten (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 4,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011110",
+      "name_nl": "Granen (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 5,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011120",
+      "name_nl": "Meel van granen (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 6,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011130",
+      "name_nl": "Brood en bakkerijproducten (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 7,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011140",
+      "name_nl": "Ontbijtgranen (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 8,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011150",
+      "name_nl": "Macaroni, noedels, couscous en soortgelijke pastaproducten (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 9,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011190",
+      "name_nl": "Overige gemalen granen en graanproducten (ND)",
+      "parent_code": "011100",
+      "level": 4,
+      "source_excel_row": 10,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011200",
+      "name_nl": "Levende dieren en vlees en andere delen van geslachte landdieren (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 11,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011210",
+      "name_nl": "Levende landdieren (ND)",
+      "parent_code": "011200",
+      "level": 4,
+      "source_excel_row": 12,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011220",
+      "name_nl": "Vlees, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011200",
+      "level": 4,
+      "source_excel_row": 13,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011221",
+      "name_nl": "Vlees van runderen, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 14,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011222",
+      "name_nl": "Vlees van varkens, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 15,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011223",
+      "name_nl": "Vlees van geiten, lammeren en schapen, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 16,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011224",
+      "name_nl": "Vlees van pluimvee, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 17,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011225",
+      "name_nl": "Vlees van hazen en konijnen, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 18,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011226",
+      "name_nl": "Vlees van paarden en andere paardachtigen, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 19,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011227",
+      "name_nl": "Vlees van kamelen en kameelachtigen, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 20,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011229",
+      "name_nl": "Overig vlees, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011220",
+      "level": 5,
+      "source_excel_row": 21,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011230",
+      "name_nl": "Vlees, gedroogd, gezouten, gepekeld of gerookt (ND)",
+      "parent_code": "011200",
+      "level": 4,
+      "source_excel_row": 22,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011240",
+      "name_nl": "Orgaanvlees, bloed en andere delen van geslachte dieren, vers, gekoeld of bevroren, gedroogd, gezouten, gepekeld of gerookt (ND)",
+      "parent_code": "011200",
+      "level": 4,
+      "source_excel_row": 23,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011250",
+      "name_nl": "Bereidingen van vlees, orgaanvlees, bloed en andere delen van geslachte dieren (ND)",
+      "parent_code": "011200",
+      "level": 4,
+      "source_excel_row": 24,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011300",
+      "name_nl": "Vis en andere schaal‑ en schelpdieren (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 25,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011310",
+      "name_nl": "Vis, levend, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 26,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011320",
+      "name_nl": "Vis, gedroogd, gezouten, gepekeld of gerookt (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 27,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011330",
+      "name_nl": "Visbereidingen (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 28,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011340",
+      "name_nl": "Overige schaal‑ en schelpdieren, levend, vers, gekoeld of bevroren (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 29,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011350",
+      "name_nl": "Overige schaal‑ en schelpdieren, gedroogd, gezouten, gepekeld of gerookt (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 30,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011360",
+      "name_nl": "Overige bereidingen van schaal- en schelpdieren (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 31,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011370",
+      "name_nl": "Lever, kuit en ander orgaanvlees van vis of van andere schaal‑ of schelpdieren, in alle vormen (ND)",
+      "parent_code": "011300",
+      "level": 4,
+      "source_excel_row": 32,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011400",
+      "name_nl": "Melk, andere zuivelproducten en eieren (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 33,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011410",
+      "name_nl": "Rauwe en volle melk (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 34,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011420",
+      "name_nl": "Halfvolle en magere melk (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 35,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011430",
+      "name_nl": "Overige melk en room (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 36,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011440",
+      "name_nl": "Niet‑dierlijke melk (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 37,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011450",
+      "name_nl": "Kaas (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 38,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011460",
+      "name_nl": "Yoghurt en soortgelijke producten (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 39,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011470",
+      "name_nl": "Desserts en dranken op basis van melk (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 40,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011480",
+      "name_nl": "Eieren (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 41,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011490",
+      "name_nl": "Overige zuivelproducten (ND)",
+      "parent_code": "011400",
+      "level": 4,
+      "source_excel_row": 42,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011500",
+      "name_nl": "Oliën en vetten (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 43,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011510",
+      "name_nl": "Plantaardige oliën (ND)",
+      "parent_code": "011500",
+      "level": 4,
+      "source_excel_row": 44,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011520",
+      "name_nl": "Boter en andere van melk afkomstige oliën en vetten (ND)",
+      "parent_code": "011500",
+      "level": 4,
+      "source_excel_row": 45,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011530",
+      "name_nl": "Margarine en dergelijke bereidingen (ND)",
+      "parent_code": "011500",
+      "level": 4,
+      "source_excel_row": 46,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011590",
+      "name_nl": "Overige dierlijke oliën en vetten (ND)",
+      "parent_code": "011500",
+      "level": 4,
+      "source_excel_row": 47,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011600",
+      "name_nl": "Fruit en noten (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 48,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011610",
+      "name_nl": "Dadels, vijgen en tropische vruchten, vers (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 49,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011620",
+      "name_nl": "Citrusvruchten, vers (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 50,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011630",
+      "name_nl": "Steenvruchten en pitvruchten, vers (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 51,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011640",
+      "name_nl": "Bessen, vers (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 52,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011650",
+      "name_nl": "Overig fruit, vers (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 53,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011660",
+      "name_nl": "Fruit, bevroren (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 54,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011670",
+      "name_nl": "Vruchten, gedroogd en gedehydrateerd (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 55,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011680",
+      "name_nl": "Noten, met of zonder dop (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 56,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011690",
+      "name_nl": "Vruchten en noten, gemalen, en in andere bereidingen (ND)",
+      "parent_code": "011600",
+      "level": 4,
+      "source_excel_row": 57,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011700",
+      "name_nl": "Groenten, knollen, plantains, bakbananen en peulvruchten (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 58,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011710",
+      "name_nl": "Blad‑ of stengelgroenten, vers of gekoeld (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 59,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011720",
+      "name_nl": "Vruchtdragende groenten, vers of gekoeld (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 60,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011730",
+      "name_nl": "Groene peulgroenten, vers of gekoeld (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 61,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011740",
+      "name_nl": "Overige groenten, vers of gekoeld (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 62,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011750",
+      "name_nl": "Knollen, plantains en bakbananen vers of gekoeld (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 63,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011760",
+      "name_nl": "Peulvruchten (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 64,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011770",
+      "name_nl": "Overige groenten, knollen, plantains en bakbananen, gedroogd en gedehydrateerd (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 65,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011780",
+      "name_nl": "Groenten, knollen, plantains en bakbananen, bevroren (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 66,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011790",
+      "name_nl": "Groenten, knollen, plantains, bakbananen en peulvruchten, gemalen, en in andere bereidingen (ND)",
+      "parent_code": "011700",
+      "level": 4,
+      "source_excel_row": 67,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011800",
+      "name_nl": "Suiker, suikerwerk en desserts (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 68,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011810",
+      "name_nl": "Rietsuiker en bietsuiker (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 69,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011820",
+      "name_nl": "Overige suikers en suikervervangers (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 70,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011830",
+      "name_nl": "Jam, marmelade, vruchtengelei, vruchtenmoes en vruchtenpasta, en honing (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 71,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011840",
+      "name_nl": "Notenpuree, notenboter en notenpasta (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 72,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011850",
+      "name_nl": "Chocolade, cacao en voedingsmiddelen op basis van cacao (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 73,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011860",
+      "name_nl": "IJs, roomijs en sorbets (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 74,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011890",
+      "name_nl": "Overig suikerwerk en desserts n.e.g. (ND)",
+      "parent_code": "011800",
+      "level": 4,
+      "source_excel_row": 75,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011900",
+      "name_nl": "Kant- en klare voeding en andere voedingsmiddelen (ND)",
+      "parent_code": "011000",
+      "level": 3,
+      "source_excel_row": 76,
+      "lowest": false
+    },
+    {
+      "cbs_code": "011910",
+      "name_nl": "Kant- en klare voeding (ND)",
+      "parent_code": "011900",
+      "level": 4,
+      "source_excel_row": 77,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011920",
+      "name_nl": "Babyvoeding (ND)",
+      "parent_code": "011900",
+      "level": 4,
+      "source_excel_row": 78,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011930",
+      "name_nl": "Zout, samengestelde kruiderijen en sauzen (ND)",
+      "parent_code": "011900",
+      "level": 4,
+      "source_excel_row": 79,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011940",
+      "name_nl": "Specerijen, keukenkruiden en zaden (ND)",
+      "parent_code": "011900",
+      "level": 4,
+      "source_excel_row": 80,
+      "lowest": true
+    },
+    {
+      "cbs_code": "011990",
+      "name_nl": "Overige voedingsmiddelen n.e.g. (ND)",
+      "parent_code": "011900",
+      "level": 4,
+      "source_excel_row": 81,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012000",
+      "name_nl": "Alcoholvrije dranken",
+      "parent_code": "010000",
+      "level": 2,
+      "source_excel_row": 82,
+      "lowest": false
+    },
+    {
+      "cbs_code": "012100",
+      "name_nl": "Groente‑ en fruitsappen (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 83,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012200",
+      "name_nl": "Koffie en koffiesurrogaten (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 84,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012300",
+      "name_nl": "Thee, maté en andere plantaardige producten voor het maken van kruidenthee (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 85,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012400",
+      "name_nl": "Cacaodranken (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 86,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012500",
+      "name_nl": "Water (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 87,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012600",
+      "name_nl": "Frisdranken (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 88,
+      "lowest": true
+    },
+    {
+      "cbs_code": "012900",
+      "name_nl": "Overige alcoholvrije dranken (ND)",
+      "parent_code": "012000",
+      "level": 3,
+      "source_excel_row": 89,
+      "lowest": true
+    },
+    {
+      "cbs_code": "013000",
+      "name_nl": "Diensten voor verwerking van primaire producten voor voedingsmiddelen en alcoholvrije dranken (S)",
+      "parent_code": "010000",
+      "level": 2,
+      "source_excel_row": 90,
+      "lowest": true
+    },
+    {
+      "cbs_code": "020000",
+      "name_nl": "Alcoholhoudende dranken, tabak en verdovende en stimulerende middelen",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 91,
+      "lowest": false
+    },
+    {
+      "cbs_code": "021000",
+      "name_nl": "Alcoholhoudende dranken",
+      "parent_code": "020000",
+      "level": 2,
+      "source_excel_row": 92,
+      "lowest": false
+    },
+    {
+      "cbs_code": "021100",
+      "name_nl": "Gedistilleerde dranken en likeuren (ND)",
+      "parent_code": "021000",
+      "level": 3,
+      "source_excel_row": 93,
+      "lowest": true
+    },
+    {
+      "cbs_code": "021200",
+      "name_nl": "Wijn (ND)",
+      "parent_code": "021000",
+      "level": 3,
+      "source_excel_row": 94,
+      "lowest": false
+    },
+    {
+      "cbs_code": "021210",
+      "name_nl": "Wijn van druiven (ND)",
+      "parent_code": "021200",
+      "level": 4,
+      "source_excel_row": 95,
+      "lowest": true
+    },
+    {
+      "cbs_code": "021220",
+      "name_nl": "Wijn van andere bronnen (ND)",
+      "parent_code": "021200",
+      "level": 4,
+      "source_excel_row": 96,
+      "lowest": true
+    },
+    {
+      "cbs_code": "021300",
+      "name_nl": "Bier (ND)",
+      "parent_code": "021000",
+      "level": 3,
+      "source_excel_row": 97,
+      "lowest": true
+    },
+    {
+      "cbs_code": "021900",
+      "name_nl": "Overige alcoholhoudende dranken (ND)",
+      "parent_code": "021000",
+      "level": 3,
+      "source_excel_row": 98,
+      "lowest": true
+    },
+    {
+      "cbs_code": "022000",
+      "name_nl": "Diensten in verband met de productie van alcohol (S)",
+      "parent_code": "020000",
+      "level": 2,
+      "source_excel_row": 99,
+      "lowest": true
+    },
+    {
+      "cbs_code": "023000",
+      "name_nl": "Tabak",
+      "parent_code": "020000",
+      "level": 2,
+      "source_excel_row": 100,
+      "lowest": false
+    },
+    {
+      "cbs_code": "023010",
+      "name_nl": "Sigaretten (ND)",
+      "parent_code": "023000",
+      "level": 4,
+      "source_excel_row": 101,
+      "lowest": true
+    },
+    {
+      "cbs_code": "023020",
+      "name_nl": "Sigaren (ND)",
+      "parent_code": "023000",
+      "level": 4,
+      "source_excel_row": 102,
+      "lowest": true
+    },
+    {
+      "cbs_code": "023090",
+      "name_nl": "Andere tabaksproducten (ND)",
+      "parent_code": "023000",
+      "level": 4,
+      "source_excel_row": 103,
+      "lowest": true
+    },
+    {
+      "cbs_code": "024000",
+      "name_nl": "Verdovende en stimulerende middelen (ND)",
+      "parent_code": "020000",
+      "level": 2,
+      "source_excel_row": 104,
+      "lowest": true
+    },
+    {
+      "cbs_code": "030000",
+      "name_nl": "Kleding en schoenen",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 105,
+      "lowest": false
+    },
+    {
+      "cbs_code": "031000",
+      "name_nl": "Kleding",
+      "parent_code": "030000",
+      "level": 2,
+      "source_excel_row": 106,
+      "lowest": false
+    },
+    {
+      "cbs_code": "031100",
+      "name_nl": "Kledingstoffen (SD)",
+      "parent_code": "031000",
+      "level": 3,
+      "source_excel_row": 107,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031200",
+      "name_nl": "Kleding (SD)",
+      "parent_code": "031000",
+      "level": 3,
+      "source_excel_row": 108,
+      "lowest": false
+    },
+    {
+      "cbs_code": "031210",
+      "name_nl": "Heren‑ of jongenskleding (SD)",
+      "parent_code": "031200",
+      "level": 4,
+      "source_excel_row": 109,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031220",
+      "name_nl": "Dames‑ of meisjeskleding (SD)",
+      "parent_code": "031200",
+      "level": 4,
+      "source_excel_row": 110,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031230",
+      "name_nl": "Babykleding (jonger dan 2 jaar) (SD)",
+      "parent_code": "031200",
+      "level": 4,
+      "source_excel_row": 111,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031240",
+      "name_nl": "Schooluniformen (SD)",
+      "parent_code": "031200",
+      "level": 4,
+      "source_excel_row": 112,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031300",
+      "name_nl": "Overige kledingartikelen en fournituren (SD)",
+      "parent_code": "031000",
+      "level": 3,
+      "source_excel_row": 113,
+      "lowest": false
+    },
+    {
+      "cbs_code": "031310",
+      "name_nl": "Overige kledingartikelen (SD)",
+      "parent_code": "031300",
+      "level": 4,
+      "source_excel_row": 114,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031320",
+      "name_nl": "Fournituren (SD)",
+      "parent_code": "031300",
+      "level": 4,
+      "source_excel_row": 115,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031400",
+      "name_nl": "Wasserijen en stomerijen, reparatie, op maat maken en huur van kleding (S)",
+      "parent_code": "031000",
+      "level": 3,
+      "source_excel_row": 116,
+      "lowest": false
+    },
+    {
+      "cbs_code": "031410",
+      "name_nl": "Wasserijen en stomerijen (S)",
+      "parent_code": "031400",
+      "level": 4,
+      "source_excel_row": 117,
+      "lowest": true
+    },
+    {
+      "cbs_code": "031420",
+      "name_nl": "Reparatie, op maat maken en huur van kleding (S)",
+      "parent_code": "031400",
+      "level": 4,
+      "source_excel_row": 118,
+      "lowest": true
+    },
+    {
+      "cbs_code": "032000",
+      "name_nl": "Schoenen",
+      "parent_code": "030000",
+      "level": 2,
+      "source_excel_row": 119,
+      "lowest": false
+    },
+    {
+      "cbs_code": "032100",
+      "name_nl": "Schoenen en ander schoeisel (SD)",
+      "parent_code": "032000",
+      "level": 3,
+      "source_excel_row": 120,
+      "lowest": false
+    },
+    {
+      "cbs_code": "032110",
+      "name_nl": "Herenschoenen (SD)",
+      "parent_code": "032100",
+      "level": 4,
+      "source_excel_row": 121,
+      "lowest": true
+    },
+    {
+      "cbs_code": "032120",
+      "name_nl": "Damesschoenen (SD)",
+      "parent_code": "032100",
+      "level": 4,
+      "source_excel_row": 122,
+      "lowest": true
+    },
+    {
+      "cbs_code": "032130",
+      "name_nl": "Kinderschoenen (SD)",
+      "parent_code": "032100",
+      "level": 4,
+      "source_excel_row": 123,
+      "lowest": true
+    },
+    {
+      "cbs_code": "032200",
+      "name_nl": "Reiniging, reparatie en huur van schoeisel (S)",
+      "parent_code": "032000",
+      "level": 3,
+      "source_excel_row": 124,
+      "lowest": true
+    },
+    {
+      "cbs_code": "040000",
+      "name_nl": "Huisvesting, water, elektriciteit, gas en andere brandstoffen",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 125,
+      "lowest": false
+    },
+    {
+      "cbs_code": "041000",
+      "name_nl": "Werkelijke woninghuur",
+      "parent_code": "040000",
+      "level": 2,
+      "source_excel_row": 126,
+      "lowest": false
+    },
+    {
+      "cbs_code": "041100",
+      "name_nl": "Werkelijke huur betaald door huurders voor hoofdverblijf (S)",
+      "parent_code": "041000",
+      "level": 3,
+      "source_excel_row": 127,
+      "lowest": true
+    },
+    {
+      "cbs_code": "041200",
+      "name_nl": "Overige werkelijke huur (S)",
+      "parent_code": "041000",
+      "level": 3,
+      "source_excel_row": 128,
+      "lowest": false
+    },
+    {
+      "cbs_code": "041210",
+      "name_nl": "Werkelijke huur betaald door huurders voor een tweede woning (S)",
+      "parent_code": "041200",
+      "level": 4,
+      "source_excel_row": 129,
+      "lowest": true
+    },
+    {
+      "cbs_code": "041220",
+      "name_nl": "Garagehuur en andere huur die door huurders wordt betaald (S)",
+      "parent_code": "041200",
+      "level": 4,
+      "source_excel_row": 130,
+      "lowest": true
+    },
+    {
+      "cbs_code": "042000",
+      "name_nl": "Toegerekende huur",
+      "parent_code": "040000",
+      "level": 2,
+      "source_excel_row": 131,
+      "lowest": false
+    },
+    {
+      "cbs_code": "042100",
+      "name_nl": "Huurwaarde voor bewoners van een eigen woning voor hun hoofdverblijf (S)",
+      "parent_code": "042000",
+      "level": 3,
+      "source_excel_row": 132,
+      "lowest": true
+    },
+    {
+      "cbs_code": "042200",
+      "name_nl": "Overige huurwaarde (S)",
+      "parent_code": "042000",
+      "level": 3,
+      "source_excel_row": 133,
+      "lowest": true
+    },
+    {
+      "cbs_code": "043000",
+      "name_nl": "Onderhoud, reparatie en beveiliging van de woning",
+      "parent_code": "040000",
+      "level": 2,
+      "source_excel_row": 134,
+      "lowest": false
+    },
+    {
+      "cbs_code": "043100",
+      "name_nl": "Beveiligingsapparatuur en materiaal voor onderhoud en reparatie van woningen",
+      "parent_code": "043000",
+      "level": 3,
+      "source_excel_row": 135,
+      "lowest": false
+    },
+    {
+      "cbs_code": "043110",
+      "name_nl": "Materiaal voor onderhoud en reparatie van de woning (ND)",
+      "parent_code": "043100",
+      "level": 4,
+      "source_excel_row": 136,
+      "lowest": true
+    },
+    {
+      "cbs_code": "043120",
+      "name_nl": "Beveiligingsapparatuur (SD)",
+      "parent_code": "043100",
+      "level": 4,
+      "source_excel_row": 137,
+      "lowest": true
+    },
+    {
+      "cbs_code": "043200",
+      "name_nl": "Diensten voor onderhoud, reparatie en beveiliging van de woning (S)",
+      "parent_code": "043000",
+      "level": 3,
+      "source_excel_row": 138,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044000",
+      "name_nl": "Watervoorziening en diverse diensten in verband met de woning",
+      "parent_code": "040000",
+      "level": 2,
+      "source_excel_row": 139,
+      "lowest": false
+    },
+    {
+      "cbs_code": "044100",
+      "name_nl": "Watervoorziening (ND)",
+      "parent_code": "044000",
+      "level": 3,
+      "source_excel_row": 140,
+      "lowest": false
+    },
+    {
+      "cbs_code": "044110",
+      "name_nl": "Watervoorziening via netwerksystemen (ND)",
+      "parent_code": "044100",
+      "level": 4,
+      "source_excel_row": 141,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044120",
+      "name_nl": "Watervoorziening via andere systemen (ND)",
+      "parent_code": "044100",
+      "level": 4,
+      "source_excel_row": 142,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044200",
+      "name_nl": "Ophalen van huisvuil (S)",
+      "parent_code": "044000",
+      "level": 3,
+      "source_excel_row": 143,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044300",
+      "name_nl": "Riolering (S)",
+      "parent_code": "044000",
+      "level": 3,
+      "source_excel_row": 144,
+      "lowest": false
+    },
+    {
+      "cbs_code": "044310",
+      "name_nl": "Riolering via rioolstelsels (S)",
+      "parent_code": "044300",
+      "level": 4,
+      "source_excel_row": 145,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044320",
+      "name_nl": "Riolering via sanitaire voorzieningen ter plaatse (S)",
+      "parent_code": "044300",
+      "level": 4,
+      "source_excel_row": 146,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044400",
+      "name_nl": "Overige diensten in verband met de woning (S)",
+      "parent_code": "044000",
+      "level": 3,
+      "source_excel_row": 147,
+      "lowest": false
+    },
+    {
+      "cbs_code": "044410",
+      "name_nl": "Onderhoudskosten voor meergezinswoningen (S)",
+      "parent_code": "044400",
+      "level": 4,
+      "source_excel_row": 148,
+      "lowest": true
+    },
+    {
+      "cbs_code": "044490",
+      "name_nl": "Overige diensten in verband met de woning n.e.g. (S)",
+      "parent_code": "044400",
+      "level": 4,
+      "source_excel_row": 149,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045000",
+      "name_nl": "Elektriciteit, gas en andere brandstoffen",
+      "parent_code": "040000",
+      "level": 2,
+      "source_excel_row": 150,
+      "lowest": false
+    },
+    {
+      "cbs_code": "045100",
+      "name_nl": "Elektriciteit (ND)",
+      "parent_code": "045000",
+      "level": 3,
+      "source_excel_row": 151,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045200",
+      "name_nl": "Gas (ND)",
+      "parent_code": "045000",
+      "level": 3,
+      "source_excel_row": 152,
+      "lowest": false
+    },
+    {
+      "cbs_code": "045210",
+      "name_nl": "Aardgas via netwerken (ND)",
+      "parent_code": "045200",
+      "level": 4,
+      "source_excel_row": 153,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045220",
+      "name_nl": "Vloeibaar gemaakte koolwaterstoffen (ND)",
+      "parent_code": "045200",
+      "level": 4,
+      "source_excel_row": 154,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045300",
+      "name_nl": "Vloeibare brandstoffen (ND)",
+      "parent_code": "045000",
+      "level": 3,
+      "source_excel_row": 155,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045400",
+      "name_nl": "Vaste brandstoffen (ND)",
+      "parent_code": "045000",
+      "level": 3,
+      "source_excel_row": 156,
+      "lowest": false
+    },
+    {
+      "cbs_code": "045410",
+      "name_nl": "Steenkool, steenkoolbriketten, turf en turfbriketten (ND)",
+      "parent_code": "045400",
+      "level": 4,
+      "source_excel_row": 157,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045420",
+      "name_nl": "Houtbrandstof, met inbegrip van pellets en briketten (ND)",
+      "parent_code": "045400",
+      "level": 4,
+      "source_excel_row": 158,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045430",
+      "name_nl": "Houtskool (ND)",
+      "parent_code": "045400",
+      "level": 4,
+      "source_excel_row": 159,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045490",
+      "name_nl": "Overige vaste brandstoffen (ND)",
+      "parent_code": "045400",
+      "level": 4,
+      "source_excel_row": 160,
+      "lowest": true
+    },
+    {
+      "cbs_code": "045500",
+      "name_nl": "Overige energie voor verwarming en koeling (ND)",
+      "parent_code": "045000",
+      "level": 3,
+      "source_excel_row": 161,
+      "lowest": true
+    },
+    {
+      "cbs_code": "050000",
+      "name_nl": "Stoffering, huishoudelijke apparaten en dagelijks onderhoud van de woning",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 162,
+      "lowest": false
+    },
+    {
+      "cbs_code": "051000",
+      "name_nl": "Meubelen, stoffering en losse tapijten",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 163,
+      "lowest": false
+    },
+    {
+      "cbs_code": "051100",
+      "name_nl": "Meubelen, stoffering en losse tapijten (D)",
+      "parent_code": "051000",
+      "level": 3,
+      "source_excel_row": 164,
+      "lowest": false
+    },
+    {
+      "cbs_code": "051110",
+      "name_nl": "Meubelen voor het huis (D)",
+      "parent_code": "051100",
+      "level": 4,
+      "source_excel_row": 165,
+      "lowest": true
+    },
+    {
+      "cbs_code": "051120",
+      "name_nl": "Tuin- en kampeermeubelen (D)",
+      "parent_code": "051100",
+      "level": 4,
+      "source_excel_row": 166,
+      "lowest": true
+    },
+    {
+      "cbs_code": "051130",
+      "name_nl": "Verlichtingsapparatuur (D)",
+      "parent_code": "051100",
+      "level": 4,
+      "source_excel_row": 167,
+      "lowest": true
+    },
+    {
+      "cbs_code": "051140",
+      "name_nl": "Stoffering, losse tapijten en vloerkleden (D)",
+      "parent_code": "051100",
+      "level": 4,
+      "source_excel_row": 168,
+      "lowest": true
+    },
+    {
+      "cbs_code": "051200",
+      "name_nl": "Reparatie, installatie en huur van meubelen, stoffering en losse tapijten (S)",
+      "parent_code": "051000",
+      "level": 3,
+      "source_excel_row": 169,
+      "lowest": true
+    },
+    {
+      "cbs_code": "052000",
+      "name_nl": "Huishoudtextiel",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 170,
+      "lowest": false
+    },
+    {
+      "cbs_code": "052100",
+      "name_nl": "Huishoudtextiel (SD)",
+      "parent_code": "052000",
+      "level": 3,
+      "source_excel_row": 171,
+      "lowest": false
+    },
+    {
+      "cbs_code": "052110",
+      "name_nl": "Meubelstoffen en gordijnen (SD)",
+      "parent_code": "052100",
+      "level": 4,
+      "source_excel_row": 172,
+      "lowest": true
+    },
+    {
+      "cbs_code": "052120",
+      "name_nl": "Beddengoed (SD)",
+      "parent_code": "052100",
+      "level": 4,
+      "source_excel_row": 173,
+      "lowest": true
+    },
+    {
+      "cbs_code": "052130",
+      "name_nl": "Tafel‑ en toiletlinnen (SD)",
+      "parent_code": "052100",
+      "level": 4,
+      "source_excel_row": 174,
+      "lowest": true
+    },
+    {
+      "cbs_code": "052190",
+      "name_nl": "Overig huishoudtextiel (SD)",
+      "parent_code": "052100",
+      "level": 4,
+      "source_excel_row": 175,
+      "lowest": true
+    },
+    {
+      "cbs_code": "052200",
+      "name_nl": "Reparatie, huur en naaiwerk van huishoudtextiel (S)",
+      "parent_code": "052000",
+      "level": 3,
+      "source_excel_row": 176,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053000",
+      "name_nl": "Huishoudelijke apparaten",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 177,
+      "lowest": false
+    },
+    {
+      "cbs_code": "053100",
+      "name_nl": "Grote elektrische en andere huishoudelijke apparaten (D)",
+      "parent_code": "053000",
+      "level": 3,
+      "source_excel_row": 178,
+      "lowest": false
+    },
+    {
+      "cbs_code": "053110",
+      "name_nl": "Grote keukenapparaten (D)",
+      "parent_code": "053100",
+      "level": 4,
+      "source_excel_row": 179,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053120",
+      "name_nl": "Grote wasmachines (D)",
+      "parent_code": "053100",
+      "level": 4,
+      "source_excel_row": 180,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053130",
+      "name_nl": "Verwarming en airconditioners (D)",
+      "parent_code": "053100",
+      "level": 4,
+      "source_excel_row": 181,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053140",
+      "name_nl": "Schoonmaakapparaten (D)",
+      "parent_code": "053100",
+      "level": 4,
+      "source_excel_row": 182,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053190",
+      "name_nl": "Overige grote huishoudelijke apparaten (D)",
+      "parent_code": "053100",
+      "level": 4,
+      "source_excel_row": 183,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053200",
+      "name_nl": "Kleine huishoudelijke apparaten (SD)",
+      "parent_code": "053000",
+      "level": 3,
+      "source_excel_row": 184,
+      "lowest": false
+    },
+    {
+      "cbs_code": "053210",
+      "name_nl": "Kleine apparaten voor het bereiden en verwerken van voedsel (SD)",
+      "parent_code": "053200",
+      "level": 4,
+      "source_excel_row": 185,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053220",
+      "name_nl": "Kleine apparaten voor het bereiden van dranken (SD)",
+      "parent_code": "053200",
+      "level": 4,
+      "source_excel_row": 186,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053290",
+      "name_nl": "Overige kleine huishoudelijke apparaten (SD)",
+      "parent_code": "053200",
+      "level": 4,
+      "source_excel_row": 187,
+      "lowest": true
+    },
+    {
+      "cbs_code": "053300",
+      "name_nl": "Reparatie, installatie en huur van huishoudelijke apparaten (S)",
+      "parent_code": "053000",
+      "level": 3,
+      "source_excel_row": 188,
+      "lowest": true
+    },
+    {
+      "cbs_code": "054000",
+      "name_nl": "Glas, servies en huishoudelijke artikelen",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 189,
+      "lowest": false
+    },
+    {
+      "cbs_code": "054010",
+      "name_nl": "Glaswerk, kristal, aardewerk of porselein (SD)",
+      "parent_code": "054000",
+      "level": 4,
+      "source_excel_row": 190,
+      "lowest": true
+    },
+    {
+      "cbs_code": "054020",
+      "name_nl": "Messen, bestek en zilverwerk (SD)",
+      "parent_code": "054000",
+      "level": 4,
+      "source_excel_row": 191,
+      "lowest": true
+    },
+    {
+      "cbs_code": "054030",
+      "name_nl": "Keukengerei en -artikelen (SD)",
+      "parent_code": "054000",
+      "level": 4,
+      "source_excel_row": 192,
+      "lowest": true
+    },
+    {
+      "cbs_code": "054040",
+      "name_nl": "Reparatie en huur van glas, servies en huishoudelijke artikelen (S)",
+      "parent_code": "054000",
+      "level": 4,
+      "source_excel_row": 193,
+      "lowest": true
+    },
+    {
+      "cbs_code": "055000",
+      "name_nl": "Gereedschappen en werktuigen voor huis en tuin",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 194,
+      "lowest": false
+    },
+    {
+      "cbs_code": "055100",
+      "name_nl": "Gereedschappen en werktuigen met motor (D)",
+      "parent_code": "055000",
+      "level": 3,
+      "source_excel_row": 195,
+      "lowest": true
+    },
+    {
+      "cbs_code": "055200",
+      "name_nl": "Gereedschappen zonder motor en diverse toebehoren (SD)",
+      "parent_code": "055000",
+      "level": 3,
+      "source_excel_row": 196,
+      "lowest": false
+    },
+    {
+      "cbs_code": "055210",
+      "name_nl": "Gereedschappen zonder motor (SD)",
+      "parent_code": "055200",
+      "level": 4,
+      "source_excel_row": 197,
+      "lowest": true
+    },
+    {
+      "cbs_code": "055220",
+      "name_nl": "Diverse toebehoren (SD)",
+      "parent_code": "055200",
+      "level": 4,
+      "source_excel_row": 198,
+      "lowest": true
+    },
+    {
+      "cbs_code": "055300",
+      "name_nl": "Reparatie en huur van gereedschappen en werktuigen met of zonder motor (S)",
+      "parent_code": "055000",
+      "level": 3,
+      "source_excel_row": 199,
+      "lowest": true
+    },
+    {
+      "cbs_code": "056000",
+      "name_nl": "Goederen en diensten voor het dagelijks onderhoud van de woning",
+      "parent_code": "050000",
+      "level": 2,
+      "source_excel_row": 200,
+      "lowest": false
+    },
+    {
+      "cbs_code": "056100",
+      "name_nl": "Niet-duurzame huishoudproducten (ND)",
+      "parent_code": "056000",
+      "level": 3,
+      "source_excel_row": 201,
+      "lowest": false
+    },
+    {
+      "cbs_code": "056110",
+      "name_nl": "Huishoudelijke schoonmaak- en onderhoudsproducten (ND)",
+      "parent_code": "056100",
+      "level": 4,
+      "source_excel_row": 202,
+      "lowest": true
+    },
+    {
+      "cbs_code": "056190",
+      "name_nl": "Overige niet-duurzame huishoudproducten (ND)",
+      "parent_code": "056100",
+      "level": 4,
+      "source_excel_row": 203,
+      "lowest": true
+    },
+    {
+      "cbs_code": "056200",
+      "name_nl": "Diensten ten behoeve van het huishouden (S)",
+      "parent_code": "056000",
+      "level": 3,
+      "source_excel_row": 204,
+      "lowest": false
+    },
+    {
+      "cbs_code": "056210",
+      "name_nl": "Huishoudelijke diensten van betaald personeel (S)",
+      "parent_code": "056200",
+      "level": 4,
+      "source_excel_row": 205,
+      "lowest": true
+    },
+    {
+      "cbs_code": "056290",
+      "name_nl": "Overige huishoudelijke diensten (S)",
+      "parent_code": "056200",
+      "level": 4,
+      "source_excel_row": 206,
+      "lowest": true
+    },
+    {
+      "cbs_code": "060000",
+      "name_nl": "Gezondheid",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 207,
+      "lowest": false
+    },
+    {
+      "cbs_code": "061000",
+      "name_nl": "Geneesmiddelen en gezondheidsproducten",
+      "parent_code": "060000",
+      "level": 2,
+      "source_excel_row": 208,
+      "lowest": false
+    },
+    {
+      "cbs_code": "061100",
+      "name_nl": "Geneesmiddelen (ND)",
+      "parent_code": "061000",
+      "level": 3,
+      "source_excel_row": 209,
+      "lowest": false
+    },
+    {
+      "cbs_code": "061110",
+      "name_nl": "Geneesmiddelen, vaccins en andere farmaceutische preparaten (ND)",
+      "parent_code": "061100",
+      "level": 4,
+      "source_excel_row": 210,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061120",
+      "name_nl": "Kruidengeneesmiddelen en homeopathische producten (ND)",
+      "parent_code": "061100",
+      "level": 4,
+      "source_excel_row": 211,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061200",
+      "name_nl": "Medische producten (ND)",
+      "parent_code": "061000",
+      "level": 3,
+      "source_excel_row": 212,
+      "lowest": false
+    },
+    {
+      "cbs_code": "061210",
+      "name_nl": "Medische diagnostische producten (ND)",
+      "parent_code": "061200",
+      "level": 4,
+      "source_excel_row": 213,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061220",
+      "name_nl": "Preventieve en beschermende hulpmiddelen (ND)",
+      "parent_code": "061200",
+      "level": 4,
+      "source_excel_row": 214,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061230",
+      "name_nl": "Behandelingsapparaten voor persoonlijk gebruik (ND)",
+      "parent_code": "061200",
+      "level": 4,
+      "source_excel_row": 215,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061300",
+      "name_nl": "Hulpmiddelen (D)",
+      "parent_code": "061000",
+      "level": 3,
+      "source_excel_row": 216,
+      "lowest": false
+    },
+    {
+      "cbs_code": "061310",
+      "name_nl": "Hulpmiddelen voor gezichtsvermogen (D)",
+      "parent_code": "061300",
+      "level": 4,
+      "source_excel_row": 217,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061320",
+      "name_nl": "Hulpmiddelen voor gehoor en communicatie (D)",
+      "parent_code": "061300",
+      "level": 4,
+      "source_excel_row": 218,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061330",
+      "name_nl": "Hulpmiddelen voor mobiliteit en dagelijks leven (D)",
+      "parent_code": "061300",
+      "level": 4,
+      "source_excel_row": 219,
+      "lowest": true
+    },
+    {
+      "cbs_code": "061400",
+      "name_nl": "Reparatie, verhuur en onderhoud van medische producten en hulpmiddelen (S)",
+      "parent_code": "061000",
+      "level": 3,
+      "source_excel_row": 220,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062000",
+      "name_nl": "Extramurale zorgdiensten",
+      "parent_code": "060000",
+      "level": 2,
+      "source_excel_row": 221,
+      "lowest": false
+    },
+    {
+      "cbs_code": "062100",
+      "name_nl": "Preventieve zorgdiensten (S)",
+      "parent_code": "062000",
+      "level": 3,
+      "source_excel_row": 222,
+      "lowest": false
+    },
+    {
+      "cbs_code": "062110",
+      "name_nl": "Vaccinatiediensten (S)",
+      "parent_code": "062100",
+      "level": 4,
+      "source_excel_row": 223,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062190",
+      "name_nl": "Overige preventieve zorgdiensten (S)",
+      "parent_code": "062100",
+      "level": 4,
+      "source_excel_row": 224,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062200",
+      "name_nl": "Poliklinische tandheelkundige diensten (S)",
+      "parent_code": "062000",
+      "level": 3,
+      "source_excel_row": 225,
+      "lowest": false
+    },
+    {
+      "cbs_code": "062210",
+      "name_nl": "Preventieve tandheelkundige diensten (S)",
+      "parent_code": "062200",
+      "level": 4,
+      "source_excel_row": 226,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062290",
+      "name_nl": "Overige poliklinische tandheelkundige diensten (S)",
+      "parent_code": "062200",
+      "level": 4,
+      "source_excel_row": 227,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062300",
+      "name_nl": "Overige extramurale zorgdiensten (S)",
+      "parent_code": "062000",
+      "level": 3,
+      "source_excel_row": 228,
+      "lowest": false
+    },
+    {
+      "cbs_code": "062310",
+      "name_nl": "Poliklinische curatieve zorg en revalidatiediensten (S)",
+      "parent_code": "062300",
+      "level": 4,
+      "source_excel_row": 229,
+      "lowest": true
+    },
+    {
+      "cbs_code": "062320",
+      "name_nl": "Langdurige extramurale zorgdiensten (S)",
+      "parent_code": "062300",
+      "level": 4,
+      "source_excel_row": 230,
+      "lowest": true
+    },
+    {
+      "cbs_code": "063000",
+      "name_nl": "Intramurale zorgdiensten",
+      "parent_code": "060000",
+      "level": 2,
+      "source_excel_row": 231,
+      "lowest": false
+    },
+    {
+      "cbs_code": "063100",
+      "name_nl": "Intramurale curatieve zorg en revalidatiediensten (S)",
+      "parent_code": "063000",
+      "level": 3,
+      "source_excel_row": 232,
+      "lowest": true
+    },
+    {
+      "cbs_code": "063200",
+      "name_nl": "Intramurale langdurige zorgdiensten (S)",
+      "parent_code": "063000",
+      "level": 3,
+      "source_excel_row": 233,
+      "lowest": true
+    },
+    {
+      "cbs_code": "064000",
+      "name_nl": "Overige gezondheidsdiensten",
+      "parent_code": "060000",
+      "level": 2,
+      "source_excel_row": 234,
+      "lowest": false
+    },
+    {
+      "cbs_code": "064100",
+      "name_nl": "Diensten van medische beeldvorming en medische laboratoria (S)",
+      "parent_code": "064000",
+      "level": 3,
+      "source_excel_row": 235,
+      "lowest": true
+    },
+    {
+      "cbs_code": "064200",
+      "name_nl": "Spoedeisend vervoer van patiënten en nooddiensten (S)",
+      "parent_code": "064000",
+      "level": 3,
+      "source_excel_row": 236,
+      "lowest": true
+    },
+    {
+      "cbs_code": "070000",
+      "name_nl": "Vervoer",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 237,
+      "lowest": false
+    },
+    {
+      "cbs_code": "071000",
+      "name_nl": "Aankoop van voertuigen",
+      "parent_code": "070000",
+      "level": 2,
+      "source_excel_row": 238,
+      "lowest": false
+    },
+    {
+      "cbs_code": "071100",
+      "name_nl": "Auto’s (D)",
+      "parent_code": "071000",
+      "level": 3,
+      "source_excel_row": 239,
+      "lowest": false
+    },
+    {
+      "cbs_code": "071110",
+      "name_nl": "Nieuwe auto’s (D)",
+      "parent_code": "071100",
+      "level": 4,
+      "source_excel_row": 240,
+      "lowest": true
+    },
+    {
+      "cbs_code": "071120",
+      "name_nl": "Tweedehandsauto’s (D)",
+      "parent_code": "071100",
+      "level": 4,
+      "source_excel_row": 241,
+      "lowest": true
+    },
+    {
+      "cbs_code": "071200",
+      "name_nl": "Motorfietsen (D)",
+      "parent_code": "071000",
+      "level": 3,
+      "source_excel_row": 242,
+      "lowest": true
+    },
+    {
+      "cbs_code": "071300",
+      "name_nl": "Fietsen (D)",
+      "parent_code": "071000",
+      "level": 3,
+      "source_excel_row": 243,
+      "lowest": true
+    },
+    {
+      "cbs_code": "071400",
+      "name_nl": "Door dieren getrokken voertuigen (D)",
+      "parent_code": "071000",
+      "level": 3,
+      "source_excel_row": 244,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072000",
+      "name_nl": "Gebruik van privévoertuigen",
+      "parent_code": "070000",
+      "level": 2,
+      "source_excel_row": 245,
+      "lowest": false
+    },
+    {
+      "cbs_code": "072100",
+      "name_nl": "Onderdelen en accessoires voor privévoertuigen (SD)",
+      "parent_code": "072000",
+      "level": 3,
+      "source_excel_row": 246,
+      "lowest": false
+    },
+    {
+      "cbs_code": "072110",
+      "name_nl": "Banden (SD)",
+      "parent_code": "072100",
+      "level": 4,
+      "source_excel_row": 247,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072120",
+      "name_nl": "Onderdelen voor privévoertuigen (SD)",
+      "parent_code": "072100",
+      "level": 4,
+      "source_excel_row": 248,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072130",
+      "name_nl": "Accessoires voor privévoertuigen (SD)",
+      "parent_code": "072100",
+      "level": 4,
+      "source_excel_row": 249,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072200",
+      "name_nl": "Brandstoffen en smeermiddelen voor privévoertuigen (ND)",
+      "parent_code": "072000",
+      "level": 3,
+      "source_excel_row": 250,
+      "lowest": false
+    },
+    {
+      "cbs_code": "072210",
+      "name_nl": "Diesel (ND)",
+      "parent_code": "072200",
+      "level": 4,
+      "source_excel_row": 251,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072220",
+      "name_nl": "Benzine (ND)",
+      "parent_code": "072200",
+      "level": 4,
+      "source_excel_row": 252,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072230",
+      "name_nl": "Overige brandstoffen voor privévoertuigen (ND)",
+      "parent_code": "072200",
+      "level": 4,
+      "source_excel_row": 253,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072240",
+      "name_nl": "Smeermiddelen (ND)",
+      "parent_code": "072200",
+      "level": 4,
+      "source_excel_row": 254,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072300",
+      "name_nl": "Onderhoud en reparatie van privévoertuigen (S)",
+      "parent_code": "072000",
+      "level": 3,
+      "source_excel_row": 255,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072400",
+      "name_nl": "Overige diensten in verband met privévoertuigen (S)",
+      "parent_code": "072000",
+      "level": 3,
+      "source_excel_row": 256,
+      "lowest": false
+    },
+    {
+      "cbs_code": "072410",
+      "name_nl": "Parkeerdiensten (S)",
+      "parent_code": "072400",
+      "level": 4,
+      "source_excel_row": 257,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072420",
+      "name_nl": "Tolvoorzieningen (S)",
+      "parent_code": "072400",
+      "level": 4,
+      "source_excel_row": 258,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072430",
+      "name_nl": "Rijlessen, rijexamens, rijbewijzen en technische keuringen (S)",
+      "parent_code": "072400",
+      "level": 4,
+      "source_excel_row": 259,
+      "lowest": true
+    },
+    {
+      "cbs_code": "072440",
+      "name_nl": "Huur van privévoertuigen zonder chauffeur (S)",
+      "parent_code": "072400",
+      "level": 4,
+      "source_excel_row": 260,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073000",
+      "name_nl": "Personenvervoersdiensten",
+      "parent_code": "070000",
+      "level": 2,
+      "source_excel_row": 261,
+      "lowest": false
+    },
+    {
+      "cbs_code": "073100",
+      "name_nl": "Personenvervoer per spoor (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 262,
+      "lowest": false
+    },
+    {
+      "cbs_code": "073110",
+      "name_nl": "Personenvervoer per trein (S)",
+      "parent_code": "073100",
+      "level": 4,
+      "source_excel_row": 263,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073120",
+      "name_nl": "Personenvervoer met sneltram en tram (S)",
+      "parent_code": "073100",
+      "level": 4,
+      "source_excel_row": 264,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073200",
+      "name_nl": "Personenvervoer over de weg (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 265,
+      "lowest": false
+    },
+    {
+      "cbs_code": "073210",
+      "name_nl": "Personenvervoer per bus en touringcar (S)",
+      "parent_code": "073200",
+      "level": 4,
+      "source_excel_row": 266,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073220",
+      "name_nl": "Personenvervoer per taxi of huurauto met chauffeur (S)",
+      "parent_code": "073200",
+      "level": 4,
+      "source_excel_row": 267,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073230",
+      "name_nl": "Personenvervoer voor leerlingen van en naar school (S)",
+      "parent_code": "073200",
+      "level": 4,
+      "source_excel_row": 268,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073290",
+      "name_nl": "Overig personenvervoer over de weg (S)",
+      "parent_code": "073200",
+      "level": 4,
+      "source_excel_row": 269,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073300",
+      "name_nl": "Personenvervoer door de lucht (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 270,
+      "lowest": false
+    },
+    {
+      "cbs_code": "073310",
+      "name_nl": "Personenvervoer door de lucht, nationaal (S)",
+      "parent_code": "073300",
+      "level": 4,
+      "source_excel_row": 271,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073320",
+      "name_nl": "Personenvervoer door de lucht, internationaal (S)",
+      "parent_code": "073300",
+      "level": 4,
+      "source_excel_row": 272,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073400",
+      "name_nl": "Personenvervoer over zee of over binnenwateren (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 273,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073500",
+      "name_nl": "Gecombineerd personenvervoer (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 274,
+      "lowest": true
+    },
+    {
+      "cbs_code": "073600",
+      "name_nl": "Overige personenvervoersdiensten (S)",
+      "parent_code": "073000",
+      "level": 3,
+      "source_excel_row": 275,
+      "lowest": true
+    },
+    {
+      "cbs_code": "074000",
+      "name_nl": "Goederenvervoersdiensten",
+      "parent_code": "070000",
+      "level": 2,
+      "source_excel_row": 276,
+      "lowest": false
+    },
+    {
+      "cbs_code": "074100",
+      "name_nl": "Post‑ en koeriersdiensten (S)",
+      "parent_code": "074000",
+      "level": 3,
+      "source_excel_row": 277,
+      "lowest": false
+    },
+    {
+      "cbs_code": "074110",
+      "name_nl": "Bezorging van brieven (S)",
+      "parent_code": "074100",
+      "level": 4,
+      "source_excel_row": 278,
+      "lowest": true
+    },
+    {
+      "cbs_code": "074120",
+      "name_nl": "Koeriers‑ en pakketdiensten (S)",
+      "parent_code": "074100",
+      "level": 4,
+      "source_excel_row": 279,
+      "lowest": true
+    },
+    {
+      "cbs_code": "074900",
+      "name_nl": "Overig goederenvervoer (S)",
+      "parent_code": "074000",
+      "level": 3,
+      "source_excel_row": 280,
+      "lowest": false
+    },
+    {
+      "cbs_code": "074910",
+      "name_nl": "Verhuizing en opslag (S)",
+      "parent_code": "074900",
+      "level": 4,
+      "source_excel_row": 281,
+      "lowest": true
+    },
+    {
+      "cbs_code": "074920",
+      "name_nl": "Levering van goederen (S)",
+      "parent_code": "074900",
+      "level": 4,
+      "source_excel_row": 282,
+      "lowest": true
+    },
+    {
+      "cbs_code": "080000",
+      "name_nl": "Informatie en communicatie",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 283,
+      "lowest": false
+    },
+    {
+      "cbs_code": "081000",
+      "name_nl": "Informatie- en communicatieapparatuur",
+      "parent_code": "080000",
+      "level": 2,
+      "source_excel_row": 284,
+      "lowest": false
+    },
+    {
+      "cbs_code": "081100",
+      "name_nl": "Apparatuur voor vaste telefonie (D)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 285,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081200",
+      "name_nl": "Apparatuur voor mobiele telefonie (D)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 286,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081300",
+      "name_nl": "Gegevensverwerkende apparatuur (D)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 287,
+      "lowest": false
+    },
+    {
+      "cbs_code": "081310",
+      "name_nl": "Computers, laptops en tablets (D)",
+      "parent_code": "081300",
+      "level": 4,
+      "source_excel_row": 288,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081320",
+      "name_nl": "Randapparatuur en verbruiksartikelen (D)",
+      "parent_code": "081300",
+      "level": 4,
+      "source_excel_row": 289,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081400",
+      "name_nl": "Audio‑ en video‑opname‑ en ‑weergaveapparatuur (D)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 290,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081500",
+      "name_nl": "Onbespeelde dragers van beeld of geluid (SD)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 291,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081900",
+      "name_nl": "Overige informatie- en communicatieapparatuur en toebehoren (D)",
+      "parent_code": "081000",
+      "level": 3,
+      "source_excel_row": 292,
+      "lowest": false
+    },
+    {
+      "cbs_code": "081910",
+      "name_nl": "Overige informatie‑ en communicatieapparatuur (D)",
+      "parent_code": "081900",
+      "level": 4,
+      "source_excel_row": 293,
+      "lowest": true
+    },
+    {
+      "cbs_code": "081920",
+      "name_nl": "Overige informatie‑ en communicatietoebehoren (SD)",
+      "parent_code": "081900",
+      "level": 4,
+      "source_excel_row": 294,
+      "lowest": true
+    },
+    {
+      "cbs_code": "082000",
+      "name_nl": "Software, met uitzondering van spellen (S)",
+      "parent_code": "080000",
+      "level": 2,
+      "source_excel_row": 295,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083000",
+      "name_nl": "Informatie‑ en communicatiediensten",
+      "parent_code": "080000",
+      "level": 2,
+      "source_excel_row": 296,
+      "lowest": false
+    },
+    {
+      "cbs_code": "083100",
+      "name_nl": "Vaste communicatiediensten (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 297,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083200",
+      "name_nl": "Mobiele communicatiediensten (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 298,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083300",
+      "name_nl": "Diensten voor internettoegang en onlineopslag (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 299,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083400",
+      "name_nl": "Gebundelde telecommunicatiediensten (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 300,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083500",
+      "name_nl": "Reparatie en verhuur van informatie- en communicatieapparatuur (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 301,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083900",
+      "name_nl": "Overige informatie- en communicatiediensten (S)",
+      "parent_code": "083000",
+      "level": 3,
+      "source_excel_row": 302,
+      "lowest": false
+    },
+    {
+      "cbs_code": "083910",
+      "name_nl": "Kijk‑ en luistergelden (S)",
+      "parent_code": "083900",
+      "level": 4,
+      "source_excel_row": 303,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083920",
+      "name_nl": "Abonnementen op audiovisuele streamingdiensten en verhuur van audiovisuele inhoud (S)",
+      "parent_code": "083900",
+      "level": 4,
+      "source_excel_row": 304,
+      "lowest": true
+    },
+    {
+      "cbs_code": "083990",
+      "name_nl": "Overige informatie‑ en communicatiediensten n.e.g. (S)",
+      "parent_code": "083900",
+      "level": 4,
+      "source_excel_row": 305,
+      "lowest": true
+    },
+    {
+      "cbs_code": "090000",
+      "name_nl": "Recreatie, sport en cultuur",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 306,
+      "lowest": false
+    },
+    {
+      "cbs_code": "091000",
+      "name_nl": "Duurzame recreatieartikelen",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 307,
+      "lowest": false
+    },
+    {
+      "cbs_code": "091100",
+      "name_nl": "Foto‑ en filmapparatuur en optische instrumenten (D)",
+      "parent_code": "091000",
+      "level": 3,
+      "source_excel_row": 308,
+      "lowest": false
+    },
+    {
+      "cbs_code": "091110",
+      "name_nl": "Camera’s (D)",
+      "parent_code": "091100",
+      "level": 4,
+      "source_excel_row": 309,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091120",
+      "name_nl": "Toebehoren voor foto‑ en filmapparatuur (D)",
+      "parent_code": "091100",
+      "level": 4,
+      "source_excel_row": 310,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091130",
+      "name_nl": "Optische instrumenten (D)",
+      "parent_code": "091100",
+      "level": 4,
+      "source_excel_row": 311,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091200",
+      "name_nl": "Grote duurzame recreatieartikelen (D)",
+      "parent_code": "091000",
+      "level": 3,
+      "source_excel_row": 312,
+      "lowest": false
+    },
+    {
+      "cbs_code": "091210",
+      "name_nl": "Kampeerwagens, caravans en aanhangwagens (D)",
+      "parent_code": "091200",
+      "level": 4,
+      "source_excel_row": 313,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091220",
+      "name_nl": "Vliegtuigen, ultralichte vliegtuigen, zweefvliegtuigen, deltavliegers en heteluchtballonnen (D)",
+      "parent_code": "091200",
+      "level": 4,
+      "source_excel_row": 314,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091230",
+      "name_nl": "Boten, jachten, buitenboordmotoren en andere watersportuitrusting (D)",
+      "parent_code": "091200",
+      "level": 4,
+      "source_excel_row": 315,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091240",
+      "name_nl": "Paarden, pony’s, kamelen en dromedarissen en toebehoren (D)",
+      "parent_code": "091200",
+      "level": 4,
+      "source_excel_row": 316,
+      "lowest": true
+    },
+    {
+      "cbs_code": "091290",
+      "name_nl": "Overige grote duurzame recreatieartikelen (D)",
+      "parent_code": "091200",
+      "level": 4,
+      "source_excel_row": 317,
+      "lowest": true
+    },
+    {
+      "cbs_code": "092000",
+      "name_nl": "Overige recreatieartikelen",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 318,
+      "lowest": false
+    },
+    {
+      "cbs_code": "092100",
+      "name_nl": "Spellen, speelgoed en hobbygerelateerde artikelen (SD)",
+      "parent_code": "092000",
+      "level": 3,
+      "source_excel_row": 319,
+      "lowest": false
+    },
+    {
+      "cbs_code": "092110",
+      "name_nl": "Spelcomputers, spelconsoles, speltoepassingen en ‑software (SD)",
+      "parent_code": "092100",
+      "level": 4,
+      "source_excel_row": 320,
+      "lowest": true
+    },
+    {
+      "cbs_code": "092120",
+      "name_nl": "Overige spellen, speelgoed en hobbygerelateerde artikelen (SD)",
+      "parent_code": "092100",
+      "level": 4,
+      "source_excel_row": 321,
+      "lowest": true
+    },
+    {
+      "cbs_code": "092130",
+      "name_nl": "Feestartikelen (ND)",
+      "parent_code": "092100",
+      "level": 4,
+      "source_excel_row": 322,
+      "lowest": true
+    },
+    {
+      "cbs_code": "092200",
+      "name_nl": "Sport‑ en kampeerartikelen en artikelen voor recreatie in de open lucht (SD)",
+      "parent_code": "092000",
+      "level": 3,
+      "source_excel_row": 323,
+      "lowest": false
+    },
+    {
+      "cbs_code": "092210",
+      "name_nl": "Sportartikelen (SD)",
+      "parent_code": "092200",
+      "level": 4,
+      "source_excel_row": 324,
+      "lowest": true
+    },
+    {
+      "cbs_code": "092220",
+      "name_nl": "Kampeerartikelen en artikelen voor recreatie in de open lucht (SD)",
+      "parent_code": "092200",
+      "level": 4,
+      "source_excel_row": 325,
+      "lowest": true
+    },
+    {
+      "cbs_code": "093000",
+      "name_nl": "Tuinproducten en huisdieren",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 326,
+      "lowest": false
+    },
+    {
+      "cbs_code": "093100",
+      "name_nl": "Tuinproducten, planten en bloemen (ND)",
+      "parent_code": "093000",
+      "level": 3,
+      "source_excel_row": 327,
+      "lowest": false
+    },
+    {
+      "cbs_code": "093110",
+      "name_nl": "Tuinproducten (ND)",
+      "parent_code": "093100",
+      "level": 4,
+      "source_excel_row": 328,
+      "lowest": true
+    },
+    {
+      "cbs_code": "093120",
+      "name_nl": "Planten, zaden en bloemen (ND)",
+      "parent_code": "093100",
+      "level": 4,
+      "source_excel_row": 329,
+      "lowest": true
+    },
+    {
+      "cbs_code": "093200",
+      "name_nl": "Huisdieren en producten voor huisdieren (D)",
+      "parent_code": "093000",
+      "level": 3,
+      "source_excel_row": 330,
+      "lowest": false
+    },
+    {
+      "cbs_code": "093210",
+      "name_nl": "Huisdieren (D)",
+      "parent_code": "093200",
+      "level": 4,
+      "source_excel_row": 331,
+      "lowest": true
+    },
+    {
+      "cbs_code": "093220",
+      "name_nl": "Producten voor huisdieren en andere huishoudelijke dieren (ND)",
+      "parent_code": "093200",
+      "level": 4,
+      "source_excel_row": 332,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094000",
+      "name_nl": "Recreatiediensten",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 333,
+      "lowest": false
+    },
+    {
+      "cbs_code": "094100",
+      "name_nl": "Huur en reparatie van foto‑ en filmapparatuur en optische instrumenten (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 334,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094200",
+      "name_nl": "Huur, onderhoud en reparatie van grote duurzame recreatieartikelen (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 335,
+      "lowest": false
+    },
+    {
+      "cbs_code": "094210",
+      "name_nl": "Huur, onderhoud en reparatie van campers en caravans (S)",
+      "parent_code": "094200",
+      "level": 4,
+      "source_excel_row": 336,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094220",
+      "name_nl": "Huur, onderhoud en reparatie van andere grote duurzame recreatieartikelen (S)",
+      "parent_code": "094200",
+      "level": 4,
+      "source_excel_row": 337,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094300",
+      "name_nl": "Huur en reparatie van spellen, speelgoed en hobbygerelateerde artikelen (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 338,
+      "lowest": false
+    },
+    {
+      "cbs_code": "094310",
+      "name_nl": "Huur van spelsoftware en abonnementen op onlinespellen (S)",
+      "parent_code": "094300",
+      "level": 4,
+      "source_excel_row": 339,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094320",
+      "name_nl": "Huur en reparatie van andere spellen, speelgoed en hobbygerelateerde artikelen (S)",
+      "parent_code": "094300",
+      "level": 4,
+      "source_excel_row": 340,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094400",
+      "name_nl": "Huur en reparatie van sport‑ en kampeerartikelen en artikelen voor recreatie in de open lucht (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 341,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094500",
+      "name_nl": "Diensten van dierenartsen en andere diensten in verband met huisdieren (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 342,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094600",
+      "name_nl": "Diensten op het gebied van sport en recreatie (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 343,
+      "lowest": false
+    },
+    {
+      "cbs_code": "094610",
+      "name_nl": "Diensten op het gebied van recreatie en vrije tijd (S)",
+      "parent_code": "094600",
+      "level": 4,
+      "source_excel_row": 344,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094620",
+      "name_nl": "Diensten in verband met sportbeoefening (S)",
+      "parent_code": "094600",
+      "level": 4,
+      "source_excel_row": 345,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094630",
+      "name_nl": "Diensten in verband met het bijwonen van sportevenementen (S)",
+      "parent_code": "094600",
+      "level": 4,
+      "source_excel_row": 346,
+      "lowest": true
+    },
+    {
+      "cbs_code": "094700",
+      "name_nl": "Kansspelen (S)",
+      "parent_code": "094000",
+      "level": 3,
+      "source_excel_row": 347,
+      "lowest": true
+    },
+    {
+      "cbs_code": "095000",
+      "name_nl": "Cultuurgoederen",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 348,
+      "lowest": false
+    },
+    {
+      "cbs_code": "095100",
+      "name_nl": "Muziekinstrumenten (D)",
+      "parent_code": "095000",
+      "level": 3,
+      "source_excel_row": 349,
+      "lowest": true
+    },
+    {
+      "cbs_code": "095200",
+      "name_nl": "Audiovisuele media (SD)",
+      "parent_code": "095000",
+      "level": 3,
+      "source_excel_row": 350,
+      "lowest": true
+    },
+    {
+      "cbs_code": "096000",
+      "name_nl": "Culturele diensten",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 351,
+      "lowest": false
+    },
+    {
+      "cbs_code": "096100",
+      "name_nl": "Diensten verleend door bioscopen, theaters en concertzalen (S)",
+      "parent_code": "096000",
+      "level": 3,
+      "source_excel_row": 352,
+      "lowest": true
+    },
+    {
+      "cbs_code": "096200",
+      "name_nl": "Diensten verleend door musea, bibliotheken en culturele locaties (S)",
+      "parent_code": "096000",
+      "level": 3,
+      "source_excel_row": 353,
+      "lowest": true
+    },
+    {
+      "cbs_code": "096300",
+      "name_nl": "Diensten op het gebied van fotografie (S)",
+      "parent_code": "096000",
+      "level": 3,
+      "source_excel_row": 354,
+      "lowest": true
+    },
+    {
+      "cbs_code": "096900",
+      "name_nl": "Overige culturele diensten (S)",
+      "parent_code": "096000",
+      "level": 3,
+      "source_excel_row": 355,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097000",
+      "name_nl": "Kranten, boeken en schrijfwaren",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 356,
+      "lowest": false
+    },
+    {
+      "cbs_code": "097100",
+      "name_nl": "Boeken (SD)",
+      "parent_code": "097000",
+      "level": 3,
+      "source_excel_row": 357,
+      "lowest": false
+    },
+    {
+      "cbs_code": "097110",
+      "name_nl": "Educatieve boeken en leerboeken (SD)",
+      "parent_code": "097100",
+      "level": 4,
+      "source_excel_row": 358,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097190",
+      "name_nl": "Overige boeken (SD)",
+      "parent_code": "097100",
+      "level": 4,
+      "source_excel_row": 359,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097200",
+      "name_nl": "Kranten en tijdschriften (ND)",
+      "parent_code": "097000",
+      "level": 3,
+      "source_excel_row": 360,
+      "lowest": false
+    },
+    {
+      "cbs_code": "097210",
+      "name_nl": "Kranten (ND)",
+      "parent_code": "097200",
+      "level": 4,
+      "source_excel_row": 361,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097220",
+      "name_nl": "Tijdschriften (ND)",
+      "parent_code": "097200",
+      "level": 4,
+      "source_excel_row": 362,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097300",
+      "name_nl": "Divers drukwerk (ND)",
+      "parent_code": "097000",
+      "level": 3,
+      "source_excel_row": 363,
+      "lowest": true
+    },
+    {
+      "cbs_code": "097400",
+      "name_nl": "Schrijfwaren en tekenartikelen (ND)",
+      "parent_code": "097000",
+      "level": 3,
+      "source_excel_row": 364,
+      "lowest": true
+    },
+    {
+      "cbs_code": "098000",
+      "name_nl": "Pakketreizen (S)",
+      "parent_code": "090000",
+      "level": 2,
+      "source_excel_row": 365,
+      "lowest": true
+    },
+    {
+      "cbs_code": "100000",
+      "name_nl": "Onderwijs",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 366,
+      "lowest": false
+    },
+    {
+      "cbs_code": "101000",
+      "name_nl": "Kleuter- en primair onderwijs",
+      "parent_code": "100000",
+      "level": 2,
+      "source_excel_row": 367,
+      "lowest": false
+    },
+    {
+      "cbs_code": "101010",
+      "name_nl": "Kleuteronderwijs (S)",
+      "parent_code": "101000",
+      "level": 4,
+      "source_excel_row": 368,
+      "lowest": true
+    },
+    {
+      "cbs_code": "101020",
+      "name_nl": "Primair onderwijs (S)",
+      "parent_code": "101000",
+      "level": 4,
+      "source_excel_row": 369,
+      "lowest": true
+    },
+    {
+      "cbs_code": "102000",
+      "name_nl": "Secundair onderwijs (S)",
+      "parent_code": "100000",
+      "level": 2,
+      "source_excel_row": 370,
+      "lowest": true
+    },
+    {
+      "cbs_code": "103000",
+      "name_nl": "Postsecundair niet-tertiair onderwijs (S)",
+      "parent_code": "100000",
+      "level": 2,
+      "source_excel_row": 371,
+      "lowest": true
+    },
+    {
+      "cbs_code": "104000",
+      "name_nl": "Tertiair onderwijs (S)",
+      "parent_code": "100000",
+      "level": 2,
+      "source_excel_row": 372,
+      "lowest": true
+    },
+    {
+      "cbs_code": "105000",
+      "name_nl": "Onderwijs dat niet naar niveau wordt ingedeeld",
+      "parent_code": "100000",
+      "level": 2,
+      "source_excel_row": 373,
+      "lowest": false
+    },
+    {
+      "cbs_code": "105010",
+      "name_nl": "Studiebegeleiding (S)",
+      "parent_code": "105000",
+      "level": 4,
+      "source_excel_row": 374,
+      "lowest": true
+    },
+    {
+      "cbs_code": "105090",
+      "name_nl": "Overig onderwijs dat niet naar niveau wordt ingedeeld (S)",
+      "parent_code": "105000",
+      "level": 4,
+      "source_excel_row": 375,
+      "lowest": true
+    },
+    {
+      "cbs_code": "110000",
+      "name_nl": "Restaurants en accommodatiediensten",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 376,
+      "lowest": false
+    },
+    {
+      "cbs_code": "111000",
+      "name_nl": "Eet- en drinkgelegenheden",
+      "parent_code": "110000",
+      "level": 2,
+      "source_excel_row": 377,
+      "lowest": false
+    },
+    {
+      "cbs_code": "111100",
+      "name_nl": "Restaurants, cafés en dergelijke (S)",
+      "parent_code": "111000",
+      "level": 3,
+      "source_excel_row": 378,
+      "lowest": false
+    },
+    {
+      "cbs_code": "111110",
+      "name_nl": "Restaurants, cafés en dergelijke – met volledige bediening (S)",
+      "parent_code": "111100",
+      "level": 4,
+      "source_excel_row": 379,
+      "lowest": true
+    },
+    {
+      "cbs_code": "111120",
+      "name_nl": "Restaurants, cafés en dergelijke – met beperkte bediening (S)",
+      "parent_code": "111100",
+      "level": 4,
+      "source_excel_row": 380,
+      "lowest": true
+    },
+    {
+      "cbs_code": "111200",
+      "name_nl": "Kantines, cafetaria’s en eetzalen (S)",
+      "parent_code": "111000",
+      "level": 3,
+      "source_excel_row": 381,
+      "lowest": false
+    },
+    {
+      "cbs_code": "111210",
+      "name_nl": "Kantines en cafetaria’s van universiteiten, scholen en kleuterscholen (S)",
+      "parent_code": "111200",
+      "level": 4,
+      "source_excel_row": 382,
+      "lowest": true
+    },
+    {
+      "cbs_code": "111290",
+      "name_nl": "Overige kantines, cafetaria’s en eetzalen (S)",
+      "parent_code": "111200",
+      "level": 4,
+      "source_excel_row": 383,
+      "lowest": true
+    },
+    {
+      "cbs_code": "112000",
+      "name_nl": "Accommodatie",
+      "parent_code": "110000",
+      "level": 2,
+      "source_excel_row": 384,
+      "lowest": false
+    },
+    {
+      "cbs_code": "112010",
+      "name_nl": "Hotels, motels, herbergen en dergelijke (S)",
+      "parent_code": "112000",
+      "level": 4,
+      "source_excel_row": 385,
+      "lowest": true
+    },
+    {
+      "cbs_code": "112020",
+      "name_nl": "Vakantiecentra, kampeerterreinen, jeugdherbergen en dergelijke (S)",
+      "parent_code": "112000",
+      "level": 4,
+      "source_excel_row": 386,
+      "lowest": true
+    },
+    {
+      "cbs_code": "112030",
+      "name_nl": "Accommodatie verstrekt door kostscholen, universiteiten en andere onderwijsinstellingen (S)",
+      "parent_code": "112000",
+      "level": 4,
+      "source_excel_row": 387,
+      "lowest": true
+    },
+    {
+      "cbs_code": "112090",
+      "name_nl": "Overige accommodatie (S)",
+      "parent_code": "112000",
+      "level": 4,
+      "source_excel_row": 388,
+      "lowest": true
+    },
+    {
+      "cbs_code": "120000",
+      "name_nl": "Verzekeringen en financiële diensten",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 389,
+      "lowest": false
+    },
+    {
+      "cbs_code": "121000",
+      "name_nl": "Verzekeringen",
+      "parent_code": "120000",
+      "level": 2,
+      "source_excel_row": 390,
+      "lowest": false
+    },
+    {
+      "cbs_code": "121100",
+      "name_nl": "Levens- en ongevallenverzekering (S)",
+      "parent_code": "121000",
+      "level": 3,
+      "source_excel_row": 391,
+      "lowest": true
+    },
+    {
+      "cbs_code": "121200",
+      "name_nl": "Verzekeringen in verband met gezondheid (S)",
+      "parent_code": "121000",
+      "level": 3,
+      "source_excel_row": 392,
+      "lowest": true
+    },
+    {
+      "cbs_code": "121300",
+      "name_nl": "Verzekeringen in verband met de woning (S)",
+      "parent_code": "121000",
+      "level": 3,
+      "source_excel_row": 393,
+      "lowest": true
+    },
+    {
+      "cbs_code": "121400",
+      "name_nl": "Verzekeringen in verband met vervoer (S)",
+      "parent_code": "121000",
+      "level": 3,
+      "source_excel_row": 394,
+      "lowest": false
+    },
+    {
+      "cbs_code": "121410",
+      "name_nl": "Verzekeringen voor privévoertuigen (S)",
+      "parent_code": "121400",
+      "level": 4,
+      "source_excel_row": 395,
+      "lowest": true
+    },
+    {
+      "cbs_code": "121420",
+      "name_nl": "Reisverzekeringen (S)",
+      "parent_code": "121400",
+      "level": 4,
+      "source_excel_row": 396,
+      "lowest": true
+    },
+    {
+      "cbs_code": "121900",
+      "name_nl": "Overige verzekeringen (S)",
+      "parent_code": "121000",
+      "level": 3,
+      "source_excel_row": 397,
+      "lowest": true
+    },
+    {
+      "cbs_code": "122000",
+      "name_nl": "Financiële diensten",
+      "parent_code": "120000",
+      "level": 2,
+      "source_excel_row": 398,
+      "lowest": false
+    },
+    {
+      "cbs_code": "122100",
+      "name_nl": "Indirect gemeten diensten van financiële intermediairs (S)",
+      "parent_code": "122000",
+      "level": 3,
+      "source_excel_row": 399,
+      "lowest": true
+    },
+    {
+      "cbs_code": "122200",
+      "name_nl": "Expliciete heffingen door deposito‑instellingen (S)",
+      "parent_code": "122000",
+      "level": 3,
+      "source_excel_row": 400,
+      "lowest": true
+    },
+    {
+      "cbs_code": "122900",
+      "name_nl": "Overige financiële diensten (S)",
+      "parent_code": "122000",
+      "level": 3,
+      "source_excel_row": 401,
+      "lowest": false
+    },
+    {
+      "cbs_code": "122910",
+      "name_nl": "Overmakingskosten (S)",
+      "parent_code": "122900",
+      "level": 4,
+      "source_excel_row": 402,
+      "lowest": true
+    },
+    {
+      "cbs_code": "122990",
+      "name_nl": "Overige financiële diensten n.e.g. (S)",
+      "parent_code": "122900",
+      "level": 4,
+      "source_excel_row": 403,
+      "lowest": true
+    },
+    {
+      "cbs_code": "130000",
+      "name_nl": "Lichaamsverzorging, sociale bescherming en diverse goederen en diensten",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 404,
+      "lowest": false
+    },
+    {
+      "cbs_code": "131000",
+      "name_nl": "Lichaamsverzorging",
+      "parent_code": "130000",
+      "level": 2,
+      "source_excel_row": 405,
+      "lowest": false
+    },
+    {
+      "cbs_code": "131100",
+      "name_nl": "Elektrische apparaten voor lichaamsverzorging (SD)",
+      "parent_code": "131000",
+      "level": 3,
+      "source_excel_row": 406,
+      "lowest": false
+    },
+    {
+      "cbs_code": "131110",
+      "name_nl": "Aankoop van elektrische apparaten voor lichaamsverzorging (SD)",
+      "parent_code": "131100",
+      "level": 4,
+      "source_excel_row": 407,
+      "lowest": true
+    },
+    {
+      "cbs_code": "131120",
+      "name_nl": "Reparatie van elektrische apparaten voor lichaamsverzorging (S)",
+      "parent_code": "131100",
+      "level": 4,
+      "source_excel_row": 408,
+      "lowest": true
+    },
+    {
+      "cbs_code": "131200",
+      "name_nl": "Overige apparaten, artikelen en producten voor lichaamsverzorging (ND)",
+      "parent_code": "131000",
+      "level": 3,
+      "source_excel_row": 409,
+      "lowest": true
+    },
+    {
+      "cbs_code": "131300",
+      "name_nl": "Kapsalons en schoonheidsinstituten (S)",
+      "parent_code": "131000",
+      "level": 3,
+      "source_excel_row": 410,
+      "lowest": false
+    },
+    {
+      "cbs_code": "131310",
+      "name_nl": "Kappersdiensten (S)",
+      "parent_code": "131300",
+      "level": 4,
+      "source_excel_row": 411,
+      "lowest": true
+    },
+    {
+      "cbs_code": "131320",
+      "name_nl": "Schoonheidsbehandelingen (S)",
+      "parent_code": "131300",
+      "level": 4,
+      "source_excel_row": 412,
+      "lowest": true
+    },
+    {
+      "cbs_code": "132000",
+      "name_nl": "Overige artikelen voor persoonlijk gebruik",
+      "parent_code": "130000",
+      "level": 2,
+      "source_excel_row": 413,
+      "lowest": false
+    },
+    {
+      "cbs_code": "132100",
+      "name_nl": "Sieraden en horloges (D)",
+      "parent_code": "132000",
+      "level": 3,
+      "source_excel_row": 414,
+      "lowest": false
+    },
+    {
+      "cbs_code": "132110",
+      "name_nl": "Aankoop van sieraden en horloges (D)",
+      "parent_code": "132100",
+      "level": 4,
+      "source_excel_row": 415,
+      "lowest": true
+    },
+    {
+      "cbs_code": "132120",
+      "name_nl": "Reparatie en huur van sieraden, klokken en horloges (S)",
+      "parent_code": "132100",
+      "level": 4,
+      "source_excel_row": 416,
+      "lowest": true
+    },
+    {
+      "cbs_code": "132200",
+      "name_nl": "Devotionele artikelen en artikelen voor religieuze en rituele vieringen (SD)",
+      "parent_code": "132000",
+      "level": 3,
+      "source_excel_row": 417,
+      "lowest": true
+    },
+    {
+      "cbs_code": "132900",
+      "name_nl": "Overige artikelen voor persoonlijk gebruik n.e.g. (SD)",
+      "parent_code": "132000",
+      "level": 3,
+      "source_excel_row": 418,
+      "lowest": false
+    },
+    {
+      "cbs_code": "132910",
+      "name_nl": "Reisartikelen, babyartikelen en andere artikelen voor persoonlijk gebruik n.e.g. (SD)",
+      "parent_code": "132900",
+      "level": 4,
+      "source_excel_row": 419,
+      "lowest": true
+    },
+    {
+      "cbs_code": "132920",
+      "name_nl": "Reparatie en huur van andere artikelen voor persoonlijk gebruik (S)",
+      "parent_code": "132900",
+      "level": 4,
+      "source_excel_row": 420,
+      "lowest": true
+    },
+    {
+      "cbs_code": "133000",
+      "name_nl": "Sociale bescherming",
+      "parent_code": "130000",
+      "level": 2,
+      "source_excel_row": 421,
+      "lowest": false
+    },
+    {
+      "cbs_code": "133010",
+      "name_nl": "Kinderopvang (S)",
+      "parent_code": "133000",
+      "level": 4,
+      "source_excel_row": 422,
+      "lowest": true
+    },
+    {
+      "cbs_code": "133020",
+      "name_nl": "Bejaardentehuizen en tehuizen voor personen met een handicap, zonder medische verzorging (S)",
+      "parent_code": "133000",
+      "level": 4,
+      "source_excel_row": 423,
+      "lowest": true
+    },
+    {
+      "cbs_code": "133030",
+      "name_nl": "Thuiszorg voor ouderen en gehandicapten (S)",
+      "parent_code": "133000",
+      "level": 4,
+      "source_excel_row": 424,
+      "lowest": true
+    },
+    {
+      "cbs_code": "133090",
+      "name_nl": "Overige diensten voor sociale bescherming (S)",
+      "parent_code": "133000",
+      "level": 4,
+      "source_excel_row": 425,
+      "lowest": true
+    },
+    {
+      "cbs_code": "139000",
+      "name_nl": "Overige diensten",
+      "parent_code": "130000",
+      "level": 2,
+      "source_excel_row": 426,
+      "lowest": false
+    },
+    {
+      "cbs_code": "139010",
+      "name_nl": "Prostitutie (S)",
+      "parent_code": "139000",
+      "level": 4,
+      "source_excel_row": 427,
+      "lowest": true
+    },
+    {
+      "cbs_code": "139020",
+      "name_nl": "Religieuze diensten (S)",
+      "parent_code": "139000",
+      "level": 4,
+      "source_excel_row": 428,
+      "lowest": true
+    },
+    {
+      "cbs_code": "139090",
+      "name_nl": "Overige diensten (S)",
+      "parent_code": "139000",
+      "level": 4,
+      "source_excel_row": 429,
+      "lowest": true
+    },
+    {
+      "cbs_code": "140000",
+      "name_nl": "Consumptiegebonden belastingen en contributies",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 430,
+      "lowest": false
+    },
+    {
+      "cbs_code": "141000",
+      "name_nl": "Consumptiegebonden belastingen",
+      "parent_code": "140000",
+      "level": 2,
+      "source_excel_row": 431,
+      "lowest": false
+    },
+    {
+      "cbs_code": "141100",
+      "name_nl": "Motorrijtuigenbelasting",
+      "parent_code": "141000",
+      "level": 3,
+      "source_excel_row": 432,
+      "lowest": true
+    },
+    {
+      "cbs_code": "141200",
+      "name_nl": "Watersysteemheffing",
+      "parent_code": "141000",
+      "level": 3,
+      "source_excel_row": 433,
+      "lowest": true
+    },
+    {
+      "cbs_code": "141300",
+      "name_nl": "Hondenbelasting",
+      "parent_code": "141000",
+      "level": 3,
+      "source_excel_row": 434,
+      "lowest": true
+    },
+    {
+      "cbs_code": "142000",
+      "name_nl": "Contributies",
+      "parent_code": "140000",
+      "level": 2,
+      "source_excel_row": 435,
+      "lowest": true
+    },
+    {
+      "cbs_code": "150000",
+      "name_nl": "Consumptie in het buitenland",
+      "parent_code": null,
+      "level": 1,
+      "source_excel_row": 436,
+      "lowest": false
+    },
+    {
+      "cbs_code": "151000",
+      "name_nl": "Voeding buitenland",
+      "parent_code": "150000",
+      "level": 2,
+      "source_excel_row": 437,
+      "lowest": true
+    },
+    {
+      "cbs_code": "152000",
+      "name_nl": "Vervoer buitenland",
+      "parent_code": "150000",
+      "level": 2,
+      "source_excel_row": 438,
+      "lowest": true
+    },
+    {
+      "cbs_code": "153000",
+      "name_nl": "Accommodaties buitenland",
+      "parent_code": "150000",
+      "level": 2,
+      "source_excel_row": 439,
+      "lowest": true
+    },
+    {
+      "cbs_code": "154000",
+      "name_nl": "Cafés en restaurants buitenland",
+      "parent_code": "150000",
+      "level": 2,
+      "source_excel_row": 440,
+      "lowest": true
+    },
+    {
+      "cbs_code": "155000",
+      "name_nl": "Overige consumptie buitenland",
+      "parent_code": "150000",
+      "level": 2,
+      "source_excel_row": 441,
+      "lowest": true
+    }
+  ]
+}

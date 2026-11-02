@@ -57,3 +57,29 @@ def test_category_cannot_be_promoted_to_product_equivalence():
     assert "global_product_id" not in category
     assert "product_equivalence_id" not in category
     assert "gtin" not in category
+
+
+def test_pinned_complete_official_reference_preserves_parentage_and_all_levels():
+    import json
+    from collections import Counter
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "app" / "data" / "cbs_ecoicop_v2_2026_reference.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    categories = data["categories"]
+    assert data["source_sha256"] == "6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f"
+    assert data["reference_version"] == "CBS-ECOICOPv2-2026"
+    assert len(categories) == len({row["cbs_code"] for row in categories}) == 440
+    assert Counter(row["level"] for row in categories) == {1: 15, 2: 59, 3: 134, 4: 224, 5: 8}
+    assert sum(row["lowest"] for row in categories) == 314
+    parent_codes = {row["parent_code"] for row in categories if row["parent_code"] is not None}
+    assert len(parent_codes) == 126
+    by_code = {row["cbs_code"]: row for row in categories}
+    assert by_code["011420"]["parent_code"] == "011400"
+    assert by_code["011221"]["parent_code"] == "011220"
+    for row in categories:
+        assert len(row["cbs_code"]) == 6 and row["cbs_code"].isascii() and row["cbs_code"].isdecimal()
+        parent = row["parent_code"]
+        if parent is not None:
+            assert parent in by_code and by_code[parent]["level"] + 1 == row["level"]
+        assert row["lowest"] == (row["cbs_code"] not in parent_codes)

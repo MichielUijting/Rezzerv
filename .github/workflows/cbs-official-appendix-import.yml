@@ -5,6 +5,8 @@ on:
     paths:
       - 'tools/inhuis_cbs_official_appendix_import.py'
       - 'tools/test_cbs_official_appendix_import.py'
+      - 'tools/inhuis_cbs_reference_contract.py'
+      - 'backend/app/data/cbs_ecoicop_v2_2026_reference.json'
       - '.github/workflows/cbs-official-appendix-import.yml'
   workflow_dispatch:
 permissions:
@@ -18,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate four-tab extractor with synthetic fixture
+      - name: Validate five-tab extractor with synthetic fixture
         env:
           PYTHONPATH: tools
         run: |
@@ -31,7 +33,7 @@ jobs:
             'https://www.cbs.nl/-/media/_excel/2026/04/bijlageecoicopv2indeling.xlsx' \
             --output /tmp/cbs-2026/original.xlsx
           echo '6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f  /tmp/cbs-2026/original.xlsx' | sha256sum --check
-      - name: Extract complete official source, all four tabs
+      - name: Extract complete official source, all five tabs
         run: |
           python tools/inhuis_cbs_official_appendix_import.py \
             --xlsx /tmp/cbs-2026/original.xlsx \
@@ -50,6 +52,11 @@ jobs:
                   print('CBS_HIERARCHY_SAMPLE', row['row'], [(c['address'], str(c['value'])[:90], c['style']) for c in cells[:10]])
           print('CBS_SOURCE_COUNTS', [(s['name'],s['nonempty_rows'],s['nonempty_cells']) for s in source['sheets']])
           PY
+      - name: Prove full 440-code hierarchy against the official Excel cells
+        run: |
+          python tools/inhuis_cbs_reference_contract.py \
+            --official-source /tmp/cbs-2026/cbs_ecoicopv2_complete_source.json \
+            --reference backend/app/data/cbs_ecoicop_v2_2026_reference.json
       - name: Save verified original and full extracted source
         uses: actions/upload-artifact@v4
         with:

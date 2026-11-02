@@ -10,3 +10,9 @@ De import draait **uitsluitend in de geïsoleerde GitHub-runner**. Er is geen pr
 Bij afwijkende checksum, ontbrekend tabblad, lege bron of downloadfout stopt de import. Bestaande Shopify-/GS1-/product-/voorraadgegevens blijven ongemoeid. Het artifact vervalt na 30 dagen; na een succesvolle run moeten de inhoud en bronversie duurzaam op de taakbranch worden vastgelegd voordat PR #642 Ready kan worden.
 
 **Werkbladdata-contract:** `Toelichting` mag nul `sheetData`-cellen bevatten, bijvoorbeeld wanneer een bron uitsluitend opmaak of objecten heeft; het oorspronkelijke Excelbestand wordt exact en checksum-gecontroleerd bewaard. De overige vier datatabbladen moeten altijd niet-leeg zijn; anders wordt de import geweigerd. De toets met een lege `Toelichting` én een lege datatab maakt dat onderscheid expliciet.
+
+## CBS-categorieën als duurzame Inhuis-referentie
+
+De tijdelijke GitHub-bijlage is niet langer de enige opslag van de **440 officiële classificatiecodes**. De door de complete originele bijlage gevalideerde classificatiereferentie staat versiegepinnd in `backend/app/data/cbs_ecoicop_v2_2026_reference.json`.
+
+De afzonderlijke volledige bron (inclusief de vier speciale-aggregaten-tabbladen en het toelichtingblad) blijft controleerbaar in het workflow-artifact; alleen de classificatieboom wordt operationeel voor Inhuis. Een speciale aggregaatcode is géén artikelclassificatie en wordt niet onterecht in de gewone categorieboom geladen.

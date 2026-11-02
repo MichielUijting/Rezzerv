@@ -38,3 +38,13 @@ Voor het compleet maken van de CBS-implementatie moeten de volledige officiële 
 `backend/tests/test_cbs_classification_service.py` test bevestiging, idempotentie, rollback, audit, verwijdering en classificatie van artikelen zonder GTIN in een geïsoleerde testdatabase.
 
 PR #639 blijft Draft. Zijn GS1 Brick-voorwaarden vervallen pas **na** de nieuwe fysieke productequivalentie- en Bijna-op-implementatie. Fysieke verwijdering van Shopify-/GS1-tabellen volgt uitsluitend na aparte inventarisatie, back-up, herstelproef en specifieke PO-GO.
+
+## Gecontroleerde volledige CBS-categorieauthority (2 november 2026)
+
+De originele CBS-Excelbron is via de geslaagde GitHub-bronimport verkregen en objectief onderzocht: originele SHA-256 `6871458274be87aa0126eab1bf334365502438f5e976845df8e5c28cdf95858f`, classificatietabblad met exact 440 unieke codes, de officiële omschrijvingen en kolom F `Laagste ECOICOPv2 groep (J/N)`. Er zijn 15 afdelingen, 59 groepen, 134 klassen, 224 subklassen en 8 microklassen, met 314 laagste categorieën. Alle 126 niet-laagste codes hebben ten minste één kind; geen enkele oudercode ontbreekt. De afgeleide ouderhiërarchie is voor alle 440 Excelrijen met deze officiële laagste-groep-gegevens, de oorspronkelijke volgorde en niveaustructuur geconfronteerd, niet ongecontroleerd uit cijfers aangenomen.
+
+Gebundelde, versiegepinnde referentie: `backend/app/data/cbs_ecoicop_v2_2026_reference.json`. `tools/inhuis_cbs_reference_contract.py` vergelijkt tijdens GitHub CI iedere officiële code, Nederlandse naam, exacte bronrij, laagste-groep-markering en hiërarchie met de volledige originele Excel-export. Elke afwijking blokkeert de import.
+
+De toevoegende Alembic-revision `20261102_01` vult de nieuwe `cbs_ecoicop_categories` met alle 440 officiële categorieën, **voordat** de write-barrier-triggers worden aangebracht. Deze migratie voert **geen enkele** CBS-toekenning aan producten uit; `global_product_cbs_classifications` en `global_product_cbs_history` blijven leeg. Andere actieve Shopify-, GS1-, Catalogus-, voorraad- en huishoudtabellen blijven onveranderd. De officiële Excel (alle vijf tabbladen) blijft daarnaast als afzonderlijk gecontroleerd GitHub-artifact bestaan.
+
+Deze wijziging mag uitsluitend via de gebruikelijke Alembic-applicatieroute worden toegepast na de afzonderlijke PO-goedkeuring voor een daadwerkelijke runtime-/server- of productieactie. Geen deployment en geen bestaande database gewijzigd door CI.
