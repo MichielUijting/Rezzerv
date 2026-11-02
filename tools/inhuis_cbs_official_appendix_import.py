@@ -70,8 +70,11 @@ def extract(path):
     names = tuple(s["name"] for s in sheets)
     if names != TABS:
         raise ValueError(f"CBS five source sheets do not match official order: {names}")
-    if any(not s["rows"] for s in sheets):
-        raise ValueError("Incomplete CBS appendix: empty tab")
+    # The official introduction sheet may carry only formatting, drawings or
+    # notes outside sheetData. Preserve it in the original XLSX artifact and
+    # report zero cells rather than misclassifying the source as incomplete.
+    if any(not s["rows"] for s in sheets if s["name"] != "Toelichting"):
+        raise ValueError("Incomplete CBS appendix: an ECOICOP/aggregate data tab is empty")
     return {"source_url": SOURCE_URL, "source_sha256": digest,
             "reference_version": "CBS-ECOICOPv2-2026",
             "representation": "all non-empty source cells, NOT operational categories",

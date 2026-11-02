@@ -34,6 +34,33 @@ def test_all_five_sheets_and_leading_zeroes(tmp_path, monkeypatch):
     assert data["sheets"][1]["rows"][0]["cells"][0]["value"] == "011420"
 
 
+def test_empty_introduction_is_allowed_but_empty_data_tab_is_rejected(tmp_path, monkeypatch):
+    path = tmp_path / 'synthetic.xlsx'
+    make_workbook(path)
+    with zipfile.ZipFile(path) as z:
+        parts = {name: z.read(name) for name in z.namelist()}
+    parts['xl/worksheets/sheet1.xml'] = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData/></worksheet>'
+    ).encode()
+    with zipfile.ZipFile(path, 'w') as z:
+        for name, content in parts.items():
+            z.writestr(name, content)
+    monkeypatch.setattr(source, "SOURCE_SHA256", hashlib.sha256(path.read_bytes()).hexdigest())
+    data = source.extract(path)
+    assert data["sheets"][0]["name"] == "Toelichting"
+    assert data["sheets"][0]["nonempty_cells"] == 0
+    assert all(s["nonempty_cells"] > 0 for s in data["sheets"][1:])
+
+    parts['xl/worksheets/sheet2.xml'] = parts['xl/worksheets/sheet1.xml']
+    with zipfile.ZipFile(path, 'w') as z:
+        for name, content in parts.items():
+            z.writestr(name, content)
+    monkeypatch.setattr(source, "SOURCE_SHA256", hashlib.sha256(path.read_bytes()).hexdigest())
+    with pytest.raises(ValueError, match="data tab is empty"):
+        source.extract(path)
+
+
 def test_unverified_workbook_rejected(tmp_path):
     path = tmp_path / 'synthetic.xlsx'
     make_workbook(path)
