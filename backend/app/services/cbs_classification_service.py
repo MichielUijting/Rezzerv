@@ -54,14 +54,14 @@ def browse_verified_categories(conn, parent_code: str | None = None) -> list[dic
         ), {"code": parent_code}).first()
         if not exists:
             raise CBSDecisionError("De gekozen CBS-hoofdcategorie bestaat niet.")
-    rows = conn.execute(text("""
+    clause = "parent_code IS NULL" if parent_code is None else "parent_code = :parent"
+    rows = conn.execute(text(f"""
         SELECT cbs_code, name_nl, parent_code, level, reference_version,
                valid_from, source_url
         FROM cbs_ecoicop_categories
-        WHERE (:parent IS NULL AND parent_code IS NULL)
-           OR parent_code = :parent
+        WHERE {clause}
         ORDER BY cbs_code
-    """), {"parent": parent_code}).mappings().all()
+    """), {} if parent_code is None else {"parent": parent_code}).mappings().all()
     # Reuse the same verified hierarchy and leaf calculation as search.
     return _enrich_verified_categories(conn, rows)
 
