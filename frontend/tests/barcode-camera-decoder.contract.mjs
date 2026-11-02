@@ -11,6 +11,8 @@ const from = source.indexOf('function startProcessedFrameDecoding(')
 const to = source.indexOf('\n\nexport function isNonFatalBarcodeScanError(', from)
 assert.ok(from >= 0 && to > from, 'Shared processed-frame scanner missing')
 const productionFunction = source.slice(from, to)
+const intervalDeclaration = source.match(/^const PROCESSED_FRAME_INTERVAL_MS = \d+$/m)?.[0]
+assert.ok(intervalDeclaration, 'Processed-frame interval declaration missing')
 const ean = '8718452801886'
 // EAN-13 checksum, independent of the scanner implementation.
 const digits = ean.split('').map(Number)
@@ -49,7 +51,7 @@ const env = {
   },
   isNonFatalBarcodeScanError: () => false,
 }
-vm.runInNewContext(productionFunction
+vm.runInNewContext(intervalDeclaration + '\n' + productionFunction
   + '\nthis.startProcessedFrameDecoding = startProcessedFrameDecoding;', env)
 const controls = env.startProcessedFrameDecoding({
   video: { readyState: 4, videoWidth: 1280, videoHeight: 720 },

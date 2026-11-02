@@ -10,7 +10,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
   const photoInputRef = useRef(null)
   const { showFeedback } = useAppFeedback()
   const {
-    videoRef, isOpen, cameraState, cameraMeta, availableCameras,
+    videoRef, isOpen, cameraState, cameraErrorRevision, cameraMeta, availableCameras,
     startScanner, stopScanner, switchCamera, scanImageFile,
   } = useBarcodeScanner({
     screenContext: 'Externe databases 2 bonartikelbarcode',
@@ -34,8 +34,9 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
       title: 'Melding',
       message: cameraState.message,
       testId: 'ed2-barcode-scanner-message',
+      dedupeMs: 0,
     })
-  }, [cameraState.status, cameraState.message, showFeedback])
+  }, [cameraState.status, cameraState.message, cameraErrorRevision, showFeedback])
 
   function choosePhoto() {
     if (disabled) return
