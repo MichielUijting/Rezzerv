@@ -81,5 +81,12 @@ def test_pinned_complete_official_reference_preserves_parentage_and_all_levels()
         assert len(row["cbs_code"]) == 6 and row["cbs_code"].isascii() and row["cbs_code"].isdecimal()
         parent = row["parent_code"]
         if parent is not None:
-            assert parent in by_code and by_code[parent]["level"] + 1 == row["level"]
+            assert parent in by_code
+            gap = row["level"] - by_code[parent]["level"]
+            assert gap == 1 or (gap == 2 and parent in {"023000", "054000", "101000", "105000", "112000", "133000", "139000"})
         assert row["lowest"] == (row["cbs_code"] not in parent_codes)
+
+    # Source-level structure: 22 legitimate classes bypass an unused intermediate level.
+    skips = [row for row in categories if row["parent_code"] and
+             row["level"] - by_code[row["parent_code"]]["level"] == 2]
+    assert len(skips) == 22

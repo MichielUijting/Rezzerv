@@ -52,6 +52,8 @@ def validate_official_reference(bundled: dict, official: dict) -> dict:
     by_code = dict(zip(keys, entries))
     parents = set()
     levels = Counter()
+    skipped_class_parents = {'023000', '054000', '101000', '105000', '112000', '133000', '139000'}
+    verified_skips = []
     for i, (row, entry) in enumerate(zip(original_rows[1:], entries)):
         fields = _cell_map(row)
         code, name = fields.get("A"), fields.get("B")
@@ -71,8 +73,13 @@ def validate_official_reference(bundled: dict, official: dict) -> dict:
             raise ValueError(f"Ongeldige ouder voor {code}.")
         if parent is not None:
             candidate = by_code.get(parent)
-            if not candidate or candidate["level"] != level - 1:
-                raise ValueError(f"Ontbrekende of onjuiste ouder {parent} van {code}.")
+            if not candidate:
+                raise ValueError(f"Ontbrekende ouder {parent} van {code}.")
+            gap = level - candidate["level"]
+            if gap == 2 and parent in skipped_class_parents:
+                verified_skips.append(parent)
+            elif gap != 1:
+                raise ValueError(f"Onjuiste officiële ouderrelatie {parent} van {code}.")
             if candidate.get("source_excel_row", 99999) >= row["row"]:
                 raise ValueError(f"Parent {parent} staat niet vóór kind {code} in CBS-bron.")
             parents.add(parent)
@@ -84,6 +91,8 @@ def validate_official_reference(bundled: dict, official: dict) -> dict:
             raise ValueError(f"CBS-laagste-groep en feitelijke kinderen wijken af: {entry['cbs_code']}")
     if len(parents) != 126:
         raise ValueError("Officiële CBS-hiërarchie verwacht 126 oudercategorieën.")
+    if len(verified_skips) != 22 or set(verified_skips) != skipped_class_parents:
+        raise ValueError("22 officiële CBS-categorieën met overgeslagen tussenniveau wijken af.")
     if by_code["011221"]["parent_code"] != "011220" or by_code["011420"]["parent_code"] != "011400":
         raise ValueError("CBS-microklasse of melkhiërarchie wijkt af.")
     return {"categories": len(entries), "levels": dict(levels),

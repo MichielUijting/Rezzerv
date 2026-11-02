@@ -42,13 +42,21 @@ def _seed_official_reference() -> None:
     if counts != _EXPECTED_LEVELS or not parents.issubset(seen):
         raise RuntimeError('CBS-hiërarchie of niveauaantallen wijken af van officiële bron.')
     by_code = {row['cbs_code']: row for row in rows}
+    skipped_class_parents = {'023000', '054000', '101000', '105000', '112000', '133000', '139000'}
+    skipped = []
     for row in rows:
         parent = row['parent_code']
         if parent is None:
             if row['level'] != 1:
                 raise RuntimeError('Niet-hoofdcategorie zonder ouder.')
-        elif by_code[parent]['level'] + 1 != row['level']:
-            raise RuntimeError('CBS-ouder en niveau zijn inconsistent.')
+        else:
+            gap = row['level'] - by_code[parent]['level']
+            if gap == 2 and parent in skipped_class_parents:
+                skipped.append(parent)
+            elif gap != 1:
+                raise RuntimeError('CBS-ouder en niveau zijn inconsistent.')
+    if len(skipped) != 22 or set(skipped) != skipped_class_parents:
+        raise RuntimeError('CBS 22 officiële categorieën met overgeslagen tussenniveau wijken af.')
         if bool(row.get('lowest')) != (row['cbs_code'] not in parents):
             raise RuntimeError('CBS laagste-groep-markering inconsistent.')
     if sum(row['lowest'] for row in rows) != 314:
