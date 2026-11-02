@@ -6,6 +6,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 const columns = [
@@ -32,6 +33,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState('')
+  const [scannedBarcode, setScannedBarcode] = useState(null)
   const verificationRef = useRef(null)
 
   useEffect(() => () => verificationRef.current?.abort(), [])
@@ -164,8 +166,11 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
           <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item, ed2TableState: returnState } })}>
             Zelf zoeken in OFF
           </Button>
+          <Ed2BarcodeScanner key={item.id} receiptItemId={item.id}
+            disabled={Boolean(item.link_status && item.link_status !== 'unlinked')}
+            onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} />
         </div>
-        <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
+        <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {verifying ? <p role="status">Kandidaat controleren in OFF...</p> : null}
         {linkError ? <p role="alert">{linkError}</p> : null}
