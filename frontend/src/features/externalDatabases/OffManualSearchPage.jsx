@@ -259,7 +259,7 @@ export default function OffManualSearchPage() {
               <Button type="button" variant="secondary" disabled={linking}
                 onClick={() => setSelectedCandidate(null)}>Annuleren</Button>
               <Button type="button" disabled={linking}
-                onClick={confirmLink}>{linking ? 'Koppelen...' : 'OK'}</Button>
+                onClick={() => confirmLink()}>{linking ? 'Koppelen...' : 'OK'}</Button>
             </div>
           </div>
         </div> : null}
