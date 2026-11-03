@@ -392,3 +392,16 @@ exacte koppeling geblokkeerd door dezelfde backendcontrole; handmatige
 bevestiging omzeilt die controle niet. Als een kandidaat niet kan worden
 gekoppeld, toont het scherm de concrete reden in de centrale overlay
 **Melding** via `AppFeedbackProvider` en niet als inline foutregel.
+
+### Barcode scannen in Externe databases 2 (PO-besluit 1 november 2026)
+
+Het kandidatenpaneel van **Externe databases 2** heeft naast
+**Zelf zoeken in OFF** een knop **Barcode scannen**. De bestaande scanner
+uit Incidentele aankoop wordt hergebruikt op mobiel en desktop, inclusief
+camera wisselen en zo nodig een foto-alternatief. De gevonden EAN/GTIN wordt
+voor het geselecteerde bonartikel voorgevuld en vereist expliciete bevestiging.
+De scan zelf schrijft niets. Na bevestiging voert de bestaande ED2-opslagroute
+een exacte OFF-controle uit, bewaart betrouwbare artikelinformatie en foto
+waar beschikbaar, of registreert uitsluitend barcodebewijs bij geen
+OFF-resultaat/storing. Identiteitsconflicten blijven fail-closed; een
+niet-bevestigde code wordt geen Catalogus-/voorraadkoppeling.

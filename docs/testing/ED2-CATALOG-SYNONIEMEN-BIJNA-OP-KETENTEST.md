@@ -3,6 +3,9 @@
 **Status:** uitvoerbare, geïsoleerde PostgreSQL-ketenacceptatie.
 **TEST_LEVEL_PROVISIONAL: M.**
 
+> **Scope na PO-besluit van 3 november 2026 (PR #644, inmiddels op main):** GPC en CBS blijven beide bestaan. Deze PR #639 is uitsluitend een **regressiebaseline van de bestaande keten**; hij implementeert of valideert nog **geen** automatische overname van GPC/CBS bij bevestigde synoniemen. In de eerstvolgende functionele implementatie-PR moeten aanvullende ketentests bewijzen: overname GPC én CBS in beide richtingen, overname binnen bevestigde synoniemgroepen, idempotente herhaling, behoud van bestaande afwijkende bevestigde waarden, transactierollback en provenance/audit. De negatieve test hieronder is een bewust vastgelegd **huidig runtimegedrag**, geen blijvende eis dat GPC ontbrekend blijft nadat de toekomstige overnameservice is ingevoerd. Na die implementatie moet deze baseline opnieuw op het nieuwe contract worden beoordeeld, niet stilzwijgend als norm gebruikt.
+
+
 ## Concrete proef
 - Artikel A: **AH Halfvolle melk**, AH-bonartikelcode `823326`, GTIN `8719587325926`, inhoud 1 liter.
 - Artikel B: **Jumbo Halfvolle melk**, Jumbo-bonartikelcode `394270`, GTIN `8718452513666`, inhoud 500 ml.

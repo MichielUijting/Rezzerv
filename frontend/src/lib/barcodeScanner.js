@@ -56,8 +56,28 @@ function enhanceBarcodeImageData(imageData, contrast = 1.65) {
   return imageData
 }
 
+// ZXing's RGBLuminanceSource accepts ONE grayscale byte per pixel (or packed
+// Int32 ARGB). Canvas ImageData.data is RGBA: FOUR bytes per pixel. Passing
+// RGBA directly silently decodes the wrong row positions and misses valid EANs.
+function canvasImageToLuminances(imageData) {
+  const { width, height, data } = imageData
+  const size = width * height
+  const luminances = new Uint8ClampedArray(size)
+  for (let pixel = 0, offset = 0; pixel < size; pixel++, offset += 4) {
+    if (data[offset + 3] === 0) {
+      luminances[pixel] = 255
+    } else {
+      luminances[pixel] = (
+        306 * data[offset] + 601 * data[offset + 1] + 117 * data[offset + 2] + 512
+      ) >> 10
+    }
+  }
+  return luminances
+}
+
 function decodeImageDataWithZxing(imageData, frameReader) {
-  const source = new RGBLuminanceSource(imageData.data, imageData.width, imageData.height)
+  const luminances = canvasImageToLuminances(imageData)
+  const source = new RGBLuminanceSource(luminances, imageData.width, imageData.height)
   const bitmap = new BinaryBitmap(new HybridBinarizer(source))
   try {
     return frameReader.decodeWithState(bitmap)
@@ -125,7 +145,11 @@ function startProcessedFrameDecoding({ video, onAttempt, onResult, onNonFatalErr
           if (text) {
             log?.('PROCESSED_FRAME_DECODE_RESULT_FOUND', { variant: candidate.name, text })
             stopped = true
-            emitResultOnce(result)
+            // Deliver the successful processed-frame read through the callback
+            // supplied by startBarcodeDecoding. emitResultOnce belongs to that
+            // outer scope; referencing it here used to throw ReferenceError
+            // and silently discard a valid EAN under the non-fatal catch.
+            onResult?.(result)
             return
           }
         } catch (error) {
@@ -148,7 +172,9 @@ function startProcessedFrameDecoding({ video, onAttempt, onResult, onNonFatalErr
     intervalMs: PROCESSED_FRAME_INTERVAL_MS,
     variants: ['center-wide-normal', 'center-wide-contrast', 'center-tight-normal', 'center-tight-contrast', 'full-frame-normal', 'full-frame-contrast'],
   })
-  run()
+  // Start on the next scheduled tick. A synchronous first decode could
+  // otherwise invoke the outer callback before processedFrameControls exists.
+  schedule()
 
   return {
     stop: () => {

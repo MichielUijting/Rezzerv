@@ -45,6 +45,88 @@ function bootstrap(route, rows, manualRows, onSave) {
   return route.fulfill({ json: {} })
 }
 
+test('ED2 toont alleen drie statustellers bij actieve tabel- en statusfilters', async ({ page }) => {
+  const article = {
+    id: 'receipt-table-line:counter-filter', receipt_line_text: 'Scharrelei M/L',
+    retailer_code: 'jumbo', retailer: 'Jumbo', receipt_article_number: '533',
+    article_code: '', link_status: 'unlinked',
+  }
+  await page.route('**/api/**', (route) => bootstrap(route, [article], [], () =>
+    route.fulfill({ json: {} })))
+  await page.goto('/externe-databases-2')
+  const counters = page.locator('.rz-external-ed2-counters')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await expect(counters).toContainText('Niet gekoppeld: 1')
+  await expect(counters).toContainText('Classificatie ontbreekt: 0')
+  await expect(counters).toContainText('Gekoppeld: 0')
+  await page.getByRole('textbox', { name: 'Filter op Artikel' }).fill('Scharrelei')
+  await expect(counters.locator('button')).toHaveCount(3)
+  const unlinked = counters.getByRole('button', { name: 'Niet gekoppeld: 1' })
+  await unlinked.click()
+  await expect(unlinked).toHaveAttribute('aria-pressed', 'true')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await unlinked.click()
+  await expect(unlinked).toHaveAttribute('aria-pressed', 'false')
+  await expect(counters.locator('button')).toHaveCount(3)
+  await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toHaveValue('Scharrelei')
+  await expect(page.getByTestId('external-databases-2-table')).toContainText('Scharrelei M/L')
+})
+
+test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als reserveoptie', async ({ page }) => {
+  const item = {
+    id: 'receipt-table-line:camera-error', receipt_line_text: 'Scharrelei M/L',
+    retailer_code: 'jumbo', receipt_article_number: '777',
+    article_code: '', link_status: 'unlinked',
+  }
+  let saveRequests = 0
+  await page.addInitScript(() => {
+    let attempts = 0
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () => {
+          attempts += 1
+          return Promise.reject(new DOMException('Could not start video source', 'NotReadableError'))
+        },
+        enumerateDevices: () => Promise.resolve([]),
+      },
+    })
+    window.__ed2GetUserMediaAttempts = () => attempts
+  })
+  await page.route('**/api/**', (route) => bootstrap(route, [item], [], (request) => {
+    saveRequests += 1
+    return request.fulfill({ json: {} })
+  }))
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'Scharrelei M/L' }).dblclick()
+  const panel = page.getByTestId('external-databases-2-off-panel')
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  await panel.getByTestId('ed2-barcode-scan').click()
+  const scanner = page.getByTestId('barcode-scanner-backdrop')
+  await expect(scanner).toBeVisible()
+  const cameraWarning = page.getByTestId('ed2-barcode-scanner-message-overlay')
+  await expect(cameraWarning).toBeVisible()
+  await expect(page.getByTestId('ed2-barcode-scanner-message')).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await cameraWarning.getByRole('button', { name: 'OK' }).click()
+  await expect(scanner.locator('.rz-inline-feedback')).toHaveCount(0)
+  await expect(scanner.getByRole('button', { name: 'Camera opnieuw proberen' })).toBeVisible()
+  await expect(scanner.getByRole('button', { name: 'Barcode uit foto' })).toBeVisible()
+  await expect(scanner).toContainText('bestaande foto')
+  // The dialog must not disappear after the asynchronous camera error.
+  await expect.poll(() => page.evaluate(() => window.__ed2GetUserMediaAttempts())).toBeGreaterThan(1)
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera opnieuw proberen' }).click()
+  await expect(page.getByTestId('ed2-barcode-scanner-message-overlay')).toBeVisible()
+  await expect(page.getByTestId('ed2-barcode-scanner-message')).toContainText('Camera voor barcode scannen kon niet worden gestart')
+  await page.getByTestId('ed2-barcode-scanner-message-overlay').getByRole('button', { name: 'OK' }).click()
+  await expect(scanner).toBeVisible()
+  await scanner.getByRole('button', { name: 'Camera sluiten' }).click()
+  await expect(scanner).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
+  expect(saveRequests).toBe(0)
+})
+
 test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN gepresenteerd', async ({ page }) => {
   const item = {
     id: 'receipt-table-line:manual-code-test', receipt_line_text: 'Melk zonder code',
@@ -66,6 +148,10 @@ test('Een barcode zonder OFF-match wordt in ED2 bewaard, niet als Catalogus-GTIN
   const table = page.getByTestId('external-databases-2-table')
   await expect(table).toContainText('Melk zonder code')
   await table.locator('tbody tr', { hasText: 'Melk zonder code' }).dblclick()
+  const scanActions = page.getByTestId('external-databases-2-off-panel').locator('.rz-external-databases-actions')
+  await expect(scanActions.getByRole('button', { name: 'Zelf zoeken in OFF' })).toBeVisible()
+  await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeVisible()
+  await expect(scanActions.getByTestId('ed2-barcode-scan')).toBeEnabled()
   await page.getByTestId('ed2-manual-barcode-input').fill('8718452504435')
   await page.getByTestId('ed2-manual-barcode-save').click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
@@ -178,6 +264,8 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
           brand: 'Albert Heijn', score: 0.88, identity_compatible: true, selection_proof: 'second' },
         { gtin: '4056489977186', product_name: 'Cervelaat', brand: 'Jumbo',
           score: 0.86, identity_compatible: false,
+          identity_conflict_reason: 'private_label_brand_conflict',
+          selection_proof: 'signed-ah-cervelaat-jumbo',
           identity_conflict_message: 'AH CERVELAAT is een Albert Heijn huismerk. Het geselecteerde product is van Jumbo.' },
         target,
       ],
@@ -200,12 +288,14 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
   await page.getByRole('button', { name: 'Zoeken', exact: true }).click()
   const candidates = page.getByTestId('external-off-free-search-results')
   await candidates.locator('tbody tr', { hasText: 'Jumbo' }).dblclick()
-  const overlay = page.getByTestId('app-feedback-error-overlay')
-  await expect(overlay).toBeVisible()
-  await expect(page.getByTestId('app-feedback-error')).toContainText('Het geselecteerde product is van Jumbo.')
-  await expect(page.getByTestId('app-feedback-error')).toContainText('Melding')
+  const warning = page.getByTestId('ed2-private-label-override-warning-overlay')
+  await expect(warning).toBeVisible()
+  await expect(page.getByTestId('ed2-private-label-override-warning')).toContainText('Het geselecteerde product is van Jumbo.')
+  await expect(page.getByTestId('ed2-private-label-override-warning')).toContainText('Waarschuwing bij koppelen')
   expect(writes).toHaveLength(0)
-  await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK' }).click()
+  await page.getByTestId('ed2-private-label-override-warning').getByRole('button', { name: 'Annuleren' }).click()
+  await expect(warning).toHaveCount(0)
+  expect(writes).toHaveLength(0)
   await candidates.locator('tbody tr', { hasText: target.gtin }).dblclick()
   await expect(page.getByRole('alertdialog')).toContainText('Weet u zeker')
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()

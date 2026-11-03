@@ -1,16 +1,28 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** Manual ED2 barcode evidence is NOT a confirmed Catalogus / stock link. */
-export default function Ed2ManualBarcodeEntry({ item, onSaved }) {
+export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = null }) {
   const { showFeedback } = useAppFeedback()
   const [barcode, setBarcode] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
   const validLength = /^(?:[0-9]{8}|[0-9]{12,14})$/.test(barcode.trim())
   const canSave = !item.link_status || item.link_status === 'unlinked'
+
+  useEffect(() => {
+    setBarcode('')
+    setConfirm(false)
+  }, [item.id])
+
+  useEffect(() => {
+    if (scannedBarcode?.receiptItemId !== item.id || !canSave) return
+    setBarcode(String(scannedBarcode.value || '').trim())
+    // Never write on detection alone: reuse the existing explicit confirmation.
+    setConfirm(true)
+  }, [scannedBarcode, item.id, canSave])
 
   async function save() {
     if (!validLength || !canSave || saving) return
