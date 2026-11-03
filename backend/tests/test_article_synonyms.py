@@ -284,7 +284,7 @@ class StoreTest(unittest.TestCase):
             conn.execute(text("""
                 INSERT INTO global_products
                     (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
-                VALUES ('d','Halfvolle melk','','','8719587325926',1,'l','active','','catalog')
+                VALUES ('d','Halfvolle melk','','','8712345678906',1,'l','active','','catalog')
             """))
             products = service.load_products(conn)
             tentative = next(
