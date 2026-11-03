@@ -239,6 +239,14 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(filtered['total'], 3)
             self.assertEqual({item['id'] for item in filtered['items']}, {'a', 'b', 'd'})
 
+        # Confirmed Jumbo + Lidl evidence for e adds another distinct peer
+        # shop to a, without inventing an exclusive shop for e.
+        with self.engine.begin() as conn:
+            conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('e','lidl-nederland-gmbh','E-2','confirmed')"))
+        with patch.object(catalog_routes, 'engine', self.engine):
+            self.assertEqual(catalog_routes._catalog_row('a')['linked_store_count'], 3)
+            self.assertEqual(catalog_routes._catalog_row('e')['linked_store_count'], 1)
+
         with self.engine.begin() as conn:
             conn.execute(text("UPDATE external_article_product_links SET status='inactive' WHERE global_product_id='e'"))
         with patch.object(catalog_routes, 'engine', self.engine):
