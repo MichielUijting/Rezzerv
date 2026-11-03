@@ -83,6 +83,30 @@ class MatchingTest(unittest.TestCase):
         b = product('b', 'Jumbo Halfvolle melk', retailer_code='jumbo')
         self.assertEqual(service.suggest_pairs([a, b]), [])
 
+    def test_name_only_candidates_are_read_only_and_keep_the_store_unknown(self):
+        a = product('a', 'Aardappelen', retailer_code='')
+        b = product('b', 'Aardappelen kruimig', retailer_code='')
+        c = product('c', 'Andere producten', retailer_code='jumbo', brick='fruit')
+        self.assertEqual(service.suggest_pairs([a, b, c]), [])
+        proposals = service.suggest_pairs([a, b, c], include_name_only=True)
+        pair = next(p for p in proposals if {p['left']['id'], p['right']['id']} == {'a', 'b'})
+        self.assertFalse(pair['linkable'])
+        self.assertEqual(pair['match_basis'], 'name_only')
+        analysis = service.build_synonym_analysis([a, b, c], set(), proposals)
+        row = next(r for r in analysis['items'] if r['id'] == 'a')
+        self.assertEqual(row['status'], 'name_review')
+        self.assertEqual(row['store'], 'Winkel onbekend')
+        self.assertGreater(len(row['pending']), 0)
+        self.assertEqual(analysis['summary']['candidate_pairs'], 0)
+        self.assertGreater(analysis['summary']['name_only_pairs'], 0)
+
+    def test_same_store_name_match_is_only_a_review_not_a_confirmable_synonym(self):
+        a = product('a', 'Melk', retailer_code='ah')
+        b = product('b', 'Melk', retailer_code='ah')
+        pair = service.suggest_pairs([a, b], include_name_only=True)[0]
+        self.assertFalse(pair['linkable'])
+        self.assertEqual(service.suggest_pairs([a, b]), [])
+
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
         b['size_value'] = '2'
