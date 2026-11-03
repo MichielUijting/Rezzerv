@@ -120,6 +120,58 @@ for (const width of [390, 1280]) {
   })
 }
 
+
+for (const width of [390, 1280]) {
+  test(`Naamovereenkomst is zichtbaar maar onkoppelbaar bij onbekende winkel op ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let writes = 0
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
+        is_platform_superuser: true, permissions: {
+          'platform.external_products.view': true,
+          'platform.external_products.link_existing': true,
+        },
+      } })
+      if (path.endsWith('/article-synonyms/link')) {
+        writes += 1
+        return route.fulfill({ status: 400 })
+      }
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
+        items: [
+          { id: 'a', name: 'Aardappelen', store: 'Winkel onbekend', image_url: '',
+            status: 'name_review', synonym_count: 0,
+            pending: [{ id: 'b', name: 'Aardappelen kruimig', linkable: false }] },
+          { id: 'b', name: 'Aardappelen kruimig', store: 'Winkel onbekend', image_url: '',
+            status: 'name_review', synonym_count: 0,
+            pending: [{ id: 'a', name: 'Aardappelen', linkable: false }] },
+        ],
+      } })
+      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [{
+        id: 'name-pair', score: 0.84, fingerprint: 'a'.repeat(64),
+        linkable: false, match_basis: 'name_only',
+        left: { id: 'a', name: 'Aardappelen', store_name: 'Winkel onbekend', image_url: '' },
+        right: { id: 'b', name: 'Aardappelen kruimig', store_name: 'Winkel onbekend', image_url: '' },
+      }] } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/artikelsynoniemen')
+    const articles = page.getByTestId('article-synonyms-articles')
+    await expect(articles).toContainText('Naamvoorstellen (winkel controleren)')
+    await articles.locator('tbody tr').first().dblclick()
+    const proposals = page.getByTestId('article-synonyms-candidates')
+    await expect(proposals).toContainText('Aardappelen kruimig')
+    await expect(proposals).toContainText('Alleen naamovereenkomst')
+    await expect(proposals.getByRole('checkbox')).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
+    expect(writes).toBe(0)
+  })
+}
+
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
   let reads = 0
   await page.route('**/api/**', async (route) => {
