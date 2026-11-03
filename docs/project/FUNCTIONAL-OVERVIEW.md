@@ -327,8 +327,10 @@ alle gecodeerde Catalogusartikelen, ook zonder nieuwe voorstellen, met hun
 bevestigde winkelherkomst of de status **Winkel onbekend**, aantal bevestigde
 synoniemen en open voorstellen. Een dubbelklik/Enter op een artikel opent de
 voorstelentabel voor dat artikel; bestaande algemene bulkselectie blijft
-beschikbaar bij aanwezige voorstellen. De voorstelentabel toont alleen
-paren uit verschillende aantoonbare winkels met zeven kolommen:
+beschikbaar bij aanwezige voorstellen. De voorstelentabel toont
+paren op basis van artikelnaam en productkenmerken, onafhankelijk van
+de winkelherkomst: dezelfde, verschillende of onbekende winkels blokkeren
+een voorstel of handmatige bevestiging niet. De zeven kolommen zijn:
 selectie en per artikel naam, Catalogusfoto en winkelnaam. De centrale
 DataTable biedt zoeken, sorteren, kolombreedtes en paginering. Selectie plus
 **Koppelen** bevestigt alle geselecteerde paren als bulk en is zonder selectie
