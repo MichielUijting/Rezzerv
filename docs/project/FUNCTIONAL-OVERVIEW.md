@@ -322,8 +322,13 @@ Er bestaat op 22 juli 2026 nog geen actieve meldingen-API. Een toekomstig meldin
 ## Artikel-synoniemen
 
 Superusers en alle actieve Frontteamleden kunnen via de actie **Artikel-synoniemen**
-centrale artikelen met een code/barcode vergelijken. De standaardtabel toont
-voorgestelde paren uit verschillende aantoonbare winkels met zeven kolommen:
+centrale artikelen met een code/barcode vergelijken. De eerste DataTable toont
+alle gecodeerde Catalogusartikelen, ook zonder nieuwe voorstellen, met hun
+bevestigde winkelherkomst of de status **Winkel onbekend**, aantal bevestigde
+synoniemen en open voorstellen. Een dubbelklik/Enter op een artikel opent de
+voorstelentabel voor dat artikel; bestaande algemene bulkselectie blijft
+beschikbaar bij aanwezige voorstellen. De voorstelentabel toont alleen
+paren uit verschillende aantoonbare winkels met zeven kolommen:
 selectie en per artikel naam, Catalogusfoto en winkelnaam. De centrale
 DataTable biedt zoeken, sorteren, kolombreedtes en paginering. Selectie plus
 **Koppelen** bevestigt alle geselecteerde paren als bulk en is zonder selectie
