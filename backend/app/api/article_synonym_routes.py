@@ -39,17 +39,22 @@ def list_suggestions():
 @router.get('/analysis')
 def synonym_analysis():
     _actor('platform.external_products.view')
-    from sqlalchemy import text
+    from sqlalchemy import inspect, text
     from app.services.article_synonym_service import build_synonym_analysis
     with engine.connect() as conn:
         products = load_products(conn)
         confirmed = confirmed_pairs(conn)
         suggestions = suggest_pairs(products, confirmed)
-        classifications = {row['global_product_id']: row['shopify_path'] for row in conn.execute(text("""
-            SELECT global_product_id, shopify_path
-              FROM global_product_shopify_classifications
-             WHERE is_active = TRUE
-        """)).mappings()}
+        # An older optional classification source is not an article identity
+        # authority. Some PostgreSQL installations have retired this table;
+        # its absence must not hide the central Catalogus products.
+        classifications = {}
+        if inspect(conn).has_table('global_product_shopify_classifications'):
+            classifications = {row['global_product_id']: row['shopify_path'] for row in conn.execute(text("""
+                SELECT global_product_id, shopify_path
+                  FROM global_product_shopify_classifications
+                 WHERE is_active = TRUE
+            """)).mappings()}
     return build_synonym_analysis(products, confirmed, suggestions, classifications)
 
 
