@@ -197,12 +197,25 @@ def confirm_pairs(conn, selections, actor_id):
     existing = confirmed_pairs(conn)
     proposals = {(p['left']['id'], p['right']['id']): p for p in suggest_pairs(products, existing)}
     by_id = {p['id']: p for p in products}
+    # A completed inheritance legitimately changes the GPC part of the
+    # candidate fingerprint. For an already confirmed pair only, accept the
+    # fingerprint recorded at confirmation as an idempotent retry token.
+    # New pairs must still pass the live candidate/fingerprint checks.
+    persisted_fingerprints = {
+        (row['left_product_id'], row['right_product_id']): row['source_fingerprint']
+        for row in conn.execute(text("""
+            SELECT left_product_id, right_product_id, source_fingerprint
+              FROM article_synonym_links
+        """)).mappings()
+    }
     to_insert = {}
     for selection in selections:
         key = (selection['left_product_id'], selection['right_product_id'])
         proposal = proposals.get(key)
         if key in existing and all(pid in by_id for pid in key):
-            proposal = {'fingerprint': _fingerprint(by_id[key[0]], by_id[key[1]])}
+            current = _fingerprint(by_id[key[0]], by_id[key[1]])
+            if selection['fingerprint'] in (current, persisted_fingerprints.get(key)):
+                continue
         if not proposal or proposal['fingerprint'] != selection['fingerprint']:
             raise HTTPException(409, 'Een suggestie is gewijzigd of niet meer beschikbaar. Vernieuw de lijst en controleer opnieuw.')
         if key not in existing:
