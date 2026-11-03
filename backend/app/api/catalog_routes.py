@@ -178,7 +178,7 @@ def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> 
         documented_shop = f"NULLIF({external_shop}, '')"
     else:
         external_join = ""
-        documented_shop = "NULL"
+        documented_shop = "NULL::text"
 
     active = (
         "AND LOWER(TRIM(COALESCE(shop_product.status, 'active'))) <> 'deleted'"
