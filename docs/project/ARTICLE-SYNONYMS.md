@@ -190,3 +190,23 @@ platformbrede winkelkoppeling verheven. Ontbrekende productidentiteiten moeten
 eerst via de bestaande expliciete ED2-bevestigingsroute worden vastgelegd.
 Dit voorkomt onderlinge vermenging van huishoudens en verandert geen bonnen,
 Catalogusartikelen, voorraad, codes of synoniemrelaties.
+
+## Artikel-synoniemen: zichtbaar artikeloverzicht bij nul voorstellen (3 november 2026)
+
+De actie `/artikelsynoniemen` toont voortaan als hoofdtabel **alle actieve,
+gecodeerde centrale Catalogusartikelen** uit de bestaande beveiligde
+`/api/external-databases/article-synonyms/analysis`-leesprojectie, ook wanneer
+`/api/external-databases/article-synonyms` geen nieuwe voorstellen bevat.
+De tabel toont artikelnaam/foto, bewezen winkelherkomst (of expliciet
+`Winkel onbekend`), aantal rechtstreeks bevestigde synoniemen, aantal
+open voorstellen en status. Zoek-, sorteer- en paginering verlopen via de
+bestaande DataTable. Dubbelklik of Enter op een artikel selecteert de context
+en opent de bestaande zevenkoloms voorstel- en bulkbevestigingstabel;
+zonder gekozen artikel blijven eventuele algemene voorstellen beschikbaar
+voor de bestaande bulkroutine.
+
+Deze UI-wijziging creëert geen nieuwe winkel/productidentiteit.
+Een ontbrekende bevestigde winkelrelatie wordt zichtbaar gemaakt en niet
+op basis van bontekst, naam of huishoudcontext aangevuld. Een volle lijst
+Catalogusartikelen betekent niet dat er bevestigbare synoniemen zijn.
+Na bevestigen worden beide tabellen opnieuw van de centrale backend geladen.
