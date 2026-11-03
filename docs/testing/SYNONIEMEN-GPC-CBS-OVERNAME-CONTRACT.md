@@ -25,3 +25,34 @@ De synoniementest breidt de reeds geïsoleerde PostgreSQL-testdatabase uit met m
 6. Verplichte rollback bij een fout: geen losse synoniemkoppeling of classificatie.
 
 **Opmerking:** een bevestigde relatie en automatische overname zijn geen bewijs dat de bestaande `Bijna op`-groepering of ED2-status zelfstandig verandert; het toepasselijke afzonderlijke ketencontract blijft leidend. Geen runtimegebruikersdata of Docker-/productieactie tijdens deze PR.
+
+
+## Samenhang met PR #646 — winkelonafhankelijke synoniemen
+
+De actuele PO-beslissing is dat **de winkel nooit een matchcriterium of
+bevestigingsvoorwaarde voor synoniemen is**. Deze classificatieovername wordt
+daarom uitsluitend getriggerd door een expliciet, volgens de actuele
+artikel-/GS1-identiteitsvoorwaarden bevestigd `article_synonym_links`-paar,
+ongeacht of beide artikelen dezelfde, verschillende of onbekende winkelherkomst
+hebben. Winkelgegevens mogen niet mee worden gekopieerd en spelen geen rol
+bij GPC-/CBS-overname of conflictbesluiten.
+
+PR #645 bevat nog de oudere implementatie van
+`backend/app/services/article_synonym_service.py` en van het
+Artikel-synoniemen-scherm. Die mogen **niet** over de modernere winkelonafhankelijke
+implementatie van Draft-PR #646 worden teruggezet. De integratie moet daarom
+pas op een kandidaat die PR #646 bevat worden uitgevoerd, met behoud van
+de actuele `suggest_pairs`, `confirm_pairs`, de dubbele artikeltabel
+en het bewaren van selectie, en aanvullend de bestaande transactionele
+`propagate_confirmed_classifications`-aanroep en overlayrespons uit PR #645.
+
+Voor Ready van PR #645 zijn gerichte ketentests vereist voor:
+- bevestiging bij **onbekende winkel** met GPC- én CBS-overname;
+- bevestiging bij **gelijke winkel** met dezelfde overname;
+- bevestiging bij **verschillende winkels** met dezelfde overname;
+- conflicterende bestaande officiële GPC/CBS-codes zonder overschrijven;
+- idempotente retry en rollback binnen één transactie;
+- correcte classificatieovername zonder automatische product-/voorraadmutaties.
+
+Deze paragraaf is een integratiecontract, **geen claim** dat de branches
+al technisch zijn samengevoegd of dat deze nieuwe regressies groen zijn.
