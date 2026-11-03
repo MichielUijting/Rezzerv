@@ -45,9 +45,14 @@ class MatchingTest(unittest.TestCase):
     def test_same_gtin_is_not_synonym(self):
         self.assertEqual(service.suggest_pairs([product('a','Melk','08719587325926'), product('b','Melk','08719587325926',retailer_code='jumbo')]), [])
 
-    def test_same_or_unknown_store_cannot_be_confirmed_as_cross_store_synonym(self):
-        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk')]), [])
-        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk', retailer_code='')]), [])
+    def test_store_is_never_required_for_a_synonym(self):
+        for a_store, b_store in [('ah', 'ah'), ('ah', 'jumbo'), ('', ''), ('', 'jumbo')]:
+            pair = service.suggest_pairs([
+                product('a', 'Halfvolle melk', retailer_code=a_store),
+                product('b', 'Halfvolle melk', retailer_code=b_store),
+            ])[0]
+            self.assertTrue(pair['linkable'])
+            self.assertEqual(pair['match_basis'], 'product_similarity')
 
     def test_same_retailer_code_is_not_synonym(self):
         items = [product('a','Melk'), product('b','Melk',retailer_code='jumbo')]
@@ -64,7 +69,7 @@ class MatchingTest(unittest.TestCase):
         self.assertEqual(service._retailer_code('Lidl Nederland GmbH'), 'lidl')
         self.assertEqual(service._retailer_code('Lidl'), 'lidl')
 
-    def test_multiple_confirmed_stores_only_match_disjoint_stores(self):
+    def test_multiple_stores_are_metadata_not_pairing_restrictions(self):
         multi = product('a', 'Halfvolle melk', retailer_code='')
         multi['retailer_codes'] = ['ah', 'jumbo']
         different = product('b', 'Halfvolle melk', retailer_code='lidl')
@@ -72,7 +77,7 @@ class MatchingTest(unittest.TestCase):
         matches = service.suggest_pairs([multi, different, overlapping])
         pairs = {(m['left']['id'], m['right']['id']) for m in matches}
         self.assertIn(('a', 'b'), pairs)
-        self.assertNotIn(('a', 'c'), pairs)
+        self.assertIn(('a', 'c'), pairs)
         analysis = service.build_synonym_analysis([multi, different], {('a', 'b')}, [])
         self.assertEqual(analysis['summary']['confirmed_pairs'], 1)
         self.assertEqual(analysis['summary']['insufficient_articles'], 0)
@@ -81,31 +86,31 @@ class MatchingTest(unittest.TestCase):
         a = product('a', 'AH Halfvolle melk', retailer_code='')
         a['retailer_codes'] = []
         b = product('b', 'Jumbo Halfvolle melk', retailer_code='jumbo')
-        self.assertEqual(service.suggest_pairs([a, b]), [])
+        self.assertTrue(service.suggest_pairs([a, b]))
 
-    def test_name_only_candidates_are_read_only_and_keep_the_store_unknown(self):
+    def test_name_based_candidates_are_confirmable_and_keep_store_unknown(self):
         a = product('a', 'Aardappelen', retailer_code='')
         b = product('b', 'Aardappelen kruimig', retailer_code='')
         c = product('c', 'Andere producten', retailer_code='jumbo', brick='fruit')
-        self.assertEqual(service.suggest_pairs([a, b, c]), [])
+        self.assertTrue(service.suggest_pairs([a, b, c]))
         proposals = service.suggest_pairs([a, b, c], include_name_only=True)
         pair = next(p for p in proposals if {p['left']['id'], p['right']['id']} == {'a', 'b'})
-        self.assertFalse(pair['linkable'])
-        self.assertEqual(pair['match_basis'], 'name_only')
+        self.assertTrue(pair['linkable'])
+        self.assertEqual(pair['match_basis'], 'product_similarity')
         analysis = service.build_synonym_analysis([a, b, c], set(), proposals)
         row = next(r for r in analysis['items'] if r['id'] == 'a')
-        self.assertEqual(row['status'], 'name_review')
+        self.assertEqual(row['status'], 'review')
         self.assertEqual(row['store'], 'Winkel onbekend')
         self.assertGreater(len(row['pending']), 0)
-        self.assertEqual(analysis['summary']['candidate_pairs'], 0)
-        self.assertGreater(analysis['summary']['name_only_pairs'], 0)
+        self.assertGreater(analysis['summary']['candidate_pairs'], 0)
+        self.assertEqual(analysis['summary']['name_only_pairs'], 0)
 
-    def test_same_store_name_match_is_only_a_review_not_a_confirmable_synonym(self):
+    def test_same_store_name_match_is_confirmable_after_manual_review(self):
         a = product('a', 'Melk', retailer_code='ah')
         b = product('b', 'Melk', retailer_code='ah')
         pair = service.suggest_pairs([a, b], include_name_only=True)[0]
-        self.assertFalse(pair['linkable'])
-        self.assertEqual(service.suggest_pairs([a, b]), [])
+        self.assertTrue(pair['linkable'])
+        self.assertEqual(service.suggest_pairs([a, b]), [pair])
 
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
@@ -279,7 +284,7 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(products['b']['retailer_codes'], ['jumbo'])
             self.assertEqual(service.suggest_pairs([products['a'], products['c']]), [])
 
-    def test_name_only_proposal_is_rejected_by_canonical_link_endpoint(self):
+    def test_similar_products_can_be_confirmed_without_known_store(self):
         with self.engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO global_products
@@ -287,19 +292,20 @@ class StoreTest(unittest.TestCase):
                 VALUES ('d','Halfvolle melk','','','8712345678906',1,'l','active','','catalog')
             """))
             products = service.load_products(conn)
-            tentative = next(
-                p for p in service.suggest_pairs(products, include_name_only=True)
-                if set((p['left']['id'], p['right']['id'])) == {'a', 'd'}
-            )
-            self.assertFalse(tentative['linkable'])
-            with self.assertRaises(HTTPException) as error:
-                service.confirm_pairs(conn, [{
-                    'left_product_id': tentative['left']['id'],
-                    'right_product_id': tentative['right']['id'],
-                    'fingerprint': tentative['fingerprint'],
-                }], 'tester')
-            self.assertEqual(error.exception.status_code, 409)
-            self.assertEqual(service.confirmed_pairs(conn), set())
+            pair = next(p for p in service.suggest_pairs(products)
+                        if {p['left']['id'], p['right']['id']} == {'a', 'd'})
+            self.assertTrue(pair['linkable'])
+            result = service.confirm_pairs(conn, [{
+                'left_product_id': pair['left']['id'],
+                'right_product_id': pair['right']['id'],
+                'fingerprint': pair['fingerprint'],
+            }], 'tester')
+            self.assertEqual(result['linked'], 1)
+            analysis = service.build_synonym_analysis(service.load_products(conn),
+                service.confirmed_pairs(conn), [])
+            row = next(item for item in analysis['items'] if item['id'] == 'd')
+            self.assertEqual(row['store'], 'Winkel onbekend')
+            self.assertEqual(row['synonym_count'], 1)
 
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
