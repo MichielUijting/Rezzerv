@@ -227,6 +227,276 @@ class StoreTest(unittest.TestCase):
                     service.confirm_pairs(conn,[selection],'actor')
                 conn.execute(text("UPDATE global_products SET name='Halfvolle melk', primary_gtin='8718452513666' WHERE id='b'"))
 
+    def test_ed2_catalog_synonyms_almost_out_cross_store_chain(self):
+        """Isolated PostgreSQL chain: ED2 -> Catalogus -> confirmed synonym -> Bijna op.
+
+        ED2 uses the real central-link resolver against the test schema. Only
+        receipt-source extraction is stubbed; there are no real receipts or
+        household records. The synonym relation alone must never bypass missing
+        GPC/product-type evidence in Bijna op.
+        """
+        import json
+        from app.services import external_unlinked_articles_service as ed2
+        from app.services import almost_out_group_service as almost_out
+
+        household_id = "synonym-chain-isolated-household"
+        with self.engine.begin() as conn:
+            # Add the minimal *isolated* schema required by the production ED2
+            # read projection and Bijna op grouping. Existing StoreTest schemas
+            # are unique per test and are destroyed by tearDown.
+            for column, declaration in (
+                ("id", "TEXT"),
+                ("receipt_text_normalized", "TEXT"),
+                ("confirmed_at", "TIMESTAMPTZ"),
+                ("confirmed_by", "TEXT"),
+                ("source_candidate_id", "TEXT"),
+                ("created_at", "TIMESTAMPTZ"),
+                ("updated_at", "TIMESTAMPTZ"),
+            ):
+                conn.exec_driver_sql(
+                    f"ALTER TABLE external_article_product_links ADD COLUMN {column} {declaration}"
+                )
+            conn.exec_driver_sql("""
+                CREATE TABLE product_identities (
+                    global_product_id TEXT, identity_type TEXT, identity_value TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE product_group_memberships (
+                    global_product_id TEXT, inventory_group_key TEXT,
+                    active INTEGER, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE product_inventory_groups (
+                    inventory_group_key TEXT, gpc_brick_code TEXT, source TEXT,
+                    active INTEGER, display_name TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT, language_code TEXT, active BOOLEAN,
+                    gpc_brick_name TEXT, gpc_brick_name_en TEXT, source_version TEXT,
+                    gpc_class_code TEXT, gpc_class_name TEXT,
+                    gpc_family_code TEXT, gpc_family_name TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE household_articles (
+                    id TEXT, household_id TEXT, global_product_id TEXT, status TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE global_product_consumption_profiles (
+                    global_product_id TEXT, facts_json TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE inventory (
+                    id TEXT, household_id TEXT, household_article_id TEXT,
+                    naam TEXT, aantal NUMERIC, space_id TEXT, sublocation_id TEXT,
+                    status TEXT
+                )
+            """)
+            conn.exec_driver_sql("CREATE TABLE spaces (id TEXT, household_id TEXT, naam TEXT)")
+            conn.exec_driver_sql("CREATE TABLE sublocations (id TEXT, space_id TEXT, naam TEXT)")
+            conn.exec_driver_sql("""
+                CREATE TABLE inventory_events (
+                    id TEXT, household_id TEXT, article_id TEXT,
+                    event_type TEXT, created_at TIMESTAMPTZ,
+                    purchase_date TEXT, quantity NUMERIC
+                )
+            """)
+            conn.execute(text("""
+                INSERT INTO gpc_product_groups
+                  (gpc_brick_code, language_code, active, gpc_brick_name,
+                   gpc_brick_name_en, source_version)
+                VALUES ('10000025', 'nl', TRUE, 'Halfvolle melk',
+                        'Semi-skimmed milk', 'test')
+            """))
+            conn.execute(text("""
+                INSERT INTO product_inventory_groups
+                  (inventory_group_key, gpc_brick_code, source, active, display_name)
+                VALUES ('gpc:10000025', '10000025', 'gs1_gpc_official', 1, 'Halfvolle melk')
+            """))
+            for pid, name, gtin, receipt_code, retailer, volume in (
+                ("a", "AH Halfvolle melk", "8719587325926", "823326", "ah", 1.0),
+                ("b", "Jumbo Halfvolle melk", "8718452513666", "394270", "jumbo", 0.5),
+            ):
+                conn.execute(text("""
+                    UPDATE global_products SET name=:name, size_value=:volume,
+                        size_unit='l' WHERE id=:id
+                """), {"name": name, "volume": volume, "id": pid})
+                conn.execute(text("""
+                    UPDATE external_article_product_links
+                    SET id=:link_id, receipt_text_normalized=:receipt_name,
+                        confirmed_at=CURRENT_TIMESTAMP,
+                        confirmed_by='external_databases_off_link',
+                        created_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+                    WHERE global_product_id=:id AND retailer_code=:retailer
+                      AND external_article_code=:receipt_code
+                """), {
+                    "link_id": "ed2-" + pid, "receipt_name": name.lower(),
+                    "id": pid, "retailer": retailer, "receipt_code": receipt_code,
+                })
+                conn.execute(text("""
+                    INSERT INTO product_identities
+                      (global_product_id, identity_type, identity_value)
+                    VALUES (:id, 'gtin', :gtin)
+                """), {"id": pid, "gtin": gtin})
+                conn.execute(text("""
+                    INSERT INTO product_group_memberships
+                      (global_product_id, inventory_group_key, active, created_at, updated_at)
+                    VALUES (:id, 'gpc:10000025', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {"id": pid})
+                conn.execute(text("""
+                    INSERT INTO global_product_gpc_bricks (global_product_id, brick_code)
+                    VALUES (:id, '10000025')
+                """), {"id": pid})
+                conn.execute(text("""
+                    INSERT INTO household_articles (id, household_id, global_product_id, status)
+                    VALUES (:article, :household, :id, 'active')
+                """), {"article": "ha-" + retailer, "household": household_id, "id": pid})
+                conn.execute(text("""
+                    INSERT INTO global_product_consumption_profiles (global_product_id, facts_json)
+                    VALUES (:id, :facts)
+                """), {"id": pid, "facts": json.dumps({"name": name})})
+                conn.execute(text("""
+                    INSERT INTO inventory
+                      (id, household_id, household_article_id, naam, aantal, status)
+                    VALUES (:id, :household, :article, :name, :amount, 'active')
+                """), {
+                    "id": "inv-" + pid, "household": household_id,
+                    "article": "ha-" + retailer, "name": name,
+                    "amount": 1 if pid == "a" else 2,
+                })
+
+        receipt_sources = [
+            {
+                "receipt_item_id": "receipt-table-line:chain-ah",
+                "receipt_line_text": "AH Halfvolle melk",
+                "retailer_code": "ah",
+                "external_article_code": "823326",
+                "quantity_label": "1 l",
+            },
+            {
+                "receipt_item_id": "receipt-table-line:chain-jumbo",
+                "receipt_line_text": "Jumbo Halfvolle melk",
+                "retailer_code": "jumbo",
+                "external_article_code": "394270",
+                "quantity_label": "500 ml",
+            },
+        ]
+        # Only the receipt source is synthetic: ED2's confirmed-link resolver,
+        # completeness guard, Catalogus joins and almost-out grouping are real.
+        with self.engine.connect() as conn, patch.object(
+            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
+        ):
+            overview = ed2.list_all_external_articles(conn=conn)
+        self.assertEqual(overview["counts"], {
+            "unlinked": 0, "classification_pending": 0, "linked": 2,
+        })
+        rows = {row["retailer_code"]: row for row in overview["items"]}
+        self.assertEqual(set(rows), {"ah", "jumbo"})
+        self.assertEqual(rows["ah"]["receipt_article_number"], "823326")
+        self.assertEqual(rows["jumbo"]["receipt_article_number"], "394270")
+        self.assertEqual(rows["ah"]["catalog_product_id"], "a")
+        self.assertEqual(rows["jumbo"]["catalog_product_id"], "b")
+        self.assertEqual(rows["ah"]["article_code"], "8719587325926")
+        self.assertEqual(rows["jumbo"]["article_code"], "8718452513666")
+        self.assertNotEqual(rows["ah"]["article_code"], rows["jumbo"]["article_code"])
+
+        with patch.object(catalog_routes, "engine", self.engine):
+            before = {pid: catalog_routes._catalog_row(pid) for pid in ("a", "b")}
+        self.assertEqual({pid: row["linked_store_count"] for pid, row in before.items()},
+                         {"a": 0, "b": 0})
+        self.assertEqual({row["gpc_brick_code"] for row in before.values()}, {"10000025"})
+
+        def project_almost_out():
+            with self.engine.connect() as conn:
+                article_rows = [
+                    {"id": "ha-ah"}, {"id": "ha-jumbo"},
+                ]
+                groups = almost_out.load_groups(conn, household_id, article_rows, {})
+                projections = [almost_out.load_group_projection(conn, household_id, group)
+                               for group in groups]
+                stock_count = conn.execute(
+                    text("SELECT COALESCE(SUM(aantal), 0) FROM inventory")
+                ).scalar_one()
+            return groups, projections, stock_count
+
+        # GS1 and consistent packaging already permit one readable product group;
+        # a synonym confirmation never silently creates inventory transactions.
+        groups_before, projections_before, stock_before = project_almost_out()
+        self.assertEqual(len(groups_before), 1)
+        self.assertEqual({item["id"] for item in groups_before[0]["members"]},
+                         {"ha-ah", "ha-jumbo"})
+        self.assertEqual(sum(float(row["quantity"]) for row in
+                             projections_before[0]["inventory_rows"]), 2.0)
+        self.assertEqual(float(stock_before), 3.0)
+
+        with self.engine.begin() as conn:
+            products = service.load_products(conn)
+            proposals = service.suggest_pairs(products)
+            self.assertEqual(len(proposals), 1)
+            candidate = proposals[0]
+            self.assertEqual({candidate["left"]["id"], candidate["right"]["id"]},
+                             {"a", "b"})
+            selection = {
+                "left_product_id": candidate["left"]["id"],
+                "right_product_id": candidate["right"]["id"],
+                "fingerprint": candidate["fingerprint"],
+            }
+            self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
+                             {"linked": 1, "already_linked": 0})
+        with self.engine.begin() as conn:
+            self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})
+            self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
+                             {"linked": 0, "already_linked": 1})
+        with patch.object(catalog_routes, "engine", self.engine):
+            after = {pid: catalog_routes._catalog_row(pid) for pid in ("a", "b")}
+        self.assertEqual({pid: row["linked_store_count"] for pid, row in after.items()},
+                         {"a": 1, "b": 1})
+        self.assertEqual({pid: row["primary_gtin"] for pid, row in after.items()},
+                         {"a": "8719587325926", "b": "8718452513666"})
+
+        groups_after, projections_after, stock_after = project_almost_out()
+        self.assertEqual(len(groups_after), 1)
+        self.assertEqual({row["household_article_id"] for row in
+                          projections_after[0]["inventory_rows"]}, {"ha-ah", "ha-jumbo"})
+        self.assertEqual(sum(float(row["quantity"]) for row in
+                             projections_after[0]["inventory_rows"]), 2.0)
+        self.assertEqual(float(stock_after), float(stock_before))
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(
+                text("SELECT COUNT(*) FROM inventory_events")
+            ).scalar_one(), 0)
+
+        # Critical negative chain: an explicitly confirmed synonym is NOT an
+        # automatic Bijna op equivalence without current compatible GPC evidence.
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                DELETE FROM global_product_gpc_bricks WHERE global_product_id='b'
+            """))
+            conn.execute(text("""
+                DELETE FROM product_group_memberships WHERE global_product_id='b'
+            """))
+        with self.engine.connect() as conn, patch.object(
+            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
+        ):
+            downgraded_ed2 = ed2.list_all_external_articles(conn=conn)
+        statuses = {row["retailer_code"]: row["link_status"]
+                    for row in downgraded_ed2["items"]}
+        self.assertEqual(statuses, {"ah": "linked", "jumbo": "unlinked"})
+        groups_missing_type, _, stock_missing_type = project_almost_out()
+        self.assertEqual(len(groups_missing_type), 2)
+        self.assertEqual(float(stock_missing_type), 3.0)
+        with self.engine.connect() as conn:
+            self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})
+            self.assertEqual(conn.execute(
+                text("SELECT COUNT(*) FROM inventory_events")
+            ).scalar_one(), 0)
+
     def test_downgrade_only_removes_synonym_table(self):
         with self.engine.begin() as conn:
             with Operations.context(MigrationContext.configure(conn)):
