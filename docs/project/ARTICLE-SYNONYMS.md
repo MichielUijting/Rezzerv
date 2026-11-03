@@ -17,10 +17,11 @@ winkelnaam; een winkelcode wordt nooit omgezet in een barcode. Artikelen zonder
 code/barcode moeten eerst in Externe databases 2 worden aangevuld. Deze wijziging
 voegt aan dat bestaande scherm geen nieuwe opslagroute toe.
 Een winkelaanduiding komt uit de bevestigde centrale winkelkoppeling of een
-expliciet herkende winkel als Catalogusbron. Alleen producten met één eenduidige
-winkel worden voorgesteld; de twee winkels moeten verschillend zijn. Een
-ontbrekende of dubbelzinnige winkel leidt niet tot een gefingeerde winkelnaam
-of een te bevestigen paar. Productfoto's komen uitsluitend uit de opgeslagen
+expliciet herkende winkel als Catalogusbron. Oorspronkelijk werden alleen producten met één bekende winkel aangeboden.
+De latere doorwerking hieronder ondersteunt ook meerdere bevestigde winkels
+per product, uitsluitend wanneer de aantoonbare winkelsets van beide producten
+niet overlappen. Onbekende of overlappende winkelsets mogen geen gefingeerd
+winkeloverstijgend paar opleveren. Productfoto's komen uitsluitend uit de opgeslagen
 Catalogus-`image_url`, met de bestaande placeholder als er geen foto is.
 
 De kandidaatselectie gebruikt de beproefde TF-IDF/cosine-baseline: woord-1/2-grams
