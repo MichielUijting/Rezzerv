@@ -165,6 +165,53 @@ class StoreTest(unittest.TestCase):
             VALUES (:id,:code,'CBS-ECOICOPv2-2026',1,TRUE,'manual','explicit_manual_confirmation')
         """), {'id': product_id, 'code': code})
 
+    def _check_inheritance_irrespective_of_retailer(self, retailer):
+        with self.engine.begin() as conn:
+            if retailer is None:
+                conn.execute(text("""
+                    UPDATE external_article_product_links
+                       SET status='inactive' WHERE global_product_id='b'
+                """))
+            else:
+                conn.execute(text("""
+                    UPDATE external_article_product_links
+                       SET retailer_code=:retailer WHERE global_product_id='b'
+                """), {'retailer': retailer})
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025')
+            """))
+            self._set_cbs(conn, 'a')
+            # The component is fed an already confirmed central synonym pair;
+            # shop provenance must never enter classification inheritance.
+            report = inheritance.propagate_confirmed_classifications(
+                conn, {('a', 'b')}, {'a', 'b'}, 'actor',
+            )
+            self.assertEqual(report['gpc_inherited'], 1)
+            self.assertEqual(report['cbs_inherited'], 1)
+            self.assertEqual(report['conflicts'], [])
+            self.assertEqual(conn.execute(text("""
+                SELECT brick_code FROM global_product_gpc_bricks
+                 WHERE global_product_id='b'
+            """)).scalar_one(), '10000025')
+            self.assertEqual(conn.execute(text("""
+                SELECT cbs_code FROM global_product_cbs_classifications
+                 WHERE global_product_id='b'
+            """)).scalar_one(), '011420')
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+                 WHERE global_product_id='b'
+            """)).scalar_one(), 1)
+
+    def test_inheritance_with_unknown_retailer(self):
+        self._check_inheritance_irrespective_of_retailer(None)
+
+    def test_inheritance_with_same_retailer(self):
+        self._check_inheritance_irrespective_of_retailer('ah')
+
+    def test_inheritance_with_different_retailers(self):
+        self._check_inheritance_irrespective_of_retailer('jumbo')
+
     def test_confirmed_synonyms_inherit_both_and_retry_is_idempotent(self):
         with self.engine.begin() as conn:
             conn.execute(text("""
