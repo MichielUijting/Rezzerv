@@ -317,7 +317,7 @@ export default function CbsClassificationPage() {
           Nog niet bevestigd.</p> : null}
         {browsing ? <div aria-label="CBS-navigatie">
           <Button type="button" variant="secondary" disabled={isBusy || !browseParent}
-            onClick={() => browseCategories(browseTrail.length > 1 ? browseTrail[browseTrail.length - 2].cbs_code : null, browseTrail.slice(0, -1))}>Terug naar bovenliggende categorie</Button>
+            onClick={() => browseCategories(browseTrail.length > 1 ? browseTrail[browseTrail.length - 2].cbs_code : null, browseTrail.slice(0, -1))}>Bovenliggende categorie openen</Button>
           <p role="status">{browseTrail.length ? browseTrail.map((item) => item.name_nl).join(' › ') : 'Alle CBS-hoofdcategorieën'}</p>
         </div> : null}
         {categories.length ? <section aria-label="Officiële CBS-kandidaten">
