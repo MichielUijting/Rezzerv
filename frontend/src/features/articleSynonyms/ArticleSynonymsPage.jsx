@@ -72,7 +72,7 @@ export default function ArticleSynonymsPage() {
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
-      else if (items.some((item) => item.id === id && item.linkable !== false) && next.size < 200) next.add(id)
+      else if (items.some((item) => item.id === id) && next.size < 200) next.add(id)
       return next
     })
   }
@@ -82,7 +82,7 @@ export default function ArticleSynonymsPage() {
     savingRef.current = true
     setSaving(true)
     setError('')
-    const selections = items.filter((item) => selected.has(item.id) && item.linkable !== false).map((item) => ({
+    const selections = items.filter((item) => selected.has(item.id)).map((item) => ({
       left_product_id: item.left.id, right_product_id: item.right.id, fingerprint: item.fingerprint,
     }))
     try {
@@ -117,20 +117,18 @@ export default function ArticleSynonymsPage() {
   const displayArticles = articles.map((item) => ({
     ...item,
     candidate_count: item.pending?.length || 0,
-    status_label: item.status === 'name_review'
-      ? 'Naamvoorstellen (winkel controleren)'
-      : item.status === 'insufficient'
-        ? 'Winkel onbekend'
-        : item.pending?.length
-          ? 'Voorstellen beschikbaar'
-          : 'Geen nieuwe voorstellen',
+    status_label: item.pending?.length
+      ? 'Voorstellen beschikbaar'
+      : item.synonym_count
+        ? 'Synoniemen gekoppeld'
+        : 'Geen nieuwe voorstellen',
   }))
 
   const columns = [
     { key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check', renderCell: (item) => <input type="checkbox"
       aria-label={`Selecteer ${item.article_name} (${item.article_store}) en ${item.synonym_name} (${item.synonym_store})`}
-      checked={selected.has(item.id)} disabled={saving || item.linkable === false || (!selected.has(item.id) && selected.size >= 200)}
-      title={item.linkable === false ? 'Alleen naamovereenkomst: eerst winkelherkomst bevestigen' : 'Bevestig dit synoniempaar'}
+      checked={selected.has(item.id)} disabled={saving || (!selected.has(item.id) && selected.size >= 200)}
+      title="Bevestig dit synoniempaar"
       onChange={() => toggle(item.id)} /> },
     { key: 'article_name', label: 'Artikelnaam', filterLabel: 'Filter op artikelnaam eerste winkel', width: 255, sortable: true, filterable: true },
     { key: 'article_photo', label: 'Foto artikel', width: 115, renderCell: (item) => <CatalogProductImage
@@ -145,7 +143,7 @@ export default function ArticleSynonymsPage() {
   return <AppShell title="Artikel-synoniemen" showExit={false}>
     <ScreenCard fullWidth>
       <h2>Artikel-synoniemen</h2>
-      <p>Dubbelklik op een Catalogusartikel om de mogelijke synoniemen te bekijken. Bevestig uitsluitend juiste voorstellen met Koppelen.</p>
+      <p>Dubbelklik op een Catalogusartikel om mogelijke synoniemen op basis van productkenmerken te bekijken, onafhankelijk van de winkel. Bevestig juiste voorstellen met Koppelen.</p>
       <p>Artikelen zonder artikelcode of barcode vul je eerst aan in <Link to="/externe-databases-2">Externe databases 2</Link>.</p>
       {error ? <p role="alert">{error}</p> : null}
       <DataTable columns={articleColumns} data={displayArticles} getRowKey={(item) => item.id}
@@ -178,16 +176,11 @@ export default function ArticleSynonymsPage() {
       {activeArticle && !loading && !currentArticle ? <p role="status">Dit artikel is niet beschikbaar in het overzicht.</p> : null}
       {(currentArticle || (!activeArticle && visibleItems.length > 0)) ? <section className="rz-synonym-analysis-details" data-testid="article-synonyms-candidates">
         <h3>{currentArticle ? `Voorstellen voor ${currentArticle.name}` : 'Nieuwe synoniemsuggesties'}</h3>
-        {visibleItems.some((item) => item.linkable === false) ? <p role="status">
-          Naamvoorstellen worden getoond om overeenkomsten te beoordelen. Zolang de winkelherkomst niet betrouwbaar is vastgesteld,
-          zijn deze regels niet selecteerbaar met Koppelen. Een naamovereenkomst is geen bevestigde identiteit.
-        </p> : null}
+        <p>Voorstellen zijn gebaseerd op artikelnaam en productkenmerken, onafhankelijk van de winkel. Controleer de overeenkomst voordat je koppelt.</p>
         <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
           pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
           dataTestId="article-synonyms-table"
-          emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : currentArticle?.status === 'insufficient'
-            ? 'Geen bevestigde winkelherkomst. Controleer de artikelkoppeling in Externe databases 2.'
-            : 'Geen nieuwe synoniemsuggesties voor dit artikel.'}
+          emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : 'Geen passende synoniemsuggesties voor dit artikel.'}
           paginationActions={<><span aria-live="polite">{selected.size} geselecteerd</span>
             <Button disabled={loading || saving || !selected.size} onClick={link}>Koppelen</Button></>}
         />
