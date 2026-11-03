@@ -31,12 +31,22 @@ RETAILER_NAMES = {
     'dirk': 'Dirk',
 }
 
+# Only canonical spellings of confirmed shop evidence. Never infer a store from a
+# product name, a GTIN or a household's unconfirmed receipt match.
+RETAILER_ALIASES = {
+    'albert-heijn': 'ah',
+    'albert-heijn-digitaal': 'ah',
+    'albertheijn': 'ah',
+    'lidl-nederland-gmbh': 'lidl',
+    'lidl-nederland': 'lidl',
+}
+
 
 def _retailer_code(value):
     value = unicodedata.normalize('NFKD', str(value or '').strip().lower())
     value = ''.join(c for c in value if not unicodedata.combining(c))
     code = re.sub(r'[^a-z0-9]+', '-', value).strip('-')
-    return 'ah' if code == 'albert-heijn' else code
+    return RETAILER_ALIASES.get(code, code)
 
 
 def _store_name(code):
@@ -110,12 +120,14 @@ def load_products(conn):
         source_retailer = _retailer_code(product.pop('source'))
         if not known_retailers and source_retailer in RETAILER_NAMES:
             known_retailers.add(source_retailer)
-        retailer_code = next(iter(known_retailers)) if len(known_retailers) == 1 else ''
+        retailer_codes = sorted(known_retailers)
+        retailer_code = retailer_codes[0] if len(retailer_codes) == 1 else ''
         product.update(
             primary_gtin=valid_gtin,
             article_codes=article_codes,
             retailer_code=retailer_code,
-            store_name=_store_name(retailer_code),
+            retailer_codes=retailer_codes,
+            store_name=' / '.join(_store_name(code) for code in retailer_codes) if retailer_codes else 'Niet vastgelegd',
             image_url=str(product.get('image_url') or '').strip(),
         )
         # Stable serialization across PostgreSQL Decimal and HTTP JSON.
@@ -123,6 +135,14 @@ def load_products(conn):
         products.append(product)
     return products
 
+
+
+def _known_retailers(product):
+    """Read only verified central store evidence; never guess from a name."""
+    codes = product.get('retailer_codes')
+    if codes is None:
+        codes = [product.get('retailer_code')]
+    return {_retailer_code(code) for code in codes if _retailer_code(code)}
 
 def suggest_pairs(products, confirmed=()):
     """Sparse inverted-index ranking; no dense all-products similarity matrix."""
@@ -151,7 +171,10 @@ def suggest_pairs(products, confirmed=()):
             if score < MIN_SCORE or (a, b) in confirmed:
                 continue
             # Shop-specific synonyms need two distinct, documented shops.
-            if not left.get('retailer_code') or not right.get('retailer_code') or left['retailer_code'] == right['retailer_code']:
+            left_stores, right_stores = _known_retailers(left), _known_retailers(right)
+            # Shared shop evidence is ambiguous for a shop-overstijgend pair.
+            # Disjoint confirmed sets also support products sold at multiple shops.
+            if not left_stores or not right_stores or left_stores & right_stores:
                 continue
             if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
                 continue  # Same trade item, not a synonym with a different identity.
@@ -226,15 +249,16 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
     direct_peers = defaultdict(set)
     for left, right in confirmed:
         a, b = by_id.get(left), by_id.get(right)
-        if not a or not b or not a.get('retailer_code') or not b.get('retailer_code'):
+        if not a or not b:
             continue
-        if a['retailer_code'] == b['retailer_code']:
+        a_stores, b_stores = _known_retailers(a), _known_retailers(b)
+        if not a_stores or not b_stores or a_stores & b_stores:
             continue
         valid_links.add(tuple(sorted((left, right))))
         direct_peers[left].add(right)
         direct_peers[right].add(left)
-        linked[left].add(b['retailer_code'])
-        linked[right].add(a['retailer_code'])
+        linked[left].update(b_stores)
+        linked[right].update(a_stores)
 
     for proposal in suggestions:
         a, b = proposal['left'], proposal['right']
@@ -262,8 +286,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         else:
             group_key, group_label = 'unclassified', 'Niet geclassificeerd'
             group_source = 'Ontbrekende classificatie'
-        store = product.get('store_name') if product.get('retailer_code') else 'Winkel onbekend'
-        if not product.get('retailer_code'):
+        store = product.get('store_name') if _known_retailers(product) else 'Winkel onbekend'
+        if not _known_retailers(product):
             status = 'insufficient'
         elif pending[pid]:
             status = 'review'
