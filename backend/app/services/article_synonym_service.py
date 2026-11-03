@@ -217,7 +217,7 @@ def suggest_pairs(products, confirmed=(), *, include_name_only=False):
             if left.get('brick_code') and right.get('brick_code') and left['brick_code'] != right['brick_code']:
                 continue
             candidates.append((j, score, linkable))
-        for j, score, linkable in sorted(candidates, key=lambda pair: (-pair[1], products[pair[0]]['id']))[:MAX_PER_PRODUCT]:
+        for j, score, linkable in sorted(candidates, key=lambda pair: (not pair[2], -pair[1], products[pair[0]]['id']))[:MAX_PER_PRODUCT]:
             first, second = sorted((left, products[j]), key=lambda p: p['id'])
             key = (first['id'], second['id'])
             pairs[key] = {
