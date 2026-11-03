@@ -100,6 +100,28 @@ class MatchingTest(unittest.TestCase):
         self.assertTrue(all(p['left']['id'] < p['right']['id'] for p in result))
 
 
+class SynonymOverviewRouteTest(unittest.TestCase):
+    def test_article_index_survives_missing_optional_legacy_classification(self):
+        from unittest.mock import MagicMock
+
+        connection = MagicMock()
+        fake_engine = MagicMock()
+        fake_engine.connect.return_value.__enter__.return_value = connection
+        sample = product('a', 'Halfvolle melk', retailer_code='')
+        sample['retailer_codes'] = []
+        with patch.object(routes, '_actor'), \\
+                patch.object(routes, 'engine', fake_engine), \\
+                patch.object(routes, 'load_products', return_value=[sample]), \\
+                patch.object(routes, 'confirmed_pairs', return_value=set()), \\
+                patch('sqlalchemy.inspect') as introspection:
+            introspection.return_value.has_table.return_value = False
+            response = routes.synonym_analysis()
+        self.assertEqual(response['summary']['eligible_articles'], 1)
+        self.assertEqual(response['summary']['candidate_pairs'], 0)
+        self.assertEqual(response['items'][0]['store'], 'Winkel onbekend')
+        connection.execute.assert_not_called()
+
+
 class StoreTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
