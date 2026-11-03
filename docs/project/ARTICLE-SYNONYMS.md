@@ -168,3 +168,24 @@ voor de kandidaat-DataTable (maximaal vijf regels). De knop **Sluiten**
 naast de kandidaat-tabeltitel vervalt; dubbelklik op een andere hoofdregel
 laadt de kandidaten voor dat artikel. Bestaande selectie-, dubbelklik- en
 bevestigingsfunctionaliteit blijft gehandhaafd.
+
+
+## Doorwerking van bevestigde winkelherkomst (3 november 2026)
+
+Artikel-synoniemen normaliseert aantoonbare winkelherkomst uit bevestigde centrale
+`external_article_product_links` en expliciete Catalogusbron: onder meer
+Albert Heijn/AH en Lidl/Lidl Nederland GmbH verwijzen naar dezelfde winkelketen.
+Een Catalogusproduct met meerdere **bevestigde** winkelrelaties behoudt alle
+winkels in de leesprojectie. Een synoniemvoorstel naar een ander centraal product
+is alleen toegestaan wanneer beide winkelverzamelingen niet leeg en onderling
+disjunct zijn; bij overlappende winkels kan niet veilig worden bewezen dat het
+voorstel winkeloverstijgend is. Handmatige bevestiging blijft vereist.
+
+Dit is geen backfill uit ruwe kassabonnen. De winkel op een kassabon bewijst
+uitsluitend de herkomst van de aankoop, niet de identiteit van het Catalogusproduct.
+Een niet-bevestigde `matched_global_product_id`, naamsovereenkomst, GTIN-match
+zonder bewaakte identiteit of huishoudartikelrelatie wordt **niet** tot
+platformbrede winkelkoppeling verheven. Ontbrekende productidentiteiten moeten
+eerst via de bestaande expliciete ED2-bevestigingsroute worden vastgelegd.
+Dit voorkomt onderlinge vermenging van huishoudens en verandert geen bonnen,
+Catalogusartikelen, voorraad, codes of synoniemrelaties.
