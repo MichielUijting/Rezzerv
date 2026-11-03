@@ -210,3 +210,24 @@ Een ontbrekende bevestigde winkelrelatie wordt zichtbaar gemaakt en niet
 op basis van bontekst, naam of huishoudcontext aangevuld. Een volle lijst
 Catalogusartikelen betekent niet dat er bevestigbare synoniemen zijn.
 Na bevestigen worden beide tabellen opnieuw van de centrale backend geladen.
+
+## Hergebruik oudere expliciet bevestigde winkel-productrelaties (3 november 2026)
+
+Naast `external_article_product_links.status='confirmed'` hergebruikt de
+alleen-lezen synoniemenprojectie nu ook bestaande centrale
+`external_product_candidates` met `is_user_confirmed=TRUE`,
+`status='linked_to_catalog'`, `candidate_status='linked_to_catalog'`,
+een vastgelegde `global_product_id` en een niet-lege, bewezen winkelcode
+uit de oorspronkelijke Kassa-/ED2-context. Historische bevestigingen die
+nog niet in de nieuwere centrale koppeltabel zijn opgenomen verdwijnen
+daardoor niet langer uit de winkelherkenning.
+
+Alleen gekende winkelketens tellen mee. Tegenstrijdige product-ID's
+binnen dezelfde (winkel, context_key) worden genegeerd. Voorstellen,
+onbevestigde kandidaten, ontkoppelingen, verdwenen tabellen en vrije
+tekst-/naamovereenkomsten vormen nooit shopbewijs. De projectie maakt
+geen nieuwe globale identiteit en schrijft niets naar bonnen,
+`external_article_product_links`, voorraad of huishoudgegevens.
+Dit bewijst niet dat iedere kassabonregel een bevestigde
+Catalogusidentiteit heeft; resterende ontbrekende links vereisen
+gerichte bronketendiagnose en expliciete bevestiging.
