@@ -173,8 +173,12 @@ def _known_retailers(product):
         codes = [product.get('retailer_code')]
     return {_retailer_code(code) for code in codes if _retailer_code(code)}
 
-def suggest_pairs(products, confirmed=()):
-    """Sparse inverted-index ranking; no dense all-products similarity matrix."""
+def suggest_pairs(products, confirmed=(), *, include_name_only=False):
+    """Sparse TF-IDF suggestions. Name-only rows can NEVER be confirmed.
+
+    The default path is the persisted-link authority. Name-only rows exist
+    solely for human review; confirmation always recomputes with this flag off.
+    """
     products = sorted(products, key=lambda p: p['id'])
     confirmed = set(confirmed)
     words, chars = _vectors(products), _vectors(products, True)
@@ -199,11 +203,12 @@ def suggest_pairs(products, confirmed=()):
             a, b = sorted((left['id'], right['id']))
             if score < MIN_SCORE or (a, b) in confirmed:
                 continue
-            # Shop-specific synonyms need two distinct, documented shops.
             left_stores, right_stores = _known_retailers(left), _known_retailers(right)
-            # Shared shop evidence is ambiguous for a shop-overstijgend pair.
-            # Disjoint confirmed sets also support products sold at multiple shops.
-            if not left_stores or not right_stores or left_stores & right_stores:
+            # Distinct verified stores are mandatory for actual link writes.
+            # Similar names with missing/overlapping store evidence may be
+            # displayed for review, but MUST remain unselectable/unconfirmable.
+            linkable = bool(left_stores and right_stores and not left_stores & right_stores)
+            if not linkable and not include_name_only:
                 continue
             if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
                 continue  # Same trade item, not a synonym with a different identity.
@@ -219,7 +224,12 @@ def suggest_pairs(products, confirmed=()):
                 'id': json.dumps(key, separators=(',', ':')),
                 'left': first, 'right': second, 'score': min(1.0, round(score, 4)),
                 'fingerprint': _fingerprint(first, second),
-                'warning': 'Controleer variant, bereiding en inhoud; de score is geen zekerheid.',
+                'linkable': linkable,
+                'match_basis': 'confirmed_retailers' if linkable else 'name_only',
+                'warning': ('Controleer variant, bereiding en inhoud; de score is geen zekerheid.'
+                            if linkable else
+                            'Alleen naamovereenkomst. Winkelherkomst is onvoldoende bevestigd; '
+                            'dit paar kan nog niet worden gekoppeld.'),
             }
     return sorted(pairs.values(), key=lambda pair: (-pair['score'], pair['id']))
 
@@ -298,6 +308,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
                 'id': other['id'], 'name': other['name'],
                 'store_name': other.get('store_name') or 'Niet vastgelegd',
                 'score': proposal['score'],
+                'linkable': bool(proposal.get('linkable', True)),
+                'match_basis': proposal.get('match_basis', 'confirmed_retailers'),
             })
 
     groups = {}
@@ -316,10 +328,10 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
             group_key, group_label = 'unclassified', 'Niet geclassificeerd'
             group_source = 'Ontbrekende classificatie'
         store = product.get('store_name') if _known_retailers(product) else 'Winkel onbekend'
-        if not _known_retailers(product):
+        if pending[pid]:
+            status = 'review' if any(p['linkable'] for p in pending[pid]) else 'name_review'
+        elif not _known_retailers(product):
             status = 'insufficient'
-        elif pending[pid]:
-            status = 'review'
         elif linked[pid]:
             status = 'linked'
         else:
@@ -367,7 +379,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         'summary': {
             'synonym_buckets': buckets,
             'confirmed_pairs': len(valid_links),
-            'candidate_pairs': len(suggestions),
+            'candidate_pairs': sum(bool(p.get('linkable', True)) for p in suggestions),
+            'name_only_pairs': sum(not p.get('linkable', True) for p in suggestions),
             'no_candidate_articles': sum(p['status'] == 'no_candidate' for p in items),
             'insufficient_articles': sum(p['status'] == 'insufficient' for p in items),
             'classified_articles': sum(p['group_source'] == 'Artikelclassificatie' for p in items),
