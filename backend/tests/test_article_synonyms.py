@@ -207,7 +207,7 @@ class StoreTest(unittest.TestCase):
         with self.engine.begin() as conn:
             # 'c' is a pre-existing coded Catalogus product without any
             # external_article_product_links row or retailer source.
-            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678901' WHERE id='c'"))
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678906' WHERE id='c'"))
             conn.execute(text("""
                 INSERT INTO external_product_candidates
                 (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
@@ -226,7 +226,7 @@ class StoreTest(unittest.TestCase):
 
     def test_conflicting_explicit_candidate_context_does_not_assign_store(self):
         with self.engine.begin() as conn:
-            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678901' WHERE id='c'"))
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678906' WHERE id='c'"))
             conn.execute(text("""
                 INSERT INTO external_product_candidates
                 (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
