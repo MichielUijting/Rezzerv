@@ -16,13 +16,11 @@ bevestigde centrale winkelartikelcode. Een winkelcode is altijd voorzien van de
 winkelnaam; een winkelcode wordt nooit omgezet in een barcode. Artikelen zonder
 code/barcode moeten eerst in Externe databases 2 worden aangevuld. Deze wijziging
 voegt aan dat bestaande scherm geen nieuwe opslagroute toe.
-Een winkelaanduiding komt uit de bevestigde centrale winkelkoppeling of een
-expliciet herkende winkel als Catalogusbron. Oorspronkelijk werden alleen producten met één bekende winkel aangeboden.
-De latere doorwerking hieronder ondersteunt ook meerdere bevestigde winkels
-per product, uitsluitend wanneer de aantoonbare winkelsets van beide producten
-niet overlappen. Onbekende of overlappende winkelsets mogen geen gefingeerd
-winkeloverstijgend paar opleveren. Productfoto's komen uitsluitend uit de opgeslagen
-Catalogus-`image_url`, met de bestaande placeholder als er geen foto is.
+De winkelherkomst is uitsluitend een informatief bronveld en **geen eis voor een
+synoniemvoorstel of een handmatige bevestiging**. Een onbekende winkel, twee
+gelijke winkels of twee verschillende winkels beïnvloeden de overeenkomstscore
+niet en blokkeren de koppeling niet. De winkel mag nooit uit de artikelnaam
+worden verzonnen. Productfoto's komen uit de opgeslagen Catalogus-`image_url`.
 
 De kandidaatselectie gebruikt de beproefde TF-IDF/cosine-baseline: woord-1/2-grams
 en teken-3/5-grams, beide 50%, over Nederlandse naam en variant. Winkelwoorden
@@ -31,7 +29,9 @@ Een sparse index vermijdt een dense N×N-matrix. Kandidaten hebben minimaal 0,20
 tekstovereenkomst en staan bij ten minste één artikel in de beste zeven. Dit is
 uitsluitend een suggestiegrens, geen betrouwbaarheidsclaim. Er wordt op de hele
 centrale set gezocht, niet uitsluitend op AH/Jumbo. Dezelfde GTIN of dezelfde
-winkelcode is een exacte identiteit en geen synoniempaar. Bekende verschillende
+centrale winkelartikel-identiteit is een exacte identiteit en geen afzonderlijk
+synoniempaar; twee onafhankelijke artikelen van dezelfde winkel mogen uiteraard
+wel een synoniemvoorstel zijn. Bekende verschillende
 GPC Bricks worden uitgesloten; ontbrekende kenmerken worden niet verzonnen.
 
 De standaard DataTable bevat exact zeven kolommen: **lege selectiekop**, **Artikelnaam**,
@@ -67,7 +67,9 @@ De **Catalogus** toont per product de numerieke kolom **Gekoppelde winkels**;
 dezelfde waarde staat in de mobiele Catalogus en beide detailpresentaties. Dit
 is het aantal **unieke andere winkels** waaraan het product **rechtstreeks** via
 een bevestigde synoniemrelatie is gekoppeld: een AH-product gekoppeld aan één
-Jumbo-product heeft waarde 1; zonder geldige directe koppelingen waarde 0.
+Jumbo-product heeft waarde 1; zonder bekende andere winkel waarde 0.
+Deze teller is alleen een herkomstweergave en zegt niets over de geldigheid
+van de synoniemrelatie.
 Meerdere gekoppelde producten uit dezelfde andere winkel tellen eenmaal.
 Een keten A↔B en B↔C telt C niet automatisch voor A. Alleen winkels met één
 eenduidige, actuele centrale winkelaanduiding tellen mee; ontbrekende,
@@ -258,3 +260,22 @@ bevestigde item/product-ID-relaties en de actuele PostgreSQL-bronketen eerst
 objectief zijn vastgesteld; oude onzekere matches mogen niet op naam worden
 teruggeschreven. De alleen-lezen projectie van eerder bevestigde kandidaten
 blijft hiervoor beschikbaar.
+
+## Correctie PO-besluit: winkel is geen criterium voor synoniemen (3 november 2026)
+
+Het expliciete actuele PO-besluit vervangt alle eerdere passages in dit
+document die verschillende bekende winkels als voorwaarde voor het voorstellen
+of bevestigen van synoniemen beschreven. Productovereenkomst wordt gerangschikt
+op naam en productkenmerken, onafhankelijk van winkel. Ook artikelen met een
+onbekende of dezelfde winkel zijn handmatig koppelbaar. Een bevestiging is een
+bewuste beslissing van de bevoegde gebruiker op twee **bestaande centrale
+product-ID's**; het is geen automatische koppeling van een kassabon,
+huishoudartikel, barcode of winkel. GTIN-identiteitsconflicten en verschillende
+bekende GPC Bricks blijven uitgesloten. Het bestaande endpoint valideert
+de kandidaat en fingerprint opnieuw voordat het opslaat.
+
+Winkelherkomst mag wel afzonderlijk uit bestaande bewezen bon/productrelaties
+worden geprojecteerd of gecorrigeerd, maar het ontbreken ervan blokkeert
+Artikel-synoniemen nooit. De oudere `name_only`-presentatieblokkade is vervallen.
+De `include_name_only`-argumentnaam wordt uitsluitend voor bestaande callers
+tijdelijk behouden; alle suggesties volgen dezelfde winkelonafhankelijke logica.
