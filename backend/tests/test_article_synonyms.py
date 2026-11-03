@@ -282,7 +282,9 @@ class StoreTest(unittest.TestCase):
             products = {p['id']: p for p in service.load_products(conn)}
             self.assertEqual(products['c']['retailer_codes'], [])
             self.assertEqual(products['b']['retailer_codes'], ['jumbo'])
-            self.assertEqual(service.suggest_pairs([products['a'], products['c']]), [])
+            # Conflicting source evidence does not invent a store, but the
+            # independent products remain eligible for a manual synonym review.
+            self.assertTrue(service.suggest_pairs([products['a'], products['c']]))
 
     def test_similar_products_can_be_confirmed_without_known_store(self):
         with self.engine.begin() as conn:
@@ -727,9 +729,12 @@ class SynonymAnalysisContractTest(unittest.TestCase):
         products = [product('a', 'Melk', retailer_code=''),
                     product('b', 'Melk', retailer_code='jumbo')]
         result = service.build_synonym_analysis(products, {('a', 'b')}, [])
-        self.assertEqual(result['summary']['confirmed_pairs'], 0)
+        self.assertEqual(result['summary']['confirmed_pairs'], 1)
         self.assertEqual(result['summary']['insufficient_articles'], 1)
         self.assertEqual(result['summary']['no_candidate_articles'], 1)
+        rows = {row['id']: row for row in result['items']}
+        self.assertEqual(rows['a']['synonym_count'], 1)
+        self.assertEqual(rows['a']['store'], 'Winkel onbekend')
 
 
     def test_buckets_0_1_2_3_plus_are_direct_product_counts(self):
