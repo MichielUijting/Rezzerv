@@ -231,3 +231,30 @@ geen nieuwe globale identiteit en schrijft niets naar bonnen,
 Dit bewijst niet dat iedere kassabonregel een bevestigde
 Catalogusidentiteit heeft; resterende ontbrekende links vereisen
 gerichte bronketendiagnose en expliciete bevestiging.
+
+## Naamvoorstellen bij ontbrekende winkelherkomst (3 november 2026)
+
+Wanneer de centrale winkelherkomst nog niet aantoonbaar vaststaat of beide
+artikelen een overlappende winkel hebben, toont Artikel-synoniemen **wel**
+uitsluitend ter beoordeling voorgestelde paren op grond van de bestaande
+TF-IDF-naamscore. Die paren krijgen `match_basis=name_only` en
+`linkable=false`. Ze tellen niet mee als bevestigbare winkeloverstijgende
+voorstellen, zijn niet selecteerbaar in de tabel, kunnen niet via de bestaande
+bulkroute worden bevestigd en worden nooit naar product-, synoniem-, winkel-
+of huishoudtabellen geschreven. De bestaande `confirm_pairs` recomputeert
+alleen voorstellen met aantoonbaar verschillende winkelsets, ook wanneer
+een client toch een name-only-fingerprint verstuurt.
+
+De vergelijking gebruikt alleen twee reeds bestaande, gecodeerde centrale
+Catalogusartikelen; identiteit op GTIN en strijdige GPC Brick blijven
+uitgesloten. Een zichtbare naamovereenkomst maakt geen winkelcode, GTIN,
+Catalogusproduct of synoniemrelatie aan en mag een latere expliciete bevestiging
+niet vervangen. Echte dubbele producten en naamverschillen moeten afzonderlijk
+door de Superuser worden beoordeeld.
+
+Een kassabonwinkel alleen geeft geen autoriteit voor het Product-ID van iedere
+verwerkte bonregel. Voor een permanente brondatareparatie moeten bestaande
+bevestigde item/product-ID-relaties en de actuele PostgreSQL-bronketen eerst
+objectief zijn vastgesteld; oude onzekere matches mogen niet op naam worden
+teruggeschreven. De alleen-lezen projectie van eerder bevestigde kandidaten
+blijft hiervoor beschikbaar.
