@@ -222,7 +222,22 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(products['c']['retailer_codes'], ['lidl'])
             self.assertEqual(products['c']['store_name'], 'Lidl')
             self.assertEqual(products['c']['retailer_code'], 'lidl')
+            pairs = service.suggest_pairs(list(products.values()))
+            self.assertIn(('a', 'c'), [
+                (pair['left']['id'], pair['right']['id']) for pair in pairs
+            ])
+            analysis = service.build_synonym_analysis(list(products.values()), set(), pairs)
+            row = next(item for item in analysis['items'] if item['id'] == 'c')
+            self.assertEqual(row['store'], 'Lidl')
+            self.assertEqual(row['status'], 'review')
+            self.assertGreater(len(row['pending']), 0)
             self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM external_article_product_links")).scalar_one(), before)
+
+    def test_optional_legacy_candidate_table_can_be_absent(self):
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql('DROP TABLE external_product_candidates')
+            products = service.load_products(conn)
+            self.assertEqual([p['id'] for p in products], ['a', 'b'])
 
     def test_conflicting_explicit_candidate_context_does_not_assign_store(self):
         with self.engine.begin() as conn:
