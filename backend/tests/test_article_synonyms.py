@@ -147,6 +147,7 @@ class StoreTest(unittest.TestCase):
             conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT, image_url TEXT, source TEXT)')
             conn.exec_driver_sql('CREATE TABLE global_product_gpc_bricks(global_product_id TEXT PRIMARY KEY, brick_code TEXT)')
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
+            conn.exec_driver_sql('CREATE TABLE external_product_candidates(context_key TEXT, retailer_code TEXT, global_product_id TEXT, is_user_confirmed BOOLEAN, status TEXT, candidate_status TEXT)')
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
             module = migration_module('20261026_01_article_synonyms')
@@ -201,6 +202,43 @@ class StoreTest(unittest.TestCase):
             # 'b' is Jumbo: neither shop overlaps, so the pair remains reviewable.
             suggestions = service.suggest_pairs(list(items.values()))
             self.assertIn(('a', 'b'), [(p['left']['id'], p['right']['id']) for p in suggestions])
+
+    def test_legacy_explicitly_confirmed_candidates_supply_retailer_from_kassa(self):
+        with self.engine.begin() as conn:
+            # 'c' is a pre-existing coded Catalogus product without any
+            # external_article_product_links row or retailer source.
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678901' WHERE id='c'"))
+            conn.execute(text("""
+                INSERT INTO external_product_candidates
+                (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
+                VALUES
+                ('receipt-line:confirmed', 'Lidl Nederland GmbH', 'c', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:proposed', 'Picnic', 'c', FALSE, 'possible_candidate', 'possible_candidate'),
+                ('receipt-line:unlinked', 'Aldi', 'c', TRUE, 'unlinked_from_catalog', 'possible_candidate'),
+                ('receipt-line:stale', 'Plus', 'c', TRUE, 'linked_to_catalog', 'unlinked_from_catalog')
+            """))
+            before = conn.execute(text("SELECT COUNT(*) FROM external_article_product_links")).scalar_one()
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(products['c']['retailer_codes'], ['lidl'])
+            self.assertEqual(products['c']['store_name'], 'Lidl')
+            self.assertEqual(products['c']['retailer_code'], 'lidl')
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM external_article_product_links")).scalar_one(), before)
+
+    def test_conflicting_explicit_candidate_context_does_not_assign_store(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678901' WHERE id='c'"))
+            conn.execute(text("""
+                INSERT INTO external_product_candidates
+                (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
+                VALUES
+                ('receipt-line:same', 'Lidl', 'c', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:same', 'Lidl', 'b', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:unconfirmed', 'Aldi', 'c', FALSE, 'linked_to_catalog', 'linked_to_catalog')
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(products['c']['retailer_codes'], [])
+            self.assertEqual(products['b']['retailer_codes'], ['jumbo'])
+            self.assertEqual(service.suggest_pairs([products['a'], products['c']]), [])
 
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
