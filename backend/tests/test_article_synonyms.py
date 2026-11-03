@@ -109,10 +109,10 @@ class SynonymOverviewRouteTest(unittest.TestCase):
         fake_engine.connect.return_value.__enter__.return_value = connection
         sample = product('a', 'Halfvolle melk', retailer_code='')
         sample['retailer_codes'] = []
-        with patch.object(routes, '_actor'), \\
-                patch.object(routes, 'engine', fake_engine), \\
-                patch.object(routes, 'load_products', return_value=[sample]), \\
-                patch.object(routes, 'confirmed_pairs', return_value=set()), \\
+        with patch.object(routes, '_actor'), \
+                patch.object(routes, 'engine', fake_engine), \
+                patch.object(routes, 'load_products', return_value=[sample]), \
+                patch.object(routes, 'confirmed_pairs', return_value=set()), \
                 patch('sqlalchemy.inspect') as introspection:
             introspection.return_value.has_table.return_value = False
             response = routes.synonym_analysis()
