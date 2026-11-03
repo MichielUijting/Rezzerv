@@ -31,6 +31,9 @@ export default function CbsClassificationPage() {
   const [query, setQuery] = useState('')
   const [categories, setCategories] = useState([])
   const [proposal, setProposal] = useState(null)
+  const [browsing, setBrowsing] = useState(false)
+  const [browseParent, setBrowseParent] = useState(null)
+  const [browseTrail, setBrowseTrail] = useState([])
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,6 +50,9 @@ export default function CbsClassificationPage() {
       setSelected(new Set())
       setCategories([])
       setProposal(null)
+      setBrowsing(false)
+      setBrowseParent(null)
+      setBrowseTrail([])
       try {
         const all = []
         let total = 0
@@ -96,12 +102,46 @@ export default function CbsClassificationPage() {
     setError('')
     setProposal(null)
     setCategories([])
+    setBrowsing(false)
+    setBrowseParent(null)
+    setBrowseTrail([])
     try {
       const result = await call(API + '/categories?query=' + encodeURIComponent(term) + '&limit=50')
+      let candidates = Array.isArray(result.items) ? result.items : []
+      if (!candidates.length) {
+        const suggestions = await call(API + '/categories/suggest?query=' + encodeURIComponent(term) + '&limit=50')
+        candidates = Array.isArray(suggestions.items) ? suggestions.items : []
+      }
+      setCategories(candidates)
+      setNote(candidates.length
+        ? candidates.some((item) => item.suggestion_reason)
+          ? 'Dit zijn zoeksuggesties op productwoorden, geen automatische classificaties. Controleer de volledige CBS-omschrijving.'
+          : 'Kies de juiste officiële CBS-categorie. Een overeenkomst in naam is nog geen bevestiging.'
+        : 'Geen eenduidige categorie gevonden. Blader door de CBS-hiërarchie om zelf een categorie te kiezen.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSearching(false)
+      busy.current = false
+    }
+  }
+
+  async function browseCategories(parent = null, trail = []) {
+    if (busy.current) return
+    busy.current = true
+    setSearching(true)
+    setError('')
+    setProposal(null)
+    try {
+      const result = await call(API + '/categories/browse' +
+        (parent ? '?parent_code=' + encodeURIComponent(parent) : ''))
       setCategories(Array.isArray(result.items) ? result.items : [])
-      setNote(result.items?.length
-        ? 'Kies de juiste officiële CBS-categorie. Een overeenkomst in naam is nog geen bevestiging.'
-        : 'Geen eenduidige categorie gevonden. Het artikel blijft Niet geclassificeerd.')
+      setBrowsing(true)
+      setBrowseParent(parent)
+      setBrowseTrail(trail)
+      setNote(parent
+        ? 'Kies een onderliggende categorie of blader verder. Alleen laagste categorieën zijn selecteerbaar.'
+        : 'Blader door de officiële CBS-hoofdcategorieën. Open een categorie om de onderliggende indeling te zien.')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -231,11 +271,12 @@ export default function CbsClassificationPage() {
     { key: 'cbs_code', label: 'CBS-code', width: 110, sortable: true },
     { key: 'name_nl', label: 'Officiële CBS-omschrijving', sortable: true },
     { key: 'path', label: 'Hiërarchie', sortable: true },
+    { key: 'suggestion_reason', label: 'Zoekhulp', renderCell: (item) => item.suggestion_reason || 'Officiële CBS-omschrijving' },
     { key: 'choose', label: '', width: 110,
       renderCell: (item) => <Button type="button" variant="secondary"
-        disabled={isBusy || !item.lowest}
-        onClick={() => setProposal(item)}>
-        {proposal?.cbs_code === item.cbs_code ? 'Gekozen' : 'Kiezen'}
+        disabled={isBusy}
+        onClick={() => item.lowest ? setProposal(item) : browseCategories(item.cbs_code, [...browseTrail, item])}>
+        {!item.lowest ? 'Openen' : proposal?.cbs_code === item.cbs_code ? 'Gekozen' : 'Kiezen'}
       </Button> },
   ]
 
@@ -256,13 +297,15 @@ export default function CbsClassificationPage() {
           paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
         <div className="rz-article-classification-actions" aria-label="CBS-classificatieacties">
           <label className="rz-input-field">
-            <span className="rz-label">Officiële CBS-code of categorie zoeken</span>
+            <span className="rz-label">Zoek productnaam, CBS-code of officiële categorie</span>
             <input className="rz-input" value={query} disabled={isBusy}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Bijvoorbeeld melk of 011420" />
           </label>
           <Button type="button" disabled={isBusy || !selectedItems.length}
             onClick={findCategories}>{searching ? 'Zoeken...' : 'Voorstel ophalen'}</Button>
+          <Button type="button" variant="secondary" disabled={isBusy}
+            onClick={() => browseCategories()}>CBS-indeling doorbladeren</Button>
           <Button type="button" disabled={isBusy || !proposal || !selectedItems.length}
             onClick={confirmSelected}>{saving ? 'Opslaan...' : 'Voorstel bevestigen'}</Button>
           <Button type="button" variant="secondary" disabled={isBusy || !selectedItems.length}
@@ -272,6 +315,11 @@ export default function CbsClassificationPage() {
         </div>
         {proposal ? <p role="status">Gekozen: {proposal.cbs_code} – {proposal.path}.
           Nog niet bevestigd.</p> : null}
+        {browsing ? <div aria-label="CBS-navigatie">
+          <Button type="button" variant="secondary" disabled={isBusy || !browseParent}
+            onClick={() => browseCategories(browseTrail.length > 1 ? browseTrail[browseTrail.length - 2].cbs_code : null, browseTrail.slice(0, -1))}>Bovenliggende categorie openen</Button>
+          <p role="status">{browseTrail.length ? browseTrail.map((item) => item.name_nl).join(' › ') : 'Alle CBS-hoofdcategorieën'}</p>
+        </div> : null}
         {categories.length ? <section aria-label="Officiële CBS-kandidaten">
           <h3>Officiële CBS-kandidaten</h3>
           <p>Kies alleen de categorie die inhoudelijk bij alle geselecteerde artikelen past.</p>

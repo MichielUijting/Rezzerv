@@ -16,6 +16,8 @@ from app.services.cbs_classification_service import (
     confirm_cbs_batch,
     remove_cbs_batch,
     search_verified_categories,
+    browse_verified_categories,
+    suggest_verified_categories,
 )
 from app.services.session_request_context import require_platform_permission_from_session
 
@@ -102,6 +104,27 @@ def categories(query: str = Query(min_length=2, max_length=100), limit: int = Qu
     with engine.connect() as conn:
         items = search_verified_categories(conn, query, limit=limit)
     return {"items": items, "total": len(items), "verified_only": True}
+
+
+@router.get("/categories/browse")
+def browse_categories(parent_code: str | None = Query(default=None, pattern=r"^[0-9]{6}$")):
+    _actor("platform.external_products.view")
+    try:
+        with engine.connect() as conn:
+            items = browse_verified_categories(conn, parent_code)
+        return {"items": items, "total": len(items), "verified_only": True}
+    except CBSDecisionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/categories/suggest")
+def suggest_categories(query: str = Query(min_length=2, max_length=100),
+                       limit: int = Query(default=40, ge=1, le=50)):
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        items = suggest_verified_categories(conn, query, limit=limit)
+    return {"items": items, "total": len(items), "verified_only": True,
+            "suggestions_are_not_confirmed": True}
 
 
 @router.post("/bulk-confirm")

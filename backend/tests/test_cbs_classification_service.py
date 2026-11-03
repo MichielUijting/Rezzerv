@@ -12,6 +12,8 @@ from app.services.cbs_classification_service import (
     confirm_cbs_batch,
     remove_cbs_batch,
     search_verified_categories,
+    suggest_verified_categories,
+    browse_verified_categories,
 )
 
 REF = "CBS-ECOICOPv2-2026"
@@ -155,3 +157,35 @@ def test_nonleaf_cbs_category_cannot_be_confirmed_as_product_classification(data
         assert any(c["cbs_code"] == "011400" and not c["lowest"] for c in candidates)
     with database.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_history")).scalar_one() == 0
+
+
+def test_verified_product_word_suggestion_is_read_only_and_leaf_only(database):
+    with database.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO cbs_ecoicop_categories
+              (cbs_code, reference_version, name_nl, level, valid_from, source_url, source_sha256)
+            VALUES ('011840', :ref, 'Notenpuree, notenboter en notenpasta (ND)', 4,
+                    '2026-01-01', 'cbs.nl', :sha)
+        """), {"ref": REF, "sha": "a" * 64})
+        results = suggest_verified_categories(conn, "100 % pindakaas - JUMBO")
+        assert [row["cbs_code"] for row in results] == ["011840"]
+        assert results[0]["lowest"] and "Zoeksuggestie" in results[0]["suggestion_reason"]
+        assert suggest_verified_categories(conn, "geen herkenbaar product") == []
+        assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_classifications")).scalar_one() == 0
+
+
+def test_official_browse_preserves_parent_links_and_rejects_unknown_parent(database):
+    with database.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO cbs_ecoicop_categories
+              (cbs_code, reference_version, name_nl, level, valid_from, source_url, source_sha256)
+            VALUES ('011400', :ref, 'Zuivel', 3, '2026-01-01', 'cbs.nl', :sha)
+        """), {"ref": REF, "sha": "a" * 64})
+        conn.execute(text("UPDATE cbs_ecoicop_categories SET parent_code='011400' WHERE cbs_code='011420'"))
+        assert [r["cbs_code"] for r in browse_verified_categories(conn)] == ["011400"]
+        assert not browse_verified_categories(conn)[0]["lowest"]
+        child = browse_verified_categories(conn, "011400")
+        assert len(child) == 1 and child[0]["lowest"] and child[0]["cbs_code"] == "011420"
+        assert "Zuivel" in child[0]["path"]
+        with pytest.raises(CBSDecisionError):
+            browse_verified_categories(conn, "999999")
