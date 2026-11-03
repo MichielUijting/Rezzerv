@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -7,6 +7,7 @@ import Button from '../../ui/Button'
 import CatalogProductImage from '../catalog/CatalogProductImage'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import './synonymAnalysis.css'
 
 const API = '/api/external-databases/article-synonyms'
 const productName = (product) => [product.name, product.brand, product.variant].filter(Boolean).join(' · ')
@@ -15,6 +16,8 @@ export default function ArticleSynonymsPage() {
   const [searchParams] = useSearchParams()
   const articleId = searchParams.get('artikel') || ''
   const [items, setItems] = useState([])
+  const [articles, setArticles] = useState([])
+  const [activeArticle, setActiveArticle] = useState(articleId)
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -22,32 +25,48 @@ export default function ArticleSynonymsPage() {
   const savingRef = useRef(false)
   const { showFeedback } = useAppFeedback()
 
+  const refresh = useCallback(async (signal) => {
+    // Analysis is the existing central, read-only projection of *all* coded
+    // Catalogus products. The candidate endpoint remains authoritative for
+    // which pairs can be confirmed.
+    const [analysisResponse, suggestionResponse] = await Promise.all([
+      fetchJsonWithAuth(`${API}/analysis`, { signal }),
+      fetchJsonWithAuth(API, { signal }),
+    ])
+    if (!analysisResponse.ok || !suggestionResponse.ok) {
+      throw new Error('Artikel-synoniemen konden niet worden geladen.')
+    }
+    const [analysis, suggestions] = await Promise.all([
+      analysisResponse.json(), suggestionResponse.json(),
+    ])
+    if (signal?.aborted) return
+    setArticles(analysis.items || [])
+    setItems((suggestions.items || []).map((item) => ({
+      ...item,
+      article_name: productName(item.left),
+      article_store: item.left.store_name || 'Niet vastgelegd',
+      synonym_name: productName(item.right),
+      synonym_store: item.right.store_name || 'Niet vastgelegd',
+    })))
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
+    setActiveArticle(articleId)
     setLoading(true)
     setError('')
     setSelected(new Set())
-    async function load() {
-      try {
-        const response = await fetchJsonWithAuth(API, { signal: controller.signal })
-        if (!response.ok) throw new Error('Suggesties konden niet worden geladen.')
-        const payload = await response.json()
-        if (!controller.signal.aborted) setItems((payload.items || []).map((item) => ({
-          ...item,
-          article_name: productName(item.left),
-          article_store: item.left.store_name || 'Niet vastgelegd',
-          synonym_name: productName(item.right),
-          synonym_store: item.right.store_name || 'Niet vastgelegd',
-        })))
-      } catch (err) {
-        if (!controller.signal.aborted) { setItems([]); setError(err.message) }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
-    }
-    load()
+    refresh(controller.signal)
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setItems([])
+          setArticles([])
+          setError(err.message)
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [])
+  }, [articleId, refresh])
 
   function toggle(id) {
     setSelected((current) => {
@@ -72,7 +91,7 @@ export default function ArticleSynonymsPage() {
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppelen is niet gelukt. Probeer opnieuw.')
-      setItems((current) => current.filter((item) => !selected.has(item.id)))
+      await refresh()
       setSelected(new Set())
       showFeedback({ variant: 'success', message: `${payload.linked} suggestie(s) gekoppeld.` })
     } catch (err) {
@@ -83,7 +102,27 @@ export default function ArticleSynonymsPage() {
     }
   }
 
-  const visibleItems = articleId ? items.filter((item) => item.left.id === articleId || item.right.id === articleId) : items
+  const currentArticle = articles.find((item) => item.id === activeArticle) || null
+  const visibleItems = activeArticle
+    ? items.filter((item) => item.left.id === activeArticle || item.right.id === activeArticle)
+    : items
+
+  const articleColumns = [
+    { key: 'name', label: 'Artikelnaam', width: 315, sortable: true, filterable: true },
+    { key: 'store', label: 'Winkel', width: 180, sortable: true, filterable: true },
+    { key: 'synonym_count', label: 'Synoniemen', width: 115, sortable: true, align: 'right' },
+    { key: 'candidate_count', label: 'Voorstellen', width: 115, sortable: true, align: 'right' },
+    { key: 'status_label', label: 'Status', width: 170, sortable: true, filterable: true },
+  ]
+  const displayArticles = articles.map((item) => ({
+    ...item,
+    candidate_count: item.pending?.length || 0,
+    status_label: item.status === 'insufficient'
+      ? 'Winkel onbekend'
+      : item.pending?.length
+        ? 'Voorstellen beschikbaar'
+        : 'Geen nieuwe voorstellen',
+  }))
 
   const columns = [
     { key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check', renderCell: (item) => <input type="checkbox"
@@ -103,15 +142,49 @@ export default function ArticleSynonymsPage() {
   return <AppShell title="Artikel-synoniemen" showExit={false}>
     <ScreenCard fullWidth>
       <h2>Artikel-synoniemen</h2>
-      <p>Controleer variant, bereiding en inhoud. Selecteer de juiste suggesties en bevestig met Koppelen. Een hoge score is geen zekerheid.</p>
+      <p>Dubbelklik op een Catalogusartikel om de mogelijke synoniemen te bekijken. Bevestig uitsluitend juiste voorstellen met Koppelen.</p>
       <p>Artikelen zonder artikelcode of barcode vul je eerst aan in <Link to="/externe-databases-2">Externe databases 2</Link>.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
-        pageSize={10}
-        dataTestId="article-synonyms-table"
-        emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : 'Geen nieuwe suggesties voor artikelen met een code of barcode.'}
-        paginationActions={<><span aria-live="polite">{selected.size} geselecteerd</span><Button disabled={loading || saving || !selected.size} onClick={link}>Koppelen</Button></>}
-      />
+      <DataTable columns={articleColumns} data={displayArticles} getRowKey={(item) => item.id}
+        pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
+        dataTestId="article-synonyms-articles"
+        emptyMessage={loading ? 'Catalogusartikelen laden...' : error ? 'Artikelen niet beschikbaar.' : 'Geen gecodeerde Catalogusartikelen beschikbaar.'}
+        renderRow={(item) => (
+          <tr key={item.id} tabIndex={0} className="rz-synonym-analysis-main-row"
+            aria-selected={activeArticle === item.id}
+            aria-label={`Voorstellen voor ${item.name} openen`}
+            title="Dubbelklik om voorstellen te bekijken"
+            onDoubleClick={() => { setActiveArticle(item.id); setSelected(new Set()) }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                setActiveArticle(item.id)
+                setSelected(new Set())
+              }
+            }}>
+            <td><div className="rz-synonym-analysis-product">
+              <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
+              <span>{item.name}</span>
+            </div></td>
+            <td>{item.store}</td>
+            <td className="rz-num">{item.synonym_count}</td>
+            <td className="rz-num">{item.candidate_count}</td>
+            <td>{item.status_label}</td>
+          </tr>
+        )} />
+      {activeArticle && !loading && !currentArticle ? <p role="status">Dit artikel is niet beschikbaar in het overzicht.</p> : null}
+      {currentArticle ? <section className="rz-synonym-analysis-details" data-testid="article-synonyms-candidates">
+        <h3>Voorstellen voor {currentArticle.name}</h3>
+        <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
+          pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
+          dataTestId="article-synonyms-table"
+          emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : currentArticle.status === 'insufficient'
+            ? 'Geen bevestigde winkelherkomst. Controleer de artikelkoppeling in Externe databases 2.'
+            : 'Geen nieuwe synoniemsuggesties voor dit artikel.'}
+          paginationActions={<><span aria-live="polite">{selected.size} geselecteerd</span>
+            <Button disabled={loading || saving || !selected.size} onClick={link}>Koppelen</Button></>}
+        />
+      </section> : null}
     </ScreenCard>
   </AppShell>
 }
