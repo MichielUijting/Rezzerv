@@ -12,7 +12,7 @@ from math import log, sqrt
 import re
 import unicodedata
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.gtin_validation_service import is_valid_gtin
 
@@ -101,6 +101,35 @@ def load_products(conn):
         retailers[row['global_product_id']].add(retailer)
         if str(row['external_article_code'] or '').strip():
             codes[row['global_product_id']].add(f"{retailer}: {row['external_article_code']}")
+    # Legacy ED2 also records user-approved Catalogus candidates directly.
+    # Their receipt/shop context was confirmed at the time of linking, but
+    # many predate the newer external_article_product_links table. Project
+    # ONLY still-confirmed central references, never tentative matches or
+    # private receipt/household rows. Conflicting context identities fail closed.
+    if inspect(conn).has_table('external_product_candidates'):
+        candidate_contexts = defaultdict(set)
+        confirmed_candidates = []
+        for row in conn.execute(text("""
+            SELECT context_key, retailer_code, global_product_id
+              FROM external_product_candidates
+             WHERE is_user_confirmed = TRUE
+               AND global_product_id IS NOT NULL
+               AND status = 'linked_to_catalog'
+               AND candidate_status = 'linked_to_catalog'
+               AND COALESCE(TRIM(context_key), '') <> ''
+               AND COALESCE(TRIM(retailer_code), '') <> ''
+        """)).mappings():
+            retailer = _retailer_code(row['retailer_code'])
+            product_id = str(row['global_product_id'] or '').strip()
+            if retailer not in RETAILER_NAMES or not product_id:
+                continue
+            identity = (retailer, str(row['context_key']).strip())
+            candidate_contexts[identity].add(product_id)
+            confirmed_candidates.append((identity, product_id))
+        for identity, product_id in confirmed_candidates:
+            if len(candidate_contexts[identity]) == 1:
+                retailers[product_id].add(identity[0])
+
     products = []
     for row in conn.execute(text("""
         SELECT gp.id, gp.name, gp.brand, gp.variant, gp.primary_gtin,
