@@ -74,6 +74,52 @@ for (const width of [390, 1280]) {
   }
 }
 
+
+for (const width of [390, 1280]) {
+  test(`Artikel-synoniemen toont gecodeerde Catalogusartikelen bij nul voorstellen op ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let writes = 0
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
+        is_platform_superuser: true, permissions: {
+          'platform.external_products.view': true,
+          'platform.external_products.link_existing': true,
+        },
+      } })
+      if (path.endsWith('/article-synonyms/link')) { writes++; return route.fulfill({ status: 400 }) }
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
+        items: [
+          { id: 'first', name: 'Halfvolle melk', store: 'Winkel onbekend', image_url: '',
+            status: 'insufficient', synonym_count: 0, pending: [] },
+          { id: 'second', name: 'Volle melk', store: 'Lidl', image_url: '',
+            status: 'no_candidate', synonym_count: 0, pending: [] },
+        ],
+        summary: { eligible_articles: 2, candidate_pairs: 0 },
+      } })
+      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [] } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/artikelsynoniemen')
+    const articles = page.getByTestId('article-synonyms-articles')
+    await expect(articles).toContainText('Halfvolle melk')
+    await expect(articles).toContainText('Volle melk')
+    await expect(articles).toContainText('Winkel onbekend')
+    await expect(articles).toContainText('Lidl')
+    await expect(page.getByTestId('article-synonyms-candidates')).toHaveCount(0)
+    await articles.locator('tbody tr').first().dblclick()
+    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen bevestigde winkelherkomst')
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
+    await articles.locator('tbody tr').nth(1).dblclick()
+    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen nieuwe synoniemsuggesties')
+    expect(writes).toBe(0)
+  })
+}
+
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
   let reads = 0
   await page.route('**/api/**', async (route) => {
