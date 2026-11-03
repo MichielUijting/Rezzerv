@@ -173,12 +173,12 @@ export default function ArticleSynonymsPage() {
           </tr>
         )} />
       {activeArticle && !loading && !currentArticle ? <p role="status">Dit artikel is niet beschikbaar in het overzicht.</p> : null}
-      {currentArticle ? <section className="rz-synonym-analysis-details" data-testid="article-synonyms-candidates">
-        <h3>Voorstellen voor {currentArticle.name}</h3>
+      {(currentArticle || (!activeArticle && visibleItems.length > 0)) ? <section className="rz-synonym-analysis-details" data-testid="article-synonyms-candidates">
+        <h3>{currentArticle ? `Voorstellen voor ${currentArticle.name}` : 'Nieuwe synoniemsuggesties'}</h3>
         <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
           pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
           dataTestId="article-synonyms-table"
-          emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : currentArticle.status === 'insufficient'
+          emptyMessage={loading ? 'Suggesties laden...' : error ? 'Suggesties niet beschikbaar.' : currentArticle?.status === 'insufficient'
             ? 'Geen bevestigde winkelherkomst. Controleer de artikelkoppeling in Externe databases 2.'
             : 'Geen nieuwe synoniemsuggesties voor dit artikel.'}
           paginationActions={<><span aria-live="polite">{selected.size} geselecteerd</span>
