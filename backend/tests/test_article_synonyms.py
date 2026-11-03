@@ -279,6 +279,28 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(products['b']['retailer_codes'], ['jumbo'])
             self.assertEqual(service.suggest_pairs([products['a'], products['c']]), [])
 
+    def test_name_only_proposal_is_rejected_by_canonical_link_endpoint(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                    (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
+                VALUES ('d','Halfvolle melk','','','8719587325926',1,'l','active','','catalog')
+            """))
+            products = service.load_products(conn)
+            tentative = next(
+                p for p in service.suggest_pairs(products, include_name_only=True)
+                if set((p['left']['id'], p['right']['id'])) == {'a', 'd'}
+            )
+            self.assertFalse(tentative['linkable'])
+            with self.assertRaises(HTTPException) as error:
+                service.confirm_pairs(conn, [{
+                    'left_product_id': tentative['left']['id'],
+                    'right_product_id': tentative['right']['id'],
+                    'fingerprint': tentative['fingerprint'],
+                }], 'tester')
+            self.assertEqual(error.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
             selection = self.selection(conn)
