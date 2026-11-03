@@ -32,7 +32,7 @@ class BulkSelection(BaseModel):
 def list_suggestions():
     _actor('platform.external_products.view')
     with engine.connect() as conn:
-        items = suggest_pairs(load_products(conn), confirmed_pairs(conn))
+        items = suggest_pairs(load_products(conn), confirmed_pairs(conn), include_name_only=True)
     return {'items': items, 'total': len(items)}
 
 
@@ -44,7 +44,7 @@ def synonym_analysis():
     with engine.connect() as conn:
         products = load_products(conn)
         confirmed = confirmed_pairs(conn)
-        suggestions = suggest_pairs(products, confirmed)
+        suggestions = suggest_pairs(products, confirmed, include_name_only=True)
         # An older optional classification source is not an article identity
         # authority. Some PostgreSQL installations have retired this table;
         # its absence must not hide the central Catalogus products.
