@@ -216,9 +216,9 @@ def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> 
             FROM direct_pairs
             JOIN documented_retailers origin ON origin.id = direct_pairs.product_id
             JOIN documented_retailers peer ON peer.id = direct_pairs.peer_id
-            WHERE origin.retailer_code IS NOT NULL
-              AND peer.retailer_code IS NOT NULL
-              AND origin.retailer_code <> peer.retailer_code
+            JOIN LATERAL UNNEST(peer.retailer_codes) AS peer_store(retailer_code) ON TRUE
+            WHERE CARDINALITY(origin.retailer_codes) > 0
+              AND NOT (origin.retailer_codes && peer.retailer_codes)
             GROUP BY direct_pairs.product_id
         ) catalog_synonym_stores
           ON catalog_synonym_stores.product_id = gp.id
