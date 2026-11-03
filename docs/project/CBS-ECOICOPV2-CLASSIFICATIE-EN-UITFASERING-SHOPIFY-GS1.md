@@ -1,3 +1,5 @@
+> **VERVANGEN DOOR NIEUW PO-BESLUIT (3 november 2026).** De eerdere opdracht om GS1 GPC uit te faseren en CBS als enige artikelclassificatie te gebruiken is **herroepen**. GPC (productclassificatie) en CBS ECOICOPv2 (bestedingsclassificatie) blijven beide bestaan. Bevestigde synoniemen nemen ontbrekende classificaties automatisch over volgens het nieuwe doelcontract. Zie [GPC-CBS-SYNONIEMEN-GECOMBINEERDE-CLASSIFICATIE.md](GPC-CBS-SYNONIEMEN-GECOMBINEERDE-CLASSIFICATIE.md). Onderstaande tekst is **historische ontwerpcontext**, geen opdracht tot GPC-verwijdering of databaseopschoning. De Shopify-uitfasering blijft alleen onder afzonderlijke data-/migratiegates gelden.
+
 # Inhuis — PO-besluit: CBS ECOICOPv2 als enige artikelclassificatie; Shopify en GS1 Brick uitfaseren
 
 **Besluit van de PO: 2 november 2026 (herziening van het eerdere ontwerp in PR #640).**

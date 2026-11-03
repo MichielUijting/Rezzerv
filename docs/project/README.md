@@ -7,6 +7,8 @@ Deze map is de leesbare ingang voor product, ontwikkeling, kwaliteit, release en
 
 ## Documenten
 
+**Actuele PO-richting voor productclassificatie (3 november 2026):** [GPC + CBS + artikelsynoniemen — gezamenlijk contract](GPC-CBS-SYNONIEMEN-GECOMBINEERDE-CLASSIFICATIE.md). De eerdere CBS-only/GPC-uitfaseerrichting is herroepen.
+
 1. [Productvisie en scope](PRODUCT-VISION.md)
 2. [Organisatie, rollen en besluitvorming](GOVERNANCE-AND-ROLES.md)
 3. [Functionele hoofdprocessen](FUNCTIONAL-OVERVIEW.md)
