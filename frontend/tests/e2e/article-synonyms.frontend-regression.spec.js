@@ -112,17 +112,17 @@ for (const width of [390, 1280]) {
     await expect(articles).toContainText('Lidl')
     await expect(page.getByTestId('article-synonyms-candidates')).toHaveCount(0)
     await articles.locator('tbody tr').first().dblclick()
-    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen bevestigde winkelherkomst')
+    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen passende synoniemsuggesties')
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
     await articles.locator('tbody tr').nth(1).dblclick()
-    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen nieuwe synoniemsuggesties')
+    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen passende synoniemsuggesties')
     expect(writes).toBe(0)
   })
 }
 
 
 for (const width of [390, 1280]) {
-  test(`Naamovereenkomst is zichtbaar maar onkoppelbaar bij onbekende winkel op ${width}px`, async ({ page }) => {
+  test(`Naamovereenkomst is ook koppelbaar bij onbekende winkel op ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     let writes = 0
     await page.route('**/api/**', async (route) => {
@@ -141,16 +141,16 @@ for (const width of [390, 1280]) {
       if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
         items: [
           { id: 'a', name: 'Aardappelen', store: 'Winkel onbekend', image_url: '',
-            status: 'name_review', synonym_count: 0,
+            status: 'review', synonym_count: 0,
             pending: [{ id: 'b', name: 'Aardappelen kruimig', linkable: false }] },
           { id: 'b', name: 'Aardappelen kruimig', store: 'Winkel onbekend', image_url: '',
-            status: 'name_review', synonym_count: 0,
+            status: 'review', synonym_count: 0,
             pending: [{ id: 'a', name: 'Aardappelen', linkable: false }] },
         ],
       } })
       if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [{
         id: 'name-pair', score: 0.84, fingerprint: 'a'.repeat(64),
-        linkable: false, match_basis: 'name_only',
+        linkable: true, match_basis: 'product_similarity',
         left: { id: 'a', name: 'Aardappelen', store_name: 'Winkel onbekend', image_url: '' },
         right: { id: 'b', name: 'Aardappelen kruimig', store_name: 'Winkel onbekend', image_url: '' },
       }] } })
@@ -161,13 +161,15 @@ for (const width of [390, 1280]) {
     })
     await page.goto('/artikelsynoniemen')
     const articles = page.getByTestId('article-synonyms-articles')
-    await expect(articles).toContainText('Naamvoorstellen (winkel controleren)')
+    await expect(articles).toContainText('Voorstellen beschikbaar')
     await articles.locator('tbody tr').first().dblclick()
     const proposals = page.getByTestId('article-synonyms-candidates')
     await expect(proposals).toContainText('Aardappelen kruimig')
-    await expect(proposals).toContainText('Alleen naamovereenkomst')
-    await expect(proposals.getByRole('checkbox')).toBeDisabled()
+    await expect(proposals).toContainText('onafhankelijk van de winkel')
+    await expect(proposals.getByRole('checkbox')).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
+    await proposals.getByRole('checkbox').check()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     expect(writes).toBe(0)
   })
 }
