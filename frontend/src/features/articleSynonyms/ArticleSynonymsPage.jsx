@@ -72,7 +72,7 @@ export default function ArticleSynonymsPage() {
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
-      else if (next.size < 200) next.add(id)
+      else if (items.some((item) => item.id === id && item.linkable !== false) && next.size < 200) next.add(id)
       return next
     })
   }
@@ -82,7 +82,7 @@ export default function ArticleSynonymsPage() {
     savingRef.current = true
     setSaving(true)
     setError('')
-    const selections = items.filter((item) => selected.has(item.id)).map((item) => ({
+    const selections = items.filter((item) => selected.has(item.id) && item.linkable !== false).map((item) => ({
       left_product_id: item.left.id, right_product_id: item.right.id, fingerprint: item.fingerprint,
     }))
     try {
@@ -117,17 +117,20 @@ export default function ArticleSynonymsPage() {
   const displayArticles = articles.map((item) => ({
     ...item,
     candidate_count: item.pending?.length || 0,
-    status_label: item.status === 'insufficient'
-      ? 'Winkel onbekend'
-      : item.pending?.length
-        ? 'Voorstellen beschikbaar'
-        : 'Geen nieuwe voorstellen',
+    status_label: item.status === 'name_review'
+      ? 'Naamvoorstellen (winkel controleren)'
+      : item.status === 'insufficient'
+        ? 'Winkel onbekend'
+        : item.pending?.length
+          ? 'Voorstellen beschikbaar'
+          : 'Geen nieuwe voorstellen',
   }))
 
   const columns = [
     { key: 'select', label: '', width: 48, className: 'rz-check', cellClassName: 'rz-check', renderCell: (item) => <input type="checkbox"
       aria-label={`Selecteer ${item.article_name} (${item.article_store}) en ${item.synonym_name} (${item.synonym_store})`}
-      checked={selected.has(item.id)} disabled={saving || (!selected.has(item.id) && selected.size >= 200)}
+      checked={selected.has(item.id)} disabled={saving || item.linkable === false || (!selected.has(item.id) && selected.size >= 200)}
+      title={item.linkable === false ? 'Alleen naamovereenkomst: eerst winkelherkomst bevestigen' : 'Bevestig dit synoniempaar'}
       onChange={() => toggle(item.id)} /> },
     { key: 'article_name', label: 'Artikelnaam', filterLabel: 'Filter op artikelnaam eerste winkel', width: 255, sortable: true, filterable: true },
     { key: 'article_photo', label: 'Foto artikel', width: 115, renderCell: (item) => <CatalogProductImage
@@ -175,6 +178,10 @@ export default function ArticleSynonymsPage() {
       {activeArticle && !loading && !currentArticle ? <p role="status">Dit artikel is niet beschikbaar in het overzicht.</p> : null}
       {(currentArticle || (!activeArticle && visibleItems.length > 0)) ? <section className="rz-synonym-analysis-details" data-testid="article-synonyms-candidates">
         <h3>{currentArticle ? `Voorstellen voor ${currentArticle.name}` : 'Nieuwe synoniemsuggesties'}</h3>
+        {visibleItems.some((item) => item.linkable === false) ? <p role="status">
+          Naamvoorstellen worden getoond om overeenkomsten te beoordelen. Zolang de winkelherkomst niet betrouwbaar is vastgesteld,
+          zijn deze regels niet selecteerbaar met Koppelen. Een naamovereenkomst is geen bevestigde identiteit.
+        </p> : null}
         <DataTable columns={columns} data={visibleItems} getRowKey={(item) => item.id}
           pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
           dataTestId="article-synonyms-table"
