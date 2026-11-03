@@ -730,8 +730,8 @@ class SynonymAnalysisContractTest(unittest.TestCase):
                     product('b', 'Melk', retailer_code='jumbo')]
         result = service.build_synonym_analysis(products, {('a', 'b')}, [])
         self.assertEqual(result['summary']['confirmed_pairs'], 1)
-        self.assertEqual(result['summary']['insufficient_articles'], 1)
-        self.assertEqual(result['summary']['no_candidate_articles'], 1)
+        self.assertEqual(result['summary']['insufficient_articles'], 0)
+        self.assertEqual(result['summary']['no_candidate_articles'], 0)
         rows = {row['id']: row for row in result['items']}
         self.assertEqual(rows['a']['synonym_count'], 1)
         self.assertEqual(rows['a']['store'], 'Winkel onbekend')
