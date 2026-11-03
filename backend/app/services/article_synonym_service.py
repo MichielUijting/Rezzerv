@@ -181,6 +181,13 @@ def confirmed_pairs(conn):
 def confirm_pairs(conn, selections, actor_id):
     """Atomic, idempotent bulk confirmation with current-candidate validation."""
     from fastapi import HTTPException
+    from app.services.synonym_classification_inheritance_service import (
+        propagate_confirmed_classifications,
+    )
+    # All synonym confirmations serialize before taking product row locks, so
+    # overlapping A-B / B-C groups cannot propagate from stale graphs.
+    if conn.dialect.name == 'postgresql':
+        conn.execute(text('SELECT pg_advisory_xact_lock(639643644)'))
     ids = sorted({s[k] for s in selections for k in ('left_product_id', 'right_product_id')})
     # Serialize edits/deletion of selected catalog records and repeated confirmations.
     if conn.dialect.name == 'postgresql':
@@ -207,7 +214,17 @@ def confirm_pairs(conn, selections, actor_id):
             VALUES (:left, :right, :actor, :fingerprint, :method, :score)
             ON CONFLICT (left_product_id, right_product_id) DO NOTHING
         '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method=METHOD, score=proposal['score']))
-    return {'linked': len(to_insert), 'already_linked': len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
+    report = propagate_confirmed_classifications(
+        conn, existing | set(to_insert),
+        {pid for selection in selections for pid in
+         (selection['left_product_id'], selection['right_product_id'])},
+        actor_id,
+    )
+    response = {'linked': len(to_insert), 'already_linked':
+                len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
+    if report['gpc_inherited'] or report['cbs_inherited'] or report['conflicts']:
+        response['classification_inheritance'] = report
+    return response
 
 
 def build_synonym_analysis(products, confirmed, suggestions, classifications=None):

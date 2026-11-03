@@ -17,6 +17,7 @@ from sqlalchemy.engine import make_url
 from app.api import article_synonym_routes as routes
 from app.api import catalog_routes
 from app.services import article_synonym_service as service
+from app.services import synonym_classification_inheritance_service as inheritance
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,7 +99,44 @@ class StoreTest(unittest.TestCase):
         self.engine = create_engine(self.base_engine.url, connect_args={'options': f'-csearch_path={self.schema}'})
         with self.engine.begin() as conn:
             conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT, image_url TEXT, source TEXT)')
-            conn.exec_driver_sql('CREATE TABLE global_product_gpc_bricks(global_product_id TEXT PRIMARY KEY, brick_code TEXT)')
+            conn.exec_driver_sql("""
+                CREATE TABLE global_product_gpc_bricks (
+                    global_product_id TEXT PRIMARY KEY, brick_code TEXT,
+                    assignment_source TEXT NOT NULL DEFAULT 'manual_catalog_detail',
+                    confidence FLOAT NOT NULL DEFAULT 1.0,
+                    migrated_from TEXT, updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE cbs_ecoicop_categories (
+                    cbs_code TEXT, reference_version TEXT, parent_code TEXT,
+                    PRIMARY KEY (cbs_code, reference_version)
+                )
+            """)
+            conn.exec_driver_sql("""
+                INSERT INTO cbs_ecoicop_categories VALUES
+                    ('011420','CBS-ECOICOPv2-2026',NULL),
+                    ('011410','CBS-ECOICOPv2-2026',NULL)
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE global_product_cbs_classifications (
+                    global_product_id TEXT PRIMARY KEY,
+                    cbs_code TEXT NOT NULL, reference_version TEXT NOT NULL,
+                    version INTEGER NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    confirmed_by TEXT NOT NULL,
+                    confirmation_source TEXT NOT NULL,
+                    confirmed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE global_product_cbs_history (
+                    id TEXT PRIMARY KEY, global_product_id TEXT NOT NULL,
+                    cbs_code TEXT, reference_version TEXT, version INTEGER,
+                    action TEXT NOT NULL, confirmed_by TEXT NOT NULL,
+                    confirmation_source TEXT NOT NULL,
+                    confirmed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
@@ -118,6 +156,125 @@ class StoreTest(unittest.TestCase):
     def selection(self, conn):
         p = service.suggest_pairs(service.load_products(conn))[0]
         return dict(left_product_id=p['left']['id'], right_product_id=p['right']['id'], fingerprint=p['fingerprint'])
+
+    def _set_cbs(self, conn, product_id, code='011420'):
+        conn.execute(text("""
+            INSERT INTO global_product_cbs_classifications
+                (global_product_id,cbs_code,reference_version,version,is_active,
+                 confirmed_by,confirmation_source)
+            VALUES (:id,:code,'CBS-ECOICOPv2-2026',1,TRUE,'manual','explicit_manual_confirmation')
+        """), {'id': product_id, 'code': code})
+
+    def test_confirmed_synonyms_inherit_both_and_retry_is_idempotent(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025')
+            """))
+            self._set_cbs(conn, 'a')
+            selection = self.selection(conn)
+            result = service.confirm_pairs(conn, [selection], 'actor')
+            self.assertEqual(result['linked'], 1)
+            self.assertEqual(result['classification_inheritance']['gpc_inherited'], 1)
+            self.assertEqual(result['classification_inheritance']['cbs_inherited'], 1)
+        with self.engine.begin() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id='b'"
+            )).scalar_one(), '10000025')
+            row = conn.execute(text("""
+                SELECT cbs_code, confirmation_source FROM global_product_cbs_classifications
+                WHERE global_product_id='b'
+            """)).one()
+            self.assertEqual(tuple(row), ('011420', 'synonym:a'))
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+                WHERE global_product_id='b'
+            """)).scalar_one(), 1)
+            again = service.confirm_pairs(conn, [selection], 'actor')
+            self.assertEqual(again['already_linked'], 1)
+            self.assertNotIn('classification_inheritance', again)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+                WHERE global_product_id='b'
+            """)).scalar_one(), 1)
+
+    def test_inheritance_is_bidirectional_and_systems_independent(self):
+        with self.engine.begin() as conn:
+            self._set_cbs(conn, 'b')
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('b','10000025')
+            """))
+            selection = self.selection(conn)
+            result = service.confirm_pairs(conn, [selection], 'actor')
+            self.assertEqual(result['classification_inheritance']['gpc_inherited'], 1)
+            self.assertEqual(result['classification_inheritance']['cbs_inherited'], 1)
+            self.assertEqual(conn.execute(text("""
+                SELECT confirmation_source FROM global_product_cbs_classifications
+                WHERE global_product_id='a'
+            """)).scalar_one(), 'synonym:b')
+
+    def test_conflicting_cbs_values_are_not_overwritten(self):
+        with self.engine.begin() as conn:
+            selection = self.selection(conn)
+            self._set_cbs(conn, 'a', '011420')
+            self._set_cbs(conn, 'b', '011410')
+            result = service.confirm_pairs(conn, [selection], 'actor')
+            conflicts = result['classification_inheritance']['conflicts']
+            self.assertEqual([x['system'] for x in conflicts], ['CBS'])
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+            """)).scalar_one(), 0)
+            self.assertEqual(set(conn.execute(text("""
+                SELECT cbs_code FROM global_product_cbs_classifications
+            """)).scalars()), {'011410', '011420'})
+
+    def test_three_article_synonym_group_inherits_consistently(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO external_article_product_links VALUES
+                    ('c','lidl','LIDL123','confirmed')
+            """))
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025')
+            """))
+            self._set_cbs(conn, 'a')
+            first = self.selection(conn)
+            service.confirm_pairs(conn, [first], 'actor')
+            candidates = service.suggest_pairs(service.load_products(conn),
+                                               service.confirmed_pairs(conn))
+            next_pair = next(p for p in candidates
+                             if 'c' in (p['left']['id'], p['right']['id']))
+            selection = dict(left_product_id=next_pair['left']['id'],
+                             right_product_id=next_pair['right']['id'],
+                             fingerprint=next_pair['fingerprint'])
+            service.confirm_pairs(conn, [selection], 'actor')
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_gpc_bricks WHERE brick_code='10000025'"
+            )).scalar_one(), 3)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_classifications
+                WHERE cbs_code='011420' AND is_active=TRUE
+            """)).scalar_one(), 3)
+
+    def test_failure_rolls_back_link_and_both_classifications(self):
+        with self.assertRaisesRegex(RuntimeError, 'simulated'):
+            with self.engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                    VALUES ('a','10000025')
+                """))
+                self._set_cbs(conn, 'a')
+                first = self.selection(conn)
+                with patch.object(inheritance, 'propagate_confirmed_classifications',
+                                  side_effect=RuntimeError('simulated')):
+                    service.confirm_pairs(conn, [first], 'actor')
+        with self.engine.connect() as conn:
+            self.assertEqual(service.confirmed_pairs(conn), set())
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_classifications"
+            )).scalar_one(), 0)
 
     def test_read_only_excludes_codeless_invalid_and_deleted(self):
         with self.engine.begin() as conn:

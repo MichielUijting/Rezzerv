@@ -74,7 +74,17 @@ export default function ArticleSynonymsPage() {
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Koppelen is niet gelukt. Probeer opnieuw.')
       setItems((current) => current.filter((item) => !selected.has(item.id)))
       setSelected(new Set())
-      showFeedback({ variant: 'success', message: `${payload.linked} suggestie(s) gekoppeld.` })
+      const inheritance = payload.classification_inheritance || {}
+      const conflicts = inheritance.conflicts || []
+      const gpcCount = inheritance.gpc_inherited || 0
+      const cbsCount = inheritance.cbs_inherited || 0
+      if (conflicts.length) {
+        showFeedback({ variant: 'warning',
+          message: `${payload.linked} synoniemkoppeling(en) vastgelegd; ${conflicts.length} classificatieconflict(en) niet overschreven. Controleer GPC/CBS per artikel.` })
+      } else {
+        showFeedback({ variant: 'success',
+          message: `${payload.linked} gekoppeld · ${gpcCount} GPC en ${cbsCount} CBS automatisch overgenomen.` })
+      }
     } catch (err) {
       setError(err.message)
     } finally {
