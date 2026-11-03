@@ -58,6 +58,31 @@ class MatchingTest(unittest.TestCase):
     def test_brick_conflict_excluded(self):
         self.assertEqual(service.suggest_pairs([product('a','Halfvolle melk'), product('b','Halfvolle melk', brick='fruit', retailer_code='jumbo')]), [])
 
+    def test_canonical_receipt_store_aliases(self):
+        self.assertEqual(service._retailer_code('Albert Heijn'), 'ah')
+        self.assertEqual(service._retailer_code('AH'), 'ah')
+        self.assertEqual(service._retailer_code('Lidl Nederland GmbH'), 'lidl')
+        self.assertEqual(service._retailer_code('Lidl'), 'lidl')
+
+    def test_multiple_confirmed_stores_only_match_disjoint_stores(self):
+        multi = product('a', 'Halfvolle melk', retailer_code='')
+        multi['retailer_codes'] = ['ah', 'jumbo']
+        different = product('b', 'Halfvolle melk', retailer_code='lidl')
+        overlapping = product('c', 'Halfvolle melk', retailer_code='jumbo')
+        matches = service.suggest_pairs([multi, different, overlapping])
+        pairs = {(m['left']['id'], m['right']['id']) for m in matches}
+        self.assertIn(('a', 'b'), pairs)
+        self.assertNotIn(('a', 'c'), pairs)
+        analysis = service.build_synonym_analysis([multi, different], {('a', 'b')}, [])
+        self.assertEqual(analysis['summary']['confirmed_pairs'], 1)
+        self.assertEqual(analysis['summary']['insufficient_articles'], 0)
+
+    def test_no_unconfirmed_receipt_or_name_based_retailer_fallback(self):
+        a = product('a', 'AH Halfvolle melk', retailer_code='')
+        a['retailer_codes'] = []
+        b = product('b', 'Jumbo Halfvolle melk', retailer_code='jumbo')
+        self.assertEqual(service.suggest_pairs([a, b]), [])
+
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
         b['size_value'] = '2'
@@ -142,6 +167,18 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(items[0]['image_url'], 'https://example.org/test.jpg')
             self.assertEqual(items[1]['image_url'], '')
             self.assertEqual(len(service.suggest_pairs(items)), 1)
+
+    def test_multiple_confirmed_retailer_links_reach_synonym_projection(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('a','lidl-nederland-gmbh','SKU4','confirmed')"))
+            items = {item['id']: item for item in service.load_products(conn)}
+            self.assertEqual(items['a']['retailer_codes'], ['ah', 'lidl'])
+            self.assertEqual(items['a']['retailer_code'], '')
+            self.assertIn('Albert Heijn', items['a']['store_name'])
+            self.assertIn('Lidl', items['a']['store_name'])
+            # 'b' is Jumbo: neither shop overlaps, so the pair remains reviewable.
+            suggestions = service.suggest_pairs(list(items.values()))
+            self.assertIn(('a', 'b'), [(p['left']['id'], p['right']['id']) for p in suggestions])
 
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
