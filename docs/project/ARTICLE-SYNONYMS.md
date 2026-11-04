@@ -382,3 +382,36 @@ Syn. blijft 52 px. Zo krijgt de linker tabel dezelfde totale nominale
 breedte als de rechter tabel en blijft de directe synoniemteller zichtbaar.
 Paginering, filtervelden en handmatige kolomverstelling blijven via de
 standaardcomponent werken.
+
+
+## PO-verzoek 4 november 2026 — conflict uitleg in Inhuis-overlay
+
+Een onveilige selectie via **Koppelen** toont geen in-screen-fouttekst
+meer. De standaardcomponent **Melding** (`AppFeedbackProvider`) toont
+een blijvende overlay met de twee betrokken artikelnamen, de concrete
+oorzaak en het vervolg. De bestaande geselecteerde regels blijven
+aangevinkt en **er wordt niets opgeslagen**.
+
+De server levert per rechterartikel een gestructureerd conflicttype,
+uitleg met echte bronwaarden en de toepasselijke herstelroute:
+- `same_gtin`: beide verschillende Catalogusrecords dragen exact dezelfde
+  barcode; de gedeelde GTIN staat vermeld en de overlay biedt
+  **Naar Catalogusdetail** van het rechterartikel.
+- `shared_article_code`: de records delen een bevestigde artikelcode;
+  de code staat vermeld, met dezelfde detailroute.
+- `gpc_mismatch`: beide bestaande officiële GS1 GPC Bricks verschillen;
+  beide codes staan vermeld en de overlay biedt **Naar GS1 GPC**
+  (`/catalogus/gpc-classificeren`) om indien toegestaan een **onjuiste**
+  classificatie eerst te corrigeren.
+- `same_article`/`missing_article`: geen actie die een ongeldige
+  productidentiteit automatisch kan herstellen.
+
+De overlay laat via **Sluiten** annuleren. Alleen voor daadwerkelijk
+corrigeerbare brondata is er een navigatieactie naar bestaande
+functionaliteit; zonder passende rechten blijft de bestaande autorisatie
+gelden. Na een feitelijke correctie kan de gebruiker de synoniemkeuze
+opnieuw controleren en handmatig met **Koppelen** bevestigen.
+Er komt **geen** knop 'Toch koppelen' die officiële GTIN-identiteit of
+bekende tegenstrijdige GS1 GPC-classificaties omzeilt. Een gedeelde GTIN
+kan betekenen dat beide Catalogusrecords feitelijk hetzelfde artikel zijn,
+niet twee synoniemen. Geen database-/migratie- of autorisatiewijzigingen.
