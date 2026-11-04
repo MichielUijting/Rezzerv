@@ -251,3 +251,50 @@ worden geprojecteerd of gecorrigeerd, maar het ontbreken ervan blokkeert
 Artikel-synoniemen nooit. De oudere `name_only`-presentatieblokkade is vervallen.
 De `include_name_only`-argumentnaam wordt uitsluitend voor bestaande callers
 tijdelijk behouden; alle suggesties volgen dezelfde winkelonafhankelijke logica.
+
+
+## PO-correctie — twee afzonderlijke artikeltabellen, 4 november 2026
+
+De pagina `/artikelsynoniemen` heeft twee onafhankelijke DataTables **naast
+elkaar op desktop**, op smalle schermen onder elkaar. De **linkertabel** toont
+de actieve gecodeerde centrale Catalogusartikelen; één klik of Enter selecteert
+een canonieke product-ID (naam en artikel-/barcode onderscheiden lookalikes).
+De **rechtertabel** bevat ieder ander actief gecodeerd centraal
+Catalogusartikel exact één keer en toont drie volgordegroepen:
+
+1. **Al gekoppeld** — rechtstreeks bestaande `article_synonym_links`, herkenbaar
+   geaccentueerd; niet nogmaals selecteerbaar.
+2. **Voorstel** — niet-bevestigde, door de bestaande naamscore voorgestelde
+   kandidaten.
+3. **Overig** — alle resterende gecodeerde Catalogusartikelen; de bevoegde
+   gebruiker kan een bewust handmatig paar kiezen, ook zonder minimale tekstscore.
+
+De gekozen linker-ID mag rechts nooit voorkomen. Zelfkoppelingen worden ook
+server-side geweigerd. Twee identieke namen met **verschillende** centrale
+product-ID's zijn niet automatisch hetzelfde record en krijgen hun
+onderscheidende artikel-/barcode te zien. Een andere Catalogus-ID met een
+identieke GTIN, overlappende bevestigde winkelartikel-identiteit of
+strijdige bekende GPC Brick is **niet koppelbaar**, wordt als zodanig
+gemarkeerd en krijgt nooit een nieuwe synoniemrelatie.
+
+Een klik of Enter op een koppelbare rechterrij selecteert die voor een
+nieuwe koppeling; **alleen expliciet Koppelen** schrijft via de bestaande
+bevoegde `POST /link` route. Er kan tot 200 paren per batch worden gekozen.
+De backend valideert live de twee bestaande product-ID's, de actuele
+fingerprint en de identiteits-/GPC-beperkingen opnieuw, zonder op de
+frontendnaam te vertrouwen. Voor een niet-automatisch voorgesteld paar stuurt
+de client `manual=true`; de opslag vermeldt
+`method='manual_catalog_review_v1'` en score 0. Een bestaand paar wordt
+niet dubbel gemaakt. Geen automatische catalogusidentiteit-, winkel-,
+voorraad-, bon- of huishoudwijzigingen.
+
+Deze twee DataTables vervangen uitsluitend de oude zevenkoloms tabel die twee
+kanten van één paar als afzonderlijke artikelen leek te tonen. Zoek-, sorteer-
+en paginafunctionaliteit blijft centraal via DataTable. De metadata en
+bestaande winkelherkomst zijn informatief; de winkel blijft volledig
+onafhankelijk van de synoniemmatch.
+
+De PostgreSQL-migratie bevat al de checkconstraint
+`left_product_id < right_product_id`, die opslag van zelfkoppelingen op
+de canonieke synoniemenrelatietabel verhindert. De nieuwe API-voorcontrole
+voorkomt dat een ongeldig verzoek pas door de database wordt afgewezen.
