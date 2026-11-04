@@ -1475,7 +1475,13 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.client.post(path + '/retry', json={
             'event_id': payload['event_id'], 'expected_decision_version': -1,
         }).status_code, 422)
-        self.assertEqual(self.client.get(path + '?limit=101').status_code, 403)
+        # An anonymous request must receive 401, not a made-up 403.
+        self.assertEqual(self.client.get(path + '?limit=101').status_code, 401)
+        actor = SimpleNamespace(is_frontteam=True, is_platform_superuser=False,
+                                user_id='actor')
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          return_value=actor):
+            self.assertEqual(self.client.get(path + '?limit=101').status_code, 422)
 
     def test_gpc_choice_requires_existing_gpc_write_permission(self):
         actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
