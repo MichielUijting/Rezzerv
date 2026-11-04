@@ -1600,3 +1600,23 @@ De paneel-grid en lichte statusaccenten zijn lokaal vastgelegd in
 centrale ontwerpvariabelen en het primaire Inhuis-kleurgebruik blijven
 leidend. Deze paragraaf is een aanvullende functionele UI-regel en
 wijzigt geen andere schermen.
+
+
+### Artikel-synoniemen — compacte tabeluitlijning (4 november 2026)
+
+De twee standaard-DataTables beginnen op dezelfde verticale positie op
+desktop; hun vaste kolommen zijn **selectievakje, foto, artikelnaam,
+barcode**. Er wordt geen winkelkolom of selectieteller in deze
+werkomgeving getoond. Links toont een checkbox de ene gekozen Catalogus-ID;
+rechts kunnen meerdere zelfstandige artikelrijen met checkboxen worden
+geselecteerd, zonder dat een rijarcering de selectie vertegenwoordigt.
+
+In de rechtertabel worden afzonderlijke **direct bevestigde** relaties
+lichtgroen gearceerd, automatisch berekende nog niet bevestigde
+voorstellen oranje en overige artikelen niet gearceerd. Gebruik lokale
+subtiele tabelcelachtergronden en de gedeelde Inhuis-kleurvariabelen voor
+selectiemarkering. Onderaan rechts staan twee standaardknoppen
+**Koppelen** en **Ontkoppelen** naast elkaar; alleen de passende knop
+is actief voor een geselecteerde bestaande of nieuwe relatie.
+Op mobiele breedte staan de twee tabellen onder elkaar.
+De tabellen behouden standaardfiltering, sorteren en paginering.
