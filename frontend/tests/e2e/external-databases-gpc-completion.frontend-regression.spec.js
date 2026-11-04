@@ -51,6 +51,8 @@ for (const width of [390, 1280]) {
     })
 
     await page.goto('/externe-databases-2')
+
+    await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
     await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
     await page.getByRole('button', { name: 'Classificatie ontbreekt: 1' }).click()
     const table = page.getByTestId('external-databases-2-table')
