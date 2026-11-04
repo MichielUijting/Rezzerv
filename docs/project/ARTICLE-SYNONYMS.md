@@ -347,3 +347,26 @@ bevestigde links, geen afgeleide transitieve groep. Beide tabellen houden
 hun eigen filters, sortering, paginering en centrale tabelcomponent;
 alleen links komt de extra tellerkolom. De bestaande directe
 koppel-/ontkoppel- en classificatievoorwaarden veranderen niet.
+
+
+## Laatste PO-aanpassing — compacte barcode en selectie met waarschuwing (4 november 2026)
+
+Op de linker DataTable wordt de barcodekolom smaller gezet, samen met
+compacte breedtes voor selectie/foto/naam, zodat de laatst getoonde teller
+zichtbaar is zonder horizontaal scrollen op de gangbare desktopweergave.
+De tellerkop heet **Syn.** en blijft het aantal direct bevestigde
+synoniemrelaties van het Catalogusartikel tonen.
+
+Alle rechterartikelen blijven met hun checkbox **selecteerbaar**, ook
+wanneer de server reeds een identiteits- of GPC-conflict herkent. Daardoor
+is het onderscheid tussen een gekozen artikel en een nog niet
+koppelbaar artikel zichtbaar en toetsbaar; de selectie is **geen**
+bevestiging. Wanneer één of meer geselecteerde nieuwe artikelen niet
+koppelbaar zijn, weigert Koppelen de hele batch vóór verzending met
+een verklarende foutmelding. De backend blijft de bestaande harde
+GTIN-/winkelartikelcode- en GPC-conflictcontroles bij daadwerkelijk
+koppelen handhaven. Er wordt geen uitzondering voor conflicterende
+classificaties of artikelen ingevoerd, en geen deelbatch stilzwijgend
+weggeschreven. Bestaande gekoppelde regels blijven via Ontkoppelen
+beheersbaar. De tekst en link onder de tabellen naar
+**Externe databases 2** vervallen op dit scherm.
