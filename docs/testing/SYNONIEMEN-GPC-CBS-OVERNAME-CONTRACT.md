@@ -65,3 +65,37 @@ PR #646 is op `main@5d7c02e0ff624437eb7d8b72b82970fd4723bb83` gemerged. PR #645 
 ### Ontkoppeling tijdens classificatieovername
 
 Ook de bestaande `/unlink`-transactie neemt nu dezelfde PostgreSQL-advisory lock als `/link`, vóór zij de actuele paren leest. Daarmee kan een gelijktijdige ontkoppeling niet een verouderde synoniemgroep laten classificeren. Ontkoppelen blijft uitsluitend de geselecteerde directe synoniemrelatie verwijderen; eerder bevestigde of via synoniemen overgenomen GPC-/CBS-gegevens worden hierdoor **niet** automatisch teruggedraaid. Voor een andere indeling is afzonderlijke expliciete en bevoegde correctie nodig.
+
+
+## Nieuw PO-besluit: conflicterende bestaande classificaties expliciet laten kiezen (4 november 2026)
+
+Wanneer beide artikelen verschillende officiële GS1 GPC-Bricks en/of
+CBS ECOICOPv2-codes hebben, geldt de eerdere instructie "alleen waarschuwen,
+nooit overschrijven" **niet meer voor een door de gebruiker expliciet
+gekozen en bevoegd bevestigde voorkeur**. Geen van beide classificaties krijgt
+automatisch voorrang. De keuze gebeurt vóór het vastleggen van de
+synoniemrelatie en is **per systeem onafhankelijk** (GS1 GPC links/rechts en
+CBS links/rechts), op basis van de actuele bestaande codes, bijbehorende
+officiële Nederlandse omschrijvingen en CBS-referentieversies.
+
+Het nieuwe read-only endpoint `POST /link/review` vergelijkt de actueel
+vastgelegde centrale classificaties voor een gekozen artikelpaar. De normale
+`POST /link` accepteert daarnaast expliciete keuzes met een serverberekende
+snapshot. De server weigert ontbrekende, verouderde, vervalste of
+onbevoegde keuzes, evenals identieke GTIN of gedeelde bevestigde
+winkelartikelidentiteit. Verschillende GS1 GPC Bricks mogen uitsluitend
+na expliciete bronkeuze worden gekoppeld en gecorrigeerd; hiervoor wordt
+bovendien de bestaande `gpc.update`-bevoegdheid verlangd.
+Voor CBS hergebruikt de bevestiging de bestaande officiële
+`confirm_cbs_batch`-autoriteit met versiebewaking en historie.
+
+De keuze schrijft alleen op centrale `global_product`-identiteiten, met
+herkomst `synonym_review:<bronproduct>`, en past uitsluitend de andere
+betrokken classificatie aan. Alle wijzigingen vinden in één bestaande
+database-transactie plaats; **Annuleren** schrijft niets en
+gelijktijdige wijzigingen leiden tot opnieuw beoordelen. Bij meer dan
+één onderling afhankelijk conflicterend paar in een bulkselectie wordt
+fail-closed gevraagd ze afzonderlijk te behandelen. De automatische overname
+van **ontbrekende** classificaties en de bestaande bescherming van de
+overige synoniemgroep blijven bestaan. Geen barcode-, aankoop-,
+huishoud- of voorraadmutatie.
