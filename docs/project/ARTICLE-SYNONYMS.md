@@ -333,3 +333,17 @@ rijen uit `article_synonym_links`. Het herstelt of verwijdert **geen**
 Catalogusartikel, GS1 GPC- of CBS-classificatie, kassabon, voorraad- of
 huishoudgegevens. Historisch geërfde classificatie blijft behouden en
 vereist afzonderlijk expliciet beheer als die onjuist zou zijn.
+
+
+## Laatste functionele presentatieverfijning (4 november 2026)
+
+De PO heeft de synoniemenfunctie functioneel akkoord bevonden met drie
+laatste aanpassingen: beide standaardpagineringen op desktop op **gelijke
+hoogte**, de twee bestaande knoppen **Koppelen** en **Ontkoppelen**
+**onder** de rechterpaginering (niet erin), en per rij van de linker
+Catalogustabel een **synoniemteller**. De teller gebruikt
+`synonym_count` uit `build_synonym_analysis`, het aantal **direct**
+bevestigde links, geen afgeleide transitieve groep. Beide tabellen houden
+hun eigen filters, sortering, paginering en centrale tabelcomponent;
+alleen links komt de extra tellerkolom. De bestaande directe
+koppel-/ontkoppel- en classificatievoorwaarden veranderen niet.
