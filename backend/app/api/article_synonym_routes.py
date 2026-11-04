@@ -132,6 +132,8 @@ def unlink_suggestions(payload: BulkSelection):
         return unlink_pairs(conn, [item.model_dump() for item in payload.selections])
 )
     expected_decision_version: int = Field(ge=0)
+    expected_target_version: int = Field(ge=0)
+    expected_target_code: str = Field(default='', max_length=100)
 
 
 @router.get('/sync-exceptions')
@@ -162,6 +164,8 @@ def retry_sync_exception_route(payload: SyncRetryRequest):
         return retry_sync_exception(
             conn, event_id=payload.event_id,
             expected_decision_version=payload.expected_decision_version,
+            expected_target_version=payload.expected_target_version,
+            expected_target_code=payload.expected_target_code,
             actor_id=actor.user_id,
         )
 
