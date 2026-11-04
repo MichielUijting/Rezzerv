@@ -415,3 +415,12 @@ Er komt **geen** knop 'Toch koppelen' die officiële GTIN-identiteit of
 bekende tegenstrijdige GS1 GPC-classificaties omzeilt. Een gedeelde GTIN
 kan betekenen dat beide Catalogusrecords feitelijk hetzelfde artikel zijn,
 niet twee synoniemen. Geen database-/migratie- of autorisatiewijzigingen.
+
+
+**Beperking bestaande barcode-editor:** `CatalogBarcodeEntry` verschijnt
+uitsluitend wanneer `primary_gtin` ontbreekt. De knop
+`Bekijk Catalogusdetail` is bij een gedeelde bestaande barcode daarom
+een **lees-/beoordelingsroute**, geen belofte dat de barcode daar direct
+gewijzigd kan worden. Correctie van een bestaande foutieve GTIN vraagt
+een afzonderlijke bevoegdheidsbewaakte identiteitsbeheerroute en maakt
+uitdrukkelijk geen deel uit van deze PR.
