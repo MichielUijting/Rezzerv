@@ -1,36 +1,41 @@
-# Werkproces Artikel classificeren — werkvoorraad en synchronisatie
+# Artikelbeheer: vier werkgebieden en gefaseerde kwaliteitsmonitor
 
-Status: eerste, read-only frontteamwerkplek op Draft-PR. Geen automatische datamutaties, backfills, database- of schemawijzigingen.
+Status: PO-goedgekeurd herontwerp 4 november 2026; eerste shell in Draft-PR #647.
+Geen automatische datareparatie, synoniemkoppeling, backfill of wijziging van bonnen/voorraad.
 
-## Doel en rollen
-- Superuser en frontteam zien dezelfde centrale werkvoorraad; bestaande backend-autorisaties voor koppeling, GS1, CBS en synoniemen blijven ongewijzigd.
-- Artikelclassificaties behoren bij centrale Catalogusproducten, niet bij één huishouden of één voorraadregel.
-- Er worden geen afleidingen gemaakt van alleen artikelnaam, winkel, foto of onbevestigde kandidaat.
+## Gebruikersroute
+Eén actieknop **Artikelbeheer** voor superuser en frontteam. Vier werkgebieden:
+1. **Identificeren**: bonartikelherkomst bewaren, productidentiteit bewijzen, OFF/GTIN selecteren en expliciet bevestigen. De bestaande Externe databases 2-DataTable staat hier voorlopig, met de *bonartikelregeltellers* (niet unieke producten). De oude URL blijft bestaan.
+2. **Classificeren**: bestaande officiële GS1 GPC- en CBS ECOICOPv2-autoriteiten bereiken, zonder de categorieën als één indeling te behandelen.
+3. **Synoniemen**: bestaande twee-tabellenscherm voor voorstellen, veilige handmatige koppeling en uitleg. Een TF-IDF-score is geen bevestiging.
+4. **Synchroniseren**: na PR #645 geautoriseerde classificatieovername en later bewijs voor status wacht/verwerkt/conflict/mislukt/controle nodig. Tot een controleerbare backend-werkvoorraad bestaat worden geen verzonnen totalen of retry-knoppen getoond.
 
-## Werkvolgorde
-1. **OFF/productidentiteit** — in Artikel classificeren: filter **Niet gekoppeld**, zoek OFF-kandidaat en bevestig handmatig. Bij ontbrekende betrouwbare match: barcode vastleggen of geval markeren voor nader onderzoek; geen geforceerde koppeling.
-2. **GS1 GPC** — filter **Classificatie ontbreekt** na OFF-koppeling; vergelijk GS1 Brick met product en bevestig via bestaande autorisatie. Een niet-gekoppeld bonartikel telt niet automatisch ook als GS1-achterstand.
-3. **CBS ECOICOPv2** — open **Artikelclassificaties toekennen**, kies de officiële classificatie van centrale Catalogusproducten en bevestig. De CBS-lijst betreft een andere populatie dan de bonartikelrijen van stap 1-2.
-4. **Artikel-synoniemen** — beoordeel voorgestelde paren, inclusief afwijkingen in GS1 en CBS. Een matching-score is een voorstel, geen automatische identiteit.
-5. **Classificatieovername/synchronisatie** — wordt pas door de afzonderlijke synoniemovernamefunctionaliteit van PR #645 geactiveerd na definitieve goedkeuring en merge. De gekozen classificaties moeten dan in de bestaande GS1- en CBS-autoriteiten landen, met versiebewaking en audit. Tot dan **geen** generieke knop voor blind synchroniseren.
-6. **Controle** — vernieuw de werkvoorraad en controleer de betrokken Catalogusartikelen. Gekoppelde relaties en resterende conflicten mogen niet als 'klaar' worden afgevinkt zonder verificatie.
+Geen dubbeltelling van dezelfde bonregels in meerdere monitorkaarten. Geen totaalsom van ongelijksoortige entiteiten (bonregels, globale producten, kandidaatparen). Dit eerste stadium is een heldere *navigatie en bestaande werkgebieden*, nog geen complete centrale unieke werkvoorraadmonitor.
 
-## Eerste monitor (deze PR)
-- **OFF niet gekoppeld:** bestaande `articles-overview.counts.unlinked` op bonartikelniveau.
-- **GS1 ontbreekt na OFF-koppeling:** bestaande `articles-overview.counts.classification_pending` op bonartikelniveau.
-- **CBS ontbreekt:** read-only telling van de bestaande `/api/cbs-classifications/products`-lijst met `classified=false`, op Catalogusproductniveau, met paginering.
-- **Synoniemvoorstellen:** bestaande `article-synonyms/analysis.summary.candidate_pairs`; voorstelparen, **geen** aantal bewezen matches en **geen** syncachterstand.
-- **Synchronisatieachterstand/mislukkingen:** **niet beschikbaar**: zonder duurzame en geautoriseerde event-/statusprojectie is geen betrouwbare bron. Monitor toont geen kunstmatige nul.
-- Iedere bron wordt afzonderlijk beoordeeld. Bij niet-beschikbaar of gewijzigde CBS-paginatotalen verschijnt een onbeschikbare teller en een foutmelding. Geen stilzwijgende nul, geen optelling van ongelijksoortige populaties.
-- De monitor is read-only; handmatige verversing. Frontteam mag geen rechten verwerven door de UI.
+## Werkvoorraadcontract voor vervolg-PR
+Lees-only onderzoek naar alle relevante bronnen, met expliciete uniekheids- en herkomstbewijzen:
+- Bonregel blijft canoniek bronbewijs, inclusief afzonderlijke retailer/artikelcode. Presentatiegroepering uit het bestaande Externe databases 2-contract blijft onaangetast.
+- Unieke centrale classificatietaak heeft als sleutel `global_product_id + classificatiesysteem`, nooit alleen naam, winkel, bonregel of GTIN zonder identiteitsproof.
+- Nog niet betrouwbaar geïdentificeerde bonartikelregels kunnen alleen volgens bestaande identiteitspolicy worden geclusterd. Onbewezen varianten blijven afzonderlijke opdrachten.
+- Synoniembeoordeling heeft een canoniek ongeordend artikelpaar als sleutel en blijft handmatig.
+- Een synchronisatietaak heeft een eigen, herleidbare operationele identiteit per bevestigde bron/target/systeem/revisie. Geen status afleiden uit kandidaatparen alleen.
+- Verschil tussen al bevestigd, in behandeling, onbekend, fout en conflict wordt expliciet; geen `0` bij ontbrekende bron, storing of ontbrekend recht.
+- Na bevestiging worden teller en lijst opnieuw opgebouwd vanuit backend-authorities; niets voortijdig uit browserstatus verbergen.
 
-## Vervolgvoorstel: betrouwbare synchronisatiemonitor
-Maak als afzonderlijke backend-PR een uitsluitend leesbare werkvoorraadprojectie over de bestaande bevestigingstransacties en autoriteiten met ten minste `product_id`, `classificatiesysteem`, `status` (wacht / verwerkt / conflict / mislukt / controle nodig), `brongebeurtenis`, `laatste_poging` en `reden`. Definieer expliciet de statusovergangen, de relatie met CBS-historie en GPC-provenance, en idempotente retry onder bestaande locks. Voer geen write-/retryactie uit zonder gericht autorisatie- en auditcontract. Bewijs met PostgreSQL-tests dat tellingen niet dubbeltellen bij meerdere bonregels/synoniemparen, en dat privacy, rollback, concurrente updates en rechten veilig blijven.
+## Veiligheidsvoorwaarden
+Bestaande backendautorisatie per endpoint blijft leidend; navigatie verschaft geen schrijfbevoegdheden. Centrale classificaties zijn geen household-inventory; huishoudisolatie blijft behouden. Geen destructieve opschoning van dubbele bonregelprojecties. Bij gelijktijdige wijzigingen/herhaling moet version-/snapshot-revalidatie plaatsvinden. Geen impliciete migraties.
 
-## Acceptatie
-- Startpagina en paginatitel tonen 'Artikel classificeren' in plaats van 'Externe databases 2'; bestaande URL blijft als compatibele route.
-- De monitor gebruikt aantoonbaar de reeds bestaande gegevensbronnen, toont geen onjuiste samengevoegde totaalsom en ververst na een classificatie.
-- Verversen en navigeren veroorzaken geen mutaties; CBS en synoniemen met beperkte rechten worden niet als 'nul' voorgesteld.
-- Bij GS1/CBS-afwijking blijft expliciete keuze van PR #645 leidend zodra die afzonderlijke PR is gemerged.
-- Frontteam en superuser kunnen het werkproces gebruiken zonder toegang tot extra technische bediening; overige rollen houden hun bestaande beperkingen.
-- De definitieve kandidaat krijgt een gesynchroniseerde patchversie, normale/preflightchecks en toepasselijke F7-regressie conform repo-policy.
+## Afhankelijkheden en volgorde
+A. PR #645 (Draft): kies per GS1/CBS-systeem bij classificatieconflict; gerichte tests, versiesync, preflight/F7, afzonderlijke PO-go voor merge.
+B. PR #647 (Draft): Artikelbeheer met vier werkgebieden, geen dubbele tellers, bestaande routes/data beschermd; betrokken gebruikers accepteren UI.
+C. Nieuwe aparte PR: uniek gemodelleerde werkvoorraad en geïntegreerde centrale classificatieacties, vooraf read-only bron-/doublureanalyse.
+D. Nieuwe aparte PR: synchronisatiebewijzen en statusmonitor; na integratie van #645 en werkvoorraadcontract. Herverwerken alleen met afzonderlijke expliciete autorisatie/audit/testcontracten.
+
+## Acceptatie eerste fase
+- Startpagina toont één actie **Artikelbeheer**; oude `/externe-databases-2` werkt.
+- Elke van de vier gebieden is afzonderlijk bereikbaar; bonregeltabel slechts onder Identificeren.
+- De bestaande OFF/GS1-statusknoppen blijven expliciet bonregeltellers en verschijnen niet dubbel.
+- CBS/GS1 en Artikel-synoniemen gebruiken bestaande beveiligde routes.
+- Synchroniseren toont eerlijk 'nog geen gevalideerde werkvoorraad'; het doet geen mutaties.
+- Mobiel/desktop gebruiken dezelfde UI-componenten en viewportresponsiviteit.
+- Geen eigen Docker/startup/database-ingrepen; voor Ready volgen normale/preflightchecks en relevante F7.
