@@ -226,6 +226,67 @@ def suggest_pairs(products, confirmed=(), *, include_name_only=False):
     return sorted(pairs.values(), key=lambda pair: (-pair['score'], pair['id']))
 
 
+def _manual_pair_is_safe(left, right):
+    """Identity and classification checks shared by display and writes."""
+    if not left or not right or left['id'] == right['id']:
+        return False
+    if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
+        return False
+    if set(left.get('article_codes') or []) & set(right.get('article_codes') or []):
+        return False
+    if left.get('brick_code') and right.get('brick_code') and left['brick_code'] != right['brick_code']:
+        return False
+    return True
+
+
+def product_link_options(products, confirmed, product_id):
+    """One distinct Catalogus article per row, including confirmed and all others."""
+    product_by_id = {p['id']: p for p in products}
+    selected = product_by_id.get(product_id)
+    if not selected:
+        return None
+    existing = {tuple(sorted(pair)) for pair in confirmed}
+    proposed = {
+        (p['left']['id'], p['right']['id']): p
+        for p in suggest_pairs(products, confirmed)
+    }
+    options = []
+    for product in products:
+        if product['id'] == product_id:
+            continue  # NEVER present the selected product as its own synonym.
+        left, right = sorted((selected, product), key=lambda p: p['id'])
+        key = (left['id'], right['id'])
+        linked = key in existing
+        suggestion = proposed.get(key)
+        safe = _manual_pair_is_safe(left, right)
+        state = 'linked' if linked else 'suggested' if suggestion else 'other'
+        options.append({
+            'id': product['id'],
+            'name': product['name'],
+            'brand': product.get('brand') or '',
+            'variant': product.get('variant') or '',
+            'image_url': product.get('image_url') or '',
+            'store': product.get('store_name') or 'Winkel onbekend',
+            'primary_gtin': product.get('primary_gtin') or '',
+            'article_codes': product.get('article_codes') or [],
+            'status': state,
+            'status_label': {'linked': 'Al gekoppeld', 'suggested': 'Voorstel', 'other': 'Overig'}[state],
+            'linkable': bool(not linked and safe),
+            'reason': ('Al gekoppeld' if linked else
+                       'Zelfde productidentiteit of strijdige GPC-indeling' if not safe else ''),
+            'score': suggestion['score'] if suggestion else None,
+            'fingerprint': _fingerprint(left, right) if not linked and safe else '',
+            # Suggestion uses canonical proposed pair, otherwise explicit
+            # manually reviewed independent central product IDs.
+            'manual': not bool(suggestion),
+        })
+    options.sort(key=lambda p: (
+        {'linked': 0, 'suggested': 1, 'other': 2}[p['status']],
+        -(p['score'] or 0), str(p['name']).casefold(), p['id'],
+    ))
+    return options
+
+
 def confirmed_pairs(conn):
     return set(tuple(row) for row in conn.execute(text(
         'SELECT left_product_id, right_product_id FROM article_synonym_links'
@@ -235,6 +296,11 @@ def confirmed_pairs(conn):
 def confirm_pairs(conn, selections, actor_id):
     """Atomic, idempotent bulk confirmation with current-candidate validation."""
     from fastapi import HTTPException
+    for selection in selections:
+        # Canonical pair order is guaranteed by the schema and never inferred
+        # from a display name. Protect all callers including crafted requests.
+        if selection['left_product_id'] >= selection['right_product_id']:
+            raise HTTPException(409, 'Een artikel kan niet aan zichzelf worden gekoppeld.')
     ids = sorted({s[k] for s in selections for k in ('left_product_id', 'right_product_id')})
     # Serialize edits/deletion of selected catalog records and repeated confirmations.
     if conn.dialect.name == 'postgresql':
@@ -250,6 +316,15 @@ def confirm_pairs(conn, selections, actor_id):
         proposal = proposals.get(key)
         if key in existing and all(pid in by_id for pid in key):
             proposal = {'fingerprint': _fingerprint(by_id[key[0]], by_id[key[1]])}
+        if key not in existing and selection.get('manual'):
+            left, right = by_id.get(key[0]), by_id.get(key[1])
+            if not _manual_pair_is_safe(left, right):
+                raise HTTPException(409, 'Deze artikelidentiteiten kunnen niet veilig als synoniem worden gekoppeld.')
+            proposal = {
+                'fingerprint': _fingerprint(left, right),
+                'score': 0.0,
+                'manual': True,
+            }
         if not proposal or proposal['fingerprint'] != selection['fingerprint']:
             raise HTTPException(409, 'Een suggestie is gewijzigd of niet meer beschikbaar. Vernieuw de lijst en controleer opnieuw.')
         if key not in existing:
@@ -260,7 +335,7 @@ def confirm_pairs(conn, selections, actor_id):
                 (left_product_id, right_product_id, confirmed_by, source_fingerprint, method, score)
             VALUES (:left, :right, :actor, :fingerprint, :method, :score)
             ON CONFLICT (left_product_id, right_product_id) DO NOTHING
-        '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method=METHOD, score=proposal['score']))
+        '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method='manual_catalog_review_v1' if proposal.get('manual') else METHOD, score=proposal['score']))
     return {'linked': len(to_insert), 'already_linked': len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
 
 
@@ -329,7 +404,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         else:
             status = 'no_candidate'
         row = {
-            'id': pid, 'name': product['name'], 'brand': product.get('brand') or '',
+            'id': pid, 'name': product['name'], 'primary_gtin': product.get('primary_gtin') or '',
+            'article_codes': product.get('article_codes') or [], 'brand': product.get('brand') or '',
             'variant': product.get('variant') or '',
             'size_value': product.get('size_value') or '',
             'size_unit': product.get('size_unit') or '',
