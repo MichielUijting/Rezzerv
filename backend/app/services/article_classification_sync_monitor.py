@@ -56,7 +56,7 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
           AND NOT EXISTS (
             SELECT 1 FROM article_classification_sync_events resolution
              WHERE resolution.related_event_id = article_classification_sync_events.id
-               AND resolution.status = 'processed'
+               AND resolution.status IN ('processed', 'failed')
           )
     """)).scalar_one()
     rows = conn.execute(text("""
@@ -68,7 +68,7 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
            AND NOT EXISTS (
              SELECT 1 FROM article_classification_sync_events resolution
               WHERE resolution.related_event_id = article_classification_sync_events.id
-                AND resolution.status = 'processed'
+                AND resolution.status IN ('processed', 'failed')
            )
          ORDER BY created_at DESC, id DESC
          LIMIT :limit OFFSET :offset
