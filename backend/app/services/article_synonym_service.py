@@ -390,6 +390,10 @@ def unlink_pairs(conn, selections):
     receipt history, household data or other synonym pairs.
     """
     from fastapi import HTTPException
+    # Ook ontkoppelen raakt de groep waarop classificaties worden geërfd.
+    # Neem dezelfde transactionele lock vóór het lezen van synoniemrelaties.
+    if conn.dialect.name == 'postgresql':
+        conn.execute(text('SELECT pg_advisory_xact_lock(639643644)'))
     if len(selections) != len({(p['left_product_id'], p['right_product_id']) for p in selections}):
         raise HTTPException(409, 'Dubbele synoniemselectie is niet toegestaan.')
     for selection in selections:
