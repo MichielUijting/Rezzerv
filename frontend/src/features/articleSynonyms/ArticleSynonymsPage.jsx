@@ -150,11 +150,11 @@ export default function ArticleSynonymsPage() {
   }
 
   const leftColumns = [
-    { key: 'selected', label: '', width: 42 },
-    { key: 'photo', label: 'Foto', width: 70 },
-    { key: 'name', label: 'Artikelnaam', width: 250, sortable: true, filterable: true },
-    { key: 'code', label: 'Barcode', width: 125, sortable: true, filterable: true },
-    { key: 'synonym_count', label: 'Syn.', width: 62, sortable: true, align: 'right' },
+    { key: 'selected', label: '', width: 36 },
+    { key: 'photo', label: 'Foto', width: 48 },
+    { key: 'name', label: 'Artikelnaam', width: 182, sortable: true, filterable: true },
+    { key: 'code', label: 'Barcode', width: 112, sortable: true, filterable: true },
+    { key: 'synonym_count', label: 'Syn.', width: 52, sortable: true, align: 'right' },
   ]
   const rightColumns = [
     { key: 'selected', label: '', width: 42 },
