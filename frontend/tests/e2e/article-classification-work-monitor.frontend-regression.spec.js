@@ -62,6 +62,7 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('classification-cbs-panel')).toContainText('CBS-categorie zoeken of doorbladeren')
     const selectedRow = page.getByTestId('combined-classification-articles').getByRole('row', { name: /Testmelk/ })
     await expect(selectedRow).toHaveAttribute('aria-selected', 'true')
+    await expect(selectedRow.locator('td').first()).toHaveCSS('background-color', 'rgb(215, 242, 223)')
     await page.getByTestId('classification-gs1-panel').getByRole('button', { name: 'Andere Brick kiezen' }).click()
     await expect(page.getByRole('dialog', { name: 'GS1 GPC Brick kiezen' })).toBeVisible()
     await page.getByRole('dialog', { name: 'GS1 GPC Brick kiezen' }).getByRole('button', { name: 'Sluiten' }).click()
