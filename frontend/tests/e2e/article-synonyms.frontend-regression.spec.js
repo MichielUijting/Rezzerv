@@ -55,7 +55,11 @@ for (const width of [390, 1280]) {
           }
         }
         return route.fulfill({ json: { linked: action === 'link' ? payload.selections.length : 0,
-          unlinked: action === 'unlink' ? payload.selections.length : 0 } })
+          unlinked: action === 'unlink' ? payload.selections.length : 0,
+          ...(action === 'link' ? {
+            classification_inheritance: { gpc_inherited: 1, cbs_inherited: 1, conflicts: [] },
+          } : {}),
+        } })
       }
       if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
       if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
@@ -166,8 +170,69 @@ for (const width of [390, 1280]) {
     expect(posts[1].payload.selections).toEqual([{
       left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false,
     }])
+    await expect(page.getByTestId('app-feedback-success'))
+      .toContainText('1 GS1 GPC en 1 CBS automatisch overgenomen.')
   })
 }
+
+
+test('Bevestigd synoniem met classificatieconflict toont herstel-overlay zonder bestaande waarden te overschrijven', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const posts = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-test', active_household_id: '0', context_type: 'system',
+      is_platform_superuser: true, role: 'admin',
+      permissions: {
+        'platform.external_products.view': true,
+        'platform.external_products.link_existing': true,
+      },
+    } })
+    if (path === '/api/external-databases/article-synonyms/analysis') return route.fulfill({
+      json: { items: [
+        { id: 'a', name: 'Melk A', primary_gtin: '8719587325926', synonym_count: 0 },
+        { id: 'b', name: 'Melk B', primary_gtin: '8718452513666', synonym_count: 0 },
+      ] },
+    })
+    if (path === '/api/external-databases/article-synonyms/analysis/a/options') return route.fulfill({
+      json: { items: [
+        { id: 'b', name: 'Melk B', primary_gtin: '8718452513666', status: 'other',
+          status_label: 'Overig', linkable: true, manual: true,
+          fingerprint: 'b'.repeat(64) },
+      ] },
+    })
+    if (path.endsWith('/article-synonyms/link')) {
+      posts.push(route.request().postDataJSON())
+      return route.fulfill({ json: {
+        linked: 1, already_linked: 0,
+        classification_inheritance: {
+          gpc_inherited: 0, cbs_inherited: 1,
+          conflicts: [{ system: 'GPC', product_ids: ['a', 'b'] }],
+        },
+      } })
+    }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  const left = page.getByTestId('article-synonyms-articles')
+  await left.locator('tbody tr').filter({ hasText: 'Melk A' }).getByRole('checkbox').check()
+  const right = page.getByTestId('article-synonyms-table')
+  await right.locator('tbody tr').filter({ hasText: 'Melk B' }).getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+  const dialog = page.getByTestId('article-synonyms-inheritance-conflict')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('1 synoniemkoppeling(en) bevestigd')
+  await expect(dialog).toContainText('0 GS1 GPC en 1 CBS overgenomen')
+  await expect(dialog).toContainText('bestaande waarden behouden')
+  await expect(dialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
+  expect(posts).toHaveLength(1)
+  await dialog.getByRole('button', { name: 'Sluiten' }).click()
+  await expect(dialog).toHaveCount(0)
+})
 
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
   let reads = 0
