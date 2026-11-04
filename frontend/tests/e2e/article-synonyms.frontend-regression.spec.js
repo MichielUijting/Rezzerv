@@ -94,7 +94,7 @@ for (const width of [390, 1280]) {
     expect(posts[0].payload.selections).toEqual([{
       left_product_id: 'a', right_product_id: 'c', fingerprint: 'c'.repeat(64),
     }])
-    await right.locator('tbody tr').nth(1).getByRole('checkbox').check()
+    await right.locator('tbody tr').filter({ hasText: '08718452513666' }).getByRole('checkbox').check()
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeDisabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
