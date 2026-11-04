@@ -112,6 +112,40 @@ class MatchingTest(unittest.TestCase):
         self.assertTrue(pair['linkable'])
         self.assertEqual(service.suggest_pairs([a, b]), [pair])
 
+    def test_two_similarly_named_products_are_not_the_same_identity(self):
+        first = product('a', 'Volle melk', gtin='08719587325926', retailer_code='')
+        other = product('b', 'Volle melk', gtin='08718452513666', retailer_code='')
+        self.assertEqual(
+            [(p['left']['id'], p['right']['id']) for p in service.suggest_pairs([first, other])],
+            [('a', 'b')],
+        )
+        options = service.product_link_options([first, other], set(), 'a')
+        self.assertEqual([p['id'] for p in options], ['b'])
+        self.assertEqual(options[0]['status'], 'suggested')
+        self.assertNotEqual(options[0]['id'], first['id'])
+
+    def test_right_options_are_disjoint_linked_suggested_and_all_other(self):
+        items = [
+            product('a', 'Halfvolle melk', retailer_code=''),
+            product('b', 'Halfvolle melk', retailer_code=''),
+            product('c', 'Halfvolle melk', retailer_code=''),
+            product('d', 'Appels', brick='fruit', retailer_code=''),
+        ]
+        options = service.product_link_options(items, {('a', 'b')}, 'a')
+        self.assertEqual([row['id'] for row in options], ['b', 'c', 'd'])
+        self.assertEqual([row['status'] for row in options], ['linked', 'suggested', 'other'])
+        self.assertEqual([row['linkable'] for row in options], [False, True, True])
+        self.assertEqual([row['manual'] for row in options], [True, False, True])
+        self.assertEqual(service.product_link_options(items, set(), 'missing'), None)
+
+    def test_identical_gtin_and_conflicting_gpc_cannot_be_selected_manually(self):
+        a = product('a', 'Halfvolle melk', gtin='08719587325926', brick='milk')
+        b = product('b', 'Melk', gtin='08719587325926', brick='milk')
+        c = product('c', 'Appels', brick='fruit')
+        options = {row['id']: row for row in service.product_link_options([a, b, c], set(), 'a')}
+        self.assertFalse(options['b']['linkable'])
+        self.assertFalse(options['c']['linkable'])
+
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
         b['size_value'] = '2'
@@ -308,6 +342,49 @@ class StoreTest(unittest.TestCase):
             row = next(item for item in analysis['items'] if item['id'] == 'd')
             self.assertEqual(row['store'], 'Winkel onbekend')
             self.assertEqual(row['synonym_count'], 1)
+
+    def test_manual_other_catalog_article_can_be_confirmed_without_text_similarity(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                  (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
+                VALUES ('d','Onverwacht ander artikel','','','8712345678906',1,'l','active','','catalog')
+            """))
+            products = service.load_products(conn)
+            opts = {row['id']: row for row in service.product_link_options(products, set(), 'a')}
+            self.assertEqual(opts['d']['status'], 'other')
+            self.assertTrue(opts['d']['manual'])
+            result = service.confirm_pairs(conn, [{
+                'left_product_id': 'a', 'right_product_id': 'd',
+                'fingerprint': opts['d']['fingerprint'], 'manual': True,
+            }], 'actor')
+            self.assertEqual(result['linked'], 1)
+            self.assertEqual(service.confirmed_pairs(conn), {('a', 'd')})
+            method = conn.execute(text("""
+                SELECT method FROM article_synonym_links
+                 WHERE left_product_id='a' AND right_product_id='d'
+            """)).scalar_one()
+            self.assertEqual(method, 'manual_catalog_review_v1')
+
+    def test_self_link_is_blocked_before_any_database_mutation(self):
+        with self.engine.begin() as conn:
+            with self.assertRaises(HTTPException) as exc:
+                service.confirm_pairs(conn, [{
+                    'left_product_id': 'a', 'right_product_id': 'a',
+                    'fingerprint': 'a' * 64, 'manual': True,
+                }], 'actor')
+            self.assertEqual(exc.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
+    def test_manual_selection_requires_current_server_fingerprint(self):
+        with self.engine.begin() as conn:
+            with self.assertRaises(HTTPException) as exc:
+                service.confirm_pairs(conn, [{
+                    'left_product_id': 'a', 'right_product_id': 'b',
+                    'fingerprint': 'a' * 64, 'manual': True,
+                }], 'actor')
+            self.assertEqual(exc.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
 
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
