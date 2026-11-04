@@ -1287,6 +1287,26 @@ class ApiTest(unittest.TestCase):
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
 
+    def test_internal_sync_monitor_denies_anonymous_household_and_forged_retry(self):
+        path = '/api/external-databases/article-synonyms/sync-exceptions'
+        payload = {'event_id': str(uuid4()), 'expected_decision_version': 1}
+        for status in (401, 403):
+            with patch.object(routes, 'require_platform_permission_from_session',
+                              side_effect=HTTPException(status)):
+                self.assertEqual(self.client.get(path).status_code, status)
+                self.assertEqual(self.client.post(path + '/retry', json=payload).status_code, status)
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          return_value=SimpleNamespace(is_frontteam=False, is_platform_superuser=False)):
+            self.assertEqual(self.client.get(path).status_code, 403)
+            self.assertEqual(self.client.post(path + '/retry', json=payload).status_code, 403)
+        self.assertEqual(self.client.post(path + '/retry', json={
+            **payload, 'actor_id': 'forged', 'household_id': '0',
+        }).status_code, 422)
+        self.assertEqual(self.client.post(path + '/retry', json={
+            'event_id': payload['event_id'], 'expected_decision_version': -1,
+        }).status_code, 422)
+        self.assertEqual(self.client.get(path + '?limit=101').status_code, 403)
+
     def test_gpc_choice_requires_existing_gpc_write_permission(self):
         actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
         def authorize(permission):
