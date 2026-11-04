@@ -128,6 +128,23 @@ Bij database-/startupinfrastructuur horen daarnaast expliciet:
 
 Bij wijzigingen aan de Kassabon → Voorraad → Bijna-op-keten of de ketenrunner hoort daarnaast de canonical 12/12 PostgreSQL-ketentest groen te zijn.
 
+## Verplichte A-B-C Artikel-synoniemenregressie bij iedere PR
+
+Bij **iedere** pull request naar `main`, ongeacht de gewijzigde bestanden of het S/M/L-testniveau, draait de onafhankelijke workflow `.github/workflows/article-synonyms-abc-every-pr.yml`. Er is bewust **geen padfilter en geen Draft-router-uitzondering**: ook wijzigingen buiten Artikelbeheer mogen de synoniemen- en classificatieketen niet onopgemerkt breken.
+
+De workflow controleert met **uitsluitend geïsoleerde testdata** de volgende vaste acceptatiestappen:
+
+1. Artikel A heeft een bevestigde GS1 GPC- én CBS ECOICOPv2-classificatie; B heeft geen van beide; C heeft twee afwijkende officiële classificaties en een eigen valide barcode.
+2. Na expliciete synoniemkoppeling A–B worden precies de twee ontbrekende classificaties naar B overgenomen; A en C blijven ongewijzigd.
+3. Bij de voorgestelde koppeling A–C zijn zowel GS1- als CBS-verschillen zichtbaar; zonder twee afzonderlijke expliciete beslissingen wordt niets opgeslagen.
+4. Na de twee expliciete keuzes voor de prevalerende classificaties worden A, B en C consistent geclassificeerd, met behoud van afzonderlijke centrale productidentiteiten en zonder huishouden-/voorraadmutaties.
+5. Herhaling veroorzaakt geen extra classificaties, synoniemrelaties, CBS-historieregels of synchronisatie-auditgebeurtenissen.
+6. De bestaande keuze-overlay wordt met Playwright op mobiel en desktop gecontroleerd, inclusief de weergegeven codes en annuleren zonder opslag.
+
+De PostgreSQL-test gebruikt een aparte, tijdelijk aangemaakte schema-namespace op de bestaande **CI-testdatabase** en verwijdert uitsluitend die eigen testnamespace. De test gebruikt **geen echte Inhuis-data of gebruikersdatabase**. Beide jobs moeten groen zijn; een afgebroken, ontbrekende of overgeslagen verplichte job geldt niet als aantoonbaar geslaagd.
+
+De normale risicogestuurde F7-, security-, migratie- en releasegates blijven **daarnaast** volledig van kracht. De A-B-C-gate op iedere PR is pas organisatiebreed van kracht nadat de workflow in `main` is gemerged. Voor branch protection moet indien gewenst ook de GitHub required-status instelling op deze twee jobnamen worden vastgezet; een workflow alleen blokkeert een merge niet automatisch zonder de geldende GitHub-ruleset.
+
 ## Centrale Draft CI-router: schedule-first vóór carry-forward
 
 Naast carry-forward gebruikt Inhuis een centrale Draft-router om het aantal GitHub Actions-runs al **vóór scheduling** te beperken. De kernreden is dat GitHub `pull_request.paths` op een synchronize-event tegen de volledige PR-diff beoordeelt; daardoor kan een oude, grote PR-diff anders bij iedere kleine reparatie opnieuw tientallen workflows activeren.
