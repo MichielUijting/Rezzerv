@@ -47,15 +47,21 @@
   max-height: none; height: auto; overflow: auto;
 }
 .rz-synonym-side .rz-synonym-analysis-main-row { cursor: pointer; }
-.rz-synonym-relation-linked { background: #e7f3ed; cursor: default; }
-.rz-synonym-relation-suggested { background: #f0f8f7; }
-.rz-synonym-relation-other { background: transparent; }
-.rz-synonym-side .rz-synonym-analysis-candidate-row[aria-selected="true"] {
-  background: #d9f0e8;
-  box-shadow: inset 3px 0 0 var(--color-ui-primary);
+.rz-synonym-side .rz-synonym-relation-linked > td { background: #dff2e5; }
+.rz-synonym-side .rz-synonym-relation-suggested > td { background: #ffe6c2; }
+.rz-synonym-side .rz-synonym-relation-other > td { background: transparent; }
+.rz-synonym-side .rz-synonym-analysis-candidate-row[aria-selected="true"] > td {
+  box-shadow: inset 0 -2px 0 var(--color-ui-primary), inset 0 2px 0 var(--color-ui-primary);
 }
 .rz-synonym-relation-label { font-weight: 400; }
-.rz-synonym-side .rz-synonym-analysis-actions { margin-top: 4px; }
+ .rz-synonym-side .rz-synonym-analysis-actions { margin-top: 4px; }
+.rz-synonym-side h3 { min-height: 1.4em; }
+.rz-synonym-side .rz-synonym-analysis-main-row[aria-selected="true"] > td { background: #d9f0e8; }
+.rz-synonym-side .rz-synonym-analysis-main-row td,
+.rz-synonym-side .rz-synonym-analysis-candidate-row td { vertical-align: middle; }
+.rz-synonym-side .rz-synonym-analysis-main-row input[type="checkbox"],
+.rz-synonym-side .rz-synonym-analysis-candidate-row input[type="checkbox"] { cursor: pointer; }
+.rz-synonym-footer-note { margin-top: 8px; font-size: .875rem; }
 @media (max-width: 900px) {
   .rz-synonym-side-by-side { grid-template-columns: minmax(0, 1fr); }
 }
