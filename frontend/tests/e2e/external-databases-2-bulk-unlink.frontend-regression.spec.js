@@ -96,7 +96,7 @@ test.describe('Externe databases 2: veilige bulkselectie, export en OFF-ontkoppe
     const downloadPromise = page.waitForEvent('download')
     await exportButton.click()
     const download = await downloadPromise
-    expect(download.suggestedFilename()).toBe('inhuis-externe-databases-2-artikelen.csv')
+    expect(download.suggestedFilename()).toBe('inhuis-artikel-classificeren-artikelen.csv')
     const { readFile } = await import('node:fs/promises')
     const csv = await readFile(await download.path(), 'utf8')
     expect(csv).toContain("'=HYPERLINK")
