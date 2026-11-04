@@ -284,8 +284,8 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
   const content = <>
     <ScreenCard fullWidth>
       <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
-      <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
-        Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p>
+      {!embedded ? <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
+        Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {note ? <p role="status">{note}</p> : null}
       <div className="rz-article-classification-layout">
@@ -295,10 +295,10 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
           wrapperClassName="rz-classification-table-wrapper"
           getRowKey={(item) => item.id} pageSize={8}
           emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen.'}
-          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} /> : <p data-testid="cbs-single-product"> {loading ? "CBS-classificatie laden…" : selectedItems.length ? `Artikel: ${selectedItems[0].name} — ${selectedItems[0].classified ? `${selectedItems[0].cbs_code} · ${selectedItems[0].category_name}` : "Niet geclassificeerd"}` : "Het gekozen Catalogusartikel is niet gevonden in de CBS-werkvoorraad."}</p>}
+          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} /> : <div className="rz-classification-current" data-testid="cbs-single-product"><span>Huidige classificatie</span><strong>{loading ? "Laden…" : selectedItems.length ? selectedItems[0].classified ? selectedItems[0].cbs_code : "Niet geclassificeerd" : "Artikel niet gevonden"}</strong><span>{selectedItems.length && selectedItems[0].classified ? selectedItems[0].category_name : "Geen bevestigde CBS-categorie"}</span></div>}
         <div className="rz-article-classification-actions" aria-label="CBS-classificatieacties">
           <label className="rz-input-field">
-            <span className="rz-label">Zoek productnaam, CBS-code of officiële categorie</span>
+            <span className="rz-label">{embedded ? "CBS-categorie zoeken" : "Zoek productnaam, CBS-code of officiële categorie"}</span>
             <input className="rz-input" value={query} disabled={isBusy}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Bijvoorbeeld melk of 011420" />
@@ -308,11 +308,11 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
           <Button type="button" variant="secondary" disabled={isBusy}
             onClick={() => browseCategories()}>CBS-indeling doorbladeren</Button>
           <Button type="button" disabled={isBusy || !proposal || !selectedItems.length}
-            onClick={confirmSelected}>{saving ? 'Opslaan...' : 'Voorstel bevestigen'}</Button>
-          <Button type="button" variant="secondary" disabled={isBusy || !selectedItems.length}
-            onClick={exportSelected}>Exporteren</Button>
-          <Button type="button" variant="secondary" disabled={isBusy || !allClassified}
-            onClick={removeSelected}>Classificatie verwijderen</Button>
+            onClick={confirmSelected}>{saving ? 'Opslaan...' : embedded ? 'Bevestigen CBS' : 'Voorstel bevestigen'}</Button>
+          {!embedded ? <Button type="button" variant="secondary" disabled={isBusy || !selectedItems.length}
+            onClick={exportSelected}>Exporteren</Button> : null}
+          {!embedded ? <Button type="button" variant="secondary" disabled={isBusy || !allClassified}
+            onClick={removeSelected}>Classificatie verwijderen</Button> : null}
         </div>
         {proposal ? <p role="status">Gekozen: {proposal.cbs_code} – {proposal.path}.
           Nog niet bevestigd.</p> : null}
