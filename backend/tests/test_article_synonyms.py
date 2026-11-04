@@ -498,6 +498,25 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(rejected.exception.status_code, 409)
             self.assertEqual(service.confirmed_pairs(conn), set())
 
+    def test_overlapping_precedence_choices_are_rejected_atomically(self):
+        conflicting_reviews = [
+            dict(left_id='a', right_id='b', snapshot='a' * 64,
+                 clashes=[dict(system='GPC')]),
+            dict(left_id='a', right_id='c', snapshot='b' * 64,
+                 clashes=[dict(system='GPC')]),
+        ]
+        selections = [
+            dict(left_product_id='a', right_product_id='b',
+                 snapshot='a' * 64, gpc_source_id='a'),
+            dict(left_product_id='a', right_product_id='c',
+                 snapshot='b' * 64, gpc_source_id='a'),
+        ]
+        with self.engine.begin() as conn:
+            with self.assertRaises(HTTPException) as rejected:
+                classification_review.apply_choices(conn, conflicting_reviews, selections, 'actor')
+            self.assertEqual(rejected.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
     def test_existing_gpc_conflict_blocks_only_gpc_not_cbs(self):
         with self.engine.begin() as conn:
             conn.execute(text("""
@@ -1153,9 +1172,26 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/candidates').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/options').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
+                self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link/review', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/unlink', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
+
+    def test_gpc_choice_requires_existing_gpc_write_permission(self):
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
+        def authorize(permission):
+            if permission == 'gpc.update':
+                raise HTTPException(403, 'GS1 GPC-bewerking is niet toegestaan.')
+            return actor
+        payload = {
+            'selections': [dict(left_product_id='a', right_product_id='b',
+                                fingerprint='a' * 64, manual=True)],
+            'decisions': [dict(left_product_id='a', right_product_id='b',
+                               snapshot='b' * 64, gpc_source_id='a')],
+        }
+        with patch.object(routes, 'require_platform_permission_from_session', side_effect=authorize):
+            response = self.client.post('/api/external-databases/article-synonyms/link', json=payload)
+        self.assertEqual(response.status_code, 403)
 
     def test_both_roles_authorized_via_canonical_permission(self):
         for superuser, frontteam in [(True,False),(False,True),(True,True)]:
