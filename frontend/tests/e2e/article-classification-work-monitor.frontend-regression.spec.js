@@ -3,49 +3,70 @@ import { test, expect } from '@playwright/test'
 test.use({ storageState: { cookies: [], origins: [] } })
 
 for (const width of [390, 1280]) {
-  test(`Artikelbeheer heeft vier werkgebieden zonder dubbele werkvoorraadtellers op ${width}px`, async ({ page }) => {
+  test(`Artikelbeheer laadt uitsluitend gekozen werkgebied en toont synoniemen direct op ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const writes = []
     const requests = []
     await page.route('**/api/**', async (route) => {
-      const path = new URL(route.request().url()).pathname
+      const url = new URL(route.request().url())
+      const path = url.pathname
       requests.push(path)
       if (!['GET', 'HEAD'].includes(route.request().method())) writes.push(path)
       if (path === '/api/session') return route.fulfill({ json: {
         user_id: 'workqueue-user', active_household_id: '0', context_type: 'system',
-        role: 'owner', is_platform_superuser: true, permissions: {},
+        role: 'owner', is_platform_superuser: true, permissions: { 'gpc.update': true },
       } })
       if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
       if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
         items: [], counts: { unlinked: 3, classification_pending: 2, linked: 7 },
       } })
+      if (path === '/api/catalog') return route.fulfill({ json: { items: [
+        { id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', primary_gtin: '8712345678901' },
+      ] } })
+      if (path === '/api/catalog/p1/gpc-brick') return route.fulfill({ json: {
+        assignment: { brick_code: '10000001', brick_description: 'Melk' }, suggestions: [],
+      } })
+      if (path === '/api/cbs-classifications/products') return route.fulfill({ json: {
+        total: 1, items: [{ id: 'p1', name: 'Testmelk', classified: false, version: 0 }],
+      } })
+      if (path === '/api/external-databases/article-synonyms/analysis') return route.fulfill({ json: {
+        summary: { candidate_pairs: 0 }, items: [
+          { id: 'p1', name: 'Testmelk', primary_gtin: '8712345678901', synonym_count: 0 },
+        ],
+      } })
       return route.fulfill({ json: {} })
     })
-
     await page.goto('/externe-databases-2')
     await expect(page.getByRole('heading', { name: 'Artikelbeheer' }).first()).toBeVisible()
-    const areas = page.getByTestId('classification-work-monitor')
-    for (const name of ['Identificeren', 'Classificeren', 'Synoniemen', 'Synchroniseren']) {
-      await expect(areas.getByRole('button', { name, exact: true })).toBeVisible()
+    const nav = page.getByTestId('classification-work-monitor')
+    for (const name of ['Identificeren', 'Classificeren', 'Synoniemen']) {
+      await expect(nav.getByRole('button', { name })).toBeVisible()
     }
-    await expect(page.getByRole('button', { name: 'Niet gekoppeld: 3' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 2' })).toBeVisible()
-
-    await areas.getByRole('button', { name: 'Classificeren', exact: true }).click()
-    await expect(page.getByTestId('classification-work-area')).toContainText('GS1 GPC')
-    await expect(page.getByTestId('classification-work-area')).toContainText('CBS ECOICOPv2')
+    await expect(nav.getByRole('button', { name: 'Synchroniseren' })).toHaveCount(0)
     await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
-
-    await areas.getByRole('button', { name: 'Synoniemen', exact: true }).click()
-    await expect(page.getByTestId('synonym-work-area')).toContainText('Artikel-synoniemen openen')
-    await areas.getByRole('button', { name: 'Synchroniseren', exact: true }).click()
-    await expect(page.getByTestId('classification-sync-evidence')).toContainText('geen gevalideerde synchronisatiewerkvoorraad')
-    await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
-
-    await areas.getByRole('button', { name: 'Identificeren', exact: true }).click()
-    await expect(page.getByTestId('external-databases-2-table')).toBeVisible()
-    expect(writes).toEqual([])
-    expect(requests).not.toContain('/api/cbs-classifications/products')
+    expect(requests).not.toContain('/api/external-databases/articles-overview')
+    expect(requests).not.toContain('/api/catalog')
     expect(requests).not.toContain('/api/external-databases/article-synonyms/analysis')
+
+    await nav.getByRole('button', { name: 'Classificeren' }).click()
+    await expect(page.getByTestId('combined-classification-workspace')).toBeVisible()
+    await expect(page.getByPlaceholder('Zoeken op artikelnaam, merk, barcode, GTIN of EAN')).toBeVisible()
+    await page.getByPlaceholder('Zoeken op artikelnaam, merk, barcode, GTIN of EAN').fill('Testmelk')
+    await page.getByRole('button', { name: /8712345678901.*Testmelk/ }).click()
+    await expect(page.getByTestId('cbs-single-product')).toContainText('Testmelk')
+    await expect(page.getByText('10000001')).toBeVisible()
+    await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
+
+    await nav.getByRole('button', { name: 'Synoniemen' }).click()
+    await expect(page.getByTestId('article-synonyms-articles')).toBeVisible()
+    await expect(page.getByTestId('article-synonyms-table')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Artikel-synoniemen openen' })).toHaveCount(0)
+    await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
+
+    await nav.getByRole('button', { name: 'Identificeren' }).click()
+    await expect(page.getByTestId('external-databases-2-table')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Niet gekoppeld: 3' })).toBeVisible()
+    expect(requests).toContain('/api/external-databases/articles-overview')
+    expect(writes).toEqual([])
   })
 }
