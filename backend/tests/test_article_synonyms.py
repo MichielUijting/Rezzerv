@@ -396,6 +396,98 @@ class StoreTest(unittest.TestCase):
                 WHERE global_product_id='b'
             """)).scalar_one(), 1)
 
+    def test_sync_exception_audit_and_explicit_retry_after_reference_validation(self):
+        from app.services.article_classification_sync_monitor import (
+            list_sync_exceptions, retry_sync_exception,
+        )
+        with self.engine.begin() as conn:
+            self._set_cbs(conn, 'a', '099999')
+            selected = self.selection(conn)
+            result = service.confirm_pairs(conn, [selected], 'actor')
+            self.assertEqual(result['classification_inheritance']['cbs_inherited'], 0)
+            exceptions = list_sync_exceptions(conn)
+            self.assertEqual(exceptions['total'], 1)
+            entry = exceptions['items'][0]
+            self.assertEqual(entry['status'], 'review_required')
+            self.assertEqual(entry['source_product_id'], 'a')
+            self.assertEqual(entry['target_product_id'], 'b')
+            self.assertEqual(entry['classification_system'], 'CBS')
+            self.assertEqual(entry['classification_code'], '099999')
+            self.assertEqual(entry['decision_version'], 1)
+            with self.assertRaises(HTTPException) as stale:
+                retry_sync_exception(conn, event_id=entry['id'],
+                                     expected_decision_version=0, actor_id='actor')
+            self.assertEqual(stale.exception.status_code, 409)
+            # A previously unverified reference cannot be inherited on retry.
+            with self.assertRaises(HTTPException) as unavailable:
+                retry_sync_exception(conn, event_id=entry['id'],
+                                     expected_decision_version=1, actor_id='actor')
+            self.assertEqual(unavailable.exception.status_code, 409)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_classifications
+                WHERE global_product_id='b'
+            """)).scalar_one(), 0)
+            # A verified official leaf may later be added through a separate
+            # official authority operation. Only an explicit retry then writes.
+            conn.execute(text("""
+                INSERT INTO cbs_ecoicop_categories VALUES
+                    ('099999','CBS-ECOICOPv2-2026',NULL,'Speciale categorie')
+            """))
+            retry = retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1, actor_id='actor')
+            self.assertEqual(retry['cbs_inherited'], 1)
+            again = retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1, actor_id='actor')
+            self.assertEqual(again['cbs_inherited'], 0)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM article_classification_sync_events
+                WHERE status='processed'
+            """)).scalar_one(), 2)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+                WHERE global_product_id='b'
+            """)).scalar_one(), 1)
+
+    def test_existing_confirmed_gpc_conflict_is_logged_once_without_overwrite(self):
+        from app.services.article_classification_sync_monitor import list_sync_exceptions
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+                VALUES ('a','10000025'),('b','10000026')
+            """))
+            for _ in range(2):
+                report = inheritance.propagate_confirmed_classifications(
+                    conn, {('a','b')}, {'a','b'}, 'actor'
+                )
+                self.assertEqual([x['system'] for x in report['conflicts']], ['GPC'])
+            self.assertEqual(list_sync_exceptions(conn)['total'], 1)
+            self.assertEqual(conn.execute(text("""
+                SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id='b'
+            """)).scalar_one(), '10000026')
+
+    def test_audit_rolls_back_with_rejected_synonym_transaction(self):
+        from app.services import article_classification_sync_monitor as monitor
+        with self.assertRaisesRegex(RuntimeError, 'audit interrupted'):
+            with self.engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+                    VALUES ('a','10000025')
+                """))
+                selected = self.selection(conn)
+                with patch.object(inheritance, 'record_sync_event',
+                                  side_effect=RuntimeError('audit interrupted')):
+                    service.confirm_pairs(conn, [selected], 'actor')
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_synonym_links"
+            )).scalar_one(), 0)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 0)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_gpc_bricks"
+            )).scalar_one(), 0)
+
     def test_inheritance_is_bidirectional_and_systems_independent(self):
         with self.engine.begin() as conn:
             self._set_cbs(conn, 'b')
