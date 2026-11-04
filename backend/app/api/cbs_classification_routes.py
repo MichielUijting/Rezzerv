@@ -19,7 +19,9 @@ from app.services.cbs_classification_service import (
     browse_verified_categories,
     suggest_verified_categories,
 )
-from app.services.article_workqueue_service import load_classification_workqueue
+from app.services.article_workqueue_service import (
+    load_classification_workqueue, load_identification_workqueue,
+)
 from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter(prefix="/api/cbs-classifications", tags=["cbs-classification"])
@@ -60,6 +62,14 @@ class Removal(BaseModel):
 class RemovalBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     selections: list[Removal] = Field(min_length=1, max_length=100)
+
+
+@router.get("/identification-workqueue")
+def identification_workqueue():
+    """Deduplicated unresolved retailer/receipt identities, never household stock."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        return load_identification_workqueue(conn)
 
 
 @router.get("/workqueue")
