@@ -3,29 +3,25 @@ import { test, expect } from '@playwright/test'
 test.use({ storageState: { cookies: [], origins: [] } })
 
 for (const width of [390, 1280]) {
-  test(`Artikel-synoniemen: twee tabellen en drie relatiestatussen op ${width}px`, async ({ page }) => {
+  test(`Artikel-synoniemen: uitgelijnde tabellen, checkboxen en ontkoppelen op ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const posts = []
     const articles = [
-      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926', store: 'Winkel onbekend',
-        synonym_count: 1, pending: [{ id: 'b' }] },
-      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666', store: 'Lidl',
-        synonym_count: 0, pending: [{ id: 'a' }] },
-      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
-        store: 'Albert Heijn', synonym_count: 1, pending: [] },
-      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
-        store: 'Winkel onbekend', synonym_count: 0, pending: [] },
+      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926' },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666' },
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906' },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913' },
     ]
     const options = [
       { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
-        status: 'linked', status_label: 'Al gekoppeld', store: 'Albert Heijn',
-        linkable: false, reason: 'Al gekoppeld', manual: true },
+        status: 'linked', status_label: 'Al gekoppeld', linkable: false,
+        fingerprint: 'c'.repeat(64), reason: 'Al gekoppeld', manual: true },
       { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666',
-        status: 'suggested', status_label: 'Voorstel', store: 'Lidl',
-        linkable: true, manual: false, fingerprint: 'b'.repeat(64) },
+        status: 'suggested', status_label: 'Voorstel', linkable: true,
+        fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
-        status: 'other', status_label: 'Overig', store: 'Winkel onbekend',
-        linkable: true, manual: true, fingerprint: 'd'.repeat(64) },
+        status: 'other', status_label: 'Overig', linkable: true,
+        fingerprint: 'd'.repeat(64), manual: true },
     ]
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
@@ -35,13 +31,20 @@ for (const width of [390, 1280]) {
         permissions: { 'platform.external_products.view': true,
           'platform.external_products.link_existing': true },
       } })
-      if (path.endsWith('/article-synonyms/link')) {
-        posts.push(route.request().postDataJSON())
-        for (const selected of posts.at(-1).selections) {
-          const target = options.find((item) => item.id === selected.right_product_id)
-          if (target) { target.status = 'linked'; target.status_label = 'Al gekoppeld'; target.linkable = false }
+      if (path.endsWith('/article-synonyms/link') || path.endsWith('/article-synonyms/unlink')) {
+        const action = path.endsWith('/unlink') ? 'unlink' : 'link'
+        const payload = route.request().postDataJSON()
+        posts.push({ action, payload })
+        for (const choice of payload.selections) {
+          const target = options.find((item) => item.id === choice.right_product_id)
+          if (target) {
+            target.status = action === 'unlink' ? 'other' : 'linked'
+            target.status_label = action === 'unlink' ? 'Overig' : 'Al gekoppeld'
+            target.linkable = action === 'unlink'
+          }
         }
-        return route.fulfill({ json: { linked: posts.at(-1).selections.length, already_linked: 0 } })
+        return route.fulfill({ json: { linked: action === 'link' ? payload.selections.length : 0,
+          unlinked: action === 'unlink' ? payload.selections.length : 0 } })
       }
       if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
       if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
@@ -53,38 +56,52 @@ for (const width of [390, 1280]) {
     await page.goto('/artikelsynoniemen')
     const left = page.getByTestId('article-synonyms-articles')
     const right = page.getByTestId('article-synonyms-table')
-    await expect(left).toContainText('Aardappelen')
-    await expect(right).toHaveCount(0)
-    await left.locator('tbody tr').first().click()
+    await expect(left).toBeVisible()
+    await expect(right).toBeVisible()
+    for (const table of [left, right]) {
+      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(4)
+      await expect(table.locator('thead')).toContainText('Foto')
+      await expect(table.locator('thead')).toContainText('Artikelnaam')
+      await expect(table.locator('thead')).toContainText('Barcode')
+      await expect(table.locator('thead')).not.toContainText('Winkel')
+    }
+    const leftCheck = left.locator('tbody tr').first().getByRole('checkbox')
+    await leftCheck.check()
+    await expect(leftCheck).toBeChecked()
     await expect(right.locator('tbody tr')).toHaveCount(3)
-    await expect(left.locator('thead tr').first().locator('th')).toHaveCount(4)
-    await expect(right.locator('thead tr').first().locator('th')).toHaveCount(4)
-    await expect(right).toContainText('Al gekoppeld')
-    await expect(right).toContainText('Voorstel')
-    await expect(right).toContainText('Overig')
+    await expect(right.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-linked/)
+    await expect(right.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-suggested/)
+    await expect(right.locator('tbody tr').nth(2)).toHaveClass(/rz-synonym-relation-other/)
     await expect(right).not.toContainText('08719587325926')
-    await expect(right.locator('tbody tr').first()).toContainText('Kruimige aardappelen')
-    await expect(right.locator('tbody tr').nth(1)).toContainText('08718452513666')
+    await expect(right.getByRole('checkbox')).toHaveCount(3)
+    await expect(page.getByText(/geselecteerd$/)).toHaveCount(0)
+    const leftTop = await left.locator('thead').boundingBox()
+    const rightTop = await right.locator('thead').boundingBox()
+    if (width > 900) expect(Math.abs(leftTop.y - rightTop.y)).toBeLessThan(2)
+    else expect(rightTop.y).toBeGreaterThan(leftTop.y)
+    const colors = await right.locator('tbody tr').evaluateAll((rows) =>
+      rows.map((row) => getComputedStyle(row.cells[0]).backgroundColor))
+    expect(colors[0]).not.toBe(colors[1])
+    expect(colors[1]).not.toBe(colors[2])
+    const linkedCheck = right.locator('tbody tr').first().getByRole('checkbox')
+    await linkedCheck.check()
+    await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
-    await right.locator('tbody tr').first().click()
-    await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
-    await right.locator('tbody tr').nth(1).click()
-    await right.locator('tbody tr').nth(2).click()
-    await expect(page.getByText('2 geselecteerd', { exact: true })).toBeVisible()
     expect(posts).toHaveLength(0)
+    await page.getByRole('button', { name: 'Ontkoppelen' }).click()
+    await expect(linkedCheck).not.toBeChecked()
+    expect(posts[0].action).toBe('unlink')
+    expect(posts[0].payload.selections).toEqual([{
+      left_product_id: 'a', right_product_id: 'c', fingerprint: 'c'.repeat(64),
+    }])
+    await right.locator('tbody tr').nth(1).getByRole('checkbox').check()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeDisabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-    await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
-    expect(posts).toHaveLength(1)
-    expect(posts[0].selections).toEqual([
-      { left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false },
-      { left_product_id: 'a', right_product_id: 'd', fingerprint: 'd'.repeat(64), manual: true },
-    ])
-    await expect(right).toContainText('Al gekoppeld')
-    // Narrow screens stack the two actual tables without changing identities.
-    const panes = await page.locator('.rz-synonym-side').evaluateAll((nodes) =>
-      nodes.map((node) => node.getBoundingClientRect().top))
-    if (width <= 900) expect(panes[1]).toBeGreaterThan(panes[0])
-    else expect(panes[1]).toBeCloseTo(panes[0], 0)
+    expect(posts[1].action).toBe('link')
+    expect(posts[1].payload.selections).toEqual([{
+      left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false,
+    }])
   })
 }
 
