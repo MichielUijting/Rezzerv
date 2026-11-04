@@ -83,6 +83,10 @@ function normalizeFeedback(input) {
           type: String(field?.type || 'text').trim() || 'text',
           value: String(field?.value ?? ''),
           placeholder: String(field?.placeholder || ''),
+          options: Array.isArray(field?.options) ? field.options.map((option) => ({
+            value: String(option?.value || ''),
+            label: String(option?.label || ''),
+          })).filter((option) => option.value && option.label) : [],
           required: Boolean(field?.required),
           autoFocus: Boolean(field?.autoFocus),
         }))
@@ -384,24 +388,42 @@ function AppFeedbackDialog({
                   {field.label}
                   {field.required ? ' *' : ''}
                 </span>
-                <input
-                  className="rz-input"
-                  type={field.type}
-                  value={fieldValues[field.name] ?? ''}
-                  placeholder={field.placeholder}
-                  required={field.required}
-                  autoFocus={field.autoFocus}
-                  disabled={isActionPending}
-                  onChange={(event) => onFieldChange?.(field.name, event.target.value)}
-                  data-testid={`${testId}-field-${field.name}`}
-                  style={{
-                    minHeight: '48px',
-                    padding: '10px 12px',
-                    fontSize: '18px',
-                    lineHeight: 1.4,
-                    fontWeight: 400,
-                  }}
-                />
+                {field.type === 'select' ? (
+                  <select
+                    className="rz-input"
+                    value={fieldValues[field.name] ?? ''}
+                    required={field.required}
+                    autoFocus={field.autoFocus}
+                    disabled={isActionPending}
+                    onChange={(event) => onFieldChange?.(field.name, event.target.value)}
+                    data-testid={`${testId}-field-${field.name}`}
+                    style={{ minHeight: '48px', padding: '10px 12px', fontSize: '16px', width: '100%' }}
+                  >
+                    <option value="">Kies welke classificatie moet gelden</option>
+                    {field.options.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="rz-input"
+                    type={field.type}
+                    value={fieldValues[field.name] ?? ''}
+                    placeholder={field.placeholder}
+                    required={field.required}
+                    autoFocus={field.autoFocus}
+                    disabled={isActionPending}
+                    onChange={(event) => onFieldChange?.(field.name, event.target.value)}
+                    data-testid={`${testId}-field-${field.name}`}
+                    style={{
+                      minHeight: '48px',
+                      padding: '10px 12px',
+                      fontSize: '18px',
+                      lineHeight: 1.4,
+                      fontWeight: 400,
+                    }}
+                  />
+                )}
               </label>
             ))}
           </div>
