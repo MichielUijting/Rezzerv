@@ -281,7 +281,9 @@ def product_link_options(products, confirmed, product_id):
             'primary_gtin': product.get('primary_gtin') or '',
             'article_codes': product.get('article_codes') or [],
             'status': state,
-            'status_label': ('Al gekoppeld' if linked else 'Niet koppelbaar' if not safe
+            'status_label': ('Al gekoppeld' if linked
+                             else 'Classificatie kiezen' if (conflict or {}).get('type') == 'gpc_mismatch'
+                             else 'Niet koppelbaar' if not safe
                              else 'Voorstel' if suggestion else 'Overig'),
             'linkable': bool(not linked and safe),
             'reason': 'Al gekoppeld' if linked else (conflict or {}).get('detail', ''),
