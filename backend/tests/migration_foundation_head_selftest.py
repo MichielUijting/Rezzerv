@@ -965,7 +965,7 @@ def _assert_article_classification_sync_audit_schema(connection) -> None:
     if set(checks) != required_checks:
         raise AssertionError(f"Synchronization audit check constraints drift: {set(checks)!r}")
     normalized = {
-        name: re.sub(r'[\\s()\"\\x60]', "", sql.lower())
+        name: "".join(sql.lower().split())
         for name, sql in checks.items()
     }
     if not all(code in normalized["ck_article_sync_system"] for code in ("gpc", "cbs")):
