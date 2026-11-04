@@ -1669,3 +1669,7 @@ bestaande Catalogusdetail- of GS1 GPC-classificatiefunctie;
 **Sluiten** annuleert. Foute productidentiteit of een werkelijk
 strijdige officiële GPC Brick wordt niet zonder correctie omzeild.
 Geen aangepaste of tweede meldingscomponent.
+
+## Artikelbeheer werkgebieden — 4 november 2026
+
+Voor superuser/frontteam wordt de gebruikerszichtbare ingang **Artikelbeheer** met vier werkgebieden (Identificeren, Classificeren, Synoniemen, Synchroniseren) opgebouwd via bestaande `AppShell`, `ScreenCard`, `Button` en `DataTable`. Er zijn geen eigen scorecard- of tabcontrols: de vier compacte standaardknoppen markeren het geselecteerde werkgebied, en elk paneel behoudt dezelfde responsiviteit voor mobiel en desktop. Het oorspronkelijke bonartikeloverzicht is uitsluitend binnen **Identificeren** zichtbaar en behoudt zijn bestaande statusknoppen; die zijn expliciet bonregistratietellingen, geen unieke centrale Catalogustaken. Verschillende populaties worden niet in één monitor opgeteld. Wanneer synchronisatiebewijs ontbreekt, geeft het scherm dit tekstueel aan en toont geen fictieve nul. Toegang volgt de bestaande beveiligde routes en autorisaties.
