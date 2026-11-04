@@ -7,10 +7,10 @@ for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     const posts = []
     const articles = [
-      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926' },
-      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666' },
-      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906' },
-      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913' },
+      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926', synonym_count: 1 },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666', synonym_count: 0 },
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906', synonym_count: 1 },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913', synonym_count: 0 },
     ]
     const options = [
       { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
@@ -59,12 +59,30 @@ for (const width of [390, 1280]) {
     await expect(left).toBeVisible()
     await expect(right).toBeVisible()
     for (const table of [left, right]) {
-      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(4)
+      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(table === left ? 5 : 4)
       await expect(table.locator('thead')).toContainText('Foto')
       await expect(table.locator('thead')).toContainText('Artikelnaam')
       await expect(table.locator('thead')).toContainText('Barcode')
       await expect(table.locator('thead')).not.toContainText('Winkel')
     }
+    await expect(left.locator('thead')).toContainText('Synoniemen')
+    await expect(right.locator('thead')).not.toContainText('Synoniemen')
+    await expect(left.locator('tbody tr').first().locator('td').last()).toHaveText('1')
+    await expect(left.locator('tbody tr').nth(1).locator('td').last()).toHaveText('0')
+    const panes = page.locator('.rz-synonym-side')
+    const leftPagination = panes.nth(0).locator('.rz-data-table-controls')
+    const rightPagination = panes.nth(1).locator('.rz-data-table-controls')
+    await expect(leftPagination).toBeVisible()
+    await expect(rightPagination).toBeVisible()
+    const leftBottom = await leftPagination.boundingBox()
+    const rightBottom = await rightPagination.boundingBox()
+    if (width > 900) expect(Math.abs(leftBottom.y - rightBottom.y)).toBeLessThan(2)
+    else expect(rightBottom.y).toBeGreaterThan(leftBottom.y)
+    const actionBar = panes.nth(1).locator('.rz-synonym-analysis-actions')
+    const actionBox = await actionBar.boundingBox()
+    expect(actionBox.y).toBeGreaterThan(rightBottom.y + rightBottom.height - 1)
+    await expect(rightPagination.getByRole('button', { name: 'Koppelen' })).toHaveCount(0)
+    await expect(rightPagination.getByRole('button', { name: 'Ontkoppelen' })).toHaveCount(0)
     const leftCheck = left.locator('tbody tr').first().getByRole('checkbox')
     await leftCheck.check()
     await expect(leftCheck).toBeChecked()
