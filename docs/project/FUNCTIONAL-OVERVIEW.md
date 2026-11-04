@@ -439,3 +439,13 @@ De actie **Koppelen** bevestigt geselecteerde nieuwe relaties;
 dezelfde beveiligde Superuser/Frontteam-autorisatie. De tekst met het aantal
 geselecteerde artikelen vervalt. Verwijdering van een synoniemrelatie wijzigt
 geen Catalogusproducten, classificaties, voorraad of bonnen.
+
+
+### Artikel-synoniemen — laatste PO-aanpassing 4 november 2026
+
+De linker Catalogustabel krijgt per artikel de rechts uitgelijnde teller
+**Synoniemen** (directe bevestigde koppelingen). De standaardpaginering
+van links en rechts is op desktop op gelijke hoogte uitgelijnd. Onder
+de paginering rechts staan de knoppen **Koppelen** en **Ontkoppelen**;
+niet in dezelfde pagineringsbalk. Dit verandert geen synoniemdata,
+classificatieregels, rollen of databaseconstructie.
