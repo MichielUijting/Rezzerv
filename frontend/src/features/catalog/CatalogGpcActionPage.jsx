@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
+import ClassificationSearchOverlay from '../externalDatabases/ClassificationSearchOverlay'
 import Button from '../../ui/Button'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
@@ -119,7 +120,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
         setFeedback(`Inhuis heeft ${visibleSuggestions.length} waarschijnlijke GPC-kandidaat${visibleSuggestions.length === 1 ? '' : 'en'} gevonden. Bevestig de beste match of kies een alternatief.`)
       } else {
         setFeedback('Inhuis kon nog geen bruikbare GPC-kandidaat afleiden. Zoek en selecteer hieronder een Brick.')
-        if (!readOnly) setBrickEditorOpen(true)
+        if (!readOnly && !embedded) setBrickEditorOpen(true)
       }
     } catch (chooseError) {
       setError(chooseError?.message || 'De GPC-classificatie kon niet worden opgehaald.')
@@ -185,9 +186,9 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
   function searchAlternative() {
     setBrickEditorOpen(true)
     setBrickQuery('')
-    setBrickResults([])
+    setBrickResults(suggestions)
     setError('')
-    setFeedback('Zoek en selecteer hieronder een betere GPC Brick.')
+    setFeedback('Selecteer de juiste officiële GS1 Brick in de zoeklijst.')
     window.setTimeout(() => document.getElementById('catalog-gpc-action-brick-search')?.focus(), 0)
   }
 
@@ -291,7 +292,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
                   </div>
                 ) : null}
 
-                {!readOnly && !checking && !assignment && suggestions.length ? (
+                {!embedded && !readOnly && !checking && !assignment && suggestions.length ? (
                   <div className="rz-catalog-gpc-candidates" data-testid="catalog-gpc-action-suggestions">
                     <div className="rz-catalog-gpc-candidates-header">
                       <strong>Waarschijnlijke GPC Bricks</strong>
@@ -320,7 +321,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
                   </div>
                 ) : null}
 
-                {!readOnly && !checking && (brickEditorOpen || assignment) ? (
+                {!embedded && !readOnly && !checking && (brickEditorOpen || assignment) ? (
                   <div className="rz-catalog-gpc-editor">
                     <label htmlFor="catalog-gpc-action-brick-search">{assignment ? 'Andere Brick kiezen' : 'Brick zoeken en selecteren'}</label>
                     <input
@@ -349,9 +350,23 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
                 ) : null}
               </section>
             ) : null}
+            {embedded && !readOnly && selectedArticle && !checking ? <Button type="button"
+              variant="secondary" disabled={saving} onClick={searchAlternative}>
+              Andere Brick kiezen
+            </Button> : null}
           </div>
         </ScreenCard>
       </div>
+      {embedded && brickEditorOpen ? <ClassificationSearchOverlay
+        title="GS1 GPC Brick kiezen" query={brickQuery} onQueryChange={setBrickQuery}
+        rows={brickQuery.trim().length >= 2 ? brickResults : suggestions}
+        busy={saving || searchingBricks} onClose={() => setBrickEditorOpen(false)}
+        getKey={(item) => item.brick_code}
+        getTitle={(item) => item.brick_code + ' — ' + item.brick_description}
+        getDetail={(item) => [item.segment_description, item.family_description, item.class_description].filter(Boolean).join(' › ')}
+        onChoose={(item) => { void saveBrick(item) }}
+        emptyMessage={brickQuery.trim().length < 2 ? 'Vul minstens twee tekens in of kies een voorgestelde Brick.' : 'Geen passende officiële Bricks.'}
+      /> : null}
     </>
   )
   return embedded ? content : <AppShell title="GPC classificeren" showExit={false}>{content}</AppShell>
