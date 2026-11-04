@@ -47,7 +47,7 @@ jobs:
           python-version: '3.12'
       - name: Install canonical targeted dependencies
         run: |
-          mapfile -t packages < <(grep -E '^(sqlalchemy|alembic|fastapi|pydantic|httpx|psycopg\\[binary\\])==' backend/requirements.txt)
+          mapfile -t packages < <(grep -E '^(sqlalchemy|alembic|fastapi|pydantic|httpx|psycopg\[binary\])==' backend/requirements.txt)
           test "${#packages[@]}" -eq 6
           python -m pip install "${packages[@]}"
       - name: Verify A-B-C identity, independent GS1/CBS choices and idempotent propagation
