@@ -109,6 +109,17 @@ def retry_sync_exception(conn, *, event_id, expected_decision_version,
     if int(event["decision_version"]) != expected_decision_version:
         raise HTTPException(409, "De beslisversie is gewijzigd; ververs de uitzondering.")
 
+    # An identical request after a committed retry is an idempotent read.
+    # Do not re-run a completed synchronization or create another audit event.
+    completed = conn.execute(text("""
+        SELECT 1 FROM article_classification_sync_events
+        WHERE related_event_id=:id AND status='processed'
+        LIMIT 1
+    """), {"id": event_id}).first()
+    if completed:
+        return {"status": "processed", "already_processed": True,
+                "gpc_inherited": 0, "cbs_inherited": 0, "event_id": str(event_id)}
+
     source_id = str(event["source_product_id"])
     target_id = str(event["target_product_id"])
     links = confirmed_pairs(conn)
