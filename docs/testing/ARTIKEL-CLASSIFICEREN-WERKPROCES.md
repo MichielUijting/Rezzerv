@@ -39,3 +39,11 @@ D. Nieuwe aparte PR: synchronisatiebewijzen en statusmonitor; na integratie van 
 - Synchroniseren toont eerlijk 'nog geen gevalideerde werkvoorraad'; het doet geen mutaties.
 - Mobiel/desktop gebruiken dezelfde UI-componenten en viewportresponsiviteit.
 - Geen eigen Docker/startup/database-ingrepen; voor Ready volgen normale/preflightchecks en relevante F7.
+
+## PO-acceptatie vervolg op 4 november — daadwerkelijke werkgebiedinhoud
+- Artikelbeheer opent **zonder** reeds opgehaalde artikellijst: uitsluitend de knoppen Identificeren, Classificeren, Synoniemen. Ieder werkgebied wordt pas gemount/opgehaald wanneer het is gekozen.
+- Identificeren toont na expliciete selectie de bestaande OFF/bonartikeltabel. Geen nieuwe automatische productkoppeling.
+- Classificeren toont één gekozen Catalogusartikel en daaronder rechtstreeks de **bestaande GS1 GPC- en CBS ECOICOPv2-bewerkingen binnen één werkplek**. GS1 en CBS blijven onafhankelijke officiële autoriteiten; geen nieuwe matching of autorisatieroute. De `gpc.update`-bevoegdheid blijft leidend; ontbreekt die, dan is GS1 alleen ter inzage.
+- Synoniemen toont onmiddellijk het bestaande twee-tabellenscherm (zonder extra knop die naar een ander scherm leidt); schrijf- en bevestigingsacties blijven identiek.
+- Synchroniseren is een automatisch achtergrondproces en dus **niet** als afzonderlijk werkgebied beschikbaar. Alleen gebruikersacties bij een concreet conflict blijven zichtbaar via de normale synoniemkeuze-overlay.
+- Fase #649 beschrijft een eventuele toekomstige uitzonderings-/foutenmonitor voor frontteam, niet een reguliere handmatige synchronisatiebediening.
