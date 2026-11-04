@@ -41,6 +41,8 @@ test.describe('Externe databases 2: veilige bulkselectie, export en OFF-ontkoppe
       })
 
       await page.goto('/externe-databases-2')
+
+      await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
       const table = page.getByTestId('external-databases-2-table')
       await expect(table.locator('tbody tr')).toHaveCount(10)
       await expect(page.getByRole('button', { name: 'Ontkoppelen', exact: true })).toBeDisabled()
@@ -89,6 +91,7 @@ test.describe('Externe databases 2: veilige bulkselectie, export en OFF-ontkoppe
       return route.fulfill({ json: {} })
     })
     await page.goto('/externe-databases-2')
+    await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
     const exportButton = page.getByRole('button', { name: 'Exporteren', exact: true })
     await expect(exportButton).toBeDisabled()
     await page.getByRole('checkbox', { name: 'Selecteer =HYPERLINK("evil")' }).check()
