@@ -146,6 +146,28 @@ class MatchingTest(unittest.TestCase):
         self.assertFalse(options['b']['linkable'])
         self.assertFalse(options['c']['linkable'])
 
+    def test_conflict_details_distinguish_gtin_codes_and_gpc(self):
+        left = product('a', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
+        same_gtin = product('b', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
+        same_code = product('c', 'Aardappelen', gtin='08718452513666', brick='milk',
+                            article_codes=['STORE-99'])
+        left['article_codes'] = ['STORE-99']
+        different_gpc = product('d', 'Aardappelschijfjes met spek',
+                                gtin='08712345678906', brick='fruit')
+        records = {r['id']: r for r in service.product_link_options(
+            [left, same_gtin, same_code, different_gpc], set(), 'a')}
+        self.assertEqual(records['b']['conflict_type'], 'same_gtin')
+        self.assertIn('08719587325926', records['b']['conflict_detail'])
+        self.assertEqual(records['b']['resolution_route'], '/catalogus/b')
+        self.assertEqual(records['c']['conflict_type'], 'shared_article_code')
+        self.assertIn('STORE-99', records['c']['conflict_detail'])
+        self.assertEqual(records['d']['conflict_type'], 'gpc_mismatch')
+        self.assertIn('milk', records['d']['conflict_detail'])
+        self.assertIn('fruit', records['d']['conflict_detail'])
+        self.assertEqual(records['d']['resolution_route'], '/catalogus/gpc-classificeren')
+        for item in records.values():
+            self.assertFalse(item['linkable'])
+
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
         b['size_value'] = '2'
