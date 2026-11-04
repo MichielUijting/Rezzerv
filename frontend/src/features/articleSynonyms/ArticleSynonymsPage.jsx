@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -70,7 +70,7 @@ export default function ArticleSynonymsPage() {
   }
 
   function toggle(item) {
-    if (savingRef.current || loadingOptions || (!item.linkable && item.status !== 'linked')) return
+    if (savingRef.current || loadingOptions) return
     setChecked((previous) => {
       const next = new Set(previous)
       if (next.has(item.id)) next.delete(item.id)
@@ -92,13 +92,20 @@ export default function ArticleSynonymsPage() {
     || (b.score || 0) - (a.score || 0)
     || a.name.localeCompare(b.name, 'nl') || a.id.localeCompare(b.id)
   )
-  const selectedLinks = options.filter((item) => checked.has(item.id) && item.status !== 'linked' && item.linkable)
+  const selectedLinks = options.filter((item) => checked.has(item.id) && item.status !== 'linked')
   const selectedUnlinks = options.filter((item) => checked.has(item.id) && item.status === 'linked')
 
   async function changeLinks(action) {
     if (savingRef.current || loadingOptions || !activeArticle) return
     const targets = action === 'unlink' ? selectedUnlinks : selectedLinks
     if (!targets.length) return
+    if (action === 'link') {
+      const conflicts = targets.filter((item) => !item.linkable)
+      if (conflicts.length) {
+        setError(`Niet gekoppeld: ${conflicts.length} geselecteerd(e) artikel(en) hebben een identiteits- of GS1 GPC-conflict. Deselecteer deze artikelen voordat je koppelt. De overige selectie is niet gewijzigd.`)
+        return
+      }
+    }
     const selections = targets.map((item) => {
       const ids = orderedPair(activeArticle, item.id)
       return {
@@ -146,8 +153,8 @@ export default function ArticleSynonymsPage() {
     { key: 'selected', label: '', width: 42 },
     { key: 'photo', label: 'Foto', width: 70 },
     { key: 'name', label: 'Artikelnaam', width: 250, sortable: true, filterable: true },
-    { key: 'code', label: 'Barcode', width: 150, sortable: true, filterable: true },
-    { key: 'synonym_count', label: 'Synoniemen', width: 94, sortable: true, align: 'right' },
+    { key: 'code', label: 'Barcode', width: 125, sortable: true, filterable: true },
+    { key: 'synonym_count', label: 'Syn.', width: 62, sortable: true, align: 'right' },
   ]
   const rightColumns = [
     { key: 'selected', label: '', width: 42 },
@@ -205,21 +212,21 @@ export default function ArticleSynonymsPage() {
               ? 'Selecteer links één artikel.'
               : loadingOptions ? 'Artikelen laden...' : 'Geen andere gecodeerde artikelen.'}
             renderRow={(item) => <tr key={item.id}
-              tabIndex={item.linkable || item.status === 'linked' ? 0 : -1}
+              tabIndex={0}
               className={`rz-synonym-analysis-candidate-row rz-synonym-relation-${item.status}`}
               aria-selected={checked.has(item.id)}
               aria-label={`${item.status_label}: ${item.name}, barcode ${item.code}`}
-              title={item.reason || item.status_label}
+              title={item.reason ? `${item.status_label}: ${item.reason}` : item.status_label}
               onClick={() => toggle(item)}
               onKeyDown={(event) => {
-                if ((event.key === 'Enter' || event.key === ' ') && (item.linkable || item.status === 'linked')) {
+                if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
                   toggle(item)
                 }
               }}>
               <td><input type="checkbox"
                 checked={checked.has(item.id)}
-                disabled={saving || loadingOptions || (!item.linkable && item.status !== 'linked')}
+                disabled={saving || loadingOptions}
                 aria-label={`Selecteer rechts ${item.name}, barcode ${item.code} (${item.status_label})`}
                 onClick={(event) => event.stopPropagation()}
                 onChange={() => toggle(item)} /></td>
@@ -236,9 +243,6 @@ export default function ArticleSynonymsPage() {
           </div>
         </section>
       </div>
-      <p className="rz-synonym-footer-note">
-        <Link to="/externe-databases-2">Externe databases 2</Link> — artikel zonder barcode aanvullen
-      </p>
     </ScreenCard>
   </AppShell>
 }
