@@ -74,6 +74,17 @@ for (const width of [390, 1280]) {
       await expect(table.locator('thead')).toContainText('Barcode')
       await expect(table.locator('thead')).not.toContainText('Winkel')
     }
+    // Beide checkbox- en fotokolommen hebben dezelfde breedte; de vrijgekomen
+    // ruimte gaat naar de linker artikelnaam zonder Syn. weg te drukken.
+    const leftCols = await left.locator('colgroup col').evaluateAll((cols) =>
+      cols.map((col) => Math.round(parseFloat(col.style.width))))
+    const rightCols = await right.locator('colgroup col').evaluateAll((cols) =>
+      cols.map((col) => Math.round(parseFloat(col.style.width))))
+    expect(leftCols).toEqual([42, 70, 236, 112, 52])
+    expect(leftCols[0]).toBe(rightCols[0])
+    expect(leftCols[1]).toBe(rightCols[1])
+    expect(leftCols.reduce((total, value) => total + value, 0))
+      .toBe(rightCols.reduce((total, value) => total + value, 0))
     await expect(left.locator('thead')).toContainText('Syn.')
     await expect(left.locator('thead')).not.toContainText('Synoniemen')
     await expect(page.getByText('Externe databases 2', { exact: true })).toHaveCount(0)
