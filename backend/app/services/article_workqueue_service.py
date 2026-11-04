@@ -10,7 +10,6 @@ import json
 
 from sqlalchemy import text
 
-from app.services.external_unlinked_articles_service import list_all_external_articles
 
 
 CLASSIFICATION_SQL = """
@@ -138,6 +137,8 @@ def project_identification_tasks(source_rows):
 
 def load_identification_workqueue(conn):
     """Reuse the proven, read-only ED2 identity authority; never write a link."""
+    from app.services.external_unlinked_articles_service import list_all_external_articles
+
     source = list_all_external_articles(conn=conn)
     items = project_identification_tasks(source["items"])
     return {
