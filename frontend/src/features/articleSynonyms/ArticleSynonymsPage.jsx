@@ -238,21 +238,29 @@ export default function ArticleSynonymsPage() {
         const pairs = reviews.flatMap((review, i) =>
           review.clashes.map((clash) => ({ review, clash, fieldName: `choice_${i}_${clash.system}` }))
         )
-        const comparisonRows = pairs.map(({ clash }) => ({
-          system: clash.system === 'GPC' ? 'GS1 GPC — producttype' : 'CBS ECOICOPv2 — bestedingsdoel',
-          leftName: clash.left.name,
-          rightName: clash.right.name,
-          leftValue: `${clash.left.code}${clash.left.reference ? ' (' + clash.left.reference + ')' : ''} — ${clash.left.label}`,
-          rightValue: `${clash.right.code}${clash.right.reference ? ' (' + clash.right.reference + ')' : ''} — ${clash.right.label}`,
+        // Backend pair IDs are canonically ordered. Keep the visual comparison
+        // aligned with the actually selected left and right table articles.
+        const orientedPairs = pairs.map(({ clash, fieldName }) => ({
+          clash,
+          fieldName,
+          left: clash.left.id === activeArticle ? clash.left : clash.right,
+          right: clash.left.id === activeArticle ? clash.right : clash.left,
         }))
-        const inputFields = pairs.map(({ clash, fieldName }) => ({
+        const comparisonRows = orientedPairs.map(({ clash, left, right }) => ({
+          system: clash.system === 'GPC' ? 'GS1 GPC — producttype' : 'CBS ECOICOPv2 — bestedingsdoel',
+          leftName: left.name,
+          rightName: right.name,
+          leftValue: `${left.code}${left.reference ? ' (' + left.reference + ')' : ''} — ${left.label}`,
+          rightValue: `${right.code}${right.reference ? ' (' + right.reference + ')' : ''} — ${right.label}`,
+        }))
+        const inputFields = orientedPairs.map(({ clash, fieldName, left, right }) => ({
           name: fieldName,
           label: `${clash.system === 'GPC' ? 'GS1 GPC' : 'CBS'}: welke classificatie moet gelden voor beide artikelen?`,
           type: 'select',
           required: true,
           options: [
-            { value: clash.left.id, label: `${clash.left.name}: ${clash.left.code} — ${clash.left.label}` },
-            { value: clash.right.id, label: `${clash.right.name}: ${clash.right.code} — ${clash.right.label}` },
+            { value: left.id, label: `${left.name}: ${left.code} — ${left.label}` },
+            { value: right.id, label: `${right.name}: ${right.code} — ${right.label}` },
           ],
         }))
         showFeedback({
