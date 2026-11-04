@@ -565,6 +565,100 @@ class StoreTest(unittest.TestCase):
                 "SELECT COUNT(*) FROM global_product_gpc_bricks"
             )).scalar_one(), 0)
 
+    def test_mandatory_three_articles_a_b_c_classification_chain(self):
+        """Every-PR regression: A classified, B empty, C conflicts in both systems.
+
+        All writes happen in an isolated PostgreSQL schema created by setUp.
+        Never mutate a user household, real catalog, receipt or inventory.
+        """
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT PRIMARY KEY,
+                    language_code TEXT NOT NULL, active BOOLEAN NOT NULL,
+                    gpc_brick_name TEXT NOT NULL
+                )
+            """)
+            conn.exec_driver_sql("""
+                INSERT INTO gpc_product_groups VALUES
+                    ('10000025','nl',TRUE,'Halfvolle melk'),
+                    ('10000026','nl',TRUE,'Andere melk')
+            """)
+            # C has a distinct *valid* product barcode, not a name-based identity.
+            conn.execute(text("""
+                UPDATE global_products SET primary_gtin='8719587325933' WHERE id='c'
+            """))
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025'),('c','10000026')
+            """))
+            self._set_cbs(conn, 'a', '011420')
+            self._set_cbs(conn, 'c', '011410')
+            products = {item['id']: item for item in service.load_products(conn)}
+            self.assertEqual(set(products), {'a','b','c'})
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
+            # A -> B: both official classifications inherited atomically.
+            ab = dict(left_product_id='a', right_product_id='b',
+                      fingerprint=service._fingerprint(products['a'],products['b']))
+            first = service.confirm_pairs(conn, [ab], 'every-pr-test')
+            self.assertEqual(first['linked'], 1)
+            self.assertEqual(first['classification_inheritance']['gpc_inherited'], 1)
+            self.assertEqual(first['classification_inheritance']['cbs_inherited'], 1)
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a':'10000025','b':'10000025','c':'10000026'})
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code FROM global_product_cbs_classifications
+            """)).all()), {'a':'011420','b':'011420','c':'011410'})
+
+            # A / C: both values must be shown; no silent overwrite.
+            products = {item['id']: item for item in service.load_products(conn)}
+            ac = dict(left_product_id='a', right_product_id='c',
+                      fingerprint=service._fingerprint(products['a'],products['c']),
+                      manual=True)
+            review = classification_review.review_pairs(conn, [ac], products)[0]
+            self.assertEqual({clash['system'] for clash in review['clashes']}, {'GPC','CBS'})
+            codes = {clash['system']:(clash['left']['code'],clash['right']['code'])
+                     for clash in review['clashes']}
+            self.assertEqual(codes['GPC'], ('10000025','10000026'))
+            self.assertEqual(codes['CBS'], ('011420','011410'))
+            with self.assertRaises(HTTPException) as missing_choice:
+                with conn.begin_nested():
+                    service.confirm_pairs(conn, [ac], 'every-pr-test')
+            self.assertEqual(missing_choice.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), {('a','b')})
+
+            # Explicit, separately captured GPC and CBS choice from A preserves
+            # the already-confirmed A/B component; C is the only changed target.
+            decision = dict(left_product_id='a', right_product_id='c',
+                            snapshot=review['snapshot'],
+                            gpc_source_id='a', cbs_source_id='a')
+            resolved = service.confirm_pairs(conn,[ac],'every-pr-test',decisions=[decision])
+            self.assertEqual(resolved['linked'],1)
+            self.assertEqual(resolved['classification_inheritance']['gpc_resolved'],1)
+            self.assertEqual(resolved['classification_inheritance']['cbs_resolved'],1)
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a':'10000025','b':'10000025','c':'10000025'})
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code FROM global_product_cbs_classifications
+            """)).all()), {'a':'011420','b':'011420','c':'011420'})
+            self.assertEqual(service.confirmed_pairs(conn), {('a','b'),('a','c')})
+
+            # Retry never creates extra events, classifications or links.
+            audit_before = conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one()
+            retry = service.confirm_pairs(conn,[ac],'every-pr-test',decisions=[])
+            self.assertEqual(retry['already_linked'],1)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), audit_before)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_history"
+            )).scalar_one(), 2)
+
     def test_inheritance_is_bidirectional_and_systems_independent(self):
         with self.engine.begin() as conn:
             self._set_cbs(conn, 'b')
