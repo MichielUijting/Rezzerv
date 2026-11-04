@@ -13,7 +13,7 @@ SYSTEMS = frozenset({"GPC", "CBS"})
 
 def record_sync_event(conn, *, source_id, target_id, system, code,
                       reference="", decision_version=0, status, reason, actor_id,
-                      operation="synonym_inheritance"):
+                      operation="synonym_inheritance", related_event_id=None):
     """Append one event per exact action/version, with repeat-safe uniqueness.
 
     Caller owns the transaction: a failure rolls back both classification and
@@ -28,19 +28,21 @@ def record_sync_event(conn, *, source_id, target_id, system, code,
         "system": system, "code": str(code or ""),
         "reference": str(reference or ""), "version": int(decision_version),
         "status": status, "operation": operation,
+        "related_event_id": str(related_event_id or ""),
     }
     fingerprint = sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     result = conn.execute(text("""
         INSERT INTO article_classification_sync_events (
             id, event_key, source_product_id, target_product_id,
             classification_system, classification_code, reference_version,
-            decision_version, status, reason, actor_id
+            decision_version, status, reason, actor_id, related_event_id
         ) VALUES (
             :id, :key, :source, :target, :system, :code, :reference,
-            :version, :status, :reason, :actor
+            :version, :status, :reason, :actor, :related
         ) ON CONFLICT (event_key) DO NOTHING
     """), {**data, "id": str(uuid4()), "key": fingerprint,
-           "actor": str(actor_id), "reason": str(reason)})
+           "actor": str(actor_id), "reason": str(reason),
+           "related": str(related_event_id) if related_event_id else None})
     return bool(result.rowcount)
 
 
@@ -51,6 +53,11 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
     total = conn.execute(text("""
         SELECT COUNT(*) FROM article_classification_sync_events
         WHERE status IN ('conflict', 'failed', 'review_required')
+          AND NOT EXISTS (
+            SELECT 1 FROM article_classification_sync_events resolution
+             WHERE resolution.related_event_id = article_classification_sync_events.id
+               AND resolution.status = 'processed'
+          )
     """)).scalar_one()
     rows = conn.execute(text("""
         SELECT id, source_product_id, target_product_id,
@@ -58,6 +65,11 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
                decision_version, status, reason, actor_id, created_at
           FROM article_classification_sync_events
          WHERE status IN ('conflict', 'failed', 'review_required')
+           AND NOT EXISTS (
+             SELECT 1 FROM article_classification_sync_events resolution
+              WHERE resolution.related_event_id = article_classification_sync_events.id
+                AND resolution.status = 'processed'
+           )
          ORDER BY created_at DESC, id DESC
          LIMIT :limit OFFSET :offset
     """), {"limit": limit, "offset": offset}).mappings().all()
@@ -168,7 +180,7 @@ def retry_sync_exception(conn, *, event_id, expected_decision_version,
         system=system, code=event["classification_code"],
         reference=event["reference_version"], decision_version=expected_decision_version,
         status="processed", reason="Geautoriseerde herverwerking afgerond; versie gecontroleerd.",
-        actor_id=actor_id, operation="retry:" + str(event_id),
+        actor_id=actor_id, operation="retry:" + str(event_id), related_event_id=event_id,
     )
     return {"status": "processed", "gpc_inherited": report["gpc_inherited"],
             "cbs_inherited": report["cbs_inherited"], "event_id": str(event_id)}
