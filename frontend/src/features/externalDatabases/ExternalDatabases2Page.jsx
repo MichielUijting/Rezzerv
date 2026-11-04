@@ -62,7 +62,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
-  const [activeArea, setActiveArea] = useState(null)
+  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -81,10 +81,11 @@ export default function ExternalDatabases2Page() {
   const isMobile = useMobileAppViewport()
   const returnState = { filters, activeStatusCounter, sort: tableSort, page: tablePage }
   useEffect(() => {
+    if (activeArea !== 'identity') return
     navigate(`${location.pathname}${location.search}`, {
       replace: true, state: { ...location.state, ed2TableState: returnState },
     })
-  }, [filters, activeStatusCounter, tableSort, tablePage])
+  }, [filters, activeStatusCounter, tableSort, tablePage, activeArea])
 
   const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
