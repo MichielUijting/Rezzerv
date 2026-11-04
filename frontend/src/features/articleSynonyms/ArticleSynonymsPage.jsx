@@ -150,6 +150,7 @@ export default function ArticleSynonymsPage() {
   return <AppShell title="Artikel-synoniemen" showExit={false}>
     <ScreenCard fullWidth>
       <h2>Artikel-synoniemen</h2>
+      {error ? <p role="alert">{error}</p> : null}
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">
           <h3>Artikel kiezen</h3>
@@ -174,7 +175,7 @@ export default function ArticleSynonymsPage() {
                 aria-label={`Selecteer links ${item.name}, barcode ${item.code}`}
                 disabled={saving || loadingOptions}
                 onClick={(event) => event.stopPropagation()}
-                onChange={() => chooseArticle(item.id)} /></td>
+                onChange={() => chooseArticle(activeArticle === item.id ? '' : item.id)} /></td>
               <td><CatalogProductImage imageUrl={item.image_url} productName={item.name} compact /></td>
               <td>{item.name}</td>
               <td>{item.code}</td>
@@ -182,7 +183,6 @@ export default function ArticleSynonymsPage() {
         </section>
         <section className="rz-synonym-side" aria-label="Synoniemen rechts">
           <h3>Te koppelen artikelen</h3>
-          {error ? <p role="alert">{error}</p> : null}
           <DataTable columns={rightColumns}
             data={currentArticle ? rightRows.map((item) => ({ ...item, code: codeOf(item) })) : []}
             getRowKey={(item) => item.id} pageSize={10}
