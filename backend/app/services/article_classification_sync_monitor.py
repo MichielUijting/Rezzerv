@@ -66,3 +66,88 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
                    if row["created_at"] else None} for row in rows],
         "total": int(total), "count_scope": "audit_events",
     }
+
+
+def retry_sync_exception(conn, *, event_id, expected_decision_version, actor_id):
+    """Explicit, idempotent retry of a verified exception under canonical locks.
+
+    Never processes conflicts: those require the existing user choice overlay.
+    Never retries on names, GTIN, household, inventory or receipt evidence.
+    """
+    from fastapi import HTTPException
+    from app.services.article_synonym_service import confirmed_pairs
+    from app.services.synonym_classification_inheritance_service import (
+        _components, propagate_confirmed_classifications,
+    )
+
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
+    event = conn.execute(text("""
+        SELECT id, source_product_id, target_product_id, classification_system,
+               classification_code, reference_version, decision_version, status
+          FROM article_classification_sync_events WHERE id=:id FOR UPDATE
+    """), {"id": event_id}).mappings().first()
+    if not event:
+        raise HTTPException(404, "Synchronisatie-uitzondering niet gevonden.")
+    if event["status"] == "conflict":
+        raise HTTPException(409, "Kies de prevalerende classificatie via Artikel-synoniemen.")
+    if event["status"] not in ("review_required", "failed"):
+        raise HTTPException(409, "Alleen een echte uitzondering kan opnieuw worden verwerkt.")
+    if int(event["decision_version"]) != expected_decision_version:
+        raise HTTPException(409, "De beslisversie is gewijzigd; ververs de uitzondering.")
+
+    source_id = str(event["source_product_id"])
+    target_id = str(event["target_product_id"])
+    links = confirmed_pairs(conn)
+    groups = _components(links, {source_id})
+    group = next((set(participants) for participants in groups if source_id in participants), set())
+    if target_id not in group or source_id == target_id:
+        raise HTTPException(409, "Bevestigde synoniemrelatie is gewijzigd; opnieuw beoordelen.")
+    rows = conn.execute(text("""
+        SELECT id FROM global_products WHERE id IN (:source, :target)
+          AND LOWER(COALESCE(status, '')) <> 'deleted' FOR UPDATE
+    """), {"source": source_id, "target": target_id}).scalars().all()
+    if set(rows) != {source_id, target_id}:
+        raise HTTPException(409, "Centrale artikelidentiteit is niet meer geldig.")
+
+    system = event["classification_system"]
+    if system == "CBS":
+        source = conn.execute(text("""
+            SELECT cbs_code, reference_version, version FROM global_product_cbs_classifications
+            WHERE global_product_id=:id AND is_active=TRUE FOR UPDATE
+        """), {"id": source_id}).mappings().first()
+        if (not source or source["cbs_code"] != event["classification_code"]
+                or source["reference_version"] != event["reference_version"]
+                or int(source["version"]) != expected_decision_version):
+            raise HTTPException(409, "CBS-code of -versie is gewijzigd; opnieuw beoordelen.")
+    else:
+        code = conn.execute(text("""
+            SELECT brick_code FROM global_product_gpc_bricks
+            WHERE global_product_id=:id FOR UPDATE
+        """), {"id": source_id}).scalar_one_or_none()
+        if code != event["classification_code"]:
+            raise HTTPException(409, "GS1-code is gewijzigd; opnieuw beoordelen.")
+
+    record_sync_event(
+        conn, source_id=source_id, target_id=target_id,
+        system=system, code=event["classification_code"],
+        reference=event["reference_version"], decision_version=expected_decision_version,
+        status="pending", reason="Expliciete geautoriseerde herverwerking gestart.",
+        actor_id=actor_id, operation="retry:" + str(event_id),
+    )
+    report = propagate_confirmed_classifications(
+        conn, links, {source_id, target_id}, actor_id
+    )
+    if report["conflicts"]:
+        # Roll back even independent writes; choice overlay is the only path
+        # for conflicting existing confirmed classifications.
+        raise HTTPException(409, "Classificatieverschil: gebruik de keuze-overlay in Artikel-synoniemen.")
+    record_sync_event(
+        conn, source_id=source_id, target_id=target_id,
+        system=system, code=event["classification_code"],
+        reference=event["reference_version"], decision_version=expected_decision_version,
+        status="processed", reason="Geautoriseerde herverwerking afgerond; versie gecontroleerd.",
+        actor_id=actor_id, operation="retry:" + str(event_id),
+    )
+    return {"status": "processed", "gpc_inherited": report["gpc_inherited"],
+            "cbs_inherited": report["cbs_inherited"], "event_id": str(event_id)}
