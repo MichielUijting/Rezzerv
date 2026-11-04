@@ -40,7 +40,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcActionPage({ embedded = false, onArticleChange = () => {} }) {
+export default function CatalogGpcActionPage({ embedded = false, readOnly = false, onArticleChange = () => {} }) {
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -112,7 +112,7 @@ export default function CatalogGpcActionPage({ embedded = false, onArticleChange
         setFeedback(`Inhuis heeft ${visibleSuggestions.length} waarschijnlijke GPC-kandidaat${visibleSuggestions.length === 1 ? '' : 'en'} gevonden. Bevestig de beste match of kies een alternatief.`)
       } else {
         setFeedback('Inhuis kon nog geen bruikbare GPC-kandidaat afleiden. Zoek en selecteer hieronder een Brick.')
-        setBrickEditorOpen(true)
+        if (!readOnly) setBrickEditorOpen(true)
       }
     } catch (chooseError) {
       setError(chooseError?.message || 'De GPC-classificatie kon niet worden opgehaald.')
@@ -150,7 +150,7 @@ export default function CatalogGpcActionPage({ embedded = false, onArticleChange
   }, [selectedArticle, brickEditorOpen, brickQuery])
 
   async function saveBrick(brick) {
-    if (!selectedArticle) return
+    if (!selectedArticle || readOnly) return
     setSaving(true)
     setError('')
     setFeedback('')
@@ -283,7 +283,7 @@ export default function CatalogGpcActionPage({ embedded = false, onArticleChange
                   </div>
                 ) : null}
 
-                {!checking && !assignment && suggestions.length ? (
+                {!readOnly && !checking && !assignment && suggestions.length ? (
                   <div className="rz-catalog-gpc-candidates" data-testid="catalog-gpc-action-suggestions">
                     <div className="rz-catalog-gpc-candidates-header">
                       <strong>Waarschijnlijke GPC Bricks</strong>
@@ -312,7 +312,7 @@ export default function CatalogGpcActionPage({ embedded = false, onArticleChange
                   </div>
                 ) : null}
 
-                {!checking && (brickEditorOpen || assignment) ? (
+                {!readOnly && !checking && (brickEditorOpen || assignment) ? (
                   <div className="rz-catalog-gpc-editor">
                     <label htmlFor="catalog-gpc-action-brick-search">{assignment ? 'Andere Brick kiezen' : 'Brick zoeken en selecteren'}</label>
                     <input
