@@ -322,8 +322,15 @@ Er bestaat op 22 juli 2026 nog geen actieve meldingen-API. Een toekomstig meldin
 ## Artikel-synoniemen
 
 Superusers en alle actieve Frontteamleden kunnen via de actie **Artikel-synoniemen**
-centrale artikelen met een code/barcode vergelijken. De standaardtabel toont
-voorgestelde paren uit verschillende aantoonbare winkels met zeven kolommen:
+centrale artikelen met een code/barcode vergelijken. De eerste DataTable toont
+alle gecodeerde Catalogusartikelen, ook zonder nieuwe voorstellen, met hun
+bevestigde winkelherkomst of de status **Winkel onbekend**, aantal bevestigde
+synoniemen en open voorstellen. Een dubbelklik/Enter op een artikel opent de
+voorstelentabel voor dat artikel; bestaande algemene bulkselectie blijft
+beschikbaar bij aanwezige voorstellen. De voorstelentabel toont
+paren op basis van artikelnaam en productkenmerken, onafhankelijk van
+de winkelherkomst: dezelfde, verschillende of onbekende winkels blokkeren
+een voorstel of handmatige bevestiging niet. De zeven kolommen zijn:
 selectie en per artikel naam, Catalogusfoto en winkelnaam. De centrale
 DataTable biedt zoeken, sorteren, kolombreedtes en paginering. Selectie plus
 **Koppelen** bevestigt alle geselecteerde paren als bulk en is zonder selectie
@@ -405,3 +412,62 @@ een exacte OFF-controle uit, bewaart betrouwbare artikelinformatie en foto
 waar beschikbaar, of registreert uitsluitend barcodebewijs bij geen
 OFF-resultaat/storing. Identiteitsconflicten blijven fail-closed; een
 niet-bevestigde code wordt geen Catalogus-/voorraadkoppeling.
+
+
+### PO-besluit 4 november 2026 — twee tabellen
+
+Artikel-synoniemen toont links een afzonderlijke Catalogus-artikeltabel,
+rechts een zelfstandige tabel met alle andere gecodeerde centrale
+Catalogusartikelen. De rechtertabel onderscheidt duidelijk **Al gekoppeld**,
+**Voorstel** en **Overig**. Selectie in de rechtertabel zet nog geen relatie
+vast; `Koppelen` is de expliciete bulkbevestiging. De linker product-ID
+wordt rechts uitgesloten, ook bij gelijke artikelnaam. Centrale identiteits-
+en GPC-conflicten zijn niet koppelbaar. Op mobiele schermen komen de twee
+tabellen onder elkaar. Dit vervangt de oudere dubbele zevenkoloms
+parenpresentatie; winkelherkomst blijft informatief en is nooit matchcriterium.
+
+
+### PO-verfijning 4 november 2026 — compacte selectie en ontkoppeling
+
+Beide artikel-synoniementabellen beginnen op desktop op dezelfde hoogte en
+tonen uitsluitend **selectiecheckbox, foto, artikelnaam en barcode**.
+Links is één artikel actief; rechts kunnen meerdere andere artikelen worden
+geselecteerd. De rechtertabel arceert uitsluitend bestaande directe relaties
+lichtgroen, automatische voorstellen oranje en overige artikelen niet.
+De actie **Koppelen** bevestigt geselecteerde nieuwe relaties;
+**Ontkoppelen** verwijdert geselecteerde bestaande directe relaties via
+dezelfde beveiligde Superuser/Frontteam-autorisatie. De tekst met het aantal
+geselecteerde artikelen vervalt. Verwijdering van een synoniemrelatie wijzigt
+geen Catalogusproducten, classificaties, voorraad of bonnen.
+
+
+### Artikel-synoniemen — laatste PO-aanpassing 4 november 2026
+
+De linker Catalogustabel krijgt per artikel de rechts uitgelijnde teller
+**Synoniemen** (directe bevestigde koppelingen). De standaardpaginering
+van links en rechts is op desktop op gelijke hoogte uitgelijnd. Onder
+de paginering rechts staan de knoppen **Koppelen** en **Ontkoppelen**;
+niet in dezelfde pagineringsbalk. Dit verandert geen synoniemdata,
+classificatieregels, rollen of databaseconstructie.
+
+
+### Artikel-synoniemen — PO-verfijning 4 november 2026
+
+De linker barcodekolom is compact en de directe synoniemteller heet
+**Syn.**. Rechts kan een gebruiker ook een volgens bronkenmerken
+mogelijk conflicterend artikel aanvinken; bij daadwerkelijk **Koppelen**
+blijft de bestaande identiteits-/GS1 GPC-controle vereist en wordt bij
+een conflict de gehele selectie met een duidelijke melding geweigerd.
+De onderste linktekst naar Externe databases 2 verdwijnt.
+
+
+### Artikel-synoniemen — conflictmelding (4 november 2026)
+
+Wanneer een geselecteerd artikel niet veilig aan het linker
+Catalogusartikel gekoppeld kan worden, toont Inhuis de centrale
+**overlaymelding** met beide artikelnamen en de precieze
+barcode-, artikelcode- of GS1 GPC-bronwaarde die blokkeert.
+De gebruiker kan naar het relevante **Catalogusdetail** of
+**GS1 GPC-classificatiescherm** gaan om een aantoonbare fout te
+corrigeren. Zonder correctie blijft koppelen geblokkeerd en
+blijven alle selectie- en bestaande artikelgegevens behouden.

@@ -12,7 +12,7 @@ from math import log, sqrt
 import re
 import unicodedata
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.gtin_validation_service import is_valid_gtin
 
@@ -31,12 +31,22 @@ RETAILER_NAMES = {
     'dirk': 'Dirk',
 }
 
+# Only canonical spellings of confirmed shop evidence. Never infer a store from a
+# product name, a GTIN or a household's unconfirmed receipt match.
+RETAILER_ALIASES = {
+    'albert-heijn': 'ah',
+    'albert-heijn-digitaal': 'ah',
+    'albertheijn': 'ah',
+    'lidl-nederland-gmbh': 'lidl',
+    'lidl-nederland': 'lidl',
+}
+
 
 def _retailer_code(value):
     value = unicodedata.normalize('NFKD', str(value or '').strip().lower())
     value = ''.join(c for c in value if not unicodedata.combining(c))
     code = re.sub(r'[^a-z0-9]+', '-', value).strip('-')
-    return 'ah' if code == 'albert-heijn' else code
+    return RETAILER_ALIASES.get(code, code)
 
 
 def _store_name(code):
@@ -91,6 +101,35 @@ def load_products(conn):
         retailers[row['global_product_id']].add(retailer)
         if str(row['external_article_code'] or '').strip():
             codes[row['global_product_id']].add(f"{retailer}: {row['external_article_code']}")
+    # Legacy ED2 also records user-approved Catalogus candidates directly.
+    # Their receipt/shop context was confirmed at the time of linking, but
+    # many predate the newer external_article_product_links table. Project
+    # ONLY still-confirmed central references, never tentative matches or
+    # private receipt/household rows. Conflicting context identities fail closed.
+    if inspect(conn).has_table('external_product_candidates'):
+        candidate_contexts = defaultdict(set)
+        confirmed_candidates = []
+        for row in conn.execute(text("""
+            SELECT context_key, retailer_code, global_product_id
+              FROM external_product_candidates
+             WHERE is_user_confirmed = TRUE
+               AND global_product_id IS NOT NULL
+               AND status = 'linked_to_catalog'
+               AND candidate_status = 'linked_to_catalog'
+               AND COALESCE(TRIM(context_key), '') <> ''
+               AND COALESCE(TRIM(retailer_code), '') <> ''
+        """)).mappings():
+            retailer = _retailer_code(row['retailer_code'])
+            product_id = str(row['global_product_id'] or '').strip()
+            if retailer not in RETAILER_NAMES or not product_id:
+                continue
+            identity = (retailer, str(row['context_key']).strip())
+            candidate_contexts[identity].add(product_id)
+            confirmed_candidates.append((identity, product_id))
+        for identity, product_id in confirmed_candidates:
+            if len(candidate_contexts[identity]) == 1:
+                retailers[product_id].add(identity[0])
+
     products = []
     for row in conn.execute(text("""
         SELECT gp.id, gp.name, gp.brand, gp.variant, gp.primary_gtin,
@@ -110,12 +149,14 @@ def load_products(conn):
         source_retailer = _retailer_code(product.pop('source'))
         if not known_retailers and source_retailer in RETAILER_NAMES:
             known_retailers.add(source_retailer)
-        retailer_code = next(iter(known_retailers)) if len(known_retailers) == 1 else ''
+        retailer_codes = sorted(known_retailers)
+        retailer_code = retailer_codes[0] if len(retailer_codes) == 1 else ''
         product.update(
             primary_gtin=valid_gtin,
             article_codes=article_codes,
             retailer_code=retailer_code,
-            store_name=_store_name(retailer_code),
+            retailer_codes=retailer_codes,
+            store_name=' / '.join(_store_name(code) for code in retailer_codes) if retailer_codes else 'Niet vastgelegd',
             image_url=str(product.get('image_url') or '').strip(),
         )
         # Stable serialization across PostgreSQL Decimal and HTTP JSON.
@@ -124,8 +165,20 @@ def load_products(conn):
     return products
 
 
-def suggest_pairs(products, confirmed=()):
-    """Sparse inverted-index ranking; no dense all-products similarity matrix."""
+
+def _known_retailers(product):
+    """Read only verified central store evidence; never guess from a name."""
+    codes = product.get('retailer_codes')
+    if codes is None:
+        codes = [product.get('retailer_code')]
+    return {_retailer_code(code) for code in codes if _retailer_code(code)}
+
+def suggest_pairs(products, confirmed=(), *, include_name_only=False):
+    """Suggest independently identified products by text, regardless of shop.
+
+    include_name_only stays as a compatible read-only API argument; it does
+    not change eligibility. Only explicit human approval creates a synonym.
+    """
     products = sorted(products, key=lambda p: p['id'])
     confirmed = set(confirmed)
     words, chars = _vectors(products), _vectors(products, True)
@@ -150,9 +203,8 @@ def suggest_pairs(products, confirmed=()):
             a, b = sorted((left['id'], right['id']))
             if score < MIN_SCORE or (a, b) in confirmed:
                 continue
-            # Shop-specific synonyms need two distinct, documented shops.
-            if not left.get('retailer_code') or not right.get('retailer_code') or left['retailer_code'] == right['retailer_code']:
-                continue
+            # Store provenance is presentation metadata, not a prerequisite
+            # or exclusion criterion for product synonym suggestions.
             if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
                 continue  # Same trade item, not a synonym with a different identity.
             if set(left.get('article_codes', [])) & set(right.get('article_codes', [])):
@@ -167,9 +219,90 @@ def suggest_pairs(products, confirmed=()):
                 'id': json.dumps(key, separators=(',', ':')),
                 'left': first, 'right': second, 'score': min(1.0, round(score, 4)),
                 'fingerprint': _fingerprint(first, second),
-                'warning': 'Controleer variant, bereiding en inhoud; de score is geen zekerheid.',
+                'linkable': True,
+                'match_basis': 'product_similarity',
+                'warning': 'Controleer variant, bereiding, inhoud en productkenmerken; de score is geen zekerheid.',
             }
     return sorted(pairs.values(), key=lambda pair: (-pair['score'], pair['id']))
+
+
+def _manual_pair_conflict(left, right):
+    """Precise explanation; never infer a conflict from an article name."""
+    if not left or not right:
+        return {'type': 'missing_article', 'detail': 'Een van de Catalogusartikelen bestaat niet meer.'}
+    if left['id'] == right['id']:
+        return {'type': 'same_article', 'detail': 'Dit is hetzelfde Catalogusartikel.'}
+    if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
+        return {'type': 'same_gtin', 'detail': f"Beide artikelen hebben dezelfde barcode {left['primary_gtin']}."}
+    shared = sorted(set(left.get('article_codes') or []) & set(right.get('article_codes') or []))
+    if shared:
+        return {'type': 'shared_article_code', 'detail': f"Beide artikelen gebruiken dezelfde bevestigde artikelcode {shared[0]}."}
+    if left.get('brick_code') and right.get('brick_code') and left['brick_code'] != right['brick_code']:
+        return {
+            'type': 'gpc_mismatch',
+            'detail': f"De GS1 GPC-classificaties verschillen: {left['brick_code']} tegenover {right['brick_code']}.",
+        }
+    return None
+
+
+def _manual_pair_is_safe(left, right):
+    return _manual_pair_conflict(left, right) is None
+
+
+def product_link_options(products, confirmed, product_id):
+    """One distinct Catalogus article per row, including confirmed and all others."""
+    product_by_id = {p['id']: p for p in products}
+    selected = product_by_id.get(product_id)
+    if not selected:
+        return None
+    existing = {tuple(sorted(pair)) for pair in confirmed}
+    proposed = {
+        (p['left']['id'], p['right']['id']): p
+        for p in suggest_pairs(products, confirmed)
+    }
+    options = []
+    for product in products:
+        if product['id'] == product_id:
+            continue  # NEVER present the selected product as its own synonym.
+        left, right = sorted((selected, product), key=lambda p: p['id'])
+        key = (left['id'], right['id'])
+        linked = key in existing
+        suggestion = proposed.get(key)
+        conflict = _manual_pair_conflict(left, right) if not linked else None
+        safe = conflict is None
+        state = 'linked' if linked else 'suggested' if suggestion else 'other'
+        options.append({
+            'id': product['id'],
+            'name': product['name'],
+            'brand': product.get('brand') or '',
+            'variant': product.get('variant') or '',
+            'image_url': product.get('image_url') or '',
+            'store': product.get('store_name') or 'Winkel onbekend',
+            'primary_gtin': product.get('primary_gtin') or '',
+            'article_codes': product.get('article_codes') or [],
+            'status': state,
+            'status_label': ('Al gekoppeld' if linked else 'Niet koppelbaar' if not safe
+                             else 'Voorstel' if suggestion else 'Overig'),
+            'linkable': bool(not linked and safe),
+            'reason': 'Al gekoppeld' if linked else (conflict or {}).get('detail', ''),
+            'conflict_type': (conflict or {}).get('type'),
+            'conflict_detail': (conflict or {}).get('detail', ''),
+            'resolution_route': (
+                '/catalogus/gpc-classificeren' if conflict and conflict['type'] == 'gpc_mismatch'
+                else f"/catalogus/{product['id']}" if conflict and conflict['type'] in
+                    {'same_gtin', 'shared_article_code'} else None
+            ),
+            'score': suggestion['score'] if suggestion else None,
+            'fingerprint': _fingerprint(left, right) if linked or safe else '',
+            # Suggestion uses canonical proposed pair, otherwise explicit
+            # manually reviewed independent central product IDs.
+            'manual': not bool(suggestion),
+        })
+    options.sort(key=lambda p: (
+        {'linked': 0, 'suggested': 1, 'other': 2}[p['status']],
+        -(p['score'] or 0), str(p['name']).casefold(), p['id'],
+    ))
+    return options
 
 
 def confirmed_pairs(conn):
@@ -181,13 +314,15 @@ def confirmed_pairs(conn):
 def confirm_pairs(conn, selections, actor_id):
     """Atomic, idempotent bulk confirmation with current-candidate validation."""
     from fastapi import HTTPException
-    from app.services.synonym_classification_inheritance_service import (
-        propagate_confirmed_classifications,
-    )
-    # All synonym confirmations serialize before taking product row locks, so
-    # overlapping A-B / B-C groups cannot propagate from stale graphs.
+    from app.services.synonym_classification_inheritance_service import propagate_confirmed_classifications
+    # Serialiseer bevestiging en classificatieovername van overlappende synoniemgroepen.
     if conn.dialect.name == 'postgresql':
         conn.execute(text('SELECT pg_advisory_xact_lock(639643644)'))
+    for selection in selections:
+        # Canonical pair order is guaranteed by the schema and never inferred
+        # from a display name. Protect all callers including crafted requests.
+        if selection['left_product_id'] >= selection['right_product_id']:
+            raise HTTPException(409, 'Een artikel kan niet aan zichzelf worden gekoppeld.')
     ids = sorted({s[k] for s in selections for k in ('left_product_id', 'right_product_id')})
     # Serialize edits/deletion of selected catalog records and repeated confirmations.
     if conn.dialect.name == 'postgresql':
@@ -197,10 +332,8 @@ def confirm_pairs(conn, selections, actor_id):
     existing = confirmed_pairs(conn)
     proposals = {(p['left']['id'], p['right']['id']): p for p in suggest_pairs(products, existing)}
     by_id = {p['id']: p for p in products}
-    # A completed inheritance legitimately changes the GPC part of the
-    # candidate fingerprint. For an already confirmed pair only, accept the
-    # fingerprint recorded at confirmation as an idempotent retry token.
-    # New pairs must still pass the live candidate/fingerprint checks.
+    # Een eerdere bevestiging kan de GPC-code wijzigen. Sta uitsluitend voor
+    # reeds opgeslagen paren hun oorspronkelijke fingerprint toe bij retry.
     persisted_fingerprints = {
         (row['left_product_id'], row['right_product_id']): row['source_fingerprint']
         for row in conn.execute(text("""
@@ -213,9 +346,18 @@ def confirm_pairs(conn, selections, actor_id):
         key = (selection['left_product_id'], selection['right_product_id'])
         proposal = proposals.get(key)
         if key in existing and all(pid in by_id for pid in key):
-            current = _fingerprint(by_id[key[0]], by_id[key[1]])
-            if selection['fingerprint'] in (current, persisted_fingerprints.get(key)):
+            current_fingerprint = _fingerprint(by_id[key[0]], by_id[key[1]])
+            if selection['fingerprint'] in (current_fingerprint, persisted_fingerprints.get(key)):
                 continue
+        if key not in existing and selection.get('manual'):
+            left, right = by_id.get(key[0]), by_id.get(key[1])
+            if not _manual_pair_is_safe(left, right):
+                raise HTTPException(409, 'Deze artikelidentiteiten kunnen niet veilig als synoniem worden gekoppeld.')
+            proposal = {
+                'fingerprint': _fingerprint(left, right),
+                'score': 0.0,
+                'manual': True,
+            }
         if not proposal or proposal['fingerprint'] != selection['fingerprint']:
             raise HTTPException(409, 'Een suggestie is gewijzigd of niet meer beschikbaar. Vernieuw de lijst en controleer opnieuw.')
         if key not in existing:
@@ -226,7 +368,7 @@ def confirm_pairs(conn, selections, actor_id):
                 (left_product_id, right_product_id, confirmed_by, source_fingerprint, method, score)
             VALUES (:left, :right, :actor, :fingerprint, :method, :score)
             ON CONFLICT (left_product_id, right_product_id) DO NOTHING
-        '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method=METHOD, score=proposal['score']))
+        '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method='manual_catalog_review_v1' if proposal.get('manual') else METHOD, score=proposal['score']))
     report = propagate_confirmed_classifications(
         conn, existing | set(to_insert),
         {pid for selection in selections for pid in
@@ -238,6 +380,40 @@ def confirm_pairs(conn, selections, actor_id):
     if report['gpc_inherited'] or report['cbs_inherited'] or report['conflicts']:
         response['classification_inheritance'] = report
     return response
+
+
+
+def unlink_pairs(conn, selections):
+    """Remove only existing, exact, direct synonym links atomically.
+
+    An unlink never mutates products, existing classification assignments,
+    receipt history, household data or other synonym pairs.
+    """
+    from fastapi import HTTPException
+    if len(selections) != len({(p['left_product_id'], p['right_product_id']) for p in selections}):
+        raise HTTPException(409, 'Dubbele synoniemselectie is niet toegestaan.')
+    for selection in selections:
+        if selection['left_product_id'] >= selection['right_product_id']:
+            raise HTTPException(409, 'Een artikel kan niet van zichzelf worden ontkoppeld.')
+    product_ids = sorted({value for selection in selections for value in
+                          (selection['left_product_id'], selection['right_product_id'])})
+    if conn.dialect.name == 'postgresql':
+        for pid in product_ids:
+            conn.execute(text('SELECT id FROM global_products WHERE id=:id FOR UPDATE'), {'id': pid}).all()
+    products = {p['id']: p for p in load_products(conn)}
+    existing = confirmed_pairs(conn)
+    for selection in selections:
+        key = (selection['left_product_id'], selection['right_product_id'])
+        if key not in existing or any(pid not in products for pid in key):
+            raise HTTPException(409, 'De bestaande synoniemkoppeling is gewijzigd. Vernieuw de lijst.')
+        if _fingerprint(products[key[0]], products[key[1]]) != selection['fingerprint']:
+            raise HTTPException(409, 'Artikelgegevens zijn gewijzigd. Vernieuw de lijst.')
+    for selection in selections:
+        conn.execute(text("""
+            DELETE FROM article_synonym_links
+             WHERE left_product_id=:left AND right_product_id=:right
+        """), {'left': selection['left_product_id'], 'right': selection['right_product_id']})
+    return {'unlinked': len(selections)}
 
 
 def build_synonym_analysis(products, confirmed, suggestions, classifications=None):
@@ -256,15 +432,16 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
     direct_peers = defaultdict(set)
     for left, right in confirmed:
         a, b = by_id.get(left), by_id.get(right)
-        if not a or not b or not a.get('retailer_code') or not b.get('retailer_code'):
+        if not a or not b:
             continue
-        if a['retailer_code'] == b['retailer_code']:
-            continue
+        a_stores, b_stores = _known_retailers(a), _known_retailers(b)
         valid_links.add(tuple(sorted((left, right))))
         direct_peers[left].add(right)
         direct_peers[right].add(left)
-        linked[left].add(b['retailer_code'])
-        linked[right].add(a['retailer_code'])
+        # Only the derived "other shops" indicator requires proven shops;
+        # a confirmed synonym remains valid when provenance is unavailable.
+        linked[left].update(b_stores - a_stores)
+        linked[right].update(a_stores - b_stores)
 
     for proposal in suggestions:
         a, b = proposal['left'], proposal['right']
@@ -275,6 +452,8 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
                 'id': other['id'], 'name': other['name'],
                 'store_name': other.get('store_name') or 'Niet vastgelegd',
                 'score': proposal['score'],
+                'linkable': bool(proposal.get('linkable', True)),
+                'match_basis': proposal.get('match_basis', 'confirmed_retailers'),
             })
 
     groups = {}
@@ -292,17 +471,18 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
         else:
             group_key, group_label = 'unclassified', 'Niet geclassificeerd'
             group_source = 'Ontbrekende classificatie'
-        store = product.get('store_name') if product.get('retailer_code') else 'Winkel onbekend'
-        if not product.get('retailer_code'):
-            status = 'insufficient'
-        elif pending[pid]:
+        store = product.get('store_name') if _known_retailers(product) else 'Winkel onbekend'
+        if pending[pid]:
             status = 'review'
-        elif linked[pid]:
+        elif direct_peers[pid]:
             status = 'linked'
+        elif not _known_retailers(product):
+            status = 'insufficient'
         else:
             status = 'no_candidate'
         row = {
-            'id': pid, 'name': product['name'], 'brand': product.get('brand') or '',
+            'id': pid, 'name': product['name'], 'primary_gtin': product.get('primary_gtin') or '',
+            'article_codes': product.get('article_codes') or [], 'brand': product.get('brand') or '',
             'variant': product.get('variant') or '',
             'size_value': product.get('size_value') or '',
             'size_unit': product.get('size_unit') or '',
@@ -345,6 +525,7 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
             'synonym_buckets': buckets,
             'confirmed_pairs': len(valid_links),
             'candidate_pairs': len(suggestions),
+            'name_only_pairs': 0,
             'no_candidate_articles': sum(p['status'] == 'no_candidate' for p in items),
             'insufficient_articles': sum(p['status'] == 'insufficient' for p in items),
             'classified_articles': sum(p['group_source'] == 'Artikelclassificatie' for p in items),

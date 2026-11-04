@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +61,34 @@ def main() -> None:
             "Every start.bat docker compose call must use the locked base+PostgreSQL "
             f"overlay/profile: {bad_compose_lines!r}"
         )
+
+    # PowerShell single-quoted regexes use one backslash for a literal dot.
+    # This test guards the exact Windows symptom: com.docker.backend.exe
+    # owns ports 5174/8011, but must not be treated as an unknown process.
+    owner_guard = start.split("\n:CleanupPortIfRezzerv\n", 1)[1].split(
+        "\n:WaitForBackendHealth\n", 1
+    )[0]
+    process_pattern = re.search(
+        r"\$isDockerName = \$name -match '([^']+)'", owner_guard
+    )
+    command_pattern = re.search(
+        r"\$isDockerCmd = \$cmd\.ToLowerInvariant\(\) -match '([^']+)'",
+        owner_guard,
+    )
+    if not process_pattern or not command_pattern:
+        raise AssertionError("Docker Desktop listener recognition missing")
+    if not re.search(process_pattern.group(1), "com.docker.backend.exe"):
+        raise AssertionError("Docker Desktop process falsely treated as unknown")
+    if not re.search(
+        command_pattern.group(1),
+        r'"C:\Program Files\Docker\Docker\resources\com.docker.backend.exe" services',
+    ):
+        raise AssertionError("Docker Desktop command falsely treated as unknown")
+    if re.search(process_pattern.group(1), "unrelated.exe"):
+        raise AssertionError("Unrelated listener incorrectly recognized as Docker")
+    _require(start, "if ($isDocker) {", "existing Docker-safe port ownership branch")
+    _require(start, "if ($isRezzerv -or $isNodeLike -or $isPowerShellRezzerv)", "existing scoped process cleanup")
+    _require(start, "exit 12", "unknown-listener fail-closed exit")
 
     # Windows service validation must not depend on cmd pipes/findstr encoding behavior.
     _forbid(start, "config --services | findstr", "Windows cmd pipe service validation")
@@ -276,6 +305,7 @@ def main() -> None:
     ):
         _require(workflow, needle, label)
 
+    print("POSTGRESQL_OPERATIONAL_STARTUP_DOCKER_PORT_GUARD_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_WINDOWS_ENCODING_SAFE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_READY_HEALTH_GREEN")
