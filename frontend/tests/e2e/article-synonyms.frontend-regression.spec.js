@@ -179,6 +179,7 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeDisabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    await expect.poll(() => posts.length).toBe(2)
     expect(posts[1].action).toBe('link')
     expect(posts[1].payload.selections).toEqual([{
       left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false,
