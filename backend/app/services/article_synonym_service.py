@@ -276,7 +276,7 @@ def product_link_options(products, confirmed, product_id):
             'reason': ('Al gekoppeld' if linked else
                        'Zelfde productidentiteit of strijdige GPC-indeling' if not safe else ''),
             'score': suggestion['score'] if suggestion else None,
-            'fingerprint': _fingerprint(left, right) if not linked and safe else '',
+            'fingerprint': _fingerprint(left, right) if linked or safe else '',
             # Suggestion uses canonical proposed pair, otherwise explicit
             # manually reviewed independent central product IDs.
             'manual': not bool(suggestion),
@@ -338,6 +338,40 @@ def confirm_pairs(conn, selections, actor_id):
             ON CONFLICT (left_product_id, right_product_id) DO NOTHING
         '''), dict(left=left, right=right, actor=actor_id, fingerprint=proposal['fingerprint'], method='manual_catalog_review_v1' if proposal.get('manual') else METHOD, score=proposal['score']))
     return {'linked': len(to_insert), 'already_linked': len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
+
+
+
+def unlink_pairs(conn, selections):
+    """Remove only existing, exact, direct synonym links atomically.
+
+    An unlink never mutates products, existing classification assignments,
+    receipt history, household data or other synonym pairs.
+    """
+    from fastapi import HTTPException
+    if len(selections) != len({(p['left_product_id'], p['right_product_id']) for p in selections}):
+        raise HTTPException(409, 'Dubbele synoniemselectie is niet toegestaan.')
+    for selection in selections:
+        if selection['left_product_id'] >= selection['right_product_id']:
+            raise HTTPException(409, 'Een artikel kan niet van zichzelf worden ontkoppeld.')
+    product_ids = sorted({value for selection in selections for value in
+                          (selection['left_product_id'], selection['right_product_id'])})
+    if conn.dialect.name == 'postgresql':
+        for pid in product_ids:
+            conn.execute(text('SELECT id FROM global_products WHERE id=:id FOR UPDATE'), {'id': pid}).all()
+    products = {p['id']: p for p in load_products(conn)}
+    existing = confirmed_pairs(conn)
+    for selection in selections:
+        key = (selection['left_product_id'], selection['right_product_id'])
+        if key not in existing or any(pid not in products for pid in key):
+            raise HTTPException(409, 'De bestaande synoniemkoppeling is gewijzigd. Vernieuw de lijst.')
+        if _fingerprint(products[key[0]], products[key[1]]) != selection['fingerprint']:
+            raise HTTPException(409, 'Artikelgegevens zijn gewijzigd. Vernieuw de lijst.')
+    for selection in selections:
+        conn.execute(text("""
+            DELETE FROM article_synonym_links
+             WHERE left_product_id=:left AND right_product_id=:right
+        """), {'left': selection['left_product_id'], 'right': selection['right_product_id']})
+    return {'unlinked': len(selections)}
 
 
 def build_synonym_analysis(products, confirmed, suggestions, classifications=None):
