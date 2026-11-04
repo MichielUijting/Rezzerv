@@ -47,3 +47,7 @@ D. Nieuwe aparte PR: synchronisatiebewijzen en statusmonitor; na integratie van 
 - Synoniemen toont onmiddellijk het bestaande twee-tabellenscherm (zonder extra knop die naar een ander scherm leidt); schrijf- en bevestigingsacties blijven identiek.
 - Synchroniseren is een automatisch achtergrondproces en dus **niet** als afzonderlijk werkgebied beschikbaar. Alleen gebruikersacties bij een concreet conflict blijven zichtbaar via de normale synoniemkeuze-overlay.
 - Fase #649 beschrijft een eventuele toekomstige uitzonderings-/foutenmonitor voor frontteam, niet een reguliere handmatige synchronisatiebediening.
+
+### Verbetering classificatie-artikelselectie (PO-feedback 4 november)
+
+De gecombineerde classificatie had eerst alleen het zoekveld van het losse GPC-scherm. Daardoor verscheen CBS pas na verborgen selectie. **Classificeren** toont nu één centrale Catalogus-DataTable uit de bestaande CBS-productpopulatie. Een geselecteerde `global_product_id` is het gedeelde anker voor de GS1 GPC- en CBS-panelen. Zowel classificaties als productidentiteit worden via de bestaande geautoriseerde autoriteiten gecontroleerd. De selectie is uitsluitend een UI-state; save blijft per classificatiesysteem afzonderlijk. Het traditionele losse GPC-scherm behoudt zijn eigen zoekfunctie en de losse CBS-pagina blijft apart functioneren.
