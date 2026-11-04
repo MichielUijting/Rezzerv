@@ -30,9 +30,9 @@ export default function ClassificationSearchOverlay({
           placeholder="Zoek categorie of code" disabled={busy} />
       </label>
       {children}
-      <div className="rz-classification-overlay-results" role="list" aria-label="Classificatieresultaten">
+      <div className="rz-classification-overlay-results" aria-label="Classificatieresultaten">
         {rows.length ? rows.map((row) => <button type="button" key={getKey(row)}
-          role="listitem" className="rz-classification-overlay-row"
+          className="rz-classification-overlay-row"
           disabled={busy} onClick={() => onChoose(row)}>
           <strong>{getTitle(row)}</strong>
           {getDetail(row) ? <span>{getDetail(row)}</span> : null}
