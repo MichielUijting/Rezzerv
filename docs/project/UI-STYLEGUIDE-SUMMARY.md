@@ -1655,3 +1655,17 @@ de actie **Koppelen** meldt een bestaand identiteits-/GS1 GPC-conflict
 en verricht dan geen opslag. Beveiligingen van de backend blijven
 volledig gelden. De aanvullende linktekst naar **Externe databases 2**
 onder de pagina wordt verwijderd om schermruimte te sparen.
+
+
+### Artikel-synoniemen — verklarende overlay bij koppelconflict (4 november 2026)
+
+Niet-koppelbare geselecteerde rechterregels veroorzaken **geen**
+in-screen-fouttekst. Gebruik de bestaande centrale
+`AppFeedbackProvider`-overlay met de betrokken artikelnamen,
+een begrijpelijke foutoorzaak op basis van de bestaande centrale
+GTIN, artikelcode of officiële GPC Brick en een passende
+herstelactie. Een toegankelijke actie navigeert alleen naar een al
+bestaande Catalogusdetail- of GS1 GPC-classificatiefunctie;
+**Sluiten** annuleert. Foute productidentiteit of een werkelijk
+strijdige officiële GPC Brick wordt niet zonder correctie omzeild.
+Geen aangepaste of tweede meldingscomponent.
