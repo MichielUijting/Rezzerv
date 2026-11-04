@@ -132,7 +132,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
   useEffect(() => {
     let cancelled = false
     const normalized = brickQuery.trim()
-    if (!selectedArticle || !brickEditorOpen || !normalized) {
+    if (!selectedArticle || !brickEditorOpen || (!embedded && !normalized)) {
       setBrickResults([])
       setSearchingBricks(false)
       return () => { cancelled = true }
@@ -141,10 +141,10 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
       setSearchingBricks(true)
       setError('')
       try {
-        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=5`)
+        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=${embedded ? 100 : 5}`)
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(functionalError(data, 'De GPC-catalogus kon niet worden doorzocht.'))
-        if (!cancelled) setBrickResults(limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
+        if (!cancelled) setBrickResults(embedded ? (Array.isArray(data?.items) ? data.items : []) : limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
       } catch (searchError) {
         if (!cancelled) setError(searchError?.message || 'De GPC-catalogus kon niet worden doorzocht.')
       } finally {
@@ -186,7 +186,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
   function searchAlternative() {
     setBrickEditorOpen(true)
     setBrickQuery('')
-    setBrickResults(suggestions)
+    setBrickResults([])
     setError('')
     setFeedback('Selecteer de juiste officiële GS1 Brick in de zoeklijst.')
     window.setTimeout(() => document.getElementById('catalog-gpc-action-brick-search')?.focus(), 0)
@@ -359,13 +359,13 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
       </div>
       {embedded && brickEditorOpen ? <ClassificationSearchOverlay
         title="GS1 GPC Brick kiezen" query={brickQuery} onQueryChange={setBrickQuery}
-        rows={brickQuery.trim().length >= 2 ? brickResults : suggestions}
+        rows={brickResults}
         busy={saving || searchingBricks} onClose={() => setBrickEditorOpen(false)}
         getKey={(item) => item.brick_code}
         getTitle={(item) => item.brick_code + ' — ' + item.brick_description}
         getDetail={(item) => [item.segment_description, item.family_description, item.class_description].filter(Boolean).join(' › ')}
         onChoose={(item) => { void saveBrick(item) }}
-        emptyMessage={brickQuery.trim().length < 2 ? 'Vul minstens twee tekens in of kies een voorgestelde Brick.' : 'Geen passende officiële Bricks.'}
+        emptyMessage='Geen officiële GS1 Bricks gevonden. Zoek op code of naam.'
       /> : null}
     </>
   )
