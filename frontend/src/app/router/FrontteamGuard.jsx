@@ -9,7 +9,7 @@ export default function FrontteamGuard({ children }) {
   const context = readStoredAuthContext()
   if (!context) return <Navigate to="/login" replace />
   if (!isFrontteamMemberFromContext(context)) {
-    setLoginMessage('Alleen leden van het frontteam hebben toegang tot Externe databases.')
+    setLoginMessage('Alleen de superuser en leden van het frontteam hebben toegang tot Artikel classificeren.')
     return <Navigate to="/home" replace />
   }
   return children
