@@ -241,17 +241,6 @@ class StoreTest(unittest.TestCase):
                 )
             """)
             conn.exec_driver_sql("""
-                CREATE TABLE gpc_product_groups (
-                    gpc_brick_code TEXT, language_code TEXT, active BOOLEAN,
-                    gpc_brick_name TEXT
-                )
-            """)
-            conn.exec_driver_sql("""
-                INSERT INTO gpc_product_groups VALUES
-                    ('10000025','nl',TRUE,'Melk'),
-                    ('10000026','nl',TRUE,'Andere melk')
-            """)
-            conn.exec_driver_sql("""
                 CREATE TABLE cbs_ecoicop_categories (
                     cbs_code TEXT, reference_version TEXT, parent_code TEXT,
                     name_nl TEXT NOT NULL,
@@ -425,6 +414,21 @@ class StoreTest(unittest.TestCase):
 
     def test_reviewer_can_choose_each_independent_classification(self):
         with self.engine.begin() as conn:
+            # Only this test needs a small official GPC label authority; other
+            # chain tests create the production-shaped GPC table themselves.
+            conn.exec_driver_sql("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT PRIMARY KEY,
+                    language_code TEXT NOT NULL,
+                    active BOOLEAN NOT NULL,
+                    gpc_brick_name TEXT NOT NULL
+                )
+            """)
+            conn.exec_driver_sql("""
+                INSERT INTO gpc_product_groups VALUES
+                    ('10000025','nl',TRUE,'Melk'),
+                    ('10000026','nl',TRUE,'Andere melk')
+            """)
             conn.execute(text("""
                 INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
                 VALUES ('a','10000025'),('b','10000026')
