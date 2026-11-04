@@ -1681,3 +1681,7 @@ Het Artikelbeheer-hoofdscherm toont bij openen **geen automatische artikellijst 
 ### Artikelbeheer: één centrale artikelselectie voor GS1 en CBS — 4 november 2026
 
 Bij de knop **Classificeren** verschijnt direct de bestaande centrale Catalogusartikelpopulatie als één standaard-DataTable, met paginering en kolomfilters. Er is geen verborgen zoekveld als enige ingang. Na selecteren van één canoniek Catalogusartikel blijven artikelnaam en barcode zichtbaar en worden voor datzelfde artikel rechtstreeks de bestaande GS1 GPC- en CBS ECOICOPv2-classificatiecomponenten getoond. De classificaties hebben afzonderlijke autorisatie, bewijs en expliciete bevestiging. De samengevoegde werkplek introduceert geen tweede schrijfroute. Er is geen gebruikerszichtbare synchronisatieknop.
+
+### Artikelbeheer: zij-aan-zij classificatiedetail — 4 november 2026
+
+Bij een geselecteerd centraal Catalogusartikel toont de classificatiewerkplek de artikelidentiteit **eenmaal** boven het detail, met twee gelijkwaardige, even brede panelen: links **GS1 GPC**, rechts **CBS ECOICOPv2**. Beide tonen bovenaan de huidige officiële classificatie en daarna de bestaande zoeken/selecteren/bevestigen-route. De categorieën blijven onafhankelijke autoriteiten; er wordt niet stilzwijgend in beide systemen geschreven. Onder de uniforme responsive grens van 720px worden de panelen verticaal getoond, GS1 gevolgd door CBS. Geen dubbele artikellijst of dubbele productkop binnen de panelen. De beveiligde schrijfbevoegdheden en de standaard Inhuis-feedbackcomponenten blijven gelden.
