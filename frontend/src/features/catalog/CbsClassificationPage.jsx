@@ -282,7 +282,7 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
   ]
 
   const content = <>
-    <ScreenCard fullWidth>
+    <ScreenCard fullWidth style={embedded ? { padding: 0, margin: 0, borderRadius: 0, overflow: 'visible' } : undefined}>
       <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
       {!embedded ? <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
         Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p> : null}
