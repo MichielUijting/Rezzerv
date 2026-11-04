@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
+import ClassificationSearchOverlay from '../externalDatabases/ClassificationSearchOverlay'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './catalog.css'
@@ -23,7 +24,7 @@ function csvCell(value) {
   return '"' + safe.replaceAll('"', '""') + '"'
 }
 
-export default function CbsClassificationPage() {
+export default function CbsClassificationPage({ embedded = false, productId = null }) {
   const { showFeedback } = useAppFeedback()
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(new Set())
@@ -31,6 +32,9 @@ export default function CbsClassificationPage() {
   const [query, setQuery] = useState('')
   const [categories, setCategories] = useState([])
   const [proposal, setProposal] = useState(null)
+  const [chooserOpen, setChooserOpen] = useState(false)
+  const [automaticSuggestions, setAutomaticSuggestions] = useState([])
+  const suggestedFor = useRef('')
   const [browsing, setBrowsing] = useState(false)
   const [browseParent, setBrowseParent] = useState(null)
   const [browseTrail, setBrowseTrail] = useState([])
@@ -43,6 +47,7 @@ export default function CbsClassificationPage() {
   const busy = useRef(false)
 
   useEffect(() => {
+    if (embedded && !productId) return undefined
     const controller = new AbortController()
     async function load() {
       setLoading(true)
@@ -74,9 +79,9 @@ export default function CbsClassificationPage() {
     }
     load()
     return () => controller.abort()
-  }, [revision])
+  }, [revision, embedded, productId])
 
-  const selectedItems = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected])
+  const selectedItems = useMemo(() => items.filter((item) => embedded ? item.id === productId : selected.has(item.id)), [items, selected, embedded, productId])
   const allClassified = selectedItems.length > 0 && selectedItems.every((item) => item.classified)
   const isBusy = loading || searching || saving
 
@@ -113,6 +118,7 @@ export default function CbsClassificationPage() {
         candidates = Array.isArray(suggestions.items) ? suggestions.items : []
       }
       setCategories(candidates)
+      if (embedded && !chooserOpen) setAutomaticSuggestions(candidates.slice(0, 5).filter((item) => item.lowest))
       setNote(candidates.length
         ? candidates.some((item) => item.suggestion_reason)
           ? 'Dit zijn zoeksuggesties op productwoorden, geen automatische classificaties. Controleer de volledige CBS-omschrijving.'
@@ -147,6 +153,69 @@ export default function CbsClassificationPage() {
     } finally {
       setSearching(false)
       busy.current = false
+    }
+  }
+
+  useEffect(() => {
+    if (!embedded || !productId || loading || !selectedItems.length) return
+    const identity = productId + ':' + revision
+    if (suggestedFor.current === identity) return
+    suggestedFor.current = identity
+    void findCategories()
+  }, [embedded, productId, loading, items, revision])
+
+  useEffect(() => {
+    if (!embedded || !chooserOpen || browsing || query.trim().length < 2) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await call(API + '/categories?query=' + encodeURIComponent(query.trim()) + '&limit=50')
+        let rows = Array.isArray(result.items) ? result.items : []
+        if (!rows.length) {
+          const suggestions = await call(API + '/categories/suggest?query=' + encodeURIComponent(query.trim()) + '&limit=50')
+          rows = Array.isArray(suggestions.items) ? suggestions.items : []
+        }
+        if (!cancelled) setCategories(rows)
+      } catch (err) {
+        if (!cancelled) setError(err.message)
+      }
+    }, 250)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [embedded, chooserOpen, browsing, query])
+
+  async function chooseEmbeddedCategory(category) {
+    if (busy.current || !selectedItems.length) return
+    if (!category.lowest) {
+      setChooserOpen(true)
+      await browseCategories(category.cbs_code, [...browseTrail, category])
+      return
+    }
+    busy.current = true
+    setSaving(true)
+    setError('')
+    try {
+      const item = selectedItems[0]
+      const result = await call(API + '/bulk-confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selections: [{
+          global_product_id: item.id,
+          expected_product_name: item.name,
+          cbs_code: category.cbs_code,
+          reference_version: category.reference_version,
+          expected_version: item.version,
+        }] }),
+      })
+      setChooserOpen(false)
+      setCategories([])
+      setAutomaticSuggestions([])
+      setNote(result.confirmed + ' CBS-classificatie opgeslagen.')
+      showFeedback({ variant: 'success', message: 'CBS-classificatie opgeslagen.' })
+      setRevision((v) => v + 1)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      busy.current = false
+      setSaving(false)
     }
   }
 
@@ -280,24 +349,43 @@ export default function CbsClassificationPage() {
       </Button> },
   ]
 
-  return <AppShell title="Artikelclassificaties toekennen" showExit={false}>
-    <ScreenCard fullWidth>
-      <h2>Artikelclassificaties toekennen</h2>
-      <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
-        Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p>
+  const content = <>
+    <ScreenCard fullWidth style={embedded ? { padding: 0, margin: 0, borderRadius: 0, overflow: 'visible' } : undefined}>
+      <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
+      {!embedded ? <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
+        Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {note ? <p role="status">{note}</p> : null}
       <div className="rz-article-classification-layout">
-        <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
+        {!embedded ? <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
           filterState={filters}
           onFilterChange={(key, value) => setFilters((prev) => ({ ...prev, [key]: value }))}
           wrapperClassName="rz-classification-table-wrapper"
           getRowKey={(item) => item.id} pageSize={8}
           emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen.'}
-          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
+          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} /> : <div className="rz-classification-current" data-testid="cbs-single-product"><span>Huidige classificatie</span><strong>{loading ? "Laden…" : selectedItems.length ? selectedItems[0].classified ? selectedItems[0].cbs_code : "Niet geclassificeerd" : "Artikel niet gevonden"}</strong><span>{selectedItems.length && selectedItems[0].classified ? selectedItems[0].category_name : "Geen bevestigde CBS-categorie"}</span></div>}
+        {embedded ? <>
+          <div className="rz-article-classification-actions" aria-label="CBS-classificatieacties">
+            <Button type="button" variant="secondary" disabled={isBusy}
+              onClick={() => { setQuery(''); setBrowsing(false); setCategories(automaticSuggestions); setChooserOpen(true) }}>
+              CBS-categorie zoeken of doorbladeren
+            </Button>
+          </div>
+          {automaticSuggestions.length ? <section data-testid="cbs-automatic-suggestions">
+            <h3>Voorgestelde CBS-categorieën</h3>
+            <div className="rz-classification-inline-candidates">
+              {automaticSuggestions.map((category) => <button type="button"
+                className="rz-classification-overlay-row" key={category.cbs_code}
+                disabled={isBusy} onClick={() => { void chooseEmbeddedCategory(category) }}>
+                <strong>{category.cbs_code} — {category.name_nl}</strong>
+                <span>{category.path || 'Officiële CBS-categorie'}</span>
+              </button>)}
+            </div>
+          </section> : null}
+        </> : <>
         <div className="rz-article-classification-actions" aria-label="CBS-classificatieacties">
           <label className="rz-input-field">
-            <span className="rz-label">Zoek productnaam, CBS-code of officiële categorie</span>
+            <span className="rz-label">{embedded ? "CBS-categorie zoeken" : "Zoek productnaam, CBS-code of officiële categorie"}</span>
             <input className="rz-input" value={query} disabled={isBusy}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Bijvoorbeeld melk of 011420" />
@@ -307,11 +395,11 @@ export default function CbsClassificationPage() {
           <Button type="button" variant="secondary" disabled={isBusy}
             onClick={() => browseCategories()}>CBS-indeling doorbladeren</Button>
           <Button type="button" disabled={isBusy || !proposal || !selectedItems.length}
-            onClick={confirmSelected}>{saving ? 'Opslaan...' : 'Voorstel bevestigen'}</Button>
-          <Button type="button" variant="secondary" disabled={isBusy || !selectedItems.length}
-            onClick={exportSelected}>Exporteren</Button>
-          <Button type="button" variant="secondary" disabled={isBusy || !allClassified}
-            onClick={removeSelected}>Classificatie verwijderen</Button>
+            onClick={confirmSelected}>{saving ? 'Opslaan...' : embedded ? 'Bevestigen CBS' : 'Voorstel bevestigen'}</Button>
+          {!embedded ? <Button type="button" variant="secondary" disabled={isBusy || !selectedItems.length}
+            onClick={exportSelected}>Exporteren</Button> : null}
+          {!embedded ? <Button type="button" variant="secondary" disabled={isBusy || !allClassified}
+            onClick={removeSelected}>Classificatie verwijderen</Button> : null}
         </div>
         {proposal ? <p role="status">Gekozen: {proposal.cbs_code} – {proposal.path}.
           Nog niet bevestigd.</p> : null}
@@ -327,7 +415,31 @@ export default function CbsClassificationPage() {
             data={categories} getRowKey={(item) => item.cbs_code} pageSize={8}
             emptyMessage="Geen CBS-categorieën gevonden." />
         </section> : null}
+
+        </>}
       </div>
     </ScreenCard>
-  </AppShell>
+    {embedded && chooserOpen ? <ClassificationSearchOverlay
+      title="CBS ECOICOPv2-categorie kiezen" query={query}
+      onQueryChange={(value) => { setQuery(value); if (value.trim().length >= 2) setBrowsing(false) }}
+      rows={categories} busy={saving || searching}
+      onClose={() => setChooserOpen(false)}
+      getKey={(item) => item.cbs_code}
+      getTitle={(item) => item.cbs_code + ' — ' + item.name_nl}
+      getDetail={(item) => item.path || (item.lowest ? 'Definitieve categorie' : 'Open om subcategorieën te bekijken')}
+      onChoose={(item) => { void chooseEmbeddedCategory(item) }}
+      emptyMessage="Gebruik zoeken of open de officiële categorie-indeling."
+    >
+      <div className="rz-classification-overlay-controls">
+        <Button type="button" variant="secondary" disabled={saving || searching}
+          onClick={() => { setQuery(''); void browseCategories() }}>Alle hoofdcategorieën</Button>
+        {browsing && browseTrail.length ? <Button type="button" variant="secondary"
+          disabled={saving || searching}
+          onClick={() => { void browseCategories(browseTrail.length > 1 ? browseTrail[browseTrail.length - 2].cbs_code : null, browseTrail.slice(0, -1)) }}>
+          Bovenliggende categorie
+        </Button> : null}
+      </div>
+    </ClassificationSearchOverlay> : null}
+  </>
+  return embedded ? content : <AppShell title="Artikelclassificaties toekennen" showExit={false}>{content}</AppShell>
 }

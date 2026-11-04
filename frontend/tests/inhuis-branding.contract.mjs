@@ -73,7 +73,9 @@ assert.match(tableLoadingOverlay, /data-testid="table-loading-overlay"/)
 assert.match(tableLoadingCss, /width:\s*min\(420px,\s*80vw\)/)
 assert.doesNotMatch(tableLoadingCss, /border-radius:\s*50%/)
 // The old receipt overview was retired; preserve ED2's standard table and branding.
-assert.match(externalDatabases2, /AppShell title="Externe databases 2"/)
+// Artikelbeheer is the PO-approved user-facing title; preserve the legacy route and table contract.
+assert.match(externalDatabases2, /AppShell title="Artikelbeheer"/)
+assert.doesNotMatch(externalDatabases2, /AppShell title="Externe databases 2"/)
 assert.match(externalDatabases2, /dataTestId="external-databases-2-table"/)
 assert.doesNotMatch(externalDatabases2, /showSearchComplete|rz-search-complete-letter|rz-search-progress-indicator/)
 

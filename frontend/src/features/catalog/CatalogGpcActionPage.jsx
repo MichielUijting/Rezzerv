@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
+import ClassificationSearchOverlay from '../externalDatabases/ClassificationSearchOverlay'
 import Button from '../../ui/Button'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
@@ -40,7 +41,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcActionPage() {
+export default function CatalogGpcActionPage({ embedded = false, readOnly = false, selectedProduct = undefined, onArticleChange = () => {} }) {
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -59,6 +60,7 @@ export default function CatalogGpcActionPage() {
   useEffect(() => {
     let cancelled = false
     async function loadCatalog() {
+      if (selectedProduct !== undefined) { setLoading(false); return }
       setLoading(true)
       setError('')
       try {
@@ -74,7 +76,13 @@ export default function CatalogGpcActionPage() {
     }
     loadCatalog()
     return () => { cancelled = true }
-  }, [])
+  }, [selectedProduct !== undefined])
+
+  useEffect(() => {
+    if (selectedProduct === undefined) return
+    if (selectedProduct?.id) void chooseArticle(selectedProduct)
+    else resetArticle()
+  }, [selectedProduct?.id])
 
   const articleResults = useMemo(() => {
     const query = articleQuery.trim().toLowerCase()
@@ -85,6 +93,7 @@ export default function CatalogGpcActionPage() {
 
   async function chooseArticle(article) {
     setSelectedArticle(article)
+    onArticleChange(article)
     setAssignment(null)
     setSuggestions([])
     setBrickEditorOpen(false)
@@ -111,7 +120,7 @@ export default function CatalogGpcActionPage() {
         setFeedback(`Inhuis heeft ${visibleSuggestions.length} waarschijnlijke GPC-kandidaat${visibleSuggestions.length === 1 ? '' : 'en'} gevonden. Bevestig de beste match of kies een alternatief.`)
       } else {
         setFeedback('Inhuis kon nog geen bruikbare GPC-kandidaat afleiden. Zoek en selecteer hieronder een Brick.')
-        setBrickEditorOpen(true)
+        if (!readOnly && !embedded) setBrickEditorOpen(true)
       }
     } catch (chooseError) {
       setError(chooseError?.message || 'De GPC-classificatie kon niet worden opgehaald.')
@@ -123,7 +132,7 @@ export default function CatalogGpcActionPage() {
   useEffect(() => {
     let cancelled = false
     const normalized = brickQuery.trim()
-    if (!selectedArticle || !brickEditorOpen || !normalized) {
+    if (!selectedArticle || !brickEditorOpen || (!embedded && !normalized)) {
       setBrickResults([])
       setSearchingBricks(false)
       return () => { cancelled = true }
@@ -132,10 +141,13 @@ export default function CatalogGpcActionPage() {
       setSearchingBricks(true)
       setError('')
       try {
-        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=5`)
+        const url = embedded
+          ? `/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=100`
+          : `/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=5`
+        const response = await fetchJsonWithAuth(url)
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(functionalError(data, 'De GPC-catalogus kon niet worden doorzocht.'))
-        if (!cancelled) setBrickResults(limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
+        if (!cancelled) setBrickResults(embedded ? (Array.isArray(data?.items) ? data.items : []) : limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
       } catch (searchError) {
         if (!cancelled) setError(searchError?.message || 'De GPC-catalogus kon niet worden doorzocht.')
       } finally {
@@ -149,7 +161,7 @@ export default function CatalogGpcActionPage() {
   }, [selectedArticle, brickEditorOpen, brickQuery])
 
   async function saveBrick(brick) {
-    if (!selectedArticle) return
+    if (!selectedArticle || readOnly) return
     setSaving(true)
     setError('')
     setFeedback('')
@@ -179,7 +191,7 @@ export default function CatalogGpcActionPage() {
     setBrickQuery('')
     setBrickResults([])
     setError('')
-    setFeedback('Zoek en selecteer hieronder een betere GPC Brick.')
+    setFeedback('Selecteer de juiste officiële GS1 Brick in de zoeklijst.')
     window.setTimeout(() => document.getElementById('catalog-gpc-action-brick-search')?.focus(), 0)
   }
 
@@ -198,6 +210,7 @@ export default function CatalogGpcActionPage() {
   }
 
   function resetArticle() {
+    onArticleChange(null)
     setSelectedArticle(null)
     setAssignment(null)
     setSuggestions([])
@@ -209,23 +222,23 @@ export default function CatalogGpcActionPage() {
     setFeedback('')
   }
 
-  return (
-    <AppShell title="GPC classificeren" showExit={false}>
+  const content = (
+    <>
       <DelayedTableLoadingOverlay active={loading || checking || searchingBricks || saving} />
       <div className="rz-catalog-page" data-testid="catalog-gpc-action-page">
-        <ScreenCard fullWidth>
+        <ScreenCard fullWidth style={embedded ? { padding: 0, margin: 0, borderRadius: 0, overflow: 'visible' } : undefined}>
           <div className="rz-catalog-card">
             <div className="rz-catalog-section-header">
               <div>
-                <h2>GPC classificeren</h2>
-                <p>Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.</p>
+                <h2>{selectedProduct !== undefined ? 'GS1 GPC' : 'GPC classificeren'}</h2>
+                {selectedProduct === undefined ? <p>Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.</p> : null}
               </div>
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-            {feedback ? <div className="rz-inline-feedback">{feedback}</div> : null}
+            {feedback && !embedded ? <div className="rz-inline-feedback">{feedback}</div> : null}
 
-            <section className="rz-catalog-detail-section">
+            {selectedProduct === undefined ? <section className="rz-catalog-detail-section">
               <h3>1. Selecteer een catalogusartikel</h3>
               {!selectedArticle ? (
                 <>
@@ -261,16 +274,17 @@ export default function CatalogGpcActionPage() {
                   <Button type="button" variant="secondary" onClick={resetArticle} disabled={saving}>Ander artikel kiezen</Button>
                 </div>
               )}
-            </section>
+            </section> : null}
 
             {selectedArticle ? (
               <section className="rz-catalog-detail-section">
-                <h3>2. GPC Brick</h3>
+                {!embedded ? <h3>2. GPC Brick</h3> : null}
                 {checking ? <div className="rz-catalog-gpc-state">Bestaande classificatie controleren…</div> : null}
+                {!checking && !assignment && !suggestions.length ? <div className="rz-classification-current"><span>Huidige classificatie</span><strong>Niet geclassificeerd</strong><span>Geen bevestigde GS1 Brick</span></div> : null}
                 {!checking && assignment ? (
                   <div className="rz-catalog-gpc-summary">
                     <div className="rz-catalog-gpc-primary">
-                      <span className="rz-catalog-gpc-label">Bevestigde classificatie</span>
+                      <span className="rz-catalog-gpc-label">{embedded ? "Huidige classificatie" : "Bevestigde classificatie"}</span>
                       <strong>{assignment.brick_code} — {text(assignment.brick_description)}</strong>
                     </div>
                     <dl className="rz-catalog-gpc-hierarchy">
@@ -281,7 +295,7 @@ export default function CatalogGpcActionPage() {
                   </div>
                 ) : null}
 
-                {!checking && !assignment && suggestions.length ? (
+                {!embedded && !readOnly && !checking && !assignment && suggestions.length ? (
                   <div className="rz-catalog-gpc-candidates" data-testid="catalog-gpc-action-suggestions">
                     <div className="rz-catalog-gpc-candidates-header">
                       <strong>Waarschijnlijke GPC Bricks</strong>
@@ -299,7 +313,7 @@ export default function CatalogGpcActionPage() {
                           <span className="rz-catalog-gpc-result-path">{text(candidate.segment_description)} › {text(candidate.family_description)} › {text(candidate.class_description)}</span>
                         </div>
                         <div className="rz-catalog-gpc-editor-actions">
-                          <Button type="button" onClick={() => saveBrick(candidate)} disabled={saving}>Voorstel bevestigen</Button>
+                          <Button type="button" onClick={() => saveBrick(candidate)} disabled={saving}>{embedded ? "Bevestigen GS1" : "Voorstel bevestigen"}</Button>
                           <Button type="button" variant="secondary" onClick={() => rejectSuggestion(candidate)} disabled={saving}>Voorstel negeren</Button>
                         </div>
                       </div>
@@ -310,7 +324,7 @@ export default function CatalogGpcActionPage() {
                   </div>
                 ) : null}
 
-                {!checking && (brickEditorOpen || assignment) ? (
+                {!embedded && !readOnly && !checking && (brickEditorOpen || assignment) ? (
                   <div className="rz-catalog-gpc-editor">
                     <label htmlFor="catalog-gpc-action-brick-search">{assignment ? 'Andere Brick kiezen' : 'Brick zoeken en selecteren'}</label>
                     <input
@@ -339,9 +353,24 @@ export default function CatalogGpcActionPage() {
                 ) : null}
               </section>
             ) : null}
+            {embedded && !readOnly && selectedArticle && !checking ? <Button type="button"
+              variant="secondary" disabled={saving} onClick={searchAlternative}>
+              Andere Brick kiezen
+            </Button> : null}
           </div>
         </ScreenCard>
       </div>
-    </AppShell>
+      {embedded && brickEditorOpen ? <ClassificationSearchOverlay
+        title="GS1 GPC Brick kiezen" query={brickQuery} onQueryChange={setBrickQuery}
+        rows={brickResults}
+        busy={saving || searchingBricks} onClose={() => setBrickEditorOpen(false)}
+        getKey={(item) => item.brick_code}
+        getTitle={(item) => item.brick_code + ' — ' + item.brick_description}
+        getDetail={(item) => [item.segment_description, item.family_description, item.class_description].filter(Boolean).join(' › ')}
+        onChoose={(item) => { void saveBrick(item) }}
+        emptyMessage='Geen officiële GS1 Bricks gevonden. Zoek op code of naam.'
+      /> : null}
+    </>
   )
+  return embedded ? content : <AppShell title="GPC classificeren" showExit={false}>{content}</AppShell>
 }

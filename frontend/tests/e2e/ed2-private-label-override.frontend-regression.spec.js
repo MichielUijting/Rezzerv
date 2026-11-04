@@ -39,6 +39,7 @@ for (const mobile of [false, true]) {
       return route.fulfill({ json: {} })
     })
     await page.goto('/externe-databases-2')
+    await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
     const article = page.getByTestId('external-databases-2-table')
       .locator('tbody tr', { hasText: 'AH CRACKERS' })
     if (mobile) await article.click()

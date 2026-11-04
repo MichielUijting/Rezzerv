@@ -573,3 +573,69 @@
   line-height: 1.5;
 }
 
+
+/* Article management uses compact existing buttons, not duplicated scorecards. */
+.rz-article-management-areas {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0 16px;
+}
+
+/* Artikelbeheer: equal GS1/CBS columns share one central Catalogus selection. */
+.rz-classification-detail { margin-top: 16px; min-width: 0; }
+.rz-classification-selected-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
+.rz-classification-selected-heading span { overflow-wrap: anywhere; }
+.rz-classification-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.rz-classification-dual-panel { min-width: 0; border: 1px solid #dfe7e1; border-radius: 10px; padding: 12px; }
+.rz-classification-dual-panel .rz-screen-card,
+.rz-classification-dual-panel .rz-catalog-page,
+.rz-classification-dual-panel .rz-catalog-card { width: 100%; min-width: 0; max-width: none; margin: 0; padding: 0; box-shadow: none; border: 0; }
+.rz-classification-dual-panel h2 { margin: 0 0 12px; }
+.rz-classification-dual-panel .rz-catalog-detail-section { padding: 0; margin: 0; border: 0; }
+.rz-classification-dual-panel .rz-catalog-gpc-summary,
+.rz-classification-dual-panel .rz-catalog-gpc-editor,
+.rz-classification-dual-panel .rz-catalog-gpc-candidates { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.rz-classification-dual-panel .rz-article-classification-layout { min-width: 0; }
+.rz-classification-dual-panel .rz-article-classification-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.rz-classification-dual-panel .rz-article-classification-actions > * { width: 100%; min-width: 0; }
+.rz-classification-current { display: flex; flex-direction: column; gap: 5px; min-height: 64px; overflow-wrap: anywhere; }
+.rz-classification-current > span:first-child { font-size: 0.875em; }
+.rz-classification-dual-panel .rz-input { max-width: 100%; width: 100%; min-width: 0; }
+@media (max-width: 720px) {
+  .rz-classification-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Selection is visible even when the standard DataTable has striped rows. */
+[data-testid="combined-classification-articles"] tr[aria-selected="true"] > td {
+  background: #d7f2df !important;
+  color: var(--color-text-primary);
+}
+[data-testid="combined-classification-articles"] tr[aria-selected="true"] {
+  outline: 2px solid var(--color-ui-primary);
+  outline-offset: -2px;
+}
+.rz-classification-search-overlay {
+  background: #fff; color: var(--color-text-primary);
+  border-radius: 10px; width: min(760px, calc(100vw - 32px));
+  max-height: min(85vh, 780px); padding: 18px; overflow-y: auto;
+}
+.rz-classification-overlay-backdrop { z-index: 9000; }
+.rz-classification-overlay-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.rz-classification-overlay-heading h3 { margin: 0; }
+.rz-classification-search-overlay .rz-input { width: 100%; min-width: 0; }
+.rz-classification-overlay-results, .rz-classification-inline-candidates {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 12px;
+  max-height: 52vh; overflow-y: auto;
+}
+.rz-classification-overlay-row {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  padding: 10px; width: 100%; background: #fff; color: var(--color-text-primary);
+  border: 1px solid #dfe7e1; border-radius: 6px; cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.rz-classification-overlay-row:hover, .rz-classification-overlay-row:focus-visible {
+  background: #d7f2df; outline: 2px solid var(--color-ui-primary);
+}
+.rz-classification-overlay-row:disabled { opacity: .6; cursor: wait; }
+.rz-classification-overlay-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

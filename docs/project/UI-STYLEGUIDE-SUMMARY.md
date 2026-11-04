@@ -1689,3 +1689,24 @@ classificatiegegevens, gekozen bron en autorisatie, en slaat relatie en
 eventuele geautoriseerde classificatiewijzigingen in één transactie op.
 De centrale overlay blijft ook voor mobiel bruikbaar. De gewone succes-,
 waarschuwing- en foutpresentatie blijft via dezelfde component verlopen.
+
+
+## Artikelbeheer werkgebieden — 4 november 2026
+
+Voor superuser/frontteam wordt de gebruikerszichtbare ingang **Artikelbeheer** met vier werkgebieden (Identificeren, Classificeren, Synoniemen, Synchroniseren) opgebouwd via bestaande `AppShell`, `ScreenCard`, `Button` en `DataTable`. Er zijn geen eigen scorecard- of tabcontrols: de vier compacte standaardknoppen markeren het geselecteerde werkgebied, en elk paneel behoudt dezelfde responsiviteit voor mobiel en desktop. Het oorspronkelijke bonartikeloverzicht is uitsluitend binnen **Identificeren** zichtbaar en behoudt zijn bestaande statusknoppen; die zijn expliciet bonregistratietellingen, geen unieke centrale Catalogustaken. Verschillende populaties worden niet in één monitor opgeteld. Wanneer synchronisatiebewijs ontbreekt, geeft het scherm dit tekstueel aan en toont geen fictieve nul. Toegang volgt de bestaande beveiligde routes en autorisaties.
+
+### Artikelbeheer: werkgebieden laden op verzoek — 4 november 2026
+
+Het Artikelbeheer-hoofdscherm toont bij openen **geen automatische artikellijst of statuscijfers**. De standaardknoppen Identificeren, Classificeren en Synoniemen zijn de enige zichtbare werkroutes. De inhoud van een werkgebied wordt pas geladen na aanklikken. Onder Identificeren verschijnt de oorspronkelijke standaard-DataTable met bestaande aantallen; onder Classificeren verschijnt één geselecteerd centraal Catalogusartikel met GS1 GPC en CBS ECOICOPv2 via bestaande componenten; onder Synoniemen verschijnen direct de bestaande twee standaardtabellen. Synchroniseren is geen aparte navigatieknop: automatische verwerking blijft op de achtergrond en uitzonderingen krijgen waar nodig de bestaande bevestigingsoverlay. Geen tweede knoppenrij voor GS1/CBS; GS1-autorisatie blijft behouden.
+
+### Artikelbeheer: één centrale artikelselectie voor GS1 en CBS — 4 november 2026
+
+Bij de knop **Classificeren** verschijnt direct de bestaande centrale Catalogusartikelpopulatie als één standaard-DataTable, met paginering en kolomfilters. Er is geen verborgen zoekveld als enige ingang. Na selecteren van één canoniek Catalogusartikel blijven artikelnaam en barcode zichtbaar en worden voor datzelfde artikel rechtstreeks de bestaande GS1 GPC- en CBS ECOICOPv2-classificatiecomponenten getoond. De classificaties hebben afzonderlijke autorisatie, bewijs en expliciete bevestiging. De samengevoegde werkplek introduceert geen tweede schrijfroute. Er is geen gebruikerszichtbare synchronisatieknop.
+
+### Artikelbeheer: zij-aan-zij classificatiedetail — 4 november 2026
+
+Bij een geselecteerd centraal Catalogusartikel toont de classificatiewerkplek de artikelidentiteit **eenmaal** boven het detail, met twee gelijkwaardige, even brede panelen: links **GS1 GPC**, rechts **CBS ECOICOPv2**. Beide tonen bovenaan de huidige officiële classificatie en daarna de bestaande zoeken/selecteren/bevestigen-route. De categorieën blijven onafhankelijke autoriteiten; er wordt niet stilzwijgend in beide systemen geschreven. Onder de uniforme responsive grens van 720px worden de panelen verticaal getoond, GS1 gevolgd door CBS. Geen dubbele artikellijst of dubbele productkop binnen de panelen. De beveiligde schrijfbevoegdheden en de standaard Inhuis-feedbackcomponenten blijven gelden.
+
+### Artikelbeheer: selectie en officiële classificatiezoekers — 4 november 2026
+
+De gekozen rij in de centrale standaard-DataTable wordt lichtgroen gearceerd en blijft gemarkeerd zolang dit artikel geselecteerd is. Alleen voor de geselecteerde canonieke Catalogusartikelidentiteit verschijnen GS1 links en CBS rechts. In beide panelen opent de bestaande categoriezoekactie een compacte, responsieve overlay met één zoekveld en aanklikbare, volledig benoemde resultaten, **zonder rijgebonden koppelknoppen**. Een definitieve GS1 Brick of laagste CBS ECOICOPv2-categorie wordt na expliciete gebruikersselectie via het bestaande beveiligde opslagendpoint vastgelegd; niet-definitieve CBS-rijen navigeren uitsluitend naar subcategorieën. Het CBS-paneel vraagt voor het gekozen artikel automatisch kandidaten op. De losse CBS/GS1-schermen behouden hun bestaande bedieningscontracten. Er is geen impliciete classificatie op basis van een naamscore.

@@ -14,7 +14,7 @@ const codeOf = (article) => article?.primary_gtin || article?.article_codes?.[0]
 const order = { linked: 0, suggested: 1, other: 2 }
 const orderedPair = (left, right) => [left, right].sort()
 
-export default function ArticleSynonymsPage() {
+export default function ArticleSynonymsPage({ embedded = false }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [articles, setArticles] = useState([])
@@ -308,7 +308,7 @@ export default function ArticleSynonymsPage() {
     { key: 'name', label: 'Artikelnaam', width: 250, sortable: true, filterable: true },
     { key: 'code', label: 'Barcode', width: 150, sortable: true, filterable: true },
   ]
-  return <AppShell title="Artikel-synoniemen" showExit={false}>
+  const content = <>
     <ScreenCard fullWidth>
       <h2>Artikel-synoniemen</h2>
       <div className="rz-synonym-side-by-side">
@@ -389,5 +389,6 @@ export default function ArticleSynonymsPage() {
         </section>
       </div>
     </ScreenCard>
-  </AppShell>
+  </>
+  return embedded ? content : <AppShell title="Artikel-synoniemen" showExit={false}>{content}</AppShell>
 }

@@ -12,7 +12,7 @@ const LEGACY_TILES = [
   { key: 'kassabonnen', label: 'Uitpakken', icon: '🧾', clickable: true },
   { key: 'kassa', label: 'Kassa', icon: '🧾', clickable: true },
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙', clickable: true },
-  { key: 'externe-databases-2', label: 'Externe databases 2', icon: '🗄️', clickable: true },
+  { key: 'externe-databases-2', label: 'Artikelbeheer', icon: '🗄️', clickable: true },
   { key: 'artikelsynoniemen', label: 'Artikel-synoniemen', icon: '🔗', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳', clickable: false },

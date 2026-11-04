@@ -9,6 +9,9 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
+import ClassificationWorkMonitor from './ClassificationWorkMonitor'
+import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
+import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -59,6 +62,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
+  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -77,10 +81,11 @@ export default function ExternalDatabases2Page() {
   const isMobile = useMobileAppViewport()
   const returnState = { filters, activeStatusCounter, sort: tableSort, page: tablePage }
   useEffect(() => {
+    if (activeArea !== 'identity') return
     navigate(`${location.pathname}${location.search}`, {
       replace: true, state: { ...location.state, ed2TableState: returnState },
     })
-  }, [filters, activeStatusCounter, tableSort, tablePage])
+  }, [filters, activeStatusCounter, tableSort, tablePage, activeArea])
 
   const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
@@ -107,7 +112,7 @@ export default function ExternalDatabases2Page() {
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'inhuis-externe-databases-2-artikelen.csv'
+    anchor.download = 'inhuis-artikel-classificeren-artikelen.csv'
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
@@ -153,8 +158,8 @@ export default function ExternalDatabases2Page() {
       variant: 'warning',
       title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
       message: count === 1
-        ? 'Dit artikel verwijderen uit Externe databases 2 en de Catalogus?'
-        : `${count} artikelen verwijderen uit Externe databases 2 en de Catalogus?`,
+        ? 'Dit artikel verwijderen uit Artikel classificeren en de Catalogus?'
+        : `${count} artikelen verwijderen uit Artikel classificeren en de Catalogus?`,
       detail: 'Kassabonnen en voorraad blijven bestaan. Een gedeeld Catalogusartikel wordt niet verwijderd.',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
@@ -216,6 +221,7 @@ export default function ExternalDatabases2Page() {
   useEffect(() => {
     let cancelled = false
     async function load() {
+      if (activeArea !== 'identity') return
       setLoading(true)
       setError('')
       try {
@@ -248,13 +254,15 @@ export default function ExternalDatabases2Page() {
     }
     load()
     return () => { cancelled = true }
-  }, [location.state?.selectedItemId, refreshVersion])
+  }, [location.state?.selectedItemId, refreshVersion, activeArea])
 
   return (
-    <AppShell title="Externe databases 2" showExit={false}>
+    <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
-        <h2>Externe databases 2</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art./Barcode toont een bekende artikelcode of handmatig ingevoerde barcode; alleen een bevestigde koppeling verandert de GS1-status.</p>
+        <h2>Artikelbeheer</h2>
+        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
+        {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
+        {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
@@ -265,8 +273,8 @@ export default function ExternalDatabases2Page() {
           title={offLinkOutcome.status === 'success' ? '' : 'Klik om deze melding te sluiten'}>
           {offLinkOutcome.message}
         </p> : null}
-        {error ? <p role="alert">{error}</p> : null}
-        <div className="rz-external-receipt-overview">
+        {activeArea === "identity" && error ? <p role="alert">{error}</p> : null}
+        {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
             key={status} type="button" variant="secondary"
@@ -351,7 +359,7 @@ export default function ExternalDatabases2Page() {
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
             }} /> : null}
-        </div>
+        </div> : null}
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">
             <p className="rz-modal-text" id="ed2-unlink-confirm">
