@@ -459,3 +459,15 @@ mogelijk conflicterend artikel aanvinken; bij daadwerkelijk **Koppelen**
 blijft de bestaande identiteits-/GS1 GPC-controle vereist en wordt bij
 een conflict de gehele selectie met een duidelijke melding geweigerd.
 De onderste linktekst naar Externe databases 2 verdwijnt.
+
+
+### Artikel-synoniemen — conflictmelding (4 november 2026)
+
+Wanneer een geselecteerd artikel niet veilig aan het linker
+Catalogusartikel gekoppeld kan worden, toont Inhuis de centrale
+**overlaymelding** met beide artikelnamen en de precieze
+barcode-, artikelcode- of GS1 GPC-bronwaarde die blokkeert.
+De gebruiker kan naar het relevante **Catalogusdetail** of
+**GS1 GPC-classificatiescherm** gaan om een aantoonbare fout te
+corrigeren. Zonder correctie blijft koppelen geblokkeerd en
+blijven alle selectie- en bestaande artikelgegevens behouden.
