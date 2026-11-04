@@ -62,7 +62,7 @@ for (const width of [390, 1280]) {
     await expect(right).toContainText('Al gekoppeld')
     await expect(right).toContainText('Voorstel')
     await expect(right).toContainText('Overig')
-    await expect(right.locator('tbody tr')).not.toContainText('08719587325926')
+    await expect(right).not.toContainText('08719587325926')
     await expect(right.locator('tbody tr').first()).toContainText('Kruimige aardappelen')
     await expect(right.locator('tbody tr').nth(1)).toContainText('08718452513666')
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
