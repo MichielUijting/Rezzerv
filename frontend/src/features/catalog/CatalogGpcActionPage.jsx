@@ -141,7 +141,10 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
       setSearchingBricks(true)
       setError('')
       try {
-        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=${embedded ? 100 : 5}`)
+        const url = embedded
+          ? `/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=100`
+          : `/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=5`
+        const response = await fetchJsonWithAuth(url)
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(functionalError(data, 'De GPC-catalogus kon niet worden doorzocht.'))
         if (!cancelled) setBrickResults(embedded ? (Array.isArray(data?.items) ? data.items : []) : limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
