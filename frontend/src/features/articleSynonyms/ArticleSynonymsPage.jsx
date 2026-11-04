@@ -74,7 +74,14 @@ export default function ArticleSynonymsPage() {
     setChecked((previous) => {
       const next = new Set(previous)
       if (next.has(item.id)) next.delete(item.id)
-      else if (next.size < 200) next.add(item.id)
+      else {
+        // Keep a single operation type: no mixed link/unlink selection.
+        for (const id of next) {
+          const previous = options.find((option) => option.id === id)
+          if ((previous?.status === 'linked') !== (item.status === 'linked')) next.delete(id)
+        }
+        if (next.size < 200) next.add(item.id)
+      }
       return next
     })
   }
@@ -181,7 +188,8 @@ export default function ArticleSynonymsPage() {
               <td>{item.code}</td>
             </tr>} />
         </section>
-        <section className="rz-synonym-side" aria-label="Synoniemen rechts">
+        <section className="rz-synonym-side" aria-label="Synoniemen rechts"
+          data-testid="article-synonyms-candidates">
           <h3>Te koppelen artikelen</h3>
           <DataTable columns={rightColumns}
             data={currentArticle ? rightRows.map((item) => ({ ...item, code: codeOf(item) })) : []}
