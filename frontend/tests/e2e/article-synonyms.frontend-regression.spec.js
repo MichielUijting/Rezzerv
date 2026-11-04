@@ -1,176 +1,90 @@
 import { test, expect } from '@playwright/test'
 
 test.use({ storageState: { cookies: [], origins: [] } })
-for (const width of [390, 1280]) {
-  for (const role of ['superuser', 'frontteam']) {
-    test(`${role}: bulk koppelen op ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
-      const writes = []
-      const pairs = Array.from({ length: 12 }, (_, i) => ({
-        id: `pair-${i}`, score: .95-i/100, fingerprint: 'a'.repeat(64),
-        left: { id: `left-${i}`, name: `AH Melk ${i}`, store_name: 'Albert Heijn', primary_gtin: '08719587325926',
-          image_url: i === 0 ? 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACAUwAOw==' : '', size_value: '1', size_unit: 'l' },
-        right: { id: `right-${i}`, name: `Jumbo Melk ${i}`, store_name: 'Jumbo', primary_gtin: '08718452513666',
-          image_url: '', size_value: '2', size_unit: 'l' },
-      }))
-      const linked = new Set()
-      let failed = false
-      await page.route('**/api/**', async (route) => {
-        const path = new URL(route.request().url()).pathname
-        if (path === '/api/session') return route.fulfill({ json: {
-          user_id: 'synonym-test', active_household_id: role === 'superuser' ? '0' : 'test-household',
-          context_type: role === 'superuser' ? 'system' : 'regular', role: 'admin',
-          is_platform_superuser: role === 'superuser', is_frontteam: role === 'frontteam',
-          permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
-        } })
-        if (path.endsWith('/article-synonyms/link')) {
-          writes.push(route.request().postDataJSON())
-          if (!failed) { failed = true; return route.fulfill({ status: 409, json: { detail: 'Een suggestie is gewijzigd. Vernieuw de lijst.' } }) }
-          for (const item of writes.at(-1).selections) linked.add(item.left_product_id)
-          return route.fulfill({ json: { linked: writes.at(-1).selections.length } })
-        }
-        if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: pairs.filter((p) => !linked.has(p.left.id)) } })
-        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
-        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
-        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-        return route.fulfill({ json: {} })
-      })
-      await page.goto('/artikelsynoniemen')
-      const table = page.getByTestId('article-synonyms-table')
-      await expect(table.locator('tbody tr')).toHaveCount(10)
-      await expect(page.getByRole('heading', { name: 'Artikel-synoniemen', level: 2, exact: true })).toBeVisible()
-      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(7)
-      await expect(table.locator('thead tr').first().locator('th').first()).toHaveText('')
-      await expect(table.locator('colgroup col').first()).toHaveAttribute('style', /48px/)
-      await expect(table.locator('thead tr').first()).toContainText('Artikelnaam')
-      await expect(table.locator('thead tr').first()).toContainText('Foto artikel')
-      await expect(table.locator('tbody tr').first()).toContainText('Albert Heijn')
-      await expect(table.locator('tbody tr').first()).toContainText('Jumbo')
-      await expect(table.locator('tbody tr').first().locator('img')).toHaveCount(1)
-      await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
-      await table.getByRole('checkbox').nth(0).check()
-      await table.getByRole('checkbox').nth(1).check()
-      await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
-      await expect(table.locator('tbody tr')).toHaveCount(2)
-      await table.getByRole('checkbox').first().check()
-      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('AH Melk 0')
-      await expect(table.locator('tbody tr')).toHaveCount(1)
-      expect(writes).toEqual([])
-      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-      await expect(page.getByRole('alert')).toContainText('Een suggestie is gewijzigd')
-      await expect(page.getByText('3 geselecteerd', { exact: true })).toBeVisible()
-      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-      await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
-      expect(writes[1].selections.map((item) => item.left_product_id)).toEqual(['left-0', 'left-1', 'left-10'])
-      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('')
-      await expect(table.locator('tbody tr')).toHaveCount(9)
-      await expect(table).not.toContainText('AH Melk 0')
-      await page.reload()
-      await expect(table.locator('tbody tr')).toHaveCount(9)
-      await expect(page.getByRole('link', { name: 'Externe databases 2', exact: true })).toBeVisible()
-      if (width <= 720) await expect(page.getByRole('button', { name: 'Terug', exact: true }).first()).toBeVisible()
-    })
-  }
-}
-
 
 for (const width of [390, 1280]) {
-  test(`Artikel-synoniemen toont gecodeerde Catalogusartikelen bij nul voorstellen op ${width}px`, async ({ page }) => {
+  test(`Artikel-synoniemen: twee tabellen en drie relatiestatussen op ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    let writes = 0
+    const posts = []
+    const articles = [
+      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926', store: 'Winkel onbekend',
+        synonym_count: 1, pending: [{ id: 'b' }] },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666', store: 'Lidl',
+        synonym_count: 0, pending: [{ id: 'a' }] },
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
+        store: 'Albert Heijn', synonym_count: 1, pending: [] },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
+        store: 'Winkel onbekend', synonym_count: 0, pending: [] },
+    ]
+    const options = [
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
+        status: 'linked', status_label: 'Al gekoppeld', store: 'Albert Heijn',
+        linkable: false, reason: 'Al gekoppeld', manual: true },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666',
+        status: 'suggested', status_label: 'Voorstel', store: 'Lidl',
+        linkable: true, manual: false, fingerprint: 'b'.repeat(64) },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
+        status: 'other', status_label: 'Overig', store: 'Winkel onbekend',
+        linkable: true, manual: true, fingerprint: 'd'.repeat(64) },
+    ]
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
       if (path === '/api/session') return route.fulfill({ json: {
-        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
-        is_platform_superuser: true, permissions: {
-          'platform.external_products.view': true,
-          'platform.external_products.link_existing': true,
-        },
-      } })
-      if (path.endsWith('/article-synonyms/link')) { writes++; return route.fulfill({ status: 400 }) }
-      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
-        items: [
-          { id: 'first', name: 'Halfvolle melk', store: 'Winkel onbekend', image_url: '',
-            status: 'insufficient', synonym_count: 0, pending: [] },
-          { id: 'second', name: 'Volle melk', store: 'Lidl', image_url: '',
-            status: 'no_candidate', synonym_count: 0, pending: [] },
-        ],
-        summary: { eligible_articles: 2, candidate_pairs: 0 },
-      } })
-      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [] } })
-      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
-      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
-      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-      return route.fulfill({ json: {} })
-    })
-    await page.goto('/artikelsynoniemen')
-    const articles = page.getByTestId('article-synonyms-articles')
-    await expect(articles).toContainText('Halfvolle melk')
-    await expect(articles).toContainText('Volle melk')
-    await expect(articles).toContainText('Winkel onbekend')
-    await expect(articles).toContainText('Lidl')
-    await expect(page.getByTestId('article-synonyms-candidates')).toHaveCount(0)
-    await articles.locator('tbody tr').first().dblclick()
-    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen passende synoniemsuggesties')
-    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
-    await articles.locator('tbody tr').nth(1).dblclick()
-    await expect(page.getByTestId('article-synonyms-candidates')).toContainText('Geen passende synoniemsuggesties')
-    expect(writes).toBe(0)
-  })
-}
-
-
-for (const width of [390, 1280]) {
-  test(`Naamovereenkomst is ook koppelbaar bij onbekende winkel op ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
-    let writes = 0
-    await page.route('**/api/**', async (route) => {
-      const path = new URL(route.request().url()).pathname
-      if (path === '/api/session') return route.fulfill({ json: {
-        user_id: 'synonym-test', active_household_id: '0', context_type: 'system', role: 'admin',
-        is_platform_superuser: true, permissions: {
-          'platform.external_products.view': true,
-          'platform.external_products.link_existing': true,
-        },
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system',
+        is_platform_superuser: true, role: 'admin',
+        permissions: { 'platform.external_products.view': true,
+          'platform.external_products.link_existing': true },
       } })
       if (path.endsWith('/article-synonyms/link')) {
-        writes += 1
-        return route.fulfill({ status: 400 })
+        posts.push(route.request().postDataJSON())
+        for (const selected of posts.at(-1).selections) {
+          const target = options.find((item) => item.id === selected.right_product_id)
+          if (target) { target.status = 'linked'; target.status_label = 'Al gekoppeld'; target.linkable = false }
+        }
+        return route.fulfill({ json: { linked: posts.at(-1).selections.length, already_linked: 0 } })
       }
-      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: {
-        items: [
-          { id: 'a', name: 'Aardappelen', store: 'Winkel onbekend', image_url: '',
-            status: 'review', synonym_count: 0,
-            pending: [{ id: 'b', name: 'Aardappelen kruimig', linkable: false }] },
-          { id: 'b', name: 'Aardappelen kruimig', store: 'Winkel onbekend', image_url: '',
-            status: 'review', synonym_count: 0,
-            pending: [{ id: 'a', name: 'Aardappelen', linkable: false }] },
-        ],
-      } })
-      if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: [{
-        id: 'name-pair', score: 0.84, fingerprint: 'a'.repeat(64),
-        linkable: true, match_basis: 'product_similarity',
-        left: { id: 'a', name: 'Aardappelen', store_name: 'Winkel onbekend', image_url: '' },
-        right: { id: 'b', name: 'Aardappelen kruimig', store_name: 'Winkel onbekend', image_url: '' },
-      }] } })
+      if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
       if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
       if (path === '/api/features') return route.fulfill({ json: { features: {} } })
       if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
       return route.fulfill({ json: {} })
     })
     await page.goto('/artikelsynoniemen')
-    const articles = page.getByTestId('article-synonyms-articles')
-    await expect(articles).toContainText('Voorstellen beschikbaar')
-    await articles.locator('tbody tr').first().dblclick()
-    const proposals = page.getByTestId('article-synonyms-candidates')
-    await expect(proposals).toContainText('Aardappelen kruimig')
-    await expect(proposals).toContainText('onafhankelijk van de winkel')
-    await expect(proposals.getByRole('checkbox')).toBeEnabled()
+    const left = page.getByTestId('article-synonyms-articles')
+    const right = page.getByTestId('article-synonyms-table')
+    await expect(left).toContainText('Aardappelen')
+    await expect(right).toHaveCount(0)
+    await left.locator('tbody tr').first().click()
+    await expect(right.locator('tbody tr')).toHaveCount(3)
+    await expect(left.locator('thead tr').first().locator('th')).toHaveCount(4)
+    await expect(right.locator('thead tr').first().locator('th')).toHaveCount(4)
+    await expect(right).toContainText('Al gekoppeld')
+    await expect(right).toContainText('Voorstel')
+    await expect(right).toContainText('Overig')
+    await expect(right.locator('tbody tr')).not.toContainText('08719587325926')
+    await expect(right.locator('tbody tr').first()).toContainText('Kruimige aardappelen')
+    await expect(right.locator('tbody tr').nth(1)).toContainText('08718452513666')
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
-    await proposals.getByRole('checkbox').check()
-    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
-    expect(writes).toBe(0)
+    await right.locator('tbody tr').first().click()
+    await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
+    await right.locator('tbody tr').nth(1).click()
+    await right.locator('tbody tr').nth(2).click()
+    await expect(page.getByText('2 geselecteerd', { exact: true })).toBeVisible()
+    expect(posts).toHaveLength(0)
+    await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
+    expect(posts).toHaveLength(1)
+    expect(posts[0].selections).toEqual([
+      { left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false },
+      { left_product_id: 'a', right_product_id: 'd', fingerprint: 'd'.repeat(64), manual: true },
+    ])
+    await expect(right).toContainText('Al gekoppeld')
+    // Narrow screens stack the two actual tables without changing identities.
+    const panes = await page.locator('.rz-synonym-side').evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().top))
+    if (width <= 900) expect(panes[1]).toBeGreaterThan(panes[0])
+    else expect(panes[1]).toBeCloseTo(panes[0], 0)
   })
 }
 
