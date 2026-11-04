@@ -445,6 +445,7 @@ class StoreTest(unittest.TestCase):
                                          expected_decision_version=1,
                                          expected_target_version=0, expected_target_code='', actor_id='actor')
             self.assertEqual(again['cbs_inherited'], 0)
+            self.assertEqual(list_sync_exceptions(conn)['total'], 0)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM article_classification_sync_events
                 WHERE status='processed'
