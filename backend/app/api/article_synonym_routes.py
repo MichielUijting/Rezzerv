@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db import engine
 from app.services.session_request_context import require_platform_permission_from_session
-from app.services.article_synonym_service import load_products, suggest_pairs, confirmed_pairs, confirm_pairs, candidate_pairs_for_product, product_link_options
+from app.services.article_synonym_service import load_products, suggest_pairs, confirmed_pairs, confirm_pairs, candidate_pairs_for_product, product_link_options, unlink_pairs
 
 router = APIRouter(prefix='/api/external-databases/article-synonyms', tags=['article-synonyms'])
 
@@ -87,3 +87,10 @@ def link_suggestions(payload: BulkSelection):
     actor = _actor('platform.external_products.link_existing')
     with engine.begin() as conn:
         return confirm_pairs(conn, [item.model_dump() for item in payload.selections], actor.user_id)
+
+
+@router.post('/unlink')
+def unlink_suggestions(payload: BulkSelection):
+    _actor('platform.external_products.link_existing')
+    with engine.begin() as conn:
+        return unlink_pairs(conn, [item.model_dump() for item in payload.selections])
