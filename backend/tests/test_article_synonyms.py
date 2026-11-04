@@ -767,6 +767,7 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/candidates').status_code, status)
+                self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/options').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
@@ -777,6 +778,19 @@ class ApiTest(unittest.TestCase):
             with patch.object(routes, 'require_platform_permission_from_session', return_value=actor) as check:
                 self.assertIs(routes._actor('platform.external_products.link_existing'), actor)
                 check.assert_called_once_with('platform.external_products.link_existing')
+
+    def test_manual_selection_contract_does_not_trust_client_identity(self):
+        body = routes.BulkSelection(selections=[dict(
+            left_product_id='a', right_product_id='b',
+            fingerprint='0' * 64, manual=True,
+        )])
+        self.assertTrue(body.selections[0].manual)
+        for forged in [
+            dict(left_product_id='a', right_product_id='b', fingerprint='0' * 64,
+                 manual=True, product_name='forged'),
+        ]:
+            self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link',
+                                              json={'selections': [forged]}).status_code, 422)
 
     def test_request_limits_and_forged_authority_rejected(self):
         for body in [{'selections':[]},{'selections':[{}]}, {'selections':[], 'role':'Superuser'}]:
