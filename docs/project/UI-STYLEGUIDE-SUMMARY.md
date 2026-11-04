@@ -1569,3 +1569,34 @@ De tellerbalk bevat uitsluitend de statusknoppen **Niet gekoppeld**,
 wordt niet getoond, ook niet bij een actief tabel- of statusfilter.
 Kolomfilters blijven in de tabel bewerkbaar en iedere statusknop blijft
 afzonderlijk in- en uitschakelbaar. Er verschijnt geen vierde donkergroene knop.
+
+
+## Artikel-synoniemen — twee afzonderlijke tabellen (4 november 2026)
+
+Voor de actie **Artikel-synoniemen** geldt vanaf dit PO-besluit:
+
+- Gebruik twee bestaande **DataTable**-componenten naast elkaar bij desktop:
+  links de te kiezen centrale Catalogusartikelen, rechts de relaties en andere
+  centrale artikelen. Bij schermen tot 900 px staan de tabellen onder elkaar.
+- Eén regel representeert **exact één Catalogusartikel** met een afzonderlijke
+  canonieke product-ID. Een reeds gekozen artikel komt nooit rechts terug.
+  Het veld **Art./Barcode** maakt identieke namen onderscheidbaar.
+- Rechts staan bestaande relaties eerst (**Al gekoppeld**, lichtgroen,
+  niet opnieuw selecteerbaar), daarna **Voorstel** (subtiele accentkleur) en
+  **Overig** (neutraal). Niet-koppelbare identiteitsconflicten krijgen de
+  tekst **Niet koppelbaar** en kunnen niet worden geselecteerd.
+- Gekozen regels krijgen een zichtbare selectiemarkering volgens het bestaande
+  tabelselectiepatroon. Een klik op de rechterrij selecteert alleen; pas de
+  bestaande, niet-vette bulkknop **Koppelen** slaat de relatie op.
+- Zoek-/filtervelden, numerieke uitlijning, horizontale scrollbar, sortering
+  en paginering volgen in beide panelen de gedeelde DataTable; er komt geen
+  schermspecifieke kopie van Tabel of een alternatieve tabelcomponent.
+- De winkel is uitsluitend presentatie en heeft geen invloed op het
+  bepalen of bevestigen van synoniemen. Gebruik de bestaande
+  `AppFeedback`-overlay voor succes/fouten en behoud de normale rechten.
+
+De paneel-grid en lichte statusaccenten zijn lokaal vastgelegd in
+`frontend/src/features/articleSynonyms/synonymAnalysis.css`; bestaande
+centrale ontwerpvariabelen en het primaire Inhuis-kleurgebruik blijven
+leidend. Deze paragraaf is een aanvullende functionele UI-regel en
+wijzigt geen andere schermen.
