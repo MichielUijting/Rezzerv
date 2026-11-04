@@ -23,7 +23,7 @@ function csvCell(value) {
   return '"' + safe.replaceAll('"', '""') + '"'
 }
 
-export default function CbsClassificationPage() {
+export default function CbsClassificationPage({ embedded = false, productId = null }) {
   const { showFeedback } = useAppFeedback()
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(new Set())
@@ -43,6 +43,7 @@ export default function CbsClassificationPage() {
   const busy = useRef(false)
 
   useEffect(() => {
+    if (embedded && !productId) return undefined
     const controller = new AbortController()
     async function load() {
       setLoading(true)
@@ -74,9 +75,9 @@ export default function CbsClassificationPage() {
     }
     load()
     return () => controller.abort()
-  }, [revision])
+  }, [revision, embedded, productId])
 
-  const selectedItems = useMemo(() => items.filter((item) => selected.has(item.id)), [items, selected])
+  const selectedItems = useMemo(() => items.filter((item) => embedded ? item.id === productId : selected.has(item.id)), [items, selected, embedded, productId])
   const allClassified = selectedItems.length > 0 && selectedItems.every((item) => item.classified)
   const isBusy = loading || searching || saving
 
@@ -280,21 +281,21 @@ export default function CbsClassificationPage() {
       </Button> },
   ]
 
-  return <AppShell title="Artikelclassificaties toekennen" showExit={false}>
+  const content = <>
     <ScreenCard fullWidth>
-      <h2>Artikelclassificaties toekennen</h2>
+      <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
       <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
         Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p>
       {error ? <p role="alert">{error}</p> : null}
       {note ? <p role="status">{note}</p> : null}
       <div className="rz-article-classification-layout">
-        <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
+        {!embedded ? <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
           filterState={filters}
           onFilterChange={(key, value) => setFilters((prev) => ({ ...prev, [key]: value }))}
           wrapperClassName="rz-classification-table-wrapper"
           getRowKey={(item) => item.id} pageSize={8}
           emptyMessage={loading ? 'Artikelen laden...' : 'Geen Catalogusartikelen.'}
-          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} />
+          paginationActions={<span aria-live="polite">{selected.size} geselecteerd</span>} /> : <p data-testid="cbs-single-product"> {loading ? "CBS-classificatie laden…" : selectedItems.length ? `Artikel: ${selectedItems[0].name} — ${selectedItems[0].classified ? `${selectedItems[0].cbs_code} · ${selectedItems[0].category_name}` : "Niet geclassificeerd"}` : "Het gekozen Catalogusartikel is niet gevonden in de CBS-werkvoorraad."}</p>}
         <div className="rz-article-classification-actions" aria-label="CBS-classificatieacties">
           <label className="rz-input-field">
             <span className="rz-label">Zoek productnaam, CBS-code of officiële categorie</span>
@@ -329,5 +330,6 @@ export default function CbsClassificationPage() {
         </section> : null}
       </div>
     </ScreenCard>
-  </AppShell>
+  </>
+  return embedded ? content : <AppShell title="Artikelclassificaties toekennen" showExit={false}>{content}</AppShell>
 }
