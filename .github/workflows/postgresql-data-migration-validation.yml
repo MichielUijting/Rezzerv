@@ -90,7 +90,7 @@ jobs:
           python -m alembic -c backend/alembic.ini upgrade head
           # Fail-first: prove the immutable SQLite baseline before the expensive
           # SQLite-to-PostgreSQL equivalence and data-copy stages.
-          python backend/tests/migration_foundation_head_selftest.py | tee /tmp/immutable-head-contract.log
+          REZZERV_EXPECT_MIGRATION_MODE=sqlite-baseline python backend/tests/migration_foundation_head_selftest.py | tee /tmp/immutable-head-contract.log
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/immutable-head-contract.log
           grep -F 'ARTICLE_CLASSIFICATION_SYNC_AUDIT_SCHEMA_AUTHORITY_GREEN' /tmp/immutable-head-contract.log
           python -m alembic -c backend/alembic.ini current | tee /tmp/pr352-sqlite-head.log
