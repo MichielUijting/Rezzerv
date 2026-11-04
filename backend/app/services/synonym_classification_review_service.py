@@ -68,6 +68,10 @@ def apply_choices(conn, reviews, decisions, actor_id):
     choices = {(d["left_product_id"], d["right_product_id"]): d for d in decisions}
     if len(decisions) != len(choices) or set(choices) != set(conflicts):
         raise HTTPException(409, "Kies voor alle afwijkende classificaties welke moet gelden.")
+    # Multiple independent decisions may not write different source codes to
+    # the same central product in one batch; ask for pairwise confirmation.
+    if len({pid for pair in conflicts for pid in pair}) != 2 * len(conflicts):
+        raise HTTPException(409, "Controleer conflicterende synoniemen één paar tegelijk.")
     report = {"gpc_resolved": 0, "cbs_resolved": 0}
     for pair, review in conflicts.items():
         decision = choices[pair]
