@@ -23,6 +23,15 @@ for (const width of [390, 1280]) {
         status: 'other', status_label: 'Niet koppelbaar', linkable: false,
         reason: 'Strijdige GPC-indeling', fingerprint: '', manual: true },
     ]
+    // Both DataTables must actually paginate; <=10 mocked rows hide
+    // the shared pagination controls by design.
+    for (let i = 0; i < 9; i += 1) {
+      const id = `extra-${i}`
+      articles.push({ id, name: `Z extra artikel ${i}`, primary_gtin: `87123456789${String(i).padStart(2, '0')}`, synonym_count: 0 })
+      options.push({ id, name: `Z extra artikel ${i}`, primary_gtin: `87123456789${String(i).padStart(2, '0')}`,
+        status: 'other', status_label: 'Overig', linkable: true, manual: true,
+        fingerprint: 'e'.repeat(64) })
+    }
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
       if (path === '/api/session') return route.fulfill({ json: {
@@ -95,12 +104,12 @@ for (const width of [390, 1280]) {
     const leftCheck = left.locator('tbody tr').first().getByRole('checkbox')
     await leftCheck.check()
     await expect(leftCheck).toBeChecked()
-    await expect(right.locator('tbody tr')).toHaveCount(3)
+    await expect(right.locator('tbody tr')).toHaveCount(10)
     await expect(right.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-linked/)
     await expect(right.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-suggested/)
     await expect(right.locator('tbody tr').nth(2)).toHaveClass(/rz-synonym-relation-other/)
     await expect(right).not.toContainText('08719587325926')
-    await expect(right.getByRole('checkbox')).toHaveCount(3)
+    await expect(right.getByRole('checkbox')).toHaveCount(10)
     const conflictCheckbox = right.locator('tbody tr').filter({ hasText: '08712345678913' }).getByRole('checkbox')
     await expect(conflictCheckbox).toBeEnabled()
     await conflictCheckbox.check()
