@@ -1620,3 +1620,21 @@ selectiemarkering. Onderaan rechts staan twee standaardknoppen
 is actief voor een geselecteerde bestaande of nieuwe relatie.
 Op mobiele breedte staan de twee tabellen onder elkaar.
 De tabellen behouden standaardfiltering, sorteren en paginering.
+
+
+### Artikel-synoniemen — uitlijning paginering en synoniemteller (4 november 2026)
+
+De standaardpaginering van beide onafhankelijke DataTables staat op desktop
+**op exact dezelfde verticale hoogte**, ook wanneer links/rechts een ander
+aantal zichtbare artikelen staat. De pagineringscomponent zelf wordt niet
+gedupliceerd of vervangen: de twee tabelshells krijgen gelijke hoogte en
+beide panelen reserveren dezelfde actieregel onder de paginering.
+De knoppen **Koppelen** en **Ontkoppelen** staan uitsluitend **onder**
+de rechterpaginering, samen rechts uitgelijnd. Op mobiel mogen de twee
+tabellen onder elkaar staan en is onderlinge pagineringsuitlijning niet nodig.
+
+De linkertabel heeft aanvullend de kolom **Synoniemen** met het aantal
+**rechtstreeks bevestigde** synoniemen per Catalogusartikel, numeriek
+rechts uitgelijnd, sorteerbaar. De rechtertabel behoudt de vier kolommen
+checkbox, foto, artikelnaam, barcode. Tellers zijn data uit de bestaande
+bevoegde analyseprojectie; geen nieuwe databaseberekeningen of writes.
