@@ -455,6 +455,76 @@ class StoreTest(unittest.TestCase):
                 WHERE global_product_id='b'
             """)).scalar_one(), 1)
 
+    def test_failed_retry_logs_only_after_rollback_without_mutating_catalog(self):
+        from app.services.article_classification_sync_monitor import (
+            record_sync_event, list_sync_exceptions,
+        )
+        with self.engine.begin() as conn:
+            record_sync_event(
+                conn, source_id='a', target_id='b', system='CBS',
+                code='011420', reference='CBS-ECOICOPv2-2026',
+                decision_version=1, status='review_required',
+                reason='Officiële bron tijdelijk niet beschikbaar', actor_id='actor',
+            )
+            event_id = conn.execute(text(
+                "SELECT id FROM article_classification_sync_events"
+            )).scalar_one()
+        app = FastAPI()
+        app.include_router(routes.router)
+        client = TestClient(app)
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
+        with patch.object(routes, 'engine', self.engine), \
+                patch.object(routes, 'require_platform_permission_from_session',
+                             return_value=actor), \
+                patch.object(routes, 'retry_sync_exception',
+                             side_effect=RuntimeError('injected failed transaction')):
+            response = client.post(
+                '/api/external-databases/article-synonyms/sync-exceptions/retry',
+                json={'event_id': event_id, 'expected_decision_version': 1,
+                      'expected_target_version': 0, 'expected_target_code': ''},
+            )
+        self.assertEqual(response.status_code, 503)
+        with self.engine.connect() as conn:
+            monitor = list_sync_exceptions(conn)
+            self.assertEqual(monitor['total'], 1)
+            self.assertEqual(monitor['items'][0]['status'], 'failed')
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_classifications"
+            )).scalar_one(), 0)
+
+    def test_gpc_retry_requires_separate_official_write_permission(self):
+        from app.services.article_classification_sync_monitor import record_sync_event
+        with self.engine.begin() as conn:
+            record_sync_event(
+                conn, source_id='a', target_id='b', system='GPC',
+                code='10000025', decision_version=0, status='review_required',
+                reason='Uitzondering voor expliciete test', actor_id='actor',
+            )
+            event_id = conn.execute(text(
+                "SELECT id FROM article_classification_sync_events"
+            )).scalar_one()
+        app = FastAPI()
+        app.include_router(routes.router)
+        client = TestClient(app)
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
+        def authorize(permission):
+            if permission == 'gpc.update':
+                raise HTTPException(403, 'GPC-schrijfrecht ontbreekt.')
+            return actor
+        with patch.object(routes, 'engine', self.engine), \
+                patch.object(routes, 'require_platform_permission_from_session',
+                             side_effect=authorize):
+            response = client.post(
+                '/api/external-databases/article-synonyms/sync-exceptions/retry',
+                json={'event_id': event_id, 'expected_decision_version': 0,
+                      'expected_target_version': 0, 'expected_target_code': ''},
+            )
+        self.assertEqual(response.status_code, 403)
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 1)
+
     def test_existing_confirmed_gpc_conflict_is_logged_once_without_overwrite(self):
         from app.services.article_classification_sync_monitor import list_sync_exceptions
         with self.engine.begin() as conn:
