@@ -370,3 +370,15 @@ classificaties of artikelen ingevoerd, en geen deelbatch stilzwijgend
 weggeschreven. Bestaande gekoppelde regels blijven via Ontkoppelen
 beheersbaar. De tekst en link onder de tabellen naar
 **Externe databases 2** vervallen op dit scherm.
+
+
+## PO-verfijning linker tabelbreedtes (4 november 2026)
+
+De linker tabel benut de beschikbare horizontale ruimte beter, zonder de
+tabelcomponent of andere schermen te wijzigen. De checkbox- en fotokolom
+hebben dezelfde standaardbreedte als rechts (42 en 70 px). De overblijvende
+ruimte gaat naar Artikelnaam (236 px); Barcode blijft 112 px en de kolom
+Syn. blijft 52 px. Zo krijgt de linker tabel dezelfde totale nominale
+breedte als de rechter tabel en blijft de directe synoniemteller zichtbaar.
+Paginering, filtervelden en handmatige kolomverstelling blijven via de
+standaardcomponent werken.
