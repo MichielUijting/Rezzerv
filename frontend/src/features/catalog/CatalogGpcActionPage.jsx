@@ -222,7 +222,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
     <>
       <DelayedTableLoadingOverlay active={loading || checking || searchingBricks || saving} />
       <div className="rz-catalog-page" data-testid="catalog-gpc-action-page">
-        <ScreenCard fullWidth>
+        <ScreenCard fullWidth style={embedded ? { padding: 0, margin: 0, borderRadius: 0, overflow: 'visible' } : undefined}>
           <div className="rz-catalog-card">
             <div className="rz-catalog-section-header">
               <div>
