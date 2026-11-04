@@ -40,7 +40,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcActionPage() {
+export default function CatalogGpcActionPage({ embedded = false, onArticleChange = () => {} }) {
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -85,6 +85,7 @@ export default function CatalogGpcActionPage() {
 
   async function chooseArticle(article) {
     setSelectedArticle(article)
+    onArticleChange(article)
     setAssignment(null)
     setSuggestions([])
     setBrickEditorOpen(false)
@@ -198,6 +199,7 @@ export default function CatalogGpcActionPage() {
   }
 
   function resetArticle() {
+    onArticleChange(null)
     setSelectedArticle(null)
     setAssignment(null)
     setSuggestions([])
@@ -209,8 +211,8 @@ export default function CatalogGpcActionPage() {
     setFeedback('')
   }
 
-  return (
-    <AppShell title="GPC classificeren" showExit={false}>
+  const content = (
+    <>
       <DelayedTableLoadingOverlay active={loading || checking || searchingBricks || saving} />
       <div className="rz-catalog-page" data-testid="catalog-gpc-action-page">
         <ScreenCard fullWidth>
@@ -342,6 +344,7 @@ export default function CatalogGpcActionPage() {
           </div>
         </ScreenCard>
       </div>
-    </AppShell>
+    </>
   )
+  return embedded ? content : <AppShell title="GPC classificeren" showExit={false}>{content}</AppShell>
 }
