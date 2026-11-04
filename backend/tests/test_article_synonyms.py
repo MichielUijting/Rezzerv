@@ -18,6 +18,7 @@ from app.api import article_synonym_routes as routes
 from app.api import catalog_routes
 from app.services import article_synonym_service as service
 from app.services import synonym_classification_inheritance_service as inheritance
+from app.services import synonym_classification_review_service as classification_review
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -240,15 +241,27 @@ class StoreTest(unittest.TestCase):
                 )
             """)
             conn.exec_driver_sql("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT, language_code TEXT, active BOOLEAN,
+                    gpc_brick_name TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                INSERT INTO gpc_product_groups VALUES
+                    ('10000025','nl',TRUE,'Melk'),
+                    ('10000026','nl',TRUE,'Andere melk')
+            """)
+            conn.exec_driver_sql("""
                 CREATE TABLE cbs_ecoicop_categories (
                     cbs_code TEXT, reference_version TEXT, parent_code TEXT,
+                    name_nl TEXT NOT NULL,
                     PRIMARY KEY (cbs_code, reference_version)
                 )
             """)
             conn.exec_driver_sql("""
                 INSERT INTO cbs_ecoicop_categories VALUES
-                    ('011420','CBS-ECOICOPv2-2026',NULL),
-                    ('011410','CBS-ECOICOPv2-2026',NULL)
+                    ('011420','CBS-ECOICOPv2-2026',NULL,'Melkproducten'),
+                    ('011410','CBS-ECOICOPv2-2026',NULL,'Andere zuivel')
             """)
             conn.exec_driver_sql("""
                 CREATE TABLE global_product_cbs_classifications (
@@ -394,20 +407,92 @@ class StoreTest(unittest.TestCase):
                 WHERE global_product_id='a'
             """)).scalar_one(), 'synonym:b')
 
-    def test_conflicting_cbs_values_are_not_overwritten(self):
+    def test_conflicting_cbs_values_require_user_choice_before_linking(self):
         with self.engine.begin() as conn:
             selection = self.selection(conn)
             self._set_cbs(conn, 'a', '011420')
             self._set_cbs(conn, 'b', '011410')
-            result = service.confirm_pairs(conn, [selection], 'actor')
-            conflicts = result['classification_inheritance']['conflicts']
-            self.assertEqual([x['system'] for x in conflicts], ['CBS'])
+            with self.assertRaises(HTTPException) as rejection:
+                service.confirm_pairs(conn, [selection], 'actor')
+            self.assertEqual(rejection.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM global_product_cbs_history
             """)).scalar_one(), 0)
             self.assertEqual(set(conn.execute(text("""
                 SELECT cbs_code FROM global_product_cbs_classifications
             """)).scalars()), {'011410', '011420'})
+
+    def test_reviewer_can_choose_each_independent_classification(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025'),('b','10000026')
+            """))
+            self._set_cbs(conn, 'a', '011420')
+            self._set_cbs(conn, 'b', '011410')
+            products = {p['id']: p for p in service.load_products(conn)}
+            choice = dict(left_product_id='a', right_product_id='b',
+                          fingerprint=service._fingerprint(products['a'], products['b']),
+                          manual=True)
+            review = classification_review.review_pairs(conn, [choice], products)[0]
+            self.assertEqual([c['system'] for c in review['clashes']], ['GPC', 'CBS'])
+            self.assertEqual(review['clashes'][0]['left']['code'], '10000025')
+            self.assertEqual(review['clashes'][0]['right']['code'], '10000026')
+            self.assertEqual(review['clashes'][1]['left']['label'], 'Melkproducten')
+            decision = dict(left_product_id='a', right_product_id='b',
+                            snapshot=review['snapshot'], gpc_source_id='a',
+                            cbs_source_id='b')
+            result = service.confirm_pairs(conn, [choice], 'actor', decisions=[decision])
+            self.assertEqual(result['linked'], 1)
+            self.assertEqual(result['classification_inheritance']['gpc_resolved'], 1)
+            self.assertEqual(result['classification_inheritance']['cbs_resolved'], 1)
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a': '10000025', 'b': '10000025'})
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code FROM global_product_cbs_classifications
+            """)).all()), {'a': '011410', 'b': '011410'})
+            self.assertEqual(conn.execute(text("""
+                SELECT confirmation_source FROM global_product_cbs_history
+                WHERE global_product_id='a'
+            """)).scalar_one(), 'synonym_review:b')
+            self.assertEqual(conn.execute(text("""
+                SELECT assignment_source FROM global_product_gpc_bricks
+                WHERE global_product_id='b'
+            """)).scalar_one(), 'synonym_review')
+
+    def test_stale_classification_choice_is_rejected_without_writes(self):
+        with self.engine.begin() as conn:
+            self._set_cbs(conn, 'a', '011420')
+            self._set_cbs(conn, 'b', '011410')
+            choice = self.selection(conn)
+            products = {p['id']: p for p in service.load_products(conn)}
+            review = classification_review.review_pairs(conn, [choice], products)[0]
+            decision = dict(left_product_id='a', right_product_id='b',
+                            snapshot=review['snapshot'], cbs_source_id='a')
+            conn.execute(text("""
+                UPDATE global_product_cbs_classifications
+                SET version=version+1 WHERE global_product_id='a'
+            """))
+            with self.assertRaises(HTTPException) as rejected:
+                service.confirm_pairs(conn, [choice], 'actor', decisions=[decision])
+            self.assertEqual(rejected.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
+    def test_shared_gtin_cannot_be_bypassed_by_a_classification_choice(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE global_products SET primary_gtin='8719587325926' WHERE id='b'
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            forged = dict(left_product_id='a', right_product_id='b',
+                          fingerprint=service._fingerprint(products['a'], products['b']),
+                          manual=True)
+            with self.assertRaises(HTTPException) as rejected:
+                service.confirm_pairs(conn, [forged], 'actor')
+            self.assertEqual(rejected.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
 
     def test_existing_gpc_conflict_blocks_only_gpc_not_cbs(self):
         with self.engine.begin() as conn:
