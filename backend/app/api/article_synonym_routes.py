@@ -23,10 +23,19 @@ class Selection(BaseModel):
     fingerprint: str = Field(pattern=r'^[0-9a-f]{64}$')
     manual: bool = False
 
+class ClassificationDecision(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    left_product_id: str = Field(min_length=1, max_length=200)
+    right_product_id: str = Field(min_length=1, max_length=200)
+    snapshot: str = Field(pattern=r'^[0-9a-f]{64}$')
+    gpc_source_id: str | None = Field(default=None, max_length=200)
+    cbs_source_id: str | None = Field(default=None, max_length=200)
+
+
 class BulkSelection(BaseModel):
     model_config = ConfigDict(extra='forbid')
     selections: list[Selection] = Field(min_length=1, max_length=200)
-
+    decisions: list[ClassificationDecision] = Field(default_factory=list, max_length=8)
 
 @router.get('')
 def list_suggestions():
@@ -82,11 +91,33 @@ def synonym_options(product_id: str):
     return {'items': options, 'total': len(options)}
 
 
+@router.post('/link/review')
+def review_synonym_classifications(payload: BulkSelection):
+    """Read-only current side-by-side verified classification comparison."""
+    _actor('platform.external_products.link_existing')
+    from app.services.synonym_classification_review_service import review_pairs
+    with engine.connect() as conn:
+        products = {p['id']: p for p in load_products(conn)}
+        reviews = review_pairs(conn, [item.model_dump() for item in payload.selections], products)
+    conflicts = [row for row in reviews if row['clashes']]
+    if len(conflicts) > 8 or len({pid for row in conflicts for pid in
+                                  (row['left_id'], row['right_id'])}) != 2 * len(conflicts):
+        raise HTTPException(409, 'Controleer conflicterende synoniemen één paar tegelijk; overige selecties blijven behouden.')
+    return {'items': conflicts, 'total': len(conflicts)}
+
+
 @router.post('/link')
 def link_suggestions(payload: BulkSelection):
     actor = _actor('platform.external_products.link_existing')
+    if any(choice.gpc_source_id for choice in payload.decisions):
+        # An explicit correction of an existing GPC Brick is a privileged
+        # classification write, not merely permission to link synonyms.
+        require_platform_permission_from_session('gpc.update')
     with engine.begin() as conn:
-        return confirm_pairs(conn, [item.model_dump() for item in payload.selections], actor.user_id)
+        return confirm_pairs(
+            conn, [item.model_dump() for item in payload.selections], actor.user_id,
+            decisions=[item.model_dump() for item in payload.decisions],
+        )
 
 
 @router.post('/unlink')

@@ -75,6 +75,14 @@ function normalizeFeedback(input) {
       ? Math.max(0, Math.min(100, Number(input.progress)))
       : null,
     showTechnicalToggle: Boolean(input.showTechnicalToggle && technicalDetail),
+    comparisonRows: Array.isArray(input.comparisonRows) ? input.comparisonRows
+      .map((row) => ({
+        system: String(row?.system || ''),
+        leftName: String(row?.leftName || ''),
+        leftValue: String(row?.leftValue || ''),
+        rightName: String(row?.rightName || ''),
+        rightValue: String(row?.rightValue || ''),
+      })).filter((row) => row.system && row.leftValue && row.rightValue) : [],
     inputFields: Array.isArray(input.inputFields)
       ? input.inputFields
         .map((field) => ({
@@ -83,6 +91,10 @@ function normalizeFeedback(input) {
           type: String(field?.type || 'text').trim() || 'text',
           value: String(field?.value ?? ''),
           placeholder: String(field?.placeholder || ''),
+          options: Array.isArray(field?.options) ? field.options.map((option) => ({
+            value: String(option?.value || ''),
+            label: String(option?.label || ''),
+          })).filter((option) => option.value && option.label) : [],
           required: Boolean(field?.required),
           autoFocus: Boolean(field?.autoFocus),
         }))
@@ -254,6 +266,7 @@ function AppFeedbackDialog({
     testId,
     progress,
     showTechnicalToggle,
+    comparisonRows,
     inputFields,
     primaryActionLabel,
     secondaryActionLabel,
@@ -366,6 +379,30 @@ function AppFeedbackDialog({
           ) : null}
         </div>
 
+        {comparisonRows?.length ? (
+          <div data-testid={`${testId}-comparison`} style={{ display: 'grid', gap: '14px' }}>
+            {comparisonRows.map((row, index) => (
+              <div key={`${row.system}-${index}`} style={{ display: 'grid', gap: '7px' }}>
+                <strong style={{ fontSize: '16px' }}>{row.system}</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                  {[{ name: row.leftName, value: row.leftValue },
+                    { name: row.rightName, value: row.rightValue }].map((side, sideIndex) => (
+                    <div key={sideIndex} style={{
+                      border: '1px solid #D0D5DD', borderRadius: '8px',
+                      padding: '10px', minWidth: 0, overflowWrap: 'anywhere',
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#475467', fontWeight: 600 }}>
+                        {sideIndex === 0 ? 'Artikel links' : 'Artikel rechts'}: {side.name}
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '5px' }}>{side.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {inputFields?.length ? (
           <div style={{ display: 'grid', gap: '12px' }}>
             {inputFields.map((field) => (
@@ -384,24 +421,42 @@ function AppFeedbackDialog({
                   {field.label}
                   {field.required ? ' *' : ''}
                 </span>
-                <input
-                  className="rz-input"
-                  type={field.type}
-                  value={fieldValues[field.name] ?? ''}
-                  placeholder={field.placeholder}
-                  required={field.required}
-                  autoFocus={field.autoFocus}
-                  disabled={isActionPending}
-                  onChange={(event) => onFieldChange?.(field.name, event.target.value)}
-                  data-testid={`${testId}-field-${field.name}`}
-                  style={{
-                    minHeight: '48px',
-                    padding: '10px 12px',
-                    fontSize: '18px',
-                    lineHeight: 1.4,
-                    fontWeight: 400,
-                  }}
-                />
+                {field.type === 'select' ? (
+                  <select
+                    className="rz-input"
+                    value={fieldValues[field.name] ?? ''}
+                    required={field.required}
+                    autoFocus={field.autoFocus}
+                    disabled={isActionPending}
+                    onChange={(event) => onFieldChange?.(field.name, event.target.value)}
+                    data-testid={`${testId}-field-${field.name}`}
+                    style={{ minHeight: '48px', padding: '10px 12px', fontSize: '16px', width: '100%' }}
+                  >
+                    <option value="">Kies welke classificatie moet gelden</option>
+                    {field.options.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="rz-input"
+                    type={field.type}
+                    value={fieldValues[field.name] ?? ''}
+                    placeholder={field.placeholder}
+                    required={field.required}
+                    autoFocus={field.autoFocus}
+                    disabled={isActionPending}
+                    onChange={(event) => onFieldChange?.(field.name, event.target.value)}
+                    data-testid={`${testId}-field-${field.name}`}
+                    style={{
+                      minHeight: '48px',
+                      padding: '10px 12px',
+                      fontSize: '18px',
+                      lineHeight: 1.4,
+                      fontWeight: 400,
+                    }}
+                  />
+                )}
               </label>
             ))}
           </div>

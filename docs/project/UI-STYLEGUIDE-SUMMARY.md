@@ -1670,6 +1670,27 @@ bestaande Catalogusdetail- of GS1 GPC-classificatiefunctie;
 strijdige officiële GPC Brick wordt niet zonder correctie omzeild.
 Geen aangepaste of tweede meldingscomponent.
 
+
+## Artikel-synoniemen — expliciete classificatiekeuze in centrale Melding (4 november 2026)
+
+Wanneer twee te koppelen centrale Catalogusartikelen verschillende reeds bevestigde
+GS1 GPC- of CBS ECOICOPv2-indelingen hebben, toont de standaard
+`AppFeedbackProvider`-overlay hun gegevens **naast elkaar** met de officiële
+code, omschrijving, bronartikel en CBS-referentieversie. Per verschillend
+classificatiesysteem gebruikt de overlay een verplichte native selectie
+(`inputFields.type='select'`) met precies de twee door de backend opgehaalde
+bestaande indelingen. Er is **geen vooraf geselecteerde keuze**. Aanvullend
+`comparisonRows` toont de huidige waarden zonder een nieuwe modalcomponent.
+
+**Annuleren** sluit zonder koppeling of mutatie. **Keuze bevestigen en koppelen**
+mag pas slagen wanneer alle afwijkende systemen expliciet zijn gekozen.
+Inhuis valideert server-side opnieuw de actuele pair-identiteit,
+classificatiegegevens, gekozen bron en autorisatie, en slaat relatie en
+eventuele geautoriseerde classificatiewijzigingen in één transactie op.
+De centrale overlay blijft ook voor mobiel bruikbaar. De gewone succes-,
+waarschuwing- en foutpresentatie blijft via dezelfde component verlopen.
+
+
 ## Artikelbeheer werkgebieden — 4 november 2026
 
 Voor superuser/frontteam wordt de gebruikerszichtbare ingang **Artikelbeheer** met vier werkgebieden (Identificeren, Classificeren, Synoniemen, Synchroniseren) opgebouwd via bestaande `AppShell`, `ScreenCard`, `Button` en `DataTable`. Er zijn geen eigen scorecard- of tabcontrols: de vier compacte standaardknoppen markeren het geselecteerde werkgebied, en elk paneel behoudt dezelfde responsiviteit voor mobiel en desktop. Het oorspronkelijke bonartikeloverzicht is uitsluitend binnen **Identificeren** zichtbaar en behoudt zijn bestaande statusknoppen; die zijn expliciet bonregistratietellingen, geen unieke centrale Catalogustaken. Verschillende populaties worden niet in één monitor opgeteld. Wanneer synchronisatiebewijs ontbreekt, geeft het scherm dit tekstueel aan en toont geen fictieve nul. Toegang volgt de bestaande beveiligde routes en autorisaties.
