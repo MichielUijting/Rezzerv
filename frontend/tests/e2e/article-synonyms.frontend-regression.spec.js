@@ -21,7 +21,9 @@ for (const width of [390, 1280]) {
         fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
         status: 'other', status_label: 'Niet koppelbaar', linkable: false,
-        reason: 'Strijdige GPC-indeling', fingerprint: '', manual: true },
+        reason: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
+        conflict_type: 'gpc_mismatch', conflict_detail: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
+        resolution_route: '/catalogus/gpc-classificeren', fingerprint: '', manual: true },
     ]
     // Both DataTables must actually paginate; <=10 mocked rows hide
     // the shared pagination controls by design.
@@ -126,8 +128,15 @@ for (const width of [390, 1280]) {
     await conflictCheckbox.check()
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-    await expect(page.getByRole('alert')).toContainText('GS1 GPC-conflict')
+    const conflictDialog = page.getByTestId('article-synonyms-conflict')
+    await expect(conflictDialog).toBeVisible()
+    await expect(conflictDialog).toContainText('Aardappelen ↔ Snijbonen')
+    await expect(conflictDialog).toContainText('10000001 tegenover 10000002')
+    await expect(conflictDialog).toContainText('corrigeer die dan in Artikelclassificatie')
+    await expect(conflictDialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
     expect(posts).toHaveLength(0)
+    await conflictDialog.getByRole('button', { name: 'Sluiten' }).click()
+    await expect(conflictDialog).toHaveCount(0)
     await conflictCheckbox.uncheck()
     await expect(page.getByText(/geselecteerd$/)).toHaveCount(0)
     const leftTop = await left.locator('thead').boundingBox()
