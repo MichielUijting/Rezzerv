@@ -293,7 +293,7 @@ def product_link_options(products, confirmed, product_id):
                     {'same_gtin', 'shared_article_code'} else None
             ),
             'score': suggestion['score'] if suggestion else None,
-            'fingerprint': _fingerprint(left, right) if linked or safe else '',
+            'fingerprint': _fingerprint(left, right) if linked or safe or (conflict or {}).get('type') == 'gpc_mismatch' else '',
             # Suggestion uses canonical proposed pair, otherwise explicit
             # manually reviewed independent central product IDs.
             'manual': not bool(suggestion),
@@ -311,10 +311,11 @@ def confirmed_pairs(conn):
     )))
 
 
-def confirm_pairs(conn, selections, actor_id):
+def confirm_pairs(conn, selections, actor_id, decisions=()):
     """Atomic, idempotent bulk confirmation with current-candidate validation."""
     from fastapi import HTTPException
     from app.services.synonym_classification_inheritance_service import propagate_confirmed_classifications
+    from app.services.synonym_classification_review_service import review_pairs, apply_choices
     # Serialiseer bevestiging en classificatieovername van overlappende synoniemgroepen.
     if conn.dialect.name == 'postgresql':
         conn.execute(text('SELECT pg_advisory_xact_lock(639643644)'))
@@ -332,6 +333,8 @@ def confirm_pairs(conn, selections, actor_id):
     existing = confirmed_pairs(conn)
     proposals = {(p['left']['id'], p['right']['id']): p for p in suggest_pairs(products, existing)}
     by_id = {p['id']: p for p in products}
+    reviews = review_pairs(conn, selections, by_id)
+    reviews_by_pair = {(r['left_id'], r['right_id']): r for r in reviews}
     # Een eerdere bevestiging kan de GPC-code wijzigen. Sta uitsluitend voor
     # reeds opgeslagen paren hun oorspronkelijke fingerprint toe bij retry.
     persisted_fingerprints = {
@@ -351,8 +354,14 @@ def confirm_pairs(conn, selections, actor_id):
                 continue
         if key not in existing and selection.get('manual'):
             left, right = by_id.get(key[0]), by_id.get(key[1])
-            if not _manual_pair_is_safe(left, right):
+            conflict = _manual_pair_conflict(left, right)
+            # GPC is a classification, not a product identity. An explicit
+            # independently reviewed choice may resolve ONLY this mismatch.
+            if conflict and conflict['type'] != 'gpc_mismatch':
                 raise HTTPException(409, 'Deze artikelidentiteiten kunnen niet veilig als synoniem worden gekoppeld.')
+            if conflict and not any(c['system'] == 'GPC'
+                                    for c in reviews_by_pair[key]['clashes']):
+                raise HTTPException(409, 'De classificatieverschillen zijn gewijzigd.')
             proposal = {
                 'fingerprint': _fingerprint(left, right),
                 'score': 0.0,
@@ -362,6 +371,7 @@ def confirm_pairs(conn, selections, actor_id):
             raise HTTPException(409, 'Een suggestie is gewijzigd of niet meer beschikbaar. Vernieuw de lijst en controleer opnieuw.')
         if key not in existing:
             to_insert[key] = proposal
+    choice_report = apply_choices(conn, reviews, decisions, actor_id)
     for (left, right), proposal in to_insert.items():
         conn.execute(text('''
             INSERT INTO article_synonym_links
@@ -377,7 +387,9 @@ def confirm_pairs(conn, selections, actor_id):
     )
     response = {'linked': len(to_insert), 'already_linked':
                 len({(s['left_product_id'], s['right_product_id']) for s in selections} & existing)}
-    if report['gpc_inherited'] or report['cbs_inherited'] or report['conflicts']:
+    report.update(choice_report)
+    if (report['gpc_inherited'] or report['cbs_inherited'] or report['conflicts']
+            or report['gpc_resolved'] or report['cbs_resolved']):
         response['classification_inheritance'] = report
     return response
 
