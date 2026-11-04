@@ -266,6 +266,10 @@ test('Twee verschillende classificaties tonen artikelcodes naast elkaar en verei
       { ...b, status: 'other', status_label: 'Niet koppelbaar', linkable: false,
         conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
     ] } })
+    if (path.endsWith('/article-synonyms/analysis/b/options')) return route.fulfill({ json: { items: [
+      { ...a, status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+        conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
+    ] } })
     if (path.endsWith('/article-synonyms/link/review')) return route.fulfill({ json: { items: [{
       left_id: 'a', right_id: 'b', snapshot: 'c'.repeat(64),
       clashes: [
@@ -316,6 +320,18 @@ test('Twee verschillende classificaties tonen artikelcodes naast elkaar en verei
     snapshot: 'c'.repeat(64), gpc_source_id: 'a', cbs_source_id: 'b',
   }])
   await expect(page.getByTestId('app-feedback-success')).toContainText('1 GS1 GPC- en 1 CBS-keuzes verwerkt')
+  await page.getByTestId('app-feedback-success-ok-button').click()
+  // B is now selected in the left table, while the canonical pair IDs are a/b.
+  // The overlay must follow the visible left/right article order, not ID order.
+  await page.getByTestId('article-synonyms-articles').locator('tbody tr').nth(1).getByRole('checkbox').check()
+  await page.getByTestId('article-synonyms-table').locator('tbody tr').first().getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+  const reversedDialog = page.getByTestId('article-synonyms-classification-choice')
+  await expect(reversedDialog).toBeVisible()
+  await expect(reversedDialog.getByText('Artikel links: Halfvolle melk B').first()).toBeVisible()
+  await expect(reversedDialog.getByText('Artikel rechts: Halfvolle melk A').first()).toBeVisible()
+  await reversedDialog.getByRole('button', { name: 'Annuleren' }).click()
+  expect(posts).toHaveLength(1)
 })
 
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
