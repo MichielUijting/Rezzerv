@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.db import engine
 from app.services.session_request_context import require_platform_permission_from_session
 from app.services.article_classification_sync_monitor import (
-    list_sync_exceptions, retry_sync_exception,
+    list_sync_exceptions, retry_sync_exception, record_sync_event,
 )
 from app.services.article_synonym_service import load_products, suggest_pairs, confirmed_pairs, confirm_pairs, candidate_pairs_for_product, product_link_options, unlink_pairs
 
@@ -160,14 +160,50 @@ def retry_sync_exception_route(payload: SyncRetryRequest):
         """), {"id": payload.event_id}).scalar_one_or_none()
     if system == 'GPC':
         require_platform_permission_from_session('gpc.update')
-    with engine.begin() as conn:
-        return retry_sync_exception(
-            conn, event_id=payload.event_id,
-            expected_decision_version=payload.expected_decision_version,
-            expected_target_version=payload.expected_target_version,
-            expected_target_code=payload.expected_target_code,
-            actor_id=actor.user_id,
-        )
+    try:
+        with engine.begin() as conn:
+            return retry_sync_exception(
+                conn, event_id=payload.event_id,
+                expected_decision_version=payload.expected_decision_version,
+                expected_target_version=payload.expected_target_version,
+                expected_target_code=payload.expected_target_code,
+                actor_id=actor.user_id,
+            )
+    except HTTPException:
+        # Validation/conflict is a controlled decision: never manufacture a
+        # processing failure record or silently try again.
+        raise
+    except Exception as exc:
+        # The original write transaction has already rolled back. Preserve
+        # failure evidence in an independent transaction only if DB is usable.
+        try:
+            with engine.begin() as audit_conn:
+                row = audit_conn.execute(text("""
+                    SELECT source_product_id, target_product_id,
+                           classification_system, classification_code,
+                           reference_version, decision_version
+                      FROM article_classification_sync_events
+                     WHERE id=:id
+                """), {"id": payload.event_id}).mappings().first()
+                if row:
+                    record_sync_event(
+                        audit_conn, source_id=row["source_product_id"],
+                        target_id=row["target_product_id"],
+                        system=row["classification_system"],
+                        code=row["classification_code"],
+                        reference=row["reference_version"],
+                        decision_version=row["decision_version"],
+                        status="failed",
+                        reason="Technische herverwerking mislukt; wijzigingen zijn teruggedraaid.",
+                        actor_id=actor.user_id,
+                        operation="retry_failure:" + payload.event_id,
+                        related_event_id=payload.event_id,
+                    )
+        except Exception:
+            # A database outage may also prevent writing a failure record;
+            # never report a successful retry or claim that the audit exists.
+            pass
+        raise HTTPException(503, "Herverwerking mislukt zonder opgeslagen classificatiewijziging.") from exc
 
 
 @router.get('')
