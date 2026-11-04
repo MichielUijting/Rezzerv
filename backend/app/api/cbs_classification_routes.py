@@ -19,6 +19,7 @@ from app.services.cbs_classification_service import (
     browse_verified_categories,
     suggest_verified_categories,
 )
+from app.services.article_workqueue_service import load_classification_workqueue
 from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter(prefix="/api/cbs-classifications", tags=["cbs-classification"])
@@ -59,6 +60,15 @@ class Removal(BaseModel):
 class RemovalBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     selections: list[Removal] = Field(min_length=1, max_length=100)
+
+
+@router.get("/workqueue")
+def classification_workqueue(offset: int = Query(default=0, ge=0),
+                             limit: int = Query(default=100, ge=1, le=100)):
+    """Canonical per-product, per-system read-only work queue."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        return load_classification_workqueue(conn, offset=offset, limit=limit)
 
 
 @router.get("/products")
