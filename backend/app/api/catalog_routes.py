@@ -147,15 +147,20 @@ def _catalog_retailer_code(expression: str) -> str:
     cleaned = (
         f"LOWER(REPLACE(REPLACE(TRIM(COALESCE({expression}, '')), ' ', '-'), '_', '-'))"
     )
-    return f"CASE WHEN {cleaned} = 'albert-heijn' THEN 'ah' ELSE {cleaned} END"
+    return (
+        f"CASE WHEN {cleaned} IN ('albert-heijn', 'albert-heijn-digitaal', " 
+        f"'albertheijn') THEN 'ah' " 
+        f"WHEN {cleaned} IN ('lidl-nederland-gmbh', 'lidl-nederland') THEN 'lidl' " 
+        f"ELSE {cleaned} END"
+    )
 
 
 def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> tuple[str, str]:
     """Count unique other stores reached by *direct* confirmed synonym links.
 
-    Each endpoint needs exactly one documented retailer, as when a synonym is
-    suggested. Do not count peers, infer transitive equivalence, or read any
-    household-specific data. A missing/ambiguous retailer is not a shop.
+    Use the same confirmed (possibly multi-store) evidence as synonym
+    suggestions: only disjoint nonempty shop sets establish a cross-store
+    relation. Count distinct peer shops, never household or receipt rows.
     """
     if "article_synonym_links" not in tables:
         return "", "0"
@@ -173,7 +178,7 @@ def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> 
         documented_shop = f"NULLIF({external_shop}, '')"
     else:
         external_join = ""
-        documented_shop = "NULL"
+        documented_shop = "NULL::text"
 
     active = (
         "AND LOWER(TRIM(COALESCE(shop_product.status, 'active'))) <> 'deleted'"
@@ -188,12 +193,12 @@ def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> 
             ), documented_retailers AS (
                 SELECT shop_product.id,
                        CASE
-                         WHEN COUNT(DISTINCT {documented_shop}) = 1
-                           THEN MIN({documented_shop})
-                         WHEN COUNT(DISTINCT {documented_shop}) = 0
-                           THEN {source_fallback}
-                         ELSE NULL
-                       END AS retailer_code
+                         WHEN COUNT(DISTINCT {documented_shop}) > 0
+                           THEN ARRAY_REMOVE(ARRAY_AGG(DISTINCT {documented_shop}), NULL)
+                         WHEN {source_fallback} IS NOT NULL
+                           THEN ARRAY[{source_fallback}]
+                         ELSE ARRAY[]::text[]
+                       END AS retailer_codes
                 FROM synonym_participants participant
                 JOIN global_products shop_product ON shop_product.id = participant.id
                 {external_join}
@@ -207,13 +212,13 @@ def _catalog_linked_store_projection(tables: set[str], gp_columns: set[str]) -> 
                 FROM article_synonym_links
             )
             SELECT direct_pairs.product_id,
-                   COUNT(DISTINCT peer.retailer_code) AS linked_store_count
+                   COUNT(DISTINCT peer_store.retailer_code) AS linked_store_count
             FROM direct_pairs
             JOIN documented_retailers origin ON origin.id = direct_pairs.product_id
             JOIN documented_retailers peer ON peer.id = direct_pairs.peer_id
-            WHERE origin.retailer_code IS NOT NULL
-              AND peer.retailer_code IS NOT NULL
-              AND origin.retailer_code <> peer.retailer_code
+            JOIN LATERAL UNNEST(peer.retailer_codes) AS peer_store(retailer_code) ON TRUE
+            WHERE CARDINALITY(origin.retailer_codes) > 0
+              AND NOT (origin.retailer_codes && peer.retailer_codes)
             GROUP BY direct_pairs.product_id
         ) catalog_synonym_stores
           ON catalog_synonym_stores.product_id = gp.id

@@ -45,9 +45,14 @@ class MatchingTest(unittest.TestCase):
     def test_same_gtin_is_not_synonym(self):
         self.assertEqual(service.suggest_pairs([product('a','Melk','08719587325926'), product('b','Melk','08719587325926',retailer_code='jumbo')]), [])
 
-    def test_same_or_unknown_store_cannot_be_confirmed_as_cross_store_synonym(self):
-        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk')]), [])
-        self.assertEqual(service.suggest_pairs([product('a', 'Melk'), product('b', 'Melk', retailer_code='')]), [])
+    def test_store_is_never_required_for_a_synonym(self):
+        for a_store, b_store in [('ah', 'ah'), ('ah', 'jumbo'), ('', ''), ('', 'jumbo')]:
+            pair = service.suggest_pairs([
+                product('a', 'Halfvolle melk', retailer_code=a_store),
+                product('b', 'Halfvolle melk', retailer_code=b_store),
+            ])[0]
+            self.assertTrue(pair['linkable'])
+            self.assertEqual(pair['match_basis'], 'product_similarity')
 
     def test_same_retailer_code_is_not_synonym(self):
         items = [product('a','Melk'), product('b','Melk',retailer_code='jumbo')]
@@ -57,6 +62,111 @@ class MatchingTest(unittest.TestCase):
 
     def test_brick_conflict_excluded(self):
         self.assertEqual(service.suggest_pairs([product('a','Halfvolle melk'), product('b','Halfvolle melk', brick='fruit', retailer_code='jumbo')]), [])
+
+    def test_canonical_receipt_store_aliases(self):
+        self.assertEqual(service._retailer_code('Albert Heijn'), 'ah')
+        self.assertEqual(service._retailer_code('AH'), 'ah')
+        self.assertEqual(service._retailer_code('Lidl Nederland GmbH'), 'lidl')
+        self.assertEqual(service._retailer_code('Lidl'), 'lidl')
+
+    def test_multiple_stores_are_metadata_not_pairing_restrictions(self):
+        multi = product('a', 'Halfvolle melk', retailer_code='')
+        multi['retailer_codes'] = ['ah', 'jumbo']
+        different = product('b', 'Halfvolle melk', retailer_code='lidl')
+        overlapping = product('c', 'Halfvolle melk', retailer_code='jumbo')
+        matches = service.suggest_pairs([multi, different, overlapping])
+        pairs = {(m['left']['id'], m['right']['id']) for m in matches}
+        self.assertIn(('a', 'b'), pairs)
+        self.assertIn(('a', 'c'), pairs)
+        analysis = service.build_synonym_analysis([multi, different], {('a', 'b')}, [])
+        self.assertEqual(analysis['summary']['confirmed_pairs'], 1)
+        self.assertEqual(analysis['summary']['insufficient_articles'], 0)
+
+    def test_no_unconfirmed_receipt_or_name_based_retailer_fallback(self):
+        a = product('a', 'AH Halfvolle melk', retailer_code='')
+        a['retailer_codes'] = []
+        b = product('b', 'Jumbo Halfvolle melk', retailer_code='jumbo')
+        self.assertTrue(service.suggest_pairs([a, b]))
+
+    def test_name_based_candidates_are_confirmable_and_keep_store_unknown(self):
+        a = product('a', 'Aardappelen', retailer_code='')
+        b = product('b', 'Aardappelen kruimig', retailer_code='')
+        c = product('c', 'Andere producten', retailer_code='jumbo', brick='fruit')
+        self.assertTrue(service.suggest_pairs([a, b, c]))
+        proposals = service.suggest_pairs([a, b, c], include_name_only=True)
+        pair = next(p for p in proposals if {p['left']['id'], p['right']['id']} == {'a', 'b'})
+        self.assertTrue(pair['linkable'])
+        self.assertEqual(pair['match_basis'], 'product_similarity')
+        analysis = service.build_synonym_analysis([a, b, c], set(), proposals)
+        row = next(r for r in analysis['items'] if r['id'] == 'a')
+        self.assertEqual(row['status'], 'review')
+        self.assertEqual(row['store'], 'Winkel onbekend')
+        self.assertGreater(len(row['pending']), 0)
+        self.assertGreater(analysis['summary']['candidate_pairs'], 0)
+        self.assertEqual(analysis['summary']['name_only_pairs'], 0)
+
+    def test_same_store_name_match_is_confirmable_after_manual_review(self):
+        a = product('a', 'Melk', retailer_code='ah')
+        b = product('b', 'Melk', retailer_code='ah')
+        pair = service.suggest_pairs([a, b], include_name_only=True)[0]
+        self.assertTrue(pair['linkable'])
+        self.assertEqual(service.suggest_pairs([a, b]), [pair])
+
+    def test_two_similarly_named_products_are_not_the_same_identity(self):
+        first = product('a', 'Volle melk', gtin='08719587325926', retailer_code='')
+        other = product('b', 'Volle melk', gtin='08718452513666', retailer_code='')
+        self.assertEqual(
+            [(p['left']['id'], p['right']['id']) for p in service.suggest_pairs([first, other])],
+            [('a', 'b')],
+        )
+        options = service.product_link_options([first, other], set(), 'a')
+        self.assertEqual([p['id'] for p in options], ['b'])
+        self.assertEqual(options[0]['status'], 'suggested')
+        self.assertNotEqual(options[0]['id'], first['id'])
+
+    def test_right_options_are_disjoint_linked_suggested_and_all_other(self):
+        items = [
+            product('a', 'Halfvolle melk', retailer_code=''),
+            product('b', 'Halfvolle melk', retailer_code=''),
+            product('c', 'Halfvolle melk', retailer_code=''),
+            product('d', 'Onverwacht ander product', brick='milk', retailer_code=''),
+        ]
+        options = service.product_link_options(items, {('a', 'b')}, 'a')
+        self.assertEqual([row['id'] for row in options], ['b', 'c', 'd'])
+        self.assertEqual([row['status'] for row in options], ['linked', 'suggested', 'other'])
+        self.assertEqual([row['linkable'] for row in options], [False, True, True])
+        self.assertEqual([row['manual'] for row in options], [True, False, True])
+        self.assertEqual(service.product_link_options(items, set(), 'missing'), None)
+
+    def test_identical_gtin_and_conflicting_gpc_cannot_be_selected_manually(self):
+        a = product('a', 'Halfvolle melk', gtin='08719587325926', brick='milk')
+        b = product('b', 'Melk', gtin='08719587325926', brick='milk')
+        c = product('c', 'Appels', brick='fruit')
+        options = {row['id']: row for row in service.product_link_options([a, b, c], set(), 'a')}
+        self.assertFalse(options['b']['linkable'])
+        self.assertFalse(options['c']['linkable'])
+
+    def test_conflict_details_distinguish_gtin_codes_and_gpc(self):
+        left = product('a', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
+        same_gtin = product('b', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
+        same_code = product('c', 'Aardappelen', gtin='08718452513666', brick='milk')
+        same_code['article_codes'] = ['STORE-99']
+        left['article_codes'] = ['STORE-99']
+        different_gpc = product('d', 'Aardappelschijfjes met spek',
+                                gtin='08712345678906', brick='fruit')
+        records = {r['id']: r for r in service.product_link_options(
+            [left, same_gtin, same_code, different_gpc], set(), 'a')}
+        self.assertEqual(records['b']['conflict_type'], 'same_gtin')
+        self.assertIn('08719587325926', records['b']['conflict_detail'])
+        self.assertEqual(records['b']['resolution_route'], '/catalogus/b')
+        self.assertEqual(records['c']['conflict_type'], 'shared_article_code')
+        self.assertIn('STORE-99', records['c']['conflict_detail'])
+        self.assertEqual(records['d']['conflict_type'], 'gpc_mismatch')
+        self.assertIn('milk', records['d']['conflict_detail'])
+        self.assertIn('fruit', records['d']['conflict_detail'])
+        self.assertEqual(records['d']['resolution_route'], '/catalogus/gpc-classificeren')
+        for item in records.values():
+            self.assertFalse(item['linkable'])
 
     def test_distinct_packaging_preserved(self):
         a, b = product('a','Halfvolle melk'), product('b','Halfvolle melk', retailer_code='jumbo')
@@ -73,6 +183,28 @@ class MatchingTest(unittest.TestCase):
         self.assertEqual(result, service.suggest_pairs(list(reversed(items))))
         self.assertEqual(len({p['id'] for p in result}), len(result))
         self.assertTrue(all(p['left']['id'] < p['right']['id'] for p in result))
+
+
+class SynonymOverviewRouteTest(unittest.TestCase):
+    def test_article_index_survives_missing_optional_legacy_classification(self):
+        from unittest.mock import MagicMock
+
+        connection = MagicMock()
+        fake_engine = MagicMock()
+        fake_engine.connect.return_value.__enter__.return_value = connection
+        sample = product('a', 'Halfvolle melk', retailer_code='')
+        sample['retailer_codes'] = []
+        with patch.object(routes, '_actor'), \
+                patch.object(routes, 'engine', fake_engine), \
+                patch.object(routes, 'load_products', return_value=[sample]), \
+                patch.object(routes, 'confirmed_pairs', return_value=set()), \
+                patch('sqlalchemy.inspect') as introspection:
+            introspection.return_value.has_table.return_value = False
+            response = routes.synonym_analysis()
+        self.assertEqual(response['summary']['eligible_articles'], 1)
+        self.assertEqual(response['summary']['candidate_pairs'], 0)
+        self.assertEqual(response['items'][0]['store'], 'Winkel onbekend')
+        connection.execute.assert_not_called()
 
 
 class StoreTest(unittest.TestCase):
@@ -100,6 +232,7 @@ class StoreTest(unittest.TestCase):
             conn.exec_driver_sql('CREATE TABLE global_products(id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, primary_gtin TEXT, size_value NUMERIC, size_unit TEXT, status TEXT, image_url TEXT, source TEXT)')
             conn.exec_driver_sql('CREATE TABLE global_product_gpc_bricks(global_product_id TEXT PRIMARY KEY, brick_code TEXT)')
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
+            conn.exec_driver_sql('CREATE TABLE external_product_candidates(context_key TEXT, retailer_code TEXT, global_product_id TEXT, is_user_confirmed BOOLEAN, status TEXT, candidate_status TEXT)')
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
             module = migration_module('20261026_01_article_synonyms')
@@ -142,6 +275,173 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(items[0]['image_url'], 'https://example.org/test.jpg')
             self.assertEqual(items[1]['image_url'], '')
             self.assertEqual(len(service.suggest_pairs(items)), 1)
+
+    def test_multiple_confirmed_retailer_links_reach_synonym_projection(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('a','lidl-nederland-gmbh','SKU4','confirmed')"))
+            items = {item['id']: item for item in service.load_products(conn)}
+            self.assertEqual(items['a']['retailer_codes'], ['ah', 'lidl'])
+            self.assertEqual(items['a']['retailer_code'], '')
+            self.assertIn('Albert Heijn', items['a']['store_name'])
+            self.assertIn('Lidl', items['a']['store_name'])
+            # 'b' is Jumbo: neither shop overlaps, so the pair remains reviewable.
+            suggestions = service.suggest_pairs(list(items.values()))
+            self.assertIn(('a', 'b'), [(p['left']['id'], p['right']['id']) for p in suggestions])
+
+    def test_legacy_explicitly_confirmed_candidates_supply_retailer_from_kassa(self):
+        with self.engine.begin() as conn:
+            # 'c' is a pre-existing coded Catalogus product without any
+            # external_article_product_links row or retailer source.
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678906' WHERE id='c'"))
+            conn.execute(text("""
+                INSERT INTO external_product_candidates
+                (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
+                VALUES
+                ('receipt-line:confirmed', 'Lidl Nederland GmbH', 'c', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:proposed', 'Picnic', 'c', FALSE, 'possible_candidate', 'possible_candidate'),
+                ('receipt-line:unlinked', 'Aldi', 'c', TRUE, 'unlinked_from_catalog', 'possible_candidate'),
+                ('receipt-line:stale', 'Plus', 'c', TRUE, 'linked_to_catalog', 'unlinked_from_catalog')
+            """))
+            before = conn.execute(text("SELECT COUNT(*) FROM external_article_product_links")).scalar_one()
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(products['c']['retailer_codes'], ['lidl'])
+            self.assertEqual(products['c']['store_name'], 'Lidl')
+            self.assertEqual(products['c']['retailer_code'], 'lidl')
+            pairs = service.suggest_pairs(list(products.values()))
+            self.assertIn(('a', 'c'), [
+                (pair['left']['id'], pair['right']['id']) for pair in pairs
+            ])
+            analysis = service.build_synonym_analysis(list(products.values()), set(), pairs)
+            row = next(item for item in analysis['items'] if item['id'] == 'c')
+            self.assertEqual(row['store'], 'Lidl')
+            self.assertEqual(row['status'], 'review')
+            self.assertGreater(len(row['pending']), 0)
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM external_article_product_links")).scalar_one(), before)
+
+    def test_optional_legacy_candidate_table_can_be_absent(self):
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql('DROP TABLE external_product_candidates')
+            products = service.load_products(conn)
+            self.assertEqual([p['id'] for p in products], ['a', 'b'])
+
+    def test_conflicting_explicit_candidate_context_does_not_assign_store(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE global_products SET primary_gtin='8712345678906' WHERE id='c'"))
+            conn.execute(text("""
+                INSERT INTO external_product_candidates
+                (context_key, retailer_code, global_product_id, is_user_confirmed, status, candidate_status)
+                VALUES
+                ('receipt-line:same', 'Lidl', 'c', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:same', 'Lidl', 'b', TRUE, 'linked_to_catalog', 'linked_to_catalog'),
+                ('receipt-line:unconfirmed', 'Aldi', 'c', FALSE, 'linked_to_catalog', 'linked_to_catalog')
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(products['c']['retailer_codes'], [])
+            self.assertEqual(products['b']['retailer_codes'], ['jumbo'])
+            # Conflicting source evidence does not invent a store, but the
+            # independent products remain eligible for a manual synonym review.
+            self.assertTrue(service.suggest_pairs([products['a'], products['c']]))
+
+    def test_similar_products_can_be_confirmed_without_known_store(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                    (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
+                VALUES ('d','Halfvolle melk','','','8712345678906',1,'l','active','','catalog')
+            """))
+            products = service.load_products(conn)
+            pair = next(p for p in service.suggest_pairs(products)
+                        if {p['left']['id'], p['right']['id']} == {'a', 'd'})
+            self.assertTrue(pair['linkable'])
+            result = service.confirm_pairs(conn, [{
+                'left_product_id': pair['left']['id'],
+                'right_product_id': pair['right']['id'],
+                'fingerprint': pair['fingerprint'],
+            }], 'tester')
+            self.assertEqual(result['linked'], 1)
+            analysis = service.build_synonym_analysis(service.load_products(conn),
+                service.confirmed_pairs(conn), [])
+            row = next(item for item in analysis['items'] if item['id'] == 'd')
+            self.assertEqual(row['store'], 'Winkel onbekend')
+            self.assertEqual(row['synonym_count'], 1)
+
+    def test_manual_other_catalog_article_can_be_confirmed_without_text_similarity(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                  (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
+                VALUES ('d','Xylofoon','','','8712345678906',1,'l','active','','catalog')
+            """))
+            products = service.load_products(conn)
+            opts = {row['id']: row for row in service.product_link_options(products, set(), 'a')}
+            self.assertEqual(opts['d']['status'], 'other')
+            self.assertTrue(opts['d']['manual'])
+            result = service.confirm_pairs(conn, [{
+                'left_product_id': 'a', 'right_product_id': 'd',
+                'fingerprint': opts['d']['fingerprint'], 'manual': True,
+            }], 'actor')
+            self.assertEqual(result['linked'], 1)
+            self.assertEqual(service.confirmed_pairs(conn), {('a', 'd')})
+            method = conn.execute(text("""
+                SELECT method FROM article_synonym_links
+                 WHERE left_product_id='a' AND right_product_id='d'
+            """)).scalar_one()
+            self.assertEqual(method, 'manual_catalog_review_v1')
+
+    def test_unlink_removes_only_selected_direct_synonym_and_keeps_products(self):
+        with self.engine.begin() as conn:
+            selection = self.selection(conn)
+            service.confirm_pairs(conn, [selection], 'actor')
+            pairs = service.confirmed_pairs(conn)
+            self.assertEqual(len(pairs), 1)
+            before_products = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+            options = service.product_link_options(service.load_products(conn), pairs, 'a')
+            linked = next(row for row in options if row['status'] == 'linked')
+            self.assertTrue(linked['fingerprint'])
+            deleted = service.unlink_pairs(conn, [{
+                'left_product_id': 'a', 'right_product_id': linked['id'],
+                'fingerprint': linked['fingerprint'],
+            }])
+            self.assertEqual(deleted, {'unlinked': 1})
+            self.assertEqual(service.confirmed_pairs(conn), set())
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one(), before_products)
+
+    def test_unlink_rejects_missing_or_stale_pair_without_partial_write(self):
+        with self.engine.begin() as conn:
+            first = self.selection(conn)
+            service.confirm_pairs(conn, [first], 'actor')
+            existing = service.confirmed_pairs(conn)
+            for payload in [
+                [{'left_product_id': 'a', 'right_product_id': 'b',
+                  'fingerprint': '0' * 64}],
+                [{'left_product_id': 'a', 'right_product_id': 'a',
+                  'fingerprint': '0' * 64}],
+                [{'left_product_id': 'a', 'right_product_id': 'c',
+                  'fingerprint': '0' * 64}],
+            ]:
+                with self.assertRaises(HTTPException):
+                    service.unlink_pairs(conn, payload)
+                self.assertEqual(service.confirmed_pairs(conn), existing)
+
+    def test_self_link_is_blocked_before_any_database_mutation(self):
+        with self.engine.begin() as conn:
+            with self.assertRaises(HTTPException) as exc:
+                service.confirm_pairs(conn, [{
+                    'left_product_id': 'a', 'right_product_id': 'a',
+                    'fingerprint': 'a' * 64, 'manual': True,
+                }], 'actor')
+            self.assertEqual(exc.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
+    def test_manual_selection_requires_current_server_fingerprint(self):
+        with self.engine.begin() as conn:
+            with self.assertRaises(HTTPException) as exc:
+                service.confirm_pairs(conn, [{
+                    'left_product_id': 'a', 'right_product_id': 'b',
+                    'fingerprint': 'a' * 64, 'manual': True,
+                }], 'actor')
+            self.assertEqual(exc.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
 
     def test_photo_change_does_not_invalidate_selection(self):
         with self.engine.begin() as conn:
@@ -201,6 +501,14 @@ class StoreTest(unittest.TestCase):
             )
             self.assertEqual(filtered['total'], 3)
             self.assertEqual({item['id'] for item in filtered['items']}, {'a', 'b', 'd'})
+
+        # Confirmed Jumbo + Lidl evidence for e adds another distinct peer
+        # shop to a, without inventing an exclusive shop for e.
+        with self.engine.begin() as conn:
+            conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('e','lidl-nederland-gmbh','E-2','confirmed')"))
+        with patch.object(catalog_routes, 'engine', self.engine):
+            self.assertEqual(catalog_routes._catalog_row('a')['linked_store_count'], 3)
+            self.assertEqual(catalog_routes._catalog_row('e')['linked_store_count'], 1)
 
         with self.engine.begin() as conn:
             conn.execute(text("UPDATE external_article_product_links SET status='inactive' WHERE global_product_id='e'"))
@@ -516,7 +824,9 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/candidates').status_code, status)
+                self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/options').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
+                self.assertEqual(self.client.post('/api/external-databases/article-synonyms/unlink', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
 
@@ -526,6 +836,19 @@ class ApiTest(unittest.TestCase):
             with patch.object(routes, 'require_platform_permission_from_session', return_value=actor) as check:
                 self.assertIs(routes._actor('platform.external_products.link_existing'), actor)
                 check.assert_called_once_with('platform.external_products.link_existing')
+
+    def test_manual_selection_contract_does_not_trust_client_identity(self):
+        body = routes.BulkSelection(selections=[dict(
+            left_product_id='a', right_product_id='b',
+            fingerprint='0' * 64, manual=True,
+        )])
+        self.assertTrue(body.selections[0].manual)
+        for forged in [
+            dict(left_product_id='a', right_product_id='b', fingerprint='0' * 64,
+                 manual=True, product_name='forged'),
+        ]:
+            self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link',
+                                              json={'selections': [forged]}).status_code, 422)
 
     def test_request_limits_and_forged_authority_rejected(self):
         for body in [{'selections':[]},{'selections':[{}]}, {'selections':[], 'role':'Superuser'}]:
@@ -555,9 +878,12 @@ class SynonymAnalysisContractTest(unittest.TestCase):
         products = [product('a', 'Melk', retailer_code=''),
                     product('b', 'Melk', retailer_code='jumbo')]
         result = service.build_synonym_analysis(products, {('a', 'b')}, [])
-        self.assertEqual(result['summary']['confirmed_pairs'], 0)
-        self.assertEqual(result['summary']['insufficient_articles'], 1)
-        self.assertEqual(result['summary']['no_candidate_articles'], 1)
+        self.assertEqual(result['summary']['confirmed_pairs'], 1)
+        self.assertEqual(result['summary']['insufficient_articles'], 0)
+        self.assertEqual(result['summary']['no_candidate_articles'], 0)
+        rows = {row['id']: row for row in result['items']}
+        self.assertEqual(rows['a']['synonym_count'], 1)
+        self.assertEqual(rows['a']['store'], 'Winkel onbekend')
 
 
     def test_buckets_0_1_2_3_plus_are_direct_product_counts(self):

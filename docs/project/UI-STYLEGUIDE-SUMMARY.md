@@ -1569,3 +1569,103 @@ De tellerbalk bevat uitsluitend de statusknoppen **Niet gekoppeld**,
 wordt niet getoond, ook niet bij een actief tabel- of statusfilter.
 Kolomfilters blijven in de tabel bewerkbaar en iedere statusknop blijft
 afzonderlijk in- en uitschakelbaar. Er verschijnt geen vierde donkergroene knop.
+
+
+## Artikel-synoniemen — twee afzonderlijke tabellen (4 november 2026)
+
+Voor de actie **Artikel-synoniemen** geldt vanaf dit PO-besluit:
+
+- Gebruik twee bestaande **DataTable**-componenten naast elkaar bij desktop:
+  links de te kiezen centrale Catalogusartikelen, rechts de relaties en andere
+  centrale artikelen. Bij schermen tot 900 px staan de tabellen onder elkaar.
+- Eén regel representeert **exact één Catalogusartikel** met een afzonderlijke
+  canonieke product-ID. Een reeds gekozen artikel komt nooit rechts terug.
+  Het veld **Art./Barcode** maakt identieke namen onderscheidbaar.
+- Rechts staan bestaande relaties eerst (**Al gekoppeld**, lichtgroen,
+  niet opnieuw selecteerbaar), daarna **Voorstel** (subtiele accentkleur) en
+  **Overig** (neutraal). Niet-koppelbare identiteitsconflicten krijgen de
+  tekst **Niet koppelbaar** en kunnen niet worden geselecteerd.
+- Gekozen regels krijgen een zichtbare selectiemarkering volgens het bestaande
+  tabelselectiepatroon. Een klik op de rechterrij selecteert alleen; pas de
+  bestaande, niet-vette bulkknop **Koppelen** slaat de relatie op.
+- Zoek-/filtervelden, numerieke uitlijning, horizontale scrollbar, sortering
+  en paginering volgen in beide panelen de gedeelde DataTable; er komt geen
+  schermspecifieke kopie van Tabel of een alternatieve tabelcomponent.
+- De winkel is uitsluitend presentatie en heeft geen invloed op het
+  bepalen of bevestigen van synoniemen. Gebruik de bestaande
+  `AppFeedback`-overlay voor succes/fouten en behoud de normale rechten.
+
+De paneel-grid en lichte statusaccenten zijn lokaal vastgelegd in
+`frontend/src/features/articleSynonyms/synonymAnalysis.css`; bestaande
+centrale ontwerpvariabelen en het primaire Inhuis-kleurgebruik blijven
+leidend. Deze paragraaf is een aanvullende functionele UI-regel en
+wijzigt geen andere schermen.
+
+
+### Artikel-synoniemen — compacte tabeluitlijning (4 november 2026)
+
+De twee standaard-DataTables beginnen op dezelfde verticale positie op
+desktop; hun vaste kolommen zijn **selectievakje, foto, artikelnaam,
+barcode**. Er wordt geen winkelkolom of selectieteller in deze
+werkomgeving getoond. Links toont een checkbox de ene gekozen Catalogus-ID;
+rechts kunnen meerdere zelfstandige artikelrijen met checkboxen worden
+geselecteerd, zonder dat een rijarcering de selectie vertegenwoordigt.
+
+In de rechtertabel worden afzonderlijke **direct bevestigde** relaties
+lichtgroen gearceerd, automatisch berekende nog niet bevestigde
+voorstellen oranje en overige artikelen niet gearceerd. Gebruik lokale
+subtiele tabelcelachtergronden en de gedeelde Inhuis-kleurvariabelen voor
+selectiemarkering. Onderaan rechts staan twee standaardknoppen
+**Koppelen** en **Ontkoppelen** naast elkaar; alleen de passende knop
+is actief voor een geselecteerde bestaande of nieuwe relatie.
+Op mobiele breedte staan de twee tabellen onder elkaar.
+De tabellen behouden standaardfiltering, sorteren en paginering.
+
+
+### Artikel-synoniemen — uitlijning paginering en synoniemteller (4 november 2026)
+
+De standaardpaginering van beide onafhankelijke DataTables staat op desktop
+**op exact dezelfde verticale hoogte**, ook wanneer links/rechts een ander
+aantal zichtbare artikelen staat. De pagineringscomponent zelf wordt niet
+gedupliceerd of vervangen: de twee tabelshells krijgen gelijke hoogte en
+beide panelen reserveren dezelfde actieregel onder de paginering.
+De knoppen **Koppelen** en **Ontkoppelen** staan uitsluitend **onder**
+de rechterpaginering, samen rechts uitgelijnd. Op mobiel mogen de twee
+tabellen onder elkaar staan en is onderlinge pagineringsuitlijning niet nodig.
+
+De linkertabel heeft aanvullend de kolom **Synoniemen** met het aantal
+**rechtstreeks bevestigde** synoniemen per Catalogusartikel, numeriek
+rechts uitgelijnd, sorteerbaar. De rechtertabel behoudt de vier kolommen
+checkbox, foto, artikelnaam, barcode. Tellers zijn data uit de bestaande
+bevoegde analyseprojectie; geen nieuwe databaseberekeningen of writes.
+
+
+### Artikel-synoniemen — compacte linker teller en expliciete selectie (4 november 2026)
+
+De linker DataTable moet op gangbare desktopbreedte alle vijf
+kolommen tegelijk tonen: selectievakje, foto, artikelnaam, compacte
+barcode en **Syn.**. De Syn.-teller is rechts uitgelijnd en houdt de
+bestaande directe synoniemtelling. Verklein voor deze specifieke
+tabel de standaardkolombreedtes zonder wijzigingen aan het gedeelde
+DataTable-contract.
+
+Rechts zijn alle checkboxen toegankelijk, óók als een artikel niet
+veilig koppelbaar blijkt. De selectie is alleen een gebruikerskeuze:
+de actie **Koppelen** meldt een bestaand identiteits-/GS1 GPC-conflict
+en verricht dan geen opslag. Beveiligingen van de backend blijven
+volledig gelden. De aanvullende linktekst naar **Externe databases 2**
+onder de pagina wordt verwijderd om schermruimte te sparen.
+
+
+### Artikel-synoniemen — verklarende overlay bij koppelconflict (4 november 2026)
+
+Niet-koppelbare geselecteerde rechterregels veroorzaken **geen**
+in-screen-fouttekst. Gebruik de bestaande centrale
+`AppFeedbackProvider`-overlay met de betrokken artikelnamen,
+een begrijpelijke foutoorzaak op basis van de bestaande centrale
+GTIN, artikelcode of officiële GPC Brick en een passende
+herstelactie. Een toegankelijke actie navigeert alleen naar een al
+bestaande Catalogusdetail- of GS1 GPC-classificatiefunctie;
+**Sluiten** annuleert. Foute productidentiteit of een werkelijk
+strijdige officiële GPC Brick wordt niet zonder correctie omzeild.
+Geen aangepaste of tweede meldingscomponent.

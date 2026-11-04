@@ -1,77 +1,172 @@
 import { test, expect } from '@playwright/test'
 
 test.use({ storageState: { cookies: [], origins: [] } })
+
 for (const width of [390, 1280]) {
-  for (const role of ['superuser', 'frontteam']) {
-    test(`${role}: bulk koppelen op ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
-      const writes = []
-      const pairs = Array.from({ length: 12 }, (_, i) => ({
-        id: `pair-${i}`, score: .95-i/100, fingerprint: 'a'.repeat(64),
-        left: { id: `left-${i}`, name: `AH Melk ${i}`, store_name: 'Albert Heijn', primary_gtin: '08719587325926',
-          image_url: i === 0 ? 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACAUwAOw==' : '', size_value: '1', size_unit: 'l' },
-        right: { id: `right-${i}`, name: `Jumbo Melk ${i}`, store_name: 'Jumbo', primary_gtin: '08718452513666',
-          image_url: '', size_value: '2', size_unit: 'l' },
-      }))
-      const linked = new Set()
-      let failed = false
-      await page.route('**/api/**', async (route) => {
-        const path = new URL(route.request().url()).pathname
-        if (path === '/api/session') return route.fulfill({ json: {
-          user_id: 'synonym-test', active_household_id: role === 'superuser' ? '0' : 'test-household',
-          context_type: role === 'superuser' ? 'system' : 'regular', role: 'admin',
-          is_platform_superuser: role === 'superuser', is_frontteam: role === 'frontteam',
-          permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
-        } })
-        if (path.endsWith('/article-synonyms/link')) {
-          writes.push(route.request().postDataJSON())
-          if (!failed) { failed = true; return route.fulfill({ status: 409, json: { detail: 'Een suggestie is gewijzigd. Vernieuw de lijst.' } }) }
-          for (const item of writes.at(-1).selections) linked.add(item.left_product_id)
-          return route.fulfill({ json: { linked: writes.at(-1).selections.length } })
+  test(`Artikel-synoniemen: uitgelijnde tabellen, checkboxen en ontkoppelen op ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const posts = []
+    const articles = [
+      { id: 'a', name: 'Aardappelen', primary_gtin: '08719587325926', synonym_count: 1 },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666', synonym_count: 0 },
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906', synonym_count: 1 },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913', synonym_count: 0 },
+    ]
+    const options = [
+      { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
+        status: 'linked', status_label: 'Al gekoppeld', linkable: false,
+        fingerprint: 'c'.repeat(64), reason: 'Al gekoppeld', manual: true },
+      { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666',
+        status: 'suggested', status_label: 'Voorstel', linkable: true,
+        fingerprint: 'b'.repeat(64), manual: false },
+      { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
+        status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+        reason: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
+        conflict_type: 'gpc_mismatch', conflict_detail: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
+        resolution_route: '/catalogus/gpc-classificeren', fingerprint: '', manual: true },
+    ]
+    // Both DataTables must actually paginate; <=10 mocked rows hide
+    // the shared pagination controls by design.
+    for (let i = 0; i < 9; i += 1) {
+      const id = `extra-${i}`
+      articles.push({ id, name: `Z extra artikel ${i}`, primary_gtin: `87123456789${String(i).padStart(2, '0')}`, synonym_count: 0 })
+      options.push({ id, name: `Z extra artikel ${i}`, primary_gtin: `87123456789${String(i).padStart(2, '0')}`,
+        status: 'other', status_label: 'Overig', linkable: true, manual: true,
+        fingerprint: 'e'.repeat(64) })
+    }
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'synonym-test', active_household_id: '0', context_type: 'system',
+        is_platform_superuser: true, role: 'admin',
+        permissions: { 'platform.external_products.view': true,
+          'platform.external_products.link_existing': true },
+      } })
+      if (path.endsWith('/article-synonyms/link') || path.endsWith('/article-synonyms/unlink')) {
+        const action = path.endsWith('/unlink') ? 'unlink' : 'link'
+        const payload = route.request().postDataJSON()
+        posts.push({ action, payload })
+        for (const choice of payload.selections) {
+          const target = options.find((item) => item.id === choice.right_product_id)
+          if (target) {
+            target.status = action === 'unlink' ? 'other' : 'linked'
+            target.status_label = action === 'unlink' ? 'Overig' : 'Al gekoppeld'
+            target.linkable = action === 'unlink'
+          }
         }
-        if (path.endsWith('/article-synonyms')) return route.fulfill({ json: { items: pairs.filter((p) => !linked.has(p.left.id)) } })
-        if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
-        if (path === '/api/features') return route.fulfill({ json: { features: {} } })
-        if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-        return route.fulfill({ json: {} })
-      })
-      await page.goto('/artikelsynoniemen')
-      const table = page.getByTestId('article-synonyms-table')
-      await expect(table.locator('tbody tr')).toHaveCount(10)
-      await expect(page.getByRole('heading', { name: 'Artikel-synoniemen', level: 2, exact: true })).toBeVisible()
-      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(7)
-      await expect(table.locator('thead tr').first().locator('th').first()).toHaveText('')
-      await expect(table.locator('colgroup col').first()).toHaveAttribute('style', /48px/)
-      await expect(table.locator('thead tr').first()).toContainText('Artikelnaam')
-      await expect(table.locator('thead tr').first()).toContainText('Foto artikel')
-      await expect(table.locator('tbody tr').first()).toContainText('Albert Heijn')
-      await expect(table.locator('tbody tr').first()).toContainText('Jumbo')
-      await expect(table.locator('tbody tr').first().locator('img')).toHaveCount(1)
-      await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
-      await table.getByRole('checkbox').nth(0).check()
-      await table.getByRole('checkbox').nth(1).check()
-      await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
-      await expect(table.locator('tbody tr')).toHaveCount(2)
-      await table.getByRole('checkbox').first().check()
-      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('AH Melk 0')
-      await expect(table.locator('tbody tr')).toHaveCount(1)
-      expect(writes).toEqual([])
-      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-      await expect(page.getByRole('alert')).toContainText('Een suggestie is gewijzigd')
-      await expect(page.getByText('3 geselecteerd', { exact: true })).toBeVisible()
-      await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-      await expect(page.getByText('0 geselecteerd', { exact: true })).toBeVisible()
-      expect(writes[1].selections.map((item) => item.left_product_id)).toEqual(['left-0', 'left-1', 'left-10'])
-      await page.getByRole('textbox', { name: 'Filter op artikelnaam eerste winkel', exact: true }).fill('')
-      await expect(table.locator('tbody tr')).toHaveCount(9)
-      await expect(table).not.toContainText('AH Melk 0')
-      await page.reload()
-      await expect(table.locator('tbody tr')).toHaveCount(9)
-      await expect(page.getByRole('link', { name: 'Externe databases 2', exact: true })).toBeVisible()
-      if (width <= 720) await expect(page.getByRole('button', { name: 'Terug', exact: true }).first()).toBeVisible()
+        return route.fulfill({ json: { linked: action === 'link' ? payload.selections.length : 0,
+          unlinked: action === 'unlink' ? payload.selections.length : 0 } })
+      }
+      if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
+      if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      return route.fulfill({ json: {} })
     })
-  }
+    await page.goto('/artikelsynoniemen')
+    const left = page.getByTestId('article-synonyms-articles')
+    const right = page.getByTestId('article-synonyms-table')
+    await expect(left).toBeVisible()
+    await expect(right).toBeVisible()
+    for (const table of [left, right]) {
+      await expect(table.locator('thead tr').first().locator('th')).toHaveCount(table === left ? 5 : 4)
+      await expect(table.locator('thead')).toContainText('Foto')
+      await expect(table.locator('thead')).toContainText('Artikelnaam')
+      await expect(table.locator('thead')).toContainText('Barcode')
+      await expect(table.locator('thead')).not.toContainText('Winkel')
+    }
+    // Beide checkbox- en fotokolommen hebben dezelfde breedte; de vrijgekomen
+    // ruimte gaat naar de linker artikelnaam zonder Syn. weg te drukken.
+    const leftCols = await left.locator('colgroup col').evaluateAll((cols) =>
+      cols.map((col) => Math.round(parseFloat(col.style.width))))
+    const rightCols = await right.locator('colgroup col').evaluateAll((cols) =>
+      cols.map((col) => Math.round(parseFloat(col.style.width))))
+    expect(leftCols).toEqual([42, 70, 236, 112, 52])
+    expect(leftCols[0]).toBe(rightCols[0])
+    expect(leftCols[1]).toBe(rightCols[1])
+    expect(leftCols.reduce((total, value) => total + value, 0))
+      .toBe(rightCols.reduce((total, value) => total + value, 0))
+    await expect(left.locator('thead')).toContainText('Syn.')
+    await expect(left.locator('thead')).not.toContainText('Synoniemen')
+    await expect(page.getByText('Externe databases 2', { exact: true })).toHaveCount(0)
+    const synHeader = left.getByRole('columnheader', { name: /Syn\./ })
+    await expect(synHeader).toBeVisible()
+    if (width > 900) {
+      const leftWidth = await left.evaluate((table) => table.parentElement.clientWidth)
+      const scrollWidth = await left.evaluate((table) => table.scrollWidth)
+      expect(scrollWidth).toBeLessThanOrEqual(leftWidth + 4)
+    }
+    await expect(right.locator('thead')).not.toContainText('Synoniemen')
+    await expect(left.locator('tbody tr').first().locator('td').last()).toHaveText('1')
+    await expect(left.locator('tbody tr').nth(1).locator('td').last()).toHaveText('0')
+    const leftCheck = left.locator('tbody tr').first().getByRole('checkbox')
+    await leftCheck.check()
+    await expect(leftCheck).toBeChecked()
+    await expect(right.locator('tbody tr')).toHaveCount(10)
+    const panes = page.locator('.rz-synonym-side')
+    const leftPagination = panes.nth(0).locator('.rz-data-table-controls')
+    const rightPagination = panes.nth(1).locator('.rz-data-table-controls')
+    await expect(leftPagination).toBeVisible()
+    await expect(rightPagination).toBeVisible()
+    const leftBottom = await leftPagination.boundingBox()
+    const rightBottom = await rightPagination.boundingBox()
+    if (width > 900) expect(Math.abs(leftBottom.y - rightBottom.y)).toBeLessThan(2)
+    else expect(rightBottom.y).toBeGreaterThan(leftBottom.y)
+    const actionBar = panes.nth(1).locator('.rz-synonym-analysis-actions')
+    const actionBox = await actionBar.boundingBox()
+    expect(actionBox.y).toBeGreaterThan(rightBottom.y + rightBottom.height - 1)
+    await expect(rightPagination.getByRole('button', { name: 'Koppelen' })).toHaveCount(0)
+    await expect(rightPagination.getByRole('button', { name: 'Ontkoppelen' })).toHaveCount(0)
+    await expect(right.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-linked/)
+    await expect(right.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-suggested/)
+    await expect(right.locator('tbody tr').nth(2)).toHaveClass(/rz-synonym-relation-other/)
+    await expect(right).not.toContainText('08719587325926')
+    await expect(right.getByRole('checkbox')).toHaveCount(10)
+    const conflictCheckbox = right.locator('tbody tr').filter({ hasText: '08712345678913' }).getByRole('checkbox')
+    await expect(conflictCheckbox).toBeEnabled()
+    await conflictCheckbox.check()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    const conflictDialog = page.getByTestId('article-synonyms-conflict')
+    await expect(conflictDialog).toBeVisible()
+    await expect(conflictDialog).toContainText('Aardappelen ↔ Snijbonen')
+    await expect(conflictDialog).toContainText('10000001 tegenover 10000002')
+    await expect(conflictDialog).toContainText('corrigeer die dan via GS1 GPC')
+    await expect(conflictDialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
+    expect(posts).toHaveLength(0)
+    await conflictDialog.getByRole('button', { name: 'Sluiten' }).click()
+    await expect(conflictDialog).toHaveCount(0)
+    await conflictCheckbox.uncheck()
+    await expect(page.getByText(/geselecteerd$/)).toHaveCount(0)
+    const leftTop = await left.locator('thead').boundingBox()
+    const rightTop = await right.locator('thead').boundingBox()
+    if (width > 900) expect(Math.abs(leftTop.y - rightTop.y)).toBeLessThan(2)
+    else expect(rightTop.y).toBeGreaterThan(leftTop.y)
+    const colors = await right.locator('tbody tr').evaluateAll((rows) =>
+      rows.map((row) => getComputedStyle(row.cells[0]).backgroundColor))
+    expect(colors[0]).not.toBe(colors[1])
+    expect(colors[1]).not.toBe(colors[2])
+    const linkedCheck = right.locator('tbody tr').first().getByRole('checkbox')
+    await linkedCheck.check()
+    await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeDisabled()
+    expect(posts).toHaveLength(0)
+    await page.getByRole('button', { name: 'Ontkoppelen' }).click()
+    await expect(linkedCheck).not.toBeChecked()
+    expect(posts[0].action).toBe('unlink')
+    expect(posts[0].payload.selections).toEqual([{
+      left_product_id: 'a', right_product_id: 'c', fingerprint: 'c'.repeat(64),
+    }])
+    await right.locator('tbody tr').filter({ hasText: '08718452513666' }).getByRole('checkbox').check()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeDisabled()
+    await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    expect(posts[1].action).toBe('link')
+    expect(posts[1].payload.selections).toEqual([{
+      left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false,
+    }])
+  })
 }
 
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
