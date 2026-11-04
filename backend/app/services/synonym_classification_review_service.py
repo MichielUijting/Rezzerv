@@ -7,6 +7,8 @@ import json
 from fastapi import HTTPException
 from sqlalchemy import inspect, text
 
+from app.services.article_classification_sync_monitor import record_sync_event
+
 
 def _classification(conn, product_id):
     gpc = conn.execute(text("SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id=:id"),
@@ -99,6 +101,12 @@ def apply_choices(conn, reviews, decisions, actor_id):
                         migrated_from=:source, confidence=1.0, updated_at=CURRENT_TIMESTAMP
                     WHERE global_product_id=:id
                 """), {"code": source["code"], "source": "synonym:" + source_id, "id": target["id"]})
+                record_sync_event(
+                    conn, source_id=source_id, target_id=target["id"], system="GPC",
+                    code=source["code"], status="processed",
+                    reason="Handmatige prevalentie gekozen in Artikel-synoniemen.",
+                    actor_id=actor_id, operation="explicit_synonym_review",
+                )
                 report["gpc_resolved"] += 1
             else:
                 from app.services.cbs_classification_service import confirm_cbs_batch
@@ -122,5 +130,12 @@ def apply_choices(conn, reviews, decisions, actor_id):
                     WHERE global_product_id=:id AND version=:version
                       AND confirmation_source='explicit_manual_confirmation'
                 """), {"source": provenance, "id": target["id"], "version": target["version"] + 1})
+                record_sync_event(
+                    conn, source_id=source_id, target_id=target["id"], system="CBS",
+                    code=source["code"], reference=source["reference"],
+                    decision_version=target["version"] + 1, status="processed",
+                    reason="Handmatige prevalentie gekozen in Artikel-synoniemen.",
+                    actor_id=actor_id, operation="explicit_synonym_review",
+                )
                 report["cbs_resolved"] += 1
     return report
