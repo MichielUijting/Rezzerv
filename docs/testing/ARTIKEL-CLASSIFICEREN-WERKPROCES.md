@@ -51,3 +51,7 @@ D. Nieuwe aparte PR: synchronisatiebewijzen en statusmonitor; na integratie van 
 ### Verbetering classificatie-artikelselectie (PO-feedback 4 november)
 
 De gecombineerde classificatie had eerst alleen het zoekveld van het losse GPC-scherm. Daardoor verscheen CBS pas na verborgen selectie. **Classificeren** toont nu één centrale Catalogus-DataTable uit de bestaande CBS-productpopulatie. Een geselecteerde `global_product_id` is het gedeelde anker voor de GS1 GPC- en CBS-panelen. Zowel classificaties als productidentiteit worden via de bestaande geautoriseerde autoriteiten gecontroleerd. De selectie is uitsluitend een UI-state; save blijft per classificatiesysteem afzonderlijk. Het traditionele losse GPC-scherm behoudt zijn eigen zoekfunctie en de losse CBS-pagina blijft apart functioneren.
+
+### PO-indeling: GS1 links, CBS rechts
+
+De detailweergave gebruikt één canoniek geselecteerd `global_product.id`, één artikelkop en twee even brede desktopkolommen met de bestaande GS1/CBS-routes. Beide officiële indelingen kunnen afzonderlijk worden gekozen en bevestigd. Op mobiel komen de kolommen in dezelfde volgorde onder elkaar. Er is geen nieuwe API-schrijfautoriteit, vertaalregel tussen GPC/CBS of gezamenlijke impliciete opslag. De bestaande CBS-confirmatie-overlay en GS1-bevestigingsroute blijven werkzaam; oude losse schermroutes blijven beschikbaar.
