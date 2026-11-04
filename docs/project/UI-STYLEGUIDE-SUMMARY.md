@@ -1638,3 +1638,20 @@ De linkertabel heeft aanvullend de kolom **Synoniemen** met het aantal
 rechts uitgelijnd, sorteerbaar. De rechtertabel behoudt de vier kolommen
 checkbox, foto, artikelnaam, barcode. Tellers zijn data uit de bestaande
 bevoegde analyseprojectie; geen nieuwe databaseberekeningen of writes.
+
+
+### Artikel-synoniemen — compacte linker teller en expliciete selectie (4 november 2026)
+
+De linker DataTable moet op gangbare desktopbreedte alle vijf
+kolommen tegelijk tonen: selectievakje, foto, artikelnaam, compacte
+barcode en **Syn.**. De Syn.-teller is rechts uitgelijnd en houdt de
+bestaande directe synoniemtelling. Verklein voor deze specifieke
+tabel de standaardkolombreedtes zonder wijzigingen aan het gedeelde
+DataTable-contract.
+
+Rechts zijn alle checkboxen toegankelijk, óók als een artikel niet
+veilig koppelbaar blijkt. De selectie is alleen een gebruikerskeuze:
+de actie **Koppelen** meldt een bestaand identiteits-/GS1 GPC-conflict
+en verricht dan geen opslag. Beveiligingen van de backend blijven
+volledig gelden. De aanvullende linktekst naar **Externe databases 2**
+onder de pagina wordt verwijderd om schermruimte te sparen.
