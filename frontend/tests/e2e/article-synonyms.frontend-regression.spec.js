@@ -20,8 +20,8 @@ for (const width of [390, 1280]) {
         status: 'suggested', status_label: 'Voorstel', linkable: true,
         fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
-        status: 'other', status_label: 'Overig', linkable: true,
-        fingerprint: 'd'.repeat(64), manual: true },
+        status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+        reason: 'Strijdige GPC-indeling', fingerprint: '', manual: true },
     ]
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
@@ -65,7 +65,16 @@ for (const width of [390, 1280]) {
       await expect(table.locator('thead')).toContainText('Barcode')
       await expect(table.locator('thead')).not.toContainText('Winkel')
     }
-    await expect(left.locator('thead')).toContainText('Synoniemen')
+    await expect(left.locator('thead')).toContainText('Syn.')
+    await expect(left.locator('thead')).not.toContainText('Synoniemen')
+    await expect(page.getByText('Externe databases 2', { exact: true })).toHaveCount(0)
+    const synHeader = left.getByRole('columnheader', { name: /Syn\./ })
+    await expect(synHeader).toBeVisible()
+    if (width > 900) {
+      const leftWidth = await left.evaluate((table) => table.parentElement.clientWidth)
+      const scrollWidth = await left.evaluate((table) => table.scrollWidth)
+      expect(scrollWidth).toBeLessThanOrEqual(leftWidth + 4)
+    }
     await expect(right.locator('thead')).not.toContainText('Synoniemen')
     await expect(left.locator('tbody tr').first().locator('td').last()).toHaveText('1')
     await expect(left.locator('tbody tr').nth(1).locator('td').last()).toHaveText('0')
@@ -92,6 +101,14 @@ for (const width of [390, 1280]) {
     await expect(right.locator('tbody tr').nth(2)).toHaveClass(/rz-synonym-relation-other/)
     await expect(right).not.toContainText('08719587325926')
     await expect(right.getByRole('checkbox')).toHaveCount(3)
+    const conflictCheckbox = right.locator('tbody tr').filter({ hasText: '08712345678913' }).getByRole('checkbox')
+    await expect(conflictCheckbox).toBeEnabled()
+    await conflictCheckbox.check()
+    await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('GS1 GPC-conflict')
+    expect(posts).toHaveLength(0)
+    await conflictCheckbox.uncheck()
     await expect(page.getByText(/geselecteerd$/)).toHaveCount(0)
     const leftTop = await left.locator('thead').boundingBox()
     const rightTop = await right.locator('thead').boundingBox()
