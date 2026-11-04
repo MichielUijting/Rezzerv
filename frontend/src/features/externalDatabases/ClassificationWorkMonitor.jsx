@@ -72,7 +72,7 @@ export default function ClassificationWorkMonitor({ counts, refreshVersion }) {
       <div><strong>{state.synonyms === null ? '—' : state.synonyms}</strong><span>Voorgestelde synoniemparen te beoordelen</span>
         <Button type="button" variant="secondary" onClick={() => navigate('/artikelsynoniemen')}>Synoniemen beoordelen</Button></div>
     </div>
-    <p data-testid="classification-sync-evidence"><strong>Synchronisatie:</strong> automatische GS1/CBS-overname na bevestigde synoniemen verloopt via Artikel-synoniemen (PR #645). Een betrouwbare teller voor nog te verwerken of mislukte synchronisaties is nog niet beschikbaar; deze wordt daarom niet als nul weergegeven.</p>
+    <p data-testid="classification-sync-evidence"><strong>Synchronisatie:</strong> de overname van classificaties via bevestigde synoniemen is afzonderlijke functionaliteit die pas na goedkeuring beschikbaar komt. Een betrouwbare teller voor nog te verwerken of mislukte synchronisaties is nog niet beschikbaar; deze wordt daarom niet als nul weergegeven.</p>
     {state.loading ? <p role="status">Werkvoorraad ophalen…</p> : null}
     {state.error ? <p role="alert">{state.error} kon niet worden gemeten. De betreffende teller toont geen waarde; andere tellers blijven bruikbaar.</p> : null}
     <Button type="button" variant="secondary" disabled={state.loading} onClick={() => setRevision((value) => value + 1)}>Werkvoorraad vernieuwen</Button>
