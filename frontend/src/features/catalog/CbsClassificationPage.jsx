@@ -24,7 +24,7 @@ function csvCell(value) {
   return '"' + safe.replaceAll('"', '""') + '"'
 }
 
-export default function CbsClassificationPage({ embedded = false, productId = null }) {
+export default function CbsClassificationPage({ embedded = false, productId = null, onSaved = () => {} }) {
   const { showFeedback } = useAppFeedback()
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(new Set())
@@ -210,6 +210,7 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
       setAutomaticSuggestions([])
       setNote(result.confirmed + ' CBS-classificatie opgeslagen.')
       showFeedback({ variant: 'success', message: 'CBS-classificatie opgeslagen.' })
+      onSaved({ global_product_id: item.id, cbs_code: category.cbs_code })
       setRevision((v) => v + 1)
     } catch (err) {
       setError(err.message)
