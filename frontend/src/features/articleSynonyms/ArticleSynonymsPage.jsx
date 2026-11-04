@@ -190,6 +190,7 @@ export default function ArticleSynonymsPage() {
               <td>{item.code}</td>
               <td className="rz-num">{Number(item.synonym_count) || 0}</td>
             </tr>} />
+          <div className="rz-synonym-actions-placeholder" aria-hidden="true" />
         </section>
         <section className="rz-synonym-side" aria-label="Synoniemen rechts"
           data-testid="article-synonyms-candidates">
