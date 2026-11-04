@@ -409,6 +409,40 @@ class StoreTest(unittest.TestCase):
                 SELECT cbs_code FROM global_product_cbs_classifications
             """)).scalars()), {'011410', '011420'})
 
+    def test_existing_gpc_conflict_blocks_only_gpc_not_cbs(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025'),('b','10000026')
+            """))
+            self._set_cbs(conn, 'a')
+            # A pre-existing confirmed relationship may acquire a later GPC
+            # conflict. Do not override either Brick or suppress safe CBS fill.
+            report = inheritance.propagate_confirmed_classifications(
+                conn, {('a', 'b')}, {'a', 'b'}, 'actor',
+            )
+            self.assertEqual(report['gpc_inherited'], 0)
+            self.assertEqual(report['cbs_inherited'], 1)
+            self.assertEqual([item['system'] for item in report['conflicts']], ['GPC'])
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a': '10000025', 'b': '10000026'})
+            self.assertEqual(conn.execute(text("""
+                SELECT cbs_code FROM global_product_cbs_classifications
+                 WHERE global_product_id='b'
+            """)).scalar_one(), '011420')
+
+    def test_missing_gpc_does_not_prevent_independent_cbs_inheritance(self):
+        with self.engine.begin() as conn:
+            self._set_cbs(conn, 'a')
+            pair = self.selection(conn)
+            result = service.confirm_pairs(conn, [pair], 'actor')
+            self.assertEqual(result['classification_inheritance']['gpc_inherited'], 0)
+            self.assertEqual(result['classification_inheritance']['cbs_inherited'], 1)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_gpc_bricks"
+            )).scalar_one(), 0)
+
     def test_three_article_synonym_group_inherits_consistently(self):
         with self.engine.begin() as conn:
             conn.execute(text("""
