@@ -573,3 +573,11 @@
   line-height: 1.5;
 }
 
+
+/* Read-only workqueue shared by the frontteam and platform superuser. */
+.rz-classification-work-monitor { margin: 0 0 18px; }
+.rz-classification-work-monitor h3 { margin: 0 0 8px; }
+.rz-classification-work-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); gap: 12px; margin: 14px 0; }
+.rz-classification-work-grid > div { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; border: 1px solid var(--color-border, #ccd6d6); border-radius: 9px; padding: 12px; }
+.rz-classification-work-grid strong { font-size: 1.7rem; line-height: 1.2; }
+.rz-classification-work-grid span { flex: 1; }
