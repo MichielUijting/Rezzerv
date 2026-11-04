@@ -18,6 +18,16 @@ test('Artikelbeheer: selecteer officiële GS1/CBS-resultaatregel en sla veilig o
     if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
     if (path === '/api/features') return route.fulfill({ json: { features: {} } })
     if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
+      total: 1, task_count_scope: 'page', items: [{
+        id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', gtin: '8712345678901',
+        gpc_code: gpcBrick, gpc_status: 'classified',
+        cbs_code: cbsCode, cbs_name: cbsCode ? 'Melk' : '',
+        cbs_status: cbsCode ? 'classified' : 'unclassified', cbs_version: cbsCode ? 1 : 0,
+      }], tasks: cbsCode ? [] : [{
+        key: 'p1:cbs', global_product_id: 'p1', system: 'cbs', status: 'open',
+      }],
+    } })
     if (path === '/api/cbs-classifications/products') return route.fulfill({ json: {
       total: 1, items: [{ id: 'p1', name: 'Testmelk', brand: 'Voorbeeld',
         gtin: '8712345678901', classified: Boolean(cbsCode), cbs_code: cbsCode,
@@ -73,4 +83,7 @@ test('Artikelbeheer: selecteer officiële GS1/CBS-resultaatregel en sla veilig o
     cbs_code: '011420', reference_version: 'CBS-ECOICOPv2-2026', expected_version: 0,
   }])
   await expect(page.getByTestId('cbs-single-product')).toContainText('011420')
+  await expect(page.getByTestId('combined-classification-articles')).toContainText('10000002')
+  await expect(page.getByTestId('combined-classification-articles')).toContainText('011420')
+  await expect(page.getByTestId('classification-workqueue-counts')).toContainText('0 open classificatietaken')
 })

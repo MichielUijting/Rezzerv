@@ -26,6 +26,13 @@ for (const width of [390, 1280]) {
       if (path === '/api/catalog/p1/gpc-brick') return route.fulfill({ json: {
         assignment: { brick_code: '10000001', brick_description: 'Melk' }, suggestions: [],
       } })
+      if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
+        total: 1, task_count_scope: 'page', items: [{
+          id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', gtin: '8712345678901',
+          gpc_code: '10000001', gpc_status: 'classified',
+          cbs_code: '', cbs_name: '', cbs_status: 'unclassified', cbs_version: 0,
+        }], tasks: [{ key: 'p1:cbs', global_product_id: 'p1', system: 'cbs', status: 'open' }],
+      } })
       if (path === '/api/cbs-classifications/products') return route.fulfill({ json: {
         total: 1, items: [{ id: 'p1', name: 'Testmelk', classified: false, version: 0 }],
       } })
@@ -80,7 +87,7 @@ for (const width of [390, 1280]) {
     } else {
       expect(panelPositions[0].y).toBeLessThan(panelPositions[1].y)
     }
-    await expect(page.getByText('10000001')).toBeVisible()
+    await expect(page.getByTestId('combined-classification-articles')).toContainText('10000001')
     await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
 
     await nav.getByRole('button', { name: 'Synoniemen' }).click()

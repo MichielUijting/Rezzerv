@@ -41,7 +41,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcActionPage({ embedded = false, readOnly = false, selectedProduct = undefined, onArticleChange = () => {} }) {
+export default function CatalogGpcActionPage({ embedded = false, readOnly = false, selectedProduct = undefined, onArticleChange = () => {}, onSaved = () => {} }) {
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -179,6 +179,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
       setBrickQuery('')
       setBrickResults([])
       setFeedback('De GPC Brick is bevestigd en opgeslagen bij het universele artikel.')
+      onSaved(data?.assignment || brick)
     } catch (saveError) {
       setError(saveError?.message || 'De GPC-classificatie kon niet worden opgeslagen.')
     } finally {
