@@ -20,7 +20,7 @@ for (const width of [390, 1280]) {
         status: 'suggested', status_label: 'Voorstel', linkable: true,
         fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
-        status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+        status: 'other', status_label: 'Classificatie kiezen', linkable: false,
         reason: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
         conflict_type: 'gpc_mismatch', conflict_detail: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
         resolution_route: '/catalogus/gpc-classificeren', fingerprint: 'd'.repeat(64), manual: true },
@@ -263,11 +263,11 @@ test('Twee verschillende classificaties tonen artikelcodes naast elkaar en verei
     } })
     if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: [a, b] } })
     if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: [
-      { ...b, status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+      { ...b, status: 'other', status_label: 'Classificatie kiezen', linkable: false,
         conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
     ] } })
     if (path.endsWith('/article-synonyms/analysis/b/options')) return route.fulfill({ json: { items: [
-      { ...a, status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+      { ...a, status: 'other', status_label: 'Classificatie kiezen', linkable: false,
         conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
     ] } })
     if (path.endsWith('/article-synonyms/link/review')) return route.fulfill({ json: { items: [{
