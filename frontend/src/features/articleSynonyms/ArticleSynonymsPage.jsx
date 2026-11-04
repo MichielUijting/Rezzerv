@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -16,6 +16,7 @@ const orderedPair = (left, right) => [left, right].sort()
 
 export default function ArticleSynonymsPage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [articles, setArticles] = useState([])
   const [activeArticle, setActiveArticle] = useState(searchParams.get('artikel') || '')
   const [options, setOptions] = useState([])
@@ -23,9 +24,44 @@ export default function ArticleSynonymsPage() {
   const [loading, setLoading] = useState(true)
   const [loadingOptions, setLoadingOptions] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
   const savingRef = useRef(false)
   const { showFeedback } = useAppFeedback()
+
+  function reportError(message) {
+    showFeedback({ variant: 'error', title: 'Artikel-synoniemen',
+      message: String(message || 'Er is iets misgegaan.'), dismissMode: 'ok-only' })
+  }
+
+  function showConflict(first, count) {
+    const type = first.conflict_type || 'unknown'
+    const left = currentArticle?.name || 'Het gekozen artikel'
+    const reason = first.conflict_detail || first.reason ||
+      'De artikelidentiteit of GS1 GPC-classificatie komt niet overeen.'
+    let remedy = 'Controleer de artikelgegevens voordat je opnieuw koppelt.'
+    let action = ''
+    if (type === 'gpc_mismatch') {
+      remedy = 'Controleer de officiële GS1 GPC-indeling van beide artikelen. Is een indeling onjuist, corrigeer die dan in Artikelclassificatie (GS1 GPC) en probeer daarna opnieuw.'
+      action = 'Naar GS1 GPC'
+    } else if (type === 'same_gtin' || type === 'shared_article_code') {
+      remedy = 'De artikelen hebben een gedeelde productidentiteit. Controleer beide Catalogusdetails. Corrigeer alleen een aantoonbaar foutieve barcode of artikelcode; zijn het twee registraties van hetzelfde product, dan is een afzonderlijk synoniem niet passend.'
+      action = 'Naar Catalogusdetail'
+    }
+    const extra = count > 1 ? ` Ook ${count - 1} andere geselecteerde artikel(en) hebben een blokkade. Er is niets gekoppeld.` : ' Er is niets gekoppeld.'
+    const route = first.resolution_route
+    showFeedback({
+      variant: 'warning',
+      title: 'Koppeling vraagt controle',
+      message: `${left} ↔ ${first.name}`,
+      detail: `${reason} ${remedy}${extra}`,
+      dismissMode: 'ok-only',
+      ...(route && action ? {
+        primaryActionLabel: action,
+        secondaryActionLabel: 'Sluiten',
+        onPrimaryAction: () => navigate(route),
+      } : {}),
+      testId: 'article-synonyms-conflict',
+    })
+  }
 
   const loadArticles = useCallback(async (signal) => {
     const response = await fetchJsonWithAuth(`${API}/analysis`, { signal })
@@ -45,7 +81,7 @@ export default function ArticleSynonymsPage() {
     const controller = new AbortController()
     setLoading(true)
     loadArticles(controller.signal)
-      .catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+      .catch((err) => { if (!controller.signal.aborted) reportError(err.message) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [loadArticles])
@@ -57,14 +93,13 @@ export default function ArticleSynonymsPage() {
     if (!activeArticle) return () => controller.abort()
     setLoadingOptions(true)
     loadOptions(activeArticle, controller.signal)
-      .catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+      .catch((err) => { if (!controller.signal.aborted) reportError(err.message) })
       .finally(() => { if (!controller.signal.aborted) setLoadingOptions(false) })
     return () => controller.abort()
   }, [activeArticle, loadOptions])
 
   function chooseArticle(id) {
     if (savingRef.current || loadingOptions) return
-    setError('')
     setActiveArticle(id)
     setChecked(new Set())
   }
@@ -102,7 +137,7 @@ export default function ArticleSynonymsPage() {
     if (action === 'link') {
       const conflicts = targets.filter((item) => !item.linkable)
       if (conflicts.length) {
-        setError(`Niet gekoppeld: ${conflicts.length} geselecteerd(e) artikel(en) hebben een identiteits- of GS1 GPC-conflict. Deselecteer deze artikelen voordat je koppelt. De overige selectie is niet gewijzigd.`)
+        showConflict(conflicts[0], conflicts.length)
         return
       }
     }
@@ -116,12 +151,11 @@ export default function ArticleSynonymsPage() {
       }
     })
     if (selections.some((entry) => entry.left_product_id === entry.right_product_id)) {
-      setError('Een artikel kan niet aan zichzelf worden gekoppeld.')
+      reportError('Een artikel kan niet aan zichzelf worden gekoppeld.')
       return
     }
     savingRef.current = true
     setSaving(true)
-    setError('')
     try {
       const response = await fetchJsonWithAuth(`${API}/${action}`, {
         method: 'POST',
@@ -142,7 +176,7 @@ export default function ArticleSynonymsPage() {
           : `${number} synoniemkoppeling(en) bevestigd.`,
       })
     } catch (err) {
-      setError(err.message)
+      reportError(err.message)
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -165,7 +199,6 @@ export default function ArticleSynonymsPage() {
   return <AppShell title="Artikel-synoniemen" showExit={false}>
     <ScreenCard fullWidth>
       <h2>Artikel-synoniemen</h2>
-      {error ? <p role="alert">{error}</p> : null}
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">
           <h3>Artikel kiezen</h3>
