@@ -132,7 +132,7 @@ for (const width of [390, 1280]) {
     await expect(conflictDialog).toBeVisible()
     await expect(conflictDialog).toContainText('Aardappelen ↔ Snijbonen')
     await expect(conflictDialog).toContainText('10000001 tegenover 10000002')
-    await expect(conflictDialog).toContainText('corrigeer die dan in Artikelclassificatie')
+    await expect(conflictDialog).toContainText('corrigeer die dan via GS1 GPC')
     await expect(conflictDialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
     expect(posts).toHaveLength(0)
     await conflictDialog.getByRole('button', { name: 'Sluiten' }).click()
