@@ -9,6 +9,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
+import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -107,7 +108,7 @@ export default function ExternalDatabases2Page() {
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'inhuis-externe-databases-2-artikelen.csv'
+    anchor.download = 'inhuis-artikel-classificeren-artikelen.csv'
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
@@ -153,8 +154,8 @@ export default function ExternalDatabases2Page() {
       variant: 'warning',
       title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
       message: count === 1
-        ? 'Dit artikel verwijderen uit Externe databases 2 en de Catalogus?'
-        : `${count} artikelen verwijderen uit Externe databases 2 en de Catalogus?`,
+        ? 'Dit artikel verwijderen uit Artikel classificeren en de Catalogus?'
+        : `${count} artikelen verwijderen uit Artikel classificeren en de Catalogus?`,
       detail: 'Kassabonnen en voorraad blijven bestaan. Een gedeeld Catalogusartikel wordt niet verwijderd.',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
@@ -251,9 +252,9 @@ export default function ExternalDatabases2Page() {
   }, [location.state?.selectedItemId, refreshVersion])
 
   return (
-    <AppShell title="Externe databases 2" showExit={false}>
+    <AppShell title="Artikel classificeren" showExit={false}>
       <ScreenCard fullWidth>
-        <h2>Externe databases 2</h2>
+        <h2>Artikel classificeren</h2>
         <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art./Barcode toont een bekende artikelcode of handmatig ingevoerde barcode; alleen een bevestigde koppeling verandert de GS1-status.</p>
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
@@ -266,7 +267,8 @@ export default function ExternalDatabases2Page() {
           {offLinkOutcome.message}
         </p> : null}
         {error ? <p role="alert">{error}</p> : null}
-        <div className="rz-external-receipt-overview">
+        <ClassificationWorkMonitor counts={counts} refreshVersion={refreshVersion} />
+        <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
             key={status} type="button" variant="secondary"
