@@ -226,17 +226,27 @@ def suggest_pairs(products, confirmed=(), *, include_name_only=False):
     return sorted(pairs.values(), key=lambda pair: (-pair['score'], pair['id']))
 
 
-def _manual_pair_is_safe(left, right):
-    """Identity and classification checks shared by display and writes."""
-    if not left or not right or left['id'] == right['id']:
-        return False
+def _manual_pair_conflict(left, right):
+    """Precise explanation; never infer a conflict from an article name."""
+    if not left or not right:
+        return {'type': 'missing_article', 'detail': 'Een van de Catalogusartikelen bestaat niet meer.'}
+    if left['id'] == right['id']:
+        return {'type': 'same_article', 'detail': 'Dit is hetzelfde Catalogusartikel.'}
     if left.get('primary_gtin') and left['primary_gtin'] == right.get('primary_gtin'):
-        return False
-    if set(left.get('article_codes') or []) & set(right.get('article_codes') or []):
-        return False
+        return {'type': 'same_gtin', 'detail': f"Beide artikelen hebben dezelfde barcode {left['primary_gtin']}."}
+    shared = sorted(set(left.get('article_codes') or []) & set(right.get('article_codes') or []))
+    if shared:
+        return {'type': 'shared_article_code', 'detail': f"Beide artikelen gebruiken dezelfde bevestigde artikelcode {shared[0]}."}
     if left.get('brick_code') and right.get('brick_code') and left['brick_code'] != right['brick_code']:
-        return False
-    return True
+        return {
+            'type': 'gpc_mismatch',
+            'detail': f"De GS1 GPC-classificaties verschillen: {left['brick_code']} tegenover {right['brick_code']}.",
+        }
+    return None
+
+
+def _manual_pair_is_safe(left, right):
+    return _manual_pair_conflict(left, right) is None
 
 
 def product_link_options(products, confirmed, product_id):
@@ -258,7 +268,8 @@ def product_link_options(products, confirmed, product_id):
         key = (left['id'], right['id'])
         linked = key in existing
         suggestion = proposed.get(key)
-        safe = _manual_pair_is_safe(left, right)
+        conflict = _manual_pair_conflict(left, right) if not linked else None
+        safe = conflict is None
         state = 'linked' if linked else 'suggested' if suggestion else 'other'
         options.append({
             'id': product['id'],
@@ -273,8 +284,14 @@ def product_link_options(products, confirmed, product_id):
             'status_label': ('Al gekoppeld' if linked else 'Niet koppelbaar' if not safe
                              else 'Voorstel' if suggestion else 'Overig'),
             'linkable': bool(not linked and safe),
-            'reason': ('Al gekoppeld' if linked else
-                       'Zelfde productidentiteit of strijdige GPC-indeling' if not safe else ''),
+            'reason': 'Al gekoppeld' if linked else (conflict or {}).get('detail', ''),
+            'conflict_type': (conflict or {}).get('type'),
+            'conflict_detail': (conflict or {}).get('detail', ''),
+            'resolution_route': (
+                '/catalogus/gpc-classificeren' if conflict and conflict['type'] == 'gpc_mismatch'
+                else f"/catalogus/{product['id']}" if conflict and conflict['type'] in
+                    {'same_gtin', 'shared_article_code'} else None
+            ),
             'score': suggestion['score'] if suggestion else None,
             'fingerprint': _fingerprint(left, right) if linked or safe else '',
             # Suggestion uses canonical proposed pair, otherwise explicit
