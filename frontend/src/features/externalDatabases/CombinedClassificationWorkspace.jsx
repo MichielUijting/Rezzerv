@@ -82,14 +82,22 @@ export default function CombinedClassificationWorkspace() {
         </td>)}
       </tr>}
     />
-    {selected ? <div data-testid="combined-selected-article">
-      <h3>{selected.name}{selected.brand ? ' · ' + selected.brand : ''}</h3>
-      <p>Barcode: {selected.gtin || 'Niet vastgelegd'}</p>
-      {!mayUpdateGpc ? <p role="status">GS1 is alleen-lezen: je hebt geen bevoegdheid om GS1 te wijzigen.</p> : null}
-      <CatalogGpcActionPage key={selected.id} embedded readOnly={!mayUpdateGpc}
-        selectedProduct={{ id: selected.id, name: selected.name, brand: selected.brand,
-          primary_gtin: selected.gtin }} />
-      <CbsClassificationPage key={selected.id + '-cbs'} embedded productId={selected.id} />
-    </div> : <p role="status">Selecteer een artikel in de tabel om zowel GS1 als CBS te bekijken en te wijzigen.</p>}
+    {selected ? <div className="rz-classification-detail" data-testid="combined-selected-article">
+      <div className="rz-classification-selected-heading">
+        <strong>{selected.name}{selected.brand ? ' · ' + selected.brand : ''}</strong>
+        <span>Barcode: {selected.gtin || 'Niet vastgelegd'}</span>
+      </div>
+      <div className="rz-classification-dual-grid" data-testid="classification-dual-panels">
+        <div className="rz-classification-dual-panel" aria-label="GS1 GPC-classificatie" data-testid="classification-gs1-panel">
+          {!mayUpdateGpc ? <p role="status">GS1 alleen lezen: onvoldoende wijzigingsrechten.</p> : null}
+          <CatalogGpcActionPage key={selected.id} embedded readOnly={!mayUpdateGpc}
+            selectedProduct={{ id: selected.id, name: selected.name, brand: selected.brand,
+              primary_gtin: selected.gtin }} />
+        </div>
+        <div className="rz-classification-dual-panel" aria-label="CBS ECOICOPv2-classificatie" data-testid="classification-cbs-panel">
+          <CbsClassificationPage key={selected.id + '-cbs'} embedded productId={selected.id} />
+        </div>
+      </div>
+    </div> : <p role="status">Selecteer een artikel in de tabel om beide classificaties naast elkaar te bekijken.</p>}
   </section>
 }
