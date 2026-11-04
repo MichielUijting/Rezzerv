@@ -53,11 +53,13 @@
 .rz-synonym-side > .rz-data-table-shell > .rz-data-table-wrapper { flex: 1 1 auto; }
 .rz-synonym-side > .rz-data-table-shell > .rz-data-table-controls { flex: 0 0 auto; }
 .rz-synonym-pagination-spacer { display: block; width: 0; height: 0; }
-.rz-synonym-side > .rz-synonym-analysis-actions {
-  flex: 0 0 auto;
-  min-height: 38px;
+.rz-synonym-side > .rz-synonym-analysis-actions,
+.rz-synonym-side > .rz-synonym-actions-placeholder {
+  flex: 0 0 44px;
+  min-height: 44px;
   margin-top: 0;
 }
+.rz-synonym-actions-placeholder { visibility: hidden; }
 .rz-synonym-side h3, .rz-synonym-side p { margin: 0; }
 .rz-synonym-side .rz-synonym-analysis-table-wrapper {
   max-height: none; height: auto; overflow: auto;
@@ -82,4 +84,6 @@
   .rz-synonym-side-by-side { grid-template-columns: minmax(0, 1fr); }
   .rz-synonym-side > .rz-data-table-shell { flex: 0 0 auto; }
   .rz-synonym-side > .rz-data-table-shell > .rz-data-table-wrapper { flex: 0 0 auto; }
+  .rz-synonym-actions-placeholder { display: none; }
+  .rz-synonym-side > .rz-synonym-analysis-actions { min-height: 44px; height: auto; }
 }
