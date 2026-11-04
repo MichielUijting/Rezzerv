@@ -412,3 +412,16 @@ een exacte OFF-controle uit, bewaart betrouwbare artikelinformatie en foto
 waar beschikbaar, of registreert uitsluitend barcodebewijs bij geen
 OFF-resultaat/storing. Identiteitsconflicten blijven fail-closed; een
 niet-bevestigde code wordt geen Catalogus-/voorraadkoppeling.
+
+
+### PO-besluit 4 november 2026 — twee tabellen
+
+Artikel-synoniemen toont links een afzonderlijke Catalogus-artikeltabel,
+rechts een zelfstandige tabel met alle andere gecodeerde centrale
+Catalogusartikelen. De rechtertabel onderscheidt duidelijk **Al gekoppeld**,
+**Voorstel** en **Overig**. Selectie in de rechtertabel zet nog geen relatie
+vast; `Koppelen` is de expliciete bulkbevestiging. De linker product-ID
+wordt rechts uitgesloten, ook bij gelijke artikelnaam. Centrale identiteits-
+en GPC-conflicten zijn niet koppelbaar. Op mobiele schermen komen de twee
+tabellen onder elkaar. Dit vervangt de oudere dubbele zevenkoloms
+parenpresentatie; winkelherkomst blijft informatief en is nooit matchcriterium.
