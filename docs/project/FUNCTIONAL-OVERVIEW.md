@@ -425,3 +425,17 @@ wordt rechts uitgesloten, ook bij gelijke artikelnaam. Centrale identiteits-
 en GPC-conflicten zijn niet koppelbaar. Op mobiele schermen komen de twee
 tabellen onder elkaar. Dit vervangt de oudere dubbele zevenkoloms
 parenpresentatie; winkelherkomst blijft informatief en is nooit matchcriterium.
+
+
+### PO-verfijning 4 november 2026 — compacte selectie en ontkoppeling
+
+Beide artikel-synoniementabellen beginnen op desktop op dezelfde hoogte en
+tonen uitsluitend **selectiecheckbox, foto, artikelnaam en barcode**.
+Links is één artikel actief; rechts kunnen meerdere andere artikelen worden
+geselecteerd. De rechtertabel arceert uitsluitend bestaande directe relaties
+lichtgroen, automatische voorstellen oranje en overige artikelen niet.
+De actie **Koppelen** bevestigt geselecteerde nieuwe relaties;
+**Ontkoppelen** verwijdert geselecteerde bestaande directe relaties via
+dezelfde beveiligde Superuser/Frontteam-autorisatie. De tekst met het aantal
+geselecteerde artikelen vervalt. Verwijdering van een synoniemrelatie wijzigt
+geen Catalogusproducten, classificaties, voorraad of bonnen.
