@@ -6,7 +6,11 @@ tasks are separate (global_product_id, system) keys.
 """
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import text
+
+from app.services.external_unlinked_articles_service import list_all_external_articles
 
 
 CLASSIFICATION_SQL = """
@@ -95,3 +99,50 @@ def load_classification_workqueue(conn, *, offset=0, limit=100):
     return {"items": items, "tasks": tasks, "total": total,
             "task_count_scope": "page", "product_count_scope": "global",
             "limit": limit, "offset": offset}
+
+
+def project_identification_tasks(source_rows):
+    """An unconfirmed receipt identity is not a canonical Catalogus product.
+
+    The authoritative ED2 server projection already excludes removed receipts,
+    filters non-products and deduplicates exact source identities. Never merge
+    items on barcode, name similarity, synonym suggestions or classification.
+    """
+    items = []
+    seen = set()
+    for source in source_rows:
+        if source.get("link_status") != "unlinked":
+            continue
+        retailer = str(source.get("retailer_code") or "")
+        label = str(source.get("receipt_line_text") or "")
+        article_code = str(source.get("receipt_article_number") or "")
+        source_id = str(source.get("id") or "")
+        if not retailer or not label or not source_id:
+            raise ValueError("Bronartikelidentiteit ontbreekt; geen fictieve taak aanmaken.")
+        identity = (retailer, label, article_code)
+        if identity in seen:
+            raise ValueError("Dubbele bonartikelbronidentiteit in de werkvoorraad.")
+        seen.add(identity)
+        items.append({
+            "key": json.dumps(identity, ensure_ascii=False),
+            "source_receipt_id": source_id,
+            "retailer_code": retailer,
+            "receipt_line_text": label,
+            "receipt_article_number": article_code,
+            "manual_barcode": str(source.get("manual_barcode") or ""),
+            "status": "needs_identification",
+            "global_product_id": None,
+        })
+    return items
+
+
+def load_identification_workqueue(conn):
+    """Reuse the proven, read-only ED2 identity authority; never write a link."""
+    source = list_all_external_articles(conn=conn)
+    items = project_identification_tasks(source["items"])
+    return {
+        "items": items,
+        "total": len(items),
+        "count_scope": "verified_source_identities",
+        "classification_task_count": None,
+    }
