@@ -110,7 +110,7 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
                        "provenance": "synonym:" + source_id})
                 if written.rowcount:
                     record_sync_event(
-                        conn, source_id=source_id, target_id=target, system="GPC",
+                        conn, source_id=source["global_product_id"], target_id=target, system="GPC",
                         code=source["brick_code"], status="processed",
                         reason="Automatisch overgenomen uit bevestigde synoniemgroep.",
                         actor_id=actor_id,
@@ -203,7 +203,7 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
                             'confirmed', :actor, :source)
                 """), params)
                 record_sync_event(
-                    conn, source_id=source_id, target_id=target, system="CBS",
+                    conn, source_id=source["global_product_id"], target_id=target, system="CBS",
                     code=code, reference=version_name, decision_version=next_version,
                     status="processed",
                     reason="Automatisch overgenomen uit bevestigde synoniemgroep.",
