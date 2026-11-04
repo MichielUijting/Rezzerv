@@ -20,10 +20,10 @@ for (const width of [390, 1280]) {
         status: 'suggested', status_label: 'Voorstel', linkable: true,
         fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
-        status: 'other', status_label: 'Niet koppelbaar', linkable: false,
+        status: 'other', status_label: 'Classificatie kiezen', linkable: false,
         reason: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
         conflict_type: 'gpc_mismatch', conflict_detail: 'De GS1 GPC-classificaties verschillen: 10000001 tegenover 10000002.',
-        resolution_route: '/catalogus/gpc-classificeren', fingerprint: '', manual: true },
+        resolution_route: '/catalogus/gpc-classificeren', fingerprint: 'd'.repeat(64), manual: true },
     ]
     // Both DataTables must actually paginate; <=10 mocked rows hide
     // the shared pagination controls by design.
@@ -42,6 +42,18 @@ for (const width of [390, 1280]) {
         permissions: { 'platform.external_products.view': true,
           'platform.external_products.link_existing': true },
       } })
+      if (path.endsWith('/article-synonyms/link/review')) {
+        const body = route.request().postDataJSON()
+        const clashes = body.selections.some((item) =>
+          item.left_product_id === 'd' || item.right_product_id === 'd')
+        return route.fulfill({ json: { items: clashes ? [{
+          left_id: 'a', right_id: 'd', snapshot: 'a'.repeat(64),
+          clashes: [{ system: 'GPC',
+            left: { id: 'a', name: 'Aardappelen', code: '10000001', label: 'Aardappelen' },
+            right: { id: 'd', name: 'Snijbonen', code: '10000002', label: 'Bonen' },
+          }],
+        }] : [] } })
+      }
       if (path.endsWith('/article-synonyms/link') || path.endsWith('/article-synonyms/unlink')) {
         const action = path.endsWith('/unlink') ? 'unlink' : 'link'
         const payload = route.request().postDataJSON()
@@ -55,7 +67,11 @@ for (const width of [390, 1280]) {
           }
         }
         return route.fulfill({ json: { linked: action === 'link' ? payload.selections.length : 0,
-          unlinked: action === 'unlink' ? payload.selections.length : 0 } })
+          unlinked: action === 'unlink' ? payload.selections.length : 0,
+          ...(action === 'link' ? {
+            classification_inheritance: { gpc_inherited: 1, cbs_inherited: 1, conflicts: [] },
+          } : {}),
+        } })
       }
       if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
       if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
@@ -128,15 +144,16 @@ for (const width of [390, 1280]) {
     await conflictCheckbox.check()
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
-    const conflictDialog = page.getByTestId('article-synonyms-conflict')
-    await expect(conflictDialog).toBeVisible()
-    await expect(conflictDialog).toContainText('Aardappelen ↔ Snijbonen')
-    await expect(conflictDialog).toContainText('10000001 tegenover 10000002')
-    await expect(conflictDialog).toContainText('corrigeer die dan via GS1 GPC')
-    await expect(conflictDialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
+    const choiceDialog = page.getByTestId('article-synonyms-classification-choice')
+    await expect(choiceDialog).toBeVisible()
+    await expect(choiceDialog.getByTestId('article-synonyms-classification-choice-comparison')).toContainText('Aardappelen')
+    await expect(choiceDialog.getByTestId('article-synonyms-classification-choice-comparison')).toContainText('Snijbonen')
+    await expect(choiceDialog.getByTestId('article-synonyms-classification-choice-comparison')).toContainText('10000001')
+    await expect(choiceDialog.getByTestId('article-synonyms-classification-choice-comparison')).toContainText('10000002')
+    await expect(choiceDialog.getByTestId('article-synonyms-classification-choice-field-choice_0_GPC')).toBeVisible()
     expect(posts).toHaveLength(0)
-    await conflictDialog.getByRole('button', { name: 'Sluiten' }).click()
-    await expect(conflictDialog).toHaveCount(0)
+    await choiceDialog.getByRole('button', { name: 'Annuleren' }).click()
+    await expect(choiceDialog).toHaveCount(0)
     await conflictCheckbox.uncheck()
     await expect(page.getByText(/geselecteerd$/)).toHaveCount(0)
     const leftTop = await left.locator('thead').boundingBox()
@@ -162,12 +179,160 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('button', { name: 'Koppelen', exact: true })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Ontkoppelen' })).toBeDisabled()
     await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+    await expect.poll(() => posts.length).toBe(2)
     expect(posts[1].action).toBe('link')
     expect(posts[1].payload.selections).toEqual([{
       left_product_id: 'a', right_product_id: 'b', fingerprint: 'b'.repeat(64), manual: false,
     }])
+    await expect(page.getByTestId('app-feedback-success'))
+      .toContainText('1 GS1 GPC en 1 CBS automatisch overgenomen.')
   })
 }
+
+
+test('Bevestigd synoniem met classificatieconflict toont herstel-overlay zonder bestaande waarden te overschrijven', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const posts = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-test', active_household_id: '0', context_type: 'system',
+      is_platform_superuser: true, role: 'admin',
+      permissions: {
+        'platform.external_products.view': true,
+        'platform.external_products.link_existing': true,
+      },
+    } })
+    if (path === '/api/external-databases/article-synonyms/analysis') return route.fulfill({
+      json: { items: [
+        { id: 'a', name: 'Melk A', primary_gtin: '8719587325926', synonym_count: 0 },
+        { id: 'b', name: 'Melk B', primary_gtin: '8718452513666', synonym_count: 0 },
+      ] },
+    })
+    if (path === '/api/external-databases/article-synonyms/analysis/a/options') return route.fulfill({
+      json: { items: [
+        { id: 'b', name: 'Melk B', primary_gtin: '8718452513666', status: 'other',
+          status_label: 'Overig', linkable: true, manual: true,
+          fingerprint: 'b'.repeat(64) },
+      ] },
+    })
+    if (path.endsWith('/article-synonyms/link')) {
+      posts.push(route.request().postDataJSON())
+      return route.fulfill({ json: {
+        linked: 1, already_linked: 0,
+        classification_inheritance: {
+          gpc_inherited: 0, cbs_inherited: 1,
+          conflicts: [{ system: 'GPC', product_ids: ['a', 'b'] }],
+        },
+      } })
+    }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  const left = page.getByTestId('article-synonyms-articles')
+  await left.locator('tbody tr').filter({ hasText: 'Melk A' }).getByRole('checkbox').check()
+  const right = page.getByTestId('article-synonyms-table')
+  await right.locator('tbody tr').filter({ hasText: 'Melk B' }).getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+  const dialog = page.getByTestId('article-synonyms-inheritance-conflict')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('1 synoniemkoppeling(en) bevestigd')
+  await expect(dialog).toContainText('0 GS1 GPC en 1 CBS overgenomen')
+  await expect(dialog).toContainText('bestaande waarden behouden')
+  await expect(dialog.getByRole('button', { name: 'Naar GS1 GPC' })).toBeVisible()
+  expect(posts).toHaveLength(1)
+  await dialog.getByRole('button', { name: 'Sluiten' }).click()
+  await expect(dialog).toHaveCount(0)
+})
+
+test('Twee verschillende classificaties tonen artikelcodes naast elkaar en vereisen twee afzonderlijke keuzes', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const posts = []
+  const a = { id: 'a', name: 'Halfvolle melk A', primary_gtin: '8719587325926', synonym_count: 0 }
+  const b = { id: 'b', name: 'Halfvolle melk B', primary_gtin: '8718452513666', synonym_count: 0 }
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-test', active_household_id: '0', context_type: 'system',
+      is_platform_superuser: true, role: 'admin',
+      permissions: { 'platform.external_products.view': true,
+        'platform.external_products.link_existing': true, 'gpc.update': true },
+    } })
+    if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: [a, b] } })
+    if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: [
+      { ...b, status: 'other', status_label: 'Classificatie kiezen', linkable: false,
+        conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
+    ] } })
+    if (path.endsWith('/article-synonyms/analysis/b/options')) return route.fulfill({ json: { items: [
+      { ...a, status: 'other', status_label: 'Classificatie kiezen', linkable: false,
+        conflict_type: 'gpc_mismatch', fingerprint: 'b'.repeat(64), manual: true },
+    ] } })
+    if (path.endsWith('/article-synonyms/link/review')) return route.fulfill({ json: { items: [{
+      left_id: 'a', right_id: 'b', snapshot: 'c'.repeat(64),
+      clashes: [
+        { system: 'GPC',
+          left: { id: 'a', name: a.name, code: '10000025', label: 'Melk' },
+          right: { id: 'b', name: b.name, code: '10000026', label: 'Andere melk' } },
+        { system: 'CBS',
+          left: { id: 'a', name: a.name, code: '011420', label: 'Melkproducten', reference: 'CBS-2026' },
+          right: { id: 'b', name: b.name, code: '011410', label: 'Overige zuivel', reference: 'CBS-2026' } },
+      ],
+    }] } })
+    if (path.endsWith('/article-synonyms/link')) {
+      posts.push(route.request().postDataJSON())
+      return route.fulfill({ json: {
+        linked: 1, classification_inheritance: {
+          gpc_inherited: 0, cbs_inherited: 0, gpc_resolved: 1, cbs_resolved: 1, conflicts: [],
+        },
+      } })
+    }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  await page.getByTestId('article-synonyms-articles').locator('tbody tr').first().getByRole('checkbox').check()
+  await page.getByTestId('article-synonyms-table').locator('tbody tr').first().getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+  const dialog = page.getByTestId('article-synonyms-classification-choice')
+  await expect(dialog).toBeVisible()
+  const comparison = dialog.getByTestId('article-synonyms-classification-choice-comparison')
+  for (const label of ['Halfvolle melk A', 'Halfvolle melk B', '10000025', '10000026',
+    '011420', '011410', 'Melkproducten', 'Overige zuivel']) {
+    await expect(comparison).toContainText(label)
+  }
+  await dialog.getByTestId('article-synonyms-classification-choice-field-choice_0_GPC').selectOption('a')
+  expect(posts).toHaveLength(0)
+  await dialog.getByRole('button', { name: 'Keuze bevestigen en koppelen' }).click()
+  await expect(dialog.getByTestId('article-synonyms-classification-choice-action-error'))
+    .toContainText('Vul cbs')
+  expect(posts).toHaveLength(0)
+  await dialog.getByTestId('article-synonyms-classification-choice-field-choice_0_CBS').selectOption('b')
+  await dialog.getByRole('button', { name: 'Keuze bevestigen en koppelen' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(posts).toHaveLength(1)
+  expect(posts[0].decisions).toEqual([{
+    left_product_id: 'a', right_product_id: 'b',
+    snapshot: 'c'.repeat(64), gpc_source_id: 'a', cbs_source_id: 'b',
+  }])
+  await expect(page.getByTestId('app-feedback-success')).toContainText('1 GS1 GPC- en 1 CBS-keuzes verwerkt')
+  await page.getByTestId('app-feedback-success-ok-button').click()
+  // B is now selected in the left table, while the canonical pair IDs are a/b.
+  // The overlay must follow the visible left/right article order, not ID order.
+  await page.getByTestId('article-synonyms-articles').locator('tbody tr').nth(1).getByRole('checkbox').check()
+  await page.getByTestId('article-synonyms-table').locator('tbody tr').first().getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Koppelen', exact: true }).click()
+  const reversedDialog = page.getByTestId('article-synonyms-classification-choice')
+  await expect(reversedDialog).toBeVisible()
+  await expect(reversedDialog.getByText('Artikel links: Halfvolle melk B').first()).toBeVisible()
+  await expect(reversedDialog.getByText('Artikel rechts: Halfvolle melk A').first()).toBeVisible()
+  await reversedDialog.getByRole('button', { name: 'Annuleren' }).click()
+  expect(posts).toHaveLength(1)
+})
 
 test('reguliere gebruiker krijgt geen suggesties', async ({ page }) => {
   let reads = 0

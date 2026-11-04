@@ -471,3 +471,15 @@ De gebruiker kan naar het relevante **Catalogusdetail** of
 **GS1 GPC-classificatiescherm** gaan om een aantoonbare fout te
 corrigeren. Zonder correctie blijft koppelen geblokkeerd en
 blijven alle selectie- en bestaande artikelgegevens behouden.
+
+
+### Artikel-synoniemen — GS1 GPC en CBS laten prevaleren (4 november 2026)
+
+Bij het koppelen van twee centrale Catalogusartikelen met verschillende
+bevestigde GS1 GPC- of CBS ECOICOPv2-classificaties krijgt de gebruiker
+een centrale overlay **met beide indelingen naast elkaar**. De gebruiker
+kiest per classificatiesysteem de bestaande officiële indeling die moet
+prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
+Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
+vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
+gedeelde productidentiteit blijft niet koppelbaar.
