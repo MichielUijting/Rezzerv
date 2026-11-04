@@ -72,7 +72,7 @@
   box-shadow: inset 0 -2px 0 var(--color-ui-primary), inset 0 2px 0 var(--color-ui-primary);
 }
 .rz-synonym-relation-label { font-weight: 400; }
- .rz-synonym-side .rz-synonym-analysis-actions { margin-top: 4px; }
+.rz-synonym-side .rz-synonym-analysis-actions { margin-top: 0; }
 .rz-synonym-side h3 { min-height: 1.4em; }
 .rz-synonym-side .rz-synonym-analysis-main-row[aria-selected="true"] > td { background: #d9f0e8; }
 .rz-synonym-side .rz-synonym-analysis-main-row td,
