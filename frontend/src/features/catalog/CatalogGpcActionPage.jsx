@@ -227,12 +227,12 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
             <div className="rz-catalog-section-header">
               <div>
                 <h2>{selectedProduct !== undefined ? 'GS1 GPC' : 'GPC classificeren'}</h2>
-                <p>{selectedProduct !== undefined ? 'Officiële GS1 GPC Brick voor het geselecteerde Catalogusartikel.' : 'Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.'}</p>
+                {selectedProduct === undefined ? <p>Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.</p> : null}
               </div>
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-            {feedback ? <div className="rz-inline-feedback">{feedback}</div> : null}
+            {feedback && !embedded ? <div className="rz-inline-feedback">{feedback}</div> : null}
 
             {selectedProduct === undefined ? <section className="rz-catalog-detail-section">
               <h3>1. Selecteer een catalogusartikel</h3>
@@ -274,12 +274,13 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
 
             {selectedArticle ? (
               <section className="rz-catalog-detail-section">
-                <h3>2. GPC Brick</h3>
+                {!embedded ? <h3>2. GPC Brick</h3> : null}
                 {checking ? <div className="rz-catalog-gpc-state">Bestaande classificatie controleren…</div> : null}
+                {!checking && !assignment && !suggestions.length ? <div className="rz-classification-current"><span>Huidige classificatie</span><strong>Niet geclassificeerd</strong><span>Geen bevestigde GS1 Brick</span></div> : null}
                 {!checking && assignment ? (
                   <div className="rz-catalog-gpc-summary">
                     <div className="rz-catalog-gpc-primary">
-                      <span className="rz-catalog-gpc-label">Bevestigde classificatie</span>
+                      <span className="rz-catalog-gpc-label">{embedded ? "Huidige classificatie" : "Bevestigde classificatie"}</span>
                       <strong>{assignment.brick_code} — {text(assignment.brick_description)}</strong>
                     </div>
                     <dl className="rz-catalog-gpc-hierarchy">
@@ -308,7 +309,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
                           <span className="rz-catalog-gpc-result-path">{text(candidate.segment_description)} › {text(candidate.family_description)} › {text(candidate.class_description)}</span>
                         </div>
                         <div className="rz-catalog-gpc-editor-actions">
-                          <Button type="button" onClick={() => saveBrick(candidate)} disabled={saving}>Voorstel bevestigen</Button>
+                          <Button type="button" onClick={() => saveBrick(candidate)} disabled={saving}>{embedded ? "Bevestigen GS1" : "Voorstel bevestigen"}</Button>
                           <Button type="button" variant="secondary" onClick={() => rejectSuggestion(candidate)} disabled={saving}>Voorstel negeren</Button>
                         </div>
                       </div>
