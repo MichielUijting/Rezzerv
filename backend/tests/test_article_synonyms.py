@@ -277,9 +277,11 @@ class StoreTest(unittest.TestCase):
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
             module = migration_module('20261026_01_article_synonyms')
+            sync_audit = migration_module('20261104_01_article_classification_sync_audit')
             with Operations.context(MigrationContext.configure(conn)):
                 maintenance.upgrade()
                 module.upgrade()
+                sync_audit.upgrade()
             for pid, gtin in [('a','8719587325926'), ('b','8718452513666'), ('c','')]:
                 conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source) VALUES (:id,'Halfvolle melk','','',:gtin,1,'l','active','', 'catalog')"), dict(id=pid, gtin=gtin))
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('a','ah','823326','confirmed'),('b','jumbo','394270','confirmed')"))
@@ -373,9 +375,22 @@ class StoreTest(unittest.TestCase):
                 SELECT COUNT(*) FROM global_product_cbs_history
                 WHERE global_product_id='b'
             """)).scalar_one(), 1)
+            audit = conn.execute(text("""
+                SELECT source_product_id, target_product_id, classification_system,
+                       classification_code, reference_version, decision_version, status
+                FROM article_classification_sync_events ORDER BY classification_system
+            """)).all()
+            self.assertEqual(len(audit), 2)
+            self.assertEqual({(row[0],row[1],row[2],row[3],row[6]) for row in audit},
+                             {('a','b','GPC','10000025','processed'),
+                              ('a','b','CBS','011420','processed')})
+            self.assertEqual(next(row[5] for row in audit if row[2]=='CBS'), 1)
             again = service.confirm_pairs(conn, [selection], 'actor')
             self.assertEqual(again['already_linked'], 1)
             self.assertNotIn('classification_inheritance', again)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 2)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM global_product_cbs_history
                 WHERE global_product_id='b'
