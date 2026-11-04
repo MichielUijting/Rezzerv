@@ -1,7 +1,7 @@
 """Issue #648: isolated PostgreSQL authority, identity and read-only contract.
 
 Never connect to a user's Inhuis database. The test requires an explicitly
-configured separate database whose name ends in '_article_workqueue_test'.
+configured separate database whose name ends in '_article_workqueue_test' or '_cbs_test'.
 """
 import os
 from types import SimpleNamespace
@@ -21,7 +21,7 @@ def workqueue_database():
     if not url:
         pytest.skip("Afzonderlijke PostgreSQL-artikelwerkvoorraad-testdatabase niet ingesteld.")
     parsed = make_url(url)
-    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_article_workqueue_test"):
+    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith(("_article_workqueue_test", "_cbs_test")):
         raise RuntimeError("Weiger niet-geisoleerde PostgreSQL-database.")
     owner = create_engine(url)
     schema = "article_workqueue_" + uuid4().hex
