@@ -68,7 +68,8 @@ def list_sync_exceptions(conn, *, limit=100, offset=0):
     }
 
 
-def retry_sync_exception(conn, *, event_id, expected_decision_version, actor_id):
+def retry_sync_exception(conn, *, event_id, expected_decision_version,
+                         expected_target_version, expected_target_code, actor_id):
     """Explicit, idempotent retry of a verified exception under canonical locks.
 
     Never processes conflicts: those require the existing user choice overlay.
@@ -127,6 +128,26 @@ def retry_sync_exception(conn, *, event_id, expected_decision_version, actor_id)
         """), {"id": source_id}).scalar_one_or_none()
         if code != event["classification_code"]:
             raise HTTPException(409, "GS1-code is gewijzigd; opnieuw beoordelen.")
+
+    # Optimistic target snapshot: row locks alone would allow retrying after
+    # a changed target was cleared. Require explicit expected target state.
+    if system == "CBS":
+        target = conn.execute(text("""
+            SELECT cbs_code, version, is_active
+            FROM global_product_cbs_classifications
+            WHERE global_product_id=:id FOR UPDATE
+        """), {"id": target_id}).mappings().first()
+        current_version = int(target["version"]) if target else 0
+        current_code = str(target["cbs_code"]) if target and target["is_active"] else ""
+    else:
+        target = conn.execute(text("""
+            SELECT brick_code FROM global_product_gpc_bricks
+            WHERE global_product_id=:id FOR UPDATE
+        """), {"id": target_id}).scalar_one_or_none()
+        current_version = 0
+        current_code = str(target or "")
+    if current_version != expected_target_version or current_code != expected_target_code:
+        raise HTTPException(409, "Doelclassificatie gewijzigd: ververs de uitzondering.")
 
     record_sync_event(
         conn, source_id=source_id, target_id=target_id,
