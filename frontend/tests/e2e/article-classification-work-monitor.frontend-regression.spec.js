@@ -34,7 +34,7 @@ test('superuser ziet afzonderlijke OFF-, GS1-, CBS- en synoniemwachtrijen zonder
     return route.fulfill({ json: {} })
   })
   await page.goto('/externe-databases-2')
-  await expect(page.getByRole('heading', { name: 'Artikel classificeren' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Artikel classificeren' }).first()).toBeVisible()
   const monitor = page.getByTestId('classification-work-monitor')
   await expect(monitor).toContainText('Nog niet gekoppeld (OFF)')
   await expect(monitor).toContainText('GS1-classificatie ontbreekt')
