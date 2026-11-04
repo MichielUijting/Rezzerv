@@ -298,3 +298,38 @@ De PostgreSQL-migratie bevat al de checkconstraint
 `left_product_id < right_product_id`, die opslag van zelfkoppelingen op
 de canonieke synoniemenrelatietabel verhindert. De nieuwe API-voorcontrole
 voorkomt dat een ongeldig verzoek pas door de database wordt afgewezen.
+
+
+## PO-verfijning 4 november 2026 — compacte uitgelijnde tabellen en ontkoppelen
+
+De twee onafhankelijke DataTables beginnen op desktop op **precies dezelfde
+hoogte**. Beide tabellen hebben uitsluitend vier kolommen:
+**selectievakje, foto, artikelnaam, barcode**. Er is geen winkelkolom of
+getoonde selectieteller. Links is maximaal één centraal Catalogusproduct
+actief; de aangevinkte rij is de linkerkant van alle acties. Rechts mag de
+gebruiker tot 200 individuele andere artikelen aanvinken.
+
+Rechts geven achtergrondaccenten de **status ten opzichte van het gekozen
+linkerartikel** aan: *lichtgroen = reeds rechtstreeks gekoppeld*,
+*oranje = nieuw automatisch voorstel*, *geen arcering = overig*.
+Arcering is **geen selectie**. Checkboxselectie is onafhankelijk daarvan.
+Bij identieke namen onderscheiden barcode en de interne centrale ID de
+verschillende artikelen.
+
+De actie **Koppelen** is uitsluitend beschikbaar wanneer aangevinkte
+artikelen rechts nog niet gekoppeld zijn en koppelbaar zijn.
+**Ontkoppelen**, rechts naast Koppelen onderaan de rechtertabel, is
+uitsluitend beschikbaar voor aangevinkte, reeds bestaande directe relaties.
+De selectie telt geen dubbele paren en een artikel mag nooit aan zichzelf
+worden gekoppeld. Na iedere bevestiging worden beide tabellen opnieuw uit
+de serverbron gelezen en vervalt de selectie.
+
+De nieuwe bevoegdheidsbewaakte `POST /unlink` gebruikt dezelfde
+Superuser/Frontteam-grens als `POST /link`; voor **alle** aangevinkte paren
+worden bestaande relatie, actuele product-ID's en fingerprint binnen één
+PostgreSQL-transactie herbevestigd. Bij afwijking volgt een 409 en geen
+gedeeltelijke ontkoppeling. Ontkoppelen verwijdert uitsluitend de gekozen
+rijen uit `article_synonym_links`. Het herstelt of verwijdert **geen**
+Catalogusartikel, GS1 GPC- of CBS-classificatie, kassabon, voorraad- of
+huishoudgegevens. Historisch geërfde classificatie blijft behouden en
+vereist afzonderlijk expliciet beheer als die onjuist zou zijn.
