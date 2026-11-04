@@ -61,3 +61,7 @@ al technisch zijn samengevoegd of dat deze nieuwe regressies groen zijn.
 ## Geïntegreerde kandidaat op nieuwe main (4 november 2026)
 
 PR #646 is op `main@5d7c02e0ff624437eb7d8b72b82970fd4723bb83` gemerged. PR #645 neemt daarvan de volledige winkelonafhankelijke synoniemenservice, twee tabellen, ontkoppelen en de bestaande verklarende blokkerings-overlay als basis. Alleen de transactionele GPC/CBS-erfservice, responsmelding en isolatie-/regressietests worden daarop toegevoegd. De oude UI en winkelgebonden matching uit de oorspronkelijke #645-branch worden niet teruggezet. De classificatieovername verandert geen barcodes, winkelherkomst, huishoudartikelen of voorraad. Eventuele conflicten per systeem behouden hun bestaande officiële waarden en melden zich via de centrale Inhuis-overlay. Alleen een latere expliciete PO-GO kan #645 mergen.
+
+### Ontkoppeling tijdens classificatieovername
+
+Ook de bestaande `/unlink`-transactie neemt nu dezelfde PostgreSQL-advisory lock als `/link`, vóór zij de actuele paren leest. Daarmee kan een gelijktijdige ontkoppeling niet een verouderde synoniemgroep laten classificeren. Ontkoppelen blijft uitsluitend de geselecteerde directe synoniemrelatie verwijderen; eerder bevestigde of via synoniemen overgenomen GPC-/CBS-gegevens worden hierdoor **niet** automatisch teruggedraaid. Voor een andere indeling is afzonderlijke expliciete en bevoegde correctie nodig.
