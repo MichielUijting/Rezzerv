@@ -60,6 +60,21 @@ def review_pairs(conn, selections, by_id):
     return result
 
 
+
+def _unresolved_conflict_event(conn, left_id, right_id, system):
+    return conn.execute(text("""
+        SELECT event.id FROM article_classification_sync_events event
+        WHERE event.classification_system=:system AND event.status='conflict'
+          AND ((event.source_product_id=:left AND event.target_product_id=:right)
+            OR (event.source_product_id=:right AND event.target_product_id=:left))
+          AND NOT EXISTS (
+             SELECT 1 FROM article_classification_sync_events resolved
+             WHERE resolved.related_event_id=event.id AND resolved.status='processed'
+          )
+        ORDER BY event.created_at DESC, event.id DESC LIMIT 1
+    """), {"left": left_id, "right": right_id, "system": system}).scalar_one_or_none()
+
+
 def apply_choices(conn, reviews, decisions, actor_id):
     """Apply ONLY the explicitly selected existing official code of one side.
 
@@ -89,6 +104,7 @@ def apply_choices(conn, reviews, decisions, actor_id):
             source_id = decision["gpc_source_id" if system == "GPC" else "cbs_source_id"]
             source = clash["left"] if source_id == pair[0] else clash["right"]
             target = clash["right"] if source_id == pair[0] else clash["left"]
+            resolved_event = _unresolved_conflict_event(conn, pair[0], pair[1], system)
             if system == "GPC":
                 if not conn.execute(text("""
                     SELECT 1 FROM gpc_product_groups
@@ -106,6 +122,7 @@ def apply_choices(conn, reviews, decisions, actor_id):
                     code=source["code"], status="processed",
                     reason="Handmatige prevalentie gekozen in Artikel-synoniemen.",
                     actor_id=actor_id, operation="explicit_synonym_review",
+                    related_event_id=resolved_event,
                 )
                 report["gpc_resolved"] += 1
             else:
@@ -136,6 +153,7 @@ def apply_choices(conn, reviews, decisions, actor_id):
                     decision_version=target["version"] + 1, status="processed",
                     reason="Handmatige prevalentie gekozen in Artikel-synoniemen.",
                     actor_id=actor_id, operation="explicit_synonym_review",
+                    related_event_id=resolved_event,
                 )
                 report["cbs_resolved"] += 1
     return report
