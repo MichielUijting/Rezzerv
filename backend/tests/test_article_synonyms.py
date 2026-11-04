@@ -417,13 +417,15 @@ class StoreTest(unittest.TestCase):
             with self.assertRaises(HTTPException) as stale:
                 with conn.begin_nested():
                     retry_sync_exception(conn, event_id=entry['id'],
-                                         expected_decision_version=0, actor_id='actor')
+                                         expected_decision_version=0,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
             self.assertEqual(stale.exception.status_code, 409)
             # A rejected transaction rolls back even its pending audit marker.
             with self.assertRaises(HTTPException) as unavailable:
                 with conn.begin_nested():
                     retry_sync_exception(conn, event_id=entry['id'],
-                                         expected_decision_version=1, actor_id='actor')
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
             self.assertEqual(unavailable.exception.status_code, 409)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM global_product_cbs_classifications
@@ -436,10 +438,12 @@ class StoreTest(unittest.TestCase):
                     ('099999','CBS-ECOICOPv2-2026',NULL,'Speciale categorie')
             """))
             retry = retry_sync_exception(conn, event_id=entry['id'],
-                                         expected_decision_version=1, actor_id='actor')
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
             self.assertEqual(retry['cbs_inherited'], 1)
             again = retry_sync_exception(conn, event_id=entry['id'],
-                                         expected_decision_version=1, actor_id='actor')
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
             self.assertEqual(again['cbs_inherited'], 0)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM article_classification_sync_events
@@ -1289,7 +1293,8 @@ class ApiTest(unittest.TestCase):
 
     def test_internal_sync_monitor_denies_anonymous_household_and_forged_retry(self):
         path = '/api/external-databases/article-synonyms/sync-exceptions'
-        payload = {'event_id': str(uuid4()), 'expected_decision_version': 1}
+        payload = {'event_id': str(uuid4()), 'expected_decision_version': 1,
+                   'expected_target_version': 0, 'expected_target_code': ''}
         for status in (401, 403):
             with patch.object(routes, 'require_platform_permission_from_session',
                               side_effect=HTTPException(status)):
