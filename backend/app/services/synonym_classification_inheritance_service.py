@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, text
 
+from app.services.article_classification_sync_monitor import record_sync_event
+
 
 def _components(links, affected):
     adjacency = defaultdict(set)
@@ -73,6 +75,16 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
 
         if len(gpc_values) > 1:
             report["conflicts"].append({"system": "GPC", "product_ids": list(group)})
+            conflicting = sorted((row for row in gpc if row["brick_code"]),
+                                 key=lambda row: (str(row["brick_code"]), str(row["global_product_id"])))
+            first = conflicting[0]
+            other = next(row for row in conflicting if row["brick_code"] != first["brick_code"])
+            record_sync_event(
+                conn, source_id=first["global_product_id"], target_id=other["global_product_id"],
+                system="GPC", code=first["brick_code"], status="conflict",
+                reason="Afwijkende bevestigde GS1-classificaties: gebruik de bestaande keuze-overlay.",
+                actor_id=actor_id,
+            )
         elif len(gpc_values) == 1:
             # Prefer a non-inherited assignment as provenance root.
             source = min(
@@ -96,10 +108,31 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
                     ON CONFLICT (global_product_id) DO NOTHING
                 """), {"target": target, "code": source["brick_code"],
                        "provenance": "synonym:" + source_id})
+                if written.rowcount:
+                    record_sync_event(
+                        conn, source_id=source_id, target_id=target, system="GPC",
+                        code=source["brick_code"], status="processed",
+                        reason="Automatisch overgenomen uit bevestigde synoniemgroep.",
+                        actor_id=actor_id,
+                    )
                 report["gpc_inherited"] += written.rowcount
 
         if len(cbs_values) > 1:
             report["conflicts"].append({"system": "CBS", "product_ids": list(group)})
+            conflicting = sorted((row for row in cbs if row["is_active"]),
+                                 key=lambda row: (str(row["cbs_code"]), str(row["reference_version"]),
+                                                  str(row["global_product_id"])))
+            first = conflicting[0]
+            other = next(row for row in conflicting if
+                         (row["cbs_code"], row["reference_version"]) !=
+                         (first["cbs_code"], first["reference_version"]))
+            record_sync_event(
+                conn, source_id=first["global_product_id"], target_id=other["global_product_id"],
+                system="CBS", code=first["cbs_code"], reference=first["reference_version"],
+                decision_version=int(first["version"]), status="conflict",
+                reason="Afwijkende bevestigde CBS-classificaties: gebruik de bestaande keuze-overlay.",
+                actor_id=actor_id,
+            )
         elif len(cbs_values) == 1:
             code, version_name = next(iter(cbs_values))
             source = min(
@@ -121,6 +154,15 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
             if not official:
                 report["conflicts"].append({"system": "CBS-reference",
                                             "product_ids": list(group)})
+                record_sync_event(
+                    conn, source_id=source["global_product_id"],
+                    target_id=next((pid for pid in group if pid != source["global_product_id"]),
+                                   source["global_product_id"]),
+                    system="CBS", code=code, reference=version_name,
+                    decision_version=int(source["version"]), status="review_required",
+                    reason="De bestaande CBS-code is geen actuele officiële eindcategorie.",
+                    actor_id=actor_id,
+                )
                 continue
             provenance = str(source["confirmation_source"] or "")
             source_id = (provenance.removeprefix("synonym:")
@@ -160,5 +202,12 @@ def propagate_confirmed_classifications(conn, links, affected, actor_id):
                     VALUES (:history_id, :id, :code, :reference, :version,
                             'confirmed', :actor, :source)
                 """), params)
+                record_sync_event(
+                    conn, source_id=source_id, target_id=target, system="CBS",
+                    code=code, reference=version_name, decision_version=next_version,
+                    status="processed",
+                    reason="Automatisch overgenomen uit bevestigde synoniemgroep.",
+                    actor_id=actor_id,
+                )
                 report["cbs_inherited"] += 1
     return report
