@@ -162,7 +162,7 @@ export default function ArticleSynonymsPage() {
           variant: 'warning',
           title: 'Synoniemen gekoppeld; overige classificaties controleren',
           message: `${number} synoniemkoppeling(en) bevestigd.`,
-          detail: `${gpcChosen} GS1 GPC- en ${cbsChosen} CBS-keuzes bevestigd. ${gpcCount} GS1 GPC en ${cbsCount} CBS overgenomen. Voor ${conflicts.length} overig(e) classificatieverschil(len) (${systems}) zijn waarden behouden.`,
+          detail: `${gpcChosen} GS1 GPC- en ${cbsChosen} CBS-keuzes bevestigd. ${gpcCount} GS1 GPC en ${cbsCount} CBS overgenomen. Voor ${conflicts.length} overig(e) classificatieverschil(len) (${systems}) zijn bestaande waarden behouden.`,
           dismissMode: 'ok-only',
           primaryActionLabel: conflicts.some((conflict) => conflict.system === 'GPC') ? 'Naar GS1 GPC' : 'Naar CBS',
           secondaryActionLabel: 'Sluiten',
