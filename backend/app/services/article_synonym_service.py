@@ -329,6 +329,18 @@ def confirm_pairs(conn, selections, actor_id, decisions=()):
     if conn.dialect.name == 'postgresql':
         for product_id in ids:
             conn.execute(text('SELECT id FROM global_products WHERE id=:id FOR UPDATE'), {'id': product_id}).all()
+    # Lock the actual GPC and CBS authority rows as well as the product IDs:
+    # the user's preview may become stale between display and confirmation.
+    if conn.dialect.name == 'postgresql':
+        for product_id in ids:
+            conn.execute(text("""
+                SELECT global_product_id FROM global_product_gpc_bricks
+                WHERE global_product_id=:id FOR UPDATE
+            """), {'id': product_id}).all()
+            conn.execute(text("""
+                SELECT global_product_id FROM global_product_cbs_classifications
+                WHERE global_product_id=:id FOR UPDATE
+            """), {'id': product_id}).all()
     products = load_products(conn)
     existing = confirmed_pairs(conn)
     proposals = {(p['left']['id'], p['right']['id']): p for p in suggest_pairs(products, existing)}
