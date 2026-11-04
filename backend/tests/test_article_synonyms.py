@@ -129,7 +129,7 @@ class MatchingTest(unittest.TestCase):
             product('a', 'Halfvolle melk', retailer_code=''),
             product('b', 'Halfvolle melk', retailer_code=''),
             product('c', 'Halfvolle melk', retailer_code=''),
-            product('d', 'Appels', brick='fruit', retailer_code=''),
+            product('d', 'Onverwacht ander product', brick='milk', retailer_code=''),
         ]
         options = service.product_link_options(items, {('a', 'b')}, 'a')
         self.assertEqual([row['id'] for row in options], ['b', 'c', 'd'])
