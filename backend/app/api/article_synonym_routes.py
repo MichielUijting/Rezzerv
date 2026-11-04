@@ -27,8 +27,15 @@ class ClassificationDecision(BaseModel):
     model_config = ConfigDict(extra='forbid')
     left_product_id: str = Field(min_length=1, max_length=200)
     right_product_id: str = Field(min_length=1, max_length=200)
-    snapshot: str = Field(pattern=r'^[0-9a-f]{64}
+    snapshot: str = Field(pattern=r'^[0-9a-f]{64}$')
+    gpc_source_id: str | None = Field(default=None, max_length=200)
+    cbs_source_id: str | None = Field(default=None, max_length=200)
 
+
+class BulkSelection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    selections: list[Selection] = Field(min_length=1, max_length=200)
+    decisions: list[ClassificationDecision] = Field(default_factory=list, max_length=8)
 
 @router.get('')
 def list_suggestions():
