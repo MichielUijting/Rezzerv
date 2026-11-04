@@ -449,3 +449,13 @@ van links en rechts is op desktop op gelijke hoogte uitgelijnd. Onder
 de paginering rechts staan de knoppen **Koppelen** en **Ontkoppelen**;
 niet in dezelfde pagineringsbalk. Dit verandert geen synoniemdata,
 classificatieregels, rollen of databaseconstructie.
+
+
+### Artikel-synoniemen — PO-verfijning 4 november 2026
+
+De linker barcodekolom is compact en de directe synoniemteller heet
+**Syn.**. Rechts kan een gebruiker ook een volgens bronkenmerken
+mogelijk conflicterend artikel aanvinken; bij daadwerkelijk **Koppelen**
+blijft de bestaande identiteits-/GS1 GPC-controle vereist en wordt bij
+een conflict de gehele selectie met een duidelijke melding geweigerd.
+De onderste linktekst naar Externe databases 2 verdwijnt.
