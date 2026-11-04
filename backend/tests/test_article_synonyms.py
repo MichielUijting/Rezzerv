@@ -348,7 +348,7 @@ class StoreTest(unittest.TestCase):
             conn.execute(text("""
                 INSERT INTO global_products
                   (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source)
-                VALUES ('d','Onverwacht ander artikel','','','8712345678906',1,'l','active','','catalog')
+                VALUES ('d','Xylofoon','','','8712345678906',1,'l','active','','catalog')
             """))
             products = service.load_products(conn)
             opts = {row['id']: row for row in service.product_link_options(products, set(), 'a')}
