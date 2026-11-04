@@ -366,6 +366,41 @@ class StoreTest(unittest.TestCase):
             """)).scalar_one()
             self.assertEqual(method, 'manual_catalog_review_v1')
 
+    def test_unlink_removes_only_selected_direct_synonym_and_keeps_products(self):
+        with self.engine.begin() as conn:
+            selection = self.selection(conn)
+            service.confirm_pairs(conn, [selection], 'actor')
+            pairs = service.confirmed_pairs(conn)
+            self.assertEqual(len(pairs), 1)
+            before_products = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+            options = service.product_link_options(service.load_products(conn), pairs, 'a')
+            linked = next(row for row in options if row['status'] == 'linked')
+            self.assertTrue(linked['fingerprint'])
+            deleted = service.unlink_pairs(conn, [{
+                'left_product_id': 'a', 'right_product_id': linked['id'],
+                'fingerprint': linked['fingerprint'],
+            }])
+            self.assertEqual(deleted, {'unlinked': 1})
+            self.assertEqual(service.confirmed_pairs(conn), set())
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one(), before_products)
+
+    def test_unlink_rejects_missing_or_stale_pair_without_partial_write(self):
+        with self.engine.begin() as conn:
+            first = self.selection(conn)
+            service.confirm_pairs(conn, [first], 'actor')
+            existing = service.confirmed_pairs(conn)
+            for payload in [
+                [{'left_product_id': 'a', 'right_product_id': 'b',
+                  'fingerprint': '0' * 64}],
+                [{'left_product_id': 'a', 'right_product_id': 'a',
+                  'fingerprint': '0' * 64}],
+                [{'left_product_id': 'a', 'right_product_id': 'c',
+                  'fingerprint': '0' * 64}],
+            ]:
+                with self.assertRaises(HTTPException):
+                    service.unlink_pairs(conn, payload)
+                self.assertEqual(service.confirmed_pairs(conn), existing)
+
     def test_self_link_is_blocked_before_any_database_mutation(self):
         with self.engine.begin() as conn:
             with self.assertRaises(HTTPException) as exc:
@@ -769,6 +804,7 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/candidates').status_code, status)
                 self.assertEqual(self.client.get('/api/external-databases/article-synonyms/analysis/a/options').status_code, status)
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/link', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
+                self.assertEqual(self.client.post('/api/external-databases/article-synonyms/unlink', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
 
