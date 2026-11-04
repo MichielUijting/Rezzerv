@@ -40,11 +40,11 @@ export default function ArticleSynonymsPage() {
     let remedy = 'Controleer de artikelgegevens voordat je opnieuw koppelt.'
     let action = ''
     if (type === 'gpc_mismatch') {
-      remedy = 'Controleer de officiële GS1 GPC-indeling van beide artikelen. Is een indeling onjuist, corrigeer die dan in Artikelclassificatie (GS1 GPC) en probeer daarna opnieuw.'
+      remedy = 'Controleer de officiële GS1 GPC-indeling van beide artikelen. Is een indeling aantoonbaar onjuist, corrigeer die dan via GS1 GPC als je daarvoor bevoegd bent, of laat dit door een bevoegde gebruiker doen. Probeer daarna opnieuw.'
       action = 'Naar GS1 GPC'
     } else if (type === 'same_gtin' || type === 'shared_article_code') {
-      remedy = 'De artikelen hebben een gedeelde productidentiteit. Controleer beide Catalogusdetails. Corrigeer alleen een aantoonbaar foutieve barcode of artikelcode; zijn het twee registraties van hetzelfde product, dan is een afzonderlijk synoniem niet passend.'
-      action = 'Naar Catalogusdetail'
+      remedy = 'De artikelen hebben een gedeelde productidentiteit. Bekijk de artikelgegevens in Catalogusdetail. Een al bestaande barcode kun je daar nog niet aanpassen; een feitelijk foutieve productidentiteit vraagt apart bevoegd beheer. Zijn het twee registraties van hetzelfde fysieke product, dan zijn dit geen afzonderlijke synoniemen.'
+      action = 'Bekijk Catalogusdetail'
     }
     const extra = count > 1 ? ` Ook ${count - 1} andere geselecteerde artikel(en) hebben een blokkade. Er is niets gekoppeld.` : ' Er is niets gekoppeld.'
     const route = first.resolution_route
