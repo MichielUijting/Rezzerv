@@ -149,8 +149,8 @@ class MatchingTest(unittest.TestCase):
     def test_conflict_details_distinguish_gtin_codes_and_gpc(self):
         left = product('a', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
         same_gtin = product('b', 'Aardappelschijfjes', gtin='08719587325926', brick='milk')
-        same_code = product('c', 'Aardappelen', gtin='08718452513666', brick='milk',
-                            article_codes=['STORE-99'])
+        same_code = product('c', 'Aardappelen', gtin='08718452513666', brick='milk')
+        same_code['article_codes'] = ['STORE-99']
         left['article_codes'] = ['STORE-99']
         different_gpc = product('d', 'Aardappelschijfjes met spek',
                                 gtin='08712345678906', brick='fruit')
