@@ -147,6 +147,7 @@ export default function ArticleSynonymsPage() {
     { key: 'photo', label: 'Foto', width: 70 },
     { key: 'name', label: 'Artikelnaam', width: 250, sortable: true, filterable: true },
     { key: 'code', label: 'Barcode', width: 150, sortable: true, filterable: true },
+    { key: 'synonym_count', label: 'Synoniemen', width: 94, sortable: true, align: 'right' },
   ]
   const rightColumns = [
     { key: 'selected', label: '', width: 42 },
@@ -166,6 +167,7 @@ export default function ArticleSynonymsPage() {
             getRowKey={(item) => item.id} pageSize={10}
             wrapperClassName="rz-synonym-analysis-table-wrapper"
             dataTestId="article-synonyms-articles"
+            paginationActions={<span className="rz-synonym-pagination-spacer" aria-hidden="true" />}
             emptyMessage={loading ? 'Catalogusartikelen laden...' : 'Geen gecodeerde Catalogusartikelen.'}
             renderRow={(item) => <tr key={item.id}
               className="rz-synonym-analysis-main-row"
@@ -186,6 +188,7 @@ export default function ArticleSynonymsPage() {
               <td><CatalogProductImage imageUrl={item.image_url} productName={item.name} compact /></td>
               <td>{item.name}</td>
               <td>{item.code}</td>
+              <td className="rz-num">{Number(item.synonym_count) || 0}</td>
             </tr>} />
         </section>
         <section className="rz-synonym-side" aria-label="Synoniemen rechts"
@@ -196,6 +199,7 @@ export default function ArticleSynonymsPage() {
             getRowKey={(item) => item.id} pageSize={10}
             wrapperClassName="rz-synonym-analysis-table-wrapper"
             dataTestId="article-synonyms-table"
+            paginationActions={<span className="rz-synonym-pagination-spacer" aria-hidden="true" />}
             emptyMessage={!currentArticle
               ? 'Selecteer links één artikel.'
               : loadingOptions ? 'Artikelen laden...' : 'Geen andere gecodeerde artikelen.'}
@@ -222,13 +226,13 @@ export default function ArticleSynonymsPage() {
               <td>{item.name}</td>
               <td>{item.code}</td>
             </tr>}
-            paginationActions={<div className="rz-synonym-analysis-actions">
-              <Button disabled={loading || loadingOptions || saving || !selectedLinks.length}
-                onClick={() => changeLinks('link')}>Koppelen</Button>
-              <Button disabled={loading || loadingOptions || saving || !selectedUnlinks.length}
-                onClick={() => changeLinks('unlink')}>Ontkoppelen</Button>
-            </div>}
           />
+          <div className="rz-synonym-analysis-actions">
+            <Button disabled={loading || loadingOptions || saving || !selectedLinks.length}
+              onClick={() => changeLinks('link')}>Koppelen</Button>
+            <Button disabled={loading || loadingOptions || saving || !selectedUnlinks.length}
+              onClick={() => changeLinks('unlink')}>Ontkoppelen</Button>
+          </div>
         </section>
       </div>
       <p className="rz-synonym-footer-note">
