@@ -40,7 +40,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcActionPage({ embedded = false, readOnly = false, onArticleChange = () => {} }) {
+export default function CatalogGpcActionPage({ embedded = false, readOnly = false, selectedProduct = undefined, onArticleChange = () => {} }) {
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -59,6 +59,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
   useEffect(() => {
     let cancelled = false
     async function loadCatalog() {
+      if (selectedProduct !== undefined) { setLoading(false); return }
       setLoading(true)
       setError('')
       try {
@@ -74,7 +75,13 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
     }
     loadCatalog()
     return () => { cancelled = true }
-  }, [])
+  }, [selectedProduct !== undefined])
+
+  useEffect(() => {
+    if (selectedProduct === undefined) return
+    if (selectedProduct?.id) void chooseArticle(selectedProduct)
+    else resetArticle()
+  }, [selectedProduct?.id])
 
   const articleResults = useMemo(() => {
     const query = articleQuery.trim().toLowerCase()
@@ -219,15 +226,15 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
           <div className="rz-catalog-card">
             <div className="rz-catalog-section-header">
               <div>
-                <h2>GPC classificeren</h2>
-                <p>Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.</p>
+                <h2>{selectedProduct !== undefined ? 'GS1 GPC' : 'GPC classificeren'}</h2>
+                <p>{selectedProduct !== undefined ? 'Officiële GS1 GPC Brick voor het geselecteerde Catalogusartikel.' : 'Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.'}</p>
               </div>
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
             {feedback ? <div className="rz-inline-feedback">{feedback}</div> : null}
 
-            <section className="rz-catalog-detail-section">
+            {selectedProduct === undefined ? <section className="rz-catalog-detail-section">
               <h3>1. Selecteer een catalogusartikel</h3>
               {!selectedArticle ? (
                 <>
@@ -263,7 +270,7 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
                   <Button type="button" variant="secondary" onClick={resetArticle} disabled={saving}>Ander artikel kiezen</Button>
                 </div>
               )}
-            </section>
+            </section> : null}
 
             {selectedArticle ? (
               <section className="rz-catalog-detail-section">
