@@ -28,6 +28,7 @@ export default function CombinedClassificationWorkspace() {
   const [taskCount, setTaskCount] = useState(null)
   const [productTotal, setProductTotal] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [revision, setRevision] = useState(0)
   const [error, setError] = useState('')
   const mayUpdateGpc = canCurrentUserPerform('gpc.update', readStoredAuthContext())
   const selected = useMemo(() => products.find((item) => item.id === selectedId) || null, [products, selectedId])
@@ -35,6 +36,10 @@ export default function CombinedClassificationWorkspace() {
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
+      setLoading(true)
+      setError('')
+      setTaskCount(null)
+      setProductTotal(null)
       try {
         const items = []
         let total = 0
@@ -72,7 +77,7 @@ export default function CombinedClassificationWorkspace() {
     }
     void load()
     return () => controller.abort()
-  }, [])
+  }, [revision])
 
   return <section aria-label="GS1 en CBS classificeren" data-testid="combined-classification-workspace">
     <h3>Artikel classificeren</h3>
@@ -114,11 +119,13 @@ export default function CombinedClassificationWorkspace() {
         <div className="rz-classification-dual-panel" aria-label="GS1 GPC-classificatie" data-testid="classification-gs1-panel">
           {!mayUpdateGpc ? <p role="status">GS1 alleen lezen: onvoldoende wijzigingsrechten.</p> : null}
           <CatalogGpcActionPage key={selected.id} embedded readOnly={!mayUpdateGpc}
+            onSaved={() => setRevision((value) => value + 1)}
             selectedProduct={{ id: selected.id, name: selected.name, brand: selected.brand,
               primary_gtin: selected.gtin }} />
         </div>
         <div className="rz-classification-dual-panel" aria-label="CBS ECOICOPv2-classificatie" data-testid="classification-cbs-panel">
-          <CbsClassificationPage key={selected.id + '-cbs'} embedded productId={selected.id} />
+          <CbsClassificationPage key={selected.id + '-cbs'} embedded productId={selected.id}
+            onSaved={() => setRevision((value) => value + 1)} />
         </div>
       </div>
     </div> : <p role="status">Selecteer een artikel in de tabel om beide classificaties naast elkaar te bekijken.</p>}
