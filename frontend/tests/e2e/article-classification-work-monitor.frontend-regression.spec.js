@@ -54,7 +54,23 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('combined-selected-article')).toHaveCount(0)
     await page.getByTestId('combined-classification-articles').getByRole('row', { name: /Testmelk/ }).click()
     await expect(page.getByTestId('combined-selected-article')).toContainText('Testmelk')
-    await expect(page.getByTestId('cbs-single-product')).toContainText('Testmelk')
+    await expect(page.getByTestId('classification-dual-panels')).toBeVisible()
+    await expect(page.getByTestId('classification-gs1-panel')).toContainText('GS1 GPC')
+    await expect(page.getByTestId('classification-cbs-panel')).toContainText('CBS ECOICOPv2')
+    await expect(page.getByTestId('classification-gs1-panel')).toContainText('10000001')
+    await expect(page.getByTestId('cbs-single-product')).toContainText('Niet geclassificeerd')
+    await expect(page.getByTestId('classification-cbs-panel')).toContainText('CBS-indeling doorbladeren')
+    await expect(page.getByTestId('classification-gs1-panel')).toContainText('Andere Brick kiezen')
+    const panelPositions = await page.getByTestId('classification-dual-panels').evaluate((element) => {
+      const parts = Array.from(element.children).map((child) => child.getBoundingClientRect())
+      return parts.map(({ x, y }) => ({ x, y }))
+    })
+    if (width > 720) {
+      expect(panelPositions[0].y).toBeCloseTo(panelPositions[1].y, 0)
+      expect(panelPositions[0].x).toBeLessThan(panelPositions[1].x)
+    } else {
+      expect(panelPositions[0].y).toBeLessThan(panelPositions[1].y)
+    }
     await expect(page.getByText('10000001')).toBeVisible()
     await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
 
