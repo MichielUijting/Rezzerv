@@ -75,6 +75,14 @@ function normalizeFeedback(input) {
       ? Math.max(0, Math.min(100, Number(input.progress)))
       : null,
     showTechnicalToggle: Boolean(input.showTechnicalToggle && technicalDetail),
+    comparisonRows: Array.isArray(input.comparisonRows) ? input.comparisonRows
+      .map((row) => ({
+        system: String(row?.system || ''),
+        leftName: String(row?.leftName || ''),
+        leftValue: String(row?.leftValue || ''),
+        rightName: String(row?.rightName || ''),
+        rightValue: String(row?.rightValue || ''),
+      })).filter((row) => row.system && row.leftValue && row.rightValue) : [],
     inputFields: Array.isArray(input.inputFields)
       ? input.inputFields
         .map((field) => ({
@@ -258,6 +266,7 @@ function AppFeedbackDialog({
     testId,
     progress,
     showTechnicalToggle,
+    comparisonRows,
     inputFields,
     primaryActionLabel,
     secondaryActionLabel,
@@ -369,6 +378,30 @@ function AppFeedbackDialog({
             </div>
           ) : null}
         </div>
+
+        {comparisonRows?.length ? (
+          <div data-testid={`${testId}-comparison`} style={{ display: 'grid', gap: '14px' }}>
+            {comparisonRows.map((row, index) => (
+              <div key={`${row.system}-${index}`} style={{ display: 'grid', gap: '7px' }}>
+                <strong style={{ fontSize: '16px' }}>{row.system}</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                  {[{ name: row.leftName, value: row.leftValue },
+                    { name: row.rightName, value: row.rightValue }].map((side, sideIndex) => (
+                    <div key={sideIndex} style={{
+                      border: '1px solid #D0D5DD', borderRadius: '8px',
+                      padding: '10px', minWidth: 0, overflowWrap: 'anywhere',
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#475467', fontWeight: 600 }}>
+                        {sideIndex === 0 ? 'Artikel links' : 'Artikel rechts'}: {side.name}
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '5px' }}>{side.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {inputFields?.length ? (
           <div style={{ display: 'grid', gap: '12px' }}>
