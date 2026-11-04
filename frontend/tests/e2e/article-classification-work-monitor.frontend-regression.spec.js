@@ -87,7 +87,7 @@ for (const width of [390, 1280]) {
     } else {
       expect(panelPositions[0].y).toBeLessThan(panelPositions[1].y)
     }
-    await expect(page.getByText('10000001')).toBeVisible()
+    await expect(page.getByTestId('combined-classification-articles')).toContainText('10000001')
     await expect(page.getByTestId('external-databases-2-table')).toHaveCount(0)
 
     await nav.getByRole('button', { name: 'Synoniemen' }).click()
