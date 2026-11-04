@@ -10,6 +10,8 @@ import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
+import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
+import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -60,7 +62,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
-  const [activeArea, setActiveArea] = useState('identity')
+  const [activeArea, setActiveArea] = useState(null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -218,6 +220,7 @@ export default function ExternalDatabases2Page() {
   useEffect(() => {
     let cancelled = false
     async function load() {
+      if (activeArea !== 'identity') return
       setLoading(true)
       setError('')
       try {
@@ -250,13 +253,15 @@ export default function ExternalDatabases2Page() {
     }
     load()
     return () => { cancelled = true }
-  }, [location.state?.selectedItemId, refreshVersion])
+  }, [location.state?.selectedItemId, refreshVersion, activeArea])
 
   return (
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Artikelbeheer</h2>
         <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
+        {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
+        {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
@@ -267,7 +272,7 @@ export default function ExternalDatabases2Page() {
           title={offLinkOutcome.status === 'success' ? '' : 'Klik om deze melding te sluiten'}>
           {offLinkOutcome.message}
         </p> : null}
-        {error ? <p role="alert">{error}</p> : null}
+        {activeArea === "identity" && error ? <p role="alert">{error}</p> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
