@@ -8,8 +8,8 @@ export default function ClassificationSearchOverlay({
   children,
 }) {
   const inputRef = useRef(null)
+  useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => {
-    inputRef.current?.focus()
     function onKeyDown(event) {
       if (event.key === 'Escape' && !busy) onClose()
     }
