@@ -130,14 +130,72 @@ export default function ArticleSynonymsPage() {
   const selectedLinks = options.filter((item) => checked.has(item.id) && item.status !== 'linked')
   const selectedUnlinks = options.filter((item) => checked.has(item.id) && item.status === 'linked')
 
+  async function submitChange(action, selections, decisions = [], rethrow = false) {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const response = await fetchJsonWithAuth(`${API}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selections, ...(decisions.length ? { decisions } : {}) }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(
+        typeof result.detail === 'string' ? result.detail : 'De synoniemrelaties konden niet worden bijgewerkt.'
+      )
+      await Promise.all([loadArticles(), loadOptions(activeArticle)])
+      setChecked(new Set())
+      const number = action === 'unlink' ? result.unlinked : result.linked
+      const inheritance = action === 'link' ? result.classification_inheritance || {} : {}
+      const conflicts = Array.isArray(inheritance.conflicts) ? inheritance.conflicts : []
+      const gpcCount = Number(inheritance.gpc_inherited || 0)
+      const cbsCount = Number(inheritance.cbs_inherited || 0)
+      const gpcChosen = Number(inheritance.gpc_resolved || 0)
+      const cbsChosen = Number(inheritance.cbs_resolved || 0)
+      if (conflicts.length) {
+        const systems = [...new Set(conflicts.map((conflict) => conflict.system))].join(', ')
+        const route = conflicts.some((conflict) => conflict.system === 'GPC')
+          ? '/catalogus/gpc-classificeren'
+          : '/catalogus/artikelclassificaties-toekennen'
+        showFeedback({
+          variant: 'warning',
+          title: 'Synoniemen gekoppeld; overige classificaties controleren',
+          message: `${number} synoniemkoppeling(en) bevestigd.`,
+          detail: `${gpcChosen} GS1 GPC- en ${cbsChosen} CBS-keuzes bevestigd. ${gpcCount} GS1 GPC en ${cbsCount} CBS overgenomen. Voor ${conflicts.length} overig(e) classificatieverschil(len) (${systems}) zijn waarden behouden.`,
+          dismissMode: 'ok-only',
+          primaryActionLabel: conflicts.some((conflict) => conflict.system === 'GPC') ? 'Naar GS1 GPC' : 'Naar CBS',
+          secondaryActionLabel: 'Sluiten',
+          onPrimaryAction: () => navigate(route),
+          testId: 'article-synonyms-inheritance-conflict',
+        })
+      } else {
+        showFeedback({
+          variant: 'success',
+          message: action === 'unlink'
+            ? `${number} synoniemkoppeling(en) verwijderd.`
+            : `${number} synoniemkoppeling(en) bevestigd. ${gpcCount} GS1 GPC en ${cbsCount} CBS automatisch overgenomen. ${gpcChosen} GS1 GPC- en ${cbsChosen} CBS-keuzes verwerkt.`,
+        })
+      }
+    } catch (err) {
+      if (rethrow) throw err
+      reportError(err.message)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
   async function changeLinks(action) {
     if (savingRef.current || loadingOptions || !activeArticle) return
     const targets = action === 'unlink' ? selectedUnlinks : selectedLinks
     if (!targets.length) return
     if (action === 'link') {
-      const conflicts = targets.filter((item) => !item.linkable)
-      if (conflicts.length) {
-        showConflict(conflicts[0], conflicts.length)
+      // Identical GTIN/retailer identities remain forbidden. GPC mismatch is
+      // eligible ONLY for an explicit classified choice at confirmation.
+      const identityBlocks = targets.filter((item) => !item.linkable && item.conflict_type !== 'gpc_mismatch')
+      if (identityBlocks.length) {
+        showConflict(identityBlocks[0], identityBlocks.length)
         return
       }
     }
@@ -154,55 +212,79 @@ export default function ArticleSynonymsPage() {
       reportError('Een artikel kan niet aan zichzelf worden gekoppeld.')
       return
     }
-    savingRef.current = true
-    setSaving(true)
-    try {
-      const response = await fetchJsonWithAuth(`${API}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selections }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(
-        typeof result.detail === 'string' ? result.detail : 'De synoniemrelaties konden niet worden bijgewerkt.'
-      )
-      await Promise.all([loadArticles(), loadOptions(activeArticle)])
-      setChecked(new Set())
-      const number = action === 'unlink' ? result.unlinked : result.linked
-      const inheritance = action === 'link' ? result.classification_inheritance || {} : {}
-      const conflicts = Array.isArray(inheritance.conflicts) ? inheritance.conflicts : []
-      const gpcCount = Number(inheritance.gpc_inherited || 0)
-      const cbsCount = Number(inheritance.cbs_inherited || 0)
-      if (conflicts.length) {
-        const systems = [...new Set(conflicts.map((conflict) => conflict.system))].join(', ')
-        const route = conflicts.some((conflict) => conflict.system === 'GPC')
-          ? '/catalogus/gpc-classificeren'
-          : '/catalogus/artikelclassificaties-toekennen'
+    if (action === 'link') {
+      let reviews = []
+      savingRef.current = true
+      setSaving(true)
+      try {
+        const response = await fetchJsonWithAuth(`${API}/link/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selections }),
+        })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(
+          typeof result.detail === 'string' ? result.detail : 'Classificaties konden niet worden vergeleken.'
+        )
+        reviews = Array.isArray(result.items) ? result.items : []
+      } catch (err) {
+        reportError(err.message)
+        return
+      } finally {
+        savingRef.current = false
+        setSaving(false)
+      }
+      if (reviews.length) {
+        const pairs = reviews.flatMap((review, i) =>
+          review.clashes.map((clash) => ({ review, clash, fieldName: `choice_${i}_${clash.system}` }))
+        )
+        const comparisonRows = pairs.map(({ clash }) => ({
+          system: clash.system === 'GPC' ? 'GS1 GPC — producttype' : 'CBS ECOICOPv2 — bestedingsdoel',
+          leftName: clash.left.name,
+          rightName: clash.right.name,
+          leftValue: `${clash.left.code}${clash.left.reference ? ' (' + clash.left.reference + ')' : ''} — ${clash.left.label}`,
+          rightValue: `${clash.right.code}${clash.right.reference ? ' (' + clash.right.reference + ')' : ''} — ${clash.right.label}`,
+        }))
+        const inputFields = pairs.map(({ clash, fieldName }) => ({
+          name: fieldName,
+          label: `${clash.system === 'GPC' ? 'GS1 GPC' : 'CBS'}: welke classificatie moet gelden voor beide artikelen?`,
+          type: 'select',
+          required: true,
+          options: [
+            { value: clash.left.id, label: `${clash.left.name}: ${clash.left.code} — ${clash.left.label}` },
+            { value: clash.right.id, label: `${clash.right.name}: ${clash.right.code} — ${clash.right.label}` },
+          ],
+        }))
         showFeedback({
           variant: 'warning',
-          title: 'Synoniemen gekoppeld; classificatie controleren',
-          message: `${number} synoniemkoppeling(en) bevestigd.`,
-          detail: `${gpcCount} GS1 GPC en ${cbsCount} CBS overgenomen. Voor ${conflicts.length} classificatieconflict(en) (${systems}) zijn bestaande waarden behouden. Controleer de betrokken artikelen; de koppeling blijft bestaan.`,
+          title: 'Kies welke artikelclassificatie moet gelden',
+          message: 'De geselecteerde artikelen hebben verschillende bevestigde classificaties.',
+          detail: 'Bekijk de beide bestaande indelingen. Kies per classificatiesysteem welke moet prevaleren. Daarmee wordt de andere officiële indeling bewust vervangen. Zonder bevestiging wordt niets gekoppeld of gewijzigd.',
+          comparisonRows,
+          inputFields,
+          primaryActionLabel: 'Keuze bevestigen en koppelen',
+          secondaryActionLabel: 'Annuleren',
           dismissMode: 'ok-only',
-          primaryActionLabel: conflicts.some((conflict) => conflict.system === 'GPC') ? 'Naar GS1 GPC' : 'Naar CBS',
-          secondaryActionLabel: 'Sluiten',
-          onPrimaryAction: () => navigate(route),
-          testId: 'article-synonyms-inheritance-conflict',
+          testId: 'article-synonyms-classification-choice',
+          onPrimaryAction: async (values) => {
+            const decisions = reviews.map((review, i) => ({
+              left_product_id: review.left_id,
+              right_product_id: review.right_id,
+              snapshot: review.snapshot,
+              ...Object.fromEntries(review.clashes.map((clash) => [
+                clash.system === 'GPC' ? 'gpc_source_id' : 'cbs_source_id',
+                values[`choice_${i}_${clash.system}`],
+              ])),
+            }))
+            await submitChange('link', selections, decisions, true)
+            // submitChange presents the actual outcome via standard feedback.
+            return false
+          },
         })
-      } else {
-        showFeedback({
-          variant: 'success',
-          message: action === 'unlink'
-            ? `${number} synoniemkoppeling(en) verwijderd.`
-            : `${number} synoniemkoppeling(en) bevestigd. ${gpcCount} GS1 GPC en ${cbsCount} CBS automatisch overgenomen.`,
-        })
+        return
       }
-    } catch (err) {
-      reportError(err.message)
-    } finally {
-      savingRef.current = false
-      setSaving(false)
     }
+    await submitChange(action, selections)
   }
 
   const leftColumns = [
