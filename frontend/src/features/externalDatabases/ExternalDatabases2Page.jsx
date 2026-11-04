@@ -60,6 +60,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
+  const [activeArea, setActiveArea] = useState('identity')
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -252,10 +253,10 @@ export default function ExternalDatabases2Page() {
   }, [location.state?.selectedItemId, refreshVersion])
 
   return (
-    <AppShell title="Artikel classificeren" showExit={false}>
+    <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
-        <h2>Artikel classificeren</h2>
-        <p>{isMobile ? 'Tik' : 'Dubbelklik'} op een artikel om passende productkandidaten te zoeken. Art./Barcode toont een bekende artikelcode of handmatig ingevoerde barcode; alleen een bevestigde koppeling verandert de GS1-status.</p>
+        <h2>Artikelbeheer</h2>
+        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
         {offLinkOutcome ? <p data-testid="external-off-link-outcome"
           role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
           onClick={() => setOffLinkOutcome(null)}
@@ -267,8 +268,7 @@ export default function ExternalDatabases2Page() {
           {offLinkOutcome.message}
         </p> : null}
         {error ? <p role="alert">{error}</p> : null}
-        <ClassificationWorkMonitor counts={counts} refreshVersion={refreshVersion} />
-        <div id="ed2-work-table" className="rz-external-receipt-overview">
+        {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
             key={status} type="button" variant="secondary"
@@ -353,7 +353,7 @@ export default function ExternalDatabases2Page() {
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
             }} /> : null}
-        </div>
+        </div> : null}
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">
             <p className="rz-modal-text" id="ed2-unlink-confirm">
