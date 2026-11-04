@@ -164,6 +164,7 @@ class MatchingTest(unittest.TestCase):
         self.assertEqual(records['c']['conflict_type'], 'shared_article_code')
         self.assertIn('STORE-99', records['c']['conflict_detail'])
         self.assertEqual(records['d']['conflict_type'], 'gpc_mismatch')
+        self.assertEqual(records['d']['status_label'], 'Classificatie kiezen')
         self.assertIn('milk', records['d']['conflict_detail'])
         self.assertIn('fruit', records['d']['conflict_detail'])
         self.assertEqual(records['d']['resolution_route'], '/catalogus/gpc-classificeren')
