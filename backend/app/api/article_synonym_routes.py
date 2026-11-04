@@ -20,8 +20,8 @@ class Selection(BaseModel):
     model_config = ConfigDict(extra='forbid')
     left_product_id: str = Field(min_length=1, max_length=200)
     right_product_id: str = Field(min_length=1, max_length=200)
-    fingerprint: str = Field(pattern=r'^[0-9a-f]{64}
-
+    fingerprint: str = Field(pattern=r'^[0-9a-f]{64}$')
+    manual: bool = False
 
 class BulkSelection(BaseModel):
     model_config = ConfigDict(extra='forbid')
