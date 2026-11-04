@@ -66,6 +66,12 @@ export default function CombinedClassificationWorkspace() {
               (!data.items.length && total > items.length)) {
             throw new Error('De artikellijst is tijdens het ophalen veranderd. Open Classificeren opnieuw.')
           }
+          const currentIds = new Set(items.map((item) => item.id))
+          const incomingIds = data.items.map((item) => item.id)
+          if (incomingIds.some((id) => !id || currentIds.has(id)) ||
+              new Set(incomingIds).size !== incomingIds.length) {
+            throw new Error('De werkvoorraad bevat dubbele of ongeldige Catalogusidentiteiten.')
+          }
           items.push(...data.items)
         } while (items.length < total)
         if (!controller.signal.aborted) setProducts(items)
