@@ -415,13 +415,15 @@ class StoreTest(unittest.TestCase):
             self.assertEqual(entry['classification_code'], '099999')
             self.assertEqual(entry['decision_version'], 1)
             with self.assertRaises(HTTPException) as stale:
-                retry_sync_exception(conn, event_id=entry['id'],
-                                     expected_decision_version=0, actor_id='actor')
+                with conn.begin_nested():
+                    retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=0, actor_id='actor')
             self.assertEqual(stale.exception.status_code, 409)
-            # A previously unverified reference cannot be inherited on retry.
+            # A rejected transaction rolls back even its pending audit marker.
             with self.assertRaises(HTTPException) as unavailable:
-                retry_sync_exception(conn, event_id=entry['id'],
-                                     expected_decision_version=1, actor_id='actor')
+                with conn.begin_nested():
+                    retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1, actor_id='actor')
             self.assertEqual(unavailable.exception.status_code, 409)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM global_product_cbs_classifications
