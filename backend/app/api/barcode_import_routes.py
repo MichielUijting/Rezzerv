@@ -73,8 +73,20 @@ def preview_barcode_import(payload: PreviewRequest):
         raise HTTPException(status_code=422, detail="CSV ontbreekt, is te groot of is ongeldig.")
     try:
         reader = csv.DictReader(io.StringIO(raw, newline=""), delimiter=";", strict=True)
-        if not reader.fieldnames or not all(header in reader.fieldnames for header in HEADERS):
-            raise ValueError("Verplichte kolommen ontbreken in het CSV-bestand.")
+        if not reader.fieldnames:
+            raise ValueError("Het CSV-bestand heeft geen kolomkoppen.")
+        # This export is valid, but is the *input*, not the enriched import.
+        # Reject it with actionable guidance instead of a generic parse error.
+        source_columns = {"Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode"}
+        if source_columns.issubset(reader.fieldnames) and "Aanvulstatus" not in reader.fieldnames:
+            raise ValueError(
+                "Dit is het oorspronkelijke exportbestand zonder nieuwe barcodevoorstellen. "
+                "Kies 'inhuis-artikel-classificeren-artikelen_aangevuld.csv' "
+                "met de kolom 'Aanvulstatus'. Er is niets opgeslagen."
+            )
+        missing = [column for column in HEADERS if column not in reader.fieldnames]
+        if missing:
+            raise ValueError("De volgende kolommen ontbreken: " + ", ".join(missing) + ".")
         source_rows = list(reader)
     except (csv.Error, ValueError) as exc:
         raise HTTPException(status_code=422, detail=f"CSV kon niet worden gelezen: {exc}") from exc
