@@ -82,3 +82,34 @@ def test_duplicate_source_and_invalid_gtin_blocked(monkeypatch):
     with pytest.raises(HTTPException) as err:
         imports.approve_barcode_import(_request("8712345678905"))
     assert err.value.status_code == 422
+
+
+def test_original_export_gets_actionable_error_without_database_access(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: (_ for _ in ()).throw(AssertionError("original CSV should not query data")))
+    original = (
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode;GS1-class.;Omvang / gewicht\n"
+        "Pindakaas;Jumbo;JUMBO-SEED-3;8718452861309;Classificatie ontbreekt;1 pot\n"
+    )
+    with pytest.raises(HTTPException) as error:
+        imports.preview_barcode_import(imports.PreviewRequest(csv_text=original))
+    assert error.value.status_code == 422
+    assert "oorspronkelijke exportbestand" in error.value.detail
+    assert "artikelen_aangevuld.csv" in error.value.detail
+
+
+def test_enriched_csv_header_with_all_actual_columns_is_accepted(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_item()]})
+    csv_text = (
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode;GS1-class.;Omvang / gewicht;"
+        "Aanvulstatus;Bron/onderbouwing;Gevonden productnaam;Opmerking\n"
+        "AH Komkommer;Albert Heijn;12345;8712345678904;Niet gekoppeld;1 stuk;"
+        "Aangevuld: officieel artikelnummer;Winkelpagina;AH Komkommer;\n"
+    )
+    result = imports.preview_barcode_import(imports.PreviewRequest(csv_text=csv_text))
+    assert result["total"] == 1
+    assert result["ready"] == 1
+    assert result["blocked"] == 0
