@@ -413,9 +413,10 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await expect(table.locator('tbody tr')).toHaveCount(1)
       await expect(table).toContainText('Artikel 22')
       await expect(page.getByRole('navigation', { name: 'Paginering' })).toHaveCount(0)
-      // Na zoeken blijft de nieuwe bulkselectie beschikbaar voor de ene
-      // zichtbare rij; zonder selectie is exporteren terecht uitgeschakeld.
-      await expect(table.getByRole('checkbox')).toHaveCount(1)
+      // Na zoeken is er één rijcheckbox én de paginaselectie in de kolomkop.
+      // Zonder selectie is exporteren terecht uitgeschakeld.
+      await expect(table.getByRole('checkbox')).toHaveCount(2)
+      await expect(table.getByRole('checkbox', { name: 'Alles op huidige pagina' })).not.toBeChecked()
       await expect(table.getByRole('checkbox', { name: 'Selecteer Artikel 22' })).not.toBeChecked()
       // Inhuis policy: Exporteren is desktop-only at 720px and below.
       // The button remains in the DOM, but must be hidden on mobile.
