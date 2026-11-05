@@ -52,6 +52,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     ARTICLE_SYNONYM_LINKS_TABLE,
     ED2_MANUAL_BARCODES_TABLE,
     ED2_REMOVED_ARTICLES_TABLE,
+    "article_classification_sync_events",  # Migration-owned audit, not immutable baseline.
     # Post-baseline classification tables are checked for schema authority below.
     "global_product_shopify_classifications",
     "global_product_shopify_history",
@@ -906,6 +907,88 @@ def _assert_ed2_removed_articles_schema(connection) -> None:
     print("ED2_REMOVED_ARTICLES_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_article_classification_sync_audit_schema(connection) -> None:
+    """Check the new migration-owned audit independently of immutable SQLite."""
+    table = "article_classification_sync_events"
+    inspector = inspect(connection)
+    if not inspector.has_table(table):
+        raise AssertionError("Missing article classification synchronization audit")
+    columns = {column["name"]: column for column in inspector.get_columns(table)}
+    expected_columns = {
+        "id", "event_key", "source_product_id", "target_product_id",
+        "classification_system", "classification_code", "reference_version",
+        "decision_version", "status", "reason", "actor_id",
+        "related_event_id", "created_at",
+    }
+    if set(columns) != expected_columns:
+        raise AssertionError(f"Synchronization audit column drift: {set(columns)!r}")
+    if {name for name, column in columns.items() if column["nullable"]} != {"related_event_id"}:
+        raise AssertionError("Synchronization audit NOT NULL boundary drift")
+    if not isinstance(columns["decision_version"]["type"], sa.Integer):
+        raise AssertionError("Synchronization decision version must be INTEGER")
+    timestamp_type = columns["created_at"]["type"]
+    if not isinstance(timestamp_type, sa.DateTime):
+        raise AssertionError("Synchronization timestamp must be DATETIME")
+    if connection.dialect.name == "postgresql" and not timestamp_type.timezone:
+        raise AssertionError("Synchronization timestamp must be TIMESTAMPTZ")
+    if tuple(inspector.get_pk_constraint(table).get("constrained_columns") or ()) != ("id",):
+        raise AssertionError("Synchronization audit primary key drift")
+    if inspector.get_foreign_keys(table):
+        raise AssertionError("Append-only synchronization evidence must not cascade-delete")
+    unique = [
+        set(item.get("column_names") or ())
+        for item in inspector.get_unique_constraints(table)
+    ]
+    indexes = {item["name"]: item for item in inspector.get_indexes(table)}
+    # SQLite and PostgreSQL may expose the event-key UNIQUE constraint via
+    # different introspection collections; accept only the real unique key.
+    event_key_unique = {"event_key"} in unique or any(
+        index.get("unique") and tuple(index.get("column_names") or ()) == ("event_key",)
+        for index in indexes.values()
+    )
+    if not event_key_unique:
+        raise AssertionError("Synchronization audit idempotency key is not unique")
+    required_indexes = {
+        "ix_article_sync_status_created": ("status", "created_at"),
+        "ix_article_sync_target": ("target_product_id", "classification_system"),
+    }
+    for name, cols in required_indexes.items():
+        index = indexes.get(name)
+        if not index or tuple(index.get("column_names") or ()) != cols or index.get("unique"):
+            raise AssertionError(f"Synchronization audit index drift: {name}")
+
+    checks = {item["name"]: item["sqltext"] for item in inspector.get_check_constraints(table)}
+    required_checks = {
+        "ck_article_sync_system", "ck_article_sync_status",
+        "ck_article_sync_version", "ck_article_sync_ids",
+    }
+    if set(checks) != required_checks:
+        raise AssertionError(f"Synchronization audit check constraints drift: {set(checks)!r}")
+    normalized = {
+        name: "".join(sql.lower().split())
+        for name, sql in checks.items()
+    }
+    if not all(code in normalized["ck_article_sync_system"] for code in ("gpc", "cbs")):
+        raise AssertionError("Synchronization classification system contract drift")
+    if not all(state in normalized["ck_article_sync_status"] for state in
+               ("pending", "processed", "conflict", "failed", "review_required")):
+        raise AssertionError("Synchronization status contract drift")
+    if "decision_version>=0" not in normalized["ck_article_sync_version"]:
+        raise AssertionError("Synchronization version contract drift")
+    if connection.dialect.name == "postgresql":
+        guard = connection.execute(text("""
+            SELECT 1 FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = current_schema() AND c.relname = :table
+              AND t.tgname = 'inhuis_maintenance_write_gate'
+              AND NOT t.tgisinternal
+        """), {"table": table}).first()
+        if not guard:
+            raise AssertionError("Synchronization audit maintenance barrier missing")
+    print("ARTICLE_CLASSIFICATION_SYNC_AUDIT_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -933,6 +1016,7 @@ def main() -> None:
             _assert_ed2_manual_barcode_schema(connection)
             _assert_ed2_removed_articles_schema(connection)
             _assert_article_classification_schema(connection)
+            _assert_article_classification_sync_audit_schema(connection)
             _assert_maintenance_schema(connection)
     finally:
         engine.dispose()

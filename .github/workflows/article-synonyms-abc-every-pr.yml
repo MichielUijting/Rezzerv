@@ -1,0 +1,98 @@
+name: Article synonyms A-B-C every PR
+
+# Mandatory scenario independently executed for every PR, regardless of files.
+# This is NOT a substitute for F7 or release/authorization gates.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: article-synonyms-abc-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  abc-postgresql:
+    name: A-B-C PostgreSQL end-to-end authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_synonyms
+          POSTGRES_PASSWORD: rezzerv_synonyms_ci
+          POSTGRES_DB: rezzerv_article_synonyms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_synonyms -d rezzerv_article_synonyms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_synonyms:rezzerv_synonyms_ci@127.0.0.1:5432/rezzerv_article_synonyms_test
+      INHUIS_ARTICLE_SYNONYMS_TEST_DATABASE_URL: postgresql+psycopg://rezzerv_synonyms:rezzerv_synonyms_ci@127.0.0.1:5432/rezzerv_article_synonyms_test
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical targeted dependencies
+        run: |
+          mapfile -t packages < <(grep -E '^(sqlalchemy|alembic|fastapi|pydantic|httpx|psycopg\[binary\])==' backend/requirements.txt)
+          test "${#packages[@]}" -eq 6
+          python -m pip install "${packages[@]}"
+      - name: Verify A-B-C identity, independent GS1/CBS choices and idempotent propagation
+        run: |
+          python -m unittest discover -s backend/tests -p test_article_synonyms.py -v \
+            -k test_mandatory_three_articles_a_b_c_classification_chain
+
+  abc-overlay:
+    name: A-B-C classification choice overlay mobile and desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Start isolated frontend
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 --strictPort > /tmp/synonym-abc-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -80 /tmp/synonym-abc-vite.log
+          exit 1
+      - name: Verify two separate official classification choices and cancellation
+        run: |
+          ./node_modules/.bin/playwright test \
+            tests/e2e/article-synonyms.frontend-regression.spec.js \
+            --project=chromium --no-deps \
+            --grep "Twee verschillende classificaties|Bevestigd synoniem met classificatieconflict|Artikel-synoniemen: uitgelijnde"
+      - name: Upload browser report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-synonyms-abc-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

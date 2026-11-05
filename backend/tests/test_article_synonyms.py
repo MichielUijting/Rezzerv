@@ -277,9 +277,11 @@ class StoreTest(unittest.TestCase):
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
             module = migration_module('20261026_01_article_synonyms')
+            sync_audit = migration_module('20261104_01_article_classification_sync_audit')
             with Operations.context(MigrationContext.configure(conn)):
                 maintenance.upgrade()
                 module.upgrade()
+                sync_audit.upgrade()
             for pid, gtin in [('a','8719587325926'), ('b','8718452513666'), ('c','')]:
                 conn.execute(text("INSERT INTO global_products (id,name,brand,variant,primary_gtin,size_value,size_unit,status,image_url,source) VALUES (:id,'Halfvolle melk','','',:gtin,1,'l','active','', 'catalog')"), dict(id=pid, gtin=gtin))
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('a','ah','823326','confirmed'),('b','jumbo','394270','confirmed')"))
@@ -373,13 +375,289 @@ class StoreTest(unittest.TestCase):
                 SELECT COUNT(*) FROM global_product_cbs_history
                 WHERE global_product_id='b'
             """)).scalar_one(), 1)
+            audit = conn.execute(text("""
+                SELECT source_product_id, target_product_id, classification_system,
+                       classification_code, reference_version, decision_version, status
+                FROM article_classification_sync_events ORDER BY classification_system
+            """)).all()
+            self.assertEqual(len(audit), 2)
+            self.assertEqual({(row[0],row[1],row[2],row[3],row[6]) for row in audit},
+                             {('a','b','GPC','10000025','processed'),
+                              ('a','b','CBS','011420','processed')})
+            self.assertEqual(next(row[5] for row in audit if row[2]=='CBS'), 1)
             again = service.confirm_pairs(conn, [selection], 'actor')
             self.assertEqual(again['already_linked'], 1)
             self.assertNotIn('classification_inheritance', again)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 2)
             self.assertEqual(conn.execute(text("""
                 SELECT COUNT(*) FROM global_product_cbs_history
                 WHERE global_product_id='b'
             """)).scalar_one(), 1)
+
+    def test_sync_exception_audit_and_explicit_retry_after_reference_validation(self):
+        from app.services.article_classification_sync_monitor import (
+            list_sync_exceptions, retry_sync_exception,
+        )
+        with self.engine.begin() as conn:
+            self._set_cbs(conn, 'a', '099999')
+            selected = self.selection(conn)
+            result = service.confirm_pairs(conn, [selected], 'actor')
+            self.assertEqual(result['classification_inheritance']['cbs_inherited'], 0)
+            exceptions = list_sync_exceptions(conn)
+            self.assertEqual(exceptions['total'], 1)
+            entry = exceptions['items'][0]
+            self.assertEqual(entry['status'], 'review_required')
+            self.assertEqual(entry['source_product_id'], 'a')
+            self.assertEqual(entry['target_product_id'], 'b')
+            self.assertEqual(entry['classification_system'], 'CBS')
+            self.assertEqual(entry['classification_code'], '099999')
+            self.assertEqual(entry['decision_version'], 1)
+            with self.assertRaises(HTTPException) as stale:
+                with conn.begin_nested():
+                    retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=0,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
+            self.assertEqual(stale.exception.status_code, 409)
+            # A rejected transaction rolls back even its pending audit marker.
+            with self.assertRaises(HTTPException) as unavailable:
+                with conn.begin_nested():
+                    retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
+            self.assertEqual(unavailable.exception.status_code, 409)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_classifications
+                WHERE global_product_id='b'
+            """)).scalar_one(), 0)
+            # A verified official leaf may later be added through a separate
+            # official authority operation. Only an explicit retry then writes.
+            conn.execute(text("""
+                INSERT INTO cbs_ecoicop_categories VALUES
+                    ('099999','CBS-ECOICOPv2-2026',NULL,'Speciale categorie')
+            """))
+            retry = retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
+            self.assertEqual(retry['cbs_inherited'], 1)
+            again = retry_sync_exception(conn, event_id=entry['id'],
+                                         expected_decision_version=1,
+                                         expected_target_version=0, expected_target_code='', actor_id='actor')
+            self.assertEqual(again['cbs_inherited'], 0)
+            self.assertEqual(list_sync_exceptions(conn)['total'], 0)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM article_classification_sync_events
+                WHERE status='processed'
+            """)).scalar_one(), 2)
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM global_product_cbs_history
+                WHERE global_product_id='b'
+            """)).scalar_one(), 1)
+
+    def test_failed_retry_logs_only_after_rollback_without_mutating_catalog(self):
+        from app.services.article_classification_sync_monitor import (
+            record_sync_event, list_sync_exceptions,
+        )
+        with self.engine.begin() as conn:
+            record_sync_event(
+                conn, source_id='a', target_id='b', system='CBS',
+                code='011420', reference='CBS-ECOICOPv2-2026',
+                decision_version=1, status='review_required',
+                reason='Officiële bron tijdelijk niet beschikbaar', actor_id='actor',
+            )
+            event_id = conn.execute(text(
+                "SELECT id FROM article_classification_sync_events"
+            )).scalar_one()
+        app = FastAPI()
+        app.include_router(routes.router)
+        client = TestClient(app)
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
+        with patch.object(routes, 'engine', self.engine), \
+                patch.object(routes, 'require_platform_permission_from_session',
+                             return_value=actor), \
+                patch.object(routes, 'retry_sync_exception',
+                             side_effect=RuntimeError('injected failed transaction')):
+            response = client.post(
+                '/api/external-databases/article-synonyms/sync-exceptions/retry',
+                json={'event_id': event_id, 'expected_decision_version': 1,
+                      'expected_target_version': 0, 'expected_target_code': ''},
+            )
+        self.assertEqual(response.status_code, 503)
+        with self.engine.connect() as conn:
+            monitor = list_sync_exceptions(conn)
+            self.assertEqual(monitor['total'], 1)
+            self.assertEqual(monitor['items'][0]['status'], 'failed')
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_classifications"
+            )).scalar_one(), 0)
+
+    def test_gpc_retry_requires_separate_official_write_permission(self):
+        from app.services.article_classification_sync_monitor import record_sync_event
+        with self.engine.begin() as conn:
+            record_sync_event(
+                conn, source_id='a', target_id='b', system='GPC',
+                code='10000025', decision_version=0, status='review_required',
+                reason='Uitzondering voor expliciete test', actor_id='actor',
+            )
+            event_id = conn.execute(text(
+                "SELECT id FROM article_classification_sync_events"
+            )).scalar_one()
+        app = FastAPI()
+        app.include_router(routes.router)
+        client = TestClient(app)
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
+        def authorize(permission):
+            if permission == 'gpc.update':
+                raise HTTPException(403, 'GPC-schrijfrecht ontbreekt.')
+            return actor
+        with patch.object(routes, 'engine', self.engine), \
+                patch.object(routes, 'require_platform_permission_from_session',
+                             side_effect=authorize):
+            response = client.post(
+                '/api/external-databases/article-synonyms/sync-exceptions/retry',
+                json={'event_id': event_id, 'expected_decision_version': 0,
+                      'expected_target_version': 0, 'expected_target_code': ''},
+            )
+        self.assertEqual(response.status_code, 403)
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 1)
+
+    def test_existing_confirmed_gpc_conflict_is_logged_once_without_overwrite(self):
+        from app.services.article_classification_sync_monitor import list_sync_exceptions
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+                VALUES ('a','10000025'),('b','10000026')
+            """))
+            for _ in range(2):
+                report = inheritance.propagate_confirmed_classifications(
+                    conn, {('a','b')}, {'a','b'}, 'actor'
+                )
+                self.assertEqual([x['system'] for x in report['conflicts']], ['GPC'])
+            self.assertEqual(list_sync_exceptions(conn)['total'], 1)
+            self.assertEqual(conn.execute(text("""
+                SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id='b'
+            """)).scalar_one(), '10000026')
+
+    def test_audit_rolls_back_with_rejected_synonym_transaction(self):
+        from app.services import article_classification_sync_monitor as monitor
+        with self.assertRaisesRegex(RuntimeError, 'audit interrupted'):
+            with self.engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+                    VALUES ('a','10000025')
+                """))
+                selected = self.selection(conn)
+                with patch.object(inheritance, 'record_sync_event',
+                                  side_effect=RuntimeError('audit interrupted')):
+                    service.confirm_pairs(conn, [selected], 'actor')
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_synonym_links"
+            )).scalar_one(), 0)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 0)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_gpc_bricks"
+            )).scalar_one(), 0)
+
+    def test_mandatory_three_articles_a_b_c_classification_chain(self):
+        """Every-PR regression: A classified, B empty, C conflicts in both systems.
+
+        All writes happen in an isolated PostgreSQL schema created by setUp.
+        Never mutate a user household, real catalog, receipt or inventory.
+        """
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT PRIMARY KEY,
+                    language_code TEXT NOT NULL, active BOOLEAN NOT NULL,
+                    gpc_brick_name TEXT NOT NULL
+                )
+            """)
+            conn.exec_driver_sql("""
+                INSERT INTO gpc_product_groups VALUES
+                    ('10000025','nl',TRUE,'Halfvolle melk'),
+                    ('10000026','nl',TRUE,'Andere melk')
+            """)
+            # C has a distinct *valid* product barcode, not a name-based identity.
+            conn.execute(text("""
+                UPDATE global_products SET primary_gtin='8719587325933' WHERE id='c'
+            """))
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id,brick_code)
+                VALUES ('a','10000025'),('c','10000026')
+            """))
+            self._set_cbs(conn, 'a', '011420')
+            self._set_cbs(conn, 'c', '011410')
+            products = {item['id']: item for item in service.load_products(conn)}
+            self.assertEqual(set(products), {'a','b','c'})
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
+            # A -> B: both official classifications inherited atomically.
+            ab = dict(left_product_id='a', right_product_id='b',
+                      fingerprint=service._fingerprint(products['a'],products['b']))
+            first = service.confirm_pairs(conn, [ab], 'every-pr-test')
+            self.assertEqual(first['linked'], 1)
+            self.assertEqual(first['classification_inheritance']['gpc_inherited'], 1)
+            self.assertEqual(first['classification_inheritance']['cbs_inherited'], 1)
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a':'10000025','b':'10000025','c':'10000026'})
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code FROM global_product_cbs_classifications
+            """)).all()), {'a':'011420','b':'011420','c':'011410'})
+
+            # A / C: both values must be shown; no silent overwrite.
+            products = {item['id']: item for item in service.load_products(conn)}
+            ac = dict(left_product_id='a', right_product_id='c',
+                      fingerprint=service._fingerprint(products['a'],products['c']),
+                      manual=True)
+            review = classification_review.review_pairs(conn, [ac], products)[0]
+            self.assertEqual({clash['system'] for clash in review['clashes']}, {'GPC','CBS'})
+            codes = {clash['system']:(clash['left']['code'],clash['right']['code'])
+                     for clash in review['clashes']}
+            self.assertEqual(codes['GPC'], ('10000025','10000026'))
+            self.assertEqual(codes['CBS'], ('011420','011410'))
+            with self.assertRaises(HTTPException) as missing_choice:
+                with conn.begin_nested():
+                    service.confirm_pairs(conn, [ac], 'every-pr-test')
+            self.assertEqual(missing_choice.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), {('a','b')})
+
+            # Explicit, separately captured GPC and CBS choice from A preserves
+            # the already-confirmed A/B component; C is the only changed target.
+            decision = dict(left_product_id='a', right_product_id='c',
+                            snapshot=review['snapshot'],
+                            gpc_source_id='a', cbs_source_id='a')
+            resolved = service.confirm_pairs(conn,[ac],'every-pr-test',decisions=[decision])
+            self.assertEqual(resolved['linked'],1)
+            self.assertEqual(resolved['classification_inheritance']['gpc_resolved'],1)
+            self.assertEqual(resolved['classification_inheritance']['cbs_resolved'],1)
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, brick_code FROM global_product_gpc_bricks
+            """)).all()), {'a':'10000025','b':'10000025','c':'10000025'})
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code FROM global_product_cbs_classifications
+            """)).all()), {'a':'011420','b':'011420','c':'011420'})
+            self.assertEqual(service.confirmed_pairs(conn), {('a','b'),('a','c')})
+
+            # Retry never creates extra events, classifications or links.
+            audit_before = conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one()
+            retry = service.confirm_pairs(conn,[ac],'every-pr-test',decisions=[])
+            self.assertEqual(retry['already_linked'],1)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), audit_before)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_history"
+            )).scalar_one(), 2)
 
     def test_inheritance_is_bidirectional_and_systems_independent(self):
         with self.engine.begin() as conn:
@@ -1177,6 +1455,33 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(self.client.post('/api/external-databases/article-synonyms/unlink', json={'selections':[dict(left_product_id='a',right_product_id='b',fingerprint='0'*64)]}).status_code,status)
         with patch.object(routes, 'require_platform_permission_from_session', return_value=SimpleNamespace(is_frontteam=False,is_platform_superuser=False)):
             self.assertEqual(self.client.get('/api/external-databases/article-synonyms').status_code,403)
+
+    def test_internal_sync_monitor_denies_anonymous_household_and_forged_retry(self):
+        path = '/api/external-databases/article-synonyms/sync-exceptions'
+        payload = {'event_id': str(uuid4()), 'expected_decision_version': 1,
+                   'expected_target_version': 0, 'expected_target_code': ''}
+        for status in (401, 403):
+            with patch.object(routes, 'require_platform_permission_from_session',
+                              side_effect=HTTPException(status)):
+                self.assertEqual(self.client.get(path).status_code, status)
+                self.assertEqual(self.client.post(path + '/retry', json=payload).status_code, status)
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          return_value=SimpleNamespace(is_frontteam=False, is_platform_superuser=False)):
+            self.assertEqual(self.client.get(path).status_code, 403)
+            self.assertEqual(self.client.post(path + '/retry', json=payload).status_code, 403)
+        self.assertEqual(self.client.post(path + '/retry', json={
+            **payload, 'actor_id': 'forged', 'household_id': '0',
+        }).status_code, 422)
+        self.assertEqual(self.client.post(path + '/retry', json={
+            'event_id': payload['event_id'], 'expected_decision_version': -1,
+        }).status_code, 422)
+        # An anonymous request must receive 401, not a made-up 403.
+        self.assertEqual(self.client.get(path + '?limit=101').status_code, 401)
+        actor = SimpleNamespace(is_frontteam=True, is_platform_superuser=False,
+                                user_id='actor')
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          return_value=actor):
+            self.assertEqual(self.client.get(path + '?limit=101').status_code, 422)
 
     def test_gpc_choice_requires_existing_gpc_write_permission(self):
         actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
