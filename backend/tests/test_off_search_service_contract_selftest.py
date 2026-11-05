@@ -13,7 +13,7 @@ def assert_equal(actual, expected, label: str) -> None:
 
 def run_manual_search_contract() -> None:
     original_resolve_receipt_item = service.resolve_receipt_item
-    original_query_off = service._query_off
+    original_query_off = service._query_off_manual_text
     try:
         service.resolve_receipt_item = lambda receipt_item_id: {
             "receipt_item_id": receipt_item_id,
@@ -23,7 +23,7 @@ def run_manual_search_contract() -> None:
             "retailer_code": "Jumbo",
             "quantity_label": "",
         }
-        service._query_off = lambda query, page_size: (
+        service._query_off_manual_text = lambda query, page_size: (
             [
                 {
                     "code": "8718452504435",
@@ -73,7 +73,7 @@ def run_manual_search_contract() -> None:
         )
     finally:
         service.resolve_receipt_item = original_resolve_receipt_item
-        service._query_off = original_query_off
+        service._query_off_manual_text = original_query_off
 
 
 def run_automatic_search_contract() -> None:
@@ -183,6 +183,56 @@ def run_exact_gtin_image_contract() -> None:
     finally:
         service.urllib.request.urlopen = original_urlopen
 
+def run_waldkorn_manual_text_search_contract() -> None:
+    """The second OFF provider must be consulted even if the first has hits."""
+    original_primary = service._query_search_a_licious
+    original_fallback = service._query_legacy_cgi
+    calls = []
+
+    def primary(query, page_size):
+        calls.append(("primary", query))
+        return [{"code": "8712345678901", "product_name": "Andere melk"}], "search_a_licious"
+
+    def fallback(query, page_size):
+        calls.append(("fallback", query))
+        return [{
+            "code": "8719587106174",
+            "product_name": "Waldkorn The Original Volkoren",
+            "brands": "Albert Heijn",
+            "quantity": "309 g",
+        }], "legacy_cgi"
+
+    try:
+        service._query_search_a_licious = primary
+        service._query_legacy_cgi = fallback
+        item = {
+            "receipt_item_id": "receipt-table-line:waldk-half",
+            "receipt_line_text": "WALDK HALF",
+            "retailer_code": "Albert Heijn",
+            "quantity_label": "",
+        }
+        result = service.search_off_candidates_for_item(
+            {"mode": "manual", "query": "Waldkorn", "limit": 7}, item,
+        )
+        assert_equal(calls, [
+            ("primary", "Waldkorn"), ("fallback", "Waldkorn"),
+        ], "raadpleeg beide OFF-zoekdiensten")
+        assert_equal(result["result_count"], 1, "Waldkorn verschijnt bij tekstzoeken")
+        assert_equal(result["results"][0]["gtin"], "8719587106174",
+                     "originele OFF-productcode blijft behouden")
+        from app.services.off_manual_search_proof import verify_manual_off_proof
+        verified = verify_manual_off_proof(
+            result["results"][0]["selection_proof"],
+            receipt_item_id=item["receipt_item_id"],
+            gtin="8719587106174",
+        )
+        assert_equal(verified["gtin"], "8719587106174",
+                     "tekstkandidaat heeft geldig koppelbewijs")
+    finally:
+        service._query_search_a_licious = original_primary
+        service._query_legacy_cgi = original_fallback
+
+
 def run_zero_padded_gtin_search_contract() -> None:
     """WALDK HALF: bon GTIN-14 08719587106174, OFF EAN-13 8719587106174."""
     original_urlopen = service.urllib.request.urlopen
@@ -254,6 +304,7 @@ def main() -> int:
         ("automatic_search_contract", run_automatic_search_contract),
         ("exact_gtin_image_contract", run_exact_gtin_image_contract),
         ("zero_padded_gtin_search_contract", run_zero_padded_gtin_search_contract),
+        ("waldkorn_manual_text_search_contract", run_waldkorn_manual_text_search_contract),
     ]
     failures = []
 
