@@ -88,7 +88,7 @@ def preview_barcode_import(payload: PreviewRequest):
         if None in row:
             raise HTTPException(status_code=422, detail=f"Extra kolommen op regel {line}.")
         # Existing and unverified spreadsheet rows are deliberately not imported.
-        if (row.get("Aanvulstatus") or "").strip().lower() != "nieuw aangevuld":
+        if (row.get("Aanvulstatus") or "").strip().lower() != "aangevuld: officieel artikelnummer":
             skipped += 1
             continue
         key = _key(row.get("Winkelketen"), row.get("Artikel"), row.get("Bonartikelnummer"))
