@@ -638,3 +638,107 @@ test.describe('ED2 barcode identity mismatch uses central overlay', () => {
     expect(attempts).toEqual([{ receipt_item_id: article.id, gtin: barcode }])
   })
 })
+
+
+test.describe('Superuser barcode-import: zelfstandige tabel met bulkacties', () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('inlezen, filteren, pagineren, selecties behouden en bulkgoedkeuren', async ({ page }) => {
+    const sent = []
+    const proposals = Array.from({ length: 12 }, (_, index) => ({
+      line: index + 2,
+      article: `Importartikel ${String(index).padStart(2, '0')}`,
+      retailer: 'Albert Heijn',
+      article_number: String(5000 + index),
+      gtin: '8712345678906',
+      receipt_item_id: `receipt-table-line:import-${index}`,
+      product_name: `Product ${index}`,
+      source: 'Winkelpagina',
+      status: 'klaar',
+      reason: '',
+    }))
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', email: 'superuser@example.test',
+        active_household_id: '0', context_type: 'system',
+        role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      if (path === '/api/catalog/ed2/barcode-import/preview') return route.fulfill({
+        json: { total: 1176, skipped: 1164, ready: 12, blocked: 0, items: proposals },
+      })
+      if (path === '/api/catalog/ed2/barcode-import/approve') {
+        sent.push(route.request().postDataJSON())
+        return route.fulfill({ json: { saved: true, source: 'manual', gtin: '8712345678906' } })
+      }
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2/importeren')
+    await expect(page.getByRole('heading', { name: 'Barcodes importeren' })).toBeVisible()
+    await expect(page.getByTestId('barcode-import-dialog')).toHaveCount(0)
+    await page.getByLabel('CSV-bestand').setInputFiles({
+      name: 'inhuis-artikel-classificeren-artikelen_aangevuld.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Artikel;Winkelketen;Bonartikelnummer;Art./Barcode;Aanvulstatus\n'),
+    })
+    const table = page.getByTestId('barcode-import-review-table')
+    await expect(table.locator('tbody tr')).toHaveCount(10)
+    await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
+    await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+', exact: true }).click()
+    await expect(table).toContainText('Importartikel 10')
+    await table.getByRole('checkbox', { name: 'Selecteer Importartikel 10 (regel 12)' }).check()
+    await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '-', exact: true }).click()
+    await table.getByRole('checkbox', { name: 'Selecteer Importartikel 00 (regel 2)' }).check()
+    await expect(page.getByText('Geselecteerd: 2')).toBeVisible()
+    await page.getByRole('button', { name: 'Goedkeuren', exact: true }).click()
+    await page.getByTestId('barcode-import-approve-confirmation-overlay')
+      .getByRole('button', { name: 'Goedkeuren' }).click()
+    await expect.poll(() => sent.length).toBe(2)
+    await expect(page.getByText('Geselecteerd: 0')).toBeVisible()
+    await expect(table).toContainText('Goedgekeurd')
+  })
+
+  test('geblokkeerde voorstellen kunnen alleen uit de importlijst verwijderd worden', async ({ page }) => {
+    let saves = 0
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+        role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/catalog/ed2/barcode-import/preview') return route.fulfill({ json: {
+        total: 1, skipped: 0, ready: 0, blocked: 1,
+        items: [{ line: 2, article: 'Geblokkeerd artikel', retailer: 'Lidl',
+          article_number: '987', gtin: '1234567', product_name: '', source: '',
+          receipt_item_id: '', status: 'geblokkeerd', reason: 'Ongeldige barcode' }],
+      } })
+      if (path === '/api/catalog/ed2/barcode-import/approve') {
+        saves += 1
+        return route.fulfill({ status: 500, json: { detail: 'Niet toegestaan' } })
+      }
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2/importeren')
+    await page.getByLabel('CSV-bestand').setInputFiles({
+      name: 'inhuis-artikel-classificeren-artikelen_aangevuld.csv',
+      mimeType: 'text/csv', buffer: Buffer.from('Artikel;Winkelketen\n'),
+    })
+    const table = page.getByTestId('barcode-import-review-table')
+    await expect(table).toContainText('Geblokkeerd artikel')
+    await table.getByRole('checkbox', { name: 'Selecteer Geblokkeerd artikel (regel 2)' }).check()
+    await expect(page.getByRole('button', { name: 'Goedkeuren', exact: true })).toBeDisabled()
+    await page.getByRole('button', { name: 'Verwijderen', exact: true }).click()
+    await page.getByTestId('barcode-import-delete-confirmation-overlay')
+      .getByRole('button', { name: 'Verwijderen' }).click()
+    await expect(table).not.toContainText('Geblokkeerd artikel')
+    expect(saves).toBe(0)
+  })
+})
