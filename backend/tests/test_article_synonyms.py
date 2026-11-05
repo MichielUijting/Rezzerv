@@ -1358,7 +1358,7 @@ class StoreTest(unittest.TestCase):
                     corrected_raw_label TEXT, normalized_label TEXT, raw_label TEXT,
                     external_article_code TEXT, quantity NUMERIC, unit TEXT,
                     is_deleted BOOLEAN, line_role TEXT,
-                    inventory_eligible BOOLEAN, line_index INTEGER
+                    inventory_eligible INTEGER, line_index INTEGER
                 )
             """)
             for retailer, receipt_name, article_code, line_id in (
