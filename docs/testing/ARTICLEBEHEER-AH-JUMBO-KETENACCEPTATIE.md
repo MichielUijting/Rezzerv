@@ -28,7 +28,7 @@ Deze test gebruikt een per-test tijdelijk PostgreSQL-schema; alle bonnen, produc
 
 ## Gerichte runtimefout en reparatie
 
-De echte PostgreSQL-query liet een eerder verborgen typefout zien: `receipt_table_lines.inventory_eligible = 1` vergelijkt een boolean met een integer. De productieservice is gecorrigeerd naar de PostgreSQL- én SQLite-veilige voorwaarde `inventory_eligible IS TRUE`. De opnieuw uitgevoerde PostgreSQL-ketentest bevestigt dat de canonieke bonbron nu werkt. De reparatie wijzigt geen schema, bon, voorraad of gebruikersdata.
+De eerste geïsoleerde PostgreSQL-ketentest toonde dat `inventory_eligible = 1` niet werkt wanneer de kolom een boolean is. De aanvullende Ready-gate met het echte opstartschema liet vervolgens zien dat `inventory_eligible IS TRUE` evenmin werkt wanneer de kolom als integer (0/1) bestaat. De bronquery gebruikt daarom `CAST(rtl.inventory_eligible AS INTEGER) = 1`, geschikt voor beide representaties in PostgreSQL en SQLite. De synthetische receipt-fixture gebruikt nu integer-eligibility om de opstartschema-variant te dekken. De reparatie wijzigt geen schema, bon, voorraad of gebruikersdata. De Ready-gate en F7 moeten op de bijgewerkte kandidaat opnieuw groen worden bewezen.
 
 ## Grenzen die NIET met dit bewijs mogen worden geclaimd
 
