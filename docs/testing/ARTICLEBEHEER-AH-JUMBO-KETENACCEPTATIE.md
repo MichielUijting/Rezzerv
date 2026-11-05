@@ -5,7 +5,7 @@ Status: eerste gerichte PostgreSQL-integratieproef in Draft PR, geen productie- 
 ## Doel en normatieve grenzen
 Verifieer de keten **bonartikel/ED2-identificatie → centrale Catalogus → GS1 en CBS → expliciete synoniemen → Bijna op** zonder product-, bon- of huishoudidentiteiten samen te voegen.
 
-- Twee afzonderlijke Catalogusproducten: AH halfvolle melk en Jumbo halfvolle melk, verschillende bevestigde GTIN's en winkelgebonden artikelcodes.
+- Twee afzonderlijke Catalogusproducten: AH halfvolle melk en Jumbo halfvolle melk, elk **1 liter**, met verschillende bevestigde GTIN's en winkelgebonden artikelcodes. De positieve synoniemproef gebruikt dus gelijke fysieke verpakkingsinhoud; uiteenlopende formaten worden niet zonder extra bewijs als gelijkwaardig geaccepteerd.
 - Een bevestigde ED2-koppeling blijft gekoppeld aan de correcte centrale `global_product_id`; verschillende winkelcodes en GTIN's blijven onderscheiden.
 - **GS1 GPC en CBS zijn twee officiële classificatieautoriteiten.** Alleen ontbrekende classificaties worden na expliciete synoniembevestiging transactioneel overgenomen. Verschillen worden nooit stil overschreven; de bestaande A–B–C-test op elke PR controleert de keuze-overlay en afzonderlijke keuzes.
 - De bestaande groepslogica van Bijna op mag samenvatten als de actuele GS1-/groepsautoriteiten daarvoor voldoende zijn, maar mag daardoor geen nieuwe voorraadmutatie, gebeurtenis of extra huishoudartikel creëren.
