@@ -72,7 +72,8 @@ export default function ExternalDatabases2Page() {
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
-  const [pageRows, setPageRows] = useState([])
+  const [pageIds, setPageIds] = useState([])
+  const [filteredIds, setFilteredIds] = useState([])
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -87,20 +88,40 @@ export default function ExternalDatabases2Page() {
     })
   }, [filters, activeStatusCounter, tableSort, tablePage, activeArea])
 
-  const onPageRowsChange = useCallback((rows) => setPageRows(rows), [])
+  const onPageRowsChange = useCallback((rows) => {
+    const ids = rows.map((row) => row.id)
+    setPageIds((previous) => previous.length === ids.length && previous.every((id, index) => id === ids[index]) ? previous : ids)
+  }, [])
+  const onFilteredRowsChange = useCallback((rows) => {
+    const ids = rows.map((row) => row.id)
+    setFilteredIds((previous) => previous.length === ids.length && previous.every((id, index) => id === ids[index]) ? previous : ids)
+  }, [])
   const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
   const counterFilteredItems = useMemo(() => activeStatusCounter
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
-  const allPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.includes(row.id))
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
 
   function togglePageSelection() {
-    const ids = pageRows.map((row) => row.id)
     setSelectedIds((current) => allPageSelected
-      ? current.filter((id) => !ids.includes(id))
-      : [...new Set([...current, ...ids])])
+      ? current.filter((id) => !pageIds.includes(id))
+      : [...new Set([...current, ...pageIds])])
   }
+
+  function toggleAllFilteredSelection() {
+    setSelectedIds((current) => allFilteredSelected
+      ? current.filter((id) => !filteredIds.includes(id))
+      : [...new Set([...current, ...filteredIds])])
+  }
+
+  const tableColumns = useMemo(() => columns.map((column) => column.key === 'select'
+    ? { ...column, header: <input type="checkbox"
+      aria-label="Alles op huidige pagina" checked={allPageSelected}
+      disabled={!pageIds.length || unlinking || deleting}
+      onChange={togglePageSelection} /> }
+    : column), [allPageSelected, pageIds, unlinking, deleting])
 
   function exportSelected() {
     if (!selectedRows.length) return
@@ -286,13 +307,14 @@ export default function ExternalDatabases2Page() {
           >{label}: {counts[status] || 0}</Button>)}
         </div>
         <div className="rz-mobile-table-select-row">
-          <label><input type="checkbox" checked={allPageSelected} disabled={!pageRows.length || unlinking || deleting}
-            onChange={togglePageSelection} /> Alles op pagina</label>
+          <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
+            onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
         </div>
         <DataTable
-          columns={columns}
+          columns={tableColumns}
           data={counterFilteredItems}
           onPageRowsChange={onPageRowsChange}
+          onFilteredRowsChange={onFilteredRowsChange}
           filterState={filters}
           onFilterChange={(key, value) => { setFilters((previous) => ({ ...previous, [key]: value })); setTablePage(1) }}
           sortState={tableSort}
