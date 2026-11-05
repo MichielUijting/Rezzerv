@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -26,6 +26,7 @@ async function readResponse(response) {
 
 export default function BarcodeImportReview() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { showFeedback } = useAppFeedback()
   const [preview, setPreview] = useState(null)
   const [removed, setRemoved] = useState([])
@@ -59,13 +60,17 @@ export default function BarcodeImportReview() {
           : row.status === 'klaar' ? 'Te beoordelen'
             : row.reason || 'Geblokkeerd',
     })), [preview, removed, approved, failures])
+  // Geblokkeerde voorstellen mogen wel uit de importlijst worden verwijderd,
+  // maar kunnen nooit ter goedkeuring worden aangeboden.
   const selectableIds = useMemo(() => new Set(items.filter((row) => (
-    row.status === 'Te beoordelen' || row.status.startsWith('Niet opgeslagen:')
+    row.status !== 'Goedgekeurd'
   )).map((row) => row.line)), [items])
   const selectedRows = useMemo(() => items.filter((row) => (
     selectedIds.includes(row.line) && selectableIds.has(row.line)
   )), [items, selectedIds, selectableIds])
   const selectedCount = selectedRows.length
+  const canApproveSelection = selectedCount > 0 && selectedRows.every((row) =>
+    row.status === 'Te beoordelen' || row.status.startsWith('Niet opgeslagen:'))
   const selectablePageIds = pageIds.filter((id) => selectableIds.has(id))
   const allPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedIds.includes(id))
   const selectableFilteredIds = filteredIds.filter((id) => selectableIds.has(id))
@@ -170,7 +175,7 @@ export default function BarcodeImportReview() {
   }
 
   function confirmApproval() {
-    if (!selectedCount || busy) return
+    if (!canApproveSelection || busy) return
     const ids = selectedRows.map((row) => row.line)
     showFeedback({
       variant: 'warning',
@@ -190,7 +195,7 @@ export default function BarcodeImportReview() {
         <div className="rz-barcode-import-heading">
           <h2>Barcodes importeren</h2>
           <Button type="button" variant="secondary"
-            onClick={() => navigate('/externe-databases-2', { state: { ed2TableState: null } })}
+            onClick={() => navigate('/externe-databases-2', { state: { ed2TableState: location.state?.ed2TableState || null } })}
             disabled={busy}>Terug naar Artikelbeheer</Button>
         </div>
         <p>Kies het aangevulde CSV-bestand. Alleen nieuwe barcodevoorstellen worden ingelezen.
@@ -247,9 +252,10 @@ export default function BarcodeImportReview() {
             <span>Geselecteerd: {selectedCount}</span>
             <Button type="button" variant="secondary" disabled={!selectedCount || busy}
               onClick={deleteSelected}>Verwijderen</Button>
-            <Button type="button" disabled={!selectedCount || busy}
+            <Button type="button" disabled={!canApproveSelection || busy}
               onClick={confirmApproval}>Goedkeuren</Button>
           </div>
+          {selectedCount && !canApproveSelection ? <p role="status">Goedkeuren is alleen beschikbaar wanneer alle geselecteerde voorstellen een geldige en nog niet gekoppelde barcode hebben. Geblokkeerde voorstellen kun je wel verwijderen.</p> : null}
           {lastBatch ? <p role="status">Laatste verwerking: {lastBatch.succeeded} opgeslagen,
             {lastBatch.failed} niet opgeslagen.</p> : null}
         </> : null}
