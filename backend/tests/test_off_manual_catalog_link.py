@@ -41,7 +41,7 @@ def test_manual_search_scores_article_terms_not_just_retailer_brand():
         "quantity_label": "",
     }
     assert search._manual_relevance_query("Aardbeien Albert Heijn", "ah") == "aardbeien"
-    with patch.object(search, "_query_off", return_value=([
+    with patch.object(search, "_query_off_manual_text", return_value=([
         {"code": "8718452504435", "product_name": "Nederlandse aardbeien", "brands": "Albert Heijn"},
         {"code": "8718452474356", "product_name": "Viande hachée Albert Heijn", "brands": "Albert Heijn"},
     ], "test-provider")):
@@ -66,7 +66,7 @@ def test_manual_exact_barcode_lookup_is_read_only_and_provides_signed_selection(
             'receipt_line_text': 'Halfvolle melk', 'quantity_label': '1 l'}
     lookup = {'status': 'found', 'product': product()}
     with patch.object(search, 'lookup_off_product_by_gtin', return_value=lookup) as exact, \
-            patch.object(search, '_query_off') as fuzzy:
+            patch.object(search, '_query_off_manual_text') as fuzzy:
         result = search.search_off_candidates_for_item(
             {'mode': 'manual', 'gtin': GTIN, 'limit': 20}, item)
     exact.assert_called_once_with(GTIN)
@@ -526,7 +526,7 @@ def test_ah_cervelaat_true_brand_conflict_remains_blocked(brand):
 def test_ah_cervelaat_manual_off_search_accepts_compact_brand_and_signed_proof():
     item = {"receipt_item_id": RECEIPT, "retailer_code": "Albert Heijn",
             "receipt_line_text": "AH CERVELAAT", "quantity_label": ""}
-    with patch.object(search, "_query_off", return_value=([
+    with patch.object(search, "_query_off_manual_text", return_value=([
         {"code": "2323685801969", "product_name": "Cervelaat", "brands": "AlbertHeijn"},
     ], "openfoodfacts")):
         result = search.search_off_candidates_for_item(
