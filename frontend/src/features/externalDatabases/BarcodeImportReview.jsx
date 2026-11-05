@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Button from '../../ui/Button'
 import DataTable from '../../ui/DataTable'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -27,6 +28,17 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
   const [busy, setBusy] = useState(false)
   const [workingLine, setWorkingLine] = useState(null)
   const [error, setError] = useState('')
+  const fileInputRef = useRef(null)
+  useEffect(() => {
+    fileInputRef.current?.focus()
+  }, [])
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !busy && workingLine === null) onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [busy, workingLine, onClose])
 
   async function loadFile(event) {
     const file = event.target.files?.[0]
@@ -35,7 +47,7 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
     setError('')
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.csv') || file.size > 2000000) {
-      setError('Kies het aangevulde CSV-bestand (maximaal 2 MB).')
+      setError('Kies in Downloads het bestand inhuis-artikel-classificeren-artikelen_aangevuld.csv (maximaal 2 MB).')
       return
     }
     setBusy(true)
@@ -88,13 +100,25 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
   const approved = Object.values(decisions).filter((value) => value === 'goedgekeurd').length
   const rejected = Object.values(decisions).filter((value) => value === 'afgewezen').length
 
-  return <section aria-label="Barcodes importeren" className="rz-external-receipt-overview">
-    <h3>Barcodes importeren</h3>
-    <p>Upload de aangevulde CSV. Alleen regels met <strong>Aangevuld: officieel artikelnummer</strong> worden voorgesteld.
-      Beoordeel elk artikel afzonderlijk. Er wordt niets opgeslagen vóór Goedkeuren.</p>
-    <label>CSV-bestand
-      <input type="file" accept=".csv,text/csv" onChange={loadFile} disabled={busy || workingLine !== null} />
-    </label>
+  return createPortal(<div className="rz-modal-backdrop rz-classification-overlay-backdrop rz-barcode-import-backdrop"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget && !busy && workingLine === null) onClose()
+    }}>
+    <section aria-label="Barcodes importeren" role="dialog" aria-modal="true"
+      className="rz-classification-search-overlay rz-barcode-import-dialog" data-testid="barcode-import-dialog">
+      <div className="rz-classification-overlay-heading">
+        <h3>Barcodes importeren</h3>
+        <button type="button" className="rz-barcode-import-dismiss" aria-label="Importvenster sluiten"
+          title="Venster sluiten" disabled={busy || workingLine !== null} onClick={onClose}>×</button>
+      </div>
+      <p>Selecteer <strong>inhuis-artikel-classificeren-artikelen_aangevuld.csv</strong>.
+        Het oorspronkelijke bestand dat eindigt op <strong>_input.csv</strong> bevat geen nieuwe voorstellen.
+        Alleen regels met <strong>Aangevuld: officieel artikelnummer</strong> worden voorgesteld.
+        Beoordeel elk artikel afzonderlijk; pas bij Goedkeuren wordt een barcode opgeslagen.</p>
+      <label className="rz-input-field"><span className="rz-label">CSV-bestand</span>
+        <input ref={fileInputRef} className="rz-input" type="file" accept=".csv,text/csv"
+          onChange={loadFile} disabled={busy || workingLine !== null} />
+      </label>
     {busy ? <p role="status">Bestand controleren...</p> : null}
     {error ? <p role="alert">{error}</p> : null}
     {preview ? <>
@@ -116,6 +140,6 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
           </>}</td>
         </tr>} />
     </> : null}
-    <Button type="button" variant="secondary" onClick={onClose}>Sluiten</Button>
-  </section>
+    </section>
+  </div>, document.body)
 }
