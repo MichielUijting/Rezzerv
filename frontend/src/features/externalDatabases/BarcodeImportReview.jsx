@@ -1,18 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import Button from '../../ui/Button'
+import { useCallback, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import AppShell from '../../app/AppShell'
+import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
+import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import './externalDatabases.css'
 
 const columns = [
-  { key: 'article', label: 'Artikel', sortable: true, filterable: true },
-  { key: 'retailer', label: 'Winkelketen', sortable: true, filterable: true },
-  { key: 'article_number', label: 'Bonartikelnummer' },
-  { key: 'gtin', label: 'Barcode' },
-  { key: 'product_name', label: 'Gevonden product' },
-  { key: 'status', label: 'Status' },
-  { key: 'decision', label: 'Beoordelen' },
+  { key: 'select', label: '', width: 56 },
+  { key: 'article', label: 'Artikel', width: 245, sortable: true, filterable: true },
+  { key: 'retailer', label: 'Winkelketen', width: 150, sortable: true, filterable: true },
+  { key: 'article_number', label: 'Bonartikelnummer', width: 155, sortable: true, filterable: true },
+  { key: 'gtin', label: 'Barcode', width: 155, sortable: true, filterable: true },
+  { key: 'product_name', label: 'Gevonden product', width: 235, sortable: true, filterable: true },
+  { key: 'status', label: 'Status', width: 235, sortable: true, filterable: true },
 ]
 
 async function readResponse(response) {
@@ -21,125 +24,236 @@ async function readResponse(response) {
   return result
 }
 
-export default function BarcodeImportReview({ onClose, onApplied }) {
+export default function BarcodeImportReview() {
+  const navigate = useNavigate()
   const { showFeedback } = useAppFeedback()
   const [preview, setPreview] = useState(null)
-  const [decisions, setDecisions] = useState({})
+  const [removed, setRemoved] = useState([])
+  const [approved, setApproved] = useState([])
+  const [failures, setFailures] = useState({})
+  const [selectedIds, setSelectedIds] = useState([])
+  const [pageIds, setPageIds] = useState([])
+  const [filteredIds, setFilteredIds] = useState([])
+  const [filters, setFilters] = useState({})
+  const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
+  const [page, setPage] = useState(1)
   const [busy, setBusy] = useState(false)
-  const [workingLine, setWorkingLine] = useState(null)
   const [error, setError] = useState('')
-  const fileInputRef = useRef(null)
-  useEffect(() => {
-    fileInputRef.current?.focus()
+  const [lastBatch, setLastBatch] = useState(null)
+
+  const onPageRowsChange = useCallback((rows) => {
+    const ids = rows.map((row) => row.line)
+    setPageIds((previous) => previous.length === ids.length && previous.every((id, i) => id === ids[i]) ? previous : ids)
   }, [])
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape' && !busy && workingLine === null) onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [busy, workingLine, onClose])
+  const onFilteredRowsChange = useCallback((rows) => {
+    const ids = rows.map((row) => row.line)
+    setFilteredIds((previous) => previous.length === ids.length && previous.every((id, i) => id === ids[i]) ? previous : ids)
+  }, [])
+
+  const items = useMemo(() => (preview?.items || [])
+    .filter((row) => !removed.includes(row.line))
+    .map((row) => ({
+      ...row,
+      status: approved.includes(row.line) ? 'Goedgekeurd'
+        : failures[row.line] ? `Niet opgeslagen: ${failures[row.line]}`
+          : row.status === 'klaar' ? 'Te beoordelen'
+            : row.reason || 'Geblokkeerd',
+    })), [preview, removed, approved, failures])
+  const selectableIds = useMemo(() => new Set(items.filter((row) => (
+    row.status === 'Te beoordelen' || row.status.startsWith('Niet opgeslagen:')
+  )).map((row) => row.line)), [items])
+  const selectedRows = useMemo(() => items.filter((row) => (
+    selectedIds.includes(row.line) && selectableIds.has(row.line)
+  )), [items, selectedIds, selectableIds])
+  const selectedCount = selectedRows.length
+  const selectablePageIds = pageIds.filter((id) => selectableIds.has(id))
+  const allPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedIds.includes(id))
+  const selectableFilteredIds = filteredIds.filter((id) => selectableIds.has(id))
+  const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every((id) => selectedIds.includes(id))
+
+  const tableColumns = useMemo(() => columns.map((column) => column.key === 'select' ? ({
+    ...column,
+    renderFilter: () => <input type="checkbox" aria-label="Alles op huidige pagina"
+      checked={allPageSelected} disabled={busy || !selectablePageIds.length}
+      onChange={() => setSelectedIds((current) => allPageSelected
+        ? current.filter((id) => !selectablePageIds.includes(id))
+        : [...new Set([...current, ...selectablePageIds])])} />,
+  }) : column), [allPageSelected, busy, selectablePageIds])
 
   async function loadFile(event) {
     const file = event.target.files?.[0]
     setPreview(null)
-    setDecisions({})
+    setRemoved([])
+    setApproved([])
+    setFailures({})
+    setSelectedIds([])
+    setFilters({})
+    setPage(1)
     setError('')
+    setLastBatch(null)
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.csv') || file.size > 2000000) {
-      setError('Kies in Downloads het bestand inhuis-artikel-classificeren-artikelen_aangevuld.csv (maximaal 2 MB).')
+      setError('Kies het aangevulde CSV-bestand van maximaal 2 MB.')
       return
     }
     setBusy(true)
     try {
-      const csv_text = await file.text()
       const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv_text }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv_text: await file.text() }),
       })
       setPreview(await readResponse(response))
     } catch (err) {
       setError(err.message)
+      showFeedback({ variant: 'error', message: err.message })
     } finally {
       setBusy(false)
     }
   }
 
-  async function decide(row, decision) {
-    if (decisions[row.line] || workingLine !== null) return
-    if (decision === 'afgewezen') {
-      setDecisions((current) => ({ ...current, [row.line]: decision }))
-      return
-    }
-    setWorkingLine(row.line)
-    setError('')
-    try {
-      const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/approve', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receipt_item_id: row.receipt_item_id, retailer: row.retailer,
-          article: row.article, article_number: row.article_number, gtin: row.gtin,
-        }),
-      })
-      const outcome = await readResponse(response)
-      if (!outcome.saved) throw new Error('De barcode is niet opgeslagen.')
-      setDecisions((current) => ({ ...current, [row.line]: 'goedgekeurd' }))
-      onApplied()
-      showFeedback({ variant: 'success', message: `Barcode voor ${row.article} opgeslagen.` })
-    } catch (err) {
-      setError(`Regel ${row.line}: ${err.message}`)
-    } finally {
-      setWorkingLine(null)
-    }
+  function deleteSelected() {
+    if (!selectedCount || busy) return
+    const ids = selectedRows.map((row) => row.line)
+    showFeedback({
+      variant: 'warning',
+      title: 'Importvoorstellen verwijderen',
+      message: `${ids.length} geselecteerde voorstellen uit deze importlijst verwijderen?`,
+      detail: 'Er worden geen artikelen, barcodes of andere gegevens uit de database verwijderd.',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'barcode-import-delete-confirmation',
+      onPrimaryAction: () => {
+        setRemoved((current) => [...new Set([...current, ...ids])])
+        setSelectedIds((current) => current.filter((id) => !ids.includes(id)))
+        setLastBatch(null)
+      },
+    })
   }
 
-  const items = (preview?.items || []).map((row) => ({
-    ...row,
-    status: decisions[row.line] || (row.status === 'klaar' ? 'Te beoordelen' : row.reason),
-  }))
-  const approved = Object.values(decisions).filter((value) => value === 'goedgekeurd').length
-  const rejected = Object.values(decisions).filter((value) => value === 'afgewezen').length
+  async function approveSelected(ids) {
+    setBusy(true)
+    setLastBatch(null)
+    setError('')
+    let succeeded = 0
+    let failed = 0
+    for (const id of ids) {
+      const row = selectedRows.find((item) => item.line === id)
+      if (!row) continue
+      try {
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receipt_item_id: row.receipt_item_id, retailer: row.retailer,
+            article: row.article, article_number: row.article_number, gtin: row.gtin,
+          }),
+        })
+        const result = await readResponse(response)
+        if (!result.saved) throw new Error('De barcode is niet opgeslagen.')
+        setApproved((current) => [...current, id])
+        setSelectedIds((current) => current.filter((currentId) => currentId !== id))
+        succeeded += 1
+      } catch (err) {
+        setFailures((current) => ({ ...current, [id]: err.message }))
+        failed += 1
+      }
+    }
+    setLastBatch({ succeeded, failed })
+    setBusy(false)
+    showFeedback({
+      variant: failed ? 'warning' : 'success',
+      title: 'Importresultaat',
+      message: `${succeeded} barcodes opgeslagen, ${failed} niet opgeslagen.`,
+      detail: failed ? 'Mislukte regels blijven in de tabel staan met hun foutmelding.' : '',
+    })
+  }
 
-  return createPortal(<div className="rz-modal-backdrop rz-classification-overlay-backdrop rz-barcode-import-backdrop"
-    onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !busy && workingLine === null) onClose()
-    }}>
-    <section aria-label="Barcodes importeren" role="dialog" aria-modal="true"
-      className="rz-classification-search-overlay rz-barcode-import-dialog" data-testid="barcode-import-dialog">
-      <div className="rz-classification-overlay-heading">
-        <h3>Barcodes importeren</h3>
-        <button type="button" className="rz-barcode-import-dismiss" aria-label="Importvenster sluiten"
-          title="Venster sluiten" disabled={busy || workingLine !== null} onClick={onClose}>×</button>
+  function confirmApproval() {
+    if (!selectedCount || busy) return
+    const ids = selectedRows.map((row) => row.line)
+    showFeedback({
+      variant: 'warning',
+      title: 'Barcodes goedkeuren',
+      message: `${ids.length} geselecteerde barcodes opslaan in Inhuis?`,
+      detail: 'Alleen deze geselecteerde regels worden verwerkt. Iedere barcode wordt opnieuw gecontroleerd op rechten, artikelidentiteit en bestaande koppelingen.',
+      primaryActionLabel: 'Goedkeuren',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'barcode-import-approve-confirmation',
+      onPrimaryAction: () => approveSelected(ids),
+    })
+  }
+
+  return <AppShell title="Barcodes importeren" showExit={false}>
+    <ScreenCard fullWidth>
+      <div className="rz-barcode-import-page">
+        <div className="rz-barcode-import-heading">
+          <h2>Barcodes importeren</h2>
+          <Button type="button" variant="secondary"
+            onClick={() => navigate('/externe-databases-2', { state: { ed2TableState: null } })}
+            disabled={busy}>Terug naar Artikelbeheer</Button>
+        </div>
+        <p>Kies het aangevulde CSV-bestand. Alleen nieuwe barcodevoorstellen worden ingelezen.
+          Goedkeuren schrijft de geselecteerde barcodes naar Inhuis; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
+        <label className="rz-input-field">
+          <span className="rz-label">CSV-bestand</span>
+          <input type="file" className="rz-input" accept=".csv,text/csv"
+            onChange={loadFile} disabled={busy} />
+        </label>
+        {busy ? <p role="status">Import verwerken...</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
+        {preview ? <>
+          <p role="status">Ingelezen: {preview.total} · Overgeslagen: {preview.skipped} ·
+            In importlijst: {items.length} · Geblokkeerd: {items.filter((row) => row.status !== 'Te beoordelen'
+              && row.status !== 'Goedgekeurd' && !row.status.startsWith('Niet opgeslagen:')).length} ·
+            Goedgekeurd: {approved.length} · Geselecteerd: {selectedCount}</p>
+          <div className="rz-mobile-table-select-row">
+            <label><input type="checkbox" aria-label="Alle gefilterde importvoorstellen selecteren"
+              checked={allFilteredSelected} disabled={busy || !selectableFilteredIds.length}
+              onChange={() => setSelectedIds((current) => allFilteredSelected
+                ? current.filter((id) => !selectableFilteredIds.includes(id))
+                : [...new Set([...current, ...selectableFilteredIds])])} />
+              Alle artikelen op alle pagina’s</label>
+          </div>
+          <DataTable
+            columns={tableColumns}
+            data={items}
+            getRowKey={(row) => row.line}
+            dataTestId="barcode-import-review-table"
+            filterState={filters}
+            onFilterChange={(key, value) => { setFilters((current) => ({ ...current, [key]: value })); setPage(1) }}
+            sortState={sort}
+            onSortChange={(next) => { setSort(next); setPage(1) }}
+            pageState={page}
+            onPageChange={setPage}
+            onPageRowsChange={onPageRowsChange}
+            onFilteredRowsChange={onFilteredRowsChange}
+            emptyMessage="Geen barcodevoorstellen voor deze filters."
+            renderRow={(row) => <tr key={row.line}>
+              <td><input type="checkbox" aria-label={`Selecteer ${row.article} (regel ${row.line})`}
+                checked={selectedIds.includes(row.line)}
+                disabled={busy || !selectableIds.has(row.line)}
+                onChange={() => setSelectedIds((current) => current.includes(row.line)
+                  ? current.filter((id) => id !== row.line) : [...current, row.line])} /></td>
+              <td>{row.article}</td>
+              <td>{row.retailer}</td>
+              <td>{row.article_number}</td>
+              <td>{row.gtin}</td>
+              <td title={row.source}>{row.product_name || row.source}</td>
+              <td title={row.reason}>{row.status}</td>
+            </tr>}
+          />
+          <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
+            <span>Geselecteerd: {selectedCount}</span>
+            <Button type="button" variant="secondary" disabled={!selectedCount || busy}
+              onClick={deleteSelected}>Verwijderen</Button>
+            <Button type="button" disabled={!selectedCount || busy}
+              onClick={confirmApproval}>Goedkeuren</Button>
+          </div>
+          {lastBatch ? <p role="status">Laatste verwerking: {lastBatch.succeeded} opgeslagen,
+            {lastBatch.failed} niet opgeslagen.</p> : null}
+        </> : null}
       </div>
-      <p>Selecteer <strong>inhuis-artikel-classificeren-artikelen_aangevuld.csv</strong>.
-        Het oorspronkelijke bestand dat eindigt op <strong>_input.csv</strong> bevat geen nieuwe voorstellen.
-        Alleen regels met <strong>Aangevuld: officieel artikelnummer</strong> worden voorgesteld.
-        Beoordeel elk artikel afzonderlijk; pas bij Goedkeuren wordt een barcode opgeslagen.</p>
-      <label className="rz-input-field"><span className="rz-label">CSV-bestand</span>
-        <input ref={fileInputRef} className="rz-input" type="file" accept=".csv,text/csv"
-          onChange={loadFile} disabled={busy || workingLine !== null} />
-      </label>
-    {busy ? <p role="status">Bestand controleren...</p> : null}
-    {error ? <p role="alert">{error}</p> : null}
-    {preview ? <>
-      <p role="status">Regels: {preview.total} · Ter beoordeling: {preview.ready} ·
-        Geblokkeerd: {preview.blocked} · Overgeslagen: {preview.skipped} ·
-        Goedgekeurd: {approved} · Afgewezen: {rejected}</p>
-      <DataTable data={items} columns={columns} getRowKey={(row) => row.line}
-        dataTestId="barcode-import-review-table"
-        defaultSort={{ key: 'article', direction: 'asc' }}
-        renderRow={(row) => <tr key={row.line}>
-          <td>{row.article}</td><td>{row.retailer}</td><td>{row.article_number}</td>
-          <td>{row.gtin}</td><td title={row.source}>{row.product_name || row.source}</td>
-          <td>{row.status}</td>
-          <td>{row.reason ? 'Niet beschikbaar' : decisions[row.line] || <>
-            <Button type="button" disabled={workingLine !== null}
-              onClick={() => decide(row, 'goedgekeurd')}>Goedkeuren</Button>{' '}
-            <Button type="button" variant="secondary" disabled={workingLine !== null}
-              onClick={() => decide(row, 'afgewezen')}>Afwijzen</Button>
-          </>}</td>
-        </tr>} />
-    </> : null}
-    </section>
-  </div>, document.body)
+    </ScreenCard>
+  </AppShell>
 }
