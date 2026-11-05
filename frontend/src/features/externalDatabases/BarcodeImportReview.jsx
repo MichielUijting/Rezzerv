@@ -67,6 +67,8 @@ export default function BarcodeImportReview() {
     selectedIds.includes(row.line) && selectableIds.has(row.line)
   )), [items, selectedIds, selectableIds])
   const selectedCount = selectedRows.length
+  const selectedOnPageCount = selectedRows.filter((row) => pageIds.includes(row.line)).length
+  const selectedElsewhereCount = selectedCount - selectedOnPageCount
   const canApproveSelection = selectedCount > 0 && selectedRows.every((row) =>
     row.status === 'Te beoordelen' || row.status.startsWith('Niet opgeslagen:'))
   const selectablePageIds = pageIds.filter((id) => selectableIds.has(id))
@@ -205,7 +207,7 @@ export default function BarcodeImportReview() {
           <p role="status">Ingelezen: {preview.total} · Overgeslagen: {preview.skipped} ·
             In importlijst: {items.length} · Geblokkeerd: {items.filter((row) => row.status !== 'Te beoordelen'
               && row.status !== 'Goedgekeurd' && !row.status.startsWith('Niet opgeslagen:')).length} ·
-            Goedgekeurd: {approved.length} · Geselecteerd: {selectedCount}</p>
+            Goedgekeurd: {approved.length}</p>
           <div className="rz-mobile-table-select-row">
             <label><input type="checkbox" aria-label="Alle gefilterde importvoorstellen selecteren"
               checked={allFilteredSelected} disabled={busy || !selectableFilteredIds.length}
@@ -243,7 +245,10 @@ export default function BarcodeImportReview() {
             </tr>}
           />
           <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
-            <span>Geselecteerd: {selectedCount}</span>
+            <span data-testid="barcode-import-selection-count">Op deze pagina geselecteerd: {selectedOnPageCount} ·
+              Elders geselecteerd: {selectedElsewhereCount} · Totaal: {selectedCount}</span>
+            <Button type="button" variant="secondary" disabled={!selectedCount || busy}
+              onClick={() => setSelectedIds([])}>Selectie wissen</Button>
             <Button type="button" variant="secondary" disabled={!selectedCount || busy}
               onClick={deleteSelected}>Verwijderen</Button>
             <Button type="button" disabled={!canApproveSelection || busy}
