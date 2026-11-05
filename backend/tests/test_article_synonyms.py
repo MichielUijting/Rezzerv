@@ -1247,6 +1247,9 @@ class StoreTest(unittest.TestCase):
                 VALUES ('10000025', 'nl', TRUE, 'Halfvolle melk',
                         'Semi-skimmed milk', 'test')
             """))
+            # AH has an explicitly confirmed CBS code; Jumbo must inherit
+            # only after the independent central synonym confirmation.
+            self._set_cbs(conn, "a", "011420")
             conn.execute(text("""
                 INSERT INTO product_inventory_groups
                   (inventory_group_key, gpc_brick_code, source, active, display_name)
@@ -1344,6 +1347,12 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({pid: row["linked_store_count"] for pid, row in before.items()},
                          {"a": 0, "b": 0})
         self.assertEqual({row["gpc_brick_code"] for row in before.values()}, {"10000025"})
+        with self.engine.connect() as conn:
+            cbs_before = dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code
+                FROM global_product_cbs_classifications
+            """)).all())
+        self.assertEqual(cbs_before, {"a": "011420"})
 
         def project_almost_out():
             with self.engine.connect() as conn:
@@ -1380,12 +1389,38 @@ class StoreTest(unittest.TestCase):
                 "right_product_id": candidate["right"]["id"],
                 "fingerprint": candidate["fingerprint"],
             }
-            self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
-                             {"linked": 1, "already_linked": 0})
+            linked = service.confirm_pairs(conn, [selection], "chain-test-admin")
+            self.assertEqual(linked["linked"], 1)
+            self.assertEqual(linked["already_linked"], 0)
+            self.assertEqual(linked["classification_inheritance"]["cbs_inherited"], 1)
+            self.assertEqual(linked["classification_inheritance"]["gpc_inherited"], 0)
+            self.assertEqual(linked["classification_inheritance"]["conflicts"], [])
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code
+                FROM global_product_cbs_classifications
+            """)).all()), {"a": "011420", "b": "011420"})
+            # The classification audit is tied to the correct distinct product
+            # identities; not to receipt text, GTIN equality or household stock.
+            events = [dict(row) for row in conn.execute(text("""
+                SELECT source_product_id, target_product_id, classification_system,
+                       classification_code, status
+                FROM article_classification_sync_events
+            """)).mappings()]
+            self.assertEqual(events, [{
+                "source_product_id": "a", "target_product_id": "b",
+                "classification_system": "CBS",
+                "classification_code": "011420", "status": "processed",
+            }])
         with self.engine.begin() as conn:
             self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})
             self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
                              {"linked": 0, "already_linked": 1})
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_history"
+            )).scalar_one(), 1)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 1)
         with patch.object(catalog_routes, "engine", self.engine):
             after = {pid: catalog_routes._catalog_row(pid) for pid in ("a", "b")}
         self.assertEqual({pid: row["linked_store_count"] for pid, row in after.items()},
@@ -1400,6 +1435,17 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(sum(float(row["quantity"]) for row in
                              projections_after[0]["inventory_rows"]), 2.0)
         self.assertEqual(float(stock_after), float(stock_before))
+        self.assertEqual(float(stock_after), 3.0)
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM external_article_product_links"
+            )).scalar_one(), 2)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM household_articles"
+            )).scalar_one(), 2)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM inventory"
+            )).scalar_one(), 2)
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(
                 text("SELECT COUNT(*) FROM inventory_events")
