@@ -90,7 +90,7 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
 
   return <section aria-label="Barcodes importeren" className="rz-external-receipt-overview">
     <h3>Barcodes importeren</h3>
-    <p>Upload de aangevulde CSV. Alleen regels met <strong>Nieuw aangevuld</strong> worden voorgesteld.
+    <p>Upload de aangevulde CSV. Alleen regels met <strong>Aangevuld: officieel artikelnummer</strong> worden voorgesteld.
       Beoordeel elk artikel afzonderlijk. Er wordt niets opgeslagen vóór Goedkeuren.</p>
     <label>CSV-bestand
       <input type="file" accept=".csv,text/csv" onChange={loadFile} disabled={busy || workingLine !== null} />
