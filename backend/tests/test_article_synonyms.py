@@ -1323,33 +1323,82 @@ class StoreTest(unittest.TestCase):
                         'AH Halfvolle melk', 7, 'active')
             """), {"household": other_household_id})
 
-        receipt_sources = [
-            {
-                "receipt_item_id": "receipt-table-line:chain-ah",
-                "receipt_line_text": "AH Halfvolle melk",
-                "retailer_code": "ah",
-                "external_article_code": "823326",
-                "quantity_label": "1 l",
-            },
-            {
-                "receipt_item_id": "receipt-table-line:chain-jumbo",
-                "receipt_line_text": "Jumbo Halfvolle melk",
-                "retailer_code": "jumbo",
-                "external_article_code": "394270",
-                "quantity_label": "1 l",
-            },
-        ]
-        # Only the receipt source is synthetic: ED2's confirmed-link resolver,
-        # completeness guard, Catalogus joins and almost-out grouping are real.
-        with self.engine.connect() as conn, patch.object(
-            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
-        ):
+        # Use the actual canonical source query for receipt_table_lines.
+        # These are synthetic receipts inside this test's disposable schema,
+        # not existing user receipts, OCR, or live retailer imports.
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE purchase_import_batches (
+                    id TEXT PRIMARY KEY, raw_payload TEXT, source_type TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE purchase_import_lines (
+                    id TEXT PRIMARY KEY, batch_id TEXT,
+                    external_article_code TEXT, article_name_raw TEXT,
+                    brand_raw TEXT, quantity_raw NUMERIC, unit_raw TEXT,
+                    external_line_ref TEXT, created_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE raw_receipts (
+                    id TEXT PRIMARY KEY, household_id TEXT, deleted_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE receipt_tables (
+                    id TEXT PRIMARY KEY, raw_receipt_id TEXT, household_id TEXT,
+                    store_chain TEXT, store_name TEXT, deleted_at TIMESTAMPTZ,
+                    workflow_state TEXT, created_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE receipt_table_lines (
+                    id TEXT PRIMARY KEY, receipt_table_id TEXT,
+                    corrected_raw_label TEXT, normalized_label TEXT, raw_label TEXT,
+                    external_article_code TEXT, quantity NUMERIC, unit TEXT,
+                    is_deleted BOOLEAN, line_role TEXT,
+                    inventory_eligible BOOLEAN, line_index INTEGER
+                )
+            """)
+            for retailer, receipt_name, article_code, line_id in (
+                ("ah", "AH Halfvolle melk", "823326", "chain-ah"),
+                ("jumbo", "Jumbo Halfvolle melk", "394270", "chain-jumbo"),
+            ):
+                conn.execute(text("""
+                    INSERT INTO raw_receipts (id, household_id)
+                    VALUES (:raw_id, :household)
+                """), {"raw_id": "raw-" + line_id, "household": household_id})
+                conn.execute(text("""
+                    INSERT INTO receipt_tables
+                        (id, raw_receipt_id, household_id, store_chain,
+                         store_name, workflow_state, created_at)
+                    VALUES (:receipt, :raw_id, :household, :retailer,
+                            :retailer, 'active', CURRENT_TIMESTAMP)
+                """), {"receipt": "receipt-" + line_id, "raw_id": "raw-" + line_id,
+                       "household": household_id, "retailer": retailer})
+                conn.execute(text("""
+                    INSERT INTO receipt_table_lines
+                        (id, receipt_table_id, raw_label, external_article_code,
+                         quantity, unit, is_deleted, line_role,
+                         inventory_eligible, line_index)
+                    VALUES (:line, :receipt, :name, :article_code,
+                            1, 'l', FALSE, 'product', TRUE, 0)
+                """), {"line": line_id, "receipt": "receipt-" + line_id,
+                       "name": receipt_name, "article_code": article_code})
+
+        # The receipt rows are synthetic, but ED2 now executes its *actual*
+        # production receipt-table SELECT and central identity resolver.
+        with self.engine.connect() as conn:
             overview = ed2.list_all_external_articles(conn=conn)
         self.assertEqual(overview["counts"], {
             "unlinked": 0, "classification_pending": 0, "linked": 2,
         })
         rows = {row["retailer_code"]: row for row in overview["items"]}
         self.assertEqual(set(rows), {"ah", "jumbo"})
+        self.assertEqual({row["id"] for row in rows.values()}, {
+            "receipt-table-line:chain-ah", "receipt-table-line:chain-jumbo",
+        })
         self.assertEqual(rows["ah"]["receipt_article_number"], "823326")
         self.assertEqual(rows["jumbo"]["receipt_article_number"], "394270")
         self.assertEqual(rows["ah"]["catalog_product_id"], "a")
@@ -1504,9 +1553,7 @@ class StoreTest(unittest.TestCase):
             conn.execute(text("""
                 DELETE FROM product_group_memberships WHERE global_product_id='b'
             """))
-        with self.engine.connect() as conn, patch.object(
-            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
-        ):
+        with self.engine.connect() as conn:
             downgraded_ed2 = ed2.list_all_external_articles(conn=conn)
         statuses = {row["retailer_code"]: row["link_status"]
                     for row in downgraded_ed2["items"]}
