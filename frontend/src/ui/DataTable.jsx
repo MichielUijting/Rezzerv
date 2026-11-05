@@ -60,6 +60,7 @@ export default function DataTable({
   pageSize = 10,
   paginationActions = null,
   onPageRowsChange = null,
+  onFilteredRowsChange = null,
   pageState = null,
   onPageChange = null,
   pageReady = true,
@@ -161,6 +162,9 @@ export default function DataTable({
   useEffect(() => {
     if (typeof onPageRowsChange === 'function') onPageRowsChange(displayData)
   }, [displayData, onPageRowsChange])
+  useEffect(() => {
+    if (typeof onFilteredRowsChange === 'function') onFilteredRowsChange(sortedData)
+  }, [sortedData, onFilteredRowsChange])
 
   const wrapperClasses = ['rz-data-table-wrapper', wrapperClassName].filter(Boolean).join(' ')
   const tableClasses = [
