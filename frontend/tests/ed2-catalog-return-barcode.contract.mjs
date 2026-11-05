@@ -22,6 +22,7 @@ const scan = read('src/features/externalDatabases/Ed2BarcodeScanner.jsx')
 const scannerModal = read('src/features/barcodes/BarcodeScannerModal.jsx')
 const search = read('src/features/externalDatabases/OffManualSearchPage.jsx')
 const table = read('src/ui/DataTable.jsx')
+const barcodeImport = read('src/features/externalDatabases/BarcodeImportReview.jsx')
 
 for (const text of [catalog, mobile, ed2]) {
   assert.match(text, /replace: true/)
@@ -92,6 +93,25 @@ assert.doesNotMatch(scan, /\/api\/(?:purchases|inventory|catalog)/)
 assert.doesNotMatch(scan, /fetchJsonWithAuth/)
 assert.match(manual, /receipt_item_id: item.id, gtin: barcode.trim\(\)/)
 
+// The Superuser barcode import uses its own guarded route and canonical DataTable.
+const router = read('src/app/router/AppRouter.jsx')
+assert.match(ed2, /isPlatformSuperuser\s*\?\s*<Button/)
+assert.match(ed2, /externe-databases-2\/importeren/)
+assert.match(router, /path: '\/externe-databases-2\/importeren'/)
+assert.match(router, /<ProtectedSuperuser><BarcodeImportReview\s*\/><\/ProtectedSuperuser>/)
+assert.match(barcodeImport, /<AppShell title="Barcodes importeren"/)
+assert.match(barcodeImport, /<DataTable/)
+assert.match(barcodeImport, /dataTestId="barcode-import-review-table"/)
+assert.match(barcodeImport, /filterState=\{filters\}/)
+assert.match(barcodeImport, /onPageRowsChange=\{onPageRowsChange\}/)
+assert.match(barcodeImport, /onFilteredRowsChange=\{onFilteredRowsChange\}/)
+assert.match(barcodeImport, /Selecteer \$\{row\.article\}/)
+assert.match(barcodeImport, /onClick=\{deleteSelected\}>Verwijderen<\/Button>/)
+assert.match(barcodeImport, /onClick=\{confirmApproval\}>Goedkeuren<\/Button>/)
+assert.match(barcodeImport, /showFeedback\(\{/)
+assert.doesNotMatch(barcodeImport, /createPortal\(/)
+assert.doesNotMatch(barcodeImport, /Terug naar Artikelbeheer/)
+assert.doesNotMatch(barcodeImport, /Selectie wissen/)
 console.log('ED2/Catalogus barcode, camera en OFF-opslagcontract OK')
 
 // Exercise the production processed-frame dispatch with a simulated decoded EAN.

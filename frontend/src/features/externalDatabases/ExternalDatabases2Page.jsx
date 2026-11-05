@@ -350,6 +350,9 @@ export default function ExternalDatabases2Page() {
           <span>Geselecteerd: {selectedIds.length}</span>
           <Button type="button" variant="secondary" disabled={!selectedRows.length || unlinking || deleting}
             onClick={exportSelected}>Exporteren</Button>
+          {isPlatformSuperuser ? <Button type="button" variant="secondary"
+            onClick={() => navigate('/externe-databases-2/importeren',
+              { state: { ed2TableState: returnState } })}>Importeren</Button> : null}
           <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"

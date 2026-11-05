@@ -17,6 +17,7 @@ from fastapi import APIRouter
 
 from app.api.article_group_routes import router as article_group_router
 from app.api.barcode_routes import router as barcode_router
+from app.api.barcode_import_routes import router as barcode_import_router
 from app.api.cbs_classification_routes import router as cbs_classification_router
 from app.api.consumer_account_routes import router as consumer_account_router
 from app.api.day_article_routes import router as day_article_router
@@ -99,6 +100,7 @@ install_server_session_suspension_guard()
 api_router = APIRouter()
 api_router.include_router(article_group_router)
 api_router.include_router(barcode_router)
+api_router.include_router(barcode_import_router)
 api_router.include_router(cbs_classification_router)
 api_router.include_router(consumer_account_router)
 api_router.include_router(day_article_router)

@@ -639,3 +639,10 @@
 }
 .rz-classification-overlay-row:disabled { opacity: .6; cursor: wait; }
 .rz-classification-overlay-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* Superuser barcode-import review uses the regular full-page Inhuis table layout. */
+.rz-barcode-import-page { display: flex; flex-direction: column; gap: 12px; }
+.rz-barcode-import-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rz-barcode-import-heading h2 { margin: 0; }
+.rz-barcode-import-page > .rz-input-field { max-width: min(560px, 100%); }
+.rz-barcode-import-page .rz-external-ed2-bulk-actions { justify-content: flex-end; }
