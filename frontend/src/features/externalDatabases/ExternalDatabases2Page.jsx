@@ -12,7 +12,6 @@ import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
-import BarcodeImportReview from './BarcodeImportReview'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -78,7 +77,6 @@ export default function ExternalDatabases2Page() {
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
@@ -353,15 +351,14 @@ export default function ExternalDatabases2Page() {
           <Button type="button" variant="secondary" disabled={!selectedRows.length || unlinking || deleting}
             onClick={exportSelected}>Exporteren</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
-            onClick={() => setImportOpen((current) => !current)}>Importeren</Button> : null}
+            onClick={() => navigate('/externe-databases-2/importeren',
+              { state: { ed2TableState: returnState } })}>Importeren</Button> : null}
           <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
             disabled={!selectedRows.length || selectedRows.length > 100 || unlinking || deleting}
             onClick={confirmDeleteSelected}>{deleting ? 'Verwijderen...' : 'Verwijderen'}</Button> : null}
         </div>
-        {isPlatformSuperuser && importOpen ? <BarcodeImportReview
-          onClose={() => setImportOpen(false)} onApplied={() => setRefreshVersion((current) => current + 1)} /> : null}
         {selectedRows.length > 0 && !canUnlink ? <p className="rz-external-databases-muted">
           Ontkoppelen is alleen mogelijk voor geselecteerde OFF-koppelingen (maximaal 100 tegelijk).
           Exporteren kan voor alle geselecteerde artikelen.
