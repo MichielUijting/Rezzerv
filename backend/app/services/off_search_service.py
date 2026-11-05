@@ -129,10 +129,19 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "mutated": False,
         }
 
+    # GS1 GTIN-14 with a leading zero encodes the same GTIN-13.
+    # OFF can index that product under its 13-digit EAN. Never broaden
+    # a lookup to unrelated codes or accept a different returned GTIN.
+    off_lookup_gtin = (
+        normalized_gtin[1:]
+        if len(normalized_gtin) == 14 and normalized_gtin.startswith("0")
+        else normalized_gtin
+    )
+
     fields = ",".join(OFF_FIELDS)
     url = (
         "https://world.openfoodfacts.org/api/v2/product/"
-        f"{urllib.parse.quote(normalized_gtin)}.json"
+        f"{urllib.parse.quote(off_lookup_gtin)}.json"
         f"?fields={urllib.parse.quote(fields)}"
     )
     request = urllib.request.Request(
@@ -184,7 +193,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
         if character.isdigit()
     )
 
-    if returned_gtin != normalized_gtin:
+    if returned_gtin != off_lookup_gtin:
         return {
             "ok": True,
             "status": "not_found",
@@ -196,9 +205,9 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
     return {
         "ok": True,
         "status": "found",
-        "gtin": normalized_gtin,
+        "gtin": off_lookup_gtin,
         "product": {
-            "gtin": normalized_gtin,
+            "gtin": off_lookup_gtin,
             "product_name": _text(
                 product.get("product_name_nl")
                 or product.get("product_name")
@@ -481,6 +490,35 @@ def _query_off(query: str, page_size: int) -> tuple[list[dict[str, Any]], str]:
         "Open Food Facts is niet beschikbaar"
         + (f" ({'; '.join(errors)})" if errors else "")
     )
+
+
+def _query_off_manual_text(query: str, page_size: int) -> tuple[list[dict[str, Any]], str]:
+    """Combine both OFF full-text providers before applying relevance filters.
+
+    An upstream provider returning unrelated hits must not suppress a relevant
+    candidate from the other provider. This read-only search never confirms a
+    link or weakens manual candidate identity checks.
+    """
+    products: list[dict[str, Any]] = []
+    providers: list[str] = []
+    errors: list[str] = []
+
+    for provider in (_query_search_a_licious, _query_legacy_cgi):
+        for attempt in (1, 2):
+            try:
+                hits, provider_name = provider(query, page_size)
+                providers.append(provider_name)
+                products.extend(hits)
+                break
+            except Exception as exc:
+                errors.append(f"{provider.__name__} poging {attempt}: {exc}")
+
+    if not providers:
+        raise OffSearchError(
+            "Open Food Facts is niet beschikbaar"
+            + (f" ({'; '.join(errors)})" if errors else "")
+        )
+    return products, "+".join(providers)
 
 
 def _name_score(query: str, product_name: str) -> float:
@@ -956,7 +994,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
                     candidate_name=product.get("product_name"),
                 )
                 candidate = {
-                    "gtin": requested_gtin,
+                    "gtin": product["gtin"],
                     "product_name": product["product_name"],
                     "brand": product.get("brand", ""),
                     "quantity": product.get("quantity", ""),
@@ -983,7 +1021,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
         if not query:
             raise OffSearchError("query of gtin is verplicht bij handmatig zoeken")
 
-        raw_products, provider = _query_off(query, max(limit * 3, 10))
+        raw_products, provider = _query_off_manual_text(query, max(limit * 3, 10))
         relevance_query = _manual_relevance_query(query, item.get('retailer_code', ''))
         best_by_gtin: dict[str, dict[str, Any]] = {}
         for product in raw_products:
