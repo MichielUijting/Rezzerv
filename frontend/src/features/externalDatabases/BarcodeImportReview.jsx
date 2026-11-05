@@ -39,8 +39,6 @@ export default function BarcodeImportReview() {
   const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [lastBatch, setLastBatch] = useState(null)
 
   const onPageRowsChange = useCallback((rows) => {
     const ids = rows.map((row) => row.line)
@@ -94,24 +92,31 @@ export default function BarcodeImportReview() {
     setSelectedIds([])
     setFilters({})
     setPage(1)
-    setError('')
-    setLastBatch(null)
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.csv') || file.size > 2000000) {
-      setError('Kies het aangevulde CSV-bestand van maximaal 2 MB.')
+      showFeedback({ variant: 'error', title: 'Ongeldig importbestand',
+        message: 'Kies het aangevulde CSV-bestand van maximaal 2 MB.' })
       return
     }
     setBusy(true)
+    showFeedback({ variant: 'progress', title: 'Barcodes inlezen',
+      message: 'Het importbestand wordt gecontroleerd.', dismissMode: 'blocked',
+      key: 'barcode-import-loading', dedupeMs: 0 })
     try {
       const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv_text: await file.text() }),
       })
-      setPreview(await readResponse(response))
+      const result = await readResponse(response)
+      setPreview(result)
+      showFeedback({ variant: 'success', title: 'Importbestand ingelezen',
+        message: `${result.items.length} barcodevoorstellen ingelezen.`,
+        detail: `${result.ready} te beoordelen · ${result.blocked} geblokkeerd · ${result.skipped} overgeslagen.`,
+        dedupeMs: 0 })
     } catch (err) {
-      setError(err.message)
-      showFeedback({ variant: 'error', message: err.message })
+      showFeedback({ variant: 'error', title: 'Importbestand niet ingelezen',
+        message: err.message, dedupeMs: 0 })
     } finally {
       setBusy(false)
     }
@@ -131,15 +136,15 @@ export default function BarcodeImportReview() {
       onPrimaryAction: () => {
         setRemoved((current) => [...new Set([...current, ...ids])])
         setSelectedIds((current) => current.filter((id) => !ids.includes(id)))
-        setLastBatch(null)
       },
     })
   }
 
   async function approveSelected(ids) {
     setBusy(true)
-    setLastBatch(null)
-    setError('')
+    showFeedback({ variant: 'progress', title: 'Barcodes verwerken',
+      message: `${ids.length} geselecteerde barcodes worden gecontroleerd en opgeslagen.`,
+      dismissMode: 'blocked', key: 'barcode-import-processing', dedupeMs: 0 })
     let succeeded = 0
     let failed = 0
     for (const id of ids) {
@@ -164,7 +169,6 @@ export default function BarcodeImportReview() {
         failed += 1
       }
     }
-    setLastBatch({ succeeded, failed })
     setBusy(false)
     showFeedback({
       variant: failed ? 'warning' : 'success',
@@ -176,17 +180,9 @@ export default function BarcodeImportReview() {
 
   function confirmApproval() {
     if (!canApproveSelection || busy) return
+    // The Goedkeuren button itself is the explicit decision. No redundant confirmation.
     const ids = selectedRows.map((row) => row.line)
-    showFeedback({
-      variant: 'warning',
-      title: 'Barcodes goedkeuren',
-      message: `${ids.length} geselecteerde barcodes opslaan in Inhuis?`,
-      detail: 'Alleen deze geselecteerde regels worden verwerkt. Iedere barcode wordt opnieuw gecontroleerd op rechten, artikelidentiteit en bestaande koppelingen.',
-      primaryActionLabel: 'Goedkeuren',
-      secondaryActionLabel: 'Annuleren',
-      testId: 'barcode-import-approve-confirmation',
-      onPrimaryAction: () => approveSelected(ids),
-    })
+    void approveSelected(ids)
   }
 
   return <AppShell title="Barcodes importeren" showExit={false}>
@@ -205,8 +201,6 @@ export default function BarcodeImportReview() {
           <input type="file" className="rz-input" accept=".csv,text/csv"
             onChange={loadFile} disabled={busy} />
         </label>
-        {busy ? <p role="status">Import verwerken...</p> : null}
-        {error ? <p role="alert">{error}</p> : null}
         {preview ? <>
           <p role="status">Ingelezen: {preview.total} · Overgeslagen: {preview.skipped} ·
             In importlijst: {items.length} · Geblokkeerd: {items.filter((row) => row.status !== 'Te beoordelen'
@@ -255,9 +249,6 @@ export default function BarcodeImportReview() {
             <Button type="button" disabled={!canApproveSelection || busy}
               onClick={confirmApproval}>Goedkeuren</Button>
           </div>
-          {selectedCount && !canApproveSelection ? <p role="status">Goedkeuren is alleen beschikbaar wanneer alle geselecteerde voorstellen een geldige en nog niet gekoppelde barcode hebben. Geblokkeerde voorstellen kun je wel verwijderen.</p> : null}
-          {lastBatch ? <p role="status">Laatste verwerking: {lastBatch.succeeded} opgeslagen,
-            {lastBatch.failed} niet opgeslagen.</p> : null}
         </> : null}
       </div>
     </ScreenCard>
