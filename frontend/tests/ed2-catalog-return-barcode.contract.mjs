@@ -96,13 +96,13 @@ assert.match(manual, /receipt_item_id: item.id, gtin: barcode.trim\(\)/)
 // The Superuser barcode CSV review is a modal, not appended below the ED2 table.
 assert.match(ed2, /isPlatformSuperuser && importOpen/)
 assert.match(ed2, /<BarcodeImportReview/)
-assert.match(barcodeImport, /createPortal\\(/)
+assert.match(barcodeImport, /createPortal\(/)
 assert.match(barcodeImport, /role="dialog" aria-modal="true"/)
 assert.match(barcodeImport, /data-testid="barcode-import-dialog"/)
-assert.match(barcodeImport, /inhuis-artikel-classificeren-artikelen_aangevuld\\.csv/)
+assert.match(barcodeImport, /inhuis-artikel-classificeren-artikelen_aangevuld\.csv/)
 assert.match(barcodeImport, /aria-label="Importvenster sluiten"/)
-assert.match(barcodeImport, /event\\.key === 'Escape'/)
-assert.doesNotMatch(barcodeImport, />Sluiten<\\/Button>/)
+assert.match(barcodeImport, /event\.key === 'Escape'/)
+assert.doesNotMatch(barcodeImport, />Sluiten<\/Button>/)
 
 console.log('ED2/Catalogus barcode, camera en OFF-opslagcontract OK')
 
