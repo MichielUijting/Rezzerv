@@ -73,7 +73,7 @@ export default function BarcodeImportReview({ onClose, onApplied }) {
       if (!outcome.saved) throw new Error('De barcode is niet opgeslagen.')
       setDecisions((current) => ({ ...current, [row.line]: 'goedgekeurd' }))
       onApplied()
-      showFeedback({ type: 'success', message: `Barcode voor ${row.article} opgeslagen.` })
+      showFeedback({ variant: 'success', message: `Barcode voor ${row.article} opgeslagen.` })
     } catch (err) {
       setError(`Regel ${row.line}: ${err.message}`)
     } finally {
