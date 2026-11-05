@@ -1383,7 +1383,7 @@ class StoreTest(unittest.TestCase):
                          quantity, unit, is_deleted, line_role,
                          inventory_eligible, line_index)
                     VALUES (:line, :receipt, :name, :article_code,
-                            1, 'l', FALSE, 'product', TRUE, 0)
+                            1, 'l', FALSE, 'product', 1, 0)
                 """), {"line": line_id, "receipt": "receipt-" + line_id,
                        "name": receipt_name, "article_code": article_code})
 
