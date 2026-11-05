@@ -517,6 +517,8 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - niet-numerieke kolommen zijn links uitgelijnd;
 - numerieke kolommen zijn rechts uitgelijnd;
 - checkboxkolommen zijn gecentreerd;
+- in **Artikelbeheer → Identificeren** heeft de selectiekolom in de kolomtitel een standaard checkbox met dezelfde afmetingen als de rijcheckboxes; die selecteert/deselecteert uitsluitend de zichtbare huidige tabelpagina;
+- de checkbox **Alle artikelen op alle pagina’s** blijft op zijn bestaande positie boven de tabel en selecteert/deselecteert alle artikelen in de actuele gefilterde tabelresultaten, ook op andere pagina’s; de paginacheckbox laat selecties buiten die pagina ongemoeid;
 - titel, filter en cellen van één kolom gebruiken exact dezelfde uitlijning;
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
