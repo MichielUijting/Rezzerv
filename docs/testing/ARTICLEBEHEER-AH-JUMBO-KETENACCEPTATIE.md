@@ -21,7 +21,7 @@ Bestaande test `StoreTest.test_ed2_catalog_synonyms_almost_out_cross_store_chain
 3. Bijna op projecteert vóór koppeling de GS1-gebaseerde groep met twee afzonderlijke `household_article_id`'s en een onveranderde voorraadhoeveelheid.
 4. De productkoppeling wordt uitsluitend op een actuele serverfingerprint expliciet bevestigd; Jumbo erft daarna CBS van AH, maar er ontstaat **geen tweede GS1-overname** omdat de GS1-classificatie al gelijk is.
 5. De append-only audit verwijst naar `source_product_id=a`, `target_product_id=b`, officiële CBS-code en status `processed`. Een herhaalde bevestiging maakt geen tweede CBS-historieregel of auditregel.
-6. Catalogus vermeldt de directe winkelrelaties zonder identiteiten samen te voegen. Bijna op blijft dezelfde twee huishoudartikelen en voorraadregistraties tonen; geen nieuwe `inventory_events` of bonartikelrelaties.
+6. Catalogus vermeldt de directe winkelrelaties zonder identiteiten samen te voegen. Bijna op blijft de twee huishoudartikelen in huishouden A en hun voorraadregistraties tonen; geen nieuwe `inventory_events` of bonartikelrelaties. Een tweede huishouden bezit zelfstandig hetzelfde centrale product met een andere huishoudartikel-ID en voorraadhoeveelheid. Beide projecten filteren expliciet op huishouden, ook wanneer de aanroeper bewust een vreemde huishoudartikel-ID meestuurt; die vreemde ID levert geen zichtbare voorraad op.
 7. Na het bewust wegnemen van GS1-/groepsbewijs in de **testdatabase** mogen ED2 en Bijna op geen gelijkwaardigheid suggereren op basis van een synoniem alleen.
 
 Deze test gebruikt een per-test tijdelijk PostgreSQL-schema; alle data zijn synthetisch. De `_source_articles`-adapter die oorspronkelijke bonregels aanlevert is bewust gestubd. De resterende ED2-projectie, Catalogusprojectie, synoniem- en classificatietransacties en Bijna op-groepering zijn echte backendroutes/services.
@@ -30,7 +30,7 @@ Deze test gebruikt een per-test tijdelijk PostgreSQL-schema; alle data zijn synt
 
 - Geen volledige echte AH/Jumbo-login, digitale bonimport, OCR, daadwerkelijke bonverwerking of retailernetwerkkoppeling.
 - Geen echte front-end doorloop door één gebruiker van alle drie Artikelbeheerwerkgebieden in dezelfde browsersessie.
-- Geen volledige geautoriseerde productie-API-keten of daadwerkelijk aangemaakte huishoudens; de huishoudisolatie-eisen moeten verder worden onderbouwd met de bestaande speciale huishouden-, voorraad-, kassabon- en autorisatieregessies.
+- Geen volledige geautoriseerde productie-API-keten of daadwerkelijk via de reguliere gebruikersroute aangemaakte huishoudens; de nieuwe test bewijst gerichte huishoudfiltering van de **echte Bijna op-dataprojectie** met twee synthetische huishoudens, maar geen volledige authenticatie- en rolautorizatie. Die eisen blijven onderbouwd door de bestaande afzonderlijke huishouden-, voorraad-, kassabon- en autorisatieregressies.
 - Geen bewijs dat synoniemen zonder voldoende GS1-/productgroepinformatie automatisch in Bijna op gegroepeerd mogen worden.
 
 ## Vervolgacceptatie vóór Ready
