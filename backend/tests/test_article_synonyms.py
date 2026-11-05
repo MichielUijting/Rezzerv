@@ -1257,7 +1257,7 @@ class StoreTest(unittest.TestCase):
             """))
             for pid, name, gtin, receipt_code, retailer, volume in (
                 ("a", "AH Halfvolle melk", "8719587325926", "823326", "ah", 1.0),
-                ("b", "Jumbo Halfvolle melk", "8718452513666", "394270", "jumbo", 0.5),
+                ("b", "Jumbo Halfvolle melk", "8718452513666", "394270", "jumbo", 1.0),
             ):
                 conn.execute(text("""
                     UPDATE global_products SET name=:name, size_value=:volume,
@@ -1336,7 +1336,7 @@ class StoreTest(unittest.TestCase):
                 "receipt_line_text": "Jumbo Halfvolle melk",
                 "retailer_code": "jumbo",
                 "external_article_code": "394270",
-                "quantity_label": "500 ml",
+                "quantity_label": "1 l",
             },
         ]
         # Only the receipt source is synthetic: ED2's confirmed-link resolver,
@@ -1404,7 +1404,7 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({item["id"] for item in groups_before[0]["members"]},
                          {"ha-ah", "ha-jumbo"})
         self.assertEqual(sum(float(row["quantity"]) for row in
-                             projections_before[0]["inventory_rows"]), 2.0)
+                             projections_before[0]["inventory_rows"]), 3.0)
         self.assertEqual(float(stock_before), 3.0)
         other_groups_before, other_projections_before = project_other_household()
         self.assertEqual(len(other_groups_before), 1)
@@ -1470,7 +1470,7 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({row["household_article_id"] for row in
                           projections_after[0]["inventory_rows"]}, {"ha-ah", "ha-jumbo"})
         self.assertEqual(sum(float(row["quantity"]) for row in
-                             projections_after[0]["inventory_rows"]), 2.0)
+                             projections_after[0]["inventory_rows"]), 3.0)
         self.assertEqual(float(stock_after), float(stock_before))
         self.assertEqual(float(stock_after), 3.0)
         other_groups_after, other_projections_after = project_other_household()
