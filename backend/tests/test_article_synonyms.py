@@ -1307,6 +1307,22 @@ class StoreTest(unittest.TestCase):
                     "amount": 1 if pid == "a" else 2,
                 })
 
+        # Same global product in another household must never expose or
+        # mutate that household's inventory when synonyms/classifications
+        # change. Its household article ID deliberately differs.
+        other_household_id = "synonym-chain-other-household"
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO household_articles (id, household_id, global_product_id, status)
+                VALUES ('ha-other', :household, 'a', 'active')
+            """), {"household": other_household_id})
+            conn.execute(text("""
+                INSERT INTO inventory
+                    (id, household_id, household_article_id, naam, aantal, status)
+                VALUES ('inv-other', :household, 'ha-other',
+                        'AH Halfvolle melk', 7, 'active')
+            """), {"household": other_household_id})
+
         receipt_sources = [
             {
                 "receipt_item_id": "receipt-table-line:chain-ah",
@@ -1356,16 +1372,30 @@ class StoreTest(unittest.TestCase):
 
         def project_almost_out():
             with self.engine.connect() as conn:
+                # Submit a forged foreign article ID alongside legitimate rows.
+                # The production service must filter by the actual household.
                 article_rows = [
-                    {"id": "ha-ah"}, {"id": "ha-jumbo"},
+                    {"id": "ha-ah"}, {"id": "ha-jumbo"}, {"id": "ha-other"},
                 ]
                 groups = almost_out.load_groups(conn, household_id, article_rows, {})
                 projections = [almost_out.load_group_projection(conn, household_id, group)
                                for group in groups]
-                stock_count = conn.execute(
-                    text("SELECT COALESCE(SUM(aantal), 0) FROM inventory")
-                ).scalar_one()
+                stock_count = conn.execute(text("""
+                    SELECT COALESCE(SUM(aantal), 0) FROM inventory
+                    WHERE household_id=:household
+                """), {"household": household_id}).scalar_one()
             return groups, projections, stock_count
+
+        def project_other_household():
+            with self.engine.connect() as conn:
+                # Try to force the foreign household into this projection too.
+                groups = almost_out.load_groups(conn, other_household_id, [
+                    {"id": "ha-other"}, {"id": "ha-ah"}, {"id": "ha-jumbo"},
+                ], {})
+                projections = [almost_out.load_group_projection(
+                    conn, other_household_id, group
+                ) for group in groups]
+            return groups, projections
 
         # GS1 and consistent packaging already permit one readable product group;
         # a synonym confirmation never silently creates inventory transactions.
@@ -1376,6 +1406,13 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(sum(float(row["quantity"]) for row in
                              projections_before[0]["inventory_rows"]), 2.0)
         self.assertEqual(float(stock_before), 3.0)
+        other_groups_before, other_projections_before = project_other_household()
+        self.assertEqual(len(other_groups_before), 1)
+        self.assertEqual([row["id"] for row in other_groups_before[0]["members"]],
+                         ["ha-other"])
+        self.assertEqual([row["household_article_id"] for row in
+                          other_projections_before[0]["inventory_rows"]], ["ha-other"])
+        self.assertEqual(float(other_projections_before[0]["inventory_rows"][0]["quantity"]), 7.0)
 
         with self.engine.begin() as conn:
             products = service.load_products(conn)
@@ -1436,16 +1473,23 @@ class StoreTest(unittest.TestCase):
                              projections_after[0]["inventory_rows"]), 2.0)
         self.assertEqual(float(stock_after), float(stock_before))
         self.assertEqual(float(stock_after), 3.0)
+        other_groups_after, other_projections_after = project_other_household()
+        self.assertEqual(len(other_groups_after), 1)
+        self.assertEqual([row["id"] for row in other_groups_after[0]["members"]],
+                         ["ha-other"])
+        self.assertEqual([row["household_article_id"] for row in
+                          other_projections_after[0]["inventory_rows"]], ["ha-other"])
+        self.assertEqual(float(other_projections_after[0]["inventory_rows"][0]["quantity"]), 7.0)
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(text(
                 "SELECT COUNT(*) FROM external_article_product_links"
             )).scalar_one(), 2)
             self.assertEqual(conn.execute(text(
                 "SELECT COUNT(*) FROM household_articles"
-            )).scalar_one(), 2)
+            )).scalar_one(), 3)
             self.assertEqual(conn.execute(text(
                 "SELECT COUNT(*) FROM inventory"
-            )).scalar_one(), 2)
+            )).scalar_one(), 3)
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(
                 text("SELECT COUNT(*) FROM inventory_events")
