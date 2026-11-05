@@ -640,44 +640,9 @@
 .rz-classification-overlay-row:disabled { opacity: .6; cursor: wait; }
 .rz-classification-overlay-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
-
-/* Superuser barcode review is a modal workspace, never extra page content. */
-.rz-barcode-import-dialog {
-  width: min(1180px, calc(100vw - 32px));
-  max-height: min(90vh, 920px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rz-barcode-import-dialog .rz-classification-overlay-heading {
-  flex: 0 0 auto;
-}
-.rz-barcode-import-dialog .rz-classification-overlay-heading h3 {
-  margin: 0;
-}
-.rz-barcode-import-dialog .rz-barcode-import-dismiss {
-  background: transparent;
-  border: 1px solid var(--color-ui-primary);
-  border-radius: 6px;
-  color: var(--color-ui-primary);
-  font-size: 24px;
-  line-height: 1;
-  min-width: 40px;
-  min-height: 40px;
-  cursor: pointer;
-}
-.rz-barcode-import-dialog .rz-barcode-import-dismiss:disabled {
-  opacity: .5;
-  cursor: wait;
-}
-.rz-barcode-import-dialog [data-testid="barcode-import-review-table"] {
-  min-height: 0;
-  overflow: auto;
-}
-@media (max-width: 720px) {
-  .rz-barcode-import-dialog {
-    padding: 12px;
-    width: calc(100vw - 16px);
-    max-height: calc(100dvh - 24px);
-  }
-}
+/* Superuser barcode-import review uses the regular full-page Inhuis table layout. */
+.rz-barcode-import-page { display: flex; flex-direction: column; gap: 12px; }
+.rz-barcode-import-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rz-barcode-import-heading h2 { margin: 0; }
+.rz-barcode-import-page > .rz-input-field { max-width: min(560px, 100%); }
+.rz-barcode-import-page .rz-external-ed2-bulk-actions { justify-content: flex-end; }
