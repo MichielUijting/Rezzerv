@@ -129,10 +129,19 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "mutated": False,
         }
 
+    # GS1 GTIN-14 with a leading zero encodes the same GTIN-13.
+    # OFF can index that product under its 13-digit EAN. Never broaden
+    # a lookup to unrelated codes or accept a different returned GTIN.
+    off_lookup_gtin = (
+        normalized_gtin[1:]
+        if len(normalized_gtin) == 14 and normalized_gtin.startswith("0")
+        else normalized_gtin
+    )
+
     fields = ",".join(OFF_FIELDS)
     url = (
         "https://world.openfoodfacts.org/api/v2/product/"
-        f"{urllib.parse.quote(normalized_gtin)}.json"
+        f"{urllib.parse.quote(off_lookup_gtin)}.json"
         f"?fields={urllib.parse.quote(fields)}"
     )
     request = urllib.request.Request(
@@ -184,7 +193,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
         if character.isdigit()
     )
 
-    if returned_gtin != normalized_gtin:
+    if returned_gtin != off_lookup_gtin:
         return {
             "ok": True,
             "status": "not_found",
@@ -196,9 +205,9 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
     return {
         "ok": True,
         "status": "found",
-        "gtin": normalized_gtin,
+        "gtin": off_lookup_gtin,
         "product": {
-            "gtin": normalized_gtin,
+            "gtin": off_lookup_gtin,
             "product_name": _text(
                 product.get("product_name_nl")
                 or product.get("product_name")
@@ -956,7 +965,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
                     candidate_name=product.get("product_name"),
                 )
                 candidate = {
-                    "gtin": requested_gtin,
+                    "gtin": product["gtin"],
                     "product_name": product["product_name"],
                     "brand": product.get("brand", ""),
                     "quantity": product.get("quantity", ""),
