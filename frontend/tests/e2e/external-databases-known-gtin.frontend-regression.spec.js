@@ -696,14 +696,21 @@ test.describe('Superuser barcode-import: zelfstandige tabel met bulkacties', () 
     await table.getByRole('checkbox', { name: 'Selecteer Importartikel 10 (regel 12)' }).check()
     await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '-', exact: true }).click()
     await table.getByRole('checkbox', { name: 'Selecteer Importartikel 00 (regel 2)' }).check()
-    await expect(page.getByText('Geselecteerd: 2')).toBeVisible()
+    // Eén aangevinkte rij op de huidige pagina, één bewaarde selectie elders.
+    // Totaal mag nooit gepresenteerd worden als aantal aangevinkte rijen op deze pagina.
+    const selection = page.getByTestId('barcode-import-selection-count')
+    await expect(selection).toContainText('Op deze pagina geselecteerd: 1')
+    await expect(selection).toContainText('Elders geselecteerd: 1')
+    await expect(selection).toContainText('Totaal: 2')
     await page.getByRole('button', { name: 'Goedkeuren', exact: true }).click()
     await expect(page.getByTestId('barcode-import-approve-confirmation-overlay')).toHaveCount(0)
     await expect.poll(() => sent.length).toBe(2)
     await expect(page.getByTestId('app-feedback-success-overlay')).toContainText('2 barcodes opgeslagen')
     await expect(page.locator('p[role="status"]')).not.toContainText('Import verwerken...')
     await page.getByTestId('app-feedback-success-overlay').getByRole('button', { name: 'OK' }).click()
-    await expect(page.getByText('Geselecteerd: 0')).toBeVisible()
+    await expect(page.getByTestId('barcode-import-selection-count')).toContainText('Op deze pagina geselecteerd: 0')
+    await expect(page.getByTestId('barcode-import-selection-count')).toContainText('Elders geselecteerd: 0')
+    await expect(page.getByTestId('barcode-import-selection-count')).toContainText('Totaal: 0')
     await expect(table).toContainText('Goedgekeurd')
   })
 
@@ -746,5 +753,48 @@ test.describe('Superuser barcode-import: zelfstandige tabel met bulkacties', () 
       .getByRole('button', { name: 'Verwijderen' }).click()
     await expect(table).not.toContainText('Geblokkeerd artikel')
     expect(saves).toBe(0)
+  })
+
+  test('selectieteller onderscheidt huidige pagina en verborgen selectie; wissen maakt alles leeg', async ({ page }) => {
+    const proposals = Array.from({ length: 12 }, (_, index) => ({
+      line: index + 2, article: `Product ${String(index).padStart(2, '0')}`,
+      retailer: 'Albert Heijn', article_number: String(index + 1),
+      gtin: '8712345678906', receipt_item_id: `receipt-${index}`,
+      product_name: 'Testproduct', source: 'Winkelpagina', status: 'klaar', reason: '',
+    }))
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'test-superuser', active_household_id: '0', context_type: 'system',
+        role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/catalog/ed2/barcode-import/preview') return route.fulfill({
+        json: { total: 12, skipped: 0, ready: 12, blocked: 0, items: proposals },
+      })
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2/importeren')
+    await page.getByLabel('CSV-bestand').setInputFiles({
+      name: 'inhuis-artikel-classificeren-artikelen_aangevuld.csv',
+      mimeType: 'text/csv', buffer: Buffer.from('Artikel;Winkelketen\\n'),
+    })
+    await page.getByTestId('app-feedback-success-overlay').getByRole('button', { name: 'OK' }).click()
+    const table = page.getByTestId('barcode-import-review-table')
+    await table.getByRole('checkbox', { name: 'Selecteer Product 00 (regel 2)' }).check()
+    await page.getByRole('navigation', { name: 'Paginering' }).getByRole('button', { name: '+' }).click()
+    await table.getByRole('checkbox', { name: 'Selecteer Product 10 (regel 12)' }).check()
+    await table.getByRole('checkbox', { name: 'Selecteer Product 11 (regel 13)' }).check()
+    const count = page.getByTestId('barcode-import-selection-count')
+    await expect(count).toContainText('Op deze pagina geselecteerd: 2')
+    await expect(count).toContainText('Elders geselecteerd: 1')
+    await expect(count).toContainText('Totaal: 3')
+    await page.getByRole('button', { name: 'Selectie wissen' }).click()
+    await expect(count).toContainText('Op deze pagina geselecteerd: 0')
+    await expect(count).toContainText('Elders geselecteerd: 0')
+    await expect(count).toContainText('Totaal: 0')
+    await expect(table.getByRole('checkbox', { name: 'Selecteer Product 10 (regel 12)' })).not.toBeChecked()
   })
 })
