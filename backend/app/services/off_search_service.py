@@ -492,6 +492,35 @@ def _query_off(query: str, page_size: int) -> tuple[list[dict[str, Any]], str]:
     )
 
 
+def _query_off_manual_text(query: str, page_size: int) -> tuple[list[dict[str, Any]], str]:
+    """Combine both OFF full-text providers before applying relevance filters.
+
+    An upstream provider returning unrelated hits must not suppress a relevant
+    candidate from the other provider. This read-only search never confirms a
+    link or weakens manual candidate identity checks.
+    """
+    products: list[dict[str, Any]] = []
+    providers: list[str] = []
+    errors: list[str] = []
+
+    for provider in (_query_search_a_licious, _query_legacy_cgi):
+        for attempt in (1, 2):
+            try:
+                hits, provider_name = provider(query, page_size)
+                providers.append(provider_name)
+                products.extend(hits)
+                break
+            except Exception as exc:
+                errors.append(f"{provider.__name__} poging {attempt}: {exc}")
+
+    if not providers:
+        raise OffSearchError(
+            "Open Food Facts is niet beschikbaar"
+            + (f" ({'; '.join(errors)})" if errors else "")
+        )
+    return products, "+".join(providers)
+
+
 def _name_score(query: str, product_name: str) -> float:
     query_norm = _normalize(query)
     product_norm = _normalize(product_name)
@@ -992,7 +1021,7 @@ def search_off_candidates_for_item(payload: dict[str, Any], item: dict[str, Any]
         if not query:
             raise OffSearchError("query of gtin is verplicht bij handmatig zoeken")
 
-        raw_products, provider = _query_off(query, max(limit * 3, 10))
+        raw_products, provider = _query_off_manual_text(query, max(limit * 3, 10))
         relevance_query = _manual_relevance_query(query, item.get('retailer_code', ''))
         best_by_gtin: dict[str, dict[str, Any]] = {}
         for product in raw_products:
