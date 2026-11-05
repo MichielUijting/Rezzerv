@@ -1247,6 +1247,9 @@ class StoreTest(unittest.TestCase):
                 VALUES ('10000025', 'nl', TRUE, 'Halfvolle melk',
                         'Semi-skimmed milk', 'test')
             """))
+            # AH has an explicitly confirmed CBS code; Jumbo must inherit
+            # only after the independent central synonym confirmation.
+            self._set_cbs(conn, "a", "011420")
             conn.execute(text("""
                 INSERT INTO product_inventory_groups
                   (inventory_group_key, gpc_brick_code, source, active, display_name)
@@ -1254,7 +1257,7 @@ class StoreTest(unittest.TestCase):
             """))
             for pid, name, gtin, receipt_code, retailer, volume in (
                 ("a", "AH Halfvolle melk", "8719587325926", "823326", "ah", 1.0),
-                ("b", "Jumbo Halfvolle melk", "8718452513666", "394270", "jumbo", 0.5),
+                ("b", "Jumbo Halfvolle melk", "8718452513666", "394270", "jumbo", 1.0),
             ):
                 conn.execute(text("""
                     UPDATE global_products SET name=:name, size_value=:volume,
@@ -1304,33 +1307,98 @@ class StoreTest(unittest.TestCase):
                     "amount": 1 if pid == "a" else 2,
                 })
 
-        receipt_sources = [
-            {
-                "receipt_item_id": "receipt-table-line:chain-ah",
-                "receipt_line_text": "AH Halfvolle melk",
-                "retailer_code": "ah",
-                "external_article_code": "823326",
-                "quantity_label": "1 l",
-            },
-            {
-                "receipt_item_id": "receipt-table-line:chain-jumbo",
-                "receipt_line_text": "Jumbo Halfvolle melk",
-                "retailer_code": "jumbo",
-                "external_article_code": "394270",
-                "quantity_label": "500 ml",
-            },
-        ]
-        # Only the receipt source is synthetic: ED2's confirmed-link resolver,
-        # completeness guard, Catalogus joins and almost-out grouping are real.
-        with self.engine.connect() as conn, patch.object(
-            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
-        ):
+        # Same global product in another household must never expose or
+        # mutate that household's inventory when synonyms/classifications
+        # change. Its household article ID deliberately differs.
+        other_household_id = "synonym-chain-other-household"
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO household_articles (id, household_id, global_product_id, status)
+                VALUES ('ha-other', :household, 'a', 'active')
+            """), {"household": other_household_id})
+            conn.execute(text("""
+                INSERT INTO inventory
+                    (id, household_id, household_article_id, naam, aantal, status)
+                VALUES ('inv-other', :household, 'ha-other',
+                        'AH Halfvolle melk', 7, 'active')
+            """), {"household": other_household_id})
+
+        # Use the actual canonical source query for receipt_table_lines.
+        # These are synthetic receipts inside this test's disposable schema,
+        # not existing user receipts, OCR, or live retailer imports.
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE purchase_import_batches (
+                    id TEXT PRIMARY KEY, raw_payload TEXT, source_type TEXT
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE purchase_import_lines (
+                    id TEXT PRIMARY KEY, batch_id TEXT,
+                    external_article_code TEXT, article_name_raw TEXT,
+                    brand_raw TEXT, quantity_raw NUMERIC, unit_raw TEXT,
+                    external_line_ref TEXT, created_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE raw_receipts (
+                    id TEXT PRIMARY KEY, household_id TEXT, deleted_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE receipt_tables (
+                    id TEXT PRIMARY KEY, raw_receipt_id TEXT, household_id TEXT,
+                    store_chain TEXT, store_name TEXT, deleted_at TIMESTAMPTZ,
+                    workflow_state TEXT, created_at TIMESTAMPTZ
+                )
+            """)
+            conn.exec_driver_sql("""
+                CREATE TABLE receipt_table_lines (
+                    id TEXT PRIMARY KEY, receipt_table_id TEXT,
+                    corrected_raw_label TEXT, normalized_label TEXT, raw_label TEXT,
+                    external_article_code TEXT, quantity NUMERIC, unit TEXT,
+                    is_deleted BOOLEAN, line_role TEXT,
+                    inventory_eligible INTEGER, line_index INTEGER
+                )
+            """)
+            for retailer, receipt_name, article_code, line_id in (
+                ("ah", "AH Halfvolle melk", "823326", "chain-ah"),
+                ("jumbo", "Jumbo Halfvolle melk", "394270", "chain-jumbo"),
+            ):
+                conn.execute(text("""
+                    INSERT INTO raw_receipts (id, household_id)
+                    VALUES (:raw_id, :household)
+                """), {"raw_id": "raw-" + line_id, "household": household_id})
+                conn.execute(text("""
+                    INSERT INTO receipt_tables
+                        (id, raw_receipt_id, household_id, store_chain,
+                         store_name, workflow_state, created_at)
+                    VALUES (:receipt, :raw_id, :household, :retailer,
+                            :retailer, 'active', CURRENT_TIMESTAMP)
+                """), {"receipt": "receipt-" + line_id, "raw_id": "raw-" + line_id,
+                       "household": household_id, "retailer": retailer})
+                conn.execute(text("""
+                    INSERT INTO receipt_table_lines
+                        (id, receipt_table_id, raw_label, external_article_code,
+                         quantity, unit, is_deleted, line_role,
+                         inventory_eligible, line_index)
+                    VALUES (:line, :receipt, :name, :article_code,
+                            1, 'l', FALSE, 'product', 1, 0)
+                """), {"line": line_id, "receipt": "receipt-" + line_id,
+                       "name": receipt_name, "article_code": article_code})
+
+        # The receipt rows are synthetic, but ED2 now executes its *actual*
+        # production receipt-table SELECT and central identity resolver.
+        with self.engine.connect() as conn:
             overview = ed2.list_all_external_articles(conn=conn)
         self.assertEqual(overview["counts"], {
             "unlinked": 0, "classification_pending": 0, "linked": 2,
         })
         rows = {row["retailer_code"]: row for row in overview["items"]}
         self.assertEqual(set(rows), {"ah", "jumbo"})
+        self.assertEqual({row["id"] for row in rows.values()}, {
+            "receipt-table-line:chain-ah", "receipt-table-line:chain-jumbo",
+        })
         self.assertEqual(rows["ah"]["receipt_article_number"], "823326")
         self.assertEqual(rows["jumbo"]["receipt_article_number"], "394270")
         self.assertEqual(rows["ah"]["catalog_product_id"], "a")
@@ -1344,19 +1412,39 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({pid: row["linked_store_count"] for pid, row in before.items()},
                          {"a": 0, "b": 0})
         self.assertEqual({row["gpc_brick_code"] for row in before.values()}, {"10000025"})
+        with self.engine.connect() as conn:
+            cbs_before = dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code
+                FROM global_product_cbs_classifications
+            """)).all())
+        self.assertEqual(cbs_before, {"a": "011420"})
 
         def project_almost_out():
             with self.engine.connect() as conn:
+                # Submit a forged foreign article ID alongside legitimate rows.
+                # The production service must filter by the actual household.
                 article_rows = [
-                    {"id": "ha-ah"}, {"id": "ha-jumbo"},
+                    {"id": "ha-ah"}, {"id": "ha-jumbo"}, {"id": "ha-other"},
                 ]
                 groups = almost_out.load_groups(conn, household_id, article_rows, {})
                 projections = [almost_out.load_group_projection(conn, household_id, group)
                                for group in groups]
-                stock_count = conn.execute(
-                    text("SELECT COALESCE(SUM(aantal), 0) FROM inventory")
-                ).scalar_one()
+                stock_count = conn.execute(text("""
+                    SELECT COALESCE(SUM(aantal), 0) FROM inventory
+                    WHERE household_id=:household
+                """), {"household": household_id}).scalar_one()
             return groups, projections, stock_count
+
+        def project_other_household():
+            with self.engine.connect() as conn:
+                # Try to force the foreign household into this projection too.
+                groups = almost_out.load_groups(conn, other_household_id, [
+                    {"id": "ha-other"}, {"id": "ha-ah"}, {"id": "ha-jumbo"},
+                ], {})
+                projections = [almost_out.load_group_projection(
+                    conn, other_household_id, group
+                ) for group in groups]
+            return groups, projections
 
         # GS1 and consistent packaging already permit one readable product group;
         # a synonym confirmation never silently creates inventory transactions.
@@ -1365,8 +1453,15 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({item["id"] for item in groups_before[0]["members"]},
                          {"ha-ah", "ha-jumbo"})
         self.assertEqual(sum(float(row["quantity"]) for row in
-                             projections_before[0]["inventory_rows"]), 2.0)
+                             projections_before[0]["inventory_rows"]), 3.0)
         self.assertEqual(float(stock_before), 3.0)
+        other_groups_before, other_projections_before = project_other_household()
+        self.assertEqual(len(other_groups_before), 1)
+        self.assertEqual([row["id"] for row in other_groups_before[0]["members"]],
+                         ["ha-other"])
+        self.assertEqual([row["household_article_id"] for row in
+                          other_projections_before[0]["inventory_rows"]], ["ha-other"])
+        self.assertEqual(float(other_projections_before[0]["inventory_rows"][0]["quantity"]), 7.0)
 
         with self.engine.begin() as conn:
             products = service.load_products(conn)
@@ -1380,12 +1475,38 @@ class StoreTest(unittest.TestCase):
                 "right_product_id": candidate["right"]["id"],
                 "fingerprint": candidate["fingerprint"],
             }
-            self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
-                             {"linked": 1, "already_linked": 0})
+            linked = service.confirm_pairs(conn, [selection], "chain-test-admin")
+            self.assertEqual(linked["linked"], 1)
+            self.assertEqual(linked["already_linked"], 0)
+            self.assertEqual(linked["classification_inheritance"]["cbs_inherited"], 1)
+            self.assertEqual(linked["classification_inheritance"]["gpc_inherited"], 0)
+            self.assertEqual(linked["classification_inheritance"]["conflicts"], [])
+            self.assertEqual(dict(conn.execute(text("""
+                SELECT global_product_id, cbs_code
+                FROM global_product_cbs_classifications
+            """)).all()), {"a": "011420", "b": "011420"})
+            # The classification audit is tied to the correct distinct product
+            # identities; not to receipt text, GTIN equality or household stock.
+            events = [dict(row) for row in conn.execute(text("""
+                SELECT source_product_id, target_product_id, classification_system,
+                       classification_code, status
+                FROM article_classification_sync_events
+            """)).mappings()]
+            self.assertEqual(events, [{
+                "source_product_id": "a", "target_product_id": "b",
+                "classification_system": "CBS",
+                "classification_code": "011420", "status": "processed",
+            }])
         with self.engine.begin() as conn:
             self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})
             self.assertEqual(service.confirm_pairs(conn, [selection], "chain-test-admin"),
                              {"linked": 0, "already_linked": 1})
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM global_product_cbs_history"
+            )).scalar_one(), 1)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM article_classification_sync_events"
+            )).scalar_one(), 1)
         with patch.object(catalog_routes, "engine", self.engine):
             after = {pid: catalog_routes._catalog_row(pid) for pid in ("a", "b")}
         self.assertEqual({pid: row["linked_store_count"] for pid, row in after.items()},
@@ -1398,8 +1519,26 @@ class StoreTest(unittest.TestCase):
         self.assertEqual({row["household_article_id"] for row in
                           projections_after[0]["inventory_rows"]}, {"ha-ah", "ha-jumbo"})
         self.assertEqual(sum(float(row["quantity"]) for row in
-                             projections_after[0]["inventory_rows"]), 2.0)
+                             projections_after[0]["inventory_rows"]), 3.0)
         self.assertEqual(float(stock_after), float(stock_before))
+        self.assertEqual(float(stock_after), 3.0)
+        other_groups_after, other_projections_after = project_other_household()
+        self.assertEqual(len(other_groups_after), 1)
+        self.assertEqual([row["id"] for row in other_groups_after[0]["members"]],
+                         ["ha-other"])
+        self.assertEqual([row["household_article_id"] for row in
+                          other_projections_after[0]["inventory_rows"]], ["ha-other"])
+        self.assertEqual(float(other_projections_after[0]["inventory_rows"][0]["quantity"]), 7.0)
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM external_article_product_links"
+            )).scalar_one(), 2)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM household_articles"
+            )).scalar_one(), 3)
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM inventory"
+            )).scalar_one(), 3)
         with self.engine.connect() as conn:
             self.assertEqual(conn.execute(
                 text("SELECT COUNT(*) FROM inventory_events")
@@ -1414,9 +1553,7 @@ class StoreTest(unittest.TestCase):
             conn.execute(text("""
                 DELETE FROM product_group_memberships WHERE global_product_id='b'
             """))
-        with self.engine.connect() as conn, patch.object(
-            ed2, "_source_articles", side_effect=lambda _conn: iter(receipt_sources)
-        ):
+        with self.engine.connect() as conn:
             downgraded_ed2 = ed2.list_all_external_articles(conn=conn)
         statuses = {row["retailer_code"]: row["link_status"]
                     for row in downgraded_ed2["items"]}
