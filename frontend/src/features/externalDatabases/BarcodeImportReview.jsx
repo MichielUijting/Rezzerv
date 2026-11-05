@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -25,8 +24,6 @@ async function readResponse(response) {
 }
 
 export default function BarcodeImportReview() {
-  const navigate = useNavigate()
-  const location = useLocation()
   const { showFeedback } = useAppFeedback()
   const [preview, setPreview] = useState(null)
   const [removed, setRemoved] = useState([])
@@ -190,12 +187,7 @@ export default function BarcodeImportReview() {
   return <AppShell title="Barcodes importeren" showExit={false}>
     <ScreenCard fullWidth>
       <div className="rz-barcode-import-page">
-        <div className="rz-barcode-import-heading">
-          <h2>Barcodes importeren</h2>
-          <Button type="button" variant="secondary"
-            onClick={() => navigate('/externe-databases-2', { state: { ed2TableState: location.state?.ed2TableState || null } })}
-            disabled={busy}>Terug naar Artikelbeheer</Button>
-        </div>
+        <h2>Barcodes importeren</h2>
         <p>Kies het aangevulde CSV-bestand. Alleen nieuwe barcodevoorstellen worden ingelezen.
           Goedkeuren schrijft de geselecteerde barcodes naar Inhuis; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
         <label className="rz-input-field">
@@ -247,8 +239,6 @@ export default function BarcodeImportReview() {
           <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
             <span data-testid="barcode-import-selection-count">Op deze pagina geselecteerd: {selectedOnPageCount} ·
               Elders geselecteerd: {selectedElsewhereCount} · Totaal: {selectedCount}</span>
-            <Button type="button" variant="secondary" disabled={!selectedCount || busy}
-              onClick={() => setSelectedIds([])}>Selectie wissen</Button>
             <Button type="button" variant="secondary" disabled={!selectedCount || busy}
               onClick={deleteSelected}>Verwijderen</Button>
             <Button type="button" disabled={!canApproveSelection || busy}
