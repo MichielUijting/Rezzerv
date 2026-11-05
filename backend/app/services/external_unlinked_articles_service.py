@@ -165,7 +165,7 @@ def _source_articles(conn):
         WHERE COALESCE(rtl.is_deleted, FALSE) = FALSE
           AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL
           AND COALESCE(rt.workflow_state, 'active') NOT IN ('removed_reimport_allowed', 'removed')
-          AND rtl.line_role = 'product' AND rtl.inventory_eligible = 1
+          AND rtl.line_role = 'product' AND rtl.inventory_eligible IS TRUE
         ORDER BY rt.created_at DESC, rtl.line_index ASC, rtl.id ASC
     """)).mappings()
     for row in receipts:
