@@ -56,6 +56,57 @@ def grouping_key(row, settings=None):
     return ('product', str(row.get('global_product_id') or row['id'])), 1.0
 
 
+
+def confirmed_synonym_factors(conn, metadata):
+    """Only isolated, directly confirmed pairs with convertible package contents.
+
+    A-B-C chains and multi-edge groups require a separately defined equivalence
+    policy; never infer transitivity from the pair table or a matching GPC code.
+    """
+    by_product = {}
+    for row in metadata:
+        product_id = str(row.get('global_product_id') or '')
+        if product_id:
+            by_product.setdefault(product_id, []).append(row)
+    if len(by_product) < 2:
+        return {}
+    product_ids = sorted(by_product)
+    # Inspect all links touching a selected product, not just links whose other
+    # endpoint happens to be in this household. This prevents unsafe partial
+    # chains from being silently treated as independent pairs.
+    links = conn.execute(text("""
+        SELECT left_product_id, right_product_id
+          FROM article_synonym_links
+         WHERE left_product_id IN :ids OR right_product_id IN :ids
+    """).bindparams(bindparam('ids', expanding=True)), {'ids': product_ids}).mappings().all()
+    neighbors = {}
+    for link in links:
+        left = str(link['left_product_id'])
+        right = str(link['right_product_id'])
+        neighbors.setdefault(left, set()).add(right)
+        neighbors.setdefault(right, set()).add(left)
+    factors = {}
+    for left in product_ids:
+        linked = neighbors.get(left, set())
+        if len(linked) != 1:
+            continue
+        right = next(iter(linked))
+        if right not in by_product or left >= right or neighbors.get(right) != {left}:
+            continue
+        first = by_product[left][0]
+        second = by_product[right][0]
+        first_size = content(first.get('size_value'), first.get('size_unit'))
+        second_size = content(second.get('size_value'), second.get('size_unit'))
+        if not first_size or not second_size or first_size[1] != second_size[1]:
+            continue
+        # Identical physical units are necessary but do not themselves prove
+        # equivalence; only the manually confirmed central link does.
+        key = ('confirmed_synonym', f'{left}:{right}', 'Bevestigde synoniemen', first_size[1])
+        factors[left] = (key, first_size[0])
+        factors[right] = (key, second_size[0])
+    return factors
+
+
 def load_groups(conn, household_id, article_rows, settings_by_article):
     ids = [str(row['id']) for row in article_rows]
     if not ids:
@@ -70,13 +121,16 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
           AND COALESCE(ha.status, 'active') = 'active'
     ''').bindparams(bindparam('ids', expanding=True)), {'household_id': str(household_id), 'ids': ids}).mappings().all()
     by_id = {str(row['id']): dict(row) for row in metadata}
+    synonym_factors = confirmed_synonym_factors(conn, list(by_id.values()))
     groups = {}
     for article in sorted(article_rows, key=lambda row: str(row['id'])):
         article_id = str(article['id'])
         if article_id not in by_id:
             continue
         row = {**dict(article), **by_id[article_id]}
-        key, factor = grouping_key(row, settings_by_article.get(article_id, {}))
+        key, factor = synonym_factors.get(str(row.get('global_product_id') or ''), (None, None))
+        if key is None:
+            key, factor = grouping_key(row, settings_by_article.get(article_id, {}))
         group = groups.setdefault(key, {'key': key, 'members': [], 'factors': {}})
         group['members'].append(dict(article))
         group['factors'][article_id] = factor
@@ -128,7 +182,7 @@ def load_group_projection(conn, household_id, group):
         'member_article_ids': ids,
         'member_data_inconsistent': inconsistent,
         'aggregation_scope': group['key'][0],
-        'aggregation_variant': group['key'][2] if group['key'][0] == 'automatic_product_type' else None,
+        'aggregation_variant': group['key'][2] if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
         'aggregation_unit': group['key'][3] if group['key'][0] == 'automatic_product_type' else None,
         'representative_package_content': package_size if group['key'][0] == 'automatic_product_type' else None,
     }
