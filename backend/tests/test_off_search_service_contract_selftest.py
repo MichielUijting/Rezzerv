@@ -183,11 +183,77 @@ def run_exact_gtin_image_contract() -> None:
     finally:
         service.urllib.request.urlopen = original_urlopen
 
+def run_zero_padded_gtin_search_contract() -> None:
+    """WALDK HALF: bon GTIN-14 08719587106174, OFF EAN-13 8719587106174."""
+    original_urlopen = service.urllib.request.urlopen
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return service.json.dumps({
+                "status": 1,
+                "product": {
+                    "code": "8719587106174",
+                    "product_name": "Waldkorn The Original Volkoren",
+                    "brands": "Albert Heijn",
+                    "quantity": "309 g",
+                },
+            }).encode("utf-8")
+
+    def fake_urlopen(request, **kwargs):
+        requests.append(request.full_url)
+        return FakeResponse()
+
+    try:
+        service.urllib.request.urlopen = fake_urlopen
+        padded = "08719587106174"
+        canonical = "8719587106174"
+        item = {
+            "receipt_item_id": "receipt-table-line:waldk-half",
+            "receipt_line_text": "WALDK HALF",
+            "retailer_code": "Albert Heijn",
+            "quantity_label": "309 gram",
+        }
+        result = service.search_off_candidates_for_item({
+            "mode": "manual", "gtin": padded, "limit": 10,
+        }, item)
+        assert_equal(len(requests), 1, "een exacte OFF-opvraag")
+        if "/8719587106174.json" not in requests[0]:
+            raise AssertionError("OFF moet met de canonieke EAN-13 worden bevraagd")
+        assert_equal(result["result_count"], 1, "gepadded GTIN vindt het OFF-product")
+        candidate = result["results"][0]
+        assert_equal(candidate["gtin"], canonical, "koppelbewijs gebruikt bevestigde EAN-13")
+        from app.services.off_manual_search_proof import verify_manual_off_proof
+        verified = verify_manual_off_proof(
+            candidate["selection_proof"],
+            receipt_item_id=item["receipt_item_id"], gtin=canonical,
+        )
+        assert_equal(verified["gtin"], canonical, "ondertekend zoekbewijs is canoniek")
+        try:
+            verify_manual_off_proof(
+                candidate["selection_proof"],
+                receipt_item_id=item["receipt_item_id"], gtin=padded,
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("een gewijzigde GTIN mag het zoekbewijs niet hergebruiken")
+    finally:
+        service.urllib.request.urlopen = original_urlopen
+
+
 def main() -> int:
     checks = [
         ("manual_search_contract", run_manual_search_contract),
         ("automatic_search_contract", run_automatic_search_contract),
         ("exact_gtin_image_contract", run_exact_gtin_image_contract),
+        ("zero_padded_gtin_search_contract", run_zero_padded_gtin_search_contract),
     ]
     failures = []
 
