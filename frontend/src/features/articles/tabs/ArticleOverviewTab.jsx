@@ -9,6 +9,7 @@ import { mergeIncomingFormStatePreservingDirtyFields } from '../lib/householdSet
 import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 import { sortOptionObjects } from '../../../ui/sorting'
 import Select from '../../../ui/Select'
+import { useAppFeedback } from '../../../ui/AppFeedbackProvider.jsx'
 
 const GROUP_LABELS = {
   basic: 'Basis',
@@ -154,8 +155,7 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
   const articleId = articleData?.id
   const consumable = isConsumable(articleData)
   const [mode, setMode] = useState(AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD)
-  const [saveMessage, setSaveMessage] = useState('')
-  const dismissTimerRef = useRef(null)
+  const { showFeedback } = useAppFeedback()
   const automationOptions = useMemo(() => sortOptionObjects([
     { value: AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD, label: 'Huishoudinstelling volgen' },
     { value: AUTO_CONSUME_MODES.ALWAYS_ON, label: 'Altijd automatisch afboeken' },
@@ -165,7 +165,6 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
   useEffect(() => {
     let cancelled = false
     setMode(getArticleAutoConsumeMode(articleId))
-    setSaveMessage('')
     fetchArticleAutoConsumeMode(articleId).then((nextMode) => {
       if (!cancelled) setMode(nextMode)
     })
@@ -174,23 +173,14 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
     }
   }, [articleId])
 
-  useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) {
-        window.clearTimeout(dismissTimerRef.current)
-      }
-    }
-  }, [])
-
   async function handleChange(event) {
     if (!canEdit) return
-    const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
-    setMode(nextMode)
-    setSaveMessage('Opgeslagen')
-    if (dismissTimerRef.current) {
-      window.clearTimeout(dismissTimerRef.current)
+    try {
+      const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
+      setMode(nextMode)
+    } catch (error) {
+      showFeedback({ variant: 'error', message: error?.message || 'Automatisering kon niet worden opgeslagen.' })
     }
-    dismissTimerRef.current = window.setTimeout(() => setSaveMessage(''), 2400)
   }
 
   return (
@@ -210,9 +200,6 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
               ))}
             </select>
           </label>
-          {saveMessage ? (
-            <span className="rz-inline-feedback rz-inline-feedback--success rz-article-automation-feedback">{saveMessage}</span>
-          ) : null}
         </div>
       </div>
     </ArticleSectionAccordion>
