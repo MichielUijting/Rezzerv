@@ -359,8 +359,8 @@ export default function ShoppingPage() {
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
           setSelectedItemIds([])
-          setMessage('Winkelen is afgerond. De boodschappen is leeggemaakt.')
           await loadList()
+          showFeedback({ variant: 'success', message: 'Winkelen is afgerond. De boodschappen is leeggemaakt.' })
         } catch (completeError) {
           throw new Error(completeError?.message || 'Winkelen kon niet worden afgerond.')
         } finally {

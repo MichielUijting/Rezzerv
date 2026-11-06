@@ -210,7 +210,10 @@ export function AppFeedbackProvider({ children }) {
 
           try {
             const result = await feedback.onPrimaryAction?.({ ...fieldValues })
-            if (result !== false) dismissFeedback()
+            if (result !== false) {
+              // Never dismiss a success/error feedback that the action just displayed.
+              setFeedback((current) => current?.id === feedback.id ? null : current)
+            }
           } catch (error) {
             setActionError(
               String(error?.message || '').trim()
@@ -225,7 +228,7 @@ export function AppFeedbackProvider({ children }) {
           try {
             await feedback?.onSecondaryAction?.()
           } finally {
-            dismissFeedback()
+            setFeedback((current) => current?.id === feedback?.id ? null : current)
           }
         }}
       />
