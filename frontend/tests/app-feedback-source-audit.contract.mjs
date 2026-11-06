@@ -15,6 +15,10 @@ assert.equal(isTransientFeedback({ variant: 'success' }), true)
 assert.match(provider, /dismissMode: variant === 'error' \? 'ok-only'/)
 assert.match(provider, /variant !== 'error' && dismissMode === 'outside-or-ok'/)
 assert.match(provider, /data-testid={`${testId}-ok-button`}/)
+assert.match(provider, /interactiveDialog = variant === 'error'/)
+const theme = fs.readFileSync(path.join(root, 'ui/theme.css'), 'utf8')
+assert.ok((theme.match(/:not\(:has\(\[data-testid\$="-ok-button"\]\)\)/g) || []).length >= 10,
+  'De OK-dialoog mag niet door passieve balk-CSS worden afgedwongen')
 
 const patterns = [
   ['inline-feedback-css', /\brz-inline-feedback\b/g],
