@@ -13329,7 +13329,7 @@ def get_household_almost_out_settings_endpoint(authorization: Optional[str] = He
         'prediction_enabled': bool(settings.get('prediction_enabled')),
         'prediction_days': int(settings.get('prediction_days') or 0),
         'shopping_days': int(settings.get('shopping_days') or 0),
-        'policy_mode': normalize_almost_out_policy_mode(settings.get('policy_mode'))
+        'policy_mode': normalize_almost_out_policy_mode(settings.get('policy_mode')),
         'is_household_admin': is_household_admin,
     }
 
