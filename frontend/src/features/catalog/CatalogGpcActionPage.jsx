@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import ScreenCard from '../../ui/ScreenCard'
 import ClassificationSearchOverlay from '../externalDatabases/ClassificationSearchOverlay'
 import Button from '../../ui/Button'
@@ -55,7 +56,10 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
   const [searchingBricks, setSearchingBricks] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [feedback, setFeedback] = useState('')
+  useEffect(() => { if (feedback) showFeedback({ variant: 'info', message: feedback }) }, [feedback, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -236,8 +240,8 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
               </div>
             </div>
 
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-            {feedback && !embedded ? <div className="rz-inline-feedback">{feedback}</div> : null}
+            
+            
 
             {selectedProduct === undefined ? <section className="rz-catalog-detail-section">
               <h3>1. Selecteer een catalogusartikel</h3>
