@@ -360,6 +360,22 @@ export default function IncidentalPurchasePage() {
   const mobileLocationOptionsEmpty = mobileLocationOptions.length === 0
 
   useEffect(() => {
+    if (purchaseLookupState.message && ['error', 'warning', 'success'].includes(purchaseLookupState.status)) {
+      showFeedback({ variant: purchaseLookupState.status, message: purchaseLookupState.message })
+    }
+  }, [purchaseLookupState.status, purchaseLookupState.message, showFeedback])
+  useEffect(() => {
+    if (purchaseSaveState.message && ['error', 'success'].includes(purchaseSaveState.status)) {
+      showFeedback({ variant: purchaseSaveState.status, message: purchaseSaveState.message })
+    }
+  }, [purchaseSaveState.status, purchaseSaveState.message, showFeedback])
+  useEffect(() => {
+    if (purchaseCameraState.status === 'error' && purchaseCameraState.message) {
+      showFeedback({ variant: 'error', message: purchaseCameraState.message })
+    }
+  }, [purchaseCameraState.status, purchaseCameraState.message, showFeedback])
+
+  useEffect(() => {
     if (!isMobileViewport || !purchaseLookupState.message) return
     if (!['success', 'warning', 'error'].includes(purchaseLookupState.status)) return
     showFeedback({
@@ -859,15 +875,7 @@ export default function IncidentalPurchasePage() {
             <input className="rz-input" value={purchaseForm.note} onChange={(event) => updatePurchaseForm('note', event.target.value)} placeholder="Extra toelichting" />
           </label>
 
-          {purchaseLookupState.message ? (
-            <div className={purchaseLookupState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : purchaseLookupState.status === 'warning' ? 'rz-inline-feedback rz-inline-feedback--warning' : 'rz-inline-feedback rz-inline-feedback--success'}>
-              {purchaseLookupState.message}
-            </div>
-          ) : null}
 
-          {purchaseSaveState.status === 'error' || purchaseSaveState.status === 'success' ? (
-            <div className={purchaseSaveState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>{purchaseSaveState.message}</div>
-          ) : null}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <Button type="button" variant="secondary" onClick={resetForm}>Leegmaken</Button>
@@ -890,11 +898,8 @@ export default function IncidentalPurchasePage() {
             </div>
             <div style={{ display: 'grid', gap: 10, border: '1px solid #d0d5dd', borderRadius: 18, padding: 12, background: '#f8fafc' }}>
               <video ref={purchaseBarcodeVideoRef} autoPlay muted playsInline style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 14, background: '#101828', display: 'block' }} />
-              <div className="rz-inline-feedback" style={{ marginTop: 8 }}>Camera: {purchaseCameraMeta.label || purchaseCameraMeta.deviceId || 'onbekend'} · Decodepogingen: {purchaseCameraMeta.decodeAttempts}</div>
+              <div style={{ marginTop: 8 }}>Camera: {purchaseCameraMeta.label || purchaseCameraMeta.deviceId || 'onbekend'} · Decodepogingen: {purchaseCameraMeta.decodeAttempts}</div>
             </div>
-            {purchaseCameraState.message ? (
-              <div className={purchaseCameraState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'} style={{ marginTop: 12 }}>{purchaseCameraState.message}</div>
-            ) : null}
           </div>
         </div>
       ) : null}
