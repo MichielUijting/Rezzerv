@@ -134,7 +134,7 @@ export default function Ed2GpcClassificationPanel({ item, onClassified }) {
             {searching ? 'Zoeken...' : 'Zoeken'}
           </Button>
         </form>
-        
+
         {!loading && !searching && !candidates.length ? <p>Geen passende GS1-classificatie gevonden. Probeer een andere zoekterm.</p> : null}
         {!loading && !searching && candidates.length ? <DataTable
           columns={columns}

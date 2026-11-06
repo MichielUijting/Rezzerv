@@ -147,7 +147,7 @@ export default function MobileCatalogPage() {
 
         <div className="rz-mobile-catalog-summary" aria-live="polite">{summary}</div>
 
-        
+
         {!error && !isLoading && items.length === 0 ? <section className="rz-mobile-catalog-state">Geen catalogusartikelen gevonden.</section> : null}
 
         {!error && items.length > 0 ? (

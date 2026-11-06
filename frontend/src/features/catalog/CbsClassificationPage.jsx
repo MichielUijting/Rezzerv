@@ -357,8 +357,8 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
       <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
       {!embedded ? <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
         Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p> : null}
-      
-      
+
+
       <div className="rz-article-classification-layout">
         {!embedded ? <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
           filterState={filters}

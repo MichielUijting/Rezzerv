@@ -295,8 +295,8 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            
-            
+
+
             {!canUpdateGpc ? <p>Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</p> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">

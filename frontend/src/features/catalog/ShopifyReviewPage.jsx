@@ -321,8 +321,8 @@ export default function ShopifyReviewPage() {
     <ScreenCard fullWidth>
       <h2>Artikelclassificaties toekennen</h2>
       <p>Via OFF kun je suggesties opvragen voor de artikelclassificatie.</p>
-      
-      
+
+
       <div className="rz-article-classification-layout">
       <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
         filterState={tableFilters}

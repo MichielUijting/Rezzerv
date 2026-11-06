@@ -96,7 +96,7 @@ export default function CombinedClassificationWorkspace() {
         {productTotal} unieke Catalogusartikelen · {taskCount} open classificatietaken
         (afzonderlijk geteld voor GS1 en CBS).
       </p> : null}
-    
+
     <DataTable
       dataTestId="combined-classification-articles"
       columns={columns} data={products}
