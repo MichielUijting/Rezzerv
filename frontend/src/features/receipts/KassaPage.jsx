@@ -2316,6 +2316,21 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         }
         const items = await loadReceipts(resolvedHouseholdId)
         if (cancelled) return
+        // /kassa/nieuw and /kassa are separate route elements. Restore the
+        // existing receipt on the destination page rather than relying on
+        // selection state from the unmounted upload page.
+        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
+        if (duplicateReceiptId) {
+          const existingItem = items.find((item) => String(item?.receipt_table_id || '') === duplicateReceiptId)
+          if (existingItem) {
+            setFilters(DEFAULT_RECEIPT_FILTERS)
+            setReceiptInboxFocusId(duplicateReceiptId)
+            setSelectedReceiptIds([duplicateReceiptId])
+            await openReceiptDetail(duplicateReceiptId, items)
+          }
+          navigate('/kassa', { replace: true, state: null })
+          return
+        }
         const sharedResult = readShareQueryParams()
         if (sharedResult?.shareStatus === 'error') {
           setError(sharedResult.message || 'De gedeelde bon kon niet worden verwerkt.')
@@ -2425,7 +2440,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       if (itemsForOpen.some((item) => String(item?.receipt_table_id || '') === existingReceiptId)) {
         setSelectedReceiptIds([existingReceiptId])
       }
-      if (isAddReceiptRoute) navigate('/kassa')
+      if (isAddReceiptRoute) navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
     }
 
     try {
