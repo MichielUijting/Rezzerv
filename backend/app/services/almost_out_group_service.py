@@ -132,6 +132,20 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     baseline_counts = {}
     for key, _factor in baseline.values():
         baseline_counts[key] = baseline_counts.get(key, 0) + 1
+    # A pair is either eligible as a whole or not at all.
+    pair_members = {}
+    for article in article_rows:
+        article_id = str(article['id'])
+        if article_id not in baseline:
+            continue
+        product_id = str(by_id[article_id].get('global_product_id') or '')
+        pair = synonym_factors.get(product_id)
+        if pair:
+            pair_members.setdefault(pair[0], []).append(article_id)
+    disabled_pairs = {
+        key for key, members in pair_members.items()
+        if any(baseline_counts[baseline[member][0]] > 1 for member in members)
+    }
     groups = {}
     for article in sorted(article_rows, key=lambda row: str(row['id'])):
         article_id = str(article['id'])
@@ -139,8 +153,8 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
             continue
         row = {**dict(article), **by_id[article_id]}
         key, factor = synonym_factors.get(str(row.get('global_product_id') or ''), (None, None))
-        if key is not None and baseline_counts[baseline[article_id][0]] > 1:
-            # An existing product-type group has priority over new pair linking.
+        if key is not None and key in disabled_pairs:
+            # Never split an existing automatic group to make a partial pair.
             key = None
         if key is None:
             key, factor = baseline[article_id]
