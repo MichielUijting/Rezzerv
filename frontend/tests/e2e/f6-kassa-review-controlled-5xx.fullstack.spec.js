@@ -34,6 +34,12 @@ async function openFinancialReview(page, targetReceiptId) {
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('receipt-detail-title')).toHaveText('L4 Financiele Review')
   await expect(page.getByTestId('receipt-detail-page')).toContainText('Totaalbedrag wijkt af van de bonregels')
+  // This fixture has no original receipt file. The required error overlay
+  // must be acknowledged with OK before approving the existing receipt.
+  const previewError = page.getByTestId('app-feedback-error')
+  await expect(previewError).toContainText('Originele bon ontbreekt')
+  await previewError.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(page.getByTestId('app-feedback-error-overlay')).toHaveCount(0)
 }
 
 test('F6-01 Kassa approval controlled 500 shows standard feedback and rolls approval back', async ({ page }) => {

@@ -2413,7 +2413,6 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     if (existingReceiptId && !outsideKassa) {
       setFilters(DEFAULT_RECEIPT_FILTERS)
       setReceiptInboxFocusId(existingReceiptId)
-      setSelectedReceiptIds([existingReceiptId])
       const refreshedItems = await loadReceipts(householdId, {
         preserveDuplicateNotice: true,
         openReceiptId: existingReceiptId,
@@ -2421,6 +2420,11 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       })
       const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
       await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
+      // Select only after refreshing the inbox: pruneReceiptUiState must not
+      // remove the target before the refreshed receipt has entered state.
+      if (itemsForOpen.some((item) => String(item?.receipt_table_id || '') === existingReceiptId)) {
+        setSelectedReceiptIds([existingReceiptId])
+      }
       if (isAddReceiptRoute) navigate('/kassa')
     }
 
