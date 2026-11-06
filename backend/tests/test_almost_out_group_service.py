@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups
+from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection
 
 
 @pytest.mark.parametrize('value,unit,expected', [(1, 'l', (1, 'l')), (500, 'ml', (.5, 'l')), (75, 'cl', (.75, 'l')), (250, 'g', (.25, 'kg')), (2, 'stuk', (2, 'stuk'))])
@@ -139,3 +139,47 @@ def test_out_of_household_link_prevents_partial_chain_merge():
              {'left_product_id': 'gp-b', 'right_product_id': 'gp-other'}]
     assert confirmed_synonym_factors(
         _SynonymConnection(metadata, links), metadata) == {}
+
+
+def test_confirmed_pair_does_not_split_existing_automatic_product_type_group():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1), 'brick_code': '10000025'},
+        {**_metadata('b', 'gp-b', 500, 'ml'), 'brick_code': '10000025'},
+        {**_metadata('c', 'gp-c', 1), 'brick_code': '10000026', 'product_name': 'Volle melk'},
+    ]
+    links = [{'left_product_id': 'gp-a', 'right_product_id': 'gp-c'}]
+    groups = load_groups(_SynonymConnection(metadata, links), 'hh',
+                         [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}], {})
+    automatic = [group for group in groups if group['key'][0] == 'automatic_product_type']
+    assert len(automatic) == 2
+    assert any({item['id'] for item in group['members']} == {'a', 'b'} for group in automatic)
+    assert not any(group['key'][0] == 'confirmed_synonym' for group in groups)
+
+
+def test_confirmed_pair_projection_converts_inventory_without_mutating_members():
+    class ReadOnlyConnection(_SynonymConnection):
+        def execute(self, statement, params):
+            sql = str(statement)
+            if 'FROM inventory i' in sql:
+                return _Rows([
+                    {'id': 'inv-a', 'household_article_id': 'a', 'quantity': 1,
+                     'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+                    {'id': 'inv-b', 'household_article_id': 'b', 'quantity': 2,
+                     'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+                ])
+            if 'FROM inventory_events' in sql:
+                return _Rows([])
+            return super().execute(statement, params)
+
+    conn = ReadOnlyConnection(
+        [_metadata('a', 'gp-a', 1), _metadata('b', 'gp-b', 500, 'ml')],
+        [{'left_product_id': 'gp-a', 'right_product_id': 'gp-b'}],
+    )
+    groups = load_groups(conn, 'hh', [{'id': 'a'}, {'id': 'b'}], {})
+    projection = load_group_projection(conn, 'hh', groups[0])
+    assert projection['aggregation_scope'] == 'confirmed_synonym'
+    assert projection['aggregation_unit'] == 'l'
+    assert projection['representative_package_content'] == 1
+    assert projection['member_article_ids'] == ['a', 'b']
+    assert [item['quantity'] for item in projection['inventory_rows']] == [1, 1]
+    assert [item['original_quantity'] for item in projection['inventory_rows']] == [1, 2]
