@@ -69,7 +69,6 @@ export default function ExternalDatabases2Page() {
   const [tableSort, setTableSort] = useState(() => restored?.sort || { key: 'receipt_line_text', direction: 'asc' })
   const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
@@ -234,17 +233,17 @@ export default function ExternalDatabases2Page() {
   }, [location.key, location.state?.offLinkOutcome])
 
   useEffect(() => {
-    if (offLinkOutcome?.status !== 'success') return undefined
+    if (!offLinkOutcome?.message) return undefined
+    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : 'error', message: offLinkOutcome.message })
     const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
     return () => window.clearTimeout(timeout)
-  }, [offLinkOutcome])
+  }, [offLinkOutcome, showFeedback])
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       if (activeArea !== 'identity') return
       setLoading(true)
-      setError('')
       try {
         const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
         const payload = await response.json()
@@ -268,14 +267,14 @@ export default function ExternalDatabases2Page() {
           }
         }
       } catch {
-        if (!cancelled) setError('De artikelen konden niet worden geladen.')
+        if (!cancelled) showFeedback({ variant: 'error', message: 'De artikelen konden niet worden geladen.' })
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [location.state?.selectedItemId, refreshVersion, activeArea])
+  }, [location.state?.selectedItemId, refreshVersion, activeArea, showFeedback])
 
   return (
     <AppShell title="Artikelbeheer" showExit={false}>
@@ -284,17 +283,6 @@ export default function ExternalDatabases2Page() {
         <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
         {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
         {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
-        {offLinkOutcome ? <p data-testid="external-off-link-outcome"
-          role={offLinkOutcome.status === 'success' ? 'status' : 'alert'}
-          onClick={() => setOffLinkOutcome(null)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') setOffLinkOutcome(null)
-          }}
-          tabIndex={0}
-          title={offLinkOutcome.status === 'success' ? '' : 'Klik om deze melding te sluiten'}>
-          {offLinkOutcome.message}
-        </p> : null}
-        {activeArea === "identity" && error ? <p role="alert">{error}</p> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
