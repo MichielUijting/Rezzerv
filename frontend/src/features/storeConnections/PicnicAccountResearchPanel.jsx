@@ -3,6 +3,7 @@ import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 async function picnicRequest(path, options = {}) {
   const response = await fetch('/api/receipts/retailers/picnic/' + path, {
@@ -24,7 +25,7 @@ export default function PicnicAccountResearchPanel() {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [deliveries, setDeliveries] = useState([])
   const [preview, setPreview] = useState(null)
 
@@ -33,7 +34,7 @@ export default function PicnicAccountResearchPanel() {
     picnicRequest('status').then(value => {
       if (active) setAccount(value)
     }).catch(() => {
-      if (active) setNotice('Picnic-onderzoeksfunctie is momenteel niet beschikbaar.')
+      if (active) showFeedback({ variant: 'error', message: 'Picnic-onderzoeksfunctie is momenteel niet beschikbaar.' })
     })
     return () => { active = false }
   }, [])
@@ -41,13 +42,12 @@ export default function PicnicAccountResearchPanel() {
   async function run(task, message) {
     if (busy) return
     setBusy(true)
-    setNotice('')
     try {
       const result = await task()
-      setNotice(message)
+      showFeedback({ variant: 'success', message })
       return result
     } catch {
-      setNotice('De actie is niet gelukt. Er zijn geen Picnic-bestellingen gewijzigd.')
+      showFeedback({ variant: 'error', message: 'De actie is niet gelukt. Er zijn geen Picnic-bestellingen gewijzigd.' })
       return null
     } finally {
       setBusy(false)
@@ -69,7 +69,7 @@ export default function PicnicAccountResearchPanel() {
           Deze proef kan alleen bestellingen uitlezen en toont nog geen digitale kassabonnen in Kassa.
           Picnic biedt hiervoor geen officieel ondersteunde API. Aanmelden is daarom experimenteel.
         </p>
-        <div role="status" data-testid="picnic-account-status">
+        <div data-testid="picnic-account-status">
           {connected ? 'Account gekoppeld (alleen lezen)' : requiresSms ? 'Sms-verificatie nodig' : 'Niet gekoppeld'}
         </div>
         {!connected && !requiresSms ? (
@@ -149,7 +149,6 @@ export default function PicnicAccountResearchPanel() {
             }
           }}>Picnic ontkoppelen</Button>
         ) : null}
-        {notice ? <div role="status" data-testid="picnic-research-feedback">{notice}</div> : null}
       </div>
     </Card>
   )
