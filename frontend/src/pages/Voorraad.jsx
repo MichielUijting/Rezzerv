@@ -8,7 +8,6 @@ import Button from "../ui/Button";
 import { useAppFeedback } from "../ui/AppFeedbackProvider.jsx";
 import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "../ui/resizableTable.jsx";
-import useDismissOnComponentClick from "../lib/useDismissOnComponentClick.js";
 import { getAuthHeaders, readStoredAuthContext } from "../lib/authSession.js";
 import { limitSearchCandidates } from "../ui/searchCandidatePolicy.js";
 import CatalogArticleThumbnail from "../ui/CatalogArticleThumbnail.jsx";
@@ -828,7 +827,7 @@ export default function Voorraad() {
   });
 
   const hasDirtyEditor = Boolean(editingCell && ['huishoudnaam', 'productnaam', 'aantal', 'locatie', 'sublocatie'].some((key) => String((editingCell?.originalRow || {})[key] ?? '') !== String((draftRowsRef.current.get(editingCell?.rowId) || rowsRef.current.find((entry) => entry.id === editingCell?.rowId) || {})[key] ?? '')));
-  const hasPendingSave = Object.values(saveState).some((entry) => entry?.status === 'saving' || entry?.status === 'error');
+  const hasPendingSave = Object.values(saveState).some((entry) => entry?.status === 'saving');
   const purchaseFormDirty = showPurchaseModal && JSON.stringify(purchaseForm) !== purchaseFormSnapshot;
   const hasPendingPurchaseSave = purchaseSaveState.status === 'saving';
   const shouldWarnBeforeLeaving = hasDirtyEditor || hasPendingSave || purchaseFormDirty || hasPendingPurchaseSave;
@@ -1596,11 +1595,6 @@ export default function Voorraad() {
                           className={column.key === "aantal" ? "rz-num" : ""}
                         >
                           {renderCell(row, column)}
-                          {column.key === 'artikel' && saveState[row.id]?.message ? (
-                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: saveState[row.id]?.status === 'error' ? '#b42318' : '#067647' }}>
-                              {saveState[row.id].message}
-                            </div>
-                          ) : null}
                         </td>
                       ))}
                     </tr>
