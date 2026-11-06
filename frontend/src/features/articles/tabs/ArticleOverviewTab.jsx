@@ -860,6 +860,13 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
     return [...baseIds, ...Object.keys(groupedFields).map((groupKey) => `group-${groupKey}`)]
   }, [groupedFields])
   const [sectionStates, setSectionStates] = useState({})
+  const { showFeedback } = useAppFeedback()
+
+  useEffect(() => {
+    if (visibilityError) {
+      showFeedback({ variant: 'error', message: 'Veldinstellingen konden niet volledig worden geladen. Standaardvelden worden getoond.' })
+    }
+  }, [visibilityError, showFeedback])
 
   const visibleGroups = useMemo(() => {
     return Object.entries(groupedFields).reduce((acc, [groupKey, fields]) => {
@@ -921,7 +928,6 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
 
   return (
     <div className="rz-overview-tab">
-      {visibilityError ? <div className="rz-article-detail-alert">Veldinstellingen konden niet volledig worden geladen. Standaardvelden worden getoond.</div> : null}
       <ArticleGlobalSectionToggle ariaLabelPrefix="Overzicht" onExpandAll={expandAllSections} onCollapseAll={collapseAllSections} canExpand={canExpandAll} canCollapse={canCollapseAll} />
       <ArticleDetailsEditor articleData={articleData} onDetailsSaved={onDetailsSaved} sectionOpen={sectionStates['article-details']} onToggleSection={() => toggleSection('article-details')} />
       <HouseholdArticleSettingsCard articleData={articleData} onDetailsSaved={onDetailsSaved} sectionOpen={sectionStates['household-settings']} onToggleSection={() => toggleSection('household-settings')} />
