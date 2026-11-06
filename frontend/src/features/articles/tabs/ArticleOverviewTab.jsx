@@ -637,7 +637,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const isMobileScanner = useMemo(() => detectMobileScannerSupport(), [])
   const [editMode, setEditMode] = useState(false)
-  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const { showFeedback } = useAppFeedback()
   const [formState, setFormState] = useState({ barcode: articleData?.barcode || '', article_number: articleData?.article_number || '' })
   const [saveState, setSaveState] = useState({ saving: false, message: '', error: '' })
   const {
@@ -669,6 +669,12 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   useEffect(() => {
     setFormState({ barcode: articleData?.barcode || '', article_number: articleData?.article_number || '' })
   }, [articleData?.barcode, articleData?.article_number])
+
+  useEffect(() => {
+    if (scanState.status === 'error' && scanState.message) {
+      showFeedback({ variant: 'error', message: scanState.message })
+    }
+  }, [scanState.status, scanState.message, showFeedback])
 
   async function refreshDetails() {
     if (typeof onDetailsSaved !== 'function') return
@@ -734,9 +740,11 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
       logEvent?.('ENRICH_TRIGGERED', { barcode: persistedBarcode })
       await triggerImmediateEnrichment()
       await refreshDetails()
-      setSaveState({ saving: false, message: 'Opgeslagen', error: '' })
+      setSaveState({ saving: false, message: '', error: '' })
+      showFeedback({ variant: 'success', message: 'Externe productkoppeling opgeslagen.' })
     } catch (error) {
-      setSaveState({ saving: false, message: '', error: error?.message || 'Externe productkoppeling kon niet worden opgeslagen.' })
+      setSaveState({ saving: false, message: '', error: '' })
+      showFeedback({ variant: 'error', message: error?.message || 'Externe productkoppeling kon niet worden opgeslagen.' })
     }
   }
 
@@ -747,14 +755,21 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   function handleEnableManualEntry() {
     if (!canEdit) return
     if (hasExistingValue()) {
-      setShowOverwriteConfirm(true)
+      showFeedback({
+        variant: 'warning',
+        title: 'Barcode overschrijven',
+        message: 'Er staat al een waarde ingevuld. Alsnog overschrijven?',
+        primaryActionLabel: 'Ja',
+        secondaryActionLabel: 'Nee',
+        onPrimaryAction: () => confirmOverwrite(true),
+        onSecondaryAction: () => confirmOverwrite(false),
+      })
       return
     }
     setEditMode(true)
   }
 
   function confirmOverwrite(allow) {
-    setShowOverwriteConfirm(false)
     if (allow && canEdit) setEditMode(true)
   }
 
@@ -780,30 +795,18 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
 
   return (
     <ArticleSectionAccordion title="Externe productkoppeling" testId="article-external-link-section" headerActions={actions} open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
-      {showOverwriteConfirm ? (
-        <div className="rz-article-detail-alert rz-article-detail-alert--warning">
-          <div>Er staat al een waarde ingevuld. Alsnog overschrijven?</div>
-          <div className="rz-article-inline-actions rz-article-inline-actions--tight">
-            <button type="button" className="rz-button-secondary rz-button-small" onClick={() => confirmOverwrite(true)}>Ja</button>
-            <button type="button" className="rz-button-secondary rz-button-small" onClick={() => confirmOverwrite(false)}>Nee</button>
-          </div>
-        </div>
-      ) : null}
-      {saveState.message ? <div className="rz-inline-feedback rz-inline-feedback--success">{saveState.message}</div> : null}
-      {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--danger">{saveState.error}</div> : null}
-      {!isMobileScanner ? <div className="rz-inline-feedback">Gebruik op laptop/desktop de handmatige barcode-invoer. Live scannen is alleen beschikbaar op mobiel.</div> : null}
-      {scanState.status === 'error' ? <div className="rz-inline-feedback rz-inline-feedback--danger">{scanState.message}</div> : null}
+      {!isMobileScanner ? <p>Gebruik op laptop/desktop de handmatige barcode-invoer. Live scannen is alleen beschikbaar op mobiel.</p> : null}
       {isMobileScanner ? (
         <div className="rz-barcode-scan-panel" style={{ display: scannerOpen ? 'block' : 'none' }}>
           <video ref={videoRef} className="rz-barcode-scan-video" autoPlay muted playsInline style={{ visibility: scannerOpen ? 'visible' : 'hidden' }} />
           <div className="rz-article-inline-actions rz-article-inline-actions--tight rz-barcode-scan-toolbar">
-            <span className="rz-inline-feedback">{scanState.message}</span>
+            <span>{scanState.message}</span>
             <div className="rz-article-inline-actions rz-article-inline-actions--tight rz-barcode-scan-toolbar-actions">
               <button type="button" className="rz-button-secondary rz-button-small" onClick={handleSwitchCamera} disabled={availableCameras.length < 2}>Camera wisselen</button>
               <button type="button" className="rz-button-secondary rz-button-small" onClick={() => closeScanner(true)}>Camera sluiten</button>
             </div>
           </div>
-          <div className="rz-inline-feedback" style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8 }}>
             Camera: {cameraMeta.label || cameraMeta.deviceId || 'onbekend'} · Decodepogingen: {cameraMeta.decodeAttempts}
           </div>
         </div>
