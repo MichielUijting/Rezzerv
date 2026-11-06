@@ -240,8 +240,8 @@ export default function CatalogGpcActionPage({ embedded = false, readOnly = fals
               </div>
             </div>
 
-            
-            
+
+
 
             {selectedProduct === undefined ? <section className="rz-catalog-detail-section">
               <h3>1. Selecteer een catalogusartikel</h3>

@@ -281,8 +281,8 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
         <div className="rz-stock-summary-value">{totalQuantity}</div>
       </section>
 
-      
-      
+
+
 
       {inventoryRows.length === 0 ? (
         <div className="rz-empty-state">Er zijn nog geen voorraadlocaties bekend voor dit artikel.</div>

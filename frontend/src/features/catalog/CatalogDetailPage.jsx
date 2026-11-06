@@ -115,7 +115,7 @@ export default function CatalogDetailPage() {
         <ScreenCard fullWidth>
           {isLoading ? <div>Catalogusartikel laden...</div> : null}
 
-          
+
 
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">

@@ -224,9 +224,9 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         </div>
         <div className="rz-locations-group-body rz-article-detail-section-body">
           {locationsLoading ? <div className="rz-empty-state">Ruimtes en sublocaties worden geladen.</div> : null}
-          
-          
-          
+
+
+
 
           {canMutate && transferForm.inventoryId ? (
             <form className="rz-stock-mutation-form" onSubmit={handleTransferSubmit} data-testid="article-location-transfer-form">

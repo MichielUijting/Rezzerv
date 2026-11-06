@@ -298,7 +298,7 @@ export default function CatalogDetailPageV2() {
         />
         <main className="rz-mobile-catalog-detail-content">
           {isLoading ? <section className="rz-mobile-catalog-state">Catalogusartikel laden…</section> : null}
-          
+
 
           {!isLoading && !error ? (
             <>
@@ -420,7 +420,7 @@ export default function CatalogDetailPageV2() {
       <div className="rz-catalog-page" data-testid="catalog-detail-page">
         <ScreenCard fullWidth>
           {isLoading ? <div>Catalogusartikel laden…</div> : null}
-          
+
 
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">
