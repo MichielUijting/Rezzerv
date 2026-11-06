@@ -64,7 +64,9 @@ jobs:
           grep -F "getByLabel('Reden / notitie')" "$spec"
           grep -F "getByRole('button', { name: 'Opslaan'" "$spec"
           grep -F 'expect(mutationResponse.status()).toBe(500)' "$spec"
-          grep -F "article-stock-mutation-error" "$spec"
+          grep -F "getByTestId('app-feedback-error')" "$spec"
+          grep -F "getByTestId('app-feedback-error-overlay')" "$spec"
+          grep -F "getByRole('button', { name: 'OK'" "$spec"
           echo 'F6_INVENTORY_NO_CORE_SHORTCUTS_GREEN'
 
       - name: Compile F6 authority sources

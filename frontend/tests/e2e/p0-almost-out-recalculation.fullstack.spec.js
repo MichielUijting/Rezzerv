@@ -122,7 +122,9 @@ test('P0 Almost-out replays existing history and changes visible projection', as
   const mutationData = await mutationResponse.json().catch(() => ({}))
   expect(mutationResponse.ok(), JSON.stringify(mutationData)).toBeTruthy()
   expect(String(mutationResponse.request().postDataJSON()?.quantity ?? '')).toBe(expectedTargetQuantity)
-  await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraadcorrectie is opgeslagen.', { timeout: 20_000 })
+  // Verify the central success feedback without reintroducing an in-screen message.
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Voorraadcorrectie is opgeslagen.', { timeout: 20_000 })
+  await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
 
   const stockRow = page.getByTestId(new RegExp(`^article-stock-row-${expectedInventoryId}-`))
   await expect(stockRow).toContainText(expectedTargetQuantity, { timeout: 20_000 })
