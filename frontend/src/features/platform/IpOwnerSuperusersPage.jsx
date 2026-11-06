@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
@@ -16,7 +17,10 @@ export default function IpOwnerSuperusersPage() {
   const [email, setEmail] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [result, setResult] = React.useState('')
+  React.useEffect(() => { if (result) showFeedback({ variant: 'success', message: result }) }, [result, showFeedback])
   const [pending, setPending] = React.useState(false)
   const [confirmation, setConfirmation] = React.useState(null)
 
@@ -114,8 +118,8 @@ export default function IpOwnerSuperusersPage() {
               <Button type="submit" disabled={pending}>Superuser maken</Button>
             </div>
           </form>
-          {error && <p role="alert">{error}</p>}
-          {result && <p role="status">{result}</p>}
+          
+          
         </Card>
 
         <Card>
