@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
           <Card className="rz-card-login">
             {completed ? (
               <div className="rz-form">
-                <div className="rz-alert" data-testid="reset-password-success">{message}</div>
+                <p>Je kunt nu opnieuw inloggen met je nieuwe wachtwoord.</p>
                 <div style={{ textAlign: 'center' }}>
                   <Link to="/login" data-testid="reset-password-login-link">Opnieuw inloggen</Link>
                 </div>
