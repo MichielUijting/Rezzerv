@@ -1981,7 +1981,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
 
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
-  useEffect(() => { if (duplicateNotice) showFeedback({ variant: 'warning', message: duplicateNotice }) }, [duplicateNotice, showFeedback])
+  // announceDuplicate already displays its specific feedback; do not overwrite it.
   useEffect(() => { if (cameraError) showFeedback({ variant: 'error', message: cameraError }) }, [cameraError, showFeedback])
   useEffect(() => { if (emailRouteError) showFeedback({ variant: 'error', message: emailRouteError }) }, [emailRouteError, showFeedback])
 

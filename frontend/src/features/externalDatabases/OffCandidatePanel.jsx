@@ -196,6 +196,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {verifying ? <p role="status">Kandidaat controleren in OFF...</p> : null}
+        {!loading && error ? <Button type="button" variant="secondary" onClick={() => setAttempt((current) => current + 1)}>Opnieuw zoeken</Button> : null}
 
         {!loading && !error ? <DataTable
           columns={columns}

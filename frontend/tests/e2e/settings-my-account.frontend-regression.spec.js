@@ -94,7 +94,7 @@ test.describe('Mijn account frontend-regressie', () => {
       current_password: 'HuidigWachtwoord123!',
       new_password: 'NieuwWachtwoord456!',
     })
-    await expect(page.getByTestId('my-account-success')).toContainText('Wachtwoord gewijzigd')
+    await expect(page.getByTestId('app-feedback-success')).toContainText('Wachtwoord gewijzigd')
     await expect(page.getByTestId('my-account-current-password')).toHaveValue('')
     await expect(page.getByTestId('my-account-new-password')).toHaveValue('')
     await expect(page.getByTestId('my-account-new-password-repeat')).toHaveValue('')
@@ -121,13 +121,14 @@ test.describe('Mijn account frontend-regressie', () => {
     await page.getByTestId('my-account-new-password-repeat').fill('AnderWachtwoord789!')
     await page.getByTestId('my-account-password-submit').click()
 
-    await expect(page.getByTestId('my-account-error')).toHaveText('De nieuwe wachtwoorden zijn niet gelijk.')
+    await expect(page.getByTestId('app-feedback-error')).toContainText('De nieuwe wachtwoorden zijn niet gelijk.')
+    await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK', exact: true }).click()
     expect(apiCalls).toBe(0)
 
     await page.getByTestId('my-account-new-password-repeat').fill('NieuwWachtwoord456!')
     await page.getByTestId('my-account-password-submit').click()
     await expect.poll(() => apiCalls).toBe(1)
-    await expect(page.getByTestId('my-account-error')).toHaveText('Huidig wachtwoord is onjuist')
+    await expect(page.getByTestId('app-feedback-error')).toContainText('Huidig wachtwoord is onjuist')
 
     const unexpectedConsoleErrors = consoleErrors.filter((entry) => !(
       entry.includes('400 (Bad Request)')

@@ -194,7 +194,7 @@ test('Een OFF storing bewaart barcode in Art./Barcode en behoudt het bestaande f
   await page.getByTestId('ed2-manual-barcode-input').fill('8711138357776')
   await page.getByTestId('ed2-manual-barcode-save').click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
-  await expect(page.getByTestId('external-off-link-outcome')).toContainText('Barcode opgeslagen. OFF is tijdelijk niet bereikbaar')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Barcode opgeslagen. OFF is tijdelijk niet bereikbaar')
   await expect(page.getByRole('textbox', { name: 'Filter op Artikel' })).toHaveValue('SIMON')
   await expect(table.locator('thead')).toContainText('Art./Barcode')
   await expect(table.locator('tbody tr', { hasText: 'SIMON LEVELT' }).locator('td').nth(4)).toHaveText('8711138357776')
@@ -306,7 +306,7 @@ test('AH CERVELAAT: kandidaat 4 laat bevestigen toe en echte merkconflicten krij
   await expect(page.getByRole('alertdialog')).toContainText('Weet u zeker')
   await page.getByRole('alertdialog').getByRole('button', { name: 'OK' }).click()
   await expect(page).toHaveURL(/\/externe-databases-2$/)
-  await expect(page.getByTestId('external-off-link-outcome')).toContainText('GS1-classificatie ontbreekt nog')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('GS1-classificatie ontbreekt nog')
   expect(writes).toEqual([{
     receipt_item_id: item.id, gtin: target.gtin, selection_proof: target.selection_proof,
   }])

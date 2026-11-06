@@ -173,7 +173,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
       await expect(page.getByTestId('app-feedback-success')).toContainText('GS1-classificatie ontbreekt nog')
-      await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
+      if (width > 720) await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
       await expect(table).toContainText('Achterham BL')
       await expect(table).toContainText('8718452504435')
       await expect(page.getByRole('button', { name: 'Classificatie ontbreekt: 1' })).toBeVisible()
@@ -338,7 +338,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.getByRole('button', { name: 'OK', exact: true }).click()
       await expect(page).toHaveURL(/\/externe-databases-2$/)
       await expect(page.getByTestId('app-feedback-success')).toContainText('Artikel gekoppeld aan de Catalogus.')
-      await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
+      if (width > 720) await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
       expect(links).toHaveLength(1)
       await expect(panel).toHaveCount(0)
 

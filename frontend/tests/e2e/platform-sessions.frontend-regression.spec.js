@@ -141,7 +141,7 @@ test('sessions page lists safe active sessions and revokes only after explicit c
   expect(revokes[0].headers['x-admin-key']).toBeUndefined()
 
   await expect(page.getByTestId('platform-session-session-target-active')).toHaveCount(0)
-  await expect(page.getByRole('status')).toContainText('target-user@example.test')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('target-user@example.test')
   await expect(page.getByTestId('platform-session-session-current')).toBeVisible()
 })
 

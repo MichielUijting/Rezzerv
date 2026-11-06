@@ -98,6 +98,7 @@ export default function SettingsAlmostOutPage() {
       setPredictionDays(String(nextSettings.predictionDays))
       setPolicyMode(nextSettings.policyMode)
       setLastSavedSnapshot(stableStringify(nextSettings))
+      showFeedback({ variant: 'success', message: 'Opgeslagen' })
       return true
     } catch (error) {
       showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet gelukt.' })
