@@ -86,7 +86,6 @@ export default function SuperuserActionButtonsSection() {
   const [savingOrder, setSavingOrder] = useState(false)
   const [draggedKey, setDraggedKey] = useState('')
   const [dragOverKey, setDragOverKey] = useState('')
-  const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
     let active = true
@@ -165,15 +164,13 @@ export default function SuperuserActionButtonsSection() {
     setItems(next)
     setSavingOrder(true)
     setError('')
-    setAnnouncement(`${sourceLabel} wordt voor ${targetLabel} geplaatst.`)
     try {
       const saved = await saveActionOrder(next.map((item) => item.key))
       setItems(saved)
-      setAnnouncement(`${sourceLabel} staat nu voor ${targetLabel}.`)
+      showFeedback({ variant: 'success', message: `${sourceLabel} staat nu voor ${targetLabel}.` })
       window.dispatchEvent(new Event('rezzerv-action-buttons-changed'))
     } catch (requestError) {
       setItems(previous)
-      setAnnouncement('De vorige volgorde is hersteld omdat opslaan niet lukte.')
       setError(requestError?.message || 'Volgorde van de Startpagina-acties kon niet worden opgeslagen.')
     } finally {
       setSavingOrder(false)
@@ -212,14 +209,9 @@ export default function SuperuserActionButtonsSection() {
           <option value="yes">Ja</option>
           <option value="no">Nee</option>
         </select>
-        <div role="status" aria-live="polite">
-          {savingActionBarLocked ? 'Actiebalkinstelling opslaan…' : ('Actiebalk vastzetten: ' + (actionBarLocked ? 'Ja' : 'Nee'))}
-        </div>
+        <div>{savingActionBarLocked ? 'Actiebalkinstelling opslaan…' : ('Actiebalk vastzetten: ' + (actionBarLocked ? 'Ja' : 'Nee'))}</div>
       </div>
 
-      <div role="status" aria-live="polite" data-testid="superuser-action-order-status">
-        {savingOrder ? 'Nieuwe volgorde opslaan…' : announcement}
-      </div>
       {loading ? <p role="status">Acties op de Startpagina laden…</p> : null}
       
       {!loading && !error && items.length === 0 ? <p>Geen acties op de Startpagina geregistreerd.</p> : null}
@@ -239,8 +231,7 @@ export default function SuperuserActionButtonsSection() {
                 onDragStart={(event) => {
                   if (saving || savingOrder || isPending) { event.preventDefault(); return }
                   setDraggedKey(item.key)
-                  setAnnouncement(`${item.label || item.key} opgepakt.`)
-                  event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.effectAllowed = 'move'
                   event.dataTransfer.setData('text/plain', item.key)
                 }}
                 onDragEnter={(event) => {
