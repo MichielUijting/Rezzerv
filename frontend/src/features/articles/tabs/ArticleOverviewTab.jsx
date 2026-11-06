@@ -360,8 +360,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   const [formState, setFormState] = useState(() => buildHouseholdSettingsFormState(settings))
   const dirtyFieldsRef = useRef(new Set())
   const formArticleIdRef = useRef(resolvedArticleId)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
@@ -381,7 +380,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         dirtyFieldsRef.current,
       ))
     }
-    setErrorMessage('')
   }, [
     resolvedArticleId,
     settings?.min_stock,
@@ -416,7 +414,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         setLocationOptions(nextSpaces)
         setSublocationOptions(nextSublocations)
       } catch (error) {
-        if (!cancelled) setErrorMessage(error?.message || 'Locatie-opties konden niet worden geladen.')
+        if (!cancelled) showFeedback({ variant: 'error', message: error?.message || 'Locatie-opties konden niet worden geladen.' })
       } finally {
         if (!cancelled) setIsLoadingLocations(false)
       }
@@ -472,8 +470,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   async function handleSave() {
     if (!resolvedArticleId || !canEdit) return
     setIsSaving(true)
-    setStatusMessage('')
-    setErrorMessage('')
     try {
       const payload = {
         min_stock: formState.min_stock === '' ? null : Number(formState.min_stock),
@@ -498,9 +494,8 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       dirtyFieldsRef.current.clear()
       setFormState(buildHouseholdSettingsFormState(nextSettings))
       if (typeof onDetailsSaved === 'function') onDetailsSaved({ settings: nextSettings })
-      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
-      setErrorMessage(error?.message || 'Huishoudinstellingen konden niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: error?.message || 'Huishoudinstellingen konden niet worden opgeslagen.' })
     } finally {
       setIsSaving(false)
     }
@@ -509,8 +504,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   return (
     <ArticleSectionAccordion title="Instellingen voor dit huishouden" testId="article-household-settings-section" open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
       <div className="rz-article-overview-instruction">Deze instellingen gelden alleen voor dit huishouden en blijven na opslaan behouden.</div>
-      {statusMessage ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-settings-save-success">{statusMessage}</div> : null}
-      {errorMessage ? <div className="rz-article-detail-alert" data-testid="article-settings-save-error">{errorMessage}</div> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         <EditableHouseholdFieldRow field={{ key: 'min_stock', label: 'Minimumvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.min_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <EditableHouseholdFieldRow field={{ key: 'ideal_stock', label: 'Streefvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.ideal_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
