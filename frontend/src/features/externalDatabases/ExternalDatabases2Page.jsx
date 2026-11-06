@@ -312,7 +312,7 @@ export default function ExternalDatabases2Page() {
           pageReady={!loading}
           getRowKey={(item) => item.id}
           defaultSort={{ key: 'receipt_line_text', direction: 'asc' }}
-          emptyMessage={loading ? 'Artikelen laden...' : error ? 'Artikelen niet beschikbaar.' : 'Geen artikelen voor de gekozen filters.'}
+          emptyMessage={loading ? 'Artikelen laden...' : 'Geen artikelen voor de gekozen filters.'}
           dataTestId="external-databases-2-table"
           renderRow={(item) => <tr key={item.id}
             tabIndex={0}

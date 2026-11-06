@@ -63,6 +63,7 @@ async function mockApi(page, actor, state) {
       is_platform_superuser: superuser,
       is_frontteam: false,
     })
+    if (path === '/api/superuser/overview') return json({ metrics: {}, trends: {}, attention_items: [] })
     if (path === '/api/superuser/bootstrap') return json({ access: 'granted' })
     if (path === '/api/superuser/audit/open') return json({ status: 'ok' })
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
