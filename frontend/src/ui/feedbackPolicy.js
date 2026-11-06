@@ -2,7 +2,8 @@ export const MAX_TRANSIENT_FEEDBACK_MS = 4000
 
 export function isTransientFeedback(feedback) {
   if (!feedback) return false
-  if (feedback.variant === 'progress' || feedback.dismissMode === 'blocked') return false
+  // Errors always require an explicit OK; never treat them as timed/mobile banners.
+  if (feedback.variant === 'error' || feedback.variant === 'progress' || feedback.dismissMode === 'blocked') return false
   if (feedback.onPrimaryAction || feedback.onSecondaryAction) return false
   if (Array.isArray(feedback.inputFields) && feedback.inputFields.length > 0) return false
   if (feedback.showTechnicalToggle) return false
