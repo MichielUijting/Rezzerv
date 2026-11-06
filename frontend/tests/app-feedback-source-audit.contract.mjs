@@ -58,6 +58,8 @@ const guardedScreens = [
   'features/auth/LoginPage.jsx',
   'features/auth/ForgotPasswordPage.jsx',
   'features/auth/RegisterPage.jsx',
+  'features/catalog/CatalogNameEditor.jsx',
+  'features/catalog/CatalogBarcodeEntry.jsx',
 ]
 for (const file of guardedScreens) {
   const violations = findings.filter((finding) => finding.file === file
