@@ -64,7 +64,15 @@ export default function ShoppingPage() {
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (error) showFeedback({ variant: 'error', message: error })
+  }, [error, showFeedback])
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (message) showFeedback({ variant: 'success', message })
+  }, [message, showFeedback])
   const checkedSaveChainsRef = useRef(new Map())
   const checkedMutationVersionsRef = useRef(new Map())
   const catalogSearchRequestRef = useRef(0)
@@ -610,8 +618,6 @@ export default function ShoppingPage() {
 
             </div>
 
-            {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
-            {message ? <div role="status" style={{ color: 'var(--color-ui-primary)' }}>{message}</div> : null}
 
             <DataTable
               columns={shoppingColumns}
