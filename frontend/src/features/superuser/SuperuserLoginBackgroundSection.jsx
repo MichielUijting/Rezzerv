@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
@@ -16,7 +17,10 @@ export default function SuperuserLoginBackgroundSection() {
   const [preview, setPreview] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [message, setMessage] = useState('')
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
 
   useEffect(() => {
     let active = true
@@ -101,8 +105,8 @@ export default function SuperuserLoginBackgroundSection() {
         <Button type="button" disabled={!selected || busy} onClick={upload}>{busy ? 'Bezig…' : status.configured ? 'JPG vervangen' : 'JPG uploaden'}</Button>
         {status.configured ? <Button type="button" variant="secondary" disabled={busy} onClick={reset}>Standaardachtergrond herstellen</Button> : null}
       </div>
-      {error ? <p role="alert">{error}</p> : null}
-      {message ? <p role="status">{message}</p> : null}
+      
+      
     </section>
   )
 }
