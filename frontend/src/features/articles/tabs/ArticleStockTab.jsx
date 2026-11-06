@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from '../../../ui/Button'
+import { useAppFeedback } from '../../../ui/AppFeedbackProvider.jsx'
 import Input from '../../../ui/Input'
 import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
 
@@ -46,6 +47,10 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
   const [mutationForm, setMutationForm] = useState(() => emptyMutationForm())
   const [mutationBusy, setMutationBusy] = useState(false)
   const [mutationError, setMutationError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (mutationError) showFeedback({ variant: 'error', message: mutationError }) }, [mutationError, showFeedback])
+  useEffect(() => { if (mutationSuccess) showFeedback({ variant: 'success', message: mutationSuccess }) }, [mutationSuccess, showFeedback])
+
   const [mutationSuccess, setMutationSuccess] = useState('')
   const [assignmentForm, setAssignmentForm] = useState(() => emptyAssignmentForm())
   const [assignmentBusy, setAssignmentBusy] = useState(false)
@@ -276,8 +281,8 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
         <div className="rz-stock-summary-value">{totalQuantity}</div>
       </section>
 
-      {mutationError ? <div className="rz-article-detail-alert" data-testid="article-stock-mutation-error">{mutationError}</div> : null}
-      {mutationSuccess ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-stock-mutation-success">{mutationSuccess}</div> : null}
+      
+      
 
       {inventoryRows.length === 0 ? (
         <div className="rz-empty-state">Er zijn nog geen voorraadlocaties bekend voor dit artikel.</div>
