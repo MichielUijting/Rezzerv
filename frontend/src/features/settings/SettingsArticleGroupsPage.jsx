@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Pagination from '../../ui/Pagination.jsx'
 import AppShell from '../../app/AppShell'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
@@ -65,19 +66,6 @@ async function requestJson(url, options = {}) {
   return data
 }
 
-function FeedbackOverlay({ message, error, onClose }) {
-  if (!message && !error) return null
-  return (
-    <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true">
-        <h3 className="rz-modal-title">{error ? 'Melding' : 'Bevestiging'}</h3>
-        <p className="rz-modal-text">{error || message}</p>
-        <div className="rz-modal-actions"><Button type="button" onClick={onClose}>OK</Button></div>
-      </div>
-    </div>
-  )
-}
-
 function GroupModal({ open, onClose, onSave, busy }) {
   const [name, setName] = useState('')
   useEffect(() => { if (open) setName('') }, [open])
@@ -138,6 +126,9 @@ export default function SettingsArticleGroupsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
   const [groupModalOpen, setGroupModalOpen] = useState(false)
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
   const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
@@ -482,7 +473,6 @@ export default function SettingsArticleGroupsPage() {
         </div>
       </Card>
 
-      <FeedbackOverlay message={message} error={error} onClose={() => { setMessage(''); setError('') }} />
       <GroupModal open={groupModalOpen} onClose={() => setGroupModalOpen(false)} onSave={addGroup} busy={saving} />
       <BulkAssignModal open={bulkModalOpen} groups={sortedGroups} onClose={() => setBulkModalOpen(false)} onSave={bulkAssign} busy={saving} />
     </AppShell>
