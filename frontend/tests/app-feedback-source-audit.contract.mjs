@@ -63,6 +63,9 @@ const guardedScreens = [
   'features/articles/tabs/ArticleOverviewTab.jsx',
   'features/catalog/CatalogGpcFrame.jsx',
   'features/externalDatabases/ExternalDatabases2Page.jsx',
+  'features/settings/SettingsArticleFieldsPage.jsx',
+  'features/settings/SettingsHouseholdAutomationPage.jsx',
+  'features/settings/SettingsPrivacyDataSharingPage.jsx',
 ]
 for (const file of guardedScreens) {
   const violations = findings.filter((finding) => finding.file === file
