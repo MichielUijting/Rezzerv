@@ -292,7 +292,7 @@ test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile
 })
 
 for (const width of [390, 1280]) {
-  test(`Bijna op settings offers only valid policies and readable save feedback at ${width}px`, async ({ page }) => {
+  test(`Bijna op settings validates policies, errors and silent successful saves at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     let rejectSave = true
     let savedPolicy = null
@@ -337,7 +337,8 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('settings-almost-out-page')).not.toContainText('[object Object]')
     rejectSave = false
     await page.getByTestId('almost-out-settings-save').click()
-    await expect(page.getByRole('status')).toContainText('Opgeslagen')
-    expect(savedPolicy).toBe('override')
+    await expect.poll(() => savedPolicy).toBe('override')
+    await expect(page.getByTestId('almost-out-settings-save')).toBeEnabled()
+    await expect(page.getByRole('status')).toHaveCount(0)
   })
 }
