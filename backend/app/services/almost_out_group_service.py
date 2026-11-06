@@ -122,6 +122,16 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     ''').bindparams(bindparam('ids', expanding=True)), {'household_id': str(household_id), 'ids': ids}).mappings().all()
     by_id = {str(row['id']): dict(row) for row in metadata}
     synonym_factors = confirmed_synonym_factors(conn, list(by_id.values()))
+    # Keep pre-existing automatic product-type groups intact: a new synonym pair
+    # must not split an already aggregated three-or-more-member product type.
+    baseline = {}
+    for article in article_rows:
+        article_id = str(article['id'])
+        if article_id in by_id:
+            baseline[article_id] = grouping_key({**dict(article), **by_id[article_id]}, settings_by_article.get(article_id, {}))
+    baseline_counts = {}
+    for key, _factor in baseline.values():
+        baseline_counts[key] = baseline_counts.get(key, 0) + 1
     groups = {}
     for article in sorted(article_rows, key=lambda row: str(row['id'])):
         article_id = str(article['id'])
@@ -129,8 +139,11 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
             continue
         row = {**dict(article), **by_id[article_id]}
         key, factor = synonym_factors.get(str(row.get('global_product_id') or ''), (None, None))
+        if key is not None and baseline_counts[baseline[article_id][0]] > 1:
+            # An existing product-type group has priority over new pair linking.
+            key = None
         if key is None:
-            key, factor = grouping_key(row, settings_by_article.get(article_id, {}))
+            key, factor = baseline[article_id]
         group = groups.setdefault(key, {'key': key, 'members': [], 'factors': {}})
         group['members'].append(dict(article))
         group['factors'][article_id] = factor
@@ -183,8 +196,8 @@ def load_group_projection(conn, household_id, group):
         'member_data_inconsistent': inconsistent,
         'aggregation_scope': group['key'][0],
         'aggregation_variant': group['key'][2] if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
-        'aggregation_unit': group['key'][3] if group['key'][0] == 'automatic_product_type' else None,
-        'representative_package_content': package_size if group['key'][0] == 'automatic_product_type' else None,
+        'aggregation_unit': group['key'][3] if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
+        'representative_package_content': package_size if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
     }
 
 
