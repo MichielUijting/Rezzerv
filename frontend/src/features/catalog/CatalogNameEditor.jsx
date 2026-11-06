@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** One central name editor for both Catalogus detail layouts. */
 export default function CatalogNameEditor({ globalProductId, name, canEdit, onSaved }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name || '')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
 
   useEffect(() => {
     setDraft(name || '')
     setEditing(false)
-    setError('')
   }, [globalProductId, name])
 
   function cancel() {
     setEditing(false)
     setDraft(name || '')
-    setError('')
   }
 
   async function save(event) {
@@ -26,7 +25,7 @@ export default function CatalogNameEditor({ globalProductId, name, canEdit, onSa
     const normalized = String(draft || '').trim().replace(/\s+/g, ' ')
     const previous = String(name || '').trim()
     if (!normalized || normalized.length > 200) {
-      setError('Vul een artikelnaam in van maximaal 200 tekens.')
+      showFeedback({ variant: 'error', message: 'Vul een artikelnaam in van maximaal 200 tekens.' })
       return
     }
     if (normalized === previous) {
@@ -34,7 +33,6 @@ export default function CatalogNameEditor({ globalProductId, name, canEdit, onSa
       return
     }
     setSaving(true)
-    setError('')
     try {
       const response = await fetchJsonWithAuth(
         `/api/catalog/${encodeURIComponent(globalProductId)}/name`,
@@ -51,7 +49,7 @@ export default function CatalogNameEditor({ globalProductId, name, canEdit, onSa
       onSaved(String(result.name || normalized))
       setEditing(false)
     } catch (saveError) {
-      setError(saveError?.message || 'De artikelnaam kon niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: saveError?.message || 'De artikelnaam kon niet worden opgeslagen.' })
     } finally {
       setSaving(false)
     }
@@ -78,7 +76,7 @@ export default function CatalogNameEditor({ globalProductId, name, canEdit, onSa
             maxLength={200}
             autoFocus
             disabled={saving}
-            onChange={(event) => { setDraft(event.target.value); setError('') }}
+            onChange={(event) => setDraft(event.target.value)}
             data-testid="catalog-shared-name-input"
           />
           <p>De naam wordt in de Catalogus voor alle huishoudens aangepast. Barcode en voorraad blijven behouden.</p>
@@ -92,7 +90,6 @@ export default function CatalogNameEditor({ globalProductId, name, canEdit, onSa
           </div>
         </form>
       ) : null}
-      {error ? <p className="rz-inline-feedback rz-inline-feedback--error" role="alert">{error}</p> : null}
     </div>
   )
 }
