@@ -144,7 +144,7 @@ export default function ReceiptPreviewCard({
               <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden…</div>
             ) : null}
 
-            
+
 
             {previewState.status === 'ready' && previewState.isPdf ? (
               <iframe
@@ -176,7 +176,7 @@ export default function ReceiptPreviewCard({
               </pre>
             ) : null}
 
-            
+
           </div>
         </div>
       )}

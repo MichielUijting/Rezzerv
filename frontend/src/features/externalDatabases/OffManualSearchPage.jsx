@@ -208,7 +208,7 @@ export default function OffManualSearchPage() {
   return (
     <AppShell title="Zelf zoeken in OFF" showExit={false}>
       <ScreenCard fullWidth>
-        
+
         {item ? <>
           <p>Artikel: <strong>{item.receipt_line_text}</strong></p>
           <form className="rz-external-off-manual-form" onSubmit={search} data-testid="external-off-free-search-form">
@@ -221,7 +221,7 @@ export default function OffManualSearchPage() {
           </form>
           <Ed2ManualBarcodeEntry item={item} onSaved={goBack} />
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
-          
+
           {searched && !loading && !error ? <section aria-label="OFF-zoekresultaten">
             <h3>Resultaten uit OFF</h3>
             <DataTable

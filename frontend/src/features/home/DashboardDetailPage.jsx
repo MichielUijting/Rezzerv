@@ -598,7 +598,7 @@ export default function DashboardDetailPage() {
   return <main className="rz-mobile-home" data-testid={'dashboard-detail-' + metric}>
     <MobileModuleHeader title={detailTitle} testId="dashboard-detail-header" />
     <section className="rz-mobile-home-inner">
-      
+
       {!dashboard && !barDrilldown && !error ? <p role="status">Dashboard inlezen.</p> : body}
     </section>
   </main>

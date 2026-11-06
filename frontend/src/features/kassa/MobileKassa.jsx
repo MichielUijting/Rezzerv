@@ -530,7 +530,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
             <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...new Set([...current, ...receiptPagination.pageItems.map(receiptId)])] : current.filter((id) => !receiptPagination.pageItems.some((item) => receiptId(item) === id)))} disabled={busy || !receiptPagination.pageItems.length} /> Alles</label>
           </div>
           {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
-          
+
           {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? (
             <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div>
           ) : !receiptsLoadError && receiptPagination.pageItems.length > 0 ? (

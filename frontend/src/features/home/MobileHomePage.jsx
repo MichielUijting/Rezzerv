@@ -512,7 +512,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         <p className="rz-mobile-home-subtitle">{welcomeText}</p>
       </div>
 
-      
+
 
       <div className="rz-dashboard-status" aria-label="Actuele status">
         <button type="button" onClick={() => openStatus('meldingen')} className="rz-dashboard-status--notifications" data-testid="dashboard-status-notifications">
