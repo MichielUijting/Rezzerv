@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
@@ -24,6 +25,8 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
   const [threads, setThreads] = useState([])
   const [notifications, setNotifications] = useState([])
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [composing, setComposing] = useState(false)
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
@@ -100,7 +103,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
         <div className="rz-mobile-support-filters" role="tablist" aria-label="Meldingen filteren">
           {FILTERS.map(([key,label]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => setFilter(key)}>{label}</button>)}
         </div>
-        {error ? <p role="status">{error}</p> : null}
+
         <div className="rz-mobile-support-list">
           {notificationPagination.pageItems.map((item) => (
             <button key={item.id} type="button" className={'rz-mobile-support-card rz-mobile-support-card--' + (item.severity || 'message')} onClick={() => openItem(item)}>

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
 import Pagination from '../../ui/Pagination.jsx'
@@ -24,7 +25,10 @@ export default function PlatformUsersPage() {
   React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [result, setResult] = React.useState('')
+  React.useEffect(() => { if (result) showFeedback({ variant: 'success', message: result }) }, [result, showFeedback])
   const [pendingUser, setPendingUser] = React.useState(null)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -111,8 +115,8 @@ export default function PlatformUsersPage() {
         </p>
       </Card>
 
-      {error ? <Card><p role="alert">{error}</p></Card> : null}
-      {result ? <Card><p role="status">{result}</p></Card> : null}
+
+
       {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !users.length ? (

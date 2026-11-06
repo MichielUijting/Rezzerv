@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
@@ -78,12 +79,13 @@ export default function SuperuserActionButtonsSection() {
   const [savingActionBarLocked, setSavingActionBarLocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [pending, setPending] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
   const [draggedKey, setDraggedKey] = useState('')
   const [dragOverKey, setDragOverKey] = useState('')
-  const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
     let active = true
@@ -162,15 +164,13 @@ export default function SuperuserActionButtonsSection() {
     setItems(next)
     setSavingOrder(true)
     setError('')
-    setAnnouncement(`${sourceLabel} wordt voor ${targetLabel} geplaatst.`)
     try {
       const saved = await saveActionOrder(next.map((item) => item.key))
       setItems(saved)
-      setAnnouncement(`${sourceLabel} staat nu voor ${targetLabel}.`)
+      showFeedback({ variant: 'success', message: `${sourceLabel} staat nu voor ${targetLabel}.` })
       window.dispatchEvent(new Event('rezzerv-action-buttons-changed'))
     } catch (requestError) {
       setItems(previous)
-      setAnnouncement('De vorige volgorde is hersteld omdat opslaan niet lukte.')
       setError(requestError?.message || 'Volgorde van de Startpagina-acties kon niet worden opgeslagen.')
     } finally {
       setSavingOrder(false)
@@ -209,16 +209,11 @@ export default function SuperuserActionButtonsSection() {
           <option value="yes">Ja</option>
           <option value="no">Nee</option>
         </select>
-        <div role="status" aria-live="polite">
-          {savingActionBarLocked ? 'Actiebalkinstelling opslaan…' : ('Actiebalk vastzetten: ' + (actionBarLocked ? 'Ja' : 'Nee'))}
-        </div>
+        <div>{savingActionBarLocked ? 'Actiebalkinstelling opslaan…' : ('Actiebalk vastzetten: ' + (actionBarLocked ? 'Ja' : 'Nee'))}</div>
       </div>
 
-      <div role="status" aria-live="polite" data-testid="superuser-action-order-status">
-        {savingOrder ? 'Nieuwe volgorde opslaan…' : announcement}
-      </div>
       {loading ? <p role="status">Acties op de Startpagina laden…</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+
       {!loading && !error && items.length === 0 ? <p>Geen acties op de Startpagina geregistreerd.</p> : null}
 
       {!loading && items.length > 0 ? (
@@ -236,8 +231,7 @@ export default function SuperuserActionButtonsSection() {
                 onDragStart={(event) => {
                   if (saving || savingOrder || isPending) { event.preventDefault(); return }
                   setDraggedKey(item.key)
-                  setAnnouncement(`${item.label || item.key} opgepakt.`)
-                  event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.effectAllowed = 'move'
                   event.dataTransfer.setData('text/plain', item.key)
                 }}
                 onDragEnter={(event) => {

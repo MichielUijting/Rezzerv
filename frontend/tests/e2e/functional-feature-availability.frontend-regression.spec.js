@@ -19,7 +19,10 @@ async function mockApi(page, actor, state) {
       role: system ? 'owner' : actor === 'technical' ? null : 'member',
       is_platform_superuser: system, is_frontteam: false,
     })
+    if (path === '/api/action-buttons') return json({ items: [] })
+    if (path === '/api/platform/mobile-action-bar') return json({ locked: true, default_locked: true, fixed_keys: ['winkelen', 'kassa', 'kassabonnen', 'voorraad'] })
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
+    if (path === '/api/superuser/overview') return json({ metrics: {}, trends: {}, attention_items: [] })
     if (path === '/api/superuser/bootstrap') return json({ access: 'granted' })
     if (path === '/api/superuser/audit/open') return json({ status: 'ok' })
     if (path === '/api/features') {

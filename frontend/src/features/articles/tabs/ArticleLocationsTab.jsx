@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../../ui/Button'
+import { useAppFeedback } from '../../../ui/AppFeedbackProvider.jsx'
 import Input from '../../../ui/Input'
 import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
 
@@ -50,6 +51,11 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
   const [sublocations, setSublocations] = useState([])
   const [locationsLoading, setLocationsLoading] = useState(false)
   const [locationsError, setLocationsError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (locationsError) showFeedback({ variant: 'error', message: locationsError }) }, [locationsError, showFeedback])
+  useEffect(() => { if (transferError) showFeedback({ variant: 'error', message: transferError }) }, [transferError, showFeedback])
+  useEffect(() => { if (transferSuccess) showFeedback({ variant: 'success', message: transferSuccess }) }, [transferSuccess, showFeedback])
+
   const [transferBusy, setTransferBusy] = useState(false)
   const [transferError, setTransferError] = useState('')
   const [transferSuccess, setTransferSuccess] = useState('')
@@ -218,9 +224,9 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         </div>
         <div className="rz-locations-group-body rz-article-detail-section-body">
           {locationsLoading ? <div className="rz-empty-state">Ruimtes en sublocaties worden geladen.</div> : null}
-          {locationsError ? <div className="rz-article-detail-alert">{locationsError}</div> : null}
-          {transferError ? <div className="rz-article-detail-alert" data-testid="article-location-transfer-error">{transferError}</div> : null}
-          {transferSuccess ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-location-transfer-success">{transferSuccess}</div> : null}
+
+
+
 
           {canMutate && transferForm.inventoryId ? (
             <form className="rz-stock-mutation-form" onSubmit={handleTransferSubmit} data-testid="article-location-transfer-form">

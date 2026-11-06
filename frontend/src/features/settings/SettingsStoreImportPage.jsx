@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlocker, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -11,7 +11,7 @@ import {
   saveStoreImportSimplificationSettings,
 } from './services/storeImportSimplificationService'
 import { sortOptionObjects } from '../../ui/sorting'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
@@ -29,23 +29,17 @@ export default function SettingsStoreImportPage() {
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveMessage, setSaveMessage] = useState('')
-  const [saveError, setSaveError] = useState('')
-  const [loadError, setLoadError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
   const currentSnapshot = useMemo(() => stableStringify({ level, receiptScannerProvider, receiptAutoApprove }), [level, receiptScannerProvider, receiptAutoApprove])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
-
-  useDismissOnComponentClick([() => setSaveMessage(''), () => setSaveError(''), () => setLoadError('')], Boolean(saveMessage || saveError || loadError))
 
   useEffect(() => {
     let active = true
     async function load() {
       setIsLoading(true)
-      setLoadError('')
       try {
         const data = await getStoreImportSimplificationSettings()
         if (!active) return
@@ -61,14 +55,14 @@ export default function SettingsStoreImportPage() {
         }))
       } catch (error) {
         if (!active) return
-        setLoadError(error?.message || 'Instellingen konden niet worden geladen.')
+        showFeedback({ variant: 'error', message: error?.message || 'Instellingen konden niet worden geladen.' })
       } finally {
         if (active) setIsLoading(false)
       }
     }
     load()
     return () => { active = false }
-  }, [])
+  }, [showFeedback])
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -86,20 +80,8 @@ export default function SettingsStoreImportPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  useEffect(() => () => {
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-  }, [])
-
-  function queueSuccessMessage(text) {
-    setSaveError('')
-    setSaveMessage(text)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(() => setSaveMessage(''), 3000)
-  }
-
   async function handleSave() {
     setIsSaving(true)
-    setSaveError('')
     try {
       const saved = await saveStoreImportSimplificationSettings(level, receiptScannerProvider, receiptAutoApprove)
       const nextLevel = saved?.store_import_simplification_level || level
@@ -113,10 +95,9 @@ export default function SettingsStoreImportPage() {
         receiptScannerProvider: nextScannerProvider,
         receiptAutoApprove: Boolean(saved?.receipt_auto_approve),
       }))
-      queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
-      setSaveError(error?.message || 'Opslaan is niet gelukt.')
+      showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet gelukt.' })
       return false
     } finally {
       setIsSaving(false)
@@ -197,7 +178,6 @@ export default function SettingsStoreImportPage() {
 
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
-              {loadError ? <div className="rz-inline-feedback rz-inline-feedback--error">{loadError}</div> : null}
               <section data-testid="receipt-scanner-provider-settings" style={{ display: 'grid', gap: '10px' }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>Kassabonscanner</div>
@@ -239,7 +219,7 @@ export default function SettingsStoreImportPage() {
                   />
                   <span>Automatisch goedkeuren</span>
                 </label>
-                {!canEdit ? <div className="rz-inline-feedback rz-inline-feedback--warning">Alleen de beheerder van het huishouden kan dit wijzigen.</div> : null}
+                {!canEdit ? <div className="rz-setting-permission-note">Alleen de beheerder van het huishouden kan dit wijzigen.</div> : null}
               </section>
 
               <div className="rz-store-import-desktop">
@@ -255,9 +235,7 @@ export default function SettingsStoreImportPage() {
                     data-testid="store-import-level-select"
                     value={level}
                     onChange={(event) => {
-                      setSaveError('')
-                      setSaveMessage('')
-                      setLevel(event.target.value)
+                                        setLevel(event.target.value)
                     }}
                     disabled={!canEdit || isSaving}
                     style={{ width: '100%' }}
@@ -267,7 +245,7 @@ export default function SettingsStoreImportPage() {
                     ))}
                   </select>
                   {!canEdit ? (
-                    <div className="rz-inline-feedback rz-inline-feedback--warning">Alleen de beheerder van het huishouden kan dit wijzigen.</div>
+                    <div className="rz-setting-permission-note">Alleen de beheerder van het huishouden kan dit wijzigen.</div>
                   ) : null}
                 </div>
               </div>
@@ -305,9 +283,7 @@ export default function SettingsStoreImportPage() {
                       className={`rz-store-import-choice${selected ? ' rz-store-import-choice--selected' : ''}`}
                       onClick={() => {
                         if (!canEdit || isSaving) return
-                        setSaveError('')
-                        setSaveMessage('')
-                        setLevel(option.value)
+                                              setLevel(option.value)
                       }}
                       disabled={!canEdit || isSaving}
                     >
@@ -316,17 +292,12 @@ export default function SettingsStoreImportPage() {
                     </button>
                   )
                 })}
-                {!canEdit ? <div className="rz-inline-feedback rz-inline-feedback--warning">Alleen de beheerder kan dit wijzigen.</div> : null}
+                {!canEdit ? <div className="rz-setting-permission-note">Alleen de beheerder kan dit wijzigen.</div> : null}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div />
                 <div className="rz-save-cluster">
-                  {(saveMessage || saveError) ? (
-                    <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}>
-                      {saveError || saveMessage}
-                    </div>
-                  ) : null}
                   <Button onClick={handleSave} disabled={isSaving || !canEdit}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
                 </div>
               </div>

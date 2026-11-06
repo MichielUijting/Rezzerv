@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import { readStoredAuthContext } from '../../lib/authSession.js'
@@ -72,7 +73,10 @@ export default function SettingsCapabilitiesPage() {
   const [workflowLocation, setWorkflowLocation] = useState('none')
   const [workflowUnpacking, setWorkflowUnpacking] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [message, setMessage] = useState('')
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
 
   const configuration = state?.product_configuration || null
   const questions = useMemo(
@@ -357,8 +361,8 @@ export default function SettingsCapabilitiesPage() {
                 </div>
               )
             })}
-            {message ? <div className="rz-inline-feedback rz-inline-feedback--success" role="status">{message}</div> : null}
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error" role="alert">{error}</div> : null}
+
+
           </div>
         </Card>
         {configuration ? (

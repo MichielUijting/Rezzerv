@@ -165,7 +165,7 @@ async function consumeThroughArticleStock(page, householdArticleId, inventoryId,
   ))
   await form.getByRole('button', { name: 'Opslaan', exact: true }).click()
   expect((await mutationPromise).ok()).toBeTruthy()
-  await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Voorraad is afgeboekt.')
 }
 
 function almostOutRowsForArticle(page, articleName) {

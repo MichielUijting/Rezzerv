@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ScreenCard from '../../../ui/ScreenCard'
 import Button from '../../../ui/Button'
+import { useAppFeedback } from '../../../ui/AppFeedbackProvider.jsx'
 import { normalizeErrorMessage } from '../../stores/storeImportShared'
 
 export default function ReceiptPreviewCard({
@@ -11,6 +12,7 @@ export default function ReceiptPreviewCard({
   loadReceiptPreview,
 }) {
   const [selectedVariant, setSelectedVariant] = useState('original')
+  const { showFeedback } = useAppFeedback()
   const [previewState, setPreviewState] = useState({
     status: 'idle',
     blobUrl: '',
@@ -25,6 +27,10 @@ export default function ReceiptPreviewCard({
   const hasTransientPreview = Boolean(transientPreview?.originalUrl)
   const supportsProcessedPreview = hasTransientPreview || (receipt?.mime_type ? String(receipt.mime_type).toLowerCase().startsWith('image/') : false)
   const previewTitle = selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'
+  useEffect(() => {
+    if (previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText) showFeedback({ variant: 'warning', message: 'Previewtype wordt niet ondersteund.' })
+  }, [previewState.status, previewState.isPdf, previewState.isImage, previewState.isHtml, previewState.isText, showFeedback])
+  useEffect(() => { if (previewState.status === 'error' && previewState.error) showFeedback({ variant: 'error', message: previewState.error }) }, [previewState.status, previewState.error, showFeedback])
 
   useEffect(() => {
     setSelectedVariant('original')
@@ -138,11 +144,7 @@ export default function ReceiptPreviewCard({
               <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden…</div>
             ) : null}
 
-            {previewState.status === 'error' ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px', margin: '16px' }}>
-                {previewState.error}
-              </div>
-            ) : null}
+
 
             {previewState.status === 'ready' && previewState.isPdf ? (
               <iframe
@@ -174,11 +176,7 @@ export default function ReceiptPreviewCard({
               </pre>
             ) : null}
 
-            {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ margin: '16px' }}>
-                Previewtype wordt niet ondersteund.
-              </div>
-            ) : null}
+
           </div>
         </div>
       )}

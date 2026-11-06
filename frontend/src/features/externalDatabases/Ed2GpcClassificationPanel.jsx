@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Button from '../../ui/Button'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DataTable from '../../ui/DataTable'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
@@ -24,6 +25,8 @@ export default function Ed2GpcClassificationPanel({ item, onClassified }) {
   const [saving, setSaving] = useState(false)
   const [confirmSave, setConfirmSave] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let active = true
@@ -131,9 +134,7 @@ export default function Ed2GpcClassificationPanel({ item, onClassified }) {
             {searching ? 'Zoeken...' : 'Zoeken'}
           </Button>
         </form>
-        {error ? <p role="alert" onClick={() => setError('')} tabIndex={0}
-          onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setError('') }}>
-          {error}</p> : null}
+
         {!loading && !searching && !candidates.length ? <p>Geen passende GS1-classificatie gevonden. Probeer een andere zoekterm.</p> : null}
         {!loading && !searching && candidates.length ? <DataTable
           columns={columns}

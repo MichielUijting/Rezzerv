@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -36,6 +37,8 @@ export default function PlatformAuditPage() {
   React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [reloadKey, setReloadKey] = React.useState(0)
 
   React.useEffect(() => {
@@ -78,7 +81,7 @@ export default function PlatformAuditPage() {
             <p>Gevoelige auditpayloads, redenen en ticketreferenties worden hier niet getoond.</p>
 
             {loading ? <p data-testid="platform-audit-loading">Nieuwe auditgegevens laden…</p> : null}
-            {error ? <p role="alert" data-testid="platform-audit-error">{error}</p> : null}
+
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-audit-empty">Er zijn geen auditgebeurtenissen beschikbaar.</p>

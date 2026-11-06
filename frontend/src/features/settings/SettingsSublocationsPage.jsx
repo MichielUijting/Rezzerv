@@ -6,20 +6,12 @@ import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import { buildTableWidth } from '../../ui/resizableTable'
 import Table from '../../ui/Table'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../lib/authSession'
 
 const initialForm = { naam: '', space_id: '', active: true }
 const initialFilters = { naam: '', ruimte: '', actiefJa: false, actiefNee: false }
 const columnWidths = { select: 48, sublocatie: 320, ruimte: 260, actief: 140 }
-
-function Feedback({ type = 'info', children }) {
-  if (!children) return null
-  const isError = type === 'error'
-  const background = isError ? '#fef2f2' : '#ecfdf3'
-  const border = isError ? '#fecaca' : '#bbf7d0'
-  const color = isError ? '#991b1b' : 'var(--color-ui-primary)'
-  return <div style={{ padding: '12px 14px', borderRadius: 12, border: `1px solid ${border}`, background, color }}>{children}</div>
-}
 
 function SublocationModal({ mode, form, onChange, onClose, onSubmit, busy, spaces }) {
   if (!mode) return null
@@ -85,6 +77,9 @@ export default function SettingsSublocationsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
   const [modalMode, setModalMode] = useState('')
   const [editingId, setEditingId] = useState('')
   const [form, setForm] = useState(initialForm)
@@ -287,8 +282,6 @@ export default function SettingsSublocationsPage() {
       <Card className="rz-settings-spaces-card">
         <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="settings-sublocations-page">
           <div><h2 style={{ margin: '0 0 8px 0', fontSize: 20 }}>Beheer Sublocaties</h2></div>
-          <Feedback type="error">{error}</Feedback>
-          <Feedback type="success">{message}</Feedback>
           <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" dataTestId="settings-sublocations-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(columnWidths), minWidth: buildTableWidth(columnWidths) }}>
               <colgroup>
                 <col style={{ width: '48px' }} />

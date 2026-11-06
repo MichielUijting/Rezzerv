@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button.jsx'
 import {
   DEFAULT_PRIMARY_COLOR,
@@ -22,6 +23,8 @@ export default function SuperuserAppearanceSection() {
   const [draft, setDraft] = useState(DEFAULT_PRIMARY_COLOR)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let active = true
@@ -106,7 +109,7 @@ export default function SuperuserAppearanceSection() {
         <Button type="button" variant="secondary" onClick={reset} disabled={saving}>Standaard herstellen</Button>
       </div>
       <p data-testid="superuser-primary-color-active">Actief: <strong>{color}</strong></p>
-      {error ? <p role="alert">{error}</p> : null}
+
     </section>
   )
 }

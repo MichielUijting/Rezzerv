@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button'
 
 export default function CatalogCameraModal({
@@ -8,6 +10,12 @@ export default function CatalogCameraModal({
   onCapture,
   onClose,
 }) {
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => {
+    if (open && cameraState?.status === 'error' && cameraState.message) {
+      showFeedback({ variant: 'error', message: cameraState.message })
+    }
+  }, [open, cameraState?.status, cameraState?.message, showFeedback])
   if (!open) return null
 
   const status = String(cameraState?.status || 'starting')
@@ -65,16 +73,7 @@ export default function CatalogCameraModal({
           />
         </div>
 
-        {message ? (
-          <div
-            className={status === 'error'
-              ? 'rz-inline-feedback rz-inline-feedback--error'
-              : 'rz-inline-feedback'}
-            data-testid="catalog-camera-state"
-          >
-            {message}
-          </div>
-        ) : null}
+
 
         <div className="rz-modal-actions">
           <Button

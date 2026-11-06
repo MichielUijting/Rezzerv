@@ -5,6 +5,7 @@ import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import { API_BASE_URL, apiPost } from '../../lib/apiClient.js'
 import { logoutServerSession, readStoredAuthContext } from '../../lib/authSession.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 export default function SettingsMyAccountPage() {
   const context = readStoredAuthContext()
@@ -15,8 +16,7 @@ export default function SettingsMyAccountPage() {
   const [newPasswordRepeat, setNewPasswordRepeat] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
 
   useEffect(() => {
     let active = true
@@ -27,14 +27,13 @@ export default function SettingsMyAccountPage() {
         if (active) setDisplayName(String(payload?.display_name || ''))
       })
       .catch((loadError) => {
-        if (active) setError(loadError?.message || 'Accountprofiel kon niet worden geladen.')
+        if (active) showFeedback({ variant: 'error', message: loadError?.message || 'Accountprofiel kon niet worden geladen.' })
       })
     return () => { active = false }
-  }, [])
+  }, [showFeedback])
 
   async function saveProfile(event) {
     event.preventDefault()
-    clearFeedback()
     setIsProfileSaving(true)
     try {
       const response = await fetch(`${API_BASE_URL}/api/account/profile`, {
@@ -46,38 +45,31 @@ export default function SettingsMyAccountPage() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Naam opslaan mislukt.')
       setDisplayName(String(payload?.display_name || displayName))
-      setMessage(payload?.message || 'Naam opgeslagen.')
+      showFeedback({ variant: 'success', message: payload?.message || 'Naam opgeslagen.' })
     } catch (saveError) {
-      setError(saveError?.message || 'Naam opslaan mislukt.')
+      showFeedback({ variant: 'error', message: saveError?.message || 'Naam opslaan mislukt.' })
     } finally {
       setIsProfileSaving(false)
     }
   }
 
-  function clearFeedback() {
-    setMessage('')
-    setError('')
-  }
-
   function updatePasswordField(setValue, value) {
-    clearFeedback()
     setValue(value)
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
-    clearFeedback()
 
     if (newPassword !== newPasswordRepeat) {
-      setError('De nieuwe wachtwoorden zijn niet gelijk.')
+      showFeedback({ variant: 'error', message: 'De nieuwe wachtwoorden zijn niet gelijk.' })
       return
     }
     if (newPassword.length < 10) {
-      setError('Gebruik een nieuw wachtwoord van minimaal 10 tekens.')
+      showFeedback({ variant: 'error', message: 'Gebruik een nieuw wachtwoord van minimaal 10 tekens.' })
       return
     }
     if (currentPassword === newPassword) {
-      setError('Nieuw wachtwoord moet verschillen van het huidige wachtwoord.')
+      showFeedback({ variant: 'error', message: 'Nieuw wachtwoord moet verschillen van het huidige wachtwoord.' })
       return
     }
 
@@ -94,9 +86,9 @@ export default function SettingsMyAccountPage() {
       setCurrentPassword('')
       setNewPassword('')
       setNewPasswordRepeat('')
-      setMessage(payload?.message || 'Wachtwoord gewijzigd.')
+      showFeedback({ variant: 'success', message: payload?.message || 'Wachtwoord gewijzigd.' })
     } catch (saveError) {
-      setError(saveError?.message || 'Wachtwoord wijzigen mislukt.')
+      showFeedback({ variant: 'error', message: saveError?.message || 'Wachtwoord wijzigen mislukt.' })
     } finally {
       setIsSaving(false)
     }
@@ -133,8 +125,7 @@ export default function SettingsMyAccountPage() {
                 label="Naam"
                 value={displayName}
                 onChange={(event) => {
-                  clearFeedback()
-                  setDisplayName(event.target.value)
+                                setDisplayName(event.target.value)
                 }}
                 required
                 maxLength={120}
@@ -164,16 +155,6 @@ export default function SettingsMyAccountPage() {
                 Na een succesvolle wijziging blijf je op dit apparaat ingelogd. Andere actieve sessies worden ingetrokken.
               </p>
             </div>
-
-            {(message || error) ? (
-              <div
-                className={error ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}
-                role="status"
-                data-testid={error ? 'my-account-error' : 'my-account-success'}
-              >
-                {error || message}
-              </div>
-            ) : null}
 
             <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }} data-testid="my-account-password-form">
               <Input

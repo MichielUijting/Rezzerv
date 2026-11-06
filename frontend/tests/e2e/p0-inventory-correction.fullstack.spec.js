@@ -108,7 +108,9 @@ test('P0 Inventory corrects exact non-financial decimal through visible stock an
   }
   console.log(`P0_INVENTORY_DECIMAL_DIAGNOSTIC=${JSON.stringify(diagnostic)}`)
 
-  await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraadcorrectie is opgeslagen.', { timeout: 20_000 })
+  // The completed mutation reports via the standard transient feedback overlay.
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Voorraadcorrectie is opgeslagen.', { timeout: 20_000 })
+  await page.getByTestId('app-feedback-success').getByRole('button', { name: 'OK', exact: true }).click()
 
   const stockRow = page.getByTestId(new RegExp(`^article-stock-row-${expectedInventoryId}-`))
   await expect(stockRow).toContainText(expectedTargetQuantity, { timeout: 20_000 })

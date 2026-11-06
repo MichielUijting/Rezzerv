@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   ALMOST_OUT_POLICY_OPTIONS,
   ALMOST_OUT_POLICY_MODES,
@@ -27,14 +27,9 @@ export default function SettingsAlmostOutPage() {
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveMessage, setSaveMessage] = useState('')
-  const [saveError, setSaveError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
-
-  useDismissOnComponentClick([() => setSaveMessage(''), () => setSaveError('')], Boolean(saveMessage || saveError))
-
   useEffect(() => {
     let cancelled = false
     fetchAlmostOutSettings()
@@ -47,7 +42,7 @@ export default function SettingsAlmostOutPage() {
       })
       .catch((error) => {
         if (cancelled) return
-        setSaveError(error?.message || 'Almost-out instellingen konden niet worden geladen.')
+        showFeedback({ variant: 'error', message: error?.message || 'De instellingen voor Bijna op konden niet worden geladen.' })
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -55,7 +50,7 @@ export default function SettingsAlmostOutPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [showFeedback])
 
   const currentSettings = useMemo(() => ({
     predictionEnabled: Boolean(predictionEnabled),
@@ -73,14 +68,6 @@ export default function SettingsAlmostOutPage() {
   }, [isLoading, lastSavedSnapshot, currentSnapshot])
 
   useEffect(() => {
-    if (saveMessage && isDirty) setSaveMessage('')
-  }, [isDirty, saveMessage])
-
-  useEffect(() => () => {
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-  }, [])
-
-  useEffect(() => {
     if (blocker.state === 'blocked') setShowLeaveModal(true)
   }, [blocker.state])
 
@@ -94,16 +81,8 @@ export default function SettingsAlmostOutPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  function queueSuccessMessage(text) {
-    setSaveError('')
-    setSaveMessage(text)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(() => setSaveMessage(''), 3000)
-  }
-
   async function handleSave() {
     setIsSaving(true)
-    setSaveError('')
     try {
       const saved = await saveAlmostOutSettings({
         predictionEnabled,
@@ -119,10 +98,10 @@ export default function SettingsAlmostOutPage() {
       setPredictionDays(String(nextSettings.predictionDays))
       setPolicyMode(nextSettings.policyMode)
       setLastSavedSnapshot(stableStringify(nextSettings))
-      queueSuccessMessage('Opgeslagen')
+      showFeedback({ variant: 'success', message: 'Opgeslagen' })
       return true
     } catch (error) {
-      setSaveError(error?.message || 'Opslaan is niet gelukt.')
+      showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet gelukt.' })
       return false
     } finally {
       setIsSaving(false)
@@ -174,8 +153,6 @@ export default function SettingsAlmostOutPage() {
                   style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                   checked={predictionEnabled}
                   onChange={(event) => {
-                    setSaveMessage('')
-                    setSaveError('')
                     setPredictionEnabled(event.target.checked)
                   }}
                   disabled={!canEdit || isSaving}
@@ -193,8 +170,6 @@ export default function SettingsAlmostOutPage() {
                 step="1"
                 value={predictionDays}
                 onChange={(event) => {
-                  setSaveMessage('')
-                  setSaveError('')
                   setPredictionDays(event.target.value)
                 }}
                 disabled={!canEdit || isSaving}
@@ -208,8 +183,6 @@ export default function SettingsAlmostOutPage() {
                   className="rz-input"
                   value={policyMode}
                   onChange={(event) => {
-                    setSaveMessage('')
-                    setSaveError('')
                     setPolicyMode(event.target.value)
                   }}
                   disabled={!canEdit || isSaving}
@@ -237,16 +210,6 @@ export default function SettingsAlmostOutPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
               <div />
               <div className="rz-save-cluster">
-                {(saveMessage || saveError) ? (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    data-save-status={saveError ? 'error' : 'saved'}
-                    className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}
-                  >
-                    {saveError || saveMessage}
-                  </div>
-                ) : null}
                 <Button onClick={handleSave} disabled={isSaving || !canEdit || isLoading} data-testid="almost-out-settings-save">
                   {isSaving ? 'Opslaan…' : 'Opslaan'}
                 </Button>

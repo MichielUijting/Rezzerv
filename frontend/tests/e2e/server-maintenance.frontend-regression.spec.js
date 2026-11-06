@@ -14,6 +14,7 @@ test('maintenance actions use exact generation and never offer an unproved Windo
   const sessionClosures = []
   await page.route('**/api/session', route => route.fulfill({ json: session }))
   await page.route('**/api/maintenance/status', route => route.fulfill({ json: { state: 'normal' } }))
+  await page.route('**/api/platform/maintenance/imports', route => route.fulfill({ json: { paused: false, maintenance_paused: false } }))
   await page.route('**/api/platform/maintenance', async route => {
     if (route.request().method() === 'POST') {
       const payload = route.request().postDataJSON()
@@ -36,7 +37,7 @@ test('maintenance actions use exact generation and never offer an unproved Windo
   await panel.getByRole('button', { name: 'Resterende sessies beëindigen' }).click()
   await expect(panel.getByText('Niet-opgeslagen invoer van andere gebruikers kan verloren gaan.', { exact: false })).toBeVisible()
   await panel.getByRole('button', { name: 'Ja, andere sessies beëindigen' }).click()
-  await expect(panel.getByText('2 andere inlogsessie(s) beëindigd.', { exact: false })).toBeVisible()
+  await expect(page.getByTestId('app-feedback-success')).toContainText('2 andere inlogsessie(s) beëindigd.')
   expect(sessionClosures).toEqual([{ expected_generation: 1, confirmed: true }])
   await panel.getByRole('button', { name: 'Verwerkingen veilig stoppen' }).click()
   await panel.getByRole('button', { name: 'Actuele veiligheidscontroles uitvoeren' }).click()

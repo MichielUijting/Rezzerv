@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
@@ -26,7 +27,10 @@ export default function PlatformAuthorizationsPage() {
   const [canManageSpecialRoles, setCanManageSpecialRoles] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [result, setResult] = React.useState('')
+  React.useEffect(() => { if (result) showFeedback({ variant: 'success', message: result }) }, [result, showFeedback])
   const [pending, setPending] = React.useState(null)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -126,8 +130,8 @@ export default function PlatformAuthorizationsPage() {
         ) : null}
       </Card>
 
-      {error ? <Card><p role="alert">{error}</p></Card> : null}
-      {result ? <Card><p role="status">{result}</p></Card> : null}
+
+
       {loading ? <Card><p>Platformautorisaties laden...</p></Card> : null}
 
       {!loading && !users.length ? <Card><p>Er zijn geen gebruikers gevonden.</p></Card> : null}

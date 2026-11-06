@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -69,6 +70,11 @@ export default function PlatformTechnicalConfigurationPage() {
   const [running, setRunning] = React.useState('')
   const [results, setResults] = React.useState({})
   const [errors, setErrors] = React.useState({})
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => {
+    const latest = Object.values(errors).filter(Boolean).at(-1)
+    if (latest) showFeedback({ variant: 'error', message: latest })
+  }, [errors, showFeedback])
 
   async function execute(action) {
     setRunning(action.key)
@@ -102,7 +108,7 @@ export default function PlatformTechnicalConfigurationPage() {
                   <h3>{action.title}</h3>
                   <p>{action.description}</p>
 
-                  {errors[action.key] ? <p role="alert">{errors[action.key]}</p> : null}
+
                   <ActionResult actionKey={action.key} result={results[action.key]} />
 
                   {confirming === action.key ? (

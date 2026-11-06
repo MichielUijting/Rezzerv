@@ -34,6 +34,11 @@ async function openReceipt(page, receiptId, expectedStore) {
   await row.dblclick()
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('receipt-detail-title')).toHaveText(expectedStore)
+  // These canonical fixture receipts have no original image. Acknowledge the
+  // expected blocking error as a real user would before reviewing the lines.
+  const previewError = page.getByTestId('app-feedback-error')
+  await expect(previewError).toContainText('Originele bon ontbreekt')
+  await previewError.getByRole('button', { name: 'OK', exact: true }).click()
 }
 
 async function reviewUncertainLineThroughBrowser(page, receiptId, lineId) {

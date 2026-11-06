@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -40,6 +41,8 @@ export default function PlatformDiagnosticsPage() {
   const [statuses, setStatuses] = React.useState({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [reloadKey, setReloadKey] = React.useState(0)
 
   React.useEffect(() => {
@@ -85,7 +88,7 @@ export default function PlatformDiagnosticsPage() {
             <p>Het starten van controles hoort bij Achtergrondtaken en is hier niet beschikbaar.</p>
 
             {loading ? <p data-testid="platform-diagnostics-loading">Diagnostiek laden…</p> : null}
-            {error ? <p role="alert" data-testid="platform-diagnostics-error">{error}</p> : null}
+
 
             {!loading && !error ? (
               <div data-testid="platform-diagnostics-statuses">

@@ -9,6 +9,7 @@ import { mergeIncomingFormStatePreservingDirtyFields } from '../lib/householdSet
 import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 import { sortOptionObjects } from '../../../ui/sorting'
 import Select from '../../../ui/Select'
+import { useAppFeedback } from '../../../ui/AppFeedbackProvider.jsx'
 
 const GROUP_LABELS = {
   basic: 'Basis',
@@ -154,8 +155,7 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
   const articleId = articleData?.id
   const consumable = isConsumable(articleData)
   const [mode, setMode] = useState(AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD)
-  const [saveMessage, setSaveMessage] = useState('')
-  const dismissTimerRef = useRef(null)
+  const { showFeedback } = useAppFeedback()
   const automationOptions = useMemo(() => sortOptionObjects([
     { value: AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD, label: 'Huishoudinstelling volgen' },
     { value: AUTO_CONSUME_MODES.ALWAYS_ON, label: 'Altijd automatisch afboeken' },
@@ -165,7 +165,6 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
   useEffect(() => {
     let cancelled = false
     setMode(getArticleAutoConsumeMode(articleId))
-    setSaveMessage('')
     fetchArticleAutoConsumeMode(articleId).then((nextMode) => {
       if (!cancelled) setMode(nextMode)
     })
@@ -174,23 +173,14 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
     }
   }, [articleId])
 
-  useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) {
-        window.clearTimeout(dismissTimerRef.current)
-      }
-    }
-  }, [])
-
   async function handleChange(event) {
     if (!canEdit) return
-    const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
-    setMode(nextMode)
-    setSaveMessage('Opgeslagen')
-    if (dismissTimerRef.current) {
-      window.clearTimeout(dismissTimerRef.current)
+    try {
+      const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
+      setMode(nextMode)
+    } catch (error) {
+      showFeedback({ variant: 'error', message: error?.message || 'Automatisering kon niet worden opgeslagen.' })
     }
-    dismissTimerRef.current = window.setTimeout(() => setSaveMessage(''), 2400)
   }
 
   return (
@@ -210,9 +200,6 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
               ))}
             </select>
           </label>
-          {saveMessage ? (
-            <span className="rz-inline-feedback rz-inline-feedback--success rz-article-automation-feedback">{saveMessage}</span>
-          ) : null}
         </div>
       </div>
     </ArticleSectionAccordion>
@@ -258,14 +245,11 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
   const authContext = readStoredAuthContext() || {}
   const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const [formState, setFormState] = useState(() => buildFormState(articleData))
-  const [statusMessage, setStatusMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [savingFieldKey, setSavingFieldKey] = useState('')
 
   useEffect(() => {
     setFormState(buildFormState(articleData))
-    setStatusMessage('')
-    setErrorMessage('')
     setSavingFieldKey('')
   }, [articleData?.name, articleData?.custom_name, articleData?.article_type, articleData?.category, articleData?.brand_or_maker, articleData?.brand, articleData?.short_description, articleData?.notes, articleData?.min_stock, articleData?.ideal_stock, articleData?.favorite_store, articleData?.barcode, articleData?.article_number])
 
@@ -289,8 +273,6 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
     if (nextValue === previousValue) return
 
     setSavingFieldKey(fieldKey)
-    setStatusMessage('')
-    setErrorMessage('')
     try {
       const payload = {
         custom_name: formState.custom_name.trim(),
@@ -306,9 +288,8 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
       const nextDetails = data?.details && typeof data.details === 'object' ? data.details : { ...articleData, ...payload }
       setFormState(buildFormState(nextDetails))
       if (typeof onDetailsSaved === 'function') onDetailsSaved(nextDetails)
-      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
-      setErrorMessage(error?.message || 'Artikeldetails konden niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: error?.message || 'Artikeldetails konden niet worden opgeslagen.' })
       setFormState((current) => ({ ...current, [fieldKey]: previousValue }))
     } finally {
       setSavingFieldKey('')
@@ -325,8 +306,6 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
   return (
     <ArticleSectionAccordion title="Artikelgegevens voor dit huishouden" testId="article-household-details-section" open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
       <div className="rz-article-overview-instruction">Wijzigingen worden opgeslagen bij verlaten van een veld.</div>
-      {statusMessage ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-details-save-success">{statusMessage}</div> : null}
-      {errorMessage ? <div className="rz-article-detail-alert" data-testid="article-details-save-error">{errorMessage}</div> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {EDITABLE_FORM_FIELDS.map((field) => (
           <EditableHouseholdFieldRow
@@ -381,8 +360,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   const [formState, setFormState] = useState(() => buildHouseholdSettingsFormState(settings))
   const dirtyFieldsRef = useRef(new Set())
   const formArticleIdRef = useRef(resolvedArticleId)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
@@ -402,7 +380,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         dirtyFieldsRef.current,
       ))
     }
-    setErrorMessage('')
   }, [
     resolvedArticleId,
     settings?.min_stock,
@@ -437,7 +414,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
         setLocationOptions(nextSpaces)
         setSublocationOptions(nextSublocations)
       } catch (error) {
-        if (!cancelled) setErrorMessage(error?.message || 'Locatie-opties konden niet worden geladen.')
+        if (!cancelled) showFeedback({ variant: 'error', message: error?.message || 'Locatie-opties konden niet worden geladen.' })
       } finally {
         if (!cancelled) setIsLoadingLocations(false)
       }
@@ -493,8 +470,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   async function handleSave() {
     if (!resolvedArticleId || !canEdit) return
     setIsSaving(true)
-    setStatusMessage('')
-    setErrorMessage('')
     try {
       const payload = {
         min_stock: formState.min_stock === '' ? null : Number(formState.min_stock),
@@ -519,9 +494,8 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       dirtyFieldsRef.current.clear()
       setFormState(buildHouseholdSettingsFormState(nextSettings))
       if (typeof onDetailsSaved === 'function') onDetailsSaved({ settings: nextSettings })
-      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
-      setErrorMessage(error?.message || 'Huishoudinstellingen konden niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: error?.message || 'Huishoudinstellingen konden niet worden opgeslagen.' })
     } finally {
       setIsSaving(false)
     }
@@ -530,8 +504,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   return (
     <ArticleSectionAccordion title="Instellingen voor dit huishouden" testId="article-household-settings-section" open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
       <div className="rz-article-overview-instruction">Deze instellingen gelden alleen voor dit huishouden en blijven na opslaan behouden.</div>
-      {statusMessage ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-settings-save-success">{statusMessage}</div> : null}
-      {errorMessage ? <div className="rz-article-detail-alert" data-testid="article-settings-save-error">{errorMessage}</div> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         <EditableHouseholdFieldRow field={{ key: 'min_stock', label: 'Minimumvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.min_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <EditableHouseholdFieldRow field={{ key: 'ideal_stock', label: 'Streefvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.ideal_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
@@ -665,7 +637,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const isMobileScanner = useMemo(() => detectMobileScannerSupport(), [])
   const [editMode, setEditMode] = useState(false)
-  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const { showFeedback } = useAppFeedback()
   const [formState, setFormState] = useState({ barcode: articleData?.barcode || '', article_number: articleData?.article_number || '' })
   const [saveState, setSaveState] = useState({ saving: false, message: '', error: '' })
   const {
@@ -697,6 +669,12 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   useEffect(() => {
     setFormState({ barcode: articleData?.barcode || '', article_number: articleData?.article_number || '' })
   }, [articleData?.barcode, articleData?.article_number])
+
+  useEffect(() => {
+    if (scanState.status === 'error' && scanState.message) {
+      showFeedback({ variant: 'error', message: scanState.message })
+    }
+  }, [scanState.status, scanState.message, showFeedback])
 
   async function refreshDetails() {
     if (typeof onDetailsSaved !== 'function') return
@@ -762,9 +740,11 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
       logEvent?.('ENRICH_TRIGGERED', { barcode: persistedBarcode })
       await triggerImmediateEnrichment()
       await refreshDetails()
-      setSaveState({ saving: false, message: 'Opgeslagen', error: '' })
+      setSaveState({ saving: false, message: '', error: '' })
+      showFeedback({ variant: 'success', message: 'Externe productkoppeling opgeslagen.' })
     } catch (error) {
-      setSaveState({ saving: false, message: '', error: error?.message || 'Externe productkoppeling kon niet worden opgeslagen.' })
+      setSaveState({ saving: false, message: '', error: '' })
+      showFeedback({ variant: 'error', message: error?.message || 'Externe productkoppeling kon niet worden opgeslagen.' })
     }
   }
 
@@ -775,14 +755,21 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   function handleEnableManualEntry() {
     if (!canEdit) return
     if (hasExistingValue()) {
-      setShowOverwriteConfirm(true)
+      showFeedback({
+        variant: 'warning',
+        title: 'Barcode overschrijven',
+        message: 'Er staat al een waarde ingevuld. Alsnog overschrijven?',
+        primaryActionLabel: 'Ja',
+        secondaryActionLabel: 'Nee',
+        onPrimaryAction: () => confirmOverwrite(true),
+        onSecondaryAction: () => confirmOverwrite(false),
+      })
       return
     }
     setEditMode(true)
   }
 
   function confirmOverwrite(allow) {
-    setShowOverwriteConfirm(false)
     if (allow && canEdit) setEditMode(true)
   }
 
@@ -808,30 +795,18 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
 
   return (
     <ArticleSectionAccordion title="Externe productkoppeling" testId="article-external-link-section" headerActions={actions} open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
-      {showOverwriteConfirm ? (
-        <div className="rz-article-detail-alert rz-article-detail-alert--warning">
-          <div>Er staat al een waarde ingevuld. Alsnog overschrijven?</div>
-          <div className="rz-article-inline-actions rz-article-inline-actions--tight">
-            <button type="button" className="rz-button-secondary rz-button-small" onClick={() => confirmOverwrite(true)}>Ja</button>
-            <button type="button" className="rz-button-secondary rz-button-small" onClick={() => confirmOverwrite(false)}>Nee</button>
-          </div>
-        </div>
-      ) : null}
-      {saveState.message ? <div className="rz-inline-feedback rz-inline-feedback--success">{saveState.message}</div> : null}
-      {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--danger">{saveState.error}</div> : null}
-      {!isMobileScanner ? <div className="rz-inline-feedback">Gebruik op laptop/desktop de handmatige barcode-invoer. Live scannen is alleen beschikbaar op mobiel.</div> : null}
-      {scanState.status === 'error' ? <div className="rz-inline-feedback rz-inline-feedback--danger">{scanState.message}</div> : null}
+      {!isMobileScanner ? <p>Gebruik op laptop/desktop de handmatige barcode-invoer. Live scannen is alleen beschikbaar op mobiel.</p> : null}
       {isMobileScanner ? (
         <div className="rz-barcode-scan-panel" style={{ display: scannerOpen ? 'block' : 'none' }}>
           <video ref={videoRef} className="rz-barcode-scan-video" autoPlay muted playsInline style={{ visibility: scannerOpen ? 'visible' : 'hidden' }} />
           <div className="rz-article-inline-actions rz-article-inline-actions--tight rz-barcode-scan-toolbar">
-            <span className="rz-inline-feedback">{scanState.message}</span>
+            <span>{scanState.message}</span>
             <div className="rz-article-inline-actions rz-article-inline-actions--tight rz-barcode-scan-toolbar-actions">
               <button type="button" className="rz-button-secondary rz-button-small" onClick={handleSwitchCamera} disabled={availableCameras.length < 2}>Camera wisselen</button>
               <button type="button" className="rz-button-secondary rz-button-small" onClick={() => closeScanner(true)}>Camera sluiten</button>
             </div>
           </div>
-          <div className="rz-inline-feedback" style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8 }}>
             Camera: {cameraMeta.label || cameraMeta.deviceId || 'onbekend'} · Decodepogingen: {cameraMeta.decodeAttempts}
           </div>
         </div>
@@ -885,6 +860,13 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
     return [...baseIds, ...Object.keys(groupedFields).map((groupKey) => `group-${groupKey}`)]
   }, [groupedFields])
   const [sectionStates, setSectionStates] = useState({})
+  const { showFeedback } = useAppFeedback()
+
+  useEffect(() => {
+    if (visibilityError) {
+      showFeedback({ variant: 'error', message: 'Veldinstellingen konden niet volledig worden geladen. Standaardvelden worden getoond.' })
+    }
+  }, [visibilityError, showFeedback])
 
   const visibleGroups = useMemo(() => {
     return Object.entries(groupedFields).reduce((acc, [groupKey, fields]) => {
@@ -946,7 +928,6 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
 
   return (
     <div className="rz-overview-tab">
-      {visibilityError ? <div className="rz-article-detail-alert">Veldinstellingen konden niet volledig worden geladen. Standaardvelden worden getoond.</div> : null}
       <ArticleGlobalSectionToggle ariaLabelPrefix="Overzicht" onExpandAll={expandAllSections} onCollapseAll={collapseAllSections} canExpand={canExpandAll} canCollapse={canCollapseAll} />
       <ArticleDetailsEditor articleData={articleData} onDetailsSaved={onDetailsSaved} sectionOpen={sectionStates['article-details']} onToggleSection={() => toggleSection('article-details')} />
       <HouseholdArticleSettingsCard articleData={articleData} onDetailsSaved={onDetailsSaved} sectionOpen={sectionStates['household-settings']} onToggleSection={() => toggleSection('household-settings')} />

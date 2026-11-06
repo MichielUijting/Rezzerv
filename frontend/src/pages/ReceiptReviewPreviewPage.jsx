@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../app/AppShell.jsx'
+import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import Card from '../ui/Card.jsx'
 import Button from '../ui/Button.jsx'
 import Input from '../ui/Input.jsx'
@@ -237,6 +238,8 @@ export default function ReceiptReviewPreviewPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingList, setIsLoadingList] = useState(false)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false)
 
   const normalized = useMemo(() => data?.normalized_review_diagnostics || {}, [data])
@@ -290,7 +293,7 @@ export default function ReceiptReviewPreviewPage() {
             </div>
 
             {isLoadingList ? <span>Bonnen laden...</span> : null}
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+
           </div>
         </Card>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import Checkbox from '../../ui/Checkbox.jsx'
 import Button from '../../ui/Button.jsx'
@@ -36,6 +37,8 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [showTechnicalIds, setShowTechnicalIds] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState([])
 
@@ -139,7 +142,7 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
         <Checkbox checked={showTechnicalIds} onChange={(event) => setShowTechnicalIds(event.target.checked)} aria-label="Technische ID's tonen in gebruikersoverzicht" />
         <span>Technische ID's: <strong>{showTechnicalIds ? 'Aan' : 'Uit'}</strong></span>
       </div>
-      {error && <div role="alert">{error}</div>}
+
       {loading ? <p role="status">Gebruikers worden geladen…</p> : (
         <DataTable
           columns={columns}

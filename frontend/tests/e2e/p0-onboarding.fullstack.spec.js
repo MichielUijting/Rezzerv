@@ -60,9 +60,8 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
   // PO-01 regression: an incomplete final step must never fail silently.
   await expect(page.getByTestId('shared-household-finish')).toBeEnabled()
   await page.getByTestId('shared-household-finish').click()
-  await expect(page.getByTestId('shared-household-finish-validation')).toHaveText(
-    'Kies eerst of je Inhuis alleen of samen gebruikt.',
-  )
+  await expect(page.getByTestId('app-feedback-error')).toContainText('Kies eerst of je Inhuis alleen of samen gebruikt.')
+  await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK', exact: true }).click()
   await expect(page).toHaveURL(/\/onboarding$/)
 
   await page.getByTestId('shared-household-usage-alone').check()

@@ -52,6 +52,10 @@ export default function MobileShopping() {
   const [completedSearchQuery, setCompletedSearchQuery] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (error) showFeedback({ variant: 'error', message: error })
+  }, [error, showFeedback])
   const catalogSearchRequestRef = useRef(0)
 
   async function loadList() {
@@ -383,7 +387,7 @@ export default function MobileShopping() {
           <span className="rz-mobile-shopping-count" aria-label={`${toBuyItems.length} nog te kopen`}>{toBuyItems.length}</span>
         </section>
 
-        {error ? <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert"><div>{error}</div><Button type="button" variant="secondary" onClick={loadList}>Opnieuw proberen</Button></section> : null}
+
         {!error && !loading && (list.items || []).length === 0 ? <section className="rz-mobile-inventory-state"><strong>Nog geen artikelen bij Boodschappen.</strong></section> : null}
 
         {!error && (list.items || []).length > 0 ? (

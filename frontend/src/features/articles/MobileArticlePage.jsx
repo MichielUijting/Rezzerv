@@ -94,6 +94,7 @@ export default function MobileArticlePage() {
   const [shoppingBusy, setShoppingBusy] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   const articleName = String(articleData?.article_name || articleData?.name || requestedArticleName || 'Voorraadartikel').trim()
   const householdArticleId = String(
@@ -294,9 +295,8 @@ export default function MobileArticlePage() {
       <div className="rz-screen rz-mobile-article-screen" data-testid="mobile-article-detail-page">
         <MobileModuleHeader title="Artikel in Voorraad" testId="mobile-article-header" />
         <main className="rz-mobile-article-content">
-          <section className="rz-mobile-article-card rz-mobile-article-state rz-mobile-article-state--error" role="alert">
+          <section className="rz-mobile-article-card rz-mobile-article-state rz-mobile-article-state--error">
             <strong>Artikel niet beschikbaar</strong>
-            <span>{error || 'Voor dit artikel zijn geen gegevens beschikbaar.'}</span>
             <button type="button" className="rz-mobile-article-text-action" onClick={() => loadAll()}>Opnieuw proberen</button>
           </section>
         </main>

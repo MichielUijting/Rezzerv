@@ -138,6 +138,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const mutationLockRef = useRef(false)
   const loadGenerationRef = useRef(0)
   const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
   async function reload() {
@@ -373,12 +374,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
           </Button>
         </div>
 
-        {error ? (
-          <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
-            <div>{error}</div>
-            <Button type="button" variant="secondary" onClick={reload}>Opnieuw proberen</Button>
-          </section>
-        ) : null}
+
 
         {!error && !isLoading && filteredRows.length === 0 ? (
           <section className="rz-mobile-inventory-state">

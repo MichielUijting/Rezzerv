@@ -69,11 +69,16 @@ test('F6-01 Inventory controlled 500 shows feedback and PostgreSQL state stays u
   const mutationResponse = await mutationResponsePromise
   expect(mutationResponse.status()).toBe(500)
 
-  const visibleError = page.getByTestId('article-stock-mutation-error')
+  // A controlled 500 must show a blocking error overlay, never an in-screen message.
+  const visibleError = page.getByTestId('app-feedback-error')
   await expect(visibleError).toBeVisible({ timeout: 20_000 })
   await expect(visibleError).toContainText('Voorraadmutatie kon niet worden opgeslagen.')
+  await expect(page.getByTestId('app-feedback-error-overlay')).toBeVisible()
   const visibleFeedbackText = String(await visibleError.textContent() || '').trim()
-  await expect(page.getByTestId('article-stock-mutation-success')).toHaveCount(0)
+  await expect(page.getByTestId('app-feedback-success')).toHaveCount(0)
+  // Failures require an explicit acknowledgement: no automatic dismissal.
+  await visibleError.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(page.getByTestId('app-feedback-error-overlay')).toHaveCount(0)
 
   await page.reload()
   await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })

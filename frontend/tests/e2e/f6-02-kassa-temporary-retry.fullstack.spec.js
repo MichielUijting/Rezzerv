@@ -31,6 +31,11 @@ async function openReceipt(page, receiptId, expectedStore) {
   await row.dblclick()
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('receipt-detail-title')).toHaveText(expectedStore)
+  // Fixture originals are absent: keep the required error overlay and
+  // acknowledge it with OK before attempting Kassa actions.
+  const previewError = page.getByTestId('app-feedback-error')
+  await expect(previewError).toContainText('Originele bon ontbreekt')
+  await previewError.getByRole('button', { name: 'OK', exact: true }).click()
 }
 
 async function reviewAndApproveUncertain(page, receiptId, lineId) {

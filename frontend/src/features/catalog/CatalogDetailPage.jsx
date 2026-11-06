@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -51,6 +52,8 @@ export default function CatalogDetailPage() {
   const [detail, setDetail] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -112,11 +115,7 @@ export default function CatalogDetailPage() {
         <ScreenCard fullWidth>
           {isLoading ? <div>Catalogusartikel laden...</div> : null}
 
-          {error ? (
-            <div className="rz-inline-feedback rz-inline-feedback--error">
-              {error}
-            </div>
-          ) : null}
+
 
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">

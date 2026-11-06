@@ -45,6 +45,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const [receipts, setReceipts] = useState([])
   const [receiptsLoading, setReceiptsLoading] = useState(false)
   const [receiptsLoadError, setReceiptsLoadError] = useState('')
+  useEffect(() => { if (receiptsLoadError) showFeedback({ variant: 'error', message: receiptsLoadError }) }, [receiptsLoadError, showFeedback])
   const receiptRequestRef = useRef(0)
   // A user's first tap on Bonnen must win over the asynchronous initial camera startup.
   const manualReceiptListRef = useRef(false)
@@ -529,7 +530,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
             <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...new Set([...current, ...receiptPagination.pageItems.map(receiptId)])] : current.filter((id) => !receiptPagination.pageItems.some((item) => receiptId(item) === id)))} disabled={busy || !receiptPagination.pageItems.length} /> Alles</label>
           </div>
           {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
-          {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
+
           {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? (
             <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div>
           ) : !receiptsLoadError && receiptPagination.pageItems.length > 0 ? (
