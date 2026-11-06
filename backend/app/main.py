@@ -6444,6 +6444,8 @@ def normalize_almost_out_prediction_days(value: Any) -> int:
 def normalize_almost_out_shopping_days(value: Any) -> int:
     if value in (None, ''):
         return 0
+    if isinstance(value, (bool, float)):
+        raise ValueError('Het aantal dagen tot boodschappen moet een geheel getal zijn')
     try:
         days = int(value)
     except (TypeError, ValueError):
