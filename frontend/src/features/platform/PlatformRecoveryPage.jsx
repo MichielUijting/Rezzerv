@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import PlatformMaintenancePanel from './PlatformMaintenancePanel.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
@@ -52,12 +53,15 @@ export default function PlatformRecoveryPage() {
   const [running, setRunning] = React.useState(false)
   const [result, setResult] = React.useState(null)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [resetHouseholdId, setResetHouseholdId] = React.useState('')
   const [resetConfirmationTarget, setResetConfirmationTarget] = React.useState('')
   const [resetConfirmationText, setResetConfirmationText] = React.useState('')
   const [resetRunning, setResetRunning] = React.useState(false)
   const [resetResult, setResetResult] = React.useState(null)
   const [resetError, setResetError] = React.useState('')
+  React.useEffect(() => { if (resetError) showFeedback({ variant: 'error', message: resetError }) }, [resetError, showFeedback])
 
   const normalizedHouseholdId = householdId.trim()
   const confirmationMatches = confirmationTarget !== '' && confirmationText.trim() === confirmationTarget
@@ -158,7 +162,7 @@ export default function PlatformRecoveryPage() {
                 autoComplete="off"
               />
 
-              {error ? <p role="alert">{error}</p> : null}
+              
               {result ? (
                 <div data-testid="platform-recovery-result">
                   <p>Herstelactie afgerond voor huishouden: {result.householdId}</p>
@@ -226,7 +230,7 @@ export default function PlatformRecoveryPage() {
                 autoComplete="off"
               />
 
-              {resetError ? <p role="alert">{resetError}</p> : null}
+              
               {resetResult ? (
                 <div data-testid="platform-reset-household-result">
                   <p>Huishouden <strong>{resetResult.household_id}</strong> is volledig gereset.</p>
