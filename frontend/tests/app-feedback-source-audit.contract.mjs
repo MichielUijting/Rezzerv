@@ -16,6 +16,8 @@ assert.match(provider, /dismissMode: variant === 'error' \? 'ok-only'/)
 assert.match(provider, /variant !== 'error' && dismissMode === 'outside-or-ok'/)
 assert.ok(provider.includes('data-testid={`${testId}-ok-button`}'), 'Elke fout-overlay vereist de centrale OK-knop')
 assert.match(provider, /interactiveDialog = variant === 'error'/)
+assert.match(provider, /setFeedback\(\(current\) => current\?\.id === feedback\.id \? null : current\)/,
+  'Een succesvolle actie mag opvolgende feedback niet wissen')
 const theme = fs.readFileSync(path.join(root, 'ui/theme.css'), 'utf8')
 assert.ok((theme.match(/:not\(:has\(\[data-testid\$="-ok-button"\]\)\)/g) || []).length >= 10,
   'De OK-dialoog mag niet door passieve balk-CSS worden afgedwongen')
