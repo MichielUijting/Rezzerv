@@ -5,7 +5,7 @@ import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 export default function ResetPasswordPage() {
   const processedHashRef = useRef(false)
@@ -17,7 +17,9 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  useDismissOnComponentClick([() => setError('')], Boolean(error) && Boolean(token))
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
 
   useEffect(() => {
     if (processedHashRef.current) return
@@ -128,7 +130,7 @@ export default function ResetPasswordPage() {
                 >
                   {loading ? 'Bezig...' : 'Wachtwoord opslaan'}
                 </Button>
-                {error ? <div className="rz-alert" data-testid="reset-password-error">{error}</div> : null}
+
               </form>
             )}
           </Card>
