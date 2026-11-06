@@ -65,4 +65,6 @@ assert.match(
   /@media \(max-width: 720px\)[\s\S]*inset:\s*0\s*!important;[\s\S]*align-items:\s*flex-end\s*!important;/,
 )
 
+await import('./app-feedback-source-audit.contract.mjs')
+
 console.log('INHUIS_FEEDBACK_BAR_CONTRACT_GREEN')
