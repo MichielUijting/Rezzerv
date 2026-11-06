@@ -157,7 +157,16 @@ test('F6-04 Settings projection interruption rolls expansion back', async ({ pag
   const householdName = required('PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD')
   await completeInhuisHalenOnboarding(page, email, password, householdName)
   await submitSettingsWatInhuisExpansion(page, 500)
-  await expect(page.getByRole('alert')).toContainText('Interne serverfout in de API', { timeout: 20_000 })
+  // Errors use the central modal feedback instead of an in-screen alert.
+  // Keep the original server-error assertion and prove OK-only dismissal.
+  const errorOverlay = page.getByTestId('app-feedback-error-overlay')
+  const errorDialog = page.getByTestId('app-feedback-error')
+  await expect(errorOverlay).toBeVisible({ timeout: 20_000 })
+  await expect(errorDialog).toContainText('Interne serverfout in de API')
+  await errorOverlay.click({ position: { x: 5, y: 5 } })
+  await expect(errorDialog).toBeVisible()
+  await errorDialog.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(errorOverlay).toHaveCount(0)
   await expect(page.getByTestId('capability-expansion-form-wat_inhuis')).toBeVisible()
   writeFileSync('f6-04-settings-interrupted-browser-proof.json', JSON.stringify({ email, responseStatus: 500 }, null, 2))
   console.log('F6_04_SETTINGS_INTERRUPTED_BROWSER_GREEN')
