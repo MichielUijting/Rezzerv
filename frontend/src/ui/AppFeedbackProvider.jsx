@@ -69,7 +69,7 @@ function normalizeFeedback(input) {
     message,
     detail,
     technicalDetail,
-    dismissMode: input.dismissMode || (variant === 'progress' ? 'blocked' : 'outside-or-ok'),
+    dismissMode: variant === 'error' ? 'ok-only' : (input.dismissMode || (variant === 'progress' ? 'blocked' : 'outside-or-ok')),
     testId: input.testId || `app-feedback-${variant}`,
     progress: Number.isFinite(Number(input.progress))
       ? Math.max(0, Math.min(100, Number(input.progress)))
@@ -279,7 +279,7 @@ function AppFeedbackDialog({
   // Passive notifications keep their existing compact bottom-bar treatment.
   const interactiveDialog = Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
   const canDismissWithOk = dismissMode !== 'blocked'
-  const canDismissOutside = dismissMode === 'outside-or-ok'
+  const canDismissOutside = variant !== 'error' && dismissMode === 'outside-or-ok'
 
   function dismiss() {
     if (dismissMode === 'blocked') return
