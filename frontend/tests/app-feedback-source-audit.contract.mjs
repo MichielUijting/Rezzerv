@@ -61,6 +61,7 @@ const guardedScreens = [
   'features/auth/ForgotPasswordPage.jsx',
   'features/auth/LoginPage.jsx',
   'features/auth/RegisterPage.jsx',
+  'features/auth/ResetPasswordPage.jsx',
   'features/barcodes/BarcodeScannerModal.jsx',
   'features/catalog/CatalogBarcodeEntry.jsx',
   'features/catalog/CatalogCameraModal.jsx',
@@ -80,6 +81,9 @@ const guardedScreens = [
   'features/externalDatabases/OffManualSearchPage.jsx',
   'features/home/DashboardDetailPage.jsx',
   'features/home/MobileHomePage.jsx',
+  'features/kassa/MobileKassa.jsx',
+  'features/kassa/components/ReceiptPreviewCard.jsx',
+  'features/onboarding/SharedHouseholdMinimumPage.jsx',
   'features/platform/IpOwnerSuperusersPage.jsx',
   'features/platform/PlatformAuditPage.jsx',
   'features/platform/PlatformAuthorizationsPage.jsx',
@@ -111,6 +115,7 @@ const guardedScreens = [
   'features/shopping/ShoppingPage.jsx',
   'features/storeConnections/PicnicAccountResearchPanel.jsx',
   'features/storeConnections/RetailerReceiptPanel.jsx',
+  'features/storeConnections/StoreConnectionsPage.jsx',
   'features/stores/StoreBatchDetailPage.jsx',
   'features/stores/StoresPage.jsx',
   'features/stores/storeImportShared.jsx',
@@ -124,6 +129,7 @@ const guardedScreens = [
   'features/support/MobileSupportInbox.jsx',
   'pages/IncidentalPurchasePage.jsx',
   'pages/MobileVoorraad.jsx',
+  'pages/ReceiptReviewPreviewPage.jsx',
   'pages/Voorraad.jsx',
 ]
 for (const file of guardedScreens) {
