@@ -198,8 +198,8 @@ export default function SettingsAlmostOutPage() {
 
             <div className="rz-automation-setting-card">
               <div className="rz-automation-setting-copy">
-                <div className="rz-automation-setting-title">Gebruik voorspelde uitputting</div>
-                <div className="rz-automation-setting-text">Inhuis gebruikt de gemiddelde tijd tussen aankopen per huishoudartikel om te schatten wanneer de voorraad op raakt.</div>
+                <div className="rz-automation-setting-title">Extra voorspelling naast je winkelplanning</div>
+                <div className="rz-automation-setting-text">Kijk ook buiten het volgende winkelbezoek vooruit op basis van eerdere aankopen. De langste van beide termijnen wordt gebruikt.</div>
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', fontWeight: 600 }}>
                 <input
