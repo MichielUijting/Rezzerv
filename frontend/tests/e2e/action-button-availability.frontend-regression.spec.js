@@ -189,7 +189,8 @@ test('Superuser drags an action before another action and persists the shifted o
   expect(state.orderUpdates[0]).toEqual([inventoryKey, shoppingKey, gerechtenKey])
   await expect(inventory).toHaveAttribute('data-sort-order', '0')
   await expect(shopping).toHaveAttribute('data-sort-order', '1')
-  await expect(page.getByTestId('superuser-action-order-status')).toContainText('Voorraad staat nu voor Boodschappenlijst')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Voorraad staat nu voor Boodschappenlijst')
+  await expect(page.getByTestId('superuser-action-order-status')).toHaveCount(0)
 })
 
 test('Startpagina waits for the current server projection before rendering managed actions', async ({ page }) => {
