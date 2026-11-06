@@ -508,7 +508,7 @@ class StoreTest(unittest.TestCase):
         client = TestClient(app)
         actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
         def authorize(permission):
-            if permission == 'gpc.update':
+            if permission == 'platform.gpc.update':
                 raise HTTPException(403, 'GPC-schrijfrecht ontbreekt.')
             return actor
         with patch.object(routes, 'engine', self.engine), \
@@ -1623,7 +1623,7 @@ class ApiTest(unittest.TestCase):
     def test_gpc_choice_requires_existing_gpc_write_permission(self):
         actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False, user_id='actor')
         def authorize(permission):
-            if permission == 'gpc.update':
+            if permission == 'platform.gpc.update':
                 raise HTTPException(403, 'GS1 GPC-bewerking is niet toegestaan.')
             return actor
         payload = {
@@ -1635,6 +1635,69 @@ class ApiTest(unittest.TestCase):
         with patch.object(routes, 'require_platform_permission_from_session', side_effect=authorize):
             response = self.client.post('/api/external-databases/article-synonyms/link', json=payload)
         self.assertEqual(response.status_code, 403)
+
+    def test_superuser_gpc_choice_uses_platform_authority_not_household_authority(self):
+        """The system-household Superuser can choose the prevailing central GPC."""
+        actor = SimpleNamespace(is_platform_superuser=True, is_frontteam=False,
+                                user_id='superuser')
+        checked = []
+
+        def authorize(permission):
+            checked.append(permission)
+            if permission == 'gpc.update':
+                raise AssertionError('Household permission must not guard central GPC writes')
+            if permission not in {'platform.external_products.link_existing',
+                                  'platform.gpc.update'}:
+                raise HTTPException(403)
+            return actor
+
+        payload = {
+            'selections': [dict(left_product_id='a', right_product_id='b',
+                                fingerprint='a' * 64, manual=True)],
+            'decisions': [dict(left_product_id='a', right_product_id='b',
+                               snapshot='b' * 64, gpc_source_id='a')],
+        }
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          side_effect=authorize), \
+             patch.object(routes, 'engine') as engine, \
+             patch.object(routes, 'confirm_pairs',
+                          return_value={'linked': 1, 'classification_inheritance': {
+                              'gpc_resolved': 1}}) as confirm:
+            result = self.client.post('/api/external-databases/article-synonyms/link',
+                                      json=payload)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()['classification_inheritance']['gpc_resolved'], 1)
+        self.assertEqual(checked, ['platform.external_products.link_existing',
+                                   'platform.gpc.update'])
+        engine.begin.assert_called_once()
+        confirm.assert_called_once()
+
+    def test_frontteam_may_link_but_not_override_gpc_without_platform_grant(self):
+        actor = SimpleNamespace(is_platform_superuser=False, is_frontteam=True,
+                                user_id='frontteam')
+        checked = []
+
+        def authorize(permission):
+            checked.append(permission)
+            if permission == 'platform.gpc.update':
+                raise HTTPException(403, 'Centrale GS1 GPC-wijziging niet toegestaan.')
+            return actor
+
+        payload = {
+            'selections': [dict(left_product_id='a', right_product_id='b',
+                                fingerprint='a' * 64, manual=True)],
+            'decisions': [dict(left_product_id='a', right_product_id='b',
+                               snapshot='b' * 64, gpc_source_id='a')],
+        }
+        with patch.object(routes, 'require_platform_permission_from_session',
+                          side_effect=authorize), \
+             patch.object(routes, 'engine') as engine:
+            response = self.client.post('/api/external-databases/article-synonyms/link',
+                                        json=payload)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(checked, ['platform.external_products.link_existing',
+                                   'platform.gpc.update'])
+        engine.begin.assert_not_called()
 
     def test_both_roles_authorized_via_canonical_permission(self):
         for superuser, frontteam in [(True,False),(False,True),(True,True)]:
