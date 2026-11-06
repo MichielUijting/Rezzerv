@@ -118,7 +118,7 @@ export default function PlatformLogsPage() {
             </select>
 
             {loading ? <p data-testid="platform-logs-loading">Nieuwe logs laden…</p> : null}
-            
+
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-logs-empty">Er zijn voor deze runtime geen passende logrecords beschikbaar.</p>

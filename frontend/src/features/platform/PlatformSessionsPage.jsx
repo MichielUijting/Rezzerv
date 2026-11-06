@@ -104,8 +104,8 @@ export default function PlatformSessionsPage() {
         </p>
       </Card>
 
-      
-      
+
+
       {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !sessions.length ? (

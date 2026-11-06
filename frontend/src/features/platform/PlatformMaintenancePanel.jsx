@@ -84,7 +84,7 @@ export default function PlatformMaintenancePanel() {
   React.useEffect(() => { if (!status || status.state === 'normal') return; const timer = setInterval(() => { if (busy) return; if (status.state === 'draining' && status.active_operations === 0 && status.host_agent_ready) request('prepare'); else if (status.state === 'locked' && status.restart_detected) request('verify'); else request() }, 10000); return () => clearInterval(timer) }, [status?.state, busy])
   return <div data-testid="platform-maintenance-panel"><Card className="rz-card-home">
     <h2>Onderhoud aan Inhuis</h2>
-    
+
     {importPause && <Card>
       <h3>Automatisch inlezen kassabonnen</h3>
       <p role="status">{importPause.paused ? "Handmatig gepauzeerd" : importPause.maintenance_paused ? "Gepauzeerd door serveronderhoud" : "Automatisch inlezen toegestaan"}.</p>
@@ -111,7 +111,7 @@ export default function PlatformMaintenancePanel() {
         {' '}Wachtende bonnen blokkeren het stilleggen niet; hun verwerking hervat na vrijgave.
       </p>}
       {status.announcement && <p>{status.announcement}</p>}
-      
+
       {status.state === 'normal' && <>
         <Input label="Onderhoudsvenster en verwachte duur" value={announcement} onChange={e => setAnnouncement(e.target.value)} maxLength={2000} placeholder="Datum, begintijd, tijdzone en verwachte duur" />
         <Button disabled={busy || !announcement.trim()} onClick={() => request('announce')}>Onderhoud aankondigen</Button>

@@ -162,7 +162,7 @@ export default function PlatformRecoveryPage() {
                 autoComplete="off"
               />
 
-              
+
               {result ? (
                 <div data-testid="platform-recovery-result">
                   <p>Herstelactie afgerond voor huishouden: {result.householdId}</p>
@@ -230,7 +230,7 @@ export default function PlatformRecoveryPage() {
                 autoComplete="off"
               />
 
-              
+
               {resetResult ? (
                 <div data-testid="platform-reset-household-result">
                   <p>Huishouden <strong>{resetResult.household_id}</strong> is volledig gereset.</p>

@@ -92,7 +92,7 @@ export default function PlatformIntegrationsPage() {
             </Button>
 
             {loading ? <p data-testid="platform-integrations-loading">Integratiestatus laden…</p> : null}
-            
+
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-integrations-empty">Geen platformintegraties beschikbaar.</p>
             ) : null}

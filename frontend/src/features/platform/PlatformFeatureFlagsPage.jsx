@@ -123,7 +123,7 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
             <p>Een wijziging wordt pas opgeslagen na een expliciete tweede bevestiging.</p>
 
             {loading ? <p data-testid="platform-feature-flags-loading">Featureflags laden…</p> : null}
-            
+
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-feature-flags-empty">Geen featureflags geregistreerd.</p>
             ) : null}
