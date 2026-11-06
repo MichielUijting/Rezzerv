@@ -75,8 +75,8 @@ export default function SettingsCapabilitiesPage() {
   const [error, setError] = useState('')
   const { showFeedback } = useAppFeedback()
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
-  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
   const [message, setMessage] = useState('')
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
 
   const configuration = state?.product_configuration || null
   const questions = useMemo(
