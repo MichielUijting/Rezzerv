@@ -26,6 +26,8 @@ export default function OffManualSearchPage() {
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (itemError) showFeedback({ variant: 'error', message: itemError }) }, [itemError, showFeedback])
   const [item, setItem] = useState(() => state?.item?.id === receiptItemId ? state.item : null)
   const [itemError, setItemError] = useState('')
   const [query, setQuery] = useState('')
@@ -206,7 +208,7 @@ export default function OffManualSearchPage() {
   return (
     <AppShell title="Zelf zoeken in OFF" showExit={false}>
       <ScreenCard fullWidth>
-        {itemError ? <p role="alert">{itemError}</p> : null}
+        
         {item ? <>
           <p>Artikel: <strong>{item.receipt_line_text}</strong></p>
           <form className="rz-external-off-manual-form" onSubmit={search} data-testid="external-off-free-search-form">
@@ -219,7 +221,7 @@ export default function OffManualSearchPage() {
           </form>
           <Ed2ManualBarcodeEntry item={item} onSaved={goBack} />
           {loading ? <p role="status">Zoeken in Open Food Facts...</p> : null}
-          {error ? <p role="alert">{error}</p> : null}
+          
           {searched && !loading && !error ? <section aria-label="OFF-zoekresultaten">
             <h3>Resultaten uit OFF</h3>
             <DataTable
