@@ -277,7 +277,7 @@ function AppFeedbackDialog({
   // Action prompts must be opaque: the informational feedback class does not
   // provide a background, allowing the page to show through the dialog.
   // Passive notifications keep their existing compact bottom-bar treatment.
-  const interactiveDialog = Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
+  const interactiveDialog = variant === 'error' || Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = variant !== 'error' && dismissMode === 'outside-or-ok'
 
