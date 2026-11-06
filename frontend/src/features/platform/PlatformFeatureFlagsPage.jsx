@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -48,6 +49,8 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
   const visibleItems = items.slice((currentPage - 1) * 10, currentPage * 10)
   React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [pendingChange, setPendingChange] = React.useState(null)
   const [updating, setUpdating] = React.useState(false)
 
@@ -120,7 +123,7 @@ export default function PlatformFeatureFlagsPage({ functional = false }) {
             <p>Een wijziging wordt pas opgeslagen na een expliciete tweede bevestiging.</p>
 
             {loading ? <p data-testid="platform-feature-flags-loading">Featureflags laden…</p> : null}
-            {error ? <p role="alert">{error}</p> : null}
+            
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-feature-flags-empty">Geen featureflags geregistreerd.</p>
             ) : null}
