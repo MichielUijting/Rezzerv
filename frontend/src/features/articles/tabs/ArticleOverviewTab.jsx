@@ -245,14 +245,11 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
   const authContext = readStoredAuthContext() || {}
   const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const [formState, setFormState] = useState(() => buildFormState(articleData))
-  const [statusMessage, setStatusMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [savingFieldKey, setSavingFieldKey] = useState('')
 
   useEffect(() => {
     setFormState(buildFormState(articleData))
-    setStatusMessage('')
-    setErrorMessage('')
     setSavingFieldKey('')
   }, [articleData?.name, articleData?.custom_name, articleData?.article_type, articleData?.category, articleData?.brand_or_maker, articleData?.brand, articleData?.short_description, articleData?.notes, articleData?.min_stock, articleData?.ideal_stock, articleData?.favorite_store, articleData?.barcode, articleData?.article_number])
 
@@ -276,8 +273,6 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
     if (nextValue === previousValue) return
 
     setSavingFieldKey(fieldKey)
-    setStatusMessage('')
-    setErrorMessage('')
     try {
       const payload = {
         custom_name: formState.custom_name.trim(),
@@ -293,9 +288,8 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
       const nextDetails = data?.details && typeof data.details === 'object' ? data.details : { ...articleData, ...payload }
       setFormState(buildFormState(nextDetails))
       if (typeof onDetailsSaved === 'function') onDetailsSaved(nextDetails)
-      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
-      setErrorMessage(error?.message || 'Artikeldetails konden niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: error?.message || 'Artikeldetails konden niet worden opgeslagen.' })
       setFormState((current) => ({ ...current, [fieldKey]: previousValue }))
     } finally {
       setSavingFieldKey('')
@@ -312,8 +306,6 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
   return (
     <ArticleSectionAccordion title="Artikelgegevens voor dit huishouden" testId="article-household-details-section" open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
       <div className="rz-article-overview-instruction">Wijzigingen worden opgeslagen bij verlaten van een veld.</div>
-      {statusMessage ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-details-save-success">{statusMessage}</div> : null}
-      {errorMessage ? <div className="rz-article-detail-alert" data-testid="article-details-save-error">{errorMessage}</div> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {EDITABLE_FORM_FIELDS.map((field) => (
           <EditableHouseholdFieldRow
