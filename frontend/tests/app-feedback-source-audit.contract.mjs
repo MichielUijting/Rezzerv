@@ -50,6 +50,7 @@ const guardedScreens = [
   'features/settings/SettingsAlmostOutPage.jsx',
   'features/almostOut/AlmostOutPage.jsx',
   'features/almostOut/MobileAlmostOut.jsx',
+  'features/articleSynonyms/SynonymAnalysisPage.jsx',
 ]
 for (const file of guardedScreens) {
   const violations = findings.filter((finding) => finding.file === file
