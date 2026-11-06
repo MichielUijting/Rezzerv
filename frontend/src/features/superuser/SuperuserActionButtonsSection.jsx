@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
@@ -78,6 +79,8 @@ export default function SuperuserActionButtonsSection() {
   const [savingActionBarLocked, setSavingActionBarLocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [pending, setPending] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
@@ -218,7 +221,7 @@ export default function SuperuserActionButtonsSection() {
         {savingOrder ? 'Nieuwe volgorde opslaan…' : announcement}
       </div>
       {loading ? <p role="status">Acties op de Startpagina laden…</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+      
       {!loading && !error && items.length === 0 ? <p>Geen acties op de Startpagina geregistreerd.</p> : null}
 
       {!loading && items.length > 0 ? (
