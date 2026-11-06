@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
@@ -10,9 +11,14 @@ export default function PlatformMaintenancePanel() {
   const [status, setStatus] = React.useState(null)
   const [announcement, setAnnouncement] = React.useState('')
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [busy, setBusy] = React.useState(false)
   const [confirmSessionClose, setConfirmSessionClose] = React.useState(false)
   const [sessionCloseResult, setSessionCloseResult] = React.useState(null)
+  React.useEffect(() => {
+    if (sessionCloseResult !== null) showFeedback({ variant: 'success', message: `${sessionCloseResult} andere inlogsessie(s) beëindigd. Lopende verwerkingen zijn niet afgebroken.` })
+  }, [sessionCloseResult, showFeedback])
   const requestId = React.useRef(0)
   const [now, setNow] = React.useState(Date.now())
   const [importPause, setImportPause] = React.useState(null)
@@ -78,7 +84,7 @@ export default function PlatformMaintenancePanel() {
   React.useEffect(() => { if (!status || status.state === 'normal') return; const timer = setInterval(() => { if (busy) return; if (status.state === 'draining' && status.active_operations === 0 && status.host_agent_ready) request('prepare'); else if (status.state === 'locked' && status.restart_detected) request('verify'); else request() }, 10000); return () => clearInterval(timer) }, [status?.state, busy])
   return <div data-testid="platform-maintenance-panel"><Card className="rz-card-home">
     <h2>Onderhoud aan Inhuis</h2>
-    {error && <p role="alert">{error}</p>}
+    
     {importPause && <Card>
       <h3>Automatisch inlezen kassabonnen</h3>
       <p role="status">{importPause.paused ? "Handmatig gepauzeerd" : importPause.maintenance_paused ? "Gepauzeerd door serveronderhoud" : "Automatisch inlezen toegestaan"}.</p>
@@ -105,7 +111,7 @@ export default function PlatformMaintenancePanel() {
         {' '}Wachtende bonnen blokkeren het stilleggen niet; hun verwerking hervat na vrijgave.
       </p>}
       {status.announcement && <p>{status.announcement}</p>}
-      {sessionCloseResult !== null && <p role="status">{sessionCloseResult} andere inlogsessie(s) beëindigd. Lopende verwerkingen zijn niet afgebroken.</p>}
+      
       {status.state === 'normal' && <>
         <Input label="Onderhoudsvenster en verwachte duur" value={announcement} onChange={e => setAnnouncement(e.target.value)} maxLength={2000} placeholder="Datum, begintijd, tijdzone en verwachte duur" />
         <Button disabled={busy || !announcement.trim()} onClick={() => request('announce')}>Onderhoud aankondigen</Button>
