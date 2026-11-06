@@ -1666,11 +1666,7 @@ export default function Voorraad() {
                 disabled={articleGroupCreateState.status === 'saving'}
               />
             </label>
-            {articleGroupCreateState.message ? (
-              <div className={articleGroupCreateState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>
-                {articleGroupCreateState.message}
-              </div>
-            ) : null}
+
             <div className="rz-modal-actions">
               <Button type="button" variant="secondary" onClick={closeCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>Annuleren</Button>
               <Button type="button" variant="primary" onClick={handleCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>
@@ -1711,13 +1707,11 @@ export default function Voorraad() {
                     style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 14, background: '#101828', display: 'block', visibility: purchaseCameraOpen ? 'visible' : 'hidden' }}
                   />
                   <div style={{ color: '#475467', fontSize: 14 }}>Richt de barcode horizontaal en scherp in beeld. Zodra een leesbare barcode wordt gevonden, wordt het formulier automatisch ingevuld.</div>
-                  <div className="rz-inline-feedback" style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8 }}>
                     Camera: {purchaseCameraMeta.label || purchaseCameraMeta.deviceId || 'onbekend'} · Decodepogingen: {purchaseCameraMeta.decodeAttempts}
                   </div>
                 </div>
-                {purchaseCameraState.message ? (
-                  <div className={purchaseCameraState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>{purchaseCameraState.message}</div>
-                ) : null}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'end' }}>
                   <label className="rz-input-field">
                     <div className="rz-label">Barcode</div>
@@ -1737,17 +1731,9 @@ export default function Voorraad() {
                 </label>
               </div>
 
-              {purchaseLookupState.message ? (
-                <div className={purchaseLookupState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : purchaseLookupState.status === 'warning' ? 'rz-inline-feedback rz-inline-feedback--warning' : 'rz-inline-feedback rz-inline-feedback--success'}>
-                  {purchaseLookupState.message}
-                </div>
-              ) : null}
 
-              {locationOptionsEmpty ? (
-                <div className="rz-inline-feedback rz-inline-feedback--warning">
-                  Nog geen locatie- en sublocatielijst beschikbaar. Deze dropdowns worden gevoed vanuit het onderhoudsscherm; totdat daar gegevens beschikbaar zijn worden alleen bestaande locaties uit de huidige voorraad gebruikt.
-                </div>
-              ) : null}
+
+
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                 <label className="rz-input-field">
@@ -1787,9 +1773,7 @@ export default function Voorraad() {
                 <input className="rz-input" value={purchaseForm.note} onChange={(event) => updatePurchaseForm('note', event.target.value)} placeholder="Extra toelichting" />
               </label>
 
-              {purchaseSaveState.status === 'error' || purchaseSaveState.status === 'success' ? (
-                <div className={purchaseSaveState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>{purchaseSaveState.message}</div>
-              ) : null}
+
             </div>
 
             <div className="rz-modal-actions" style={{ justifyContent: 'space-between' }}>
