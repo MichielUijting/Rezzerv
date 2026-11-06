@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import CatalogGpcActionPage from '../catalog/CatalogGpcActionPage'
 import CbsClassificationPage from '../catalog/CbsClassificationPage'
 import DataTable from '../../ui/DataTable'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, canCurrentUserPerform, readStoredAuthContext } from '../../lib/authSession'
 
 const PAGE_SIZE = 100
@@ -30,6 +31,8 @@ export default function CombinedClassificationWorkspace() {
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const mayUpdateGpc = canCurrentUserPerform('gpc.update', readStoredAuthContext())
   const selected = useMemo(() => products.find((item) => item.id === selectedId) || null, [products, selectedId])
 
@@ -93,7 +96,7 @@ export default function CombinedClassificationWorkspace() {
         {productTotal} unieke Catalogusartikelen · {taskCount} open classificatietaken
         (afzonderlijk geteld voor GS1 en CBS).
       </p> : null}
-    {error ? <p role="alert">{error}</p> : null}
+    
     <DataTable
       dataTestId="combined-classification-articles"
       columns={columns} data={products}
