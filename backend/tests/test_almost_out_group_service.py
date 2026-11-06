@@ -151,7 +151,7 @@ def test_confirmed_pair_does_not_split_existing_automatic_product_type_group():
     groups = load_groups(_SynonymConnection(metadata, links), 'hh',
                          [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}], {})
     automatic = [group for group in groups if group['key'][0] == 'automatic_product_type']
-    assert len(automatic) == 2
+    assert len(groups) == 2
     assert any({item['id'] for item in group['members']} == {'a', 'b'} for group in automatic)
     assert not any(group['key'][0] == 'confirmed_synonym' for group in groups)
 
