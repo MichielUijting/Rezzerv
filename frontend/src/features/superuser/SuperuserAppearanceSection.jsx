@@ -109,7 +109,7 @@ export default function SuperuserAppearanceSection() {
         <Button type="button" variant="secondary" onClick={reset} disabled={saving}>Standaard herstellen</Button>
       </div>
       <p data-testid="superuser-primary-color-active">Actief: <strong>{color}</strong></p>
-      
+
     </section>
   )
 }

@@ -103,7 +103,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
         <div className="rz-mobile-support-filters" role="tablist" aria-label="Meldingen filteren">
           {FILTERS.map(([key,label]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => setFilter(key)}>{label}</button>)}
         </div>
-        
+
         <div className="rz-mobile-support-list">
           {notificationPagination.pageItems.map((item) => (
             <button key={item.id} type="button" className={'rz-mobile-support-card rz-mobile-support-card--' + (item.severity || 'message')} onClick={() => openItem(item)}>

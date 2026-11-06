@@ -293,7 +293,7 @@ export default function ReceiptReviewPreviewPage() {
             </div>
 
             {isLoadingList ? <span>Bonnen laden...</span> : null}
-            
+
           </div>
         </Card>
 

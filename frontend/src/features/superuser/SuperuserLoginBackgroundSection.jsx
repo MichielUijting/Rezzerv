@@ -105,8 +105,8 @@ export default function SuperuserLoginBackgroundSection() {
         <Button type="button" disabled={!selected || busy} onClick={upload}>{busy ? 'Bezig…' : status.configured ? 'JPG vervangen' : 'JPG uploaden'}</Button>
         {status.configured ? <Button type="button" variant="secondary" disabled={busy} onClick={reset}>Standaardachtergrond herstellen</Button> : null}
       </div>
-      
-      
+
+
     </section>
   )
 }

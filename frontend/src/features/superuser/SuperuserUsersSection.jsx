@@ -142,7 +142,7 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
         <Checkbox checked={showTechnicalIds} onChange={(event) => setShowTechnicalIds(event.target.checked)} aria-label="Technische ID's tonen in gebruikersoverzicht" />
         <span>Technische ID's: <strong>{showTechnicalIds ? 'Aan' : 'Uit'}</strong></span>
       </div>
-      
+
       {loading ? <p role="status">Gebruikers worden geladen…</p> : (
         <DataTable
           columns={columns}

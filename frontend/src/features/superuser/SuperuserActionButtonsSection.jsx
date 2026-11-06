@@ -213,7 +213,7 @@ export default function SuperuserActionButtonsSection() {
       </div>
 
       {loading ? <p role="status">Acties op de Startpagina laden…</p> : null}
-      
+
       {!loading && !error && items.length === 0 ? <p>Geen acties op de Startpagina geregistreerd.</p> : null}
 
       {!loading && items.length > 0 ? (
