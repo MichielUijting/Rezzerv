@@ -74,7 +74,9 @@ export default function CatalogPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [message, setMessage] = useState('')
+  useEffect(() => { if (message) showFeedback({ variant: 'info', message: message }) }, [message, showFeedback])
   const hasRequestedCatalogRef = useRef(false)
   const returnState = { filters, sort, page }
 
@@ -293,9 +295,9 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-            {message ? <div className="rz-inline-feedback">{message}</div> : null}
-            {!canUpdateGpc ? <div className="rz-inline-feedback">Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</div> : null}
+            
+            
+            {!canUpdateGpc ? <p>Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</p> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
