@@ -834,7 +834,42 @@ export default function Voorraad() {
   const shouldWarnBeforeLeaving = hasDirtyEditor || hasPendingSave || purchaseFormDirty || hasPendingPurchaseSave;
   const blocker = useBlocker(shouldWarnBeforeLeaving);
 
-  useDismissOnComponentClick([() => setSaveState((prev) => Object.fromEntries(Object.entries(prev).filter(([, value]) => value?.status === 'saving')))], Boolean(Object.keys(saveState).length));
+  const observedSaveEntriesRef = useRef(new Map());
+  useEffect(() => {
+    for (const [rowId, entry] of Object.entries(saveState)) {
+      if (entry?.status !== 'error' || !entry?.message) continue;
+      if (observedSaveEntriesRef.current.get(rowId) === entry) continue;
+      observedSaveEntriesRef.current.set(rowId, entry);
+      showFeedback({ variant: 'error', message: entry.message });
+    }
+  }, [saveState, showFeedback]);
+
+  useEffect(() => {
+    if (articleGroupCreateState.status === 'error' && articleGroupCreateState.message) {
+      showFeedback({ variant: 'error', message: articleGroupCreateState.message });
+    }
+  }, [articleGroupCreateState.status, articleGroupCreateState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseLookupState.message && ['error', 'warning', 'success'].includes(purchaseLookupState.status)) {
+      showFeedback({ variant: purchaseLookupState.status, message: purchaseLookupState.message });
+    }
+  }, [purchaseLookupState.status, purchaseLookupState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseSaveState.message && ['error', 'success'].includes(purchaseSaveState.status)) {
+      showFeedback({ variant: purchaseSaveState.status, message: purchaseSaveState.message });
+    }
+  }, [purchaseSaveState.status, purchaseSaveState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseCameraState.status === 'error' && purchaseCameraState.message) {
+      showFeedback({ variant: 'error', message: purchaseCameraState.message });
+    }
+  }, [purchaseCameraState.status, purchaseCameraState.message, showFeedback]);
+
+
+
 
   useEffect(() => {
     purchaseFormRef.current = purchaseForm;
