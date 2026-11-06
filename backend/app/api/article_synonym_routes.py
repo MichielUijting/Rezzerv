@@ -115,7 +115,8 @@ def link_suggestions(payload: BulkSelection):
     if any(choice.gpc_source_id for choice in payload.decisions):
         # An explicit correction of an existing GPC Brick is a privileged
         # classification write, not merely permission to link synonyms.
-        require_platform_permission_from_session('gpc.update')
+        # Central GPC authority is platform.gpc.update, not household gpc.update.
+        require_platform_permission_from_session('platform.gpc.update')
     with engine.begin() as conn:
         return confirm_pairs(
             conn, [item.model_dump() for item in payload.selections], actor.user_id,
@@ -153,14 +154,14 @@ def retry_sync_exception_route(payload: SyncRetryRequest):
     actor = _actor('platform.external_products.link_existing')
     from sqlalchemy import text
     # GPC inheritance is a privileged GPC write; inspect the immutable event
-    # before entering the write transaction, and check permission separately.
+    # before entering the write transaction, and check platform permission separately.
     with engine.connect() as conn:
         system = conn.execute(text("""
             SELECT classification_system FROM article_classification_sync_events
             WHERE id=:id
         """), {"id": payload.event_id}).scalar_one_or_none()
     if system == 'GPC':
-        require_platform_permission_from_session('gpc.update')
+        require_platform_permission_from_session('platform.gpc.update')
     try:
         with engine.begin() as conn:
             return retry_sync_exception(
