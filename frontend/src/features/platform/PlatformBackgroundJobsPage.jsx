@@ -125,7 +125,7 @@ export default function PlatformBackgroundJobsPage() {
                   <h3>{action.title}</h3>
                   <p>{action.description}</p>
 
-                  
+
                   <BackgroundResult actionKey={action.key} report={results[action.key]} />
 
                   {confirming === action.key ? (

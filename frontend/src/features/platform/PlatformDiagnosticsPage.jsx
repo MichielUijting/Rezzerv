@@ -88,7 +88,7 @@ export default function PlatformDiagnosticsPage() {
             <p>Het starten van controles hoort bij Achtergrondtaken en is hier niet beschikbaar.</p>
 
             {loading ? <p data-testid="platform-diagnostics-loading">Diagnostiek laden…</p> : null}
-            
+
 
             {!loading && !error ? (
               <div data-testid="platform-diagnostics-statuses">

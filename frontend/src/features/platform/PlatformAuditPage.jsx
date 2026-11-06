@@ -81,7 +81,7 @@ export default function PlatformAuditPage() {
             <p>Gevoelige auditpayloads, redenen en ticketreferenties worden hier niet getoond.</p>
 
             {loading ? <p data-testid="platform-audit-loading">Nieuwe auditgegevens laden…</p> : null}
-            
+
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-audit-empty">Er zijn geen auditgebeurtenissen beschikbaar.</p>

@@ -130,8 +130,8 @@ export default function PlatformAuthorizationsPage() {
         ) : null}
       </Card>
 
-      
-      
+
+
       {loading ? <Card><p>Platformautorisaties laden...</p></Card> : null}
 
       {!loading && !users.length ? <Card><p>Er zijn geen gebruikers gevonden.</p></Card> : null}

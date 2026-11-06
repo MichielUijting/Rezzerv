@@ -118,8 +118,8 @@ export default function IpOwnerSuperusersPage() {
               <Button type="submit" disabled={pending}>Superuser maken</Button>
             </div>
           </form>
-          
-          
+
+
         </Card>
 
         <Card>

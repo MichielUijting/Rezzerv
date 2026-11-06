@@ -223,8 +223,8 @@ export default function SharedHouseholdMinimumPage({
             >
               {inviteSaving ? 'Bezig…' : 'Uitnodiging versturen'}
             </Button>
-            
-            
+
+
           </form>
         </Card>
       ) : null}
@@ -243,8 +243,8 @@ export default function SharedHouseholdMinimumPage({
         {saving ? 'Opslaan…' : 'Onboarding afronden'}
       </Button>
 
-      
-      
+
+
     </div>
   )
 }
