@@ -47,11 +47,10 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
   const [mutationForm, setMutationForm] = useState(() => emptyMutationForm())
   const [mutationBusy, setMutationBusy] = useState(false)
   const [mutationError, setMutationError] = useState('')
+  const [mutationSuccess, setMutationSuccess] = useState('')
   const { showFeedback } = useAppFeedback()
   useEffect(() => { if (mutationError) showFeedback({ variant: 'error', message: mutationError }) }, [mutationError, showFeedback])
   useEffect(() => { if (mutationSuccess) showFeedback({ variant: 'success', message: mutationSuccess }) }, [mutationSuccess, showFeedback])
-
-  const [mutationSuccess, setMutationSuccess] = useState('')
   const [assignmentForm, setAssignmentForm] = useState(() => emptyAssignmentForm())
   const [assignmentBusy, setAssignmentBusy] = useState(false)
   const [assignmentOptionsBusy, setAssignmentOptionsBusy] = useState(false)

@@ -145,7 +145,7 @@ test('L4-07 platform admin revokes a household session without gaining household
   expect(revokedSessionId).not.toBe('')
   expect(revokePayload?.household_context_used).toBe(false)
   expect(revokePayload?.context_type).toBe('none')
-  await expect(platformPage.getByRole('status')).toContainText(`Sessie van ${householdUserEmail} is ingetrokken.`)
+  await expect(platformPage.getByTestId('app-feedback-success')).toContainText(`Sessie van ${householdUserEmail} is ingetrokken.`)
   await expect(targetSessionCard).toHaveCount(0)
 
   const revokedTargetApi = await targetPage.request.get('/api/session')

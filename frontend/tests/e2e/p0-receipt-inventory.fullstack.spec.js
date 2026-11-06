@@ -193,7 +193,7 @@ async function consumeThroughArticleStock(page, householdArticleId, inventoryId,
   const mutationResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events` && response.request().method() === 'POST')
   await form.getByRole('button', { name: 'Opslaan', exact: true }).click()
   expect((await mutationResponsePromise).ok()).toBeTruthy()
-  await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.', { timeout: 20_000 })
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Voorraad is afgeboekt.', { timeout: 20_000 })
 }
 
 test('prepare global-location unpacking household', async ({ page }) => {

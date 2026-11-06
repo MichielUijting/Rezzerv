@@ -3271,7 +3271,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         resetUploadProgress()
         setStatus('')
         setDuplicateNotice('')
-        setEmailRouteError(message)
+        // The dedicated error overlay below is the sole feedback for this rejected upload.
+        // Publishing the same error via emailRouteError would replace its identity.
+        setEmailRouteError('')
         setError('')
         showKassaFeedback('error', message, {
           title: 'Upload geweigerd',
