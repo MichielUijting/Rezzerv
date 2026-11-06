@@ -14,7 +14,7 @@ assert.equal(transientFeedbackDuration({ variant: 'error', autoDismissMs: 1000 }
 assert.equal(isTransientFeedback({ variant: 'success' }), true)
 assert.match(provider, /dismissMode: variant === 'error' \? 'ok-only'/)
 assert.match(provider, /variant !== 'error' && dismissMode === 'outside-or-ok'/)
-assert.match(provider, /data-testid={`${testId}-ok-button`}/)
+assert.ok(provider.includes('data-testid={`${testId}-ok-button`}'), 'Elke fout-overlay vereist de centrale OK-knop')
 assert.match(provider, /interactiveDialog = variant === 'error'/)
 const theme = fs.readFileSync(path.join(root, 'ui/theme.css'), 'utf8')
 assert.ok((theme.match(/:not\(:has\(\[data-testid\$="-ok-button"\]\)\)/g) || []).length >= 10,
