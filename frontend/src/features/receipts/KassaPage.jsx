@@ -11,7 +11,6 @@ import Tabs from '../../ui/Tabs'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
@@ -660,9 +659,16 @@ function readShareQueryParams() {
 
 
 function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onToggleCollapse }) {
+  const { showFeedback } = useAppFeedback()
   const [selectedVariant, setSelectedVariant] = useState('original')
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
   const [imageZoom, setImageZoom] = useState(1)
+
+  useEffect(() => {
+    if (previewState.status === 'error' && previewState.error) {
+      showFeedback({ variant: 'error', message: previewState.error })
+    }
+  }, [previewState.status, previewState.error, showFeedback])
   const hasTransientPreview = Boolean(transientPreview?.originalUrl)
   const supportsProcessedPreview = hasTransientPreview || (receipt?.mime_type ? String(receipt.mime_type).toLowerCase().startsWith('image/') : false)
   const previewTitle = selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'
@@ -787,11 +793,6 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden...</div>
             ) : null}
 
-            {previewState.status === 'error' ? (
-              <div role="alert" style={{ maxWidth: '560px', margin: '16px', color: '#B42318' }}>
-                {previewState.error || 'De originele kassabon kon niet worden geladen.'}
-              </div>
-            ) : null}
 
             {previewState.status === 'ready' && previewState.isPdf ? (
               <object
@@ -839,7 +840,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div role="status" style={{ maxWidth: '560px', margin: '16px', color: '#475467' }}>
+              <div style={{ maxWidth: '560px', margin: '16px', color: '#475467' }}>
                 Van deze kassabon is geen ondersteund voorbeeld beschikbaar.
               </div>
             ) : null}
@@ -1892,8 +1893,6 @@ function CameraCaptureModal({
         </div>
 
 
-        {error ? <div role="alert" data-testid="kassa-camera-error">{error}</div> : null}
-        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate">{duplicateNotice}</div> : null}
 
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
@@ -1980,7 +1979,11 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   const [inboxScrollHeightPx, setInboxScrollHeightPx] = useState(KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
-  useDismissOnComponentClick([() => setError(''), () => setStatus(''), () => setDuplicateNotice(''), () => setCameraError(''), () => setEmailRouteError('')], Boolean(error || status || duplicateNotice || cameraError || emailRouteError))
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
+  useEffect(() => { if (duplicateNotice) showFeedback({ variant: 'warning', message: duplicateNotice }) }, [duplicateNotice, showFeedback])
+  useEffect(() => { if (cameraError) showFeedback({ variant: 'error', message: cameraError }) }, [cameraError, showFeedback])
+  useEffect(() => { if (emailRouteError) showFeedback({ variant: 'error', message: emailRouteError }) }, [emailRouteError, showFeedback])
 
   useEffect(() => {
     return () => {
