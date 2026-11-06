@@ -387,7 +387,7 @@ export default function MobileShopping() {
           <span className="rz-mobile-shopping-count" aria-label={`${toBuyItems.length} nog te kopen`}>{toBuyItems.length}</span>
         </section>
 
-        
+
         {!error && !loading && (list.items || []).length === 0 ? <section className="rz-mobile-inventory-state"><strong>Nog geen artikelen bij Boodschappen.</strong></section> : null}
 
         {!error && (list.items || []).length > 0 ? (

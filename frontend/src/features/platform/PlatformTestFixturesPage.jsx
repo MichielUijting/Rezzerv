@@ -124,7 +124,7 @@ export default function PlatformTestFixturesPage() {
                   <h3>{action.title}</h3>
                   <p>{action.description}</p>
                   {action.warning ? <p>{action.warning}</p> : null}
-                  
+
                   <FixtureResult actionKey={action.key} result={results[action.key]} />
 
                   {confirming === action.key ? (

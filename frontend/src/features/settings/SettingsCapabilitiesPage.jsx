@@ -361,8 +361,8 @@ export default function SettingsCapabilitiesPage() {
                 </div>
               )
             })}
-            
-            
+
+
           </div>
         </Card>
         {configuration ? (

@@ -108,7 +108,7 @@ export default function PlatformTechnicalConfigurationPage() {
                   <h3>{action.title}</h3>
                   <p>{action.description}</p>
 
-                  
+
                   <ActionResult actionKey={action.key} result={results[action.key]} />
 
                   {confirming === action.key ? (

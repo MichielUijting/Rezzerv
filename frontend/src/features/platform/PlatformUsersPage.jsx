@@ -115,8 +115,8 @@ export default function PlatformUsersPage() {
         </p>
       </Card>
 
-      
-      
+
+
       {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !users.length ? (
