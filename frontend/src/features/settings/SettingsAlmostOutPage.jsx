@@ -23,6 +23,7 @@ function stableStringify(value) {
 export default function SettingsAlmostOutPage() {
   const [predictionEnabled, setPredictionEnabled] = useState(false)
   const [predictionDays, setPredictionDays] = useState('7')
+  const [shoppingDays, setShoppingDays] = useState('0')
   const [policyMode, setPolicyMode] = useState(ALMOST_OUT_POLICY_MODES.ADVISORY)
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -42,6 +43,7 @@ export default function SettingsAlmostOutPage() {
         if (cancelled) return
         setPredictionEnabled(Boolean(settings.predictionEnabled))
         setPredictionDays(String(settings.predictionDays ?? 0))
+        setShoppingDays(String(settings.shoppingDays ?? 0))
         setPolicyMode(settings.policyMode || ALMOST_OUT_POLICY_MODES.ADVISORY)
         setCanEdit(Boolean(settings.isHouseholdAdmin))
       })
@@ -60,8 +62,9 @@ export default function SettingsAlmostOutPage() {
   const currentSettings = useMemo(() => ({
     predictionEnabled: Boolean(predictionEnabled),
     predictionDays: Math.max(0, Number(predictionDays) || 0),
+    shoppingDays: Math.max(0, Number(shoppingDays) || 0),
     policyMode,
-  }), [predictionEnabled, predictionDays, policyMode])
+  }), [predictionEnabled, predictionDays, shoppingDays, policyMode])
   const currentSnapshot = useMemo(() => stableStringify(currentSettings), [currentSettings])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
@@ -102,21 +105,29 @@ export default function SettingsAlmostOutPage() {
   }
 
   async function handleSave() {
+    const days = Number(shoppingDays)
+    if (!Number.isInteger(days) || days < 0 || days > 365) {
+      setSaveError('Vul een heel aantal dagen tussen 0 en 365 in.')
+      return false
+    }
     setIsSaving(true)
     setSaveError('')
     try {
       const saved = await saveAlmostOutSettings({
         predictionEnabled,
         predictionDays: Math.max(0, Number(predictionDays) || 0),
+        shoppingDays: days,
         policyMode,
       })
       const nextSettings = {
         predictionEnabled: Boolean(saved.predictionEnabled),
         predictionDays: Math.max(0, Number(saved.predictionDays) || 0),
+        shoppingDays: Math.max(0, Number(saved.shoppingDays) || 0),
         policyMode: saved.policyMode || ALMOST_OUT_POLICY_MODES.ADVISORY,
       }
       setPredictionEnabled(nextSettings.predictionEnabled)
       setPredictionDays(String(nextSettings.predictionDays))
+      setShoppingDays(String(nextSettings.shoppingDays))
       setPolicyMode(nextSettings.policyMode)
       setLastSavedSnapshot(stableStringify(nextSettings))
       queueSuccessMessage('Opgeslagen')
@@ -154,13 +165,35 @@ export default function SettingsAlmostOutPage() {
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Bijna op voorspelling</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Stel hier huishoudbreed in of Inhuis artikelen al op <strong>Bijna op</strong> zet wanneer verwacht wordt dat ze binnen een aantal dagen uit voorraad raken.
+                Stel in wanneer jullie weer boodschappen doen. Bijna op houdt rekening met artikelen die naar verwachting vóór dat moment opraken en blijft de ingestelde minimumvoorraad bewaken.
               </p>
               {!isLoading && !canEdit ? (
                 <p style={{ margin: '8px 0 0 0', color: '#b54708', fontWeight: 600 }}>
                   Alleen de beheerder van het huishouden kan deze instelling wijzigen.
                 </p>
               ) : null}
+            </div>
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              <Input
+                label="Over hoeveel dagen ga je boodschappen doen?"
+                type="number"
+                min="0"
+                max="365"
+                step="1"
+                value={shoppingDays}
+                onChange={(event) => {
+                  setSaveMessage('')
+                  setSaveError('')
+                  setShoppingDays(event.target.value)
+                }}
+                disabled={!canEdit || isSaving}
+                data-testid="almost-out-shopping-days"
+                placeholder="Bijvoorbeeld: 3"
+              />
+              <p style={{ margin: 0, color: '#667085' }}>
+                0 betekent: geen vaste boodschappendatum. Met een andere waarde kijkt Inhuis tot jullie volgende winkelbezoek vooruit. Zonder voldoende aankoopgeschiedenis blijft de minimumvoorraad leidend.
+              </p>
             </div>
 
             <div className="rz-automation-setting-card">
@@ -187,7 +220,7 @@ export default function SettingsAlmostOutPage() {
 
             <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
               <Input
-                label="Aantal dagen vooruitkijken"
+                label="Extra voorspeltermijn (dagen)"
                 type="number"
                 min="0"
                 step="1"
