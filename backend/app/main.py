@@ -9116,7 +9116,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                discount_amount, line_role, inventory_eligible,
                barcode,
                external_article_code,
-               matched_global_product_id
+               matched_global_product_id, matched_article_id
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
           AND COALESCE(is_deleted, FALSE) = FALSE
@@ -9218,6 +9218,20 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         # Een global_product/catalogusmatch mag alleen product- en categoriesuggestie zijn.
         # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
         matched_household_article_id = None
+        explicit_receipt_article_id = str(line.get('matched_article_id') or '').strip()
+        if explicit_receipt_article_id and not explicit_receipt_article_id.startswith('live::'):
+            # Kassa's explicit article is usable only if owned by this household.
+            owned_article = conn.execute(
+                text("""
+                    SELECT id FROM household_articles
+                    WHERE id = :article_id AND household_id = :household_id
+                      AND COALESCE(status, 'active') = 'active'
+                    LIMIT 1
+                """),
+                {'article_id': explicit_receipt_article_id, 'household_id': household_id},
+            ).scalar()
+            if owned_article:
+                matched_household_article_id = str(owned_article)
 
         if existing_line:
             conn.execute(
@@ -9233,9 +9247,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     content_unit = :content_unit,
                     line_price_raw = :line_price_raw,
                     currency_code = :currency_code,
-                    matched_global_product_id = :matched_global_product_id,
+                    matched_global_product_id = COALESCE(:matched_global_product_id, matched_global_product_id),
                     matched_household_article_id = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN :matched_household_article_id
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN COALESCE(:matched_household_article_id, matched_household_article_id)
                         ELSE matched_household_article_id
                     END,
                     suggested_household_article_id = CASE
@@ -9243,7 +9257,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                         ELSE suggested_household_article_id
                     END,
                     match_status = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :matched_global_product_id IS NOT NULL THEN 'matched'
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND (:matched_household_article_id IS NOT NULL OR :matched_global_product_id IS NOT NULL) THEN 'matched'
                         WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN 'unmatched'
                         ELSE match_status
                     END,
