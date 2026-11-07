@@ -28,12 +28,9 @@ def classify_locationless_ready_line(line: Any) -> tuple[bool, str | None, str |
 
     article_id = line.get("matched_household_article_id")
     matched_global_product_id = str(line.get("matched_global_product_id") or "").strip()
-    article_group_id = line.get("selected_article_group_id")
 
     if not article_id and not matched_global_product_id:
         return False, "Nog geen artikel of product gekoppeld", "article_resolution"
-    if not article_group_id:
-        return False, "Nog geen artikelgroep gekozen", "article_group_resolution"
     return True, None, None
 
 
@@ -95,6 +92,8 @@ def _process_locationless_ready_only_batch(
                         pib.id,
                         pib.household_id,
                         pib.import_status,
+                        pib.source_type,
+                        pib.source_reference,
                         pib.raw_payload,
                         sp.code AS store_provider_code
                     FROM purchase_import_batches pib
@@ -162,10 +161,30 @@ def _process_locationless_ready_only_batch(
                 },
             ).mappings().all()
 
+            # A Kassa-approved receipt can still contain legacy pending unpack
+            # decisions. Pressing bulk Goedkeuren is an explicit request to
+            # process its *complete* stock-ready lines, not to invent article
+            # identities or override ignored lines.
+            approved_receipt = False
+            receipt_reference = str(batch.get("source_reference") or "")
+            if (batch.get("source_type") == "receipt"
+                    and receipt_reference.startswith("receipt:")):
+                approved_receipt = bool(conn.execute(text("""
+                    SELECT 1 FROM receipt_tables
+                    WHERE id = :receipt_id AND household_id = :household_id
+                      AND approved_at IS NOT NULL
+                      AND parse_status IN ('approved', 'approved_override')
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                """), {
+                    "receipt_id": receipt_reference[len("receipt:"):],
+                    "household_id": str(batch["household_id"]),
+                }).first())
+
             selected_lines = [
-                line
-                for line in lines
+                line for line in lines
                 if (line["review_decision"] or "pending") == "selected"
+                or (approved_receipt and (line["review_decision"] or "pending") == "pending")
             ]
             results: list[dict[str, Any]] = []
             processable_lines = []
@@ -189,13 +208,28 @@ def _process_locationless_ready_only_batch(
                     )
                     skipped_count += 1
                     continue
+                if (line["review_decision"] or "pending") == "pending":
+                    # The explicit bulk action selects only ready, approved
+                    # receipt lines; unready/ignored lines remain unchanged.
+                    conn.execute(text("""
+                        UPDATE purchase_import_lines
+                        SET review_decision = 'selected', updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :line_id AND batch_id = :batch_id
+                          AND COALESCE(review_decision, 'pending') = 'pending'
+                    """), {"line_id": line_id, "batch_id": batch_id})
                 processable_lines.append(line)
 
             if not processable_lines:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Geen klaarstaande regels om naar voorraad te verwerken",
-                )
+                # Return actionable per-line reasons, not a generic 400 that
+                # hides why a Kassa-approved receipt remains in Uitpakken.
+                return {
+                    "batch_id": batch_id,
+                    "status": str(batch.get("import_status") or "review"),
+                    "processed_count": 0,
+                    "failed_count": 0,
+                    "skipped_count": skipped_count,
+                    "results": results,
+                }
 
             processed_count = 0
             failed_count = 0
