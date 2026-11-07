@@ -11,6 +11,7 @@ from app.services.purchase_import_location_policy_patch import (
     _processing_household_id,
     classify_locationless_ready_line,
     is_locationless_bulk_candidate,
+    recover_explicit_approved_receipt_article_link,
     install_purchase_import_location_policy_patch,
 )
 from app.testing.postgresql_onboarding_selftest_fixture import (
@@ -205,3 +206,70 @@ def test_installer_replaces_the_registered_process_route_and_resolver():
     assert route.endpoint is main_module.process_purchase_import_batch
     assert route.dependant.call is main_module.process_purchase_import_batch
     assert app.state.purchase_import_location_policy_patch_installed is True
+
+
+def test_recover_approved_receipt_link_only_when_source_article_is_verified():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_article_id": "article-1",
+        "global_product_id": None,
+    }
+    line = {
+        "id": "line-1",
+        "external_line_ref": "receipt-line:source-line-1",
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+        "article_override_mode": "auto",
+    }
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    result = recover_explicit_approved_receipt_article_link(
+        conn, line=line, batch=batch, approved_receipt=True,
+    )
+    assert result["matched_household_article_id"] == "article-1"
+    assert conn.execute.call_count == 2
+    query, params = conn.execute.call_args_list[0].args
+    sql = str(query)
+    assert "ha.household_id = rt.household_id" in sql
+    assert "rt.household_id = :household_id" in sql
+    assert "rt.approved_at IS NOT NULL" in sql
+    assert params["household_id"] == "house-1"
+
+
+def test_unapproved_or_explicitly_cleared_receipt_link_is_not_recovered():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    for approved, override in [(False, "auto"), (True, "cleared")]:
+        line = {
+            "id": "line-1", "external_line_ref": "receipt-line:source-line-1",
+            "matched_household_article_id": None,
+            "matched_global_product_id": None,
+            "article_override_mode": override,
+        }
+        assert recover_explicit_approved_receipt_article_link(
+            conn, line=line, batch=batch, approved_receipt=approved,
+        ) == line
+    conn.execute.assert_not_called()
+
+
+def test_unlinked_source_is_not_guessed_or_persisted():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_article_id": None,
+        "global_product_id": None,
+    }
+    line = {
+        "id": "line-1", "external_line_ref": "receipt-line:source-line-1",
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+    }
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    assert recover_explicit_approved_receipt_article_link(
+        conn, line=line, batch=batch, approved_receipt=True,
+    ) == line
+    assert conn.execute.call_count == 1
