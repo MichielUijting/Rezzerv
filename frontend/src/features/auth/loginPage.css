@@ -223,20 +223,6 @@
     gap: 0;
   }
 
-  /* Tijdelijke navigatie voor PR #658; verwijderen voor merge. */
-  .rz-login-temporary-almost-out {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    align-self: stretch;
-    min-height: 44px;
-    margin-top: 16px;
-    border-radius: var(--radius-md);
-    text-decoration: none;
-    font-weight: 400;
-    text-align: center;
-  }
-
   .rz-login-field {
     display: grid;
     gap: 10px;
