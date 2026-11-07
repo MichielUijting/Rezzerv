@@ -89,6 +89,9 @@ const workflowPage = fs.readFileSync(
 assert.match(workflowPage, /Voorraadlocaties en Uitpakken/)
 assert.match(workflowPage, /workflow-location-level/)
 assert.match(workflowPage, /workflow-unpacking-enabled/)
+assert.doesNotMatch(workflowPage, /data-testid="workflow-incompatible"/, 'In-screen melding is niet toegestaan')
+assert.match(workflowPage, /showFeedback\(\{ variant: 'error'/, 'Opslagfouten moeten via centrale overlay')
+assert.doesNotMatch(workflowPage, /setError\(/, 'Gebruik geen achterblijvende schermmelding voor workflowfouten')
 assert.doesNotMatch(
   workflowPage,
   /if\s*\(nextLocation === 'none'\)\s*setWorkflowUnpacking\(false\)/,
