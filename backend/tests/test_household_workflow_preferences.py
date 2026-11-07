@@ -178,3 +178,33 @@ def test_direct_kassa_inventory_rule_only_for_safe_configuration():
     assert not should_process_approved_receipt_directly_to_inventory(
         config(location="none", unpacking=True)
     )
+
+
+def test_inventory_article_totals_keep_old_located_stock_visible():
+    from decimal import Decimal
+    from app.services.canonical_inventory_identity_service import (
+        get_inventory_total_by_household_article,
+    )
+
+    class TotalConnection:
+        def execute(self, query, params):
+            statement = " ".join(str(query).split()).lower()
+            assert "from inventory" in statement
+            assert "household_id = :household_id" in statement
+            assert "household_article_id = :household_article_id" in statement
+            # Inventory totals must not be restricted to NULL locations when
+            # previously located stock is retained under the new preference.
+            assert "space_id is null" not in statement
+            assert "sublocation_id is null" not in statement
+            assert params == {"household_id": "h1", "household_article_id": "article-1"}
+            return SimpleNamespace(mappings=lambda: SimpleNamespace(
+                first=lambda: {"total_quantity": 7},
+            ))
+
+    with patch(
+        "app.services.canonical_inventory_identity_service.require_household_article",
+        return_value={"household_id": "h1", "id": "article-1"},
+    ):
+        assert get_inventory_total_by_household_article(
+            TotalConnection(), "h1", "article-1",
+        ) == Decimal("7")
