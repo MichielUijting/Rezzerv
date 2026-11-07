@@ -1488,30 +1488,41 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  async function syncSelectedReviewDecisions() {
+  async function syncSelectedReviewDecisions(selectedIds) {
     if (!batch) return
-    const selectedSet = new Set(selectedLineIds)
-    const lines = batch?.lines || []
-    await Promise.all(lines.map((line) => {
-      const nextDecision = selectedSet.has(line.id) ? 'selected' : 'ignored'
-      if ((line.review_decision || 'pending') === nextDecision) return Promise.resolve()
-      return fetchJson(`/api/purchase-import-lines/${line.id}/review`, {
-        method: 'POST',
-        body: JSON.stringify({ review_decision: nextDecision }),
-      })
-    }))
-    await refreshBatch(batch.batch_id)
+    const selectedSet = new Set(selectedIds.map(String))
+    // Only confirm the explicit user selection. A missing checkbox is NOT a
+    // request to ignore an article, especially during a partial bulk run.
+    const lines = (batch.lines || []).filter((line) => (
+      selectedSet.has(String(line.id))
+      && (line.processing_status || 'pending') !== 'processed'
+      && (line.review_decision || 'pending') !== 'selected'
+    ))
+    await Promise.all(lines.map((line) => fetchJson(`/api/purchase-import-lines/${line.id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ review_decision: 'selected' }),
+    })))
+    return refreshBatch(batch.batch_id)
   }
 
   async function handleProcessSelected(mode = 'selected_only') {
     if (!batch) return
-    if (selectedLineIds.length === 0) {
+    // Snapshot once, before any asynchronous refresh can change the UI selection.
+    const selectedIds = [...new Set(selectedLineIds.map(String))]
+    if (selectedIds.length === 0) {
       setError('Selecteer eerst minstens één bonregel.')
       return
     }
-    await syncSelectedReviewDecisions()
-    await processBatchNow(mode)
-    setProcessConfirm(null)
+    try {
+      const refreshed = await syncSelectedReviewDecisions(selectedIds)
+      await processBatchNow(mode, selectedIds, refreshed)
+    } catch (error) {
+      showUitpakkenFeedback('error', normalizeErrorMessage(error?.message) || 'De geselecteerde bonregels konden niet worden voorbereid.', {
+        key: `uitpakken-selection-sync-error-${Date.now()}`,
+      })
+    } finally {
+      setProcessConfirm(null)
+    }
   }
 
   function handlePrimaryProcessClick() {
@@ -1569,8 +1580,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     window.URL.revokeObjectURL(url)
   }
 
-  async function processBatchNow(mode = 'ready_only') {
-    if (!batch) return
+  async function processBatchNow(mode = 'ready_only', selectedIds = selectedLineIds, currentBatch = batch) {
+    if (!currentBatch) return
     if (isViewer) {
       setError('Kijkers mogen kassabonnen wel opvoeren, maar niet naar voorraad verwerken.')
       return
@@ -1580,10 +1591,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setStatus('')
     setLastProcessResult(null)
     try {
-      const lineNameById = Object.fromEntries((batch.lines || []).map((line) => [line.id, line.article_name_raw]))
+      const lineNameById = Object.fromEntries((currentBatch.lines || []).map((line) => [line.id, line.article_name_raw]))
 
-      const selectedIdSet = new Set(selectedLineIds.map((id) => String(id)))
-      const linesNeedingArticleLink = (batch.lines || []).filter((line) => {
+      const selectedIdSet = new Set(selectedIds.map(String))
+      const linesNeedingArticleLink = (currentBatch.lines || []).filter((line) => {
         if (!selectedIdSet.has(String(line.id))) return false
         if (String(line.processing_status || 'pending') === 'processed') return false
         const draft = getDraftValues(line)
@@ -1622,14 +1633,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .map((item) => String(item.line_id || ''))
           .filter(Boolean)
       )
-
-      if (processedLineIds.size > 0) {
-        setBatch((current) => current ? {
-          ...current,
-          lines: (current.lines || []).filter((line) => !processedLineIds.has(String(line.id))),
-        } : current)
-        setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
-      }
 
       const refreshedBatch = await refreshBatch(batch.batch_id)
       await refreshLocationOptions()
