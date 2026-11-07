@@ -118,6 +118,34 @@ def run_locationless_production_contract() -> dict:
                     "ideal_stock": 2,
                 },
             )
+            # Genuine material source line: the production processor now
+            # verifies the original receipt's role before any inventory write.
+            # The old fixture had an orphan import line (no Kassa source).
+            _insert_row(
+                conn,
+                "receipt_tables",
+                {
+                    "id": "locationless-contract",
+                    "household_id": ids["household_id"],
+                    "store_name": "Albert Heijn",
+                    "parse_status": "approved",
+                    "approved_at": "2026-11-07T12:00:00",
+                },
+            )
+            _insert_row(
+                conn,
+                "receipt_table_lines",
+                {
+                    "id": "locationless-contract:1",
+                    "receipt_table_id": "locationless-contract",
+                    "line_index": 1,
+                    "raw_label": "LOCATI ELOZE RIJST",
+                    "normalized_label": "LOCATI ELOZE RIJST",
+                    "quantity": 4,
+                    "line_role": "product",
+                    "inventory_eligible": True,
+                },
+            )
             _insert_row(
                 conn,
                 "purchase_import_batches",

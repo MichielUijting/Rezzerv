@@ -28,20 +28,113 @@ def classify_locationless_ready_line(line: Any) -> tuple[bool, str | None, str |
 
     article_id = line.get("matched_household_article_id")
     matched_global_product_id = str(line.get("matched_global_product_id") or "").strip()
-    article_group_id = line.get("selected_article_group_id")
-    target_location_id = str(line.get("target_location_id") or "").strip()
 
     if not article_id and not matched_global_product_id:
         return False, "Nog geen artikel of product gekoppeld", "article_resolution"
-    if not article_group_id:
-        return False, "Nog geen artikelgroep gekozen", "article_group_resolution"
-    if target_location_id:
-        return (
-            False,
-            "Dit huishouden gebruikt voorraad zonder locatie; verwijder de gekozen locatie",
-            "purchase_event_write",
-        )
     return True, None, None
+
+
+def is_locationless_bulk_candidate(line: Any, *, approved_receipt: bool) -> bool:
+    decision = str(line.get("review_decision") or "pending").strip().lower()
+    return decision == "selected" or (approved_receipt and decision == "pending")
+
+
+def recover_explicit_approved_receipt_article_link(
+    conn, *, line: dict, batch: Any, approved_receipt: bool,
+) -> dict:
+    """Recover only a verified source link for historical approved receipt lines.
+
+    Never guess an article from a receipt name, cross households, or overwrite
+    an explicit 'cleared' preference. Non-receipt import lines stay untouched.
+    """
+    result = dict(line)
+    if not approved_receipt or result.get("matched_household_article_id") or result.get("matched_global_product_id"):
+        return result
+    if str(result.get("article_override_mode") or "auto") == "cleared":
+        return result
+    reference = str(result.get("external_line_ref") or "")
+    source = str(batch.get("source_reference") or "")
+    if not reference.startswith("receipt-line:") or not source.startswith("receipt:"):
+        return result
+    verified = conn.execute(text("""
+        SELECT ha.id AS household_article_id, gp.id AS global_product_id
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        LEFT JOIN household_articles ha
+          ON ha.id = rtl.matched_article_id
+         AND ha.household_id = rt.household_id
+         AND COALESCE(ha.status, 'active') = 'active'
+        LEFT JOIN global_products gp
+          ON gp.id = rtl.matched_global_product_id
+        WHERE rtl.id = :receipt_line_id
+          AND rt.id = :receipt_id
+          AND rt.household_id = :household_id
+          AND rt.approved_at IS NOT NULL
+          AND rt.parse_status IN ('approved', 'approved_override')
+          AND rt.deleted_at IS NULL
+        LIMIT 1
+    """), {
+        "receipt_line_id": reference[len("receipt-line:"):],
+        "receipt_id": source[len("receipt:"):],
+        "household_id": str(batch["household_id"]),
+    }).mappings().first()
+    article_id = str((verified or {}).get("household_article_id") or "").strip() or None
+    product_id = str((verified or {}).get("global_product_id") or "").strip() or None
+    if not article_id and not product_id:
+        return result
+    conn.execute(text("""
+        UPDATE purchase_import_lines
+        SET matched_household_article_id = COALESCE(matched_household_article_id, :article_id),
+            matched_global_product_id = COALESCE(matched_global_product_id, :product_id),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :line_id AND batch_id = :batch_id
+          AND COALESCE(article_override_mode, 'auto') <> 'cleared'
+    """), {
+        "article_id": article_id,
+        "product_id": product_id,
+        "line_id": str(result["id"]),
+        "batch_id": str(batch["id"]),
+    })
+    result["matched_household_article_id"] = article_id
+    result["matched_global_product_id"] = product_id
+    return result
+
+
+def is_receipt_source_inventory_eligible(conn, *, line: Any, batch: Any) -> bool:
+    """Financial/loyalty/unknown receipt lines remain only in Kassa.
+
+    A historical import line is not an authority to override the original
+    receipt's role. Missing source facts fail closed rather than being turned
+    into stock from the label alone.
+    """
+    if batch.get("source_type") != "receipt":
+        return True
+    batch_reference = str(batch.get("source_reference") or "")
+    line_reference = str(line.get("external_line_ref") or "")
+    if not (batch_reference.startswith("receipt:") and line_reference.startswith("receipt-line:")):
+        return False
+    source = conn.execute(text("""
+        SELECT rtl.line_role, rtl.inventory_eligible
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        WHERE rtl.id = :line_id
+          AND rtl.receipt_table_id = :receipt_id
+          AND rt.household_id = :household_id
+          AND rt.deleted_at IS NULL
+          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+        LIMIT 1
+    """), {
+        "line_id": line_reference[len("receipt-line:"):],
+        "receipt_id": batch_reference[len("receipt:"):],
+        "household_id": str(batch["household_id"]),
+    }).mappings().first()
+    return bool(
+        source
+        and str(source.get("line_role") or "").lower() == "product"
+        and (source.get("inventory_eligible") is True
+             or source.get("inventory_eligible") == 1
+             or str(source.get("inventory_eligible") or "").strip().lower() in {"true", "t", "yes", "on"})
+    )
 
 
 def _batch_household_configuration(main_module, batch_id: str):
@@ -102,6 +195,8 @@ def _process_locationless_ready_only_batch(
                         pib.id,
                         pib.household_id,
                         pib.import_status,
+                        pib.source_type,
+                        pib.source_reference,
                         pib.raw_payload,
                         sp.code AS store_provider_code
                     FROM purchase_import_batches pib
@@ -145,8 +240,8 @@ def _process_locationless_ready_only_batch(
                     """
                     SELECT id, external_line_ref, article_name_raw, brand_raw,
                            external_article_code, quantity_raw, unit_raw,
-                           review_decision, matched_household_article_id,
-                           matched_global_product_id,
+                           review_decision, article_override_mode,
+                           matched_household_article_id, matched_global_product_id,
                            COALESCE(
                                selected_article_group_id,
                                (
@@ -169,20 +264,56 @@ def _process_locationless_ready_only_batch(
                 },
             ).mappings().all()
 
+            # A Kassa-approved receipt can still contain legacy pending unpack
+            # decisions. Pressing bulk Goedkeuren is an explicit request to
+            # process its *complete* stock-ready lines, not to invent article
+            # identities or override ignored lines.
+            approved_receipt = False
+            receipt_reference = str(batch.get("source_reference") or "")
+            if (batch.get("source_type") == "receipt"
+                    and receipt_reference.startswith("receipt:")):
+                approved_receipt = bool(conn.execute(text("""
+                    SELECT 1 FROM receipt_tables
+                    WHERE id = :receipt_id AND household_id = :household_id
+                      AND approved_at IS NOT NULL
+                      AND parse_status IN ('approved', 'approved_override')
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                """), {
+                    "receipt_id": receipt_reference[len("receipt:"):],
+                    "household_id": str(batch["household_id"]),
+                }).first())
+
             selected_lines = [
-                line
-                for line in lines
-                if (line["review_decision"] or "pending") == "selected"
+                line for line in lines
+                if is_locationless_bulk_candidate(line, approved_receipt=approved_receipt)
             ]
             results: list[dict[str, Any]] = []
             processable_lines = []
             skipped_count = 0
 
-            for line in selected_lines:
+            for original_line in selected_lines:
+                line = dict(original_line)
                 line_id = line["id"]
                 current_line_id = line_id
                 current_line_name = line.get("article_name_raw") or ""
                 line_reference = m.build_purchase_import_line_reference(conn, line_id)
+                if not is_receipt_source_inventory_eligible(conn, line=line, batch=batch):
+                    results.append({
+                        "line_id": line_id,
+                        "line_reference": line_reference,
+                        "status": "skipped",
+                        "reason": "Geen voorraadartikel volgens de bonregelclassificatie in Kassa",
+                        "failure_stage": "receipt_line_semantics",
+                    })
+                    skipped_count += 1
+                    continue
+                line = recover_explicit_approved_receipt_article_link(
+                    conn,
+                    line=line,
+                    batch=batch,
+                    approved_receipt=approved_receipt,
+                )
                 ready, reason, failure_stage = classify_locationless_ready_line(line)
                 if not ready:
                     results.append(
@@ -196,13 +327,28 @@ def _process_locationless_ready_only_batch(
                     )
                     skipped_count += 1
                     continue
+                if (line["review_decision"] or "pending") == "pending":
+                    # The explicit bulk action selects only ready, approved
+                    # receipt lines; unready/ignored lines remain unchanged.
+                    conn.execute(text("""
+                        UPDATE purchase_import_lines
+                        SET review_decision = 'selected', updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :line_id AND batch_id = :batch_id
+                          AND COALESCE(review_decision, 'pending') = 'pending'
+                    """), {"line_id": line_id, "batch_id": batch_id})
                 processable_lines.append(line)
 
             if not processable_lines:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Geen klaarstaande regels om naar voorraad te verwerken",
-                )
+                # Return actionable per-line reasons, not a generic 400 that
+                # hides why a Kassa-approved receipt remains in Uitpakken.
+                return {
+                    "batch_id": batch_id,
+                    "status": str(batch.get("import_status") or "review"),
+                    "processed_count": 0,
+                    "failed_count": 0,
+                    "skipped_count": skipped_count,
+                    "results": results,
+                }
 
             processed_count = 0
             failed_count = 0
@@ -348,10 +494,14 @@ def _process_locationless_ready_only_batch(
                     failed_count += 1
                     continue
 
+                # Existing receipt lines may retain a historical target_location_id
+                # from before locations were disabled. Keep the receipt untouched;
+                # the current household policy makes the new inventory event
+                # locationless, without inventing or deleting location history.
                 resolved_location = resolve_inventory_target_location(
                     conn,
                     str(batch["household_id"]),
-                    line["target_location_id"],
+                    None,
                 )
 
                 quantity = m.normalize_store_import_quantity(

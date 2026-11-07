@@ -225,6 +225,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
   const [lineSaveState, setLineSaveState] = useState({})
+  const [quantityDrafts, setQuantityDrafts] = useState({})
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
   const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
@@ -1142,6 +1143,39 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   function cancelDefaultLocationChoice() {
     setPendingDefaultLocationChoice(null)
+  }
+
+  async function saveLineQuantity(line) {
+    const values = quantityDrafts[line.id] || {}
+    const quantityText = String(values.quantity ?? line.quantity_raw ?? '').trim().replace(',', '.')
+    const quantity = Number(quantityText)
+    const unit = String(values.unit ?? line.unit_raw ?? '').trim()
+    if (!quantityText || !Number.isFinite(quantity) || quantity <= 0 || quantity > 1000000000) {
+      showUitpakkenFeedback('error', 'Vul een geldig positief aantal in.', { key: `quantity-validation-${line.id}-${Date.now()}` })
+      return
+    }
+    setBusyLineId(line.id)
+    try {
+      await fetchJson(`/api/purchase-import-lines/${line.id}/quantity`, {
+        method: 'POST',
+        body: JSON.stringify({ quantity, unit }),
+      })
+      const updated = await refreshBatch(batch.batch_id)
+      const saved = updated?.lines?.find((candidate) => String(candidate.id) === String(line.id))
+      if (!saved || Number(saved.quantity_raw) !== quantity || String(saved.unit_raw || '') !== unit) {
+        throw new Error('De gecorrigeerde hoeveelheid kon niet worden bevestigd.')
+      }
+      setQuantityDrafts((current) => {
+        const next = { ...current }
+        delete next[line.id]
+        return next
+      })
+      showUitpakkenFeedback('success', 'Aantal opgeslagen. Je kunt de bonregel opnieuw goedkeuren.', { key: `quantity-saved-${line.id}-${Date.now()}` })
+    } catch (error) {
+      showUitpakkenFeedback('error', normalizeErrorMessage(error?.message) || 'Aantal opslaan is mislukt.', { key: `quantity-error-${line.id}-${Date.now()}` })
+    } finally {
+      setBusyLineId(null)
+    }
   }
 
   async function persistLineDraft(line, patch = {}, options = {}) {
@@ -2278,7 +2312,40 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Bonartikel</dt><dd>{formatReceiptLineLabel(line.article_name_raw)}</dd></div>
                   <div><dt>Winkel</dt><dd>{batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</dd></div>
                   <div><dt>Aankoopdatum</dt><dd>{batch?.purchase_date || 'Onbekend'}</dd></div>
-                  <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
+                  <div><dt>Aantal</dt><dd style={{ display: 'grid', gap: '6px' }}>
+                    <input
+                      className="rz-input rz-inline-input"
+                      type="text"
+                      inputMode="decimal"
+                      aria-label="Aantal"
+                      data-testid={`receipt-line-quantity-${line.id}`}
+                      value={quantityDrafts[line.id]?.quantity ?? String(line.quantity_raw ?? '')}
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                      onChange={(event) => setQuantityDrafts((current) => ({
+                        ...current,
+                        [line.id]: { quantity: event.target.value, unit: current[line.id]?.unit ?? String(line.unit_raw ?? '') },
+                      }))}
+                    />
+                    <input
+                      className="rz-input rz-inline-input"
+                      type="text"
+                      aria-label="Eenheid"
+                      data-testid={`receipt-line-unit-${line.id}`}
+                      value={quantityDrafts[line.id]?.unit ?? String(line.unit_raw ?? '')}
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                      onChange={(event) => setQuantityDrafts((current) => ({
+                        ...current,
+                        [line.id]: { quantity: current[line.id]?.quantity ?? String(line.quantity_raw ?? ''), unit: event.target.value },
+                      }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed' || !quantityDrafts[line.id]}
+                      onClick={() => saveLineQuantity(line)}
+                      data-testid={`receipt-line-save-quantity-${line.id}`}
+                    >Opslaan</Button>
+                  </dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
 
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
