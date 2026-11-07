@@ -97,16 +97,16 @@ def test_locationless_ready_only_ignores_missing_location_but_not_other_requirem
     assert stage == "article_group_resolution"
 
 
-def test_locationless_ready_only_rejects_a_stored_location_instead_of_normalizing_it():
+def test_locationless_ready_only_accepts_a_legacy_receipt_location():
+    # Switching the current household policy must not require editing every
+    # previously imported receipt line. The original line remains unchanged.
     ready, reason, stage = classify_locationless_ready_line({
         "matched_household_article_id": "article-1",
         "matched_global_product_id": None,
         "selected_article_group_id": "group-1",
         "target_location_id": "legacy-space",
     })
-    assert ready is False
-    assert "zonder locatie" in str(reason)
-    assert stage == "purchase_event_write"
+    assert (ready, reason, stage) == (True, None, None)
 
 
 def test_processing_resolver_returns_real_null_location_for_none_policy(engine):
