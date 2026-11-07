@@ -10,6 +10,7 @@ from app.services.purchase_import_location_policy_patch import (
     _policy_store_storage_target_location,
     _processing_household_id,
     classify_locationless_ready_line,
+    is_locationless_bulk_candidate,
     install_purchase_import_location_policy_patch,
 )
 from app.testing.postgresql_onboarding_selftest_fixture import (
@@ -92,9 +93,7 @@ def test_locationless_ready_only_ignores_missing_location_but_not_other_requirem
         "selected_article_group_id": None,
         "target_location_id": None,
     })
-    assert ready is False
-    assert reason == "Nog geen artikelgroep gekozen"
-    assert stage == "article_group_resolution"
+    assert (ready, reason, stage) == (True, None, None)
 
 
 def test_locationless_ready_only_accepts_a_legacy_receipt_location():
@@ -107,6 +106,39 @@ def test_locationless_ready_only_accepts_a_legacy_receipt_location():
         "target_location_id": "legacy-space",
     })
     assert (ready, reason, stage) == (True, None, None)
+
+
+def test_locationless_bulk_candidates_only_include_approved_pending_or_explicit_selected():
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=True,
+    )
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "selected"}, approved_receipt=False,
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=False,
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "ignored"}, approved_receipt=True,
+    )
+
+
+def test_locationless_bulk_ready_without_article_group_but_never_without_identity():
+    assert classify_locationless_ready_line({
+        "matched_household_article_id": "article-1",
+        "matched_global_product_id": None,
+        "selected_article_group_id": None,
+        "target_location_id": "legacy-space",
+    }) == (True, None, None)
+    ready, reason, stage = classify_locationless_ready_line({
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+        "selected_article_group_id": None,
+        "target_location_id": "legacy-space",
+    })
+    assert ready is False
+    assert stage == "article_resolution"
+    assert "artikel" in reason.lower()
 
 
 def test_processing_resolver_returns_real_null_location_for_none_policy(engine):
