@@ -29,18 +29,11 @@ def classify_locationless_ready_line(line: Any) -> tuple[bool, str | None, str |
     article_id = line.get("matched_household_article_id")
     matched_global_product_id = str(line.get("matched_global_product_id") or "").strip()
     article_group_id = line.get("selected_article_group_id")
-    target_location_id = str(line.get("target_location_id") or "").strip()
 
     if not article_id and not matched_global_product_id:
         return False, "Nog geen artikel of product gekoppeld", "article_resolution"
     if not article_group_id:
         return False, "Nog geen artikelgroep gekozen", "article_group_resolution"
-    if target_location_id:
-        return (
-            False,
-            "Dit huishouden gebruikt voorraad zonder locatie; verwijder de gekozen locatie",
-            "purchase_event_write",
-        )
     return True, None, None
 
 
@@ -348,10 +341,14 @@ def _process_locationless_ready_only_batch(
                     failed_count += 1
                     continue
 
+                # Existing receipt lines may retain a historical target_location_id
+                # from before locations were disabled. Keep the receipt untouched;
+                # the current household policy makes the new inventory event
+                # locationless, without inventing or deleting location history.
                 resolved_location = resolve_inventory_target_location(
                     conn,
                     str(batch["household_id"]),
-                    line["target_location_id"],
+                    None,
                 )
 
                 quantity = m.normalize_store_import_quantity(
