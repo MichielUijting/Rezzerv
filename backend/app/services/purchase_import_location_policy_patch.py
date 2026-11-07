@@ -291,12 +291,7 @@ def _process_locationless_ready_only_batch(
             skipped_count = 0
 
             for original_line in selected_lines:
-                line = recover_explicit_approved_receipt_article_link(
-                    conn,
-                    line=dict(original_line),
-                    batch=batch,
-                    approved_receipt=approved_receipt,
-                )
+                line = dict(original_line)
                 line_id = line["id"]
                 current_line_id = line_id
                 current_line_name = line.get("article_name_raw") or ""
@@ -311,6 +306,12 @@ def _process_locationless_ready_only_batch(
                     })
                     skipped_count += 1
                     continue
+                line = recover_explicit_approved_receipt_article_link(
+                    conn,
+                    line=line,
+                    batch=batch,
+                    approved_receipt=approved_receipt,
+                )
                 ready, reason, failure_stage = classify_locationless_ready_line(line)
                 if not ready:
                     results.append(
