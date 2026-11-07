@@ -97,8 +97,28 @@ test.describe('Uitpakken melding-overlay regressie', () => {
         inbox_status: 'Gecontroleerd', summary: { total: 1 },
       }] }),
     }));
+    const calls = [];
+    await page.route('**/api/purchase-import-batches/existing-receipt', async (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ batch_id: 'existing-receipt', lines: [
+        { id: 'ah-mango', article_name_raw: 'AH MANGO', quantity_raw: 1,
+          review_decision: 'selected', processing_status: 'pending',
+          matched_household_article_id: null, matched_global_product_id: null },
+        { id: 'ignored', article_name_raw: 'EMBALLAGE', quantity_raw: 1,
+          review_decision: 'ignored', processing_status: 'pending',
+          matched_household_article_id: null, matched_global_product_id: null },
+        { id: 'processed', article_name_raw: 'VOORRAAD AL VERWERKT', quantity_raw: 1,
+          review_decision: 'selected', processing_status: 'processed',
+          matched_household_article_id: null, matched_global_product_id: null },
+      ] }),
+    }));
+    await page.route('**/api/purchase-import-lines/*/create-article', async (route) => {
+      calls.push({ kind: 'create', path: route.request().url(), body: await route.request().postDataJSON() });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
     let requestedMode = '';
     await page.route('**/api/purchase-import-batches/existing-receipt/process', async (route) => {
+      calls.push({ kind: 'process' });
       requestedMode = (await route.request().postDataJSON()).mode;
       await route.fulfill({
         status: 200, contentType: 'application/json',
@@ -111,6 +131,9 @@ test.describe('Uitpakken melding-overlay regressie', () => {
     await page.getByTestId('receipt-batch-row-existing-receipt').locator('input[type="checkbox"]').check();
     await page.getByTestId('unpack-approve-selected-button').click();
     await expect.poll(() => requestedMode).toBe('ready_only');
+    expect(calls.map((call) => call.kind)).toEqual(['create', 'process']);
+    expect(calls[0].path).toContain('/api/purchase-import-lines/ah-mango/create-article');
+    expect(calls[0].body).toEqual({ article_name: 'AH MANGO' });
     const errorOverlay = page.getByTestId('app-feedback-error');
     await expect(errorOverlay).toBeVisible();
     await expect(errorOverlay).toContainText('Mislukt: 1');
