@@ -197,6 +197,11 @@ export default function ReceiptsPage() {
           processed += Number(result?.processed_count || 0)
           skipped += Number(result?.skipped_count || 0)
           failed += Number(result?.failed_count || 0)
+          const reasons = (result?.results || [])
+            .filter((line) => line?.status === 'skipped' || line?.status === 'failed')
+            .map((line) => String(line?.reason || line?.error || '').trim())
+            .filter(Boolean)
+          if (reasons.length) errors.push(...reasons.slice(0, 2))
         } catch (error) {
           failed += 1
           errors.push(normalizeErrorMessage(error?.message) || 'Verwerking mislukt')
@@ -207,7 +212,7 @@ export default function ReceiptsPage() {
       setSelectedBatchesById({})
       const summary = `Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden.`
       showFeedback({
-        variant: failed ? 'error' : skipped ? 'warning' : 'success',
+        variant: failed || processed === 0 ? 'error' : skipped ? 'warning' : 'success',
         message: `${summary} ${processed === 0 ? 'Er zijn geen bonregels naar Voorraad verwerkt. ' : ''}Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`.trim(),
         key: 'uitpakken-bulk-approve-result',
       })
