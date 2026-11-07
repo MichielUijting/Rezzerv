@@ -227,8 +227,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [isLoading, setIsLoading] = useState(true)
   const [busyLineId, setBusyLineId] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
-  const [processFeedback, setProcessFeedback] = useState('')
-  const [processResultOverlay, setProcessResultOverlay] = useState('')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
@@ -259,7 +257,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationFilter, setLocationFilter] = useState('all')
   const [tableSort, setTableSort] = useState({ key: 'bonartikel', direction: 'asc' })
   const [processConfirm, setProcessConfirm] = useState(null)
-  const processFeedbackTimer = useRef(null)
   const storeBatchTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
     { key: 'bonartikel', width: 360 },
@@ -284,7 +281,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const { showFeedback } = useAppFeedback()
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
-  useEffect(() => { if (processFeedback) showFeedback({ variant: 'info', message: processFeedback }) }, [processFeedback, showFeedback])
 
 
   const {
@@ -1328,19 +1324,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  function clearTransientFeedback() {
-    if (processFeedbackTimer.current) {
-      window.clearTimeout(processFeedbackTimer.current)
-      processFeedbackTimer.current = null
-    }
-  }
-
-  function showProcessFeedback(message) {
-    clearTransientFeedback()
-    setProcessFeedback(message)
-    processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
-  }
-
   function openCreateArticleGroup(lineId, suggestedName = '') {
     if (!canCreateArticleGroup) return
     setNewArticleGroupLineId(String(lineId || ''))
@@ -1447,7 +1430,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   useEffect(() => {
     loadPageData()
-    return () => clearTransientFeedback()
   }, [batchId])
 
   useEffect(() => {
@@ -1650,17 +1632,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           const reason = String(item.error || item.reason || item.diagnostic?.failure_message || '').trim()
           return reason ? `${name}: ${reason}` : `${name}: reden niet beschikbaar`
         })
-      if (failedCount > 0 || (processedCount === 0 && skippedCount > 0)) {
-        showUitpakkenFeedback(
-          failedCount > 0 ? 'error' : 'warning',
-          lineFailureReasons.length
-            ? `Niet naar Voorraad verwerkt. ${lineFailureReasons.join(' | ')}`
-            : 'Niet naar Voorraad verwerkt. Geen specifieke foutreden beschikbaar.',
-          { key: `uitpakken-process-failed-${batch.batch_id}-${Date.now()}` }
-        )
-      } else if (processedCount > 0) {
-        showProcessFeedback('Verwerkt!')
-      }
 
       const processed = (result.results || []).filter((item) => item.status === 'processed').map((item) => lineNameById[item.line_id]).filter(Boolean)
       const skipped = (result.results || []).filter((item) => item.status === 'skipped').map((item) => lineNameById[item.line_id]).filter(Boolean)
@@ -1674,7 +1645,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         parts.push(`Overgeslagen: ${skippedCount}`)
         parts.push(`Mislukt: ${failedCount}`)
       }
-      setProcessResultOverlay(parts.join(' · '))
+      if (processedCount > 0 || skippedCount > 0 || failedCount > 0) {
+        const unresolved = (refreshedBatch?.lines || []).filter(
+          (line) => String(line.processing_status || 'pending') !== 'processed',
+        ).length
+        const summary = [parts.join(' · '), ...lineFailureReasons].filter(Boolean).join(' · ')
+        if (failedCount > 0 || skippedCount > 0) {
+          showUitpakkenFeedback(
+            failedCount > 0 ? 'error' : 'warning',
+            `${summary}. Nog ${unresolved} bonregel(s) niet verwerkt.`,
+            { key: `uitpakken-process-result-${batch.batch_id}-${Date.now()}` },
+          )
+        } else {
+          showFeedback({
+            variant: 'success',
+            title: unresolved === 0 ? 'Verwerking afgerond' : 'Geselecteerde artikelen verwerkt',
+            message: `${summary}. ${unresolved === 0 ? 'Alle bonregels zijn verwerkt.' : `Nog ${unresolved} bonregel(s) niet verwerkt.`}`,
+            dismissMode: 'ok-only',
+            dedupeKey: `uitpakken-process-result-${batch.batch_id}-${Date.now()}`,
+          })
+        }
+      }
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
 
       // Uitpakken is alleen voor nog te verwerken bonnen. Na volledige
@@ -2510,27 +2501,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               setActiveBarcodeLineId('')
             }}
           />
-          {processResultOverlay ? (
-            <div className="rz-modal-backdrop" role="presentation" onClick={() => setProcessResultOverlay('')}>
-              <div
-                className="rz-modal-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="process-result-title"
-                onClick={(event) => event.stopPropagation()}
-                style={{ width: 'min(560px, calc(100vw - 48px))' }}
-              >
-                <h3 id="process-result-title" className="rz-modal-title">Verwerking afgerond</h3>
-                <p className="rz-modal-text">{processResultOverlay}</p>
-                <div className="rz-modal-actions">
-                  <Button variant="primary" type="button" onClick={() => setProcessResultOverlay('')}>
-                    Sluiten
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {locationPickerLineId ? (() => {
             const pickerIsBulk = locationPickerMode === 'bulk'
             const pickerEntry = pickerIsBulk ? null : lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
