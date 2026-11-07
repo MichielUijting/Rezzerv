@@ -283,6 +283,10 @@ def test_receipt_financial_and_unknown_lines_never_enter_stock():
     line = {"external_line_ref": "receipt-line:l-1"}
     for role, eligible, expected in [
         ("product", True, True),
+        ("product", 1, True),
+        ("product", "true", True),
+        ("product", 0, False),
+        ("financial", 1, False),
         ("financial", False, False),
         ("loyalty", False, False),
         ("unknown", False, False),
