@@ -25,7 +25,6 @@ import {
   batchStatusLabel,
   buildBatchTitle,
   fetchJson,
-  formatQuantity,
   normalizeErrorMessage,
   providerLabel,
   StoreArticleSelector,
@@ -75,6 +74,15 @@ function countUniqueNewMappings(lines) {
     }
   })
   return ids.size
+}
+
+function formatDutchQuantityNumber(value) {
+  if (value === null || value === undefined || value === '') return ''
+  return String(value).replace('.', ',')
+}
+
+function formatDutchReceiptQuantity(value, unit) {
+  return [formatDutchQuantityNumber(value), unit].filter(Boolean).join(' ')
 }
 
 function detailValue(value, fallback = 'Niet van toepassing') {
@@ -1536,7 +1544,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         entry.line.article_name_raw || '',
         articleName,
         locationLabel,
-        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
+        formatDutchReceiptQuantity(entry.line.quantity_raw, entry.line.unit_raw),
         standardProductLabel(entry.line),
         entry.statusLabel || '',
       ]
@@ -2168,7 +2176,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         ) : null}
                         <span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span>
                       </td>
-                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatDutchReceiptQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         {isMobileViewport ? (
                           <div className="rz-mobile-unpack-location-field">
@@ -2319,11 +2327,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       inputMode="decimal"
                       aria-label="Aantal"
                       data-testid={`receipt-line-quantity-${line.id}`}
-                      value={quantityDrafts[line.id]?.quantity ?? String(line.quantity_raw ?? '')}
+                      value={quantityDrafts[line.id]?.quantity ?? formatDutchQuantityNumber(line.quantity_raw)}
                       disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
                       onChange={(event) => setQuantityDrafts((current) => ({
                         ...current,
-                        [line.id]: { quantity: event.target.value, unit: current[line.id]?.unit ?? String(line.unit_raw ?? '') },
+                        [line.id]: { quantity: event.target.value.replace(/\./g, ','), unit: current[line.id]?.unit ?? String(line.unit_raw ?? '') },
                       }))}
                     />
                     <input
@@ -2335,7 +2343,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
                       onChange={(event) => setQuantityDrafts((current) => ({
                         ...current,
-                        [line.id]: { quantity: current[line.id]?.quantity ?? String(line.quantity_raw ?? ''), unit: event.target.value },
+                        [line.id]: { quantity: current[line.id]?.quantity ?? formatDutchQuantityNumber(line.quantity_raw), unit: event.target.value },
                       }))}
                     />
                     <Button
