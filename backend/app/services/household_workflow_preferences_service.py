@@ -64,10 +64,12 @@ def save_household_workflow_preferences(
     if (
         _LOCATION_LEVELS[level] < _LOCATION_LEVELS[current.location_tracking_level]
         or (unpacking_disabled and level in {"none", "global"})
-    ):
-        # Old location-bound rows must not become invisible or be silently
-        # mixed with new locationless receipts when Uitpakken is turned off.
-        # No destructive conversion here.
+    ) and not (level == "none" and unpacking):
+        # When Uitpakken stays active and locations are disabled, preserve all
+        # existing located inventory rows verbatim. Household article totals
+        # include these rows independently of location (canonical identity
+        # service). New receipt purchases use NULL/NULL locations instead.
+        # Other transitions remain fail-closed to protect existing stock.
         occupied = conn.execute(text("""
             SELECT 1
             FROM inventory
