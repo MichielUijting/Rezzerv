@@ -100,6 +100,41 @@ def recover_explicit_approved_receipt_article_link(
     return result
 
 
+def is_receipt_source_inventory_eligible(conn, *, line: Any, batch: Any) -> bool:
+    """Financial/loyalty/unknown receipt lines remain only in Kassa.
+
+    A historical import line is not an authority to override the original
+    receipt's role. Missing source facts fail closed rather than being turned
+    into stock from the label alone.
+    """
+    if batch.get("source_type") != "receipt":
+        return True
+    batch_reference = str(batch.get("source_reference") or "")
+    line_reference = str(line.get("external_line_ref") or "")
+    if not (batch_reference.startswith("receipt:") and line_reference.startswith("receipt-line:")):
+        return False
+    source = conn.execute(text("""
+        SELECT rtl.line_role, rtl.inventory_eligible
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        WHERE rtl.id = :line_id
+          AND rtl.receipt_table_id = :receipt_id
+          AND rt.household_id = :household_id
+          AND rt.deleted_at IS NULL
+          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+        LIMIT 1
+    """), {
+        "line_id": line_reference[len("receipt-line:"):],
+        "receipt_id": batch_reference[len("receipt:"):],
+        "household_id": str(batch["household_id"]),
+    }).mappings().first()
+    return bool(
+        source
+        and str(source.get("line_role") or "").lower() == "product"
+        and source.get("inventory_eligible") is True
+    )
+
+
 def _batch_household_configuration(main_module, batch_id: str):
     with main_module.engine.begin() as conn:
         household_id = conn.execute(
@@ -266,6 +301,16 @@ def _process_locationless_ready_only_batch(
                 current_line_id = line_id
                 current_line_name = line.get("article_name_raw") or ""
                 line_reference = m.build_purchase_import_line_reference(conn, line_id)
+                if not is_receipt_source_inventory_eligible(conn, line=line, batch=batch):
+                    results.append({
+                        "line_id": line_id,
+                        "line_reference": line_reference,
+                        "status": "skipped",
+                        "reason": "Geen voorraadartikel volgens de bonregelclassificatie in Kassa",
+                        "failure_stage": "receipt_line_semantics",
+                    })
+                    skipped_count += 1
+                    continue
                 ready, reason, failure_stage = classify_locationless_ready_line(line)
                 if not ready:
                     results.append(
