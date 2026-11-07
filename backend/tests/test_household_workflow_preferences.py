@@ -114,6 +114,26 @@ def test_open_receipts_do_not_block_locationless_unpacking():
     }
 
 
+
+def test_locationless_unpacking_keeps_existing_located_inventory_and_pending_receipts():
+    conn = FakeConnection(pending=True, located_stock=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        save_household_workflow_preferences(
+            conn,
+            household_id="h1",
+            location_tracking_level="none",
+            unpacking_enabled=True,
+        )
+    # No conversion, deletion or location rewrite: only the household policy changes.
+    assert not any("FROM inventory" in sql for sql in conn.statements)
+    assert not any("FROM purchase_import_batches" in sql for sql in conn.statements)
+    assert len([sql for sql in conn.statements if sql.startswith("UPDATE ")]) == 1
+    assert not any(sql.startswith("DELETE ") for sql in conn.statements)
+
+
 def test_open_receipts_still_block_location_downgrade_when_unpacking_disabled():
     conn = FakeConnection(pending=True)
     with patch(
