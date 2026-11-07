@@ -34,6 +34,11 @@ def classify_locationless_ready_line(line: Any) -> tuple[bool, str | None, str |
     return True, None, None
 
 
+def is_locationless_bulk_candidate(line: Any, *, approved_receipt: bool) -> bool:
+    decision = str(line.get("review_decision") or "pending").strip().lower()
+    return decision == "selected" or (approved_receipt and decision == "pending")
+
+
 def _batch_household_configuration(main_module, batch_id: str):
     with main_module.engine.begin() as conn:
         household_id = conn.execute(
@@ -183,8 +188,7 @@ def _process_locationless_ready_only_batch(
 
             selected_lines = [
                 line for line in lines
-                if (line["review_decision"] or "pending") == "selected"
-                or (approved_receipt and (line["review_decision"] or "pending") == "pending")
+                if is_locationless_bulk_candidate(line, approved_receipt=approved_receipt)
             ]
             results: list[dict[str, Any]] = []
             processable_lines = []
