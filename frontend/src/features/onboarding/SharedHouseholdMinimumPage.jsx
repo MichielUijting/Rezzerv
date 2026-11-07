@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
@@ -35,6 +36,11 @@ export default function SharedHouseholdMinimumPage({
   const [inviteMessage, setInviteMessage] = useState('')
   const [inviteError, setInviteError] = useState('')
   const [finishError, setFinishError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (inviteMessage) showFeedback({ variant: 'success', message: inviteMessage }) }, [inviteMessage, showFeedback])
+  useEffect(() => { if (inviteError) showFeedback({ variant: 'error', message: inviteError }) }, [inviteError, showFeedback])
+  useEffect(() => { if (finishError) showFeedback({ variant: 'error', message: finishError }) }, [finishError, showFeedback])
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [onboardingInvitations, setOnboardingInvitations] = useState([])
 
   const normalizedInviteEmail = String(inviteEmail || '').trim().toLowerCase()
@@ -217,8 +223,8 @@ export default function SharedHouseholdMinimumPage({
             >
               {inviteSaving ? 'Bezig…' : 'Uitnodiging versturen'}
             </Button>
-            {inviteMessage ? <div className="rz-inline-feedback" data-testid="shared-household-invite-success">{inviteMessage}</div> : null}
-            {inviteError ? <div className="rz-alert" data-testid="shared-household-invite-error">{inviteError}</div> : null}
+
+
           </form>
         </Card>
       ) : null}
@@ -237,17 +243,8 @@ export default function SharedHouseholdMinimumPage({
         {saving ? 'Opslaan…' : 'Onboarding afronden'}
       </Button>
 
-      {finishError ? (
-        <div
-          className="rz-alert"
-          role="alert"
-          aria-live="polite"
-          data-testid="shared-household-finish-validation"
-        >
-          {finishError}
-        </div>
-      ) : null}
-      {error ? <div className="rz-alert">{error}</div> : null}
+
+
     </div>
   )
 }

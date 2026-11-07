@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   ALMOST_OUT_POLICY_OPTIONS,
   ALMOST_OUT_POLICY_MODES,
@@ -27,7 +28,7 @@ export default function SettingsAlmostOutPage() {
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
 
@@ -44,7 +45,7 @@ export default function SettingsAlmostOutPage() {
       })
       .catch((error) => {
         if (cancelled) return
-        setSaveError(error?.message || 'Almost-out instellingen konden niet worden geladen.')
+        showFeedback({ variant: 'error', message: error?.message || 'De instellingen voor Bijna op konden niet worden geladen.' })
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -52,7 +53,7 @@ export default function SettingsAlmostOutPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [showFeedback])
 
   const currentSettings = useMemo(() => ({
     predictionEnabled: Boolean(predictionEnabled),
@@ -87,11 +88,10 @@ export default function SettingsAlmostOutPage() {
   async function handleSave() {
     const days = Number(shoppingDays)
     if (!Number.isInteger(days) || days < 0 || days > 365) {
-      setSaveError('Vul een heel aantal dagen tussen 0 en 365 in.')
+      showFeedback({ variant: 'error', message: 'Vul een heel aantal dagen tussen 0 en 365 in.' })
       return false
     }
     setIsSaving(true)
-    setSaveError('')
     try {
       const saved = await saveAlmostOutSettings({
         predictionEnabled,
@@ -112,7 +112,7 @@ export default function SettingsAlmostOutPage() {
       setLastSavedSnapshot(stableStringify(nextSettings))
       return true
     } catch (error) {
-      setSaveError(error?.message || 'Opslaan is niet gelukt.')
+      showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet gelukt.' })
       return false
     } finally {
       setIsSaving(false)
@@ -162,8 +162,7 @@ export default function SettingsAlmostOutPage() {
                 step="1"
                 value={shoppingDays}
                 onChange={(event) => {
-                  setSaveError('')
-                  setShoppingDays(event.target.value)
+                                setShoppingDays(event.target.value)
                 }}
                 disabled={!canEdit || isSaving}
                 data-testid="almost-out-shopping-days"
@@ -185,8 +184,7 @@ export default function SettingsAlmostOutPage() {
                   style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                   checked={predictionEnabled}
                   onChange={(event) => {
-                      setSaveError('')
-                    setPredictionEnabled(event.target.checked)
+                                      setPredictionEnabled(event.target.checked)
                   }}
                   disabled={!canEdit || isSaving}
                   data-testid="almost-out-prediction-enabled"
@@ -203,8 +201,7 @@ export default function SettingsAlmostOutPage() {
                 step="1"
                 value={predictionDays}
                 onChange={(event) => {
-                  setSaveError('')
-                  setPredictionDays(event.target.value)
+                                setPredictionDays(event.target.value)
                 }}
                 disabled={!canEdit || isSaving}
                 data-testid="almost-out-prediction-days"
@@ -217,8 +214,7 @@ export default function SettingsAlmostOutPage() {
                   className="rz-input"
                   value={policyMode}
                   onChange={(event) => {
-                      setSaveError('')
-                    setPolicyMode(event.target.value)
+                                      setPolicyMode(event.target.value)
                   }}
                   disabled={!canEdit || isSaving}
                   data-testid="almost-out-policy-mode"
@@ -245,16 +241,6 @@ export default function SettingsAlmostOutPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
               <div />
               <div className="rz-save-cluster">
-                {saveError ? (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    data-save-status="error"
-                    className="rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay"
-                  >
-                    {saveError}
-                  </div>
-                ) : null}
                 <Button onClick={handleSave} disabled={isSaving || !canEdit || isLoading} data-testid="almost-out-settings-save">
                   {isSaving ? 'Opslaan…' : 'Opslaan'}
                 </Button>

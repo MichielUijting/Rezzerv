@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
@@ -14,6 +15,8 @@ function formatDateTimeToSeconds(value) {
 export default function SuperuserUsageSection({ onOpenHousehold }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -36,7 +39,7 @@ export default function SuperuserUsageSection({ onOpenHousehold }) {
     { key: 'last_active_at', header: 'Laatst actief', width: 190, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => formatDateTimeToSeconds(row.last_active_at) },
   ], [])
 
-  if (error) return <div role="alert">{error}</div>
+  if (error) return <div>Gegevens zijn momenteel niet beschikbaar.</div>
   if (!data) return <div role="status">Gebruiksinformatie wordt geladen…</div>
 
   return (

@@ -6,26 +6,23 @@ import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
 import { fetchAuthContext } from '../../lib/authSession.js'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 export default function RegisterPage({ onRegistered }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  useDismissOnComponentClick([() => setError('')], Boolean(error))
+  const { showFeedback } = useAppFeedback()
 
   async function onSubmit(event) {
     event.preventDefault()
-    setError('')
     if (password !== passwordRepeat) {
-      setError('De wachtwoorden zijn niet gelijk.')
+      showFeedback({ variant: 'error', message: 'De wachtwoorden zijn niet gelijk.' })
       return
     }
     if (password.length < 10) {
-      setError('Gebruik een wachtwoord van minimaal 10 tekens.')
+      showFeedback({ variant: 'error', message: 'Gebruik een wachtwoord van minimaal 10 tekens.' })
       return
     }
 
@@ -37,7 +34,7 @@ export default function RegisterPage({ onRegistered }) {
       await fetchAuthContext({ force: true })
       onRegistered()
     } catch (err) {
-      setError(err?.message || 'Account aanmaken mislukt')
+      showFeedback({ variant: 'error', message: err?.message || 'Account aanmaken mislukt' })
     } finally {
       setLoading(false)
     }
@@ -89,7 +86,6 @@ export default function RegisterPage({ onRegistered }) {
                 <Link to="/login">Al een account? Inloggen</Link>
               </div>
 
-              {error ? <div className="rz-alert">{error}</div> : null}
             </form>
           </Card>
         </div>

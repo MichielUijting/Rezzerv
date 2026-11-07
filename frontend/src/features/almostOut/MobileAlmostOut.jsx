@@ -12,6 +12,7 @@ import {
   normalizeAlmostOutText,
 } from './mobileAlmostOutModel.js'
 import '../../pages/mobileVoorraad.css'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { exportAlmostOutRows, moveAlmostOutToShopping, hideAlmostOutRows, restoreAlmostOutRows } from './almostOutBulk.js'
 
 async function resolveHouseholdId() {
@@ -46,9 +47,9 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   const [rows, setRows] = useState([])
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [bulkMessage, setBulkMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [query, setQuery] = useState('')
   const [locationFilter, setLocationFilter] = useState('')
   const [sortKey, setSortKey] = useState('amountToBuy')
@@ -60,7 +61,9 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
       setRows(await loadMobileAlmostOut())
     } catch (err) {
       setRows([])
-      setError(String(err?.message || 'Bijna-op-artikelen konden niet worden geladen'))
+      const message = String(err?.message || 'Bijna-op-artikelen konden niet worden geladen')
+      setError(message)
+      showFeedback({ variant: 'error', message })
     } finally {
       setIsLoading(false)
     }
@@ -134,20 +137,21 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
     if (action === 'hide' && !window.confirm(`Verwijder ${selectedRows.length} melding(en) uit Bijna op? De voorraad blijft bewaard. Verborgen meldingen zijn herstelbaar.`)) return
     setBulkBusy(true)
     setError('')
-    setBulkMessage('')
     try {
       if (action === 'shopping') {
         const total = await moveAlmostOutToShopping(selectedRows)
-        setBulkMessage(`${total} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
+        showFeedback({ variant: 'success', message: `${total} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.` })
       } else {
         if (action === 'hide') await hideAlmostOutRows(selectedRows)
         else await restoreAlmostOutRows()
         setRows(await loadMobileAlmostOut())
         setSelectedIds([])
-        setBulkMessage(action === 'hide' ? 'Meldingen verborgen, voorraad behouden.' : 'Verwijderingen ongedaan gemaakt.')
+        showFeedback({ variant: 'success', message: action === 'hide' ? 'Meldingen verborgen, voorraad behouden.' : 'Verwijderingen ongedaan gemaakt.' })
       }
     } catch (err) {
-      setError(String(err?.message || 'Bulkverwerking mislukt'))
+      const message = String(err?.message || 'Bulkverwerking mislukt')
+      setError(message)
+      showFeedback({ variant: 'error', message })
     } finally {
       // Reconcile the view also when part of a batch transfer succeeded.
       if (action === 'shopping') {
@@ -246,13 +250,6 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           {isLoading && rows.length === 0 ? 'Bijna-op-artikelen laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
         </div>
 
-        {bulkMessage ? <div role="status" className="rz-mobile-inventory-state">{bulkMessage}</div> : null}
-        {error ? (
-          <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
-            <div>{error}</div>
-            <Button type="button" variant="secondary" onClick={reload}>Opnieuw proberen</Button>
-          </section>
-        ) : null}
 
         {!error && !isLoading && filteredRows.length === 0 ? (
           <section className="rz-mobile-inventory-state">

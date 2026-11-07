@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -9,7 +9,7 @@ import {
   HOUSEHOLD_AUTO_CONSUME_MODES,
 } from './services/householdAutomationService'
 import { sortOptionObjects } from '../../ui/sorting'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function stableStringify(value) {
   if (Array.isArray(value)) {
@@ -28,14 +28,9 @@ export default function SettingsHouseholdAutomationPage() {
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveMessage, setSaveMessage] = useState('')
-  const [saveError, setSaveError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
-
-  useDismissOnComponentClick([() => setSaveMessage(''), () => setSaveError('')], Boolean(saveMessage || saveError))
-
   useEffect(() => {
     let cancelled = false
     fetchHouseholdAutomationSettings()
@@ -69,20 +64,6 @@ export default function SettingsHouseholdAutomationPage() {
   }, [isLoading, lastSavedSnapshot, currentSnapshot])
 
   useEffect(() => {
-    if (saveMessage && isDirty) {
-      setSaveMessage('')
-    }
-  }, [isDirty, saveMessage])
-
-  useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) {
-        clearTimeout(dismissTimerRef.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
     if (blocker.state === 'blocked') {
       setShowLeaveModal(true)
     }
@@ -99,16 +80,8 @@ export default function SettingsHouseholdAutomationPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  function queueSuccessMessage(text) {
-    setSaveError('')
-    setSaveMessage(text)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(() => setSaveMessage(''), 3000)
-  }
-
   async function handleSave() {
     setIsSaving(true)
-    setSaveError('')
 
     try {
       const saved = await saveHouseholdAutomationSettings({ mode })
@@ -117,10 +90,9 @@ export default function SettingsHouseholdAutomationPage() {
       }
       setMode(savedSettings.mode)
       setLastSavedSnapshot(stableStringify(savedSettings))
-      queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
-      setSaveError(error?.message || 'Opslaan is niet gelukt.')
+      showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet gelukt.' })
       return false
     } finally {
       setIsSaving(false)
@@ -179,9 +151,7 @@ export default function SettingsHouseholdAutomationPage() {
                 data-testid="household-automation-toggle"
                 value={mode}
                 onChange={(event) => {
-                  setSaveMessage('')
-                  setSaveError('')
-                  setMode(event.target.value)
+                                setMode(event.target.value)
                 }}
                 disabled={!canEdit || isSaving}
               >
@@ -195,16 +165,6 @@ export default function SettingsHouseholdAutomationPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
             <div />
             <div className="rz-save-cluster">
-              {(saveMessage || saveError) ? (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  data-save-status={saveError ? 'error' : 'saved'}
-                  className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}
-                >
-                  {saveError || saveMessage}
-                </div>
-              ) : null}
               <Button onClick={handleSave} disabled={isSaving || !canEdit} data-testid="household-automation-save">{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
             </div>
           </div>

@@ -30,7 +30,6 @@ import {
   providerLabel,
   StoreArticleSelector,
 } from './storeImportShared'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
@@ -246,7 +245,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const locationHoverTimerRef = useRef(null)
   const previousReceiptLineIdRef = useRef(receiptLineId || '')
 
-  useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
   const [statusFilter, setStatusFilter] = useState('all')
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
@@ -275,6 +273,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
   const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
+  useEffect(() => { if (processFeedback) showFeedback({ variant: 'info', message: processFeedback }) }, [processFeedback, showFeedback])
 
 
   const {

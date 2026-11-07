@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Pagination from '../../ui/Pagination.jsx'
 import { fetchHouseholdDashboard, fetchHouseholdDashboardDrilldown } from './dashboardApi.js'
 import './mobileHome.css'
@@ -424,6 +425,8 @@ export default function DashboardDetailPage() {
   const [dashboard, setDashboard] = useState(null)
   const [barDrilldown, setBarDrilldown] = useState(null)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const granularity = searchParams.get('granularity') || ''
   const bucketIndex = Number(searchParams.get('bucket'))
   const series = searchParams.get('series') || 'current'
@@ -595,7 +598,7 @@ export default function DashboardDetailPage() {
   return <main className="rz-mobile-home" data-testid={'dashboard-detail-' + metric}>
     <MobileModuleHeader title={detailTitle} testId="dashboard-detail-header" />
     <section className="rz-mobile-home-inner">
-      {error ? <div role="alert" className="rz-dashboard-error">{error}</div> : null}
+
       {!dashboard && !barDrilldown && !error ? <p role="status">Dashboard inlezen.</p> : body}
     </section>
   </main>

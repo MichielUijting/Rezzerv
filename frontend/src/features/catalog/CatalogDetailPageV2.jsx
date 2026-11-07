@@ -75,6 +75,7 @@ export default function CatalogDetailPageV2() {
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [cameraState, setCameraState] = useState({ status: 'idle', message: '' })
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -297,7 +298,7 @@ export default function CatalogDetailPageV2() {
         />
         <main className="rz-mobile-catalog-detail-content">
           {isLoading ? <section className="rz-mobile-catalog-state">Catalogusartikel laden…</section> : null}
-          {error ? <section className="rz-mobile-catalog-state" role="alert">{error}</section> : null}
+
 
           {!isLoading && !error ? (
             <>
@@ -419,7 +420,7 @@ export default function CatalogDetailPageV2() {
       <div className="rz-catalog-page" data-testid="catalog-detail-page">
         <ScreenCard fullWidth>
           {isLoading ? <div>Catalogusartikel laden…</div> : null}
-          {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+
 
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">

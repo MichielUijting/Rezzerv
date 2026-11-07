@@ -155,7 +155,7 @@ test('users page suspends only after explicit confirmation and never exposes cre
   await expect(target).toContainText('Status: Geschorst')
   await expect(target).toContainText('Actieve sessies: 0')
   await expect(target.getByRole('button', { name: 'Gebruiker schorsen', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('status')).toContainText('2 actieve sessie(s) zijn ingetrokken')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('2 actieve sessie(s) zijn ingetrokken')
 })
 
 test('users direct route stays closed without permission and performs no user-management request', async ({ page }) => {

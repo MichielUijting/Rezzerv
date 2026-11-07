@@ -399,9 +399,11 @@ Voor de nieuwe Voorraadbaseline blijven de generieke toegankelijkheidscontracten
 
 De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Schermen maken geen eigen tijdelijke succes-, info-, waarschuwing- of foutbalk wanneer deze centrale component het patroon afdekt.
 
+**Bindend PO-besluit 6 november 2026 — applicatiebreed:** status-, succes-, waarschuwing- en foutmeldingen staan nooit als dynamische melding tussen de inhoud van een scherm. Alleen een centrale overlay of de centrale vaste balk onderin is toegestaan. Een **foutmelding** is altijd een centrale, blokkerende melding met expliciete **OK**-knop, ook op mobiel: zij verdwijnt **niet** na een timer, niet bij klikken op de melding en niet bij klikken buiten de overlay. Onderliggende functionele leegstand-, veldlabel- en voortgangsmetadata zijn geen tijdelijke meldingen. Schermen implementeren geen eigen `rz-inline-feedback`-meldingsblokken of fout-dismisstimers.
+
 ### Mobiele passieve feedback
 
-Op mobiele schermen is passieve feedback altijd een **overlay**:
+Op mobiele schermen is **niet-foutieve, passieve** feedback altijd een **overlay**:
 - de melding staat buiten de documentflow en schuift inhoud nooit omlaag of omhoog;
 - er wordt op mobiel geen permanente lege feedbackbalk of extra feedback-clearance gereserveerd;
 - de overlay gebruikt `--color-mobile-ui-primary` (standaard `#005F6A`) met witte tekst;

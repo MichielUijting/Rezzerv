@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import useBarcodeScanner from '../../lib/useBarcodeScanner'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** One shared Catalogus editor for the desktop and mobile article detail. */
 export default function CatalogBarcodeEntry({ globalProductId, primaryGtin, canEdit, mobile, onSaved }) {
   const [gtin, setGtin] = useState('')
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const {
     videoRef, isOpen, cameraState, cameraMeta, availableCameras,
     startScanner, stopScanner, switchCamera,
@@ -16,30 +16,25 @@ export default function CatalogBarcodeEntry({ globalProductId, primaryGtin, canE
     screenContext: 'Catalogus gedeelde barcode',
     onDetected: (detected) => {
       setGtin(String(detected || '').trim())
-      setError('')
-      setMessage('Barcode gevonden. Controleer de code en bevestig met Opslaan.')
+      showFeedback({ variant: 'info', message: 'Barcode gevonden. Controleer de code en bevestig met Opslaan.' })
       stopScanner(true)
     },
   })
 
   useEffect(() => {
     setGtin('')
-    setMessage('')
-    setError('')
     stopScanner()
   }, [globalProductId, primaryGtin, stopScanner])
 
   if (String(primaryGtin || '').trim()) return null
   if (!canEdit) {
-    return <p className="rz-inline-feedback">Nog geen barcode bekend. Een bevoegd catalogusbeheerder kan deze toevoegen.</p>
+    return <p>Nog geen barcode bekend. Een bevoegd catalogusbeheerder kan deze toevoegen.</p>
   }
 
   async function saveBarcode(event) {
     event.preventDefault()
     if (!gtin.trim() || saving) return
     setSaving(true)
-    setMessage('')
-    setError('')
     try {
       const response = await fetchJsonWithAuth(
         `/api/catalog/${encodeURIComponent(globalProductId)}/gtin`,
@@ -48,9 +43,9 @@ export default function CatalogBarcodeEntry({ globalProductId, primaryGtin, canE
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result?.detail || 'De barcode kon niet worden opgeslagen.')
       onSaved(String(result.gtin))
-      setMessage('De barcode is centraal in de Catalogus opgeslagen.')
+      showFeedback({ variant: 'success', message: 'De barcode is centraal in de Catalogus opgeslagen.' })
     } catch (saveError) {
-      setError(saveError?.message || 'De barcode kon niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: saveError?.message || 'De barcode kon niet worden opgeslagen.' })
     } finally {
       setSaving(false)
     }
@@ -84,8 +79,6 @@ export default function CatalogBarcodeEntry({ globalProductId, primaryGtin, canE
           ) : null}
         </div>
       </form>
-      {error ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{error}</p> : null}
-      {message ? <p role="status" className="rz-inline-feedback rz-inline-feedback--success">{message}</p> : null}
       <BarcodeScannerModal
         open={isOpen}
         title="Barcode scannen voor Catalogus"

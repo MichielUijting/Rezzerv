@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import CatalogProductImage from './CatalogProductImage'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Select from '../../ui/Select.jsx'
 import Pagination from '../../ui/Pagination.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
@@ -40,6 +41,8 @@ export default function MobileCatalogPage() {
   }, [query, kind, sort, page])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -144,7 +147,7 @@ export default function MobileCatalogPage() {
 
         <div className="rz-mobile-catalog-summary" aria-live="polite">{summary}</div>
 
-        {error ? <section className="rz-mobile-catalog-state" role="alert">{error}</section> : null}
+
         {!error && !isLoading && items.length === 0 ? <section className="rz-mobile-catalog-state">Geen catalogusartikelen gevonden.</section> : null}
 
         {!error && items.length > 0 ? (

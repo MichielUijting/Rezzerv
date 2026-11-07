@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -7,7 +7,7 @@ import { useArticleFieldVisibility } from '../articles/hooks/useArticleFieldVisi
 import { ARTICLE_TABS } from '../articles/config/articleFieldConstants'
 import { getFieldsByTabAndGroup } from '../articles/config/articleFieldHelpers'
 import FieldVisibilitySection from './components/FieldVisibilitySection'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 const TAB_LABELS = {
   [ARTICLE_TABS.OVERVIEW]: 'Overzicht',
@@ -31,14 +31,9 @@ function stableStringify(value) {
 
 export default function SettingsArticleFieldsPage() {
   const { visibilityMap, alwaysVisibleKeys, isLoading, isSaving, error, toggleFieldVisibility, resetToDefault, showAllFields, saveVisibility } = useArticleFieldVisibility()
-  const [saveMessage, setSaveMessage] = useState('')
-  const [saveError, setSaveError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
-
-  useDismissOnComponentClick([() => setSaveMessage(''), () => setSaveError('')], Boolean(saveMessage || saveError))
-
   const groupedFieldsByTab = useMemo(() => ({
     [ARTICLE_TABS.OVERVIEW]: getFieldsByTabAndGroup(ARTICLE_TABS.OVERVIEW),
     [ARTICLE_TABS.STOCK]: {},
@@ -52,24 +47,14 @@ export default function SettingsArticleFieldsPage() {
   const blocker = useBlocker(isDirty)
 
   useEffect(() => {
+    if (error) showFeedback({ variant: 'error', message: 'De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.' })
+  }, [error, showFeedback])
+
+  useEffect(() => {
     if (!isLoading && !lastSavedSnapshot) {
       setLastSavedSnapshot(currentSnapshot)
     }
   }, [isLoading, lastSavedSnapshot, currentSnapshot])
-
-  useEffect(() => {
-    if (saveMessage && isDirty) {
-      setSaveMessage('')
-    }
-  }, [isDirty, saveMessage])
-
-  useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) {
-        clearTimeout(dismissTimerRef.current)
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -88,25 +73,16 @@ export default function SettingsArticleFieldsPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  function queueSuccessMessage(text) {
-    setSaveError('')
-    setSaveMessage(text)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(() => setSaveMessage(''), 3000)
-  }
-
   async function handleSave() {
-    setSaveError('')
     const result = await saveVisibility()
 
     if (result.ok) {
       const savedSnapshot = stableStringify(result.data || visibilityMap || {})
       setLastSavedSnapshot(savedSnapshot)
-      queueSuccessMessage('Opgeslagen')
       return true
     }
 
-    setSaveError(result.error?.message || 'Opslaan is niet gelukt.')
+    showFeedback({ variant: 'error', message: result.error?.message || 'Opslaan is niet gelukt.' })
     return false
   }
 
@@ -134,14 +110,10 @@ export default function SettingsArticleFieldsPage() {
   }
 
   function handleResetDefaults() {
-    setSaveError('')
-    setSaveMessage('')
     resetToDefault()
   }
 
   function handleShowAll() {
-    setSaveError('')
-    setSaveMessage('')
     showAllFields()
   }
 
@@ -156,7 +128,6 @@ export default function SettingsArticleFieldsPage() {
 
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
-              {error ? <div className="rz-inline-feedback rz-inline-feedback--warning">De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.</div> : null}
               <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={toggleFieldVisibility} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -164,11 +135,6 @@ export default function SettingsArticleFieldsPage() {
                   <Button variant="secondary" onClick={handleShowAll} disabled={isSaving}>Alles tonen</Button>
                 </div>
                 <div className="rz-save-cluster">
-                  {(saveMessage || saveError) ? (
-                    <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}>
-                      {saveError || saveMessage}
-                    </div>
-                  ) : null}
                   <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
                 </div>
               </div>

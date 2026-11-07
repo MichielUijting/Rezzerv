@@ -4,28 +4,23 @@ import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-
-  useDismissOnComponentClick([() => setError('')], Boolean(error))
+  const { showFeedback } = useAppFeedback()
 
   async function onSubmit(event) {
     event.preventDefault()
-    setError('')
-    setMessage('')
     setLoading(true)
     try {
       const response = await apiPost('/api/auth/password-reset/request', { email })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Herstelverzoek kon niet worden verwerkt')
-      setMessage(data?.message || 'Als dit e-mailadres bij ons bekend is, ontvang je een herstellink.')
+      showFeedback({ variant: 'success', message: data?.message || 'Als dit e-mailadres bij ons bekend is, ontvang je een herstellink.' })
     } catch (err) {
-      setError(err?.message || 'Herstelverzoek kon niet worden verwerkt')
+      showFeedback({ variant: 'error', message: err?.message || 'Herstelverzoek kon niet worden verwerkt' })
     } finally {
       setLoading(false)
     }
@@ -59,8 +54,6 @@ export default function ForgotPasswordPage() {
               >
                 {loading ? 'Bezig...' : 'Herstellink versturen'}
               </Button>
-              {message ? <div className="rz-alert" data-testid="forgot-password-message">{message}</div> : null}
-              {error ? <div className="rz-alert" data-testid="forgot-password-error">{error}</div> : null}
             </form>
           </Card>
         </div>

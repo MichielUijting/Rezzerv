@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchPrivacyDataSharingSettings, updatePrivacyDataSharingSettings } from './services/privacyDataSharingService'
 
 const DEFAULT_SETTINGS = {
@@ -37,13 +37,8 @@ export default function SettingsPrivacyDataSharingPage() {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
-
-  useDismissOnComponentClick([() => setMessage(''), () => setError('')], Boolean(message || error))
-
   const snapshot = useMemo(() => stableStringify(settings), [settings])
   const isDirty = !isLoading && !!lastSavedSnapshot && snapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
@@ -52,7 +47,6 @@ export default function SettingsPrivacyDataSharingPage() {
     let active = true
     async function load() {
       setIsLoading(true)
-      setError('')
       try {
         const payload = await fetchPrivacyDataSharingSettings()
         if (!active) return
@@ -63,14 +57,14 @@ export default function SettingsPrivacyDataSharingPage() {
         if (!active) return
         setSettings(DEFAULT_SETTINGS)
         setLastSavedSnapshot(stableStringify(DEFAULT_SETTINGS))
-        setError(loadError?.message || 'Privacy-instellingen konden niet worden geladen.')
+        showFeedback({ variant: 'error', message: loadError?.message || 'Privacy-instellingen konden niet worden geladen.' })
       } finally {
         if (active) setIsLoading(false)
       }
     }
     load()
     return () => { active = false }
-  }, [])
+  }, [showFeedback])
 
   useEffect(() => {
     if (blocker.state === 'blocked') setShowLeaveModal(true)
@@ -86,34 +80,21 @@ export default function SettingsPrivacyDataSharingPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isDirty])
 
-  useEffect(() => () => {
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-  }, [])
-
-  function queueMessage(text) {
-    setError('')
-    setMessage(text)
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-    dismissTimerRef.current = setTimeout(() => setMessage(''), 3000)
-  }
-
   function updateSetting(key, checked) {
     setSettings((current) => ({ ...current, [key]: checked }))
   }
 
   async function handleSave() {
     setIsSaving(true)
-    setError('')
-    setMessage('')
     try {
       const payload = await updatePrivacyDataSharingSettings(settings)
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload }
       setSettings(nextSettings)
       setLastSavedSnapshot(stableStringify(nextSettings))
-      queueMessage(payload?.settings_message || 'Privacy- en datadeelrechten opgeslagen.')
+      showFeedback({ variant: 'success', message: payload?.settings_message || 'Privacy- en datadeelrechten opgeslagen.' })
       return true
     } catch (saveError) {
-      setError(saveError?.message || 'Privacy-instellingen konden niet worden opgeslagen.')
+      showFeedback({ variant: 'error', message: saveError?.message || 'Privacy-instellingen konden niet worden opgeslagen.' })
       return false
     } finally {
       setIsSaving(false)
@@ -147,12 +128,6 @@ export default function SettingsPrivacyDataSharingPage() {
               <p style={{ margin: 0, color: '#667085' }}>Beheer hier per gebruiker welke data mag worden gebruikt. Alles staat standaard uit en alleen jij kunt dit voor jezelf wijzigen.</p>
             </div>
           </div>
-
-          {(message || error) ? (
-            <div className={error ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>
-              {error || message}
-            </div>
-          ) : null}
 
           {isLoading ? <div>Privacy-instellingen laden…</div> : (
             <>

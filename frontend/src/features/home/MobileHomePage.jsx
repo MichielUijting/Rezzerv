@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchAlmostOutCount, fetchHouseholdDashboard, fetchRetailerPendingReceiptSummary } from './dashboardApi.js'
 import { readDashboardCardOrder, writeDashboardCardOrder } from './dashboardCardOrder.js'
 import './mobileHome.css'
@@ -241,6 +242,8 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   const [almostOutCount, setAlmostOutCount] = useState(null)
   const [pendingReceipts, setPendingReceipts] = useState(null)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [periodKey, setPeriodKey] = useState('days')
   const [cardOrder, setCardOrder] = useState(() => readDashboardCardOrder(context))
   const [draggingKey, setDraggingKey] = useState('')
@@ -509,7 +512,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         <p className="rz-mobile-home-subtitle">{welcomeText}</p>
       </div>
 
-      {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
+
 
       <div className="rz-dashboard-status" aria-label="Actuele status">
         <button type="button" onClick={() => openStatus('meldingen')} className="rz-dashboard-status--notifications" data-testid="dashboard-status-notifications">

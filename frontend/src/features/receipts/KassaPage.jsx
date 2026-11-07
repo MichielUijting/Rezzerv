@@ -11,7 +11,6 @@ import Tabs from '../../ui/Tabs'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
@@ -660,9 +659,16 @@ function readShareQueryParams() {
 
 
 function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onToggleCollapse }) {
+  const { showFeedback } = useAppFeedback()
   const [selectedVariant, setSelectedVariant] = useState('original')
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
   const [imageZoom, setImageZoom] = useState(1)
+
+  useEffect(() => {
+    if (previewState.status === 'error' && previewState.error) {
+      showFeedback({ variant: 'error', message: previewState.error })
+    }
+  }, [previewState.status, previewState.error, showFeedback])
   const hasTransientPreview = Boolean(transientPreview?.originalUrl)
   const supportsProcessedPreview = hasTransientPreview || (receipt?.mime_type ? String(receipt.mime_type).toLowerCase().startsWith('image/') : false)
   const previewTitle = selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'
@@ -787,11 +793,6 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden...</div>
             ) : null}
 
-            {previewState.status === 'error' ? (
-              <div role="alert" style={{ maxWidth: '560px', margin: '16px', color: '#B42318' }}>
-                {previewState.error || 'De originele kassabon kon niet worden geladen.'}
-              </div>
-            ) : null}
 
             {previewState.status === 'ready' && previewState.isPdf ? (
               <object
@@ -839,7 +840,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div role="status" style={{ maxWidth: '560px', margin: '16px', color: '#475467' }}>
+              <div style={{ maxWidth: '560px', margin: '16px', color: '#475467' }}>
                 Van deze kassabon is geen ondersteund voorbeeld beschikbaar.
               </div>
             ) : null}
@@ -1892,8 +1893,6 @@ function CameraCaptureModal({
         </div>
 
 
-        {error ? <div role="alert" data-testid="kassa-camera-error">{error}</div> : null}
-        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate">{duplicateNotice}</div> : null}
 
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
@@ -1980,7 +1979,11 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   const [inboxScrollHeightPx, setInboxScrollHeightPx] = useState(KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
-  useDismissOnComponentClick([() => setError(''), () => setStatus(''), () => setDuplicateNotice(''), () => setCameraError(''), () => setEmailRouteError('')], Boolean(error || status || duplicateNotice || cameraError || emailRouteError))
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
+  // announceDuplicate already displays its specific feedback; do not overwrite it.
+  useEffect(() => { if (cameraError) showFeedback({ variant: 'error', message: cameraError }) }, [cameraError, showFeedback])
+  useEffect(() => { if (emailRouteError) showFeedback({ variant: 'error', message: emailRouteError }) }, [emailRouteError, showFeedback])
 
   useEffect(() => {
     return () => {
@@ -2313,6 +2316,21 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         }
         const items = await loadReceipts(resolvedHouseholdId)
         if (cancelled) return
+        // /kassa/nieuw and /kassa are separate route elements. Restore the
+        // existing receipt on the destination page rather than relying on
+        // selection state from the unmounted upload page.
+        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
+        if (duplicateReceiptId) {
+          const existingItem = items.find((item) => String(item?.receipt_table_id || '') === duplicateReceiptId)
+          if (existingItem) {
+            setFilters(DEFAULT_RECEIPT_FILTERS)
+            setReceiptInboxFocusId(duplicateReceiptId)
+            setSelectedReceiptIds([duplicateReceiptId])
+            await openReceiptDetail(duplicateReceiptId, items)
+          }
+          navigate('/kassa', { replace: true, state: null })
+          return
+        }
         const sharedResult = readShareQueryParams()
         if (sharedResult?.shareStatus === 'error') {
           setError(sharedResult.message || 'De gedeelde bon kon niet worden verwerkt.')
@@ -2382,23 +2400,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       ? await fetchJson(`/api/receipts/${encodeURIComponent(existingReceiptId)}`)
       : null
     const outsideKassa = Boolean(existingReceipt?.approved_at)
-    if (existingReceiptId && !outsideKassa && isAddReceiptRoute) {
-      // AppFeedbackProvider lives above the router, so publish the duplicate
-      // feedback before navigating away from /kassa/nieuw. The destination
-      // bootstrap still reuses the share hand-off to open/select the receipt,
-      // but the user-facing feedback no longer depends on route-remount timing.
-      setDuplicateNotice(message)
-      setArchivedDuplicate(null)
-      showKassaFeedback('warning', message, {
-        title: 'Bon al ingelezen',
-        detail: 'De bestaande kassabon is geopend in Kassa.',
-        key: `kassa-duplicate-receipt-${existingReceiptId}`,
-        dedupeMs: 0,
-        testId: 'kassa-duplicate-overlay',
-      })
-      navigate(`/kassa?share_status=success&duplicate=1&receipt_table_id=${encodeURIComponent(existingReceiptId)}`)
-      return
-    }
+    // Handle uploads directly, using the same inbox/detail path as shared receipts.
+    // Navigating through a temporary share_status URL can leave its parameters
+    // unconsumed when the Kassa component remains mounted across the route change.
     if (outsideKassa) {
       message = existingReceipt.import_status === 'processed'
         ? 'Deze kassabon is al ingelezen en verwerkt en staat in Voorraad.'
@@ -2424,7 +2428,6 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     if (existingReceiptId && !outsideKassa) {
       setFilters(DEFAULT_RECEIPT_FILTERS)
       setReceiptInboxFocusId(existingReceiptId)
-      setSelectedReceiptIds([existingReceiptId])
       const refreshedItems = await loadReceipts(householdId, {
         preserveDuplicateNotice: true,
         openReceiptId: existingReceiptId,
@@ -2432,7 +2435,12 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       })
       const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
       await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
-      if (isAddReceiptRoute) navigate('/kassa')
+      // Select only after refreshing the inbox: pruneReceiptUiState must not
+      // remove the target before the refreshed receipt has entered state.
+      if (itemsForOpen.some((item) => String(item?.receipt_table_id || '') === existingReceiptId)) {
+        setSelectedReceiptIds([existingReceiptId])
+      }
+      if (isAddReceiptRoute) navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
     }
 
     try {
@@ -3268,7 +3276,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         resetUploadProgress()
         setStatus('')
         setDuplicateNotice('')
-        setEmailRouteError(message)
+        // The dedicated error overlay below is the sole feedback for this rejected upload.
+        // Publishing the same error via emailRouteError would replace its identity.
+        setEmailRouteError('')
         setError('')
         showKassaFeedback('error', message, {
           title: 'Upload geweigerd',

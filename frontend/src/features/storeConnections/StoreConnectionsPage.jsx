@@ -44,6 +44,7 @@ export default function StoreConnectionsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [status, setStatus] = useState('')
   const [editingCode, setEditingCode] = useState('')
   const [cardNumber, setCardNumber] = useState('')
@@ -883,7 +884,7 @@ export default function StoreConnectionsPage() {
         <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
-            {error ? <div className="rz-inline-feedback" role="alert" data-testid="store-connections-error">{error}</div> : null}
+
             {isMobileViewport ? (
               <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" role="group" aria-label="Kolommen winkelkoppelingen">
                 <span>Winkel</span>

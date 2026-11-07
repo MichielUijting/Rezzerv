@@ -10,6 +10,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { nextSortState, sortItems } from '../../ui/sorting'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import '../stores/locationlessStoreImport.css'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function normalizeNumber(value) {
   const number = Number(value)
@@ -95,10 +96,9 @@ async function syncLocationTrackingLevel() {
 export default function AlmostOutPage() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [bulkMessage, setBulkMessage] = useState('')
   const [filters, setFilters] = useState({
     householdName: '',
     productName: '',
@@ -131,7 +131,6 @@ export default function AlmostOutPage() {
 
     async function loadAlmostOut() {
       setIsLoading(true)
-      setError('')
       try {
         const householdId = await resolveHouseholdId()
         if (cancelled) return
@@ -144,7 +143,7 @@ export default function AlmostOutPage() {
         if (!cancelled) setItems(nextItems)
       } catch (err) {
         if (!cancelled) {
-          setError(String(err?.message || 'Bijna-op-artikelen konden niet worden geladen'))
+          showFeedback({ variant: 'error', message: String(err?.message || 'Bijna-op-artikelen konden niet worden geladen') })
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -154,7 +153,7 @@ export default function AlmostOutPage() {
     syncLocationTrackingLevel()
     loadAlmostOut()
     return () => { cancelled = true }
-  }, [])
+  }, [showFeedback])
 
   const rows = useMemo(() => {
     return (items || []).map((item) => ({
@@ -228,12 +227,10 @@ export default function AlmostOutPage() {
     }
     if (action === 'hide' && !window.confirm(`Verwijder ${selectedRows.length} melding(en) uit Bijna op? De voorraadartikelen blijven bestaan en verborgen meldingen kunnen worden hersteld.`)) return
     setBulkBusy(true)
-    setError('')
-    setBulkMessage('')
     try {
       if (action === 'shopping') {
         const count = await moveAlmostOutToShopping(selectedRows)
-        setBulkMessage(`${count} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.`)
+        showFeedback({ variant: 'success', message: `${count} artikel(en) naar Boodschappen overgezet en uit Bijna op verwijderd.` })
       } else {
         if (action === 'hide') await hideAlmostOutRows(selectedRows)
         else await restoreAlmostOutRows()
@@ -243,10 +240,10 @@ export default function AlmostOutPage() {
         if (!response.ok) throw new Error(payload?.detail || 'Bijna op kon niet worden bijgewerkt')
         setItems(Array.isArray(payload.items) ? payload.items : [])
         setSelectedIds([])
-        setBulkMessage(action === 'hide' ? 'Geselecteerde meldingen verborgen. Voorraad is ongewijzigd.' : 'Verwijderingen ongedaan gemaakt.')
+        showFeedback({ variant: 'success', message: action === 'hide' ? 'Geselecteerde meldingen verborgen. Voorraad is ongewijzigd.' : 'Verwijderingen ongedaan gemaakt.' })
       }
     } catch (err) {
-      setError(String(err?.message || 'Bulkverwerking mislukt'))
+      showFeedback({ variant: 'error', message: String(err?.message || 'Bulkverwerking mislukt') })
     } finally {
       // A partial transfer may already have succeeded before an error.
       // Re-read the authoritative list rather than leaving transferred
@@ -276,8 +273,6 @@ export default function AlmostOutPage() {
     <AppShell title="Bijna op" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="almost-out-page">
         <ScreenCard>
-          {bulkMessage ? <div className="rz-inline-feedback" role="status">{bulkMessage}</div> : null}
-          {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
           <Table tableClassName="rz-stock-table" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
               <colgroup>
                 <col style={{ width: `${tableWidths.select}px` }} />

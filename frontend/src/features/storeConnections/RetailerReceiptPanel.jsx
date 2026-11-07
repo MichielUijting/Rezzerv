@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import './retailerReceiptPanel.css'
@@ -29,6 +31,8 @@ export default function RetailerReceiptPanel({
   setupHelp,
   children,
 }) {
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (periodError) showFeedback({ variant: 'error', message: periodError }) }, [periodError, showFeedback])
   const actionStyle = {
     display: 'inline-flex',
     width: '100%',
@@ -83,7 +87,6 @@ export default function RetailerReceiptPanel({
         />
       </div>
 
-      {periodError ? <div role="alert">{periodError}</div> : null}
 
       <div
         data-testid="retailer-receipt-action-row"

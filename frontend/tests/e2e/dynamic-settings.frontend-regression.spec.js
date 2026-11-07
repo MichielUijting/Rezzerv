@@ -336,7 +336,8 @@ for (const width of [390, 1280]) {
     await page.getByTestId('almost-out-shopping-days').fill('3')
     await policy.selectOption('override')
     await page.getByTestId('almost-out-settings-save').click()
-    await expect(page.getByRole('status')).toContainText('De instellingen zijn niet opgeslagen.')
+    await expect(page.getByTestId('app-feedback-error')).toContainText('De instellingen zijn niet opgeslagen.')
+    await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK', exact: true }).click()
     await expect(page.getByTestId('settings-almost-out-page')).not.toContainText('[object Object]')
     rejectSave = false
     await page.getByTestId('almost-out-settings-save').click()

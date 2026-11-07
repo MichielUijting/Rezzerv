@@ -5,7 +5,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
 import { fetchAuthContext, getLoginMessage } from '../../lib/authSession.js'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version.js'
 import './loginPage.css'
 
@@ -43,12 +43,14 @@ export default function LoginPage({ onLoggedIn }) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
   const [loginMessage] = useState(() => getLoginMessage())
   const [version, setVersion] = useState(getRezzervVersionTag())
   const [loginBackground, setLoginBackground] = useState(null)
 
-  useDismissOnComponentClick([() => setError('')], Boolean(error))
+  useEffect(() => {
+    if (loginMessage) showFeedback({ variant: 'warning', message: loginMessage })
+  }, [loginMessage, showFeedback])
 
   useEffect(() => {
     let active = true
@@ -78,7 +80,6 @@ export default function LoginPage({ onLoggedIn }) {
 
   async function onSubmit(e) {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       const res = await apiPost('/api/auth/login', { email, password })
@@ -87,7 +88,7 @@ export default function LoginPage({ onLoggedIn }) {
       await fetchAuthContext({ force: true })
       onLoggedIn()
     } catch (err) {
-      setError(err.message)
+      showFeedback({ variant: 'error', message: err.message || 'Inloggen mislukt' })
     } finally {
       setLoading(false)
     }
@@ -213,8 +214,6 @@ export default function LoginPage({ onLoggedIn }) {
               <Link to="/registreren" data-testid="register-link">Account maken</Link>
             </div>
 
-            {loginMessage && !error ? <div className="rz-inline-feedback rz-inline-feedback--warning">{loginMessage}</div> : null}
-            {error && <div className="rz-alert">{error}</div>}
           </form>
         </Card>
 

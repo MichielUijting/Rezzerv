@@ -42,7 +42,9 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [note, setNote] = useState('')
+  useEffect(() => { if (note) showFeedback({ variant: 'info', message: note }) }, [note, showFeedback])
   const [revision, setRevision] = useState(0)
   const busy = useRef(false)
 
@@ -355,8 +357,8 @@ export default function CbsClassificationPage({ embedded = false, productId = nu
       <h2>{embedded ? "CBS ECOICOPv2" : "Artikelclassificaties toekennen"}</h2>
       {!embedded ? <p>Zoek een officiële CBS ECOICOPv2-categorie en bevestig de juiste classificatie handmatig.
         Niet geclassificeerd blokkeert een product- of voorraadkoppeling niet.</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      {note ? <p role="status">{note}</p> : null}
+
+
       <div className="rz-article-classification-layout">
         {!embedded ? <DataTable dataTestId="cbs-classification-table" columns={columns} data={items}
           filterState={filters}

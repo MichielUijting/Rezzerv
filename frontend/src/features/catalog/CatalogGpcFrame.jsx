@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function valueOrDash(value) {
   const normalized = String(value ?? '').trim()
@@ -52,8 +53,10 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [error, setError] = useState('')
-  const [feedback, setFeedback] = useState('')
+  const { showFeedback } = useAppFeedback()
+  // All legacy feedback call sites delegate to the central overlay/bar layer.
+  const setError = (message) => { if (message) showFeedback({ variant: 'error', message }) }
+  const setFeedback = (message) => { if (message) showFeedback({ variant: 'info', message }) }
 
   const role = String(readStoredAuthContext()?.display_role || '').trim().toLowerCase()
   const canEdit = role === 'admin' || role === 'lid'
@@ -207,8 +210,6 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
       </div>
 
       {loading ? <div className="rz-catalog-gpc-state">Classificatie laden…</div> : null}
-      {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-      {feedback ? <div className="rz-inline-feedback">{feedback}</div> : null}
 
       {!loading ? (
         <div className="rz-catalog-gpc-summary">

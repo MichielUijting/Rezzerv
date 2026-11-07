@@ -33,6 +33,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (linkError) showFeedback({ variant: 'error', message: linkError }) }, [linkError, showFeedback])
   const [scannedBarcode, setScannedBarcode] = useState(null)
   const verificationRef = useRef(null)
 
@@ -194,8 +196,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
         {verifying ? <p role="status">Kandidaat controleren in OFF...</p> : null}
-        {linkError ? <p role="alert">{linkError}</p> : null}
-        {error ? <div role="alert"><p>{error}</p><Button type="button" variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Opnieuw zoeken</Button></div> : null}
+        {!loading && error ? <Button type="button" variant="secondary" onClick={() => setAttempt((current) => current + 1)}>Opnieuw zoeken</Button> : null}
+
         {!loading && !error ? <DataTable
           columns={columns}
           data={results}

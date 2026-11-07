@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import demoData from '../../demo-articles.json'
 import { sortOptionObjects } from '../../ui/sorting'
 import { fetchJsonWithAuth, getAuthHeaders } from '../../lib/authSession'
@@ -234,6 +235,8 @@ export function StoreArticleSelector({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newArticleName, setNewArticleName] = useState('')
   const [createArticleError, setCreateArticleError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (createArticleError) showFeedback({ variant: 'error', message: createArticleError }) }, [createArticleError, showFeedback])
 
   const showCreateArticleOption = canCreateArticle && typeof onCreateArticle === 'function'
   const sortedArticleOptions = useMemo(() => sortOptionObjects(articleOptions || [], (article) => articleLabel(article)), [articleOptions])
@@ -313,7 +316,6 @@ export function StoreArticleSelector({
                 }}
               />
             </div>
-            {createArticleError ? <div className="rz-inline-feedback rz-store-modal-feedback">{createArticleError}</div> : null}
             <div className="rz-modal-actions">
               <Button variant="secondary" data-testid={`store-create-article-cancel-${lineId}`} type="button" onClick={closeCreateArticleModal} disabled={disabled}>Terug</Button>
               <Button variant="primary" type="button" onClick={handleCreateArticle} disabled={disabled}>Opslaan</Button>

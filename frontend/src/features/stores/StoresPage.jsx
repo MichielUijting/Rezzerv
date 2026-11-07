@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Pagination from '../../ui/Pagination.jsx'
@@ -37,8 +38,10 @@ export default function StoresPage() {
   const [storePage, setStorePage] = useState(1)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
 
-  useDismissOnComponentClick([() => setError(''), () => setStatus('')], Boolean(error || status))
   const [isLoading, setIsLoading] = useState(true)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isPulling, setIsPulling] = useState(false)
@@ -278,7 +281,7 @@ export default function StoresPage() {
         </Card>
 
         <Card>
-          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '4px 0' }}>
+          <div data-testid="store-import-simplification-banner" className="rz-store-operational-information" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '4px 0' }}>
             <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
             <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
           </div>
@@ -286,7 +289,7 @@ export default function StoresPage() {
 
         {!isLoading && !isHouseholdAdmin ? (
           <Card>
-            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="stores-member-warning">
+            <div className="rz-store-operational-information" data-testid="stores-member-warning">
               Alleen de beheerder van het huishouden kan winkels koppelen of nieuwe aankopen ophalen. Je kunt bestaande bonnen wel bekijken.
             </div>
           </Card>
@@ -294,23 +297,13 @@ export default function StoresPage() {
 
         {!isLoading && isViewer ? (
           <Card>
-            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="stores-viewer-warning">
+            <div className="rz-store-operational-information" data-testid="stores-viewer-warning">
               Kijkers mogen kassabonnen wel opvoeren en bekijken, maar niet naar voorraad verwerken.
             </div>
           </Card>
         ) : null}
 
-        {error ? (
-          <Card>
-            <div style={{ color: '#b42318', fontWeight: 700 }}>{error}</div>
-          </Card>
-        ) : null}
 
-        {status ? (
-          <Card>
-            <div style={{ color: 'var(--color-ui-primary)', fontWeight: 700 }}>{status}</div>
-          </Card>
-        ) : null}
 
         <Card>
           <div data-testid="open-batches-section" style={{ display: 'grid', gap: '12px' }}>
@@ -372,7 +365,7 @@ export default function StoresPage() {
                         <div>{batch.uiState.progressText}</div>
                         <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
                       </div>
-                      <div data-testid={`batch-status-reason-${batch.batch_id}`} className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '8px 10px' }}>
+                      <div data-testid={`batch-status-reason-${batch.batch_id}`} className="rz-store-operational-information" style={{ padding: '8px 10px' }}>
                         <strong>Statusreden:</strong> {batch.uiState.statusReason}<br />
                         <strong>Primaire actie:</strong> {batch.uiState.actionLabel} — {batch.uiState.primaryActionReason}
                       </div>

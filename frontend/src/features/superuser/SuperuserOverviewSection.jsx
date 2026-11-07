@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button.jsx'
 import DataTable from '../../ui/DataTable.jsx'
@@ -18,6 +19,8 @@ export default function SuperuserOverviewSection() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +40,7 @@ export default function SuperuserOverviewSection() {
     { key: 'signal_count', header: 'Aantal', width: 110, sortable: true, align: 'right', getValue: (row) => row.signal_count ?? 0 },
   ], [])
 
-  if (error) return <div role="alert">{error}</div>
+  if (error) return <div>Gegevens zijn momenteel niet beschikbaar.</div>
   if (!data) return <div role="status">Platformoverzicht wordt geladen…</div>
 
   const metrics = data.metrics || {}

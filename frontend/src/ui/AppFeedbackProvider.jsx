@@ -69,7 +69,7 @@ function normalizeFeedback(input) {
     message,
     detail,
     technicalDetail,
-    dismissMode: input.dismissMode || (variant === 'progress' ? 'blocked' : 'outside-or-ok'),
+    dismissMode: variant === 'error' ? 'ok-only' : (input.dismissMode || (variant === 'progress' ? 'blocked' : 'outside-or-ok')),
     testId: input.testId || `app-feedback-${variant}`,
     progress: Number.isFinite(Number(input.progress))
       ? Math.max(0, Math.min(100, Number(input.progress)))
@@ -210,7 +210,10 @@ export function AppFeedbackProvider({ children }) {
 
           try {
             const result = await feedback.onPrimaryAction?.({ ...fieldValues })
-            if (result !== false) dismissFeedback()
+            if (result !== false) {
+              // Never dismiss a success/error feedback that the action just displayed.
+              setFeedback((current) => current?.id === feedback.id ? null : current)
+            }
           } catch (error) {
             setActionError(
               String(error?.message || '').trim()
@@ -225,7 +228,7 @@ export function AppFeedbackProvider({ children }) {
           try {
             await feedback?.onSecondaryAction?.()
           } finally {
-            dismissFeedback()
+            setFeedback((current) => current?.id === feedback?.id ? null : current)
           }
         }}
       />
@@ -277,9 +280,9 @@ function AppFeedbackDialog({
   // Action prompts must be opaque: the informational feedback class does not
   // provide a background, allowing the page to show through the dialog.
   // Passive notifications keep their existing compact bottom-bar treatment.
-  const interactiveDialog = Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
+  const interactiveDialog = variant === 'error' || Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
   const canDismissWithOk = dismissMode !== 'blocked'
-  const canDismissOutside = dismissMode === 'outside-or-ok'
+  const canDismissOutside = variant !== 'error' && dismissMode === 'outside-or-ok'
 
   function dismiss() {
     if (dismissMode === 'blocked') return

@@ -8,7 +8,6 @@ import Button from "../ui/Button";
 import { useAppFeedback } from "../ui/AppFeedbackProvider.jsx";
 import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "../ui/resizableTable.jsx";
-import useDismissOnComponentClick from "../lib/useDismissOnComponentClick.js";
 import { getAuthHeaders, readStoredAuthContext } from "../lib/authSession.js";
 import { limitSearchCandidates } from "../ui/searchCandidatePolicy.js";
 import CatalogArticleThumbnail from "../ui/CatalogArticleThumbnail.jsx";
@@ -828,13 +827,48 @@ export default function Voorraad() {
   });
 
   const hasDirtyEditor = Boolean(editingCell && ['huishoudnaam', 'productnaam', 'aantal', 'locatie', 'sublocatie'].some((key) => String((editingCell?.originalRow || {})[key] ?? '') !== String((draftRowsRef.current.get(editingCell?.rowId) || rowsRef.current.find((entry) => entry.id === editingCell?.rowId) || {})[key] ?? '')));
-  const hasPendingSave = Object.values(saveState).some((entry) => entry?.status === 'saving' || entry?.status === 'error');
+  const hasPendingSave = Object.values(saveState).some((entry) => entry?.status === 'saving');
   const purchaseFormDirty = showPurchaseModal && JSON.stringify(purchaseForm) !== purchaseFormSnapshot;
   const hasPendingPurchaseSave = purchaseSaveState.status === 'saving';
   const shouldWarnBeforeLeaving = hasDirtyEditor || hasPendingSave || purchaseFormDirty || hasPendingPurchaseSave;
   const blocker = useBlocker(shouldWarnBeforeLeaving);
 
-  useDismissOnComponentClick([() => setSaveState((prev) => Object.fromEntries(Object.entries(prev).filter(([, value]) => value?.status === 'saving')))], Boolean(Object.keys(saveState).length));
+  const observedSaveEntriesRef = useRef(new Map());
+  useEffect(() => {
+    for (const [rowId, entry] of Object.entries(saveState)) {
+      if (entry?.status !== 'error' || !entry?.message) continue;
+      if (observedSaveEntriesRef.current.get(rowId) === entry) continue;
+      observedSaveEntriesRef.current.set(rowId, entry);
+      showFeedback({ variant: 'error', message: entry.message });
+    }
+  }, [saveState, showFeedback]);
+
+  useEffect(() => {
+    if (articleGroupCreateState.status === 'error' && articleGroupCreateState.message) {
+      showFeedback({ variant: 'error', message: articleGroupCreateState.message });
+    }
+  }, [articleGroupCreateState.status, articleGroupCreateState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseLookupState.message && ['error', 'warning', 'success'].includes(purchaseLookupState.status)) {
+      showFeedback({ variant: purchaseLookupState.status, message: purchaseLookupState.message });
+    }
+  }, [purchaseLookupState.status, purchaseLookupState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseSaveState.message && ['error', 'success'].includes(purchaseSaveState.status)) {
+      showFeedback({ variant: purchaseSaveState.status, message: purchaseSaveState.message });
+    }
+  }, [purchaseSaveState.status, purchaseSaveState.message, showFeedback]);
+
+  useEffect(() => {
+    if (purchaseCameraState.status === 'error' && purchaseCameraState.message) {
+      showFeedback({ variant: 'error', message: purchaseCameraState.message });
+    }
+  }, [purchaseCameraState.status, purchaseCameraState.message, showFeedback]);
+
+
+
 
   useEffect(() => {
     purchaseFormRef.current = purchaseForm;
@@ -1561,11 +1595,6 @@ export default function Voorraad() {
                           className={column.key === "aantal" ? "rz-num" : ""}
                         >
                           {renderCell(row, column)}
-                          {column.key === 'artikel' && saveState[row.id]?.message ? (
-                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: saveState[row.id]?.status === 'error' ? '#b42318' : '#067647' }}>
-                              {saveState[row.id].message}
-                            </div>
-                          ) : null}
                         </td>
                       ))}
                     </tr>
@@ -1631,11 +1660,7 @@ export default function Voorraad() {
                 disabled={articleGroupCreateState.status === 'saving'}
               />
             </label>
-            {articleGroupCreateState.message ? (
-              <div className={articleGroupCreateState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>
-                {articleGroupCreateState.message}
-              </div>
-            ) : null}
+
             <div className="rz-modal-actions">
               <Button type="button" variant="secondary" onClick={closeCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>Annuleren</Button>
               <Button type="button" variant="primary" onClick={handleCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>
@@ -1676,13 +1701,11 @@ export default function Voorraad() {
                     style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 14, background: '#101828', display: 'block', visibility: purchaseCameraOpen ? 'visible' : 'hidden' }}
                   />
                   <div style={{ color: '#475467', fontSize: 14 }}>Richt de barcode horizontaal en scherp in beeld. Zodra een leesbare barcode wordt gevonden, wordt het formulier automatisch ingevuld.</div>
-                  <div className="rz-inline-feedback" style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8 }}>
                     Camera: {purchaseCameraMeta.label || purchaseCameraMeta.deviceId || 'onbekend'} · Decodepogingen: {purchaseCameraMeta.decodeAttempts}
                   </div>
                 </div>
-                {purchaseCameraState.message ? (
-                  <div className={purchaseCameraState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>{purchaseCameraState.message}</div>
-                ) : null}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'end' }}>
                   <label className="rz-input-field">
                     <div className="rz-label">Barcode</div>
@@ -1702,17 +1725,9 @@ export default function Voorraad() {
                 </label>
               </div>
 
-              {purchaseLookupState.message ? (
-                <div className={purchaseLookupState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : purchaseLookupState.status === 'warning' ? 'rz-inline-feedback rz-inline-feedback--warning' : 'rz-inline-feedback rz-inline-feedback--success'}>
-                  {purchaseLookupState.message}
-                </div>
-              ) : null}
 
-              {locationOptionsEmpty ? (
-                <div className="rz-inline-feedback rz-inline-feedback--warning">
-                  Nog geen locatie- en sublocatielijst beschikbaar. Deze dropdowns worden gevoed vanuit het onderhoudsscherm; totdat daar gegevens beschikbaar zijn worden alleen bestaande locaties uit de huidige voorraad gebruikt.
-                </div>
-              ) : null}
+
+
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                 <label className="rz-input-field">
@@ -1752,9 +1767,7 @@ export default function Voorraad() {
                 <input className="rz-input" value={purchaseForm.note} onChange={(event) => updatePurchaseForm('note', event.target.value)} placeholder="Extra toelichting" />
               </label>
 
-              {purchaseSaveState.status === 'error' || purchaseSaveState.status === 'success' ? (
-                <div className={purchaseSaveState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>{purchaseSaveState.message}</div>
-              ) : null}
+
             </div>
 
             <div className="rz-modal-actions" style={{ justifyContent: 'space-between' }}>

@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Button from '../../ui/Button'
 
 export default function BarcodeScannerModal({
@@ -13,6 +15,12 @@ export default function BarcodeScannerModal({
   onClose,
   hideInlineFeedback = false,
 }) {
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => {
+    if (open && cameraState?.status === 'error' && cameraState.message) {
+      showFeedback({ variant: 'error', message: cameraState.message })
+    }
+  }, [open, cameraState?.status, cameraState?.message, showFeedback])
   if (!open) return null
 
   return (
@@ -38,7 +46,7 @@ export default function BarcodeScannerModal({
         <div className="rz-barcode-scanner-preview">
           <video ref={videoRef} autoPlay muted playsInline />
           {!hideInlineFeedback ? (
-            <div className="rz-inline-feedback">
+            <div className="rz-barcode-camera-metadata">
               Camera: {cameraMeta?.label || cameraMeta?.deviceId || 'onbekend'} · Decodepogingen: {cameraMeta?.decodeAttempts || 0}
             </div>
           ) : null}
@@ -46,11 +54,7 @@ export default function BarcodeScannerModal({
         {cameraState?.status === 'error' && onChoosePhoto
           ? <p className="rz-modal-text">Geen werkende camera? Met Barcode uit foto kun je een bestaande foto kiezen waarop de barcode scherp zichtbaar is. De code wordt pas opgeslagen na jouw bevestiging.</p>
           : null}
-        {!hideInlineFeedback && cameraState?.message ? (
-          <div className={cameraState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'} style={{ marginTop: 12 }}>
-            {cameraState.message}
-          </div>
-        ) : null}
+
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -47,6 +48,8 @@ export default function PlatformLogsPage() {
   const [maxEntries, setMaxEntries] = React.useState(500)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const { showFeedback } = useAppFeedback()
+  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [reloadKey, setReloadKey] = React.useState(0)
 
   React.useEffect(() => {
@@ -115,7 +118,7 @@ export default function PlatformLogsPage() {
             </select>
 
             {loading ? <p data-testid="platform-logs-loading">Nieuwe logs laden…</p> : null}
-            {error ? <p role="alert" data-testid="platform-logs-error">{error}</p> : null}
+
 
             {!loading && !error && items.length === 0 ? (
               <p data-testid="platform-logs-empty">Er zijn voor deze runtime geen passende logrecords beschikbaar.</p>

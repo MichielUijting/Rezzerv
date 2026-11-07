@@ -6,6 +6,7 @@ import Button from '../../ui/Button'
 import { buildTableWidth } from '../../ui/resizableTable'
 import Table from '../../ui/Table'
 import Pagination from '../../ui/Pagination.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../lib/authSession'
 
 const initialLocationForm = { naam: '', active: true }
@@ -26,24 +27,6 @@ const sublocationTableColumns = [
 ]
 const sublocationColumnWidths = Object.fromEntries(sublocationTableColumns.map(({ key, width }) => [key, width]))
 const greenCheckboxStyle = { accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }
-
-function FeedbackOverlay({ type = 'info', message, onClose }) {
-  if (!message) return null
-  const isError = type === 'error'
-  const title = isError ? 'Melding' : 'Bevestiging'
-  return (
-    <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="locations-feedback-title">
-        <h3 id="locations-feedback-title" className="rz-modal-title">{title}</h3>
-        <p className="rz-modal-text">{message}</p>
-        <div className="rz-modal-actions">
-          <Button type="button" onClick={onClose}>OK</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 
 function LocationModal({ open, form, onChange, onClose, onSubmit, busy }) {
   if (!open) return null
@@ -156,6 +139,9 @@ export default function SettingsLocationsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const { showFeedback } = useAppFeedback()
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
+  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
   const [locationModalOpen, setLocationModalOpen] = useState(false)
   const [locationForm, setLocationForm] = useState(initialLocationForm)
   const [sublocationModalMode, setSublocationModalMode] = useState('')
@@ -775,8 +761,6 @@ export default function SettingsLocationsPage() {
         </div>
       </Card>
 
-      <FeedbackOverlay type="error" message={error} onClose={() => setError('')} />
-      <FeedbackOverlay type="success" message={message} onClose={() => setMessage('')} />
       <LocationModal open={locationModalOpen} form={locationForm} onChange={setLocationForm} onClose={() => setLocationModalOpen(false)} onSubmit={handleSaveLocation} busy={isSaving} />
       <SublocationModal mode={sublocationModalMode} form={sublocationForm} onChange={setSublocationForm} onClose={() => setSublocationModalMode('')} onSubmit={handleSaveSublocation} busy={isSaving} locationOptions={sortedLocations} />
       <ActionModal open={showLocationActionModal} title="Geselecteerde locaties verwerken" noun="locatie" selectedCount={selectedLocationIds.length} onClose={() => setShowLocationActionModal(false)} onDelete={deleteSelectedLocations} onArchive={archiveSelectedLocations} busy={isSaving} />

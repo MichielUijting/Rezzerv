@@ -193,7 +193,9 @@ const listCatalogBody = catalogRouteSource.split('def list_catalog(', 2)[1]?.spl
 assert.ok(listCatalogBody, 'Catalog list route missing')
 assert.doesNotMatch(listCatalogBody, /ensure_dutch_gpc_assignments\(/)
 assert.match(listCatalogBody, /LIMIT :limit OFFSET :offset/)
-assert.match(kassaPage, /previewState\.error \|\| 'De originele kassabon kon niet worden geladen\.'/)
+assert.match(kassaPage, /previewState\.status === 'error' && previewState\.error/)
+assert.match(kassaPage, /showFeedback\(\{ variant: 'error', message: previewState\.error \}\)/)
+assert.doesNotMatch(kassaPage, /previewState\.error \|\| 'De originele kassabon kon niet worden geladen\.'/)
 assert.match(kassaPage, /Van deze kassabon is geen ondersteund voorbeeld beschikbaar/)
 
 const mobileCatalogSearch = readFileSync(new URL('../src/features/catalog/MobileCatalogPage.jsx', import.meta.url), 'utf8')

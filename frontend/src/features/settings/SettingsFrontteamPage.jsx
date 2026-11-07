@@ -30,7 +30,7 @@ export default function SettingsFrontteamPage() {
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
   const [selectedIds, setSelectedIds] = React.useState([])
-  const [error, setError] = React.useState('')
+  const setError = (message) => { if (message) showFeedback({ variant: 'error', message }) }
 
   const load = React.useCallback(async () => {
     setLoading(true); setError('')
@@ -178,7 +178,7 @@ export default function SettingsFrontteamPage() {
                 </div>
                 <p className="rz-frontteam-help">Het eigen huishouden en de huishoudrol blijven ongewijzigd.</p>
               </form>
-              {error ? <div role="alert" className="rz-frontteam-error">{error}</div> : null}
+
               <DataTable
                 columns={columns} data={members} getRowKey={(member) => member.user_id}
                 emptyMessage={loading ? 'Frontteamleden laden…' : 'Er zijn nog geen Frontteamleden.'}

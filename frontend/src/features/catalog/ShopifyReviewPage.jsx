@@ -41,7 +41,9 @@ export default function ShopifyReviewPage() {
   const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const [note, setNote] = useState('')
+  useEffect(() => { if (note) showFeedback({ variant: 'info', message: note }) }, [note, showFeedback])
   const [reload, setReload] = useState(0)
   const busyRef = useRef(false)
 
@@ -319,8 +321,8 @@ export default function ShopifyReviewPage() {
     <ScreenCard fullWidth>
       <h2>Artikelclassificaties toekennen</h2>
       <p>Via OFF kun je suggesties opvragen voor de artikelclassificatie.</p>
-      {error ? <p role="alert">{error}</p> : null}
-      {note ? <p role="status">{note}</p> : null}
+
+
       <div className="rz-article-classification-layout">
       <DataTable dataTestId="shopify-review-table" columns={columns} data={items}
         filterState={tableFilters}

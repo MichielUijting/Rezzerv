@@ -28,7 +28,6 @@ export default function SynonymAnalysisPage() {
   const [candidates, setCandidates] = useState([])
   const [candidateId, setCandidateId] = useState('')
   const [candidateLoading, setCandidateLoading] = useState(false)
-  const [candidateError, setCandidateError] = useState('')
   const [saving, setSaving] = useState(false)
   const [reloadCandidates, setReloadCandidates] = useState(0)
   const savingRef = useRef(false)
@@ -44,23 +43,27 @@ export default function SynonymAnalysisPage() {
   useEffect(() => {
     const controller = new AbortController()
     refreshAnalysis(controller.signal)
-      .catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          const message = err.message || 'Synoniemenanalyse kon niet worden geladen.'
+          setError(message)
+          showFeedback({ variant: 'error', message })
+        }
+      })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [refreshAnalysis])
+  }, [refreshAnalysis, showFeedback])
 
   useEffect(() => {
     if (!selectedId) {
       setCandidates([])
       setCandidateId('')
-      setCandidateError('')
       return undefined
     }
     const controller = new AbortController()
     setCandidateLoading(true)
     setCandidates([])
     setCandidateId('')
-    setCandidateError('')
     async function load() {
       try {
         const response = await fetchJsonWithAuth(`${API}/analysis/${encodeURIComponent(selectedId)}/candidates`, { signal: controller.signal })
@@ -68,14 +71,14 @@ export default function SynonymAnalysisPage() {
         if (!response.ok) throw new Error(result.detail || 'Kandidaten konden niet worden geladen.')
         if (!controller.signal.aborted) setCandidates((result.items || []).slice(0, 5))
       } catch (err) {
-        if (!controller.signal.aborted) setCandidateError(err.message || 'Kandidaten konden niet worden geladen.')
+        if (!controller.signal.aborted) showFeedback({ variant: 'error', message: err.message || 'Kandidaten konden niet worden geladen.' })
       } finally {
         if (!controller.signal.aborted) setCandidateLoading(false)
       }
     }
     load()
     return () => controller.abort()
-  }, [selectedId, reloadCandidates])
+  }, [selectedId, reloadCandidates, showFeedback])
 
   const products = data?.items || []
   const selectedProduct = products.find((item) => item.id === selectedId) || null
@@ -93,7 +96,6 @@ export default function SynonymAnalysisPage() {
     if (candidate.left.id !== selectedId && candidate.right.id !== selectedId) return
     savingRef.current = true
     setSaving(true)
-    setCandidateError('')
     try {
       const response = await fetchJsonWithAuth(`${API}/link`, {
         method: 'POST',
@@ -114,7 +116,7 @@ export default function SynonymAnalysisPage() {
         message: result.linked ? 'Synoniem gekoppeld. Beide Catalogusartikelen zijn bijgewerkt.' : 'Dit synoniem was al gekoppeld.',
       })
     } catch (err) {
-      setCandidateError(err.message || 'Koppelen is niet gelukt. Vernieuw en probeer opnieuw.')
+      showFeedback({ variant: 'error', message: err.message || 'Koppelen is niet gelukt. Vernieuw en probeer opnieuw.' })
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -141,7 +143,6 @@ export default function SynonymAnalysisPage() {
     <ScreenCard fullWidth>
       <div className="rz-synonym-analysis" data-testid="synonym-analysis-page">
          {loading ? <p role="status">Synoniemenanalyse laden…</p> : null}
-        {error ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{error}</p> : null}
         {!loading && !error && data ? <>
           <div className="rz-synonym-analysis-summary" aria-label="Filter op aantal synoniemen">
             {BUCKETS.map(({ key, label }) =>
@@ -182,7 +183,6 @@ export default function SynonymAnalysisPage() {
             <div className="rz-synonym-analysis-details-heading">
               <h3>Kandidaten voor {selectedProduct.name}</h3>
             </div>
-            {candidateError ? <p role="alert" className="rz-inline-feedback rz-inline-feedback--error">{candidateError}</p> : null}
             {candidateLoading ? <p role="status">Kandidaten zoeken…</p> : null}
             <DataTable columns={candidateColumns} data={candidates} pageSize={5}
               wrapperClassName="rz-synonym-analysis-table-wrapper"
