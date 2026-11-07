@@ -41,9 +41,10 @@ def save_household_workflow_preferences(
     location_change = level != current.location_tracking_level
     unpacking_disabled = current.unpacking_enabled and not unpacking
 
-    if location_change or unpacking_disabled:
-        # A still-open receipt may need the existing Uitpakken choices. Do not
-        # conceal that work by changing the household process underneath it.
+    if (location_change or unpacking_disabled) and not (level == "none" and unpacking):
+        # Existing receipts remain visible and processable when Uitpakken stays
+        # enabled and locations are switched off. No pending line is discarded.
+        # Other workflow transitions retain the original fail-closed guard.
         pending = conn.execute(text("""
             SELECT 1
             FROM purchase_import_batches pib
