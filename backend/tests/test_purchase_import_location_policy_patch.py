@@ -11,6 +11,7 @@ from app.services.purchase_import_location_policy_patch import (
     _processing_household_id,
     classify_locationless_ready_line,
     is_locationless_bulk_candidate,
+    is_receipt_source_inventory_eligible,
     recover_explicit_approved_receipt_article_link,
     install_purchase_import_location_policy_patch,
 )
@@ -273,3 +274,39 @@ def test_unlinked_source_is_not_guessed_or_persisted():
         conn, line=line, batch=batch, approved_receipt=True,
     ) == line
     assert conn.execute.call_count == 1
+
+
+def test_receipt_financial_and_unknown_lines_never_enter_stock():
+    from unittest.mock import Mock
+
+    batch = {"source_type": "receipt", "source_reference": "receipt:r-1", "household_id": "h-1"}
+    line = {"external_line_ref": "receipt-line:l-1"}
+    for role, eligible, expected in [
+        ("product", True, True),
+        ("financial", False, False),
+        ("loyalty", False, False),
+        ("unknown", False, False),
+        ("product", None, False),
+    ]:
+        conn = Mock()
+        conn.execute.return_value.mappings.return_value.first.return_value = {
+            "line_role": role, "inventory_eligible": eligible,
+        }
+        assert is_receipt_source_inventory_eligible(conn, line=line, batch=batch) is expected
+        sql, params = conn.execute.call_args.args
+        assert "rtl.receipt_table_id = :receipt_id" in str(sql)
+        assert "rt.household_id = :household_id" in str(sql)
+        assert params == {"line_id": "l-1", "receipt_id": "r-1", "household_id": "h-1"}
+
+
+def test_missing_receipt_source_is_not_stock_eligible():
+    from unittest.mock import Mock
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = None
+    batch = {"source_type": "receipt", "source_reference": "receipt:r-1", "household_id": "h-1"}
+    assert not is_receipt_source_inventory_eligible(
+        conn, line={"external_line_ref": "receipt-line:l-1"}, batch=batch,
+    )
+    assert not is_receipt_source_inventory_eligible(
+        conn, line={"external_line_ref": "other:l-1"}, batch=batch,
+    )
