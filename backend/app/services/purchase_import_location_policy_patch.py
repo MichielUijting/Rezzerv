@@ -39,6 +39,67 @@ def is_locationless_bulk_candidate(line: Any, *, approved_receipt: bool) -> bool
     return decision == "selected" or (approved_receipt and decision == "pending")
 
 
+def recover_explicit_approved_receipt_article_link(
+    conn, *, line: dict, batch: Any, approved_receipt: bool,
+) -> dict:
+    """Recover only a verified source link for historical approved receipt lines.
+
+    Never guess an article from a receipt name, cross households, or overwrite
+    an explicit 'cleared' preference. Non-receipt import lines stay untouched.
+    """
+    result = dict(line)
+    if not approved_receipt or result.get("matched_household_article_id") or result.get("matched_global_product_id"):
+        return result
+    if str(result.get("article_override_mode") or "auto") == "cleared":
+        return result
+    reference = str(result.get("external_line_ref") or "")
+    source = str(batch.get("source_reference") or "")
+    if not reference.startswith("receipt-line:") or not source.startswith("receipt:"):
+        return result
+    verified = conn.execute(text("""
+        SELECT ha.id AS household_article_id, gp.id AS global_product_id
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        LEFT JOIN household_articles ha
+          ON ha.id = rtl.matched_article_id
+         AND ha.household_id = rt.household_id
+         AND COALESCE(ha.status, 'active') = 'active'
+        LEFT JOIN global_products gp
+          ON gp.id = rtl.matched_global_product_id
+        WHERE rtl.id = :receipt_line_id
+          AND rt.id = :receipt_id
+          AND rt.household_id = :household_id
+          AND rt.approved_at IS NOT NULL
+          AND rt.parse_status IN ('approved', 'approved_override')
+          AND rt.deleted_at IS NULL
+        LIMIT 1
+    """), {
+        "receipt_line_id": reference[len("receipt-line:"):],
+        "receipt_id": source[len("receipt:"):],
+        "household_id": str(batch["household_id"]),
+    }).mappings().first()
+    article_id = str((verified or {}).get("household_article_id") or "").strip() or None
+    product_id = str((verified or {}).get("global_product_id") or "").strip() or None
+    if not article_id and not product_id:
+        return result
+    conn.execute(text("""
+        UPDATE purchase_import_lines
+        SET matched_household_article_id = COALESCE(matched_household_article_id, :article_id),
+            matched_global_product_id = COALESCE(matched_global_product_id, :product_id),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :line_id AND batch_id = :batch_id
+          AND COALESCE(article_override_mode, 'auto') <> 'cleared'
+    """), {
+        "article_id": article_id,
+        "product_id": product_id,
+        "line_id": str(result["id"]),
+        "batch_id": str(batch["id"]),
+    })
+    result["matched_household_article_id"] = article_id
+    result["matched_global_product_id"] = product_id
+    return result
+
+
 def _batch_household_configuration(main_module, batch_id: str):
     with main_module.engine.begin() as conn:
         household_id = conn.execute(
@@ -142,8 +203,8 @@ def _process_locationless_ready_only_batch(
                     """
                     SELECT id, external_line_ref, article_name_raw, brand_raw,
                            external_article_code, quantity_raw, unit_raw,
-                           review_decision, matched_household_article_id,
-                           matched_global_product_id,
+                           review_decision, article_override_mode,
+                           matched_household_article_id, matched_global_product_id,
                            COALESCE(
                                selected_article_group_id,
                                (
@@ -194,7 +255,13 @@ def _process_locationless_ready_only_batch(
             processable_lines = []
             skipped_count = 0
 
-            for line in selected_lines:
+            for original_line in selected_lines:
+                line = recover_explicit_approved_receipt_article_link(
+                    conn,
+                    line=dict(original_line),
+                    batch=batch,
+                    approved_receipt=approved_receipt,
+                )
                 line_id = line["id"]
                 current_line_id = line_id
                 current_line_name = line.get("article_name_raw") or ""
