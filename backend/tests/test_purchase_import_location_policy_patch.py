@@ -125,6 +125,53 @@ def test_locationless_bulk_candidates_only_include_approved_pending_or_explicit_
     )
 
 
+def test_locationless_selected_only_never_promotes_pending_receipt_lines():
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "selected"}, approved_receipt=True, mode="selected_only",
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=True, mode="selected_only",
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "ignored"}, approved_receipt=True, mode="selected_only",
+    )
+
+
+def test_locationless_selected_only_uses_locationless_processor(monkeypatch):
+    import app.services.purchase_import_location_policy_patch as patch
+
+    calls = []
+    monkeypatch.setattr(
+        patch, "_batch_household_configuration",
+        lambda main_module, batch_id: (
+            "house-none", SimpleNamespace(location_tracking_level="none"),
+        ),
+    )
+    monkeypatch.setattr(
+        patch, "_process_locationless_ready_only_batch",
+        lambda module, batch_id, payload, authorization: (
+            calls.append(payload.mode) or {"mode": payload.mode, "locationless": True}
+        ),
+    )
+    legacy = lambda batch_id, payload, authorization=None: {"legacy": True}
+    route = SimpleNamespace(
+        path="/api/purchase-import-batches/{batch_id}/process",
+        methods={"POST"}, endpoint=legacy, dependant=SimpleNamespace(call=legacy),
+    )
+    main_module = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(), routes=[route]),
+        process_purchase_import_batch=legacy,
+        resolve_store_storage_target_location=lambda conn, location_id: None,
+    )
+    install_purchase_import_location_policy_patch(main_module)
+
+    for mode in ("selected_only", "ready_only"):
+        assert route.dependant.call(
+            "batch", SimpleNamespace(mode=mode), "session",
+        ) == {"mode": mode, "locationless": True}
+    assert calls == ["selected_only", "ready_only"]
+
+
 def test_locationless_bulk_ready_without_article_group_but_never_without_identity():
     assert classify_locationless_ready_line({
         "matched_household_article_id": "article-1",
