@@ -34,8 +34,12 @@ def classify_locationless_ready_line(line: Any) -> tuple[bool, str | None, str |
     return True, None, None
 
 
-def is_locationless_bulk_candidate(line: Any, *, approved_receipt: bool) -> bool:
+def is_locationless_bulk_candidate(
+    line: Any, *, approved_receipt: bool, mode: str = "ready_only",
+) -> bool:
     decision = str(line.get("review_decision") or "pending").strip().lower()
+    if mode == "selected_only":
+        return decision == "selected"
     return decision == "selected" or (approved_receipt and decision == "pending")
 
 
@@ -286,7 +290,9 @@ def _process_locationless_ready_only_batch(
 
             selected_lines = [
                 line for line in lines
-                if is_locationless_bulk_candidate(line, approved_receipt=approved_receipt)
+                if is_locationless_bulk_candidate(
+                    line, approved_receipt=approved_receipt, mode=payload.mode,
+                )
             ]
             results: list[dict[str, Any]] = []
             processable_lines = []
@@ -1080,7 +1086,7 @@ def install_purchase_import_location_policy_patch(main_module) -> None:
         token = _processing_household_id.set(household_id)
         try:
             if (
-                payload.mode == "ready_only"
+                payload.mode in {"ready_only", "selected_only"}
                 and configuration.location_tracking_level == LOCATION_NONE
             ):
                 return _process_locationless_ready_only_batch(
