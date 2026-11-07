@@ -10,6 +10,11 @@ const feedback = fs.readFileSync(
   'utf8',
 )
 
+const feedbackPolicy = fs.readFileSync(
+  new URL('../src/ui/feedbackPolicy.js', import.meta.url),
+  'utf8',
+)
+
 assert.doesNotMatch(detail, /processResultOverlay|setProcessResultOverlay/, 'Verwijder de tweede, zelfgebouwde verwerkingsoverlay')
 assert.doesNotMatch(detail, /showProcessFeedback\('Verwerkt!'\)/, 'Geen tweede succesmelding voor dezelfde actie')
 assert.match(detail, /title: unresolved === 0 \? 'Verwerking afgerond' : 'Geselecteerde artikelen verwerkt'/)
@@ -17,5 +22,8 @@ assert.match(detail, /dismissMode: 'ok-only'/, 'Resultaat blijft zichtbaar tot g
 assert.match(detail, /Nog \$\{unresolved\} bonregel\(s\) niet verwerkt/, 'Gedeeltelijke verwerking mag geen voltooiing melden')
 assert.match(feedback, /const interactiveDialog = !mobileTransient \|\| variant === 'error'/,
   'Centrale desktopmelding moet een dekkende achtergrond hebben')
+
+assert.match(feedbackPolicy, /feedback.dismissMode === 'ok-only'/,
+  'OK-only resultaatmelding mag niet automatisch verdwijnen')
 
 console.log('Uitpakken single-result-overlay contract: OK')
