@@ -89,6 +89,11 @@ const workflowPage = fs.readFileSync(
 assert.match(workflowPage, /Voorraadlocaties en Uitpakken/)
 assert.match(workflowPage, /workflow-location-level/)
 assert.match(workflowPage, /workflow-unpacking-enabled/)
+assert.doesNotMatch(
+  workflowPage,
+  /if\s*\(nextLocation === 'none'\)\s*setWorkflowUnpacking\(false\)/,
+  'Zonder locaties moet Uitpakken onafhankelijk aan kunnen blijven',
+)
 assert.match(workflowPage, /workflow-preferences-save/)
 assert.ok(workflowPage.includes('/api/onboarding/workflow-preferences'))
 assert.match(workflowPage, /household-configuration-changed/)
