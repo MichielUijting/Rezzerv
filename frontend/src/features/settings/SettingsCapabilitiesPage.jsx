@@ -371,7 +371,7 @@ export default function SettingsCapabilitiesPage() {
               <h3 style={{ margin: 0 }}>Voorraadlocaties en Uitpakken</h3>
               <p style={{ margin: 0, color: '#475467' }}>
                 Bepaal wat je huishouden gebruikt. Bestaande locaties, artikelen en voorraadhistorie worden nooit verwijderd.
-                Heb je nog voorraad op locaties of open bonartikelen, dan wordt een onveilige omschakeling geweigerd.
+                Open bonartikelen blijven in Uitpakken staan en volgen direct de gekozen werkwijze. Bestaande voorraad op locaties wordt niet automatisch omgezet.
               </p>
               <label style={{ display: 'grid', gap: 6 }}>
                 <span>Voorraadlocaties gebruiken</span>
@@ -380,7 +380,6 @@ export default function SettingsCapabilitiesPage() {
                   onChange={(event) => {
                     const nextLocation = event.target.value
                     setWorkflowLocation(nextLocation)
-                    if (nextLocation === 'none') setWorkflowUnpacking(false)
                   }}
                   disabled={isSavingWorkflow}
                   data-testid="workflow-location-level"
