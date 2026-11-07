@@ -17734,6 +17734,33 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         context = require_household_context(authorization, str(line["household_id"]))
         require_household_permission(conn, context, PERMISSION_ARTICLE_CREATE)
 
+        source_info = conn.execute(text("""
+            SELECT source_type, source_reference
+            FROM purchase_import_batches
+            WHERE id = :batch_id AND household_id = :household_id
+            LIMIT 1
+        """), {
+            'batch_id': line["batch_id"],
+            'household_id': str(line["household_id"]),
+        }).mappings().first()
+        if source_info and source_info.get('source_type') == 'receipt':
+            from app.services.purchase_import_location_policy_patch import (
+                is_receipt_source_inventory_eligible,
+            )
+            if not is_receipt_source_inventory_eligible(
+                conn,
+                line=line,
+                batch={
+                    'household_id': str(line["household_id"]),
+                    'source_type': source_info['source_type'],
+                    'source_reference': source_info.get('source_reference'),
+                },
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail='Dit is geen voorraadgerechtigde productregel; de regel blijft alleen in Kassa.',
+                )
+
         article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name, consumable=infer_consumable_from_name(payload.article_name))
         conn.execute(
             text(
