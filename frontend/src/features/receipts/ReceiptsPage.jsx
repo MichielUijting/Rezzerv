@@ -205,9 +205,10 @@ export default function ReceiptsPage() {
       setRefreshVersion((current) => current + 1)
       setSelectedBatchIds([])
       setSelectedBatchesById({})
+      const summary = `Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden.`
       showFeedback({
-        variant: failed ? 'warning' : 'info',
-        message: `Voorraadcontrole toegepast: bij actieve voorraadlocaties is een geldige standaardlocatie per artikel vereist. Verwerkt: ${processed} regel(s). Overgeslagen: ${skipped} regel(s). Mislukt: ${failed}. ${ineligible} bon(nen) niet Gecontroleerd en daarom niet aangeboden. Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`,
+        variant: failed ? 'error' : skipped ? 'warning' : 'success',
+        message: `${summary} ${processed === 0 ? 'Er zijn geen bonregels naar Voorraad verwerkt. ' : ''}Onvolledige bonnen blijven in Uitpakken. ${errors.slice(0, 2).join(' · ')}`.trim(),
         key: 'uitpakken-bulk-approve-result',
       })
     } catch (error) {
