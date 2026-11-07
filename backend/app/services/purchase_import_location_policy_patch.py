@@ -131,7 +131,9 @@ def is_receipt_source_inventory_eligible(conn, *, line: Any, batch: Any) -> bool
     return bool(
         source
         and str(source.get("line_role") or "").lower() == "product"
-        and source.get("inventory_eligible") is True
+        and (source.get("inventory_eligible") is True
+             or source.get("inventory_eligible") == 1
+             or str(source.get("inventory_eligible") or "").strip().lower() in {"true", "t", "yes", "on"})
     )
 
 
