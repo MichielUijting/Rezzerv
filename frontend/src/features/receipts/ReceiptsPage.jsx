@@ -188,8 +188,30 @@ export default function ReceiptsPage() {
     try {
       for (const item of eligible) {
         try {
-          // De bestaande backend beslist per bonregel over geschiktheid, locaties
-          // en idempotentie. 'ready_only' verwerkt ook bij een deels onvolledige bon.
+          // Het individuele Uitpakken verwerkt eerst de ontbrekende Mijn-artikel-
+          // identiteit via dezelfde expliciete create-article API. De bulkactie
+          // moet dit ook doen, anders blijven aangevulde, geselecteerde bonregels
+          // met alleen een bonomschrijving onterecht vaststaan.
+          // De backend bewaakt hierbij artikelrechten en huishoudisolatie.
+          const batchDetail = await fetchJson(`/api/purchase-import-batches/${encodeURIComponent(item.batch_id)}`)
+          const pendingArticleLines = (batchDetail?.lines || []).filter((line) => {
+            const decision = String(line?.review_decision || 'pending').toLowerCase()
+            const quantity = Number(line?.quantity_raw ?? 0)
+            return ['selected', 'pending'].includes(decision)
+              && String(line?.processing_status || 'pending') !== 'processed'
+              && !String(line?.matched_household_article_id || '').trim()
+              && !String(line?.matched_global_product_id || '').trim()
+              && String(line?.article_name_raw || '').trim()
+              && Number.isFinite(quantity) && quantity > 0
+          })
+          for (const line of pendingArticleLines) {
+            await fetchJson(`/api/purchase-import-lines/${encodeURIComponent(line.id)}/create-article`, {
+              method: 'POST',
+              body: JSON.stringify({ article_name: String(line.article_name_raw).trim() }),
+            })
+          }
+          // De backend beslist daarna over geschiktheid, toestemming,
+          // idempotentie en locatievrij verwerken.
           const result = await fetchJson(`/api/purchase-import-batches/${encodeURIComponent(item.batch_id)}/process`, {
             method: 'POST',
             body: JSON.stringify({ processed_by: 'ui', mode: 'ready_only' }),
