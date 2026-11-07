@@ -27,6 +27,8 @@ class FakeConnection:
             return SimpleNamespace(first=lambda: (1,) if self.pending else None)
         if "FROM inventory" in sql:
             return SimpleNamespace(first=lambda: (1,) if self.located_stock else None)
+        if sql.startswith("UPDATE household_product_configuration"):
+            return SimpleNamespace(rowcount=1)
         raise AssertionError("Onverwachte schrijfactie of query: " + sql)
 
 
@@ -88,6 +90,44 @@ def test_open_receipt_blocks_disabling_unpacking():
             )
     assert not any("UPDATE " in sql or "DELETE " in sql for sql in conn.statements)
 
+
+
+def test_open_receipts_do_not_block_locationless_unpacking():
+    conn = FakeConnection(pending=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        save_household_workflow_preferences(
+            conn,
+            household_id="h1",
+            location_tracking_level="none",
+            unpacking_enabled=True,
+        )
+    assert not any("FROM purchase_import_batches" in sql for sql in conn.statements)
+    updates = [sql for sql in conn.statements if sql.startswith("UPDATE household_product_configuration")]
+    assert len(updates) == 1
+    assert conn.parameters[-1] == {
+        "household_id": "h1",
+        "location_tracking_level": "none",
+        "unpacking_enabled": 1,
+    }
+
+
+def test_open_receipts_still_block_location_downgrade_when_unpacking_disabled():
+    conn = FakeConnection(pending=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        with pytest.raises(ValueError, match="bonartikelen open"):
+            save_household_workflow_preferences(
+                conn,
+                household_id="h1",
+                location_tracking_level="none",
+                unpacking_enabled=False,
+            )
+    assert not any(sql.startswith("UPDATE ") for sql in conn.statements)
 
 def test_exact_location_requires_unpacking():
     conn = FakeConnection()
