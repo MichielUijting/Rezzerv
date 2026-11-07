@@ -1640,20 +1640,23 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const failedCount = Number(result?.failed_count || 0)
       const skippedCount = Number(result?.skipped_count || 0)
 
-      if (processedCount > 0) {
-        showProcessFeedback('Verwerkt!')
-      } else if (failedCount > 0) {
+      const lineFailureReasons = (result.results || [])
+        .filter((item) => item.status === 'failed' || item.status === 'skipped')
+        .map((item) => {
+          const name = String(lineNameById[item.line_id] || 'Bonregel').trim()
+          const reason = String(item.error || item.reason || item.diagnostic?.failure_message || '').trim()
+          return reason ? `${name}: ${reason}` : `${name}: reden niet beschikbaar`
+        })
+      if (failedCount > 0 || (processedCount === 0 && skippedCount > 0)) {
         showUitpakkenFeedback(
-          'error',
-          'Overzetten naar Voorraad is mislukt.',
+          failedCount > 0 ? 'error' : 'warning',
+          lineFailureReasons.length
+            ? `Niet naar Voorraad verwerkt. ${lineFailureReasons.join(' | ')}`
+            : 'Niet naar Voorraad verwerkt. Geen specifieke foutreden beschikbaar.',
           { key: `uitpakken-process-failed-${batch.batch_id}-${Date.now()}` }
         )
-      } else if (skippedCount > 0) {
-        showUitpakkenFeedback(
-          'warning',
-          'Er zijn geen regels overgezet naar Voorraad.',
-          { key: `uitpakken-process-skipped-${batch.batch_id}-${Date.now()}` }
-        )
+      } else if (processedCount > 0) {
+        showProcessFeedback('Verwerkt!')
       }
 
       const processed = (result.results || []).filter((item) => item.status === 'processed').map((item) => lineNameById[item.line_id]).filter(Boolean)
