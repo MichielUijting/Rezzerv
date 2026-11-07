@@ -216,7 +216,6 @@ export default function LoginPage({ onLoggedIn }) {
 
           </form>
         </Card>
-
       </main>
 
 
