@@ -292,10 +292,11 @@ test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile
 })
 
 for (const width of [390, 1280]) {
-  test(`Bijna op settings offers only valid policies and readable save feedback at ${width}px`, async ({ page }) => {
+  test(`Bijna op settings validates policies, errors and silent successful saves at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     let rejectSave = true
     let savedPolicy = null
+    let savedShoppingDays = null
     await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname
       if (path === '/api/household/almost-out-settings') {
@@ -305,6 +306,7 @@ for (const width of [390, 1280]) {
             return route.fulfill({ status: 422, json: { detail: [{ loc: ['body', 'policy_mode'], msg: 'Invalid value' }] } })
           }
           savedPolicy = payload.policy_mode
+          savedShoppingDays = payload.shopping_days
           return route.fulfill({ json: { ...payload, is_household_admin: true } })
         }
         return route.fulfill({ json: { prediction_enabled: false, prediction_days: 7, policy_mode: 'advisory', is_household_admin: true } })
@@ -331,6 +333,7 @@ for (const width of [390, 1280]) {
     await expect(policy.locator('option')).toHaveCount(2)
     await expect(policy.locator('option[value="override_fallback_to_stock"]')).toHaveCount(0)
     await page.getByTestId('almost-out-prediction-enabled').check()
+    await page.getByTestId('almost-out-shopping-days').fill('3')
     await policy.selectOption('override')
     await page.getByTestId('almost-out-settings-save').click()
     await expect(page.getByTestId('app-feedback-error')).toContainText('De instellingen zijn niet opgeslagen.')
@@ -338,7 +341,10 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('settings-almost-out-page')).not.toContainText('[object Object]')
     rejectSave = false
     await page.getByTestId('almost-out-settings-save').click()
-    await expect(page.getByTestId('app-feedback-success')).toContainText('Opgeslagen')
-    expect(savedPolicy).toBe('override')
+    await expect.poll(() => savedPolicy).toBe('override')
+    expect(savedShoppingDays).toBe(3)
+    await expect(page.getByTestId('almost-out-shopping-days')).toHaveValue('3')
+    await expect(page.getByTestId('almost-out-settings-save')).toBeEnabled()
+    await expect(page.getByRole('status')).toHaveCount(0)
   })
 }

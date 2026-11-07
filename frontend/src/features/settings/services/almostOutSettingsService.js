@@ -25,7 +25,7 @@ function settingsErrorMessage(detail, fallback) {
   // FastAPI validation details are arrays of objects, not displayable strings.
   // Keep technical field paths, input values and objects out of user feedback.
   if (Array.isArray(detail)) {
-    return 'De instellingen zijn niet opgeslagen. Controleer de gekozen instelling en het aantal dagen.'
+    return 'De instellingen zijn niet opgeslagen. Controleer de instellingen en gebruik een heel aantal dagen tussen 0 en 365.'
   }
   return fallback
 }
@@ -36,6 +36,7 @@ function normalizeSettings(value = {}) {
   return {
     predictionEnabled: Boolean(value.prediction_enabled ?? value.predictionEnabled),
     predictionDays: Math.max(0, Number(value.prediction_days ?? value.predictionDays ?? 0) || 0),
+    shoppingDays: Math.max(0, Number(value.shopping_days ?? value.shoppingDays ?? 0) || 0),
     policyMode: allowed.has(normalizedPolicyMode) ? normalizedPolicyMode : ALMOST_OUT_POLICY_MODES.ADVISORY,
     isHouseholdAdmin: Boolean(value.is_household_admin ?? value.isHouseholdAdmin),
   }
@@ -67,6 +68,7 @@ export async function saveAlmostOutSettings(settings = {}) {
     body: JSON.stringify({
       prediction_enabled: normalized.predictionEnabled,
       prediction_days: normalized.predictionDays,
+      shopping_days: normalized.shoppingDays,
       policy_mode: normalized.policyMode,
     }),
   })

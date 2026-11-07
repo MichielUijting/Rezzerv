@@ -1178,6 +1178,7 @@ ARTICLE_FIELD_VISIBILITY_DEFAULT = {
 }
 ALMOST_OUT_PREDICTION_ENABLED_KEY = "almost_out_prediction_enabled"
 ALMOST_OUT_PREDICTION_DAYS_KEY = "almost_out_prediction_days"
+ALMOST_OUT_SHOPPING_DAYS_KEY = "almost_out_shopping_days"
 ALMOST_OUT_POLICY_MODE_KEY = "almost_out_policy_mode"
 ALMOST_OUT_POLICY_ADVISORY = "advisory"
 ALMOST_OUT_POLICY_OVERRIDE = "override"
@@ -4293,7 +4294,11 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     article_settings_map = article_settings_map or {}
     prediction_enabled = bool(household_settings.get('prediction_enabled'))
     prediction_days = int(household_settings.get('prediction_days') or 0)
+    shopping_days = int(household_settings.get('shopping_days') or 0)
+    effective_prediction_days = max(shopping_days, prediction_days if prediction_enabled else 0)
     policy_mode = normalize_almost_out_policy_mode(household_settings.get('policy_mode'))
+    if not prediction_enabled:
+        policy_mode = ALMOST_OUT_POLICY_ADVISORY
 
     min_stock = normalize_optional_numeric_field(article_row.get('min_stock'))
     ideal_stock = normalize_optional_numeric_field(article_row.get('ideal_stock'))
@@ -4324,19 +4329,19 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
 
     prediction_payload = None
     prediction_triggered = False
-    if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and prediction_enabled and prediction_days > 0:
+    if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and effective_prediction_days > 0:
         prediction_payload = None if group_projection else compute_household_product_prediction(
             conn,
             household_id,
             household_article_id,
             article_name,
             current_quantity=current_quantity,
-            prediction_days=prediction_days,
+            prediction_days=effective_prediction_days,
             global_product_id=global_product_id,
         )
         if group_projection:
             from app.services.almost_out_group_service import prediction_from_events
-            prediction_payload = prediction_from_events(event_rows, prediction_days)
+            prediction_payload = prediction_from_events(event_rows, effective_prediction_days)
         prediction_triggered = bool(prediction_payload and prediction_payload.get('prediction_triggered'))
 
     include_item = False
@@ -4415,6 +4420,8 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
         'prediction_triggered': bool(prediction_triggered),
         'prediction_enabled': prediction_enabled,
         'prediction_days': prediction_days,
+        'shopping_days': shopping_days,
+        'effective_prediction_days': effective_prediction_days,
         'policy_mode': effective_policy_mode,
         'base_policy_mode': policy_mode,
         'business_rules': {
@@ -4426,10 +4433,12 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     }
     if group_projection:
         item_payload.update({key: value for key, value in group_projection.items() if key not in {'inventory_rows', 'event_rows'}})
-        item_payload['product_anchor'] = 'automatic_product_type'
-        item_payload['household_article_name'] = group_projection['aggregation_variant']
-        item_payload['display_name'] = group_projection['aggregation_variant']
-        item_payload['packaging_unit'] = f"verpakking van {group_projection['representative_package_content']:g} {group_projection['aggregation_unit']}"
+        item_payload['product_anchor'] = group_projection['aggregation_scope']
+        if group_projection['aggregation_scope'] == 'automatic_product_type':
+            item_payload['household_article_name'] = group_projection['aggregation_variant']
+            item_payload['display_name'] = group_projection['aggregation_variant']
+        if group_projection.get('representative_package_content') and group_projection.get('aggregation_unit'):
+            item_payload['packaging_unit'] = f"verpakking van {group_projection['representative_package_content']:g} {group_projection['aggregation_unit']}"
         item_payload['verpakkingseenheid'] = item_payload['packaging_unit']
         item_payload['packaging_quantity'] = 1
         item_payload['verpakkingshoeveelheid'] = 1
@@ -4446,7 +4455,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             'predicted_days_until_depletion': None,
             'predicted_depletion_date': None,
             'predicted_depletion_at': None,
-            'prediction_threshold_days': prediction_days if prediction_enabled else None,
+            'prediction_threshold_days': effective_prediction_days if effective_prediction_days else None,
             'purchase_event_count': 0,
         })
     return item_payload
@@ -4509,17 +4518,18 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
-        candidates = [group['members'][0]] if group['key'][0] == 'automatic_product_type' else group['members']
+        grouped = group['key'][0] in {'automatic_product_type', 'confirmed_synonym'}
+        candidates = [group['members'][0]] if grouped else group['members']
         for article_row in candidates:
             article_id = str(article_row['id'])
-            members = group['members'] if group['key'][0] == 'automatic_product_type' else [article_row]
-            if not household_settings.get('prediction_enabled') and not any(member.get('min_stock') is not None for member in members):
+            members = group['members'] if grouped else [article_row]
+            if not (household_settings.get('prediction_enabled') or household_settings.get('shopping_days')) and not any(member.get('min_stock') is not None for member in members):
                 continue
             if any(settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True for member in members):
                 hidden_count += 1
                 continue
             projection = None
-            if group['key'][0] == 'automatic_product_type':
+            if grouped:
                 projection = load_group_projection(conn, household_id, group)
                 article_row = dict(article_row)
                 reference_factor = group['factors'][article_id]
@@ -6431,6 +6441,20 @@ def normalize_almost_out_prediction_days(value: Any) -> int:
     return max(normalized, 0)
 
 
+def normalize_almost_out_shopping_days(value: Any) -> int:
+    if value in (None, ''):
+        return 0
+    if isinstance(value, (bool, float)):
+        raise ValueError('Het aantal dagen tot boodschappen moet een geheel getal zijn')
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        raise ValueError('Het aantal dagen tot boodschappen moet een geheel getal zijn')
+    if not 0 <= days <= 365:
+        raise ValueError('Het aantal dagen tot boodschappen moet tussen 0 en 365 liggen')
+    return days
+
+
 def normalize_almost_out_policy_mode(value: Any) -> str:
     normalized = str(value or '').strip().lower()
     if normalized not in ALMOST_OUT_POLICY_ALLOWED:
@@ -6458,6 +6482,14 @@ def get_household_almost_out_prediction_days(conn, household_id: str) -> int:
     return normalize_almost_out_prediction_days(row["setting_value"] if row else ALMOST_OUT_PREDICTION_DEFAULT_DAYS)
 
 
+def get_household_almost_out_shopping_days(conn, household_id: str) -> int:
+    row = conn.execute(
+        text('SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key'),
+        {'household_id': str(household_id), 'setting_key': ALMOST_OUT_SHOPPING_DAYS_KEY},
+    ).mappings().first()
+    return normalize_almost_out_shopping_days(row['setting_value'] if row else 0)
+
+
 def get_household_almost_out_policy_mode(conn, household_id: str) -> str:
     row = conn.execute(
         text(
@@ -6468,7 +6500,7 @@ def get_household_almost_out_policy_mode(conn, household_id: str) -> str:
     return normalize_almost_out_policy_mode(row["setting_value"] if row else ALMOST_OUT_POLICY_ADVISORY)
 
 
-def set_household_almost_out_settings(conn, household_id: str, *, prediction_enabled: bool, prediction_days: int, policy_mode: str) -> dict:
+def set_household_almost_out_settings(conn, household_id: str, *, prediction_enabled: bool, prediction_days: int, policy_mode: str, shopping_days: int | None = None) -> dict:
     normalized_enabled = normalize_almost_out_prediction_enabled(prediction_enabled)
     normalized_days = normalize_almost_out_prediction_days(prediction_days)
     normalized_policy_mode = normalize_almost_out_policy_mode(policy_mode)
@@ -6477,6 +6509,8 @@ def set_household_almost_out_settings(conn, household_id: str, *, prediction_ena
         ALMOST_OUT_PREDICTION_DAYS_KEY: str(normalized_days),
         ALMOST_OUT_POLICY_MODE_KEY: normalized_policy_mode,
     }
+    if shopping_days is not None:
+        settings_to_write[ALMOST_OUT_SHOPPING_DAYS_KEY] = str(normalize_almost_out_shopping_days(shopping_days))
     for setting_key, setting_value in settings_to_write.items():
         conn.execute(
             text(
@@ -6497,6 +6531,7 @@ def set_household_almost_out_settings(conn, household_id: str, *, prediction_ena
     return {
         'prediction_enabled': normalized_enabled,
         'prediction_days': normalized_days,
+        'shopping_days': get_household_almost_out_shopping_days(conn, household_id),
         'policy_mode': normalized_policy_mode,
     }
 
@@ -6505,6 +6540,7 @@ def get_household_almost_out_settings(conn, household_id: str) -> dict:
     return {
         'prediction_enabled': get_household_almost_out_prediction_enabled(conn, household_id),
         'prediction_days': get_household_almost_out_prediction_days(conn, household_id),
+        'shopping_days': get_household_almost_out_shopping_days(conn, household_id),
         'policy_mode': get_household_almost_out_policy_mode(conn, household_id),
     }
 
@@ -7249,6 +7285,7 @@ class HouseholdAutomationSettingsUpdateRequest(BaseModel):
 class HouseholdAlmostOutSettingsUpdateRequest(BaseModel):
     prediction_enabled: bool = False
     prediction_days: int = 0
+    shopping_days: int | None = None
     policy_mode: str = ALMOST_OUT_POLICY_ADVISORY
 
     @field_validator("prediction_days", mode='before')
@@ -7263,6 +7300,11 @@ class HouseholdAlmostOutSettingsUpdateRequest(BaseModel):
         if normalized < 0:
             raise ValueError('prediction_days mag niet negatief zijn')
         return normalized
+
+    @field_validator('shopping_days', mode='before')
+    @classmethod
+    def validate_shopping_days(cls, value):
+        return None if value is None else normalize_almost_out_shopping_days(value)
 
     @field_validator("policy_mode")
     @classmethod
@@ -13286,6 +13328,7 @@ def get_household_almost_out_settings_endpoint(authorization: Optional[str] = He
         'household_id': household_id,
         'prediction_enabled': bool(settings.get('prediction_enabled')),
         'prediction_days': int(settings.get('prediction_days') or 0),
+        'shopping_days': int(settings.get('shopping_days') or 0),
         'policy_mode': normalize_almost_out_policy_mode(settings.get('policy_mode')),
         'is_household_admin': is_household_admin,
     }
@@ -13302,6 +13345,7 @@ def update_household_almost_out_settings_endpoint(payload: HouseholdAlmostOutSet
             prediction_enabled=payload.prediction_enabled,
             prediction_days=payload.prediction_days,
             policy_mode=payload.policy_mode,
+            shopping_days=payload.shopping_days,
         )
     return {
         'household_id': household_id,

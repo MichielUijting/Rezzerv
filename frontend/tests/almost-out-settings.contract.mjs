@@ -19,18 +19,23 @@ const service = context.service
 assert.equal(service.ALMOST_OUT_POLICY_OPTIONS.length, 2)
 assert.equal(service.ALMOST_OUT_POLICY_OPTIONS.map(option => option.value).join(','), 'advisory,override')
 for (const option of service.ALMOST_OUT_POLICY_OPTIONS) {
-  response = { ok: true, body: { prediction_enabled: true, prediction_days: 7, policy_mode: option.value } }
-  const saved = await service.saveAlmostOutSettings({ predictionEnabled: true, predictionDays: 7, policyMode: option.value })
+  response = { ok: true, body: { prediction_enabled: true, prediction_days: 7, shopping_days: 3, policy_mode: option.value } }
+  const saved = await service.saveAlmostOutSettings({ predictionEnabled: true, predictionDays: 7, shoppingDays: 3, policyMode: option.value })
   assert.equal(saved.policyMode, option.value)
   assert.equal(JSON.parse(sent.body).policy_mode, option.value)
   assert.equal(saved.predictionEnabled, true)
+  assert.equal(saved.shoppingDays, 3)
+  assert.equal(JSON.parse(sent.body).shopping_days, 3)
 }
 response = { ok: false, body: { detail: [{ loc: ['body', 'policy_mode'], msg: 'Value error', input: 'private input' }] } }
 await assert.rejects(service.saveAlmostOutSettings({}), error => {
-  assert.equal(error.message, 'De instellingen zijn niet opgeslagen. Controleer de gekozen instelling en het aantal dagen.')
+  assert.equal(error.message, 'De instellingen zijn niet opgeslagen. Controleer de instellingen en gebruik een heel aantal dagen tussen 0 en 365.')
   assert.doesNotMatch(error.message, /object Object|private input|policy_mode/)
   return true
 })
+response = { ok: true, body: { prediction_enabled: false, prediction_days: 0, policy_mode: 'advisory' } }
+const legacy = await service.fetchAlmostOutSettings()
+assert.equal(legacy.shoppingDays, 0)
 response = { ok: false, body: { detail: 'Je hebt geen rechten om dit te wijzigen.' } }
 await assert.rejects(service.saveAlmostOutSettings({}), /Je hebt geen rechten om dit te wijzigen\./)
 response = { ok: false, body: { detail: { unexpected: 'private input' } } }
