@@ -217,14 +217,6 @@ export default function LoginPage({ onLoggedIn }) {
           </form>
         </Card>
 
-        {/* Tijdelijke navigatie voor PR #658; verwijderen voordat de PR wordt gemerged. */}
-        <Link
-          to="/bijna-op"
-          className="rz-login-temporary-almost-out rz-button-secondary"
-          data-testid="login-temporary-almost-out"
-        >
-          Naar Bijna op
-        </Link>
       </main>
 
 
