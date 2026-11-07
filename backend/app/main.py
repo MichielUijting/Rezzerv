@@ -910,6 +910,26 @@ class ReviewLineRequest(BaseModel):
         return value
 
 
+class PurchaseImportLineQuantityRequest(BaseModel):
+    quantity: float
+    unit: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, value):
+        if not math.isfinite(value) or value <= 0 or value > 1000000000:
+            raise ValueError("Aantal moet een geldig positief getal zijn")
+        return value
+
+    @field_validator("unit")
+    @classmethod
+    def validate_unit(cls, value):
+        cleaned = str(value or "").strip()
+        if len(cleaned) > 64:
+            raise ValueError("Eenheid is te lang")
+        return cleaned
+
+
 class MapLineRequest(BaseModel):
     household_article_id: Optional[str | int] = None
 
@@ -17125,6 +17145,66 @@ def get_latest_purchase_import_batch_for_connection(connection_id: str):
     result = dict(batch)
     result["created_at"] = normalize_datetime(result.get("created_at"))
     return result
+
+
+@app.post("/api/purchase-import-lines/{line_id}/quantity")
+def correct_purchase_import_line_quantity(
+    line_id: str,
+    payload: PurchaseImportLineQuantityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Correct an unprocessed line; for receipt sources persist on the canonical receipt."""
+    with engine.begin() as conn:
+        line = conn.execute(text("""
+            SELECT pil.id, pil.batch_id, pil.processing_status, pil.processed_event_id,
+                   pil.external_line_ref, pib.household_id, pib.source_type, pib.source_reference
+            FROM purchase_import_lines pil
+            JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+            WHERE pil.id = :line_id
+            LIMIT 1
+        """), {"line_id": line_id}).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Bonartikel niet gevonden")
+        context = require_household_context(authorization, str(line["household_id"]))
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            raise HTTPException(status_code=403, detail="Kijkers mogen aantallen niet wijzigen")
+        if line.get("processed_event_id") or line.get("processing_status") == "processed":
+            raise HTTPException(status_code=409, detail="Een al verwerkt artikel kan niet via de bon worden gewijzigd")
+
+        params = {"line_id": line_id, "quantity": payload.quantity, "unit": payload.unit}
+        reference = str(line.get("external_line_ref") or "")
+        if line.get("source_type") == "receipt" and reference.startswith("receipt-line:"):
+            receipt_line_id = reference.split(":", 1)[1]
+            receipt_id = str(line.get("source_reference") or "").removeprefix("receipt:").strip()
+            source = conn.execute(text("""
+                SELECT rtl.id
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                WHERE rtl.id = :source_line_id AND rtl.receipt_table_id = :receipt_id
+                  AND rt.household_id = :household_id
+                  AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+                LIMIT 1
+            """), {
+                "source_line_id": receipt_line_id,
+                "receipt_id": receipt_id,
+                "household_id": str(line["household_id"]),
+            }).scalar()
+            if not source:
+                raise HTTPException(status_code=409, detail="De oorspronkelijke bonregel is niet beschikbaar")
+            conn.execute(text("""
+                UPDATE receipt_table_lines
+                SET corrected_quantity = :quantity, corrected_unit = :unit,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :source_line_id
+            """), {**params, "source_line_id": receipt_line_id})
+        conn.execute(text("""
+            UPDATE purchase_import_lines
+            SET quantity_raw = :quantity, unit_raw = :unit,
+                processing_error = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :line_id
+        """), params)
+        update_batch_status(conn, str(line["batch_id"]))
+    return {"line_id": line_id, "quantity_raw": payload.quantity, "unit_raw": payload.unit}
 
 
 @app.post("/api/purchase-import-lines/{line_id}/review")
