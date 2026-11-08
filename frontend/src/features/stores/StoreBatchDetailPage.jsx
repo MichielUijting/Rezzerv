@@ -1606,7 +1606,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode }),
+        body: JSON.stringify({ processed_by: 'ui', mode, selected_line_ids: selectedIds.map(String) }),
       })
 
       const processedLineIds = new Set(
