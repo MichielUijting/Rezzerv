@@ -143,6 +143,7 @@ def run_locationless_production_contract() -> dict:
                     "household_id": ids["household_id"],
                     "store_name": "Albert Heijn",
                     "parse_status": "approved",
+                    "workflow_state": "active",
                     "approved_at": "2026-11-07T12:00:00",
                 },
             )
