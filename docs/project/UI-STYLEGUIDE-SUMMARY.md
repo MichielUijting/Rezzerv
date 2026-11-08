@@ -1727,3 +1727,8 @@ De gekozen rij in de centrale standaard-DataTable wordt lichtgroen gearceerd en 
 ### Artikelsynoniemen: datumfilter en gelijkblijvende tabeluitlijning — 8 november 2026
 
 Boven de **linker** standaardtabel van Artikelsynoniemen staat `Toegevoegd vanaf`, een gewoon toegankelijk datumveld. Standaard is het leeg en zijn alle Catalogusartikelen zichtbaar. Na datumselectie worden artikelen met een bekende Catalogusaanmaakdatum vanaf die datum getoond; historische artikelen zonder betrouwbare aanmaakdatum blijven zichtbaar, zodat ze niet onterecht buiten de review vallen. Een oudere datum brengt oude artikelen terug voor een nieuwe beoordeling; er wordt niets automatisch ontkoppeld of goedgekeurd. De koppen van beide naast elkaar geplaatste tabellen behouden op desktop dezelfde hoogte en hun tabelheaders blijven uitgelijnd. De rechterkandidatentabel wordt niet door dit datumfilter beïnvloed; op mobiel blijven de twee tabellen onder elkaar staan.
+
+
+### Standaardtabel: lege kolomwaarden filteren — 8 november 2026
+
+De centrale `DataTable` accepteert in bestaande tekstkolomfilters exact de opdrachten `=leeg` en `=nietleeg` (hoofdletterongevoelig). `=leeg` toont uitsluitend rijen waarvan de kolomwaarde ontbreekt, `null` is, een lege/alleen-spaties-tekst is of een lege lijst is; `=nietleeg` toont de overige rijen, inclusief `0` en `false`. De opdracht werkt op de reeds vastgelegde kolomfilterwaarde (`getFilterValue`, `getValue` of normale celwaarde) en overschrijft alleen voor deze twee exacte opdrachten een eventueel vrij-tekst-filterpredicaat. Een leeg filterveld houdt alle rijen; gewone tekstfiltering, sorting, paginering, selectie en lay-out blijven behouden. Er komt geen aparte filterknop of extra rij bij.
