@@ -227,9 +227,17 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     const result = location.state?.offLinkOutcome
-    if (!result) return undefined
+    if (!result) return
+    // A link result is one-time navigation feedback, not a persistent part of
+    // browser history. Consume it before a Back/Forward navigation can replay
+    // old success messages (or claim that a link just happened again).
     setOffLinkOutcome(result)
-    return undefined
+    const nextState = { ...(location.state || {}) }
+    delete nextState.offLinkOutcome
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: nextState,
+    })
   }, [location.key, location.state?.offLinkOutcome])
 
   useEffect(() => {
