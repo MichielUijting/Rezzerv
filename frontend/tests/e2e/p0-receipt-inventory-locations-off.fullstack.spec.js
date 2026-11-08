@@ -288,8 +288,8 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
   expect(processResponse.ok()).toBeTruthy()
   const processPayload = await processResponse.json()
   expect(Number(processPayload?.processed_count || 0)).toBeGreaterThanOrEqual(1)
-  await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ }).getByRole('button', { name: 'OK' }).click()
   await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveCount(0, { timeout: 20_000 })
 
   const inventoryResponse = await page.request.get('/api/dev/inventory-preview')
