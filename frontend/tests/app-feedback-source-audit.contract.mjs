@@ -15,9 +15,23 @@ assert.equal(isTransientFeedback({ variant: 'success' }), true)
 assert.match(provider, /dismissMode: variant === 'error' \? 'ok-only'/)
 assert.match(provider, /variant !== 'error' && dismissMode === 'outside-or-ok'/)
 assert.ok(provider.includes('data-testid={`${testId}-ok-button`}'), 'Elke fout-overlay vereist de centrale OK-knop')
-assert.match(provider, /interactiveDialog = variant === 'error'/)
+assert.match(provider, /interactiveDialog = !mobileTransient \|\| variant === 'error'/)
+assert.match(provider, /background: '#FFFFFF'/)
 assert.match(provider, /setFeedback\(\(current\) => current\?\.id === feedback\.id \? null : current\)/,
   'Een succesvolle actie mag opvolgende feedback niet wissen')
+const unpacking = fs.readFileSync(path.join(root, 'features/stores/StoreBatchDetailPage.jsx'), 'utf8')
+const resultFeedback = unpacking.split('if (processedCount > 0 || skippedCount > 0 || failedCount > 0) {')[1]
+  ?.split('setSelectedLineIds((current) => current.filter')[0]
+assert.ok(resultFeedback, 'Uitpakken moet het resultaat van een bulkverwerking tonen')
+assert.match(resultFeedback, /dismissMode: 'ok-only'/,
+  'Ook een gedeeltelijke bulkverwerking blijft zichtbaar tot OK')
+assert.match(resultFeedback, /skippedCount > 0 \? 'warning' : 'success'/,
+  'Overgeslagen regels krijgen een herkenbare waarschuwing in de centrale resultaatmelding')
+assert.match(resultFeedback, /failedCount > 0\s*\? 'Verwerking deels mislukt'/,
+  'Mislukte regels worden nooit als succesvolle verwerking gepresenteerd')
+assert.doesNotMatch(resultFeedback, /showUitpakkenFeedback\(/,
+  'Een bulkresultaat mag niet terugvallen op de tijdelijke waarschuwing')
+
 const theme = fs.readFileSync(path.join(root, 'ui/theme.css'), 'utf8')
 assert.ok((theme.match(/:not\(:has\(\[data-testid\$="-ok-button"\]\)\)/g) || []).length >= 10,
   'De OK-dialoog mag niet door passieve balk-CSS worden afgedwongen')

@@ -401,6 +401,14 @@ De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Sch
 
 **Bindend PO-besluit 6 november 2026 — applicatiebreed:** status-, succes-, waarschuwing- en foutmeldingen staan nooit als dynamische melding tussen de inhoud van een scherm. Alleen een centrale overlay of de centrale vaste balk onderin is toegestaan. Een **foutmelding** is altijd een centrale, blokkerende melding met expliciete **OK**-knop, ook op mobiel: zij verdwijnt **niet** na een timer, niet bij klikken op de melding en niet bij klikken buiten de overlay. Onderliggende functionele leegstand-, veldlabel- en voortgangsmetadata zijn geen tijdelijke meldingen. Schermen implementeren geen eigen `rz-inline-feedback`-meldingsblokken of fout-dismisstimers.
 
+### Desktop: ondoorzichtige resultaatmeldingen bij Uitpakken (8 november 2026)
+
+- Een bulkactie **Naar voorraad** toont slechts **één** centrale melding via `AppFeedbackProvider/useAppFeedback`. Dezelfde actie mag niet daarnaast een eigen `rz-modal-backdrop` of tweede passieve melding openen.
+- Op desktop zijn alle centrale feedbackkaarten, ook passieve succes- en informatiemeldingen, **ondoorzichtig wit**, met contrasterende tekst en de bestaande rand en binnenruimte. Inhoud van de onderliggende pagina mag nooit door de kaart heen zichtbaar zijn.
+- De uitslag van een voorraadbulkactie blijft als één centrale melding met **OK** zichtbaar totdat de gebruiker deze bevestigt. Bij een gedeeltelijke verwerking vermeldt de melding expliciet hoeveel bonregels nog openstaan; zij mag niet beweren dat de volledige bon is afgerond.
+- Ook bij **overgeslagen** regels wordt het bulkresultaat nooit een tijdelijke waarschuwing: de centrale melding blijft open met **OK**. Een gedeeltelijke verwerking toont **Geselecteerde artikelen verwerkt**, een deels mislukte verwerking **Verwerking deels mislukt** (foutvariant), en uitsluitend een volledig verwerkte bon **Verwerking afgerond**. Verwerkt, overgeslagen en mislukt blijven onderscheiden in de tekst.
+- Deze specifieke, expliciet te bevestigen resultaatmelding is **niet transient**. De algemene mobiele regels voor overige passieve meldingen blijven ongewijzigd.
+
 ### Mobiele passieve feedback
 
 Op mobiele schermen is **niet-foutieve, passieve** feedback altijd een **overlay**:

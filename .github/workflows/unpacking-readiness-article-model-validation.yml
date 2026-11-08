@@ -35,5 +35,7 @@ jobs:
         run: python tools/check_unpacking_readiness_article_model.py
       - name: Run focused regression tests
         run: python -m pytest -q backend/tests/test_unpacking_readiness_article_model_contract.py
+      - name: Verify explicit browser checkbox selection scope
+        run: node frontend/tests/unpacking-explicit-selection.contract.mjs
       - name: No whitespace errors
         run: git diff --check origin/main...HEAD

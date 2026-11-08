@@ -10,6 +10,9 @@ from app.services.purchase_import_location_policy_patch import (
     _policy_store_storage_target_location,
     _processing_household_id,
     classify_locationless_ready_line,
+    is_locationless_bulk_candidate,
+    is_receipt_source_inventory_eligible,
+    recover_explicit_approved_receipt_article_link,
     install_purchase_import_location_policy_patch,
 )
 from app.testing.postgresql_onboarding_selftest_fixture import (
@@ -92,21 +95,99 @@ def test_locationless_ready_only_ignores_missing_location_but_not_other_requirem
         "selected_article_group_id": None,
         "target_location_id": None,
     })
-    assert ready is False
-    assert reason == "Nog geen artikelgroep gekozen"
-    assert stage == "article_group_resolution"
+    assert (ready, reason, stage) == (True, None, None)
 
 
-def test_locationless_ready_only_rejects_a_stored_location_instead_of_normalizing_it():
+def test_locationless_ready_only_accepts_a_legacy_receipt_location():
+    # Switching the current household policy must not require editing every
+    # previously imported receipt line. The original line remains unchanged.
     ready, reason, stage = classify_locationless_ready_line({
         "matched_household_article_id": "article-1",
         "matched_global_product_id": None,
         "selected_article_group_id": "group-1",
         "target_location_id": "legacy-space",
     })
+    assert (ready, reason, stage) == (True, None, None)
+
+
+def test_locationless_bulk_candidates_only_include_approved_pending_or_explicit_selected():
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=True,
+    )
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "selected"}, approved_receipt=False,
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=False,
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "ignored"}, approved_receipt=True,
+    )
+
+
+def test_locationless_selected_only_never_promotes_pending_receipt_lines():
+    assert is_locationless_bulk_candidate(
+        {"review_decision": "selected"}, approved_receipt=True, mode="selected_only",
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "pending"}, approved_receipt=True, mode="selected_only",
+    )
+    assert not is_locationless_bulk_candidate(
+        {"review_decision": "ignored"}, approved_receipt=True, mode="selected_only",
+    )
+
+
+def test_locationless_selected_only_uses_locationless_processor(monkeypatch):
+    import app.services.purchase_import_location_policy_patch as patch
+
+    calls = []
+    monkeypatch.setattr(
+        patch, "_batch_household_configuration",
+        lambda main_module, batch_id: (
+            "house-none", SimpleNamespace(location_tracking_level="none"),
+        ),
+    )
+    monkeypatch.setattr(
+        patch, "_process_locationless_ready_only_batch",
+        lambda module, batch_id, payload, authorization: (
+            calls.append(payload.mode) or {"mode": payload.mode, "locationless": True}
+        ),
+    )
+    legacy = lambda batch_id, payload, authorization=None: {"legacy": True}
+    route = SimpleNamespace(
+        path="/api/purchase-import-batches/{batch_id}/process",
+        methods={"POST"}, endpoint=legacy, dependant=SimpleNamespace(call=legacy),
+    )
+    main_module = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(), routes=[route]),
+        process_purchase_import_batch=legacy,
+        resolve_store_storage_target_location=lambda conn, location_id: None,
+    )
+    install_purchase_import_location_policy_patch(main_module)
+
+    for mode in ("selected_only", "ready_only"):
+        assert route.dependant.call(
+            "batch", SimpleNamespace(mode=mode), "session",
+        ) == {"mode": mode, "locationless": True}
+    assert calls == ["selected_only", "ready_only"]
+
+
+def test_locationless_bulk_ready_without_article_group_but_never_without_identity():
+    assert classify_locationless_ready_line({
+        "matched_household_article_id": "article-1",
+        "matched_global_product_id": None,
+        "selected_article_group_id": None,
+        "target_location_id": "legacy-space",
+    }) == (True, None, None)
+    ready, reason, stage = classify_locationless_ready_line({
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+        "selected_article_group_id": None,
+        "target_location_id": "legacy-space",
+    })
     assert ready is False
-    assert "zonder locatie" in str(reason)
-    assert stage == "purchase_event_write"
+    assert stage == "article_resolution"
+    assert "artikel" in reason.lower()
 
 
 def test_processing_resolver_returns_real_null_location_for_none_policy(engine):
@@ -173,3 +254,110 @@ def test_installer_replaces_the_registered_process_route_and_resolver():
     assert route.endpoint is main_module.process_purchase_import_batch
     assert route.dependant.call is main_module.process_purchase_import_batch
     assert app.state.purchase_import_location_policy_patch_installed is True
+
+
+def test_recover_approved_receipt_link_only_when_source_article_is_verified():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_article_id": "article-1",
+        "global_product_id": None,
+    }
+    line = {
+        "id": "line-1",
+        "external_line_ref": "receipt-line:source-line-1",
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+        "article_override_mode": "auto",
+    }
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    result = recover_explicit_approved_receipt_article_link(
+        conn, line=line, batch=batch, approved_receipt=True,
+    )
+    assert result["matched_household_article_id"] == "article-1"
+    assert conn.execute.call_count == 2
+    query, params = conn.execute.call_args_list[0].args
+    sql = str(query)
+    assert "ha.household_id = rt.household_id" in sql
+    assert "rt.household_id = :household_id" in sql
+    assert "rt.approved_at IS NOT NULL" in sql
+    assert params["household_id"] == "house-1"
+
+
+def test_unapproved_or_explicitly_cleared_receipt_link_is_not_recovered():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    for approved, override in [(False, "auto"), (True, "cleared")]:
+        line = {
+            "id": "line-1", "external_line_ref": "receipt-line:source-line-1",
+            "matched_household_article_id": None,
+            "matched_global_product_id": None,
+            "article_override_mode": override,
+        }
+        assert recover_explicit_approved_receipt_article_link(
+            conn, line=line, batch=batch, approved_receipt=approved,
+        ) == line
+    conn.execute.assert_not_called()
+
+
+def test_unlinked_source_is_not_guessed_or_persisted():
+    from unittest.mock import Mock
+
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_article_id": None,
+        "global_product_id": None,
+    }
+    line = {
+        "id": "line-1", "external_line_ref": "receipt-line:source-line-1",
+        "matched_household_article_id": None,
+        "matched_global_product_id": None,
+    }
+    batch = {"id": "batch-1", "household_id": "house-1", "source_reference": "receipt:source-1"}
+    assert recover_explicit_approved_receipt_article_link(
+        conn, line=line, batch=batch, approved_receipt=True,
+    ) == line
+    assert conn.execute.call_count == 1
+
+
+def test_receipt_financial_and_unknown_lines_never_enter_stock():
+    from unittest.mock import Mock
+
+    batch = {"source_type": "receipt", "source_reference": "receipt:r-1", "household_id": "h-1"}
+    line = {"external_line_ref": "receipt-line:l-1"}
+    for role, eligible, expected in [
+        ("product", True, True),
+        ("product", 1, True),
+        ("product", "true", True),
+        ("product", 0, False),
+        ("financial", 1, False),
+        ("financial", False, False),
+        ("loyalty", False, False),
+        ("unknown", False, False),
+        ("product", None, False),
+    ]:
+        conn = Mock()
+        conn.execute.return_value.mappings.return_value.first.return_value = {
+            "line_role": role, "inventory_eligible": eligible,
+        }
+        assert is_receipt_source_inventory_eligible(conn, line=line, batch=batch) is expected
+        sql, params = conn.execute.call_args.args
+        assert "rtl.receipt_table_id = :receipt_id" in str(sql)
+        assert "rt.household_id = :household_id" in str(sql)
+        assert params == {"line_id": "l-1", "receipt_id": "r-1", "household_id": "h-1"}
+
+
+def test_missing_receipt_source_is_not_stock_eligible():
+    from unittest.mock import Mock
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = None
+    batch = {"source_type": "receipt", "source_reference": "receipt:r-1", "household_id": "h-1"}
+    assert not is_receipt_source_inventory_eligible(
+        conn, line={"external_line_ref": "receipt-line:l-1"}, batch=batch,
+    )
+    assert not is_receipt_source_inventory_eligible(
+        conn, line={"external_line_ref": "other:l-1"}, batch=batch,
+    )

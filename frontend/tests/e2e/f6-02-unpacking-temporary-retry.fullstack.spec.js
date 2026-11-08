@@ -67,9 +67,9 @@ test('F6-02 Uitpakken temporary failure leaves retryable state and visible retry
   expect(JSON.stringify(retryPayload)).toContain('inventory_mutation_skipped')
   expect(JSON.stringify(retryPayload)).toContain('direct_consumption')
 
-  const completedDialog = page.getByRole('dialog', { name: 'Verwerking afgerond' })
+  const completedDialog = page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })
   await expect(completedDialog).toBeVisible({ timeout: 30_000 })
-  await completedDialog.getByRole('button', { name: 'Sluiten' }).click()
+  await completedDialog.getByRole('button', { name: 'OK' }).click()
   await expect(page.getByTestId(`receipt-line-${expectedLineId}`)).toHaveCount(0, { timeout: 20_000 })
 
   writeFileSync('f6-02-unpacking-browser-proof.json', JSON.stringify({

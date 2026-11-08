@@ -118,6 +118,61 @@ def run_locationless_production_contract() -> dict:
                     "ideal_stock": 2,
                 },
             )
+            # Genuine material source line: the production processor now
+            # verifies the original receipt's role before any inventory write.
+            # The old fixture had an orphan import line (no Kassa source).
+            _insert_row(
+                conn,
+                "raw_receipts",
+                {
+                    "id": "locationless-raw-contract",
+                    "household_id": ids["household_id"],
+                    "original_filename": "locationless-contract.txt",
+                    "mime_type": "text/plain",
+                    "storage_path": "test-fixtures/locationless-contract.txt",
+                    "sha256_hash": "f" * 64,
+                    "raw_status": "parsed",
+                },
+            )
+            _insert_row(
+                conn,
+                "receipt_tables",
+                {
+                    "id": "locationless-contract",
+                    "raw_receipt_id": "locationless-raw-contract",
+                    "household_id": ids["household_id"],
+                    "store_name": "Albert Heijn",
+                    "purchase_at": "2026-11-07T12:00:00",
+                    "total_amount": 4.0,
+                    "discount_total": 0.0,
+                    "currency": "EUR",
+                    "parse_status": "approved",
+                    "confidence_score": 1.0,
+                    "line_count": 1,
+                    "logical_receipt_key": "locationless-logical-contract",
+                    "workflow_state": "active",
+                    "approved_at": "2026-11-07T12:00:00",
+                },
+            )
+            _insert_row(
+                conn,
+                "receipt_table_lines",
+                {
+                    "id": "locationless-contract:1",
+                    "receipt_table_id": "locationless-contract",
+                    "line_index": 1,
+                    "raw_label": "LOCATI ELOZE RIJST",
+                    "normalized_label": "LOCATI ELOZE RIJST",
+                    "quantity": 4,
+                    "unit": "stuk",
+                    "line_total": 4.0,
+                    "article_match_status": "unmatched",
+                    "logical_line_key": "locationless-logical-line",
+                    "is_validated": True,
+                    "line_role": "product",
+                    "inventory_eligible": True,
+                },
+            )
             _insert_row(
                 conn,
                 "purchase_import_batches",

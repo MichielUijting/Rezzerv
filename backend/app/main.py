@@ -910,6 +910,26 @@ class ReviewLineRequest(BaseModel):
         return value
 
 
+class PurchaseImportLineQuantityRequest(BaseModel):
+    quantity: float
+    unit: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, value):
+        if not math.isfinite(value) or value <= 0 or value > 1000000000:
+            raise ValueError("Aantal moet een geldig positief getal zijn")
+        return value
+
+    @field_validator("unit")
+    @classmethod
+    def validate_unit(cls, value):
+        cleaned = str(value or "").strip()
+        if len(cleaned) > 64:
+            raise ValueError("Eenheid is te lang")
+        return cleaned
+
+
 class MapLineRequest(BaseModel):
     household_article_id: Optional[str | int] = None
 
@@ -971,6 +991,9 @@ class CreateArticleFromLineRequest(BaseModel):
 class ProcessBatchRequest(BaseModel):
     processed_by: str = "ui"
     mode: str = "selected_only"
+    # None preserves the legacy API contract for non-browser callers.
+    # An explicit list strictly scopes browser processing to checked lines.
+    selected_line_ids: Optional[List[str]] = None
     auto_consume_article_ids: List[str] = Field(default_factory=list)
 
     @field_validator("mode")
@@ -9116,7 +9139,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                discount_amount, line_role, inventory_eligible,
                barcode,
                external_article_code,
-               matched_global_product_id
+               matched_global_product_id, matched_article_id
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
           AND COALESCE(is_deleted, FALSE) = FALSE
@@ -9218,6 +9241,20 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         # Een global_product/catalogusmatch mag alleen product- en categoriesuggestie zijn.
         # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
         matched_household_article_id = None
+        explicit_receipt_article_id = str(line.get('matched_article_id') or '').strip()
+        if explicit_receipt_article_id and not explicit_receipt_article_id.startswith('live::'):
+            # Kassa's explicit article is usable only if owned by this household.
+            owned_article = conn.execute(
+                text("""
+                    SELECT id FROM household_articles
+                    WHERE id = :article_id AND household_id = :household_id
+                      AND COALESCE(status, 'active') = 'active'
+                    LIMIT 1
+                """),
+                {'article_id': explicit_receipt_article_id, 'household_id': household_id},
+            ).scalar()
+            if owned_article:
+                matched_household_article_id = str(owned_article)
 
         if existing_line:
             conn.execute(
@@ -9233,9 +9270,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     content_unit = :content_unit,
                     line_price_raw = :line_price_raw,
                     currency_code = :currency_code,
-                    matched_global_product_id = :matched_global_product_id,
+                    matched_global_product_id = COALESCE(:matched_global_product_id, matched_global_product_id),
                     matched_household_article_id = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN :matched_household_article_id
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN COALESCE(:matched_household_article_id, matched_household_article_id)
                         ELSE matched_household_article_id
                     END,
                     suggested_household_article_id = CASE
@@ -9243,7 +9280,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                         ELSE suggested_household_article_id
                     END,
                     match_status = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :matched_global_product_id IS NOT NULL THEN 'matched'
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND (:matched_household_article_id IS NOT NULL OR :matched_global_product_id IS NOT NULL) THEN 'matched'
                         WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN 'unmatched'
                         ELSE match_status
                     END,
@@ -17113,6 +17150,66 @@ def get_latest_purchase_import_batch_for_connection(connection_id: str):
     return result
 
 
+@app.post("/api/purchase-import-lines/{line_id}/quantity")
+def correct_purchase_import_line_quantity(
+    line_id: str,
+    payload: PurchaseImportLineQuantityRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Correct an unprocessed line; for receipt sources persist on the canonical receipt."""
+    with engine.begin() as conn:
+        line = conn.execute(text("""
+            SELECT pil.id, pil.batch_id, pil.processing_status, pil.processed_event_id,
+                   pil.external_line_ref, pib.household_id, pib.source_type, pib.source_reference
+            FROM purchase_import_lines pil
+            JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+            WHERE pil.id = :line_id
+            LIMIT 1
+        """), {"line_id": line_id}).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Bonartikel niet gevonden")
+        context = require_household_context(authorization, str(line["household_id"]))
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            raise HTTPException(status_code=403, detail="Kijkers mogen aantallen niet wijzigen")
+        if line.get("processed_event_id") or line.get("processing_status") == "processed":
+            raise HTTPException(status_code=409, detail="Een al verwerkt artikel kan niet via de bon worden gewijzigd")
+
+        params = {"line_id": line_id, "quantity": payload.quantity, "unit": payload.unit}
+        reference = str(line.get("external_line_ref") or "")
+        if line.get("source_type") == "receipt" and reference.startswith("receipt-line:"):
+            receipt_line_id = reference.split(":", 1)[1]
+            receipt_id = str(line.get("source_reference") or "").removeprefix("receipt:").strip()
+            source = conn.execute(text("""
+                SELECT rtl.id
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                WHERE rtl.id = :source_line_id AND rtl.receipt_table_id = :receipt_id
+                  AND rt.household_id = :household_id
+                  AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+                LIMIT 1
+            """), {
+                "source_line_id": receipt_line_id,
+                "receipt_id": receipt_id,
+                "household_id": str(line["household_id"]),
+            }).scalar()
+            if not source:
+                raise HTTPException(status_code=409, detail="De oorspronkelijke bonregel is niet beschikbaar")
+            conn.execute(text("""
+                UPDATE receipt_table_lines
+                SET corrected_quantity = :quantity, corrected_unit = :unit,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :source_line_id
+            """), {**params, "source_line_id": receipt_line_id})
+        conn.execute(text("""
+            UPDATE purchase_import_lines
+            SET quantity_raw = :quantity, unit_raw = :unit,
+                processing_error = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :line_id
+        """), params)
+        update_batch_status(conn, str(line["batch_id"]))
+    return {"line_id": line_id, "quantity_raw": payload.quantity, "unit_raw": payload.unit}
+
+
 @app.post("/api/purchase-import-lines/{line_id}/review")
 def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
     with engine.begin() as conn:
@@ -17720,6 +17817,33 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         context = require_household_context(authorization, str(line["household_id"]))
         require_household_permission(conn, context, PERMISSION_ARTICLE_CREATE)
 
+        source_info = conn.execute(text("""
+            SELECT source_type, source_reference
+            FROM purchase_import_batches
+            WHERE id = :batch_id AND household_id = :household_id
+            LIMIT 1
+        """), {
+            'batch_id': line["batch_id"],
+            'household_id': str(line["household_id"]),
+        }).mappings().first()
+        if source_info and source_info.get('source_type') == 'receipt':
+            from app.services.purchase_import_location_policy_patch import (
+                is_receipt_source_inventory_eligible,
+            )
+            if not is_receipt_source_inventory_eligible(
+                conn,
+                line=line,
+                batch={
+                    'household_id': str(line["household_id"]),
+                    'source_type': source_info['source_type'],
+                    'source_reference': source_info.get('source_reference'),
+                },
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail='Dit is geen voorraadgerechtigde productregel; de regel blijft alleen in Kassa.',
+                )
+
         article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name, consumable=infer_consumable_from_name(payload.article_name))
         conn.execute(
             text(
@@ -18193,7 +18317,28 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                 },
             ).mappings().all()
 
-            selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
+            explicit_line_ids = None
+            if payload.selected_line_ids is not None:
+                requested_ids = [str(line_id).strip() for line_id in payload.selected_line_ids]
+                if not requested_ids or any(not line_id for line_id in requested_ids):
+                    raise HTTPException(status_code=400, detail="Selecteer minimaal één geldige bonregel")
+                if len(set(requested_ids)) != len(requested_ids):
+                    raise HTTPException(status_code=400, detail="Dubbele bonregels in selectie")
+                explicit_line_ids = set(requested_ids)
+                batch_line_ids = {str(line["id"]) for line in lines}
+                if not explicit_line_ids.issubset(batch_line_ids):
+                    raise HTTPException(status_code=400, detail="Selectie bevat bonregels van een andere bon")
+
+            selected_lines = [
+                line for line in lines
+                if (line["review_decision"] or "pending") == "selected"
+                and (explicit_line_ids is None or str(line["id"]) in explicit_line_ids)
+            ]
+            if explicit_line_ids is not None and {
+                str(line["id"]) for line in selected_lines
+            } != explicit_line_ids:
+                raise HTTPException(status_code=400, detail="Niet alle opgegeven bonregels zijn geselecteerd")
+
             results = []
             processable_lines = []
             skipped_count = 0
