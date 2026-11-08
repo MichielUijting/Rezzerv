@@ -103,7 +103,7 @@ def preview_barcode_import(payload: PreviewRequest):
         if None in row:
             raise HTTPException(status_code=422, detail=f"Extra kolommen op regel {line}.")
         barcode = str(row.get("Art./Barcode") or "").strip()
-        if not barcode:
+        if not barcode and "Aanvulstatus" not in reader.fieldnames:
             skipped += 1
             continue
         # Keep explicit provenance filtering for enhanced spreadsheets.
