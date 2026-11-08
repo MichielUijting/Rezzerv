@@ -67,7 +67,21 @@ def synonym_analysis():
                   FROM global_product_shopify_classifications
                  WHERE is_active = TRUE
             """)).mappings()}
-    return build_synonym_analysis(products, confirmed, suggestions, classifications)
+        # Present the actual Catalogus creation date for the left-side filter.
+        # Older installations may lack this metadata: never invent a date.
+        created_dates = {}
+        if 'created_at' in {col['name'] for col in inspect(conn).get_columns('global_products')}:
+            created_dates = {
+                str(row['id']): str(row['created_at'])[:10] if row['created_at'] else ''
+                for row in conn.execute(text("""
+                    SELECT id, created_at FROM global_products
+                    WHERE status = 'active'
+                """)).mappings()
+            }
+    analysis = build_synonym_analysis(products, confirmed, suggestions, classifications)
+    for item in analysis['items']:
+        item['added_on'] = created_dates.get(str(item['id']), '')
+    return analysis
 
 
 @router.get('/analysis/{product_id}/candidates')

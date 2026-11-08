@@ -210,6 +210,30 @@ class SynonymOverviewRouteTest(unittest.TestCase):
         connection.execute.assert_not_called()
 
 
+    def test_article_index_exposes_real_catalog_creation_date(self):
+        from unittest.mock import MagicMock
+
+        connection = MagicMock()
+        connection.execute.return_value.mappings.return_value = [
+            {'id': 'a', 'created_at': '2026-02-03 10:00:00'},
+        ]
+        fake_engine = MagicMock()
+        fake_engine.connect.return_value.__enter__.return_value = connection
+        sample = product('a', 'Halfvolle melk', retailer_code='')
+        sample['retailer_codes'] = []
+        with patch.object(routes, '_actor'), \
+                patch.object(routes, 'engine', fake_engine), \
+                patch.object(routes, 'load_products', return_value=[sample]), \
+                patch.object(routes, 'confirmed_pairs', return_value=set()), \
+                patch('sqlalchemy.inspect') as introspection:
+            introspection.return_value.has_table.return_value = False
+            introspection.return_value.get_columns.return_value = [{'name': 'created_at'}]
+            response = routes.synonym_analysis()
+        self.assertEqual(response['items'][0]['added_on'], '2026-02-03')
+        self.assertEqual(connection.execute.call_count, 1)
+
+
+
 class StoreTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1544,8 +1568,9 @@ class StoreTest(unittest.TestCase):
                 text("SELECT COUNT(*) FROM inventory_events")
             ).scalar_one(), 0)
 
-        # Critical negative chain: an explicitly confirmed synonym is NOT an
-        # automatic Bijna op equivalence without current compatible GPC evidence.
+        # A manually confirmed synonym remains a separate, explicit authority
+        # even if one product later loses its GPC classification. That does not
+        # recreate a missing Catalogus link or change any household stock.
         with self.engine.begin() as conn:
             conn.execute(text("""
                 DELETE FROM global_product_gpc_bricks WHERE global_product_id='b'
@@ -1558,8 +1583,20 @@ class StoreTest(unittest.TestCase):
         statuses = {row["retailer_code"]: row["link_status"]
                     for row in downgraded_ed2["items"]}
         self.assertEqual(statuses, {"ah": "linked", "jumbo": "unlinked"})
-        groups_missing_type, _, stock_missing_type = project_almost_out()
-        self.assertEqual(len(groups_missing_type), 2)
+        groups_missing_type, projections_missing_type, stock_missing_type = project_almost_out()
+        self.assertEqual(len(groups_missing_type), 1)
+        self.assertEqual(
+            {row["id"] for row in groups_missing_type[0]["members"]},
+            {"ha-ah", "ha-jumbo"},
+        )
+        self.assertEqual(
+            {row["household_article_id"] for row in projections_missing_type[0]["inventory_rows"]},
+            {"ha-ah", "ha-jumbo"},
+        )
+        self.assertEqual(
+            sum(float(row["quantity"]) for row in projections_missing_type[0]["inventory_rows"]),
+            3.0,
+        )
         self.assertEqual(float(stock_missing_type), 3.0)
         with self.engine.connect() as conn:
             self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})

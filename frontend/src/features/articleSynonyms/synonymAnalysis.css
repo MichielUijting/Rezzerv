@@ -61,6 +61,12 @@
 }
 .rz-synonym-actions-placeholder { visibility: hidden; }
 .rz-synonym-side h3, .rz-synonym-side p { margin: 0; }
+/* Shared-height pane headings preserve left/right DataTable alignment while
+   allowing the left date selector to review older Catalogus articles. */
+.rz-synonym-side-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; height: 72px; box-sizing: border-box; }
+.rz-synonym-date-control { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; }
+.rz-synonym-date-control input { width: 152px; min-height: 34px; }
+
 .rz-synonym-side .rz-synonym-analysis-table-wrapper {
   max-height: none; height: auto; overflow: auto;
 }
@@ -82,6 +88,7 @@
 .rz-synonym-footer-note { margin-top: 8px; font-size: .875rem; }
 @media (max-width: 900px) {
   .rz-synonym-side-by-side { grid-template-columns: minmax(0, 1fr); }
+  .rz-synonym-side-heading { height: auto; min-height: 54px; }
   .rz-synonym-side > .rz-data-table-shell { flex: 0 0 auto; }
   .rz-synonym-side > .rz-data-table-shell > .rz-data-table-wrapper { flex: 0 0 auto; }
   .rz-synonym-actions-placeholder { display: none; }
