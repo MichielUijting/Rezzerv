@@ -203,7 +203,22 @@ jobs:
                   WHERE id = :batch_id
               """), {'batch_id': batch_id}).mappings().one()
               assert str(batch['household_id']) == household_id, batch
-              assert str(batch['import_status']) == 'processed', batch
+              # De browser verwerkt uitsluitend de expliciet aangevinkte regel.
+              # De overige bonregels blijven open; de batch is daarom gedeeltelijk verwerkt.
+              assert str(batch['import_status']) == 'partially_processed', batch
+
+              batch_line_statuses = conn.execute(text("""
+                  SELECT id, processing_status, processed_event_id
+                  FROM public.purchase_import_lines
+                  WHERE batch_id = :batch_id
+              """), {'batch_id': batch_id}).mappings().all()
+              selected_lines = [row for row in batch_line_statuses if str(row['id']) == line_id]
+              other_lines = [row for row in batch_line_statuses if str(row['id']) != line_id]
+              assert len(selected_lines) == 1, batch_line_statuses
+              assert other_lines, batch_line_statuses
+              assert str(selected_lines[0]['processing_status']) == 'processed', selected_lines
+              assert str(selected_lines[0]['processed_event_id']) == processed_event_id, selected_lines
+              assert all(str(row['processing_status']) != 'processed' and row['processed_event_id'] is None for row in other_lines), other_lines
 
               line = conn.execute(text("""
                   SELECT id, batch_id, quantity_raw, processing_status, processed_event_id,
