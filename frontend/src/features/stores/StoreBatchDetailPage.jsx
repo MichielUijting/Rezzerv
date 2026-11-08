@@ -1650,21 +1650,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           (line) => String(line.processing_status || 'pending') !== 'processed',
         ).length
         const summary = [parts.join(' · '), ...lineFailureReasons].filter(Boolean).join(' · ')
-        if (failedCount > 0 || skippedCount > 0) {
-          showUitpakkenFeedback(
-            failedCount > 0 ? 'error' : 'warning',
-            `${summary}. Nog ${unresolved} bonregel(s) niet verwerkt.`,
-            { key: `uitpakken-process-result-${batch.batch_id}-${Date.now()}` },
-          )
-        } else {
-          showFeedback({
-            variant: 'success',
-            title: unresolved === 0 ? 'Verwerking afgerond' : 'Geselecteerde artikelen verwerkt',
-            message: `${summary}. ${unresolved === 0 ? 'Alle bonregels zijn verwerkt.' : `Nog ${unresolved} bonregel(s) niet verwerkt.`}`,
-            dismissMode: 'ok-only',
-            dedupeKey: `uitpakken-process-result-${batch.batch_id}-${Date.now()}`,
-          })
-        }
+        // A partial result is still a processing result, not a transient warning:
+        // show exactly one persistent central overlay so users can inspect
+        // processed, skipped and failed lines before explicitly confirming OK.
+        showFeedback({
+          variant: failedCount > 0 ? 'error' : skippedCount > 0 ? 'warning' : 'success',
+          title: failedCount > 0
+            ? 'Verwerking deels mislukt'
+            : unresolved === 0 ? 'Verwerking afgerond' : 'Geselecteerde artikelen verwerkt',
+          message: `${summary}. ${unresolved === 0 ? 'Alle bonregels zijn verwerkt.' : `Nog ${unresolved} bonregel(s) niet verwerkt.`}`,
+          dismissMode: 'ok-only',
+          dedupeKey: `uitpakken-process-result-${batch.batch_id}-${Date.now()}`,
+        })
       }
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
 
