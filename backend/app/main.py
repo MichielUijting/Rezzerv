@@ -991,6 +991,9 @@ class CreateArticleFromLineRequest(BaseModel):
 class ProcessBatchRequest(BaseModel):
     processed_by: str = "ui"
     mode: str = "selected_only"
+    # None preserves the legacy API contract for non-browser callers.
+    # An explicit list strictly scopes browser processing to checked lines.
+    selected_line_ids: Optional[List[str]] = None
     auto_consume_article_ids: List[str] = Field(default_factory=list)
 
     @field_validator("mode")
@@ -18314,7 +18317,28 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                 },
             ).mappings().all()
 
-            selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
+            explicit_line_ids = None
+            if payload.selected_line_ids is not None:
+                requested_ids = [str(line_id).strip() for line_id in payload.selected_line_ids]
+                if not requested_ids or any(not line_id for line_id in requested_ids):
+                    raise HTTPException(status_code=400, detail="Selecteer minimaal één geldige bonregel")
+                if len(set(requested_ids)) != len(requested_ids):
+                    raise HTTPException(status_code=400, detail="Dubbele bonregels in selectie")
+                explicit_line_ids = set(requested_ids)
+                batch_line_ids = {str(line["id"]) for line in lines}
+                if not explicit_line_ids.issubset(batch_line_ids):
+                    raise HTTPException(status_code=400, detail="Selectie bevat bonregels van een andere bon")
+
+            selected_lines = [
+                line for line in lines
+                if (line["review_decision"] or "pending") == "selected"
+                and (explicit_line_ids is None or str(line["id"]) in explicit_line_ids)
+            ]
+            if explicit_line_ids is not None and {
+                str(line["id"]) for line in selected_lines
+            } != explicit_line_ids:
+                raise HTTPException(status_code=400, detail="Niet alle opgegeven bonregels zijn geselecteerd")
+
             results = []
             processable_lines = []
             skipped_count = 0
