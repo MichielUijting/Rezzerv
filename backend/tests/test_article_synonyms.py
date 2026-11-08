@@ -1568,8 +1568,9 @@ class StoreTest(unittest.TestCase):
                 text("SELECT COUNT(*) FROM inventory_events")
             ).scalar_one(), 0)
 
-        # Critical negative chain: an explicitly confirmed synonym is NOT an
-        # automatic Bijna op equivalence without current compatible GPC evidence.
+        # A manually confirmed synonym remains a separate, explicit authority
+        # even if one product later loses its GPC classification. That does not
+        # recreate a missing Catalogus link or change any household stock.
         with self.engine.begin() as conn:
             conn.execute(text("""
                 DELETE FROM global_product_gpc_bricks WHERE global_product_id='b'
@@ -1582,8 +1583,20 @@ class StoreTest(unittest.TestCase):
         statuses = {row["retailer_code"]: row["link_status"]
                     for row in downgraded_ed2["items"]}
         self.assertEqual(statuses, {"ah": "linked", "jumbo": "unlinked"})
-        groups_missing_type, _, stock_missing_type = project_almost_out()
-        self.assertEqual(len(groups_missing_type), 2)
+        groups_missing_type, projections_missing_type, stock_missing_type = project_almost_out()
+        self.assertEqual(len(groups_missing_type), 1)
+        self.assertEqual(
+            {row["id"] for row in groups_missing_type[0]["members"]},
+            {"ha-ah", "ha-jumbo"},
+        )
+        self.assertEqual(
+            {row["household_article_id"] for row in projections_missing_type[0]["inventory_rows"]},
+            {"ha-ah", "ha-jumbo"},
+        )
+        self.assertEqual(
+            sum(float(row["quantity"]) for row in projections_missing_type[0]["inventory_rows"]),
+            3.0,
+        )
         self.assertEqual(float(stock_missing_type), 3.0)
         with self.engine.connect() as conn:
             self.assertEqual(service.confirmed_pairs(conn), {("a", "b")})
