@@ -61,6 +61,9 @@
 }
 .rz-synonym-actions-placeholder { visibility: hidden; }
 .rz-synonym-side h3, .rz-synonym-side p { margin: 0; }
+.rz-synonym-date-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rz-synonym-date-filter input { min-height: 36px; min-width: 155px; padding: 6px 8px; border: 1px solid var(--rz-border, #b9c7c7); border-radius: 6px; font: inherit; color: inherit; background: var(--rz-surface, #fff); }
+
 .rz-synonym-side .rz-synonym-analysis-table-wrapper {
   max-height: none; height: auto; overflow: auto;
 }
