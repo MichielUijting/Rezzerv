@@ -315,12 +315,14 @@ export default function ArticleSynonymsPage({ embedded = false }) {
       <h2>Artikel-synoniemen</h2>
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">
-          <h3>Artikel kiezen</h3>
-          <label className="rz-input-field">
-            <span>Toegevoegd vanaf</span>
-            <input type="date" aria-label="Catalogusartikelen toegevoegd vanaf"
-              value={addedFrom} onChange={(event) => setAddedFrom(event.target.value)} />
-          </label>
+          <div className="rz-synonym-side-heading">
+            <h3>Artikel kiezen</h3>
+            <label className="rz-input-field rz-synonym-date-control">
+              <span>Toegevoegd vanaf</span>
+              <input type="date" aria-label="Catalogusartikelen toegevoegd vanaf"
+                value={addedFrom} onChange={(event) => setAddedFrom(event.target.value)} />
+            </label>
+          </div>
           <DataTable columns={leftColumns}
             data={visibleArticles.map((item) => ({ ...item, code: codeOf(item) }))}
             getRowKey={(item) => item.id} pageSize={10}
@@ -353,7 +355,9 @@ export default function ArticleSynonymsPage({ embedded = false }) {
         </section>
         <section className="rz-synonym-side" aria-label="Synoniemen rechts"
           data-testid="article-synonyms-candidates">
-          <h3>Te koppelen artikelen</h3>
+          <div className="rz-synonym-side-heading">
+            <h3>Te koppelen artikelen</h3>
+          </div>
           <DataTable columns={rightColumns}
             data={currentArticle ? rightRows.map((item) => ({ ...item, code: codeOf(item) })) : []}
             getRowKey={(item) => item.id} pageSize={10}
