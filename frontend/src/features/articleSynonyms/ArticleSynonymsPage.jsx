@@ -18,6 +18,7 @@ export default function ArticleSynonymsPage({ embedded = false }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [articles, setArticles] = useState([])
+  const [addedFrom, setAddedFrom] = useState('')
   const [activeArticle, setActiveArticle] = useState(searchParams.get('artikel') || '')
   const [options, setOptions] = useState([])
   const [checked, setChecked] = useState(new Set())
@@ -122,6 +123,7 @@ export default function ArticleSynonymsPage({ embedded = false }) {
   }
 
   const currentArticle = articles.find((item) => item.id === activeArticle)
+  const visibleArticles = articles.filter((item) => !addedFrom || !item.added_on || item.added_on >= addedFrom)
   const rightRows = [...options].sort((a, b) =>
     order[a.status] - order[b.status]
     || (b.score || 0) - (a.score || 0)
@@ -314,8 +316,13 @@ export default function ArticleSynonymsPage({ embedded = false }) {
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">
           <h3>Artikel kiezen</h3>
+          <label className="rz-synonym-date-filter">
+            <span>Toegevoegd vanaf</span>
+            <input type="date" aria-label="Catalogusartikelen toegevoegd vanaf"
+              value={addedFrom} onChange={(event) => setAddedFrom(event.target.value)} />
+          </label>
           <DataTable columns={leftColumns}
-            data={articles.map((item) => ({ ...item, code: codeOf(item) }))}
+            data={visibleArticles.map((item) => ({ ...item, code: codeOf(item) }))}
             getRowKey={(item) => item.id} pageSize={10}
             wrapperClassName="rz-synonym-analysis-table-wrapper"
             dataTestId="article-synonyms-articles"
