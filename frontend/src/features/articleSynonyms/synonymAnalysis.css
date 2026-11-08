@@ -64,7 +64,7 @@
 /* Shared-height pane headings preserve left/right DataTable alignment while
    allowing the left date selector to review older Catalogus articles. */
 .rz-synonym-side-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 58px; }
-.rz-synonym-date-control { display: flex; align-items: center; gap: 6px; margin: 0; }
+.rz-synonym-date-control { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; }
 .rz-synonym-date-control input { width: 152px; min-height: 34px; }
 
 .rz-synonym-side .rz-synonym-analysis-table-wrapper {
