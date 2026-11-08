@@ -215,8 +215,8 @@ test('L4-05 duplicate Naar voorraad submission is idempotent for inventory and p
   expect(firstTwoStatuses.every((status) => status >= 200 && status < 300), `Dubbele process-responses: ${firstTwoStatuses.join(', ')}`).toBeTruthy()
   page.off('response', onResponse)
 
-  await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ }).getByRole('button', { name: 'OK' }).click()
 
   const batchAfter = await readBatch(page, batchId)
   const processedLine = (batchAfter?.lines || []).find((item) => String(item?.id || '') === lineId)
