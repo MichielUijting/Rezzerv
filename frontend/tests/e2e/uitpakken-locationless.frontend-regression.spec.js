@@ -192,7 +192,7 @@ test.describe('Uitpakken zonder locaties', () => {
     await expect(page.getByRole('dialog', { name: 'Niet alle geselecteerde regels zijn compleet' })).toHaveCount(0);
     await expect.poll(() => reviewDecision).toBe('selected');
     await expect.poll(() => processPayload).not.toBeNull();
-    expect(processPayload).toEqual({ processed_by: 'ui', mode: 'selected_only' });
+    expect(processPayload).toEqual({ processed_by: 'ui', mode: 'selected_only', selected_line_ids: [lineId] });
     await expect(lineRow).toHaveCount(0);
     await expect(page.getByText(/target_location_id is niet toegestaan/i)).toHaveCount(0);
   });
