@@ -23,6 +23,7 @@ const columns = [
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
   { key: 'article_code', label: 'Art./Barcode', width: 185, sortable: true, filterable: true,
     getSortValue: (row) => row.article_code || row.manual_barcode || '',
+    getFilterValue: (row) => row.article_code || row.manual_barcode || '',
     filterPredicate: (row, filter) => String(row.article_code || row.manual_barcode || '').toLowerCase().includes(String(filter).toLowerCase()),
     renderCell: (row) => row.article_code || (row.manual_barcode
       ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
