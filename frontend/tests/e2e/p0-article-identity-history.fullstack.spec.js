@@ -253,8 +253,8 @@ test('L4-06 purchase identities survive same-name rename through detail and hist
   expect(processResponse.ok()).toBeTruthy()
   const processPayload = await processResponse.json()
   expect(Number(processPayload?.processed_count || 0)).toBeGreaterThanOrEqual(2)
-  await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ }).getByRole('button', { name: 'OK' }).click()
 
   const batchAfter = await readBatch(page, batchId)
   const processedA = (batchAfter?.lines || []).find((line) => String(line?.id || '') === lineAId)
