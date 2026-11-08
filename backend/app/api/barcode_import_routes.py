@@ -21,11 +21,11 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_receipt_text,
     normalize_external_link_article_code,
 )
-from app.services.barcode_identity_service import validate_barcode
+from app.services.barcode_identity_service import validate_barcode, calculate_gtin_check_digit
 from app.services.session_request_context import resolve_current_server_session
 
 router = APIRouter(prefix="/api/catalog/ed2/barcode-import", tags=["catalog"])
-HEADERS = ("Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode", "Aanvulstatus")
+HEADERS = ("Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode")
 MAX_BYTES = 2_000_000
 MAX_ROWS = 3000
 
@@ -56,6 +56,16 @@ def _key(retailer: Any, article: Any, number: Any) -> tuple[str, str, str]:
     )
 
 
+def _is_derived_receipt_barcode(article_number: Any, barcode: Any) -> bool:
+    """A calculated receipt identifier is not evidence of an assigned GTIN."""
+    number = str(article_number or "").strip()
+    value = str(barcode or "").strip()
+    if not number.isascii() or not number.isdigit() or not (1 <= len(number) <= 7):
+        return False
+    body = "2" + number.zfill(7) + "0000"
+    return value == body + str(calculate_gtin_check_digit(body))
+
+
 def _live_index() -> dict[tuple[str, str, str], list[dict]]:
     index: dict[tuple[str, str, str], list[dict]] = {}
     for item in list_all_external_articles().get("items", []):
@@ -75,15 +85,8 @@ def preview_barcode_import(payload: PreviewRequest):
         reader = csv.DictReader(io.StringIO(raw, newline=""), delimiter=";", strict=True)
         if not reader.fieldnames:
             raise ValueError("Het CSV-bestand heeft geen kolomkoppen.")
-        # This export is valid, but is the *input*, not the enriched import.
-        # Reject it with actionable guidance instead of a generic parse error.
-        source_columns = {"Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode"}
-        if source_columns.issubset(reader.fieldnames) and "Aanvulstatus" not in reader.fieldnames:
-            raise ValueError(
-                "Dit is het oorspronkelijke exportbestand zonder nieuwe barcodevoorstellen. "
-                "Kies 'inhuis-artikel-classificeren-artikelen_aangevuld.csv' "
-                "met de kolom 'Aanvulstatus'. Er is niets opgeslagen."
-            )
+        # Four-column exports are accepted for preview; enhanced CSV may
+        # additionally carry verified provenance in Aanvulstatus.
         missing = [column for column in HEADERS if column not in reader.fieldnames]
         if missing:
             raise ValueError("De volgende kolommen ontbreken: " + ", ".join(missing) + ".")
@@ -99,12 +102,17 @@ def preview_barcode_import(payload: PreviewRequest):
     for line, row in enumerate(source_rows, start=2):
         if None in row:
             raise HTTPException(status_code=422, detail=f"Extra kolommen op regel {line}.")
-        # Existing and unverified spreadsheet rows are deliberately not imported.
-        if (row.get("Aanvulstatus") or "").strip().lower() != "aangevuld: officieel artikelnummer":
+        barcode = str(row.get("Art./Barcode") or "").strip()
+        if not barcode:
+            skipped += 1
+            continue
+        # Keep explicit provenance filtering for enhanced spreadsheets.
+        if "Aanvulstatus" in reader.fieldnames and (
+            (row.get("Aanvulstatus") or "").strip().lower() != "aangevuld: officieel artikelnummer"
+        ):
             skipped += 1
             continue
         key = _key(row.get("Winkelketen"), row.get("Artikel"), row.get("Bonartikelnummer"))
-        barcode = str(row.get("Art./Barcode") or "").strip()
         validation = validate_barcode(barcode, "gtin")
         current = index.get(key, [])
         status = "klaar"
@@ -115,6 +123,11 @@ def preview_barcode_import(payload: PreviewRequest):
             status, reason = "geblokkeerd", "Dubbele artikelregel in het importbestand."
         elif not validation["valid"]:
             status, reason = "geblokkeerd", "Barcode heeft geen geldige GTIN-controle."
+        elif _is_derived_receipt_barcode(row.get("Bonartikelnummer"), barcode):
+            status, reason = (
+                "geblokkeerd",
+                "Afgeleide code uit het bonartikelnummer; geen aangetoonde productbarcode.",
+            )
         elif len(current) != 1:
             status, reason = "geblokkeerd", "Geen unieke overeenkomst in Artikelbeheer."
         elif current[0].get("link_status") != "unlinked" or current[0].get("article_code") or current[0].get("manual_barcode"):
@@ -144,6 +157,11 @@ def approve_barcode_import(payload: ApproveRequest):
     validation = validate_barcode(payload.gtin, "gtin")
     if not validation["valid"]:
         raise HTTPException(status_code=422, detail="Ongeldige barcode.")
+    if _is_derived_receipt_barcode(payload.article_number, validation["normalized_value"]):
+        raise HTTPException(
+            status_code=422,
+            detail="Afgeleide code uit het bonartikelnummer is geen aangetoonde productbarcode.",
+        )
     matches = _live_index().get(_key(payload.retailer, payload.article, payload.article_number), [])
     if len(matches) != 1 or str(matches[0].get("id")) != payload.receipt_item_id:
         raise HTTPException(status_code=409, detail="Artikelidentiteit is gewijzigd. Importeer het bestand opnieuw.")
