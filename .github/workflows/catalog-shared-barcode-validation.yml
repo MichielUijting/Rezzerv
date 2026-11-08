@@ -5,6 +5,9 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'backend/app/api/catalog_routes.py'
+      - 'backend/app/api/barcode_import_routes.py'
+      - 'backend/tests/test_superuser_barcode_import.py'
+      - 'frontend/src/features/externalDatabases/BarcodeImportReview.jsx'
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
       - 'backend/tests/test_catalog_shared_name_update.py'
@@ -54,8 +57,9 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m py_compile backend/app/api/catalog_routes.py backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
+          python -m py_compile backend/app/api/catalog_routes.py backend/app/api/barcode_import_routes.py backend/tests/test_superuser_barcode_import.py backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
           python -m py_compile backend/app/services/external_ed2_delete_service.py backend/tests/test_external_ed2_delete_service.py
+          python -m pytest -q backend/tests/test_superuser_barcode_import.py
           python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
           python -m pytest -q backend/tests/test_external_ed2_delete_service.py
       - uses: actions/setup-node@v4

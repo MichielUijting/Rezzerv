@@ -84,19 +84,41 @@ def test_duplicate_source_and_invalid_gtin_blocked(monkeypatch):
     assert err.value.status_code == 422
 
 
-def test_original_export_gets_actionable_error_without_database_access(monkeypatch):
+def test_original_four_column_csv_is_previewed_without_auto_write(monkeypatch):
     _superuser(monkeypatch)
     monkeypatch.setattr(imports, "list_all_external_articles",
-                        lambda: (_ for _ in ()).throw(AssertionError("original CSV should not query data")))
-    original = (
-        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode;GS1-class.;Omvang / gewicht\n"
-        "Pindakaas;Jumbo;JUMBO-SEED-3;8718452861309;Classificatie ontbreekt;1 pot\n"
+                        lambda: {"items": [_item()]})
+    monkeypatch.setattr(imports, "save_ed2_manual_barcode",
+                        lambda *args: (_ for _ in ()).throw(AssertionError("preview wrote")))
+    csv_text = (
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\n"
+        "AH Komkommer;Albert Heijn;12345;8712345678906\n"
+        "Ander artikel;Jumbo;345;\n"
     )
-    with pytest.raises(HTTPException) as error:
-        imports.preview_barcode_import(imports.PreviewRequest(csv_text=original))
-    assert error.value.status_code == 422
-    assert "oorspronkelijke exportbestand" in error.value.detail
-    assert "artikelen_aangevuld.csv" in error.value.detail
+    result = imports.preview_barcode_import(imports.PreviewRequest(csv_text=csv_text))
+    assert (result["total"], result["ready"], result["blocked"], result["skipped"]) == (2, 1, 0, 1)
+
+
+def test_derived_receipt_number_is_blocked_in_preview_and_approval(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_item(receipt_article_number="84679")]})
+    pseudo = "2008467900008"
+    csv_text = (
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\n"
+        f"AH Komkommer;Albert Heijn;84679;{pseudo}\n"
+    )
+    result = imports.preview_barcode_import(imports.PreviewRequest(csv_text=csv_text))
+    assert (result["ready"], result["blocked"]) == (0, 1)
+    assert "Afgeleide code" in result["items"][0]["reason"]
+    with pytest.raises(HTTPException) as err:
+        imports.approve_barcode_import(imports.ApproveRequest(
+            receipt_item_id="receipt-table-line:1", retailer="Albert Heijn",
+            article="AH Komkommer", article_number="84679", gtin=pseudo,
+        ))
+    assert err.value.status_code == 422
+    assert "Afgeleide code" in err.value.detail
+
 
 
 def test_enriched_csv_header_with_all_actual_columns_is_accepted(monkeypatch):
