@@ -26,4 +26,21 @@ assert.match(src, /column\.getFilterValue\(row\)/)
 assert.match(src, /column\.getValue\(row\)/)
 assert.match(src, /defaultGetValue\(row, column\)/)
 assert.match(src, /column\.filterPredicate\(row, activeFilterValue\)/)
+// Artikelbeheer's Art./Barcode cell shows the confirmed code OR the manual
+// barcode. The special filters must use exactly that same visible fallback.
+const artikelbeheer = fs.readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
+assert.match(artikelbeheer, /getSortValue: \(row\) => row\.article_code \|\| row\.manual_barcode \|\| ''/)
+assert.match(artikelbeheer, /getFilterValue: \(row\) => row\.article_code \|\| row\.manual_barcode \|\| ''/)
+assert.match(artikelbeheer, /renderCell: \(row\) => row\.article_code \|\| \(row\.manual_barcode/)
+
+const visibleBarcode = (row) => row.article_code || row.manual_barcode || ''
+const manualBarcode = { article_code: '', manual_barcode: '2008218100008' }
+const confirmedBarcode = { article_code: '8712345678906', manual_barcode: '' }
+const noBarcode = { article_code: '', manual_barcode: '' }
+assert.equal(matchesTableFilter(visibleBarcode(manualBarcode), '=leeg'), false)
+assert.equal(matchesTableFilter(visibleBarcode(manualBarcode), '=nietleeg'), true)
+assert.equal(matchesTableFilter(visibleBarcode(confirmedBarcode), '=leeg'), false)
+assert.equal(matchesTableFilter(visibleBarcode(noBarcode), '=leeg'), true)
+assert.equal(matchesTableFilter(visibleBarcode(noBarcode), '=nietleeg'), false)
+
 console.log('DATA_TABLE_EMPTY_FILTER_CONTRACT_GREEN')
