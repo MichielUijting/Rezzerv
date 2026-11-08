@@ -4,6 +4,7 @@ import Pagination from './Pagination.jsx'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from './resizableTable.jsx'
 import { nextSortState, sortItems } from './sorting'
 import { useMobileAppViewport } from '../app/mobileViewport.js'
+import { matchesTableFilter, normalizeTableFilterText } from './dataTableFilter.js'
 
 function normalizeText(value) {
   return String(value ?? '').trim().toLowerCase()
@@ -125,9 +126,12 @@ export default function DataTable({
   const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
     if (!column.filterable) return true
     const activeFilterValue = activeFilters[column.key]
-    const filterValue = normalizeText(activeFilterValue)
+    const filterValue = normalizeTableFilterText(activeFilterValue)
     if (!filterValue) return true
-    if (typeof column.filterPredicate === 'function') {
+    // Reserved exact-match terms are handled centrally, also for columns
+    // providing their own normal text predicate.
+    if (filterValue !== '=leeg' && filterValue !== '=nietleeg'
+      && typeof column.filterPredicate === 'function') {
       return Boolean(column.filterPredicate(row, activeFilterValue))
     }
     const rawValue = typeof column.getFilterValue === 'function'
@@ -135,7 +139,7 @@ export default function DataTable({
       : typeof column.getValue === 'function'
         ? column.getValue(row)
         : defaultGetValue(row, column)
-    return normalizeText(rawValue).includes(filterValue)
+    return matchesTableFilter(rawValue, activeFilterValue)
   })), [data, visibleColumns, activeFilters])
 
   const sortedData = useMemo(() => {
