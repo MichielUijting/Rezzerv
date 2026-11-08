@@ -316,7 +316,7 @@ export default function ArticleSynonymsPage({ embedded = false }) {
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">
           <h3>Artikel kiezen</h3>
-          <label className="rz-synonym-date-filter">
+          <label className="rz-input-field">
             <span>Toegevoegd vanaf</span>
             <input type="date" aria-label="Catalogusartikelen toegevoegd vanaf"
               value={addedFrom} onChange={(event) => setAddedFrom(event.target.value)} />
