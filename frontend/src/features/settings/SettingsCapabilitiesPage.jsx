@@ -72,11 +72,10 @@ export default function SettingsCapabilitiesPage() {
   const [isSavingWorkflow, setIsSavingWorkflow] = useState(false)
   const [workflowLocation, setWorkflowLocation] = useState('none')
   const [workflowUnpacking, setWorkflowUnpacking] = useState(false)
-  const [error, setError] = useState('')
   const { showFeedback } = useAppFeedback()
-  useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
-  const [message, setMessage] = useState('')
-  useEffect(() => { if (message) showFeedback({ variant: 'success', message }) }, [message, showFeedback])
+  const reportError = (error, fallback) => {
+    showFeedback({ variant: 'error', message: error?.message || fallback })
+  }
 
   const configuration = state?.product_configuration || null
   const questions = useMemo(
@@ -92,12 +91,11 @@ export default function SettingsCapabilitiesPage() {
 
   async function loadCapabilities() {
     setIsLoading(true)
-    setError('')
     try {
       const next = await requestJson('/api/onboarding/capabilities')
       setState(next)
     } catch (loadError) {
-      setError(loadError?.message || 'Mogelijkheden konden niet worden geladen.')
+      reportError(loadError, 'Mogelijkheden konden niet worden geladen.')
     } finally {
       setIsLoading(false)
     }
@@ -122,8 +120,6 @@ export default function SettingsCapabilitiesPage() {
   }, [selectedUseCase, questions.locationRefinement])
 
   function chooseUseCase(useCase) {
-    setError('')
-    setMessage('')
     setSelectedUseCase(useCase)
     setForm({ ...EMPTY_FORM, mainLocations: [''], sublocations: [] })
   }
@@ -157,8 +153,6 @@ export default function SettingsCapabilitiesPage() {
   async function submitExpansion() {
     if (!selectedUseCase) return
     setIsSaving(true)
-    setError('')
-    setMessage('')
     try {
       let url = ''
       let payload = {}
@@ -200,12 +194,12 @@ export default function SettingsCapabilitiesPage() {
       const next = await requestJson(url, { method: 'POST', body: JSON.stringify(payload) })
       setState(next)
       setSelectedUseCase('')
-      setMessage('Mogelijkheid toegevoegd. Home en Instellingen passen zich direct aan.')
+      showFeedback({ variant: 'success', message: 'Mogelijkheid toegevoegd. Home en Instellingen passen zich direct aan.' })
       if (context?.context_type === 'regular') {
         await fetchHouseholdOnboarding(context, { force: true })
       }
     } catch (saveError) {
-      setError(saveError?.message || 'Inhuis uitbreiden mislukt.')
+      reportError(saveError, 'Inhuis uitbreiden mislukt.')
     } finally {
       setIsSaving(false)
     }
@@ -213,8 +207,6 @@ export default function SettingsCapabilitiesPage() {
 
   async function saveWorkflowPreferences() {
     setIsSavingWorkflow(true)
-    setError('')
-    setMessage('')
     try {
       const next = await requestJson('/api/onboarding/workflow-preferences', {
         method: 'PUT',
@@ -228,9 +220,9 @@ export default function SettingsCapabilitiesPage() {
         await fetchHouseholdOnboarding(context, { force: true })
         window.dispatchEvent(new Event('inhuis:household-configuration-changed'))
       }
-      setMessage('De werkwijze voor dit huishouden is opgeslagen. Bestaande voorraad en locaties zijn behouden.')
+      showFeedback({ variant: 'success', message: 'De werkwijze voor dit huishouden is opgeslagen. Bestaande voorraad en locaties zijn behouden.' })
     } catch (saveError) {
-      setError(saveError?.message || 'De huishoudinstellingen konden niet worden opgeslagen.')
+      reportError(saveError, 'De huishoudinstellingen konden niet worden opgeslagen.')
     } finally {
       setIsSavingWorkflow(false)
     }
@@ -371,7 +363,7 @@ export default function SettingsCapabilitiesPage() {
               <h3 style={{ margin: 0 }}>Voorraadlocaties en Uitpakken</h3>
               <p style={{ margin: 0, color: '#475467' }}>
                 Bepaal wat je huishouden gebruikt. Bestaande locaties, artikelen en voorraadhistorie worden nooit verwijderd.
-                Heb je nog voorraad op locaties of open bonartikelen, dan wordt een onveilige omschakeling geweigerd.
+                Open bonartikelen blijven in Uitpakken staan en volgen direct de gekozen werkwijze. Bestaande voorraad op locaties wordt niet automatisch omgezet.
               </p>
               <label style={{ display: 'grid', gap: 6 }}>
                 <span>Voorraadlocaties gebruiken</span>
@@ -380,7 +372,6 @@ export default function SettingsCapabilitiesPage() {
                   onChange={(event) => {
                     const nextLocation = event.target.value
                     setWorkflowLocation(nextLocation)
-                    if (nextLocation === 'none') setWorkflowUnpacking(false)
                   }}
                   disabled={isSavingWorkflow}
                   data-testid="workflow-location-level"
@@ -402,11 +393,6 @@ export default function SettingsCapabilitiesPage() {
                 kassabonverwerking en voorraad actief zijn en geen exacte locatie verplicht is.
                 Controleer de artikelen vooraf in Kassa; de afzonderlijke Uitpakken-controle vervalt.
               </p>
-              {workflowLocation === 'exact' && !workflowUnpacking ? (
-                <div role="status" style={{ color: '#9a3412' }} data-testid="workflow-incompatible">
-                  Zet ook exacte locaties uit of schakel Uitpakken in. Exacte locaties kunnen niet zonder Uitpakken worden verwerkt.
-                </div>
-              ) : null}
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   type="button"

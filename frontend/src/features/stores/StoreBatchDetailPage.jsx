@@ -25,7 +25,6 @@ import {
   batchStatusLabel,
   buildBatchTitle,
   fetchJson,
-  formatQuantity,
   normalizeErrorMessage,
   providerLabel,
   StoreArticleSelector,
@@ -75,6 +74,15 @@ function countUniqueNewMappings(lines) {
     }
   })
   return ids.size
+}
+
+function formatDutchQuantityNumber(value) {
+  if (value === null || value === undefined || value === '') return ''
+  return String(value).replace('.', ',')
+}
+
+function formatDutchReceiptQuantity(value, unit) {
+  return [formatDutchQuantityNumber(value), unit].filter(Boolean).join(' ')
 }
 
 function detailValue(value, fallback = 'Niet van toepassing') {
@@ -219,12 +227,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [isLoading, setIsLoading] = useState(true)
   const [busyLineId, setBusyLineId] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
-  const [processFeedback, setProcessFeedback] = useState('')
-  const [processResultOverlay, setProcessResultOverlay] = useState('')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
   const [lineSaveState, setLineSaveState] = useState({})
+  const [quantityDrafts, setQuantityDrafts] = useState({})
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
   const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
@@ -250,7 +257,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationFilter, setLocationFilter] = useState('all')
   const [tableSort, setTableSort] = useState({ key: 'bonartikel', direction: 'asc' })
   const [processConfirm, setProcessConfirm] = useState(null)
-  const processFeedbackTimer = useRef(null)
   const storeBatchTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
     { key: 'bonartikel', width: 360 },
@@ -275,7 +281,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const { showFeedback } = useAppFeedback()
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
-  useEffect(() => { if (processFeedback) showFeedback({ variant: 'info', message: processFeedback }) }, [processFeedback, showFeedback])
 
 
   const {
@@ -1144,6 +1149,39 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setPendingDefaultLocationChoice(null)
   }
 
+  async function saveLineQuantity(line) {
+    const values = quantityDrafts[line.id] || {}
+    const quantityText = String(values.quantity ?? line.quantity_raw ?? '').trim().replace(',', '.')
+    const quantity = Number(quantityText)
+    const unit = String(values.unit ?? line.unit_raw ?? '').trim()
+    if (!quantityText || !Number.isFinite(quantity) || quantity <= 0 || quantity > 1000000000) {
+      showUitpakkenFeedback('error', 'Vul een geldig positief aantal in.', { key: `quantity-validation-${line.id}-${Date.now()}` })
+      return
+    }
+    setBusyLineId(line.id)
+    try {
+      await fetchJson(`/api/purchase-import-lines/${line.id}/quantity`, {
+        method: 'POST',
+        body: JSON.stringify({ quantity, unit }),
+      })
+      const updated = await refreshBatch(batch.batch_id)
+      const saved = updated?.lines?.find((candidate) => String(candidate.id) === String(line.id))
+      if (!saved || Number(saved.quantity_raw) !== quantity || String(saved.unit_raw || '') !== unit) {
+        throw new Error('De gecorrigeerde hoeveelheid kon niet worden bevestigd.')
+      }
+      setQuantityDrafts((current) => {
+        const next = { ...current }
+        delete next[line.id]
+        return next
+      })
+      showUitpakkenFeedback('success', 'Aantal opgeslagen. Je kunt de bonregel opnieuw goedkeuren.', { key: `quantity-saved-${line.id}-${Date.now()}` })
+    } catch (error) {
+      showUitpakkenFeedback('error', normalizeErrorMessage(error?.message) || 'Aantal opslaan is mislukt.', { key: `quantity-error-${line.id}-${Date.now()}` })
+    } finally {
+      setBusyLineId(null)
+    }
+  }
+
   async function persistLineDraft(line, patch = {}, options = {}) {
     if (!batch) return false
     const draftValues = getDraftValues(line)
@@ -1286,19 +1324,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  function clearTransientFeedback() {
-    if (processFeedbackTimer.current) {
-      window.clearTimeout(processFeedbackTimer.current)
-      processFeedbackTimer.current = null
-    }
-  }
-
-  function showProcessFeedback(message) {
-    clearTransientFeedback()
-    setProcessFeedback(message)
-    processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
-  }
-
   function openCreateArticleGroup(lineId, suggestedName = '') {
     if (!canCreateArticleGroup) return
     setNewArticleGroupLineId(String(lineId || ''))
@@ -1405,7 +1430,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   useEffect(() => {
     loadPageData()
-    return () => clearTransientFeedback()
   }, [batchId])
 
   useEffect(() => {
@@ -1446,30 +1470,41 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  async function syncSelectedReviewDecisions() {
+  async function syncSelectedReviewDecisions(selectedIds) {
     if (!batch) return
-    const selectedSet = new Set(selectedLineIds)
-    const lines = batch?.lines || []
-    await Promise.all(lines.map((line) => {
-      const nextDecision = selectedSet.has(line.id) ? 'selected' : 'ignored'
-      if ((line.review_decision || 'pending') === nextDecision) return Promise.resolve()
-      return fetchJson(`/api/purchase-import-lines/${line.id}/review`, {
-        method: 'POST',
-        body: JSON.stringify({ review_decision: nextDecision }),
-      })
-    }))
-    await refreshBatch(batch.batch_id)
+    const selectedSet = new Set(selectedIds.map(String))
+    // Only confirm the explicit user selection. A missing checkbox is NOT a
+    // request to ignore an article, especially during a partial bulk run.
+    const lines = (batch.lines || []).filter((line) => (
+      selectedSet.has(String(line.id))
+      && (line.processing_status || 'pending') !== 'processed'
+      && (line.review_decision || 'pending') !== 'selected'
+    ))
+    await Promise.all(lines.map((line) => fetchJson(`/api/purchase-import-lines/${line.id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ review_decision: 'selected' }),
+    })))
+    return refreshBatch(batch.batch_id)
   }
 
   async function handleProcessSelected(mode = 'selected_only') {
     if (!batch) return
-    if (selectedLineIds.length === 0) {
+    // Snapshot once, before any asynchronous refresh can change the UI selection.
+    const selectedIds = [...new Set(selectedLineIds.map(String))]
+    if (selectedIds.length === 0) {
       setError('Selecteer eerst minstens één bonregel.')
       return
     }
-    await syncSelectedReviewDecisions()
-    await processBatchNow(mode)
-    setProcessConfirm(null)
+    try {
+      const refreshed = await syncSelectedReviewDecisions(selectedIds)
+      await processBatchNow(mode, selectedIds, refreshed)
+    } catch (error) {
+      showUitpakkenFeedback('error', normalizeErrorMessage(error?.message) || 'De geselecteerde bonregels konden niet worden voorbereid.', {
+        key: `uitpakken-selection-sync-error-${Date.now()}`,
+      })
+    } finally {
+      setProcessConfirm(null)
+    }
   }
 
   function handlePrimaryProcessClick() {
@@ -1502,7 +1537,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         entry.line.article_name_raw || '',
         articleName,
         locationLabel,
-        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
+        formatDutchReceiptQuantity(entry.line.quantity_raw, entry.line.unit_raw),
         standardProductLabel(entry.line),
         entry.statusLabel || '',
       ]
@@ -1527,8 +1562,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     window.URL.revokeObjectURL(url)
   }
 
-  async function processBatchNow(mode = 'ready_only') {
-    if (!batch) return
+  async function processBatchNow(mode = 'ready_only', selectedIds = selectedLineIds, currentBatch = batch) {
+    if (!currentBatch) return
     if (isViewer) {
       setError('Kijkers mogen kassabonnen wel opvoeren, maar niet naar voorraad verwerken.')
       return
@@ -1538,10 +1573,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setStatus('')
     setLastProcessResult(null)
     try {
-      const lineNameById = Object.fromEntries((batch.lines || []).map((line) => [line.id, line.article_name_raw]))
+      const lineNameById = Object.fromEntries((currentBatch.lines || []).map((line) => [line.id, line.article_name_raw]))
 
-      const selectedIdSet = new Set(selectedLineIds.map((id) => String(id)))
-      const linesNeedingArticleLink = (batch.lines || []).filter((line) => {
+      const selectedIdSet = new Set(selectedIds.map(String))
+      const linesNeedingArticleLink = (currentBatch.lines || []).filter((line) => {
         if (!selectedIdSet.has(String(line.id))) return false
         if (String(line.processing_status || 'pending') === 'processed') return false
         const draft = getDraftValues(line)
@@ -1571,7 +1606,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode }),
+        body: JSON.stringify({ processed_by: 'ui', mode, selected_line_ids: selectedIds.map(String) }),
       })
 
       const processedLineIds = new Set(
@@ -1580,14 +1615,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .map((item) => String(item.line_id || ''))
           .filter(Boolean)
       )
-
-      if (processedLineIds.size > 0) {
-        setBatch((current) => current ? {
-          ...current,
-          lines: (current.lines || []).filter((line) => !processedLineIds.has(String(line.id))),
-        } : current)
-        setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
-      }
 
       const refreshedBatch = await refreshBatch(batch.batch_id)
       await refreshLocationOptions()
@@ -1598,21 +1625,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const failedCount = Number(result?.failed_count || 0)
       const skippedCount = Number(result?.skipped_count || 0)
 
-      if (processedCount > 0) {
-        showProcessFeedback('Verwerkt!')
-      } else if (failedCount > 0) {
-        showUitpakkenFeedback(
-          'error',
-          'Overzetten naar Voorraad is mislukt.',
-          { key: `uitpakken-process-failed-${batch.batch_id}-${Date.now()}` }
-        )
-      } else if (skippedCount > 0) {
-        showUitpakkenFeedback(
-          'warning',
-          'Er zijn geen regels overgezet naar Voorraad.',
-          { key: `uitpakken-process-skipped-${batch.batch_id}-${Date.now()}` }
-        )
-      }
+      const lineFailureReasons = (result.results || [])
+        .filter((item) => item.status === 'failed' || item.status === 'skipped')
+        .map((item) => {
+          const name = String(lineNameById[item.line_id] || 'Bonregel').trim()
+          const reason = String(item.error || item.reason || item.diagnostic?.failure_message || '').trim()
+          return reason ? `${name}: ${reason}` : `${name}: reden niet beschikbaar`
+        })
 
       const processed = (result.results || []).filter((item) => item.status === 'processed').map((item) => lineNameById[item.line_id]).filter(Boolean)
       const skipped = (result.results || []).filter((item) => item.status === 'skipped').map((item) => lineNameById[item.line_id]).filter(Boolean)
@@ -1626,7 +1645,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         parts.push(`Overgeslagen: ${skippedCount}`)
         parts.push(`Mislukt: ${failedCount}`)
       }
-      setProcessResultOverlay(parts.join(' · '))
+      if (processedCount > 0 || skippedCount > 0 || failedCount > 0) {
+        const unresolved = (refreshedBatch?.lines || []).filter(
+          (line) => String(line.processing_status || 'pending') !== 'processed',
+        ).length
+        const summary = [parts.join(' · '), ...lineFailureReasons].filter(Boolean).join(' · ')
+        // A partial result is still a processing result, not a transient warning:
+        // show exactly one persistent central overlay so users can inspect
+        // processed, skipped and failed lines before explicitly confirming OK.
+        showFeedback({
+          variant: failedCount > 0 ? 'error' : skippedCount > 0 ? 'warning' : 'success',
+          title: failedCount > 0
+            ? 'Verwerking deels mislukt'
+            : unresolved === 0 ? 'Verwerking afgerond' : 'Geselecteerde artikelen verwerkt',
+          message: `${summary}. ${unresolved === 0 ? 'Alle bonregels zijn verwerkt.' : `Nog ${unresolved} bonregel(s) niet verwerkt.`}`,
+          dismissMode: 'ok-only',
+          dedupeKey: `uitpakken-process-result-${batch.batch_id}-${Date.now()}`,
+        })
+      }
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
 
       // Uitpakken is alleen voor nog te verwerken bonnen. Na volledige
@@ -2134,7 +2170,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         ) : null}
                         <span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span>
                       </td>
-                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatDutchReceiptQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         {isMobileViewport ? (
                           <div className="rz-mobile-unpack-location-field">
@@ -2278,7 +2314,40 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Bonartikel</dt><dd>{formatReceiptLineLabel(line.article_name_raw)}</dd></div>
                   <div><dt>Winkel</dt><dd>{batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</dd></div>
                   <div><dt>Aankoopdatum</dt><dd>{batch?.purchase_date || 'Onbekend'}</dd></div>
-                  <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
+                  <div><dt>Aantal</dt><dd style={{ display: 'grid', gap: '6px' }}>
+                    <input
+                      className="rz-input rz-inline-input"
+                      type="text"
+                      inputMode="decimal"
+                      aria-label="Aantal"
+                      data-testid={`receipt-line-quantity-${line.id}`}
+                      value={quantityDrafts[line.id]?.quantity ?? formatDutchQuantityNumber(line.quantity_raw)}
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                      onChange={(event) => setQuantityDrafts((current) => ({
+                        ...current,
+                        [line.id]: { quantity: event.target.value.replace(/\./g, ','), unit: current[line.id]?.unit ?? String(line.unit_raw ?? '') },
+                      }))}
+                    />
+                    <input
+                      className="rz-input rz-inline-input"
+                      type="text"
+                      aria-label="Eenheid"
+                      data-testid={`receipt-line-unit-${line.id}`}
+                      value={quantityDrafts[line.id]?.unit ?? String(line.unit_raw ?? '')}
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                      onChange={(event) => setQuantityDrafts((current) => ({
+                        ...current,
+                        [line.id]: { quantity: current[line.id]?.quantity ?? formatDutchQuantityNumber(line.quantity_raw), unit: event.target.value },
+                      }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed' || !quantityDrafts[line.id]}
+                      onClick={() => saveLineQuantity(line)}
+                      data-testid={`receipt-line-save-quantity-${line.id}`}
+                    >Opslaan</Button>
+                  </dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
 
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
@@ -2429,27 +2498,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               setActiveBarcodeLineId('')
             }}
           />
-          {processResultOverlay ? (
-            <div className="rz-modal-backdrop" role="presentation" onClick={() => setProcessResultOverlay('')}>
-              <div
-                className="rz-modal-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="process-result-title"
-                onClick={(event) => event.stopPropagation()}
-                style={{ width: 'min(560px, calc(100vw - 48px))' }}
-              >
-                <h3 id="process-result-title" className="rz-modal-title">Verwerking afgerond</h3>
-                <p className="rz-modal-text">{processResultOverlay}</p>
-                <div className="rz-modal-actions">
-                  <Button variant="primary" type="button" onClick={() => setProcessResultOverlay('')}>
-                    Sluiten
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {locationPickerLineId ? (() => {
             const pickerIsBulk = locationPickerMode === 'bulk'
             const pickerEntry = pickerIsBulk ? null : lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))

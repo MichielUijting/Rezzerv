@@ -27,6 +27,8 @@ class FakeConnection:
             return SimpleNamespace(first=lambda: (1,) if self.pending else None)
         if "FROM inventory" in sql:
             return SimpleNamespace(first=lambda: (1,) if self.located_stock else None)
+        if sql.startswith("UPDATE household_product_configuration"):
+            return SimpleNamespace(rowcount=1)
         raise AssertionError("Onverwachte schrijfactie of query: " + sql)
 
 
@@ -89,6 +91,64 @@ def test_open_receipt_blocks_disabling_unpacking():
     assert not any("UPDATE " in sql or "DELETE " in sql for sql in conn.statements)
 
 
+
+def test_open_receipts_do_not_block_locationless_unpacking():
+    conn = FakeConnection(pending=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        save_household_workflow_preferences(
+            conn,
+            household_id="h1",
+            location_tracking_level="none",
+            unpacking_enabled=True,
+        )
+    assert not any("FROM purchase_import_batches" in sql for sql in conn.statements)
+    updates = [sql for sql in conn.statements if sql.startswith("UPDATE household_product_configuration")]
+    assert len(updates) == 1
+    assert conn.parameters[-1] == {
+        "household_id": "h1",
+        "location_tracking_level": "none",
+        "unpacking_enabled": 1,
+    }
+
+
+
+def test_locationless_unpacking_keeps_existing_located_inventory_and_pending_receipts():
+    conn = FakeConnection(pending=True, located_stock=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        save_household_workflow_preferences(
+            conn,
+            household_id="h1",
+            location_tracking_level="none",
+            unpacking_enabled=True,
+        )
+    # No conversion, deletion or location rewrite: only the household policy changes.
+    assert not any("FROM inventory" in sql for sql in conn.statements)
+    assert not any("FROM purchase_import_batches" in sql for sql in conn.statements)
+    assert len([sql for sql in conn.statements if sql.startswith("UPDATE ")]) == 1
+    assert not any(sql.startswith("DELETE ") for sql in conn.statements)
+
+
+def test_open_receipts_still_block_location_downgrade_when_unpacking_disabled():
+    conn = FakeConnection(pending=True)
+    with patch(
+        "app.services.household_workflow_preferences_service.resolve_household_product_configuration",
+        return_value=config(),
+    ):
+        with pytest.raises(ValueError, match="bonartikelen open"):
+            save_household_workflow_preferences(
+                conn,
+                household_id="h1",
+                location_tracking_level="none",
+                unpacking_enabled=False,
+            )
+    assert not any(sql.startswith("UPDATE ") for sql in conn.statements)
+
 def test_exact_location_requires_unpacking():
     conn = FakeConnection()
     with patch(
@@ -118,3 +178,33 @@ def test_direct_kassa_inventory_rule_only_for_safe_configuration():
     assert not should_process_approved_receipt_directly_to_inventory(
         config(location="none", unpacking=True)
     )
+
+
+def test_inventory_article_totals_keep_old_located_stock_visible():
+    from decimal import Decimal
+    from app.services.canonical_inventory_identity_service import (
+        get_inventory_total_by_household_article,
+    )
+
+    class TotalConnection:
+        def execute(self, query, params):
+            statement = " ".join(str(query).split()).lower()
+            assert "from inventory" in statement
+            assert "household_id = :household_id" in statement
+            assert "household_article_id = :household_article_id" in statement
+            # Inventory totals must not be restricted to NULL locations when
+            # previously located stock is retained under the new preference.
+            assert "space_id is null" not in statement
+            assert "sublocation_id is null" not in statement
+            assert params == {"household_id": "h1", "household_article_id": "article-1"}
+            return SimpleNamespace(mappings=lambda: SimpleNamespace(
+                first=lambda: {"total_quantity": 7},
+            ))
+
+    with patch(
+        "app.services.canonical_inventory_identity_service.require_household_article",
+        return_value={"household_id": "h1", "id": "article-1"},
+    ):
+        assert get_inventory_total_by_household_article(
+            TotalConnection(), "h1", "article-1",
+        ) == Decimal("7")

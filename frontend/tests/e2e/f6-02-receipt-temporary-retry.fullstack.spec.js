@@ -190,9 +190,9 @@ test('F6-02 Receipt temporary failure rolls back and visible retry succeeds exac
   expect(Number(retryPayload?.processed_count || 0), JSON.stringify(retryPayload)).toBe(1)
   expect(Number(retryPayload?.failed_count || 0), JSON.stringify(retryPayload)).toBe(0)
 
-  const completedDialog = page.getByRole('dialog', { name: 'Verwerking afgerond' })
+  const completedDialog = page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })
   await expect(completedDialog).toBeVisible({ timeout: 30_000 })
-  await completedDialog.getByRole('button', { name: 'Sluiten' }).click()
+  await completedDialog.getByRole('button', { name: 'OK' }).click()
 
   const batchAfter = await readBatch(page, batchId)
   const processedLine = (batchAfter?.lines || []).find((item) => String(item?.id || '') === lineId)

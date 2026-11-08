@@ -158,7 +158,13 @@ def verify_l4_05() -> None:
         receipt = conn.execute(text("SELECT household_id,approved_at FROM public.receipt_tables WHERE id=:id"), {"id": receipt_id}).mappings().one()
         assert str(receipt["household_id"]) == household_id and receipt["approved_at"] is not None
         batch = conn.execute(text("SELECT household_id,import_status FROM public.purchase_import_batches WHERE id=:id"), {"id": batch_id}).mappings().one()
-        assert str(batch["household_id"]) == household_id and str(batch["import_status"]) == "processed"
+        # Only the checked receipt line is processed. Other receipt lines
+        # remain pending, so the batch is intentionally partially_processed.
+        assert str(batch["household_id"]) == household_id and str(batch["import_status"]) in {"partially_processed", "processed"}
+        other_lines = conn.execute(text("SELECT id,processing_status,processed_event_id FROM public.purchase_import_lines WHERE batch_id=:id AND id<>:line_id"), {"id": batch_id, "line_id": line_id}).mappings().all()
+        assert all(str(other["processing_status"] or "") != "processed" and other["processed_event_id"] is None for other in other_lines), other_lines
+        if other_lines:
+            assert str(batch["import_status"]) == "partially_processed", batch
         line = conn.execute(text("SELECT quantity_raw,processing_status,processed_event_id,matched_household_article_id,target_location_id,final_location_id FROM public.purchase_import_lines WHERE id=:id"), {"id": line_id}).mappings().one()
         assert str(line["processing_status"]) == "processed" and str(line["processed_event_id"]) == event_id
         assert str(line["matched_household_article_id"]) == article_id and dec(line["quantity_raw"]) == expected_quantity
