@@ -91,9 +91,9 @@ def test_original_four_column_csv_is_previewed_without_auto_write(monkeypatch):
     monkeypatch.setattr(imports, "save_ed2_manual_barcode",
                         lambda *args: (_ for _ in ()).throw(AssertionError("preview wrote")))
     csv_text = (
-        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\\n"
-        "AH Komkommer;Albert Heijn;12345;8712345678906\\n"
-        "Ander artikel;Jumbo;345;;\\n"
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\n"
+        "AH Komkommer;Albert Heijn;12345;8712345678906\n"
+        "Ander artikel;Jumbo;345;\n"
     )
     result = imports.preview_barcode_import(imports.PreviewRequest(csv_text=csv_text))
     assert (result["total"], result["ready"], result["blocked"], result["skipped"]) == (2, 1, 0, 1)
@@ -105,8 +105,8 @@ def test_derived_receipt_number_is_blocked_in_preview_and_approval(monkeypatch):
                         lambda: {"items": [_item(receipt_article_number="84679")]})
     pseudo = "2008467900008"
     csv_text = (
-        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\\n"
-        f"AH Komkommer;Albert Heijn;84679;{pseudo}\\n"
+        "Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\n"
+        f"AH Komkommer;Albert Heijn;84679;{pseudo}\n"
     )
     result = imports.preview_barcode_import(imports.PreviewRequest(csv_text=csv_text))
     assert (result["ready"], result["blocked"]) == (0, 1)
