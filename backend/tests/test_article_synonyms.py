@@ -210,6 +210,30 @@ class SynonymOverviewRouteTest(unittest.TestCase):
         connection.execute.assert_not_called()
 
 
+    def test_article_index_exposes_real_catalog_creation_date(self):
+        from unittest.mock import MagicMock
+
+        connection = MagicMock()
+        connection.execute.return_value.mappings.return_value = [
+            {'id': 'a', 'created_at': '2026-02-03 10:00:00'},
+        ]
+        fake_engine = MagicMock()
+        fake_engine.connect.return_value.__enter__.return_value = connection
+        sample = product('a', 'Halfvolle melk', retailer_code='')
+        sample['retailer_codes'] = []
+        with patch.object(routes, '_actor'), \
+                patch.object(routes, 'engine', fake_engine), \
+                patch.object(routes, 'load_products', return_value=[sample]), \
+                patch.object(routes, 'confirmed_pairs', return_value=set()), \
+                patch('sqlalchemy.inspect') as introspection:
+            introspection.return_value.has_table.return_value = False
+            introspection.return_value.get_columns.return_value = [{'name': 'created_at'}]
+            response = routes.synonym_analysis()
+        self.assertEqual(response['items'][0]['added_on'], '2026-02-03')
+        self.assertEqual(connection.execute.call_count, 1)
+
+
+
 class StoreTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
