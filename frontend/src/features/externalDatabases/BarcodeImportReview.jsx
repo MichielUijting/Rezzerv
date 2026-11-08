@@ -94,7 +94,7 @@ export default function BarcodeImportReview() {
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.csv') || file.size > 2000000) {
       showFeedback({ variant: 'error', title: 'Ongeldig importbestand',
-        message: 'Kies het aangevulde CSV-bestand van maximaal 2 MB.' })
+        message: 'Kies een CSV-bestand met artikel, winkelketen, bonartikelnummer en Art./Barcode (maximaal 2 MB).' })
       return
     }
     setBusy(true)
@@ -188,8 +188,9 @@ export default function BarcodeImportReview() {
     <ScreenCard fullWidth>
       <div className="rz-barcode-import-page">
         <h2>Barcodes importeren</h2>
-        <p>Kies het aangevulde CSV-bestand. Alleen nieuwe barcodevoorstellen worden ingelezen.
-          Goedkeuren schrijft de geselecteerde barcodes naar Inhuis; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
+        <p>Importeer een CSV met Artikel, Winkelketen, Bonartikelnummer en Art./Barcode. Een kolom Aanvulstatus mag ook.
+          Afgeleide codes uit bonartikelnummers worden ter controle getoond maar niet opgeslagen.
+          Goedkeuren slaat alleen toegestane geselecteerde barcodes op; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
         <label className="rz-input-field">
           <span className="rz-label">CSV-bestand</span>
           <input type="file" className="rz-input" accept=".csv,text/csv"
