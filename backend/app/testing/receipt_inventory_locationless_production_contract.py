@@ -123,9 +123,23 @@ def run_locationless_production_contract() -> dict:
             # The old fixture had an orphan import line (no Kassa source).
             _insert_row(
                 conn,
+                "raw_receipts",
+                {
+                    "id": "locationless-raw-contract",
+                    "household_id": ids["household_id"],
+                    "original_filename": "locationless-contract.txt",
+                    "mime_type": "text/plain",
+                    "storage_path": "test-fixtures/locationless-contract.txt",
+                    "sha256_hash": "f" * 64,
+                    "raw_status": "parsed",
+                },
+            )
+            _insert_row(
+                conn,
                 "receipt_tables",
                 {
                     "id": "locationless-contract",
+                    "raw_receipt_id": "locationless-raw-contract",
                     "household_id": ids["household_id"],
                     "store_name": "Albert Heijn",
                     "parse_status": "approved",
