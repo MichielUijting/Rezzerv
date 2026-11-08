@@ -535,3 +535,40 @@ test('Synoniemenanalyse is beschermd tegen reguliere gebruikers', async ({ page 
   await expect(page).toHaveURL(/\/home$/)
   expect(reads).toBe(0)
 })
+
+
+test('Artikel-synoniemen: Toegevoegd vanaf toont ook oudere Catalogusartikelen opnieuw', async ({ page }) => {
+  const articles = [
+    { id: 'older', name: 'Oud artikel', primary_gtin: '8712345678906', added_on: '2026-02-01', synonym_count: 0 },
+    { id: 'newer', name: 'Nieuw artikel', primary_gtin: '8712345678913', added_on: '2026-11-01', synonym_count: 0 },
+    { id: 'unknown', name: 'Artikel zonder historische datum', primary_gtin: '8712345678920', added_on: '', synonym_count: 0 },
+  ]
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-date-test', active_household_id: '0', context_type: 'system',
+      is_platform_superuser: true, role: 'admin',
+      permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
+    } })
+    if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
+    if (path.endsWith('/article-synonyms/analysis/older/options')) return route.fulfill({ json: { items: [] } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  const left = page.getByTestId('article-synonyms-articles')
+  const date = page.getByLabel('Catalogusartikelen toegevoegd vanaf')
+  await expect(left.getByText('Oud artikel')).toBeVisible()
+  await expect(left.getByText('Nieuw artikel')).toBeVisible()
+  await date.fill('2026-10-01')
+  await expect(left.getByText('Oud artikel')).toHaveCount(0)
+  await expect(left.getByText('Nieuw artikel')).toBeVisible()
+  // Legacy articles without reliable created_at are not silently lost.
+  await expect(left.getByText('Artikel zonder historische datum')).toBeVisible()
+  await date.fill('2026-01-01')
+  await expect(left.getByText('Oud artikel')).toBeVisible()
+  await date.fill('')
+  await expect(left.getByText('Oud artikel')).toBeVisible()
+})
