@@ -270,8 +270,12 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   await expect(page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })).toBeVisible({ timeout: 30_000 })
   await page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ }).getByRole('button', { name: 'OK' }).click()
   await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveCount(0, { timeout: 20_000 })
-  await expect(page.getByText('Status: Verwerkt naar voorraad', { exact: false })).toBeVisible()
-  await expect(page.getByText(/Verwerkt:\s*1/)).toBeVisible()
+  // Verwerkte regels verdwijnen uit Uitpakken: controleer de echte bonstatus.
+  const batchAfter = await readBatch(page, batchId)
+  const processedLine = (batchAfter?.lines || []).find((item) => String(item.id) === lineId)
+  expect(processedLine, JSON.stringify(batchAfter)).toBeTruthy()
+  expect(String(processedLine.processing_status || '')).toBe('processed')
+  expect(String(processedLine.processed_event_id || '')).not.toBe('')
 
   const inventoryResponse = await page.request.get('/api/dev/inventory-preview')
   expect(inventoryResponse.ok()).toBeTruthy()
