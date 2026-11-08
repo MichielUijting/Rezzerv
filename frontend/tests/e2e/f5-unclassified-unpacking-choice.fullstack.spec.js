@@ -222,8 +222,8 @@ test('F5-09 Niet ingedeeld remains valid in ready-only unpacking', async ({ page
   expect(Number(processPayload?.processed_count || 0), JSON.stringify(processPayload)).toBeGreaterThanOrEqual(1)
   expect(JSON.stringify(processPayload)).not.toContain('Nog geen artikelgroep gekozen')
 
-  await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('dialog', { name: /^(Verwerking afgerond|Geselecteerde artikelen verwerkt)$/ }).getByRole('button', { name: 'OK' }).click()
   await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveCount(0, { timeout: 20_000 })
 
   const batchAfter = await readBatch(page, batchId)
