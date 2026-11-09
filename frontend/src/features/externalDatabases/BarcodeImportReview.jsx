@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -36,6 +36,9 @@ export default function BarcodeImportReview() {
   const [approved, setApproved] = useState([])
   const [failures, setFailures] = useState({})
   const [foundProducts, setFoundProducts] = useState({})
+  const [offNames, setOffNames] = useState({})
+  const offLookupPending = useRef(new Set())
+  const offLookupGeneration = useRef(0)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -53,16 +56,75 @@ export default function BarcodeImportReview() {
     setFilteredIds((previous) => previous.length === ids.length && previous.every((id, i) => id === ids[i]) ? previous : ids)
   }, [])
 
+  // Enrich only the visible rows. The CSV never needs a product-name column,
+  // and reading OFF must not persist or approve any product information.
+  useEffect(() => {
+    if (!preview?.items?.length || !pageIds.length) return
+    const visible = new Set(pageIds)
+    const gtins = [...new Set(preview.items
+      .filter((row) => visible.has(row.line) && /^\\d{8,14}$/.test(String(row.gtin || '')))
+      .map((row) => row.gtin))]
+      .filter((gtin) => !Object.prototype.hasOwnProperty.call(offNames, gtin)
+        && !offLookupPending.current.has(gtin))
+      .slice(0, 10)
+    if (!gtins.length) return
+    const generation = offLookupGeneration.current
+    gtins.forEach((gtin) => offLookupPending.current.add(gtin))
+    void (async () => {
+      try {
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/off-names', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gtins }),
+        })
+        const result = await readResponse(response)
+        if (offLookupGeneration.current !== generation) return
+        setOffNames((current) => {
+          const next = { ...current }
+          for (const entry of result.items || []) {
+            if (gtins.includes(entry.gtin)) next[entry.gtin] = entry
+          }
+          // Avoid endlessly retrying malformed or missing response entries.
+          for (const gtin of gtins) {
+            if (!next[gtin]) next[gtin] = { status: 'unavailable', product_name: '' }
+          }
+          return next
+        })
+      } catch {
+        if (offLookupGeneration.current === generation) {
+          setOffNames((current) => Object.fromEntries([
+            ...Object.entries(current),
+            ...gtins.map((gtin) => [gtin, { status: 'unavailable', product_name: '' }]),
+          ]))
+        }
+      } finally {
+        if (offLookupGeneration.current === generation) {
+          gtins.forEach((gtin) => offLookupPending.current.delete(gtin))
+        }
+      }
+    })()
+  }, [preview, pageIds, offNames])
+
+  function offNameFor(row) {
+    const entry = offNames[row.gtin]
+    if (entry?.status === 'found') return entry.product_name
+    if (foundProducts[row.line]) return foundProducts[row.line]
+    if (entry?.status === 'not_found') return 'Niet gevonden in OFF'
+    if (entry?.status === 'no_name') return 'Naam ontbreekt in OFF'
+    if (entry?.status === 'unavailable') return 'OFF tijdelijk niet bereikbaar'
+    return /^\\d{8,14}$/.test(String(row.gtin || '')) ? 'OFF opzoeken…' : 'Geen geldige barcode'
+  }
+
   const items = useMemo(() => (preview?.items || [])
     .filter((row) => !removed.includes(row.line))
     .map((row) => ({
       ...row,
-      product_name: foundProducts[row.line] || row.product_name,
+      product_name: offNameFor(row),
       status: approved.includes(row.line) ? 'Goedgekeurd'
         : failures[row.line] ? `Niet opgeslagen: ${failures[row.line]}`
           : row.status === 'klaar' ? 'Te beoordelen'
             : row.reason || 'Geblokkeerd',
-    })), [preview, removed, approved, failures, foundProducts])
+    })), [preview, removed, approved, failures, foundProducts, offNames])
   // Geblokkeerde voorstellen mogen wel uit de importlijst worden verwijderd,
   // maar kunnen nooit ter goedkeuring worden aangeboden.
   const selectableIds = useMemo(() => new Set(items.filter((row) => (
@@ -97,6 +159,9 @@ export default function BarcodeImportReview() {
     setApproved([])
     setFailures({})
     setFoundProducts({})
+    setOffNames({})
+    offLookupGeneration.current += 1
+    offLookupPending.current.clear()
     setSelectedIds([])
     setFilters({})
     setPage(1)
@@ -307,7 +372,8 @@ export default function BarcodeImportReview() {
               <td>{row.retailer}</td>
               <td>{row.article_number}</td>
               <td>{row.gtin}</td>
-              <td title={row.source}>{row.product_name || row.source}</td>
+              <td title={offNames[row.gtin]?.status === 'found' ? [row.product_name,
+                offNames[row.gtin]?.brand, offNames[row.gtin]?.quantity].filter(Boolean).join(' · ') : row.product_name}>{row.product_name}</td>
               <td title={row.reason}>{row.status}</td>
             </tr>}
           />
