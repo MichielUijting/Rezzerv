@@ -375,7 +375,20 @@ export default function BarcodeImportReview() {
               <td>{row.gtin}</td>
               <td title={offNames[row.gtin]?.status === 'found' ? [row.product_name,
                 offNames[row.gtin]?.brand, offNames[row.gtin]?.quantity].filter(Boolean).join(' · ') : row.product_name}>{row.product_name}</td>
-              <td title={row.reason}>{row.status}</td>
+              <td title={[
+                row.reason,
+                row.existing_catalog_product ? `Catalogusproduct: ${row.existing_catalog_product}` : '',
+                row.existing_catalog_gtin ? `Catalogusbarcode: ${row.existing_catalog_gtin}` : '',
+                row.existing_manual_gtin ? `Handmatige barcode: ${row.existing_manual_gtin}` : '',
+              ].filter(Boolean).join(' · ')}>
+                <span>{row.status}</span>
+                {row.existing_catalog_product && row.status !== 'Te beoordelen'
+                  ? <div><small>Catalogus: {row.existing_catalog_product}</small></div> : null}
+                {row.has_barcode_conflict ? <div>
+                  <small>Catalogus: {row.existing_catalog_gtin || 'geen barcode'}</small>
+                  <div><small>Handmatig: {row.existing_manual_gtin || 'geen barcode'}</small></div>
+                </div> : null}
+              </td>
             </tr>}
           />
           <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
