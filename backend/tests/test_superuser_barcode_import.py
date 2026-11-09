@@ -135,3 +135,15 @@ def test_enriched_csv_header_with_all_actual_columns_is_accepted(monkeypatch):
     assert result["total"] == 1
     assert result["ready"] == 1
     assert result["blocked"] == 0
+
+
+def test_import_approval_passes_explicit_off_mismatch_choice(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles", lambda: {"items": [_item()]})
+    sent = []
+    monkeypatch.setattr(imports, "save_ed2_manual_barcode",
+                        lambda payload: sent.append(payload) or {"saved": True, "source": "manual"})
+    payload = _request()
+    payload.allow_off_mismatch = True
+    assert imports.approve_barcode_import(payload)["saved"]
+    assert len(sent) == 1 and sent[0].allow_off_mismatch is True
