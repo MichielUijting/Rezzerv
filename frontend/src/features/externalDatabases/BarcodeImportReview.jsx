@@ -19,7 +19,13 @@ const columns = [
 
 async function readResponse(response) {
   const result = await response.json()
-  if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'De import kon niet worden verwerkt.')
+  if (!response.ok) {
+    const detail = result.detail
+    const error = new Error(typeof detail === 'string' ? detail
+      : detail?.message || 'De import kon niet worden verwerkt.')
+    if (detail?.code === 'off_identity_mismatch') error.offMismatch = detail
+    throw error
+  }
   return result
 }
 
@@ -29,6 +35,7 @@ export default function BarcodeImportReview() {
   const [removed, setRemoved] = useState([])
   const [approved, setApproved] = useState([])
   const [failures, setFailures] = useState({})
+  const [foundProducts, setFoundProducts] = useState({})
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -50,11 +57,12 @@ export default function BarcodeImportReview() {
     .filter((row) => !removed.includes(row.line))
     .map((row) => ({
       ...row,
+      product_name: foundProducts[row.line] || row.product_name,
       status: approved.includes(row.line) ? 'Goedgekeurd'
         : failures[row.line] ? `Niet opgeslagen: ${failures[row.line]}`
           : row.status === 'klaar' ? 'Te beoordelen'
             : row.reason || 'Geblokkeerd',
-    })), [preview, removed, approved, failures])
+    })), [preview, removed, approved, failures, foundProducts])
   // Geblokkeerde voorstellen mogen wel uit de importlijst worden verwijderd,
   // maar kunnen nooit ter goedkeuring worden aangeboden.
   const selectableIds = useMemo(() => new Set(items.filter((row) => (
@@ -88,6 +96,7 @@ export default function BarcodeImportReview() {
     setRemoved([])
     setApproved([])
     setFailures({})
+    setFoundProducts({})
     setSelectedIds([])
     setFilters({})
     setPage(1)
@@ -146,7 +155,15 @@ export default function BarcodeImportReview() {
       variant: 'warning',
       title: 'OFF-productgegevens wijken af',
       message: 'De OFF-productgegevens komen niet veilig overeen met dit bonartikel.',
-      detail: `Bonartikel: ${row.article} · Barcode: ${row.gtin}. Je kunt alleen de barcode vastleggen; de afwijkende OFF-productgegevens worden niet overgenomen.`,
+      detail: [
+        `Bonartikel: ${row.article} (artikelnummer ${row.article_number || 'onbekend'})`,
+        `Voorgestelde barcode: ${row.gtin}`,
+        `OFF gevonden product: ${row.offProduct?.product_name || 'Naam ontbreekt'}`,
+        row.offProduct?.brand ? `Merk: ${row.offProduct.brand}` : '',
+        row.offProduct?.quantity ? `Inhoud: ${row.offProduct.quantity}` : '',
+        row.offProduct?.conflict_reason ? `Afwijking: ${row.offProduct.conflict_reason}` : '',
+        'Bij Toch koppelen wordt alleen de barcode opgeslagen, niet de afwijkende OFF-productgegevens.',
+      ].filter(Boolean).join('\n'),
       dismissMode: 'blocked',
       primaryActionLabel: 'Toch koppelen',
       secondaryActionLabel: 'Annuleren',
@@ -206,8 +223,15 @@ export default function BarcodeImportReview() {
         setSelectedIds((current) => current.filter((currentId) => currentId !== id))
         succeeded += 1
       } catch (err) {
-        if (String(err.message || '').includes('OFF-productgegevens passen niet veilig')) {
-          mismatches.push(row)
+        if (err.offMismatch) {
+          const detail = err.offMismatch
+          if (detail.gtin !== row.gtin) {
+            setFailures((current) => ({ ...current, [id]: 'OFF gaf een andere barcode terug.' }))
+            failed += 1
+            continue
+          }
+          setFoundProducts((current) => ({ ...current, [id]: detail.product_name || '' }))
+          mismatches.push({ ...row, offProduct: detail })
         } else {
           setFailures((current) => ({ ...current, [id]: err.message }))
           failed += 1
