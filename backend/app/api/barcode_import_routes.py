@@ -10,6 +10,7 @@ import csv
 import io
 from collections import Counter
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
@@ -23,15 +24,21 @@ from app.services.external_article_product_link_service import (
 )
 from app.services.barcode_identity_service import validate_barcode, calculate_gtin_check_digit
 from app.services.session_request_context import resolve_current_server_session
+from app.services.off_search_service import lookup_off_product_by_gtin
 
 router = APIRouter(prefix="/api/catalog/ed2/barcode-import", tags=["catalog"])
 HEADERS = ("Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode")
 MAX_BYTES = 2_000_000
 MAX_ROWS = 3000
+MAX_OFF_NAMES = 10
 
 
 class PreviewRequest(BaseModel):
     csv_text: str
+
+
+class OffNamesRequest(BaseModel):
+    gtins: list[str]
 
 
 class ApproveRequest(BaseModel):
@@ -150,6 +157,50 @@ def preview_barcode_import(payload: PreviewRequest):
         "blocked": sum(item["status"] == "geblokkeerd" for item in results),
         "total": len(source_rows),
     }
+
+
+def _off_name_lookup(gtin: str) -> dict:
+    """Exact GTIN lookup, never a fuzzy product suggestion or catalog write."""
+    try:
+        result = lookup_off_product_by_gtin(gtin)
+    except Exception:
+        return {"gtin": gtin, "status": "unavailable", "product_name": "", "brand": "", "quantity": ""}
+    product = result.get("product") or {}
+    status = result.get("status")
+    if status == "found" and str(product.get("product_name") or "").strip():
+        return {
+            "gtin": gtin, "status": "found",
+            "product_name": str(product["product_name"]).strip(),
+            "brand": str(product.get("brand") or "").strip(),
+            "quantity": str(product.get("quantity") or "").strip(),
+        }
+    return {
+        "gtin": gtin,
+        "status": "unavailable" if status == "external_source_unavailable" else (
+            "no_name" if status == "found" else "not_found"
+        ),
+        "product_name": "", "brand": "", "quantity": "",
+    }
+
+
+@router.post("/off-names")
+def lookup_barcode_import_off_names(payload: OffNamesRequest):
+    """Read-only enrichment for the visible import page; never writes to InHuis."""
+    _require_superuser()
+    if not payload.gtins or len(payload.gtins) > MAX_OFF_NAMES:
+        raise HTTPException(status_code=422, detail="Maximaal 10 barcodes per OFF-controle.")
+    normalized = []
+    for raw in payload.gtins:
+        validation = validate_barcode(raw, "gtin")
+        if not validation["valid"]:
+            raise HTTPException(status_code=422, detail="Ongeldige barcode voor OFF-controle.")
+        gtin = validation["normalized_value"]
+        if gtin not in normalized:
+            normalized.append(gtin)
+    # Bounded requests: one page, maximum three simultaneous OFF lookups.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        items = list(pool.map(_off_name_lookup, normalized))
+    return {"items": items, "mutated": False}
 
 
 @router.post("/approve")
