@@ -745,17 +745,22 @@ def _ed2_normalized_source(conn, receipt_item_id: str) -> dict[str, str]:
 
 
 def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
-    conditions = []
+    # A receipt article code is the strongest retailer-scoped identity.
+    # Never treat another item with the same receipt text but a different
+    # article code as a collision. Only fall back to name when code is absent.
     if identity["external_article_code"]:
-        conditions.append("external_article_code = :external_article_code")
-    if identity["receipt_text_normalized"]:
-        conditions.append("receipt_text_normalized = :receipt_text_normalized")
-    if not conditions:
+        predicate = "external_article_code = :external_article_code"
+    elif identity["receipt_text_normalized"]:
+        predicate = (
+            "receipt_text_normalized = :receipt_text_normalized "
+            "AND COALESCE(TRIM(external_article_code), '') = ''"
+        )
+    else:
         raise HTTPException(status_code=422, detail="Een stabiele bonartikelidentiteit ontbreekt")
     collision = conn.execute(text(
         "SELECT id FROM external_article_product_links "
         "WHERE retailer_code = :retailer_code AND status IN ('confirmed', 'classification_pending') "
-        "AND (" + " OR ".join(conditions) + ") LIMIT 1"
+        "AND " + predicate + " LIMIT 1"
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
