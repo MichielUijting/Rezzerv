@@ -40,6 +40,7 @@ class ApproveRequest(BaseModel):
     article: str
     article_number: str
     gtin: str
+    allow_off_mismatch: bool = False
 
 
 def _require_superuser() -> None:
@@ -170,5 +171,6 @@ def approve_barcode_import(payload: ApproveRequest):
         raise HTTPException(status_code=409, detail="Artikel is intussen gekoppeld of heeft al een barcode.")
     return save_ed2_manual_barcode(
         Ed2ManualBarcodeRequest(receipt_item_id=payload.receipt_item_id,
-                                gtin=validation["normalized_value"])
+                                gtin=validation["normalized_value"],
+                                allow_off_mismatch=payload.allow_off_mismatch)
     )
