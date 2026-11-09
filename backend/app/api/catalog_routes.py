@@ -75,6 +75,7 @@ class CatalogGtinUpdateRequest(BaseModel):
 class Ed2ManualBarcodeRequest(BaseModel):
     receipt_item_id: str
     gtin: str
+    allow_off_mismatch: bool = False
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -822,10 +823,16 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
     if results:
         candidate = results[0]
         if candidate.get("identity_compatible") is False:
-            raise HTTPException(
-                status_code=409,
-                detail="De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
-            )
+            if not payload.allow_off_mismatch:
+                raise HTTPException(
+                    status_code=409,
+                    detail="De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
+                )
+            # Superuser explicitly opted to keep the GTIN only. Never confirm the
+            # incompatible OFF product or import its identity, metadata or image.
+            results = []
+    if results:
+        candidate = results[0]
         if not candidate.get("selection_proof"):
             raise HTTPException(status_code=409, detail="OFF kon deze barcode niet betrouwbaar bevestigen")
         # Reuse the established signed, receipt-bound OFF confirmation and its
