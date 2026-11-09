@@ -256,3 +256,23 @@ def test_retry_after_outage_enriches_existing_barcode_when_off_recovers(guard, m
     })
     assert save(code)["off_found"] is True
     assert linked and linked[0]["selection_proof"] == "server-proof"
+
+
+def test_explicit_off_mismatch_override_saves_only_manual_barcode(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": code, "identity_compatible": False,
+                     "selection_proof": "must-not-be-used", "image_url": "https://example.test/other.jpg"}],
+    })
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=code, allow_off_mismatch=True,
+        )
+    )
+    assert result["saved"] is True and result["source"] == "manual"
+    assert not result["off_found"] and not result["photo_loaded"]
+    assert not linked
+    assert conn.manual == {("jumbo", "melk", "123"): code}
+    assert conn.household_articles == [{"id": "h1", "stock": 4}]
+    assert conn.receipt_lines == [{"id": "r1", "label": "Melk"}]
