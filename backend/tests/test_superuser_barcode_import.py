@@ -147,3 +147,54 @@ def test_import_approval_passes_explicit_off_mismatch_choice(monkeypatch):
     payload.allow_off_mismatch = True
     assert imports.approve_barcode_import(payload)["saved"]
     assert len(sent) == 1 and sent[0].allow_off_mismatch is True
+
+
+def test_off_names_fetch_exact_gtins_without_changing_catalog(monkeypatch):
+    _superuser(monkeypatch)
+    calls = []
+    def lookup(gtin):
+        calls.append(gtin)
+        return {"status": "found", "product": {
+            "product_name": "Bouillon Kip", "brand": "Albert Heijn",
+            "quantity": "340 ml", "gtin": gtin,
+        }}
+    monkeypatch.setattr(imports, "lookup_off_product_by_gtin", lookup)
+    monkeypatch.setattr(imports, "save_ed2_manual_barcode",
+                        lambda *args: (_ for _ in ()).throw(AssertionError("OFF preview wrote to catalog")))
+    response = imports.lookup_barcode_import_off_names(imports.OffNamesRequest(
+        gtins=["8712345678906", "8712345678906"]
+    ))
+    assert response["mutated"] is False
+    assert calls == ["8712345678906"]
+    assert response["items"] == [{
+        "gtin": "8712345678906", "status": "found",
+        "product_name": "Bouillon Kip", "brand": "Albert Heijn",
+        "quantity": "340 ml",
+    }]
+
+
+def test_off_names_is_superuser_only_and_fails_closed_on_invalid_input(monkeypatch):
+    _superuser(monkeypatch, False)
+    with pytest.raises(HTTPException) as denied:
+        imports.lookup_barcode_import_off_names(imports.OffNamesRequest(gtins=["8712345678906"]))
+    assert denied.value.status_code == 403
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "lookup_off_product_by_gtin",
+                        lambda *args: (_ for _ in ()).throw(AssertionError("Unexpected lookup")))
+    for codes in ([], ["8712345678906"] * 11, ["8712345678907"]):
+        with pytest.raises(HTTPException) as invalid:
+            imports.lookup_barcode_import_off_names(imports.OffNamesRequest(gtins=codes))
+        assert invalid.value.status_code == 422
+
+
+def test_off_names_report_not_found_and_unavailable_separately(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "lookup_off_product_by_gtin", lambda gtin: {
+        "status": "not_found" if gtin == "8712345678906" else "external_source_unavailable",
+        "product": None,
+    })
+    result = imports.lookup_barcode_import_off_names(imports.OffNamesRequest(
+        gtins=["8712345678906", "8712345678913"]
+    ))
+    assert [x["status"] for x in result["items"]] == ["not_found", "unavailable"]
+    assert all(not x["product_name"] for x in result["items"])
