@@ -276,3 +276,26 @@ def test_explicit_off_mismatch_override_saves_only_manual_barcode(guard, monkeyp
     assert conn.manual == {("jumbo", "melk", "123"): code}
     assert conn.household_articles == [{"id": "h1", "stock": 4}]
     assert conn.receipt_lines == [{"id": "r1", "label": "Melk"}]
+
+
+def test_mismatch_returns_off_product_name_and_exact_barcode(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": code, "product_name": "Ander merk Amsterdamse uien",
+                     "brand": "Voorbeeldmerk", "quantity": "320 g",
+                     "identity_compatible": False,
+                     "identity_conflict_message": "Huismerk wijkt af",
+                     "selection_proof": "unused"}],
+    })
+    with pytest.raises(HTTPException) as exc:
+        save(code)
+    assert exc.value.status_code == 409
+    detail = exc.value.detail
+    assert detail["code"] == "off_identity_mismatch"
+    assert detail["product_name"] == "Ander merk Amsterdamse uien"
+    assert detail["gtin"] == code
+    assert detail["quantity"] == "320 g"
+    assert detail["conflict_reason"] == "Huismerk wijkt af"
+    assert conn.manual == {}
+    assert not linked
