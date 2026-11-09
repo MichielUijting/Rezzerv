@@ -299,3 +299,46 @@ def test_mismatch_returns_off_product_name_and_exact_barcode(guard, monkeypatch)
     assert detail["conflict_reason"] == "Huismerk wijkt af"
     assert conn.manual == {}
     assert not linked
+
+
+def test_unlinked_collision_uses_exact_receipt_number_when_present():
+    from app.api.catalog_routes import _ed2_require_unlinked
+
+    class QueryConnection:
+        def __init__(self):
+            self.sql = ""
+            self.params = None
+        def execute(self, statement, params):
+            self.sql = str(statement)
+            self.params = params
+            return Result([])
+
+    conn = QueryConnection()
+    _ed2_require_unlinked(conn, {
+        "retailer_code": "ah",
+        "receipt_text_normalized": "ah bouillon",
+        "external_article_code": "845556",
+    })
+    assert "external_article_code = :external_article_code" in conn.sql
+    assert "receipt_text_normalized = :receipt_text_normalized" not in conn.sql
+    assert conn.params["external_article_code"] == "845556"
+
+
+def test_name_fallback_cannot_block_another_numbered_item():
+    from app.api.catalog_routes import _ed2_require_unlinked
+
+    class QueryConnection:
+        def __init__(self):
+            self.sql = ""
+        def execute(self, statement, params):
+            self.sql = str(statement)
+            return Result([])
+
+    conn = QueryConnection()
+    _ed2_require_unlinked(conn, {
+        "retailer_code": "ah",
+        "receipt_text_normalized": "ah bouillon",
+        "external_article_code": "",
+    })
+    assert "receipt_text_normalized = :receipt_text_normalized" in conn.sql
+    assert "COALESCE(TRIM(external_article_code), '') = ''" in conn.sql
