@@ -62,7 +62,7 @@ export default function BarcodeImportReview() {
     if (!preview?.items?.length || !pageIds.length) return
     const visible = new Set(pageIds)
     const gtins = [...new Set(preview.items
-      .filter((row) => visible.has(row.line) && /^\\d{8,14}$/.test(String(row.gtin || '')))
+      .filter((row) => visible.has(row.line) && /^[0-9]{8,14}$/.test(String(row.gtin || '')))
       .map((row) => row.gtin))]
       .filter((gtin) => !Object.prototype.hasOwnProperty.call(offNames, gtin)
         && !offLookupPending.current.has(gtin))
@@ -112,7 +112,7 @@ export default function BarcodeImportReview() {
     if (entry?.status === 'not_found') return 'Niet gevonden in OFF'
     if (entry?.status === 'no_name') return 'Naam ontbreekt in OFF'
     if (entry?.status === 'unavailable') return 'OFF tijdelijk niet bereikbaar'
-    return /^\\d{8,14}$/.test(String(row.gtin || '')) ? 'OFF opzoeken…' : 'Geen geldige barcode'
+    return /^[0-9]{8,14}$/.test(String(row.gtin || '')) ? 'OFF opzoeken…' : 'Geen geldige barcode'
   }
 
   const items = useMemo(() => (preview?.items || [])
@@ -160,6 +160,7 @@ export default function BarcodeImportReview() {
     setFailures({})
     setFoundProducts({})
     setOffNames({})
+    setPageIds([])
     offLookupGeneration.current += 1
     offLookupPending.current.clear()
     setSelectedIds([])
