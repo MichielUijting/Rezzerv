@@ -139,6 +139,47 @@ export default function BarcodeImportReview() {
     })
   }
 
+  function offerOffMismatchOverride(rows, index = 0) {
+    const row = rows[index]
+    if (!row) return
+    showFeedback({
+      variant: 'warning',
+      title: 'OFF-productgegevens wijken af',
+      message: 'De OFF-productgegevens komen niet veilig overeen met dit bonartikel.',
+      detail: `Bonartikel: ${row.article} · Barcode: ${row.gtin}. Je kunt alleen de barcode vastleggen; de afwijkende OFF-productgegevens worden niet overgenomen.`,
+      dismissMode: 'blocked',
+      primaryActionLabel: 'Toch koppelen',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'barcode-import-off-mismatch',
+      onPrimaryAction: async () => {
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receipt_item_id: row.receipt_item_id, retailer: row.retailer,
+            article: row.article, article_number: row.article_number, gtin: row.gtin,
+            allow_off_mismatch: true,
+          }),
+        })
+        const result = await readResponse(response)
+        if (!result.saved) throw new Error('De barcode is niet opgeslagen.')
+        setApproved((current) => [...new Set([...current, row.line])])
+        setSelectedIds((current) => current.filter((id) => id !== row.line))
+        setFailures((current) => {
+          const next = { ...current }
+          delete next[row.line]
+          return next
+        })
+        if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
+        else showFeedback({ variant: 'success', title: 'Barcode opgeslagen',
+          message: 'De barcode is opgeslagen zonder afwijkende OFF-productgegevens.', dedupeMs: 0 })
+      },
+      onSecondaryAction: () => {
+        if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
+      },
+    })
+  }
+
   async function approveSelected(ids) {
     setBusy(true)
     showFeedback({ variant: 'progress', title: 'Barcodes verwerken',
@@ -146,6 +187,7 @@ export default function BarcodeImportReview() {
       dismissMode: 'blocked', key: 'barcode-import-processing', dedupeMs: 0 })
     let succeeded = 0
     let failed = 0
+    const mismatches = []
     for (const id of ids) {
       const row = selectedRows.find((item) => item.line === id)
       if (!row) continue
@@ -164,11 +206,19 @@ export default function BarcodeImportReview() {
         setSelectedIds((current) => current.filter((currentId) => currentId !== id))
         succeeded += 1
       } catch (err) {
-        setFailures((current) => ({ ...current, [id]: err.message }))
-        failed += 1
+        if (String(err.message || '').includes('OFF-productgegevens passen niet veilig')) {
+          mismatches.push(row)
+        } else {
+          setFailures((current) => ({ ...current, [id]: err.message }))
+          failed += 1
+        }
       }
     }
     setBusy(false)
+    if (mismatches.length) {
+      offerOffMismatchOverride(mismatches)
+      return
+    }
     showFeedback({
       variant: failed ? 'warning' : 'success',
       title: 'Importresultaat',
