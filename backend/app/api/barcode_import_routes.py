@@ -139,8 +139,22 @@ def preview_barcode_import(payload: PreviewRequest):
         elif len(current) != 1:
             status, reason = "geblokkeerd", "Geen unieke overeenkomst in Artikelbeheer."
         elif current[0].get("link_status") != "unlinked" or current[0].get("article_code") or current[0].get("manual_barcode"):
-            status, reason = "geblokkeerd", "Artikel heeft al een barcode of Cataloguskoppeling."
+            existing = current[0]
+            catalog_gtin = str(existing.get("article_code") or "").strip()
+            manual_gtin = str(existing.get("manual_barcode") or "").strip()
+            proposed = validation["normalized_value"]
+            if (catalog_gtin and catalog_gtin == proposed) or (
+                not catalog_gtin and manual_gtin == proposed
+            ):
+                status, reason = "al_gekoppeld", "Al gekoppeld – barcode komt overeen"
+                if existing.get("link_status") == "classification_pending":
+                    reason += " (classificatie ontbreekt)"
+            elif (catalog_gtin and catalog_gtin != proposed) or (manual_gtin and manual_gtin != proposed):
+                status, reason = "conflict", "Barcodeconflict: bestaande barcode wijkt af"
+            else:
+                status, reason = "geblokkeerd", "Cataloguskoppeling bestaat zonder zichtbare barcode"
         seen.add(key)
+        existing = current[0] if len(current) == 1 else {}
         results.append({
             "line": line, "article": row.get("Artikel") or "",
             "retailer": row.get("Winkelketen") or "",
@@ -150,11 +164,19 @@ def preview_barcode_import(payload: PreviewRequest):
             "product_name": row.get("Gevonden productnaam") or "",
             "receipt_item_id": str(current[0].get("id")) if len(current) == 1 else "",
             "status": status, "reason": reason,
+            "existing_catalog_gtin": str(existing.get("article_code") or ""),
+            "existing_manual_gtin": str(existing.get("manual_barcode") or ""),
+            "existing_catalog_product": str(existing.get("catalog_product_name") or ""),
+            "existing_link_status": str(existing.get("link_status") or ""),
+            "has_barcode_conflict": bool(
+                existing.get("article_code") and existing.get("manual_barcode")
+                and existing.get("article_code") != existing.get("manual_barcode")
+            ) or status == "conflict",
         })
     return {
         "items": results, "skipped": skipped,
         "ready": sum(item["status"] == "klaar" for item in results),
-        "blocked": sum(item["status"] == "geblokkeerd" for item in results),
+        "blocked": sum(item["status"] != "klaar" for item in results),
         "total": len(source_rows),
     }
 
