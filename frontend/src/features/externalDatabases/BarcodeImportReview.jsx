@@ -163,7 +163,7 @@ export default function BarcodeImportReview() {
         row.offProduct?.quantity ? `Inhoud: ${row.offProduct.quantity}` : '',
         row.offProduct?.conflict_reason ? `Afwijking: ${row.offProduct.conflict_reason}` : '',
         'Bij Toch koppelen wordt alleen de barcode opgeslagen, niet de afwijkende OFF-productgegevens.',
-      ].filter(Boolean).join('\n'),
+      ].filter(Boolean).join(' · '),
       dismissMode: 'blocked',
       primaryActionLabel: 'Toch koppelen',
       secondaryActionLabel: 'Annuleren',
