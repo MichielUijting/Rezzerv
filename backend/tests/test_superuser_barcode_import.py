@@ -198,3 +198,31 @@ def test_off_names_report_not_found_and_unavailable_separately(monkeypatch):
     ))
     assert [x["status"] for x in result["items"]] == ["not_found", "unavailable"]
     assert all(not x["product_name"] for x in result["items"])
+
+
+@pytest.mark.parametrize("existing,status,reason", [
+    ({"link_status": "classification_pending", "article_code": "8712345678906",
+      "catalog_product_name": "AH Komkommer"}, "al_gekoppeld", "Al gekoppeld"),
+    ({"link_status": "unlinked", "manual_barcode": "8712345678906"},
+     "al_gekoppeld", "Al gekoppeld"),
+    ({"link_status": "linked", "article_code": "", "catalog_product_name": "Generiek"},
+     "geblokkeerd", "zonder zichtbare barcode"),
+    ({"link_status": "classification_pending", "article_code": "8712345678906",
+      "manual_barcode": "8718265525399", "catalog_product_name": "Risotto"},
+     "conflict", "Catalogus en handmatige barcode verschillen"),
+    ({"link_status": "classification_pending", "article_code": "8718265525399"},
+     "conflict", "bestaande barcode wijkt af"),
+])
+def test_existing_import_identity_explains_exact_match_or_conflict(monkeypatch, existing, status, reason):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_item(**existing)]})
+    output = imports.preview_barcode_import(imports.PreviewRequest(csv_text=_csv([_line()])))
+    assert output["ready"] == 0
+    assert output["blocked"] == 1
+    entry = output["items"][0]
+    assert entry["status"] == status
+    assert reason in entry["reason"]
+    assert entry["existing_catalog_gtin"] == existing.get("article_code", "")
+    assert entry["existing_manual_gtin"] == existing.get("manual_barcode", "")
+    assert entry["has_barcode_conflict"] == (status == "conflict")
