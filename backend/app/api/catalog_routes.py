@@ -826,7 +826,15 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
             if not payload.allow_off_mismatch:
                 raise HTTPException(
                     status_code=409,
-                    detail="De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
+                    detail={
+                        "code": "off_identity_mismatch",
+                        "message": "De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
+                        "product_name": str(candidate.get("product_name") or ""),
+                        "brand": str(candidate.get("brand") or ""),
+                        "quantity": str(candidate.get("quantity") or ""),
+                        "gtin": gtin,
+                        "conflict_reason": str(candidate.get("identity_conflict_message") or ""),
+                    },
                 )
             # Superuser explicitly opted to keep the GTIN only. Never confirm the
             # incompatible OFF product or import its identity, metadata or image.
