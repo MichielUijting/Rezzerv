@@ -143,7 +143,9 @@ def preview_barcode_import(payload: PreviewRequest):
             catalog_gtin = str(existing.get("article_code") or "").strip()
             manual_gtin = str(existing.get("manual_barcode") or "").strip()
             proposed = validation["normalized_value"]
-            if (catalog_gtin and catalog_gtin == proposed) or (
+            if (catalog_gtin and manual_gtin and catalog_gtin != manual_gtin):
+                status, reason = "conflict", "Barcodeconflict: Catalogus en handmatige barcode verschillen"
+            elif (catalog_gtin and catalog_gtin == proposed) or (
                 not catalog_gtin and manual_gtin == proposed
             ):
                 status, reason = "al_gekoppeld", "Al gekoppeld – barcode komt overeen"
