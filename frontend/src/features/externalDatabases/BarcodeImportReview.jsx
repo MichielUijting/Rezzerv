@@ -330,8 +330,9 @@ export default function BarcodeImportReview() {
     <ScreenCard fullWidth>
       <div className="rz-barcode-import-page">
         <h2>Barcodes importeren</h2>
-        <p>Importeer een CSV met Artikel, Winkelketen, Bonartikelnummer en Art./Barcode. Een kolom Aanvulstatus mag ook.
-          Afgeleide codes uit bonartikelnummers worden ter controle getoond maar niet opgeslagen.
+        <p>Importeer een CSV met Artikel, Winkelketen, Bonartikelnummer en Art./Barcode. Bonartikelnummer mag leeg zijn:
+          InHuis gebruikt dan uitsluitend een unieke combinatie van winkelketen en exacte bonomschrijving.
+          Een kolom Aanvulstatus mag ook. Afgeleide codes uit bonartikelnummers worden ter controle getoond maar niet opgeslagen.
           Goedkeuren slaat alleen toegestane geselecteerde barcodes op; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
         <label className="rz-input-field">
           <span className="rz-label">CSV-bestand</span>
