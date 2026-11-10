@@ -342,3 +342,70 @@ def test_name_fallback_cannot_block_another_numbered_item():
     })
     assert "receipt_text_normalized = :receipt_text_normalized" in conn.sql
     assert "COALESCE(TRIM(external_article_code), '') = ''" in conn.sql
+
+
+def test_receipt_bound_off_proof_mismatch_shows_override_without_saving(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{
+            "gtin": gtin, "product_name": "Hertog Jan Pilsener",
+            "brand": "Hertog Jan", "quantity": "330 ml",
+            "identity_compatible": True, "selection_proof": "other-receipt",
+        }],
+    })
+    def reject_proof(payload):
+        raise ValueError("Dit zoekresultaat hoort niet bij het geselecteerde bonartikel.")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", reject_proof)
+    with pytest.raises(HTTPException) as exc:
+        save(gtin)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "off_identity_mismatch"
+    assert exc.value.detail["gtin"] == gtin
+    assert exc.value.detail["product_name"] == "Hertog Jan Pilsener"
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_receipt_bound_off_proof_mismatch_superuser_override_saves_only_gtin(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{
+            "gtin": gtin, "product_name": "Hertog Jan Pilsener",
+            "identity_compatible": True, "selection_proof": "other-receipt",
+        }],
+    })
+    def unexpected_confirm(payload):
+        raise AssertionError("OFF confirmation must not run after explicit GTIN-only override")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", unexpected_confirm)
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=gtin,
+            allow_off_mismatch=True,
+        ),
+    )
+    assert result["saved"] is True
+    assert result["source"] == "manual"
+    assert result["off_found"] is False
+    assert result["photo_loaded"] is False
+    assert conn.manual == {("jumbo", "melk", "123"): gtin}
+    assert not linked
+
+
+def test_unrelated_invalid_off_proof_still_fails_closed(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": gtin, "selection_proof": "expired", "identity_compatible": True}],
+    })
+    def invalid_proof(payload):
+        raise ValueError("Het zoekresultaat is verlopen. Zoek opnieuw in OFF.")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", invalid_proof)
+    with pytest.raises(HTTPException) as exc:
+        save(gtin)
+    assert exc.value.status_code == 409
+    assert isinstance(exc.value.detail, str)
+    assert "verlopen" in exc.value.detail
+    assert conn.manual == {}
+    assert not linked
