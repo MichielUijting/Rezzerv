@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any, Callable
 
+from sqlalchemy import text
+
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
