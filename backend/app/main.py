@@ -4504,22 +4504,6 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     ).mappings().all()
 
     total_active = len(article_rows)
-    if article_rows:
-        # Voorraad and Bijna op must use the same exact Catalogus photo
-        # evidence, including historically confirmed receipt/product links.
-        # The resolver is read-only: never copy an arbitrary synonym/Brick image.
-        from app.services.household_alias_policy import resolve_household_catalog_images
-        catalog_images = resolve_household_catalog_images(conn, text, [dict(row) for row in article_rows])
-        article_rows = [
-            {
-                **dict(row),
-                'image_url': (
-                    normalize_optional_text_field(row.get('image_url'))
-                    or catalog_images.get(str(row.get('id') or '').strip(), '')
-                ),
-            }
-            for row in article_rows
-        ]
     if not article_rows:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
@@ -4584,6 +4568,24 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
 
+    # Enrich only the visible signals. Resolving every household item on each
+    # Bijna op refresh would make reads unnecessarily expensive for large homes.
+    missing_photo_ids = {
+        str(item.get('household_article_id') or '').strip()
+        for item in items if not normalize_optional_text_field(item.get('image_url'))
+    }
+    if missing_photo_ids:
+        from app.services.household_alias_policy import resolve_household_catalog_images
+        source_rows = [
+            dict(row) for row in article_rows
+            if str(row.get('id') or '').strip() in missing_photo_ids
+        ]
+        images = resolve_household_catalog_images(conn, text, source_rows)
+        for item in items:
+            if not normalize_optional_text_field(item.get('image_url')):
+                item['image_url'] = images.get(
+                    str(item.get('household_article_id') or '').strip(), ''
+                )
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),
