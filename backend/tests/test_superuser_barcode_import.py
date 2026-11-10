@@ -227,3 +227,139 @@ def test_existing_import_identity_explains_exact_match_or_conflict(monkeypatch, 
     assert entry["existing_catalog_gtin"] == existing.get("article_code", "")
     assert entry["existing_manual_gtin"] == existing.get("manual_barcode", "")
     assert entry["has_barcode_conflict"] == (status == "conflict")
+
+
+def _jumbo_item(**overrides):
+    result = _item(
+        id="receipt-table-line:jumbo-1", retailer_code="jumbo",
+        receipt_line_text="JUMBO FUET PLAKJES", receipt_article_number="",
+    )
+    result.update(overrides)
+    return result
+
+
+def _jumbo_csv(*rows):
+    return ("Artikel;Winkelketen;Bonartikelnummer;Art./Barcode\n"
+            + "\n".join(rows) + "\n")
+
+
+def _jumbo_request(article="JUMBO FUET PLAKJES"):
+    return imports.ApproveRequest(
+        receipt_item_id="receipt-table-line:jumbo-1", retailer="Jumbo",
+        article=article, article_number="", gtin="8718452767885",
+    )
+
+
+def test_jumbo_without_article_number_previews_and_approves(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_jumbo_item()]})
+    writes = []
+    monkeypatch.setattr(imports, "save_ed2_manual_barcode",
+                        lambda payload: writes.append(payload) or {"saved": True, "source": "manual"})
+    output = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert (output["total"], output["ready"], output["blocked"]) == (1, 1, 0)
+    assert output["items"][0]["receipt_item_id"] == "receipt-table-line:jumbo-1"
+    assert output["items"][0]["article_number"] == ""
+    assert writes == []  # preview is always read-only
+    assert imports.approve_barcode_import(_jumbo_request())["saved"] is True
+    assert len(writes) == 1
+    assert writes[0].receipt_item_id == "receipt-table-line:jumbo-1"
+    assert writes[0].gtin == "8718452767885"
+
+
+def test_jumbo_numberless_identity_is_rechecked_at_approval(monkeypatch):
+    _superuser(monkeypatch)
+    rows = [_jumbo_item()]
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": rows})
+    monkeypatch.setattr(imports, "save_ed2_manual_barcode",
+                        lambda payload: (_ for _ in ()).throw(AssertionError("unexpected write")))
+    ready = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert ready["ready"] == 1
+    rows.append(_jumbo_item(id="receipt-table-line:jumbo-2",
+                            receipt_line_text="Jumbo Fuet Plakjes"))
+    with pytest.raises(HTTPException) as exc:
+        imports.approve_barcode_import(_jumbo_request())
+    assert exc.value.status_code == 409
+
+
+def test_jumbo_numberless_identity_never_claims_numbered_product(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_jumbo_item(receipt_article_number="84751")]})
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert (preview["ready"], preview["blocked"]) == (0, 1)
+    assert preview["items"][0]["receipt_item_id"] == ""
+
+
+def test_jumbo_numberless_collision_with_numbered_same_name_is_blocked(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles", lambda: {
+        "items": [
+            _jumbo_item(),
+            _jumbo_item(id="receipt-table-line:jumbo-2", receipt_article_number="154"),
+        ],
+    })
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert (preview["ready"], preview["blocked"]) == (0, 1)
+    assert "niet uniek" in preview["items"][0]["reason"]
+
+
+def test_jumbo_numberless_double_name_is_not_guessed(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles", lambda: {
+        "items": [_jumbo_item(), _jumbo_item(id="receipt-table-line:jumbo-2",
+                                              receipt_line_text="Jumbo Fuet Plakjes")],
+    })
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert (preview["ready"], preview["blocked"]) == (0, 1)
+    assert "niet uniek" in preview["items"][0]["reason"]
+
+
+def test_jumbo_numberless_still_checks_existing_barcode(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles", lambda: {
+        "items": [_jumbo_item(link_status="classification_pending",
+                               article_code="8718452767885")],
+    })
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv("JUMBO FUET PLAKJES;Jumbo;;8718452767885"),
+    ))
+    assert preview["ready"] == 0
+    assert preview["items"][0]["status"] == "al_gekoppeld"
+
+
+def test_jumbo_numberless_csv_duplicate_still_blocked(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_jumbo_item()]})
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv(
+            "JUMBO FUET PLAKJES;Jumbo;;8718452767885",
+            "JUMBO FUET PLAKJES;Jumbo;;8718452767885",
+        ),
+    ))
+    assert (preview["ready"], preview["blocked"]) == (1, 1)
+    assert "Dubbele artikelregel" in preview["items"][1]["reason"]
+
+
+def test_jumbo_blank_article_name_still_blocked(monkeypatch):
+    _superuser(monkeypatch)
+    monkeypatch.setattr(imports, "list_all_external_articles",
+                        lambda: {"items": [_jumbo_item()]})
+    preview = imports.preview_barcode_import(imports.PreviewRequest(
+        csv_text=_jumbo_csv(";Jumbo;;8718452767885"),
+    ))
+    assert (preview["ready"], preview["blocked"]) == (0, 1)
+    assert "artikelnaam ontbreekt" in preview["items"][0]["reason"]
