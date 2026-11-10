@@ -20,28 +20,30 @@ from app.services.synonym_auto_consume_service import (
 )
 
 
-def seed(conn, *, household="pg-h1", quantity_a=2, quantity_b=3):
+def seed(conn, *, household="pg-h1", quantity_a=2, quantity_b=3, quantity_c=0):
     conn.execute(text("DELETE FROM inventory_events"))
     conn.execute(text("DELETE FROM inventory"))
     conn.execute(text("DELETE FROM article_synonym_links"))
     conn.execute(text("DELETE FROM household_articles"))
     conn.execute(text("DELETE FROM global_products"))
     conn.execute(text("""
-        INSERT INTO global_products (id,status) VALUES ('gp-a','active'),('gp-b','active')
+        INSERT INTO global_products (id,status) VALUES ('gp-a','active'),('gp-b','active'),('gp-c','active')
     """))
     conn.execute(text("""
-        INSERT INTO article_synonym_links VALUES ('gp-a','gp-b')
+        INSERT INTO article_synonym_links VALUES ('gp-a','gp-b'),('gp-b','gp-c')
     """))
     conn.execute(text("""
         INSERT INTO household_articles
          (id,household_id,naam,global_product_id,status,default_inventory_handling)
         VALUES ('ha-a',:household,'Melk AH','gp-a','active','STOCK'),
                ('ha-b',:household,'Melk Jumbo','gp-b','active','STOCK'),
+               ('ha-c',:household,'Melk Lidl','gp-c','active','STOCK'),
                ('foreign-b','pg-other','Melk Jumbo','gp-b','active','STOCK')
     """), {"household": household})
     for inv_id, article_id, number, location in (
         ("inv-a", "ha-a", quantity_a, "fridge"),
         ("inv-b", "ha-b", quantity_b, "pantry"),
+        ("inv-c", "ha-c", quantity_c, "cellar"),
         ("foreign", "foreign-b", 99, "foreign-loc"),
     ):
         if number:
@@ -198,6 +200,45 @@ def main():
         assert stock(conn, "ha-a") == 2 and stock(conn, "ha-b") == 3
         assert stock(conn, "foreign-b", "pg-other") == 99
         print("SYNONYM_POSTGRESQL_CUMULATIVE_PRODUCT_DAY_GREEN")
+
+        # Three linked products A-B-C form one confirmed group, even though
+        # there is no direct A-C link. All three old stock locations are
+        # consumed and a new Lidl purchase is kept untouched.
+        seed(conn, quantity_a=2, quantity_b=3, quantity_c=4)
+        grouped = plan(conn, article="ha-c", quantity=2,
+                       mode="consume_all_existing_before_purchase")
+        assert grouped is not None and grouped["members"] == ("ha-a", "ha-b", "ha-c"), grouped
+        assert grouped["requested_deduction_quantity"] == 9
+        record_purchase(conn, article_id="ha-c", quantity=2,
+                        location="cellar", inventory_id="inv-c")
+        applied = apply(conn, grouped, purchased_article="ha-c",
+                        quantity=2, inventory_id="inv-c")
+        assert applied["applied_quantity"] == 9
+        assert stock(conn, "ha-a") == 0 and stock(conn, "ha-b") == 0
+        assert stock(conn, "ha-c") == 2
+        assert stock(conn, "foreign-b", "pg-other") == 99
+        three_locations = dict(conn.execute(text("""
+            SELECT location_id, ABS(quantity) FROM inventory_events
+            WHERE event_type='auto_repurchase'
+        """)).all())
+        assert three_locations == {"fridge": 2, "pantry": 3, "cellar": 4}
+        second = plan(conn, article="ha-a", quantity=3,
+                      mode="consume_all_existing_before_purchase")
+        assert second is not None and second["requested_deduction_quantity"] == 0
+        print("SYNONYM_POSTGRESQL_THREE_MEMBER_CHAIN_GREEN")
+
+        # Quantity mode rolls across all three individual product identities.
+        seed(conn, quantity_a=2, quantity_b=3, quantity_c=4)
+        group = plan(conn, article="ha-a", quantity=6, mode="consume_purchased_quantity")
+        assert group is not None and group["requested_deduction_quantity"] == 6
+        record_purchase(conn, article_id="ha-a", quantity=6,
+                        location="fridge", inventory_id="inv-a")
+        applied = apply(conn, group, purchased_article="ha-a",
+                        quantity=6, inventory_id="inv-a")
+        assert applied["applied_quantity"] == 6
+        assert stock(conn, "ha-a") == 8 and stock(conn, "ha-b") == 0
+        assert stock(conn, "ha-c") == 1
+        print("SYNONYM_POSTGRESQL_THREE_MEMBER_QUANTITY_GREEN")
 
         # Disabled mode is a strict non-deduction even with confirmed pairs.
         seed(conn)
