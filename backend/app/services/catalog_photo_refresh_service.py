@@ -122,8 +122,14 @@ def register_catalog_photo_refresh(app, engine):
     state = {"task": None}
     async def worker():
         attempted = set()
+        hours_since_retry = 0
         await asyncio.sleep(_START_DELAY_SECONDS)
         while True:
+            # Previously photo-less OFF records may acquire images later.
+            # Retry them after a week rather than suppressing them forever.
+            if hours_since_retry >= 24 * 7:
+                attempted.clear()
+                hours_since_retry = 0
             try:
                 outcome = await asyncio.to_thread(
                     refresh_missing_catalog_photos, engine, attempted=attempted
@@ -134,6 +140,7 @@ def register_catalog_photo_refresh(app, engine):
                 raise
             except Exception:
                 _LOG.exception("Catalogusfoto's OFF-bijvullen overgeslagen")
+            hours_since_retry += 1
             await asyncio.sleep(_INTERVAL_SECONDS)
 
     async def on_startup():
