@@ -1,52 +1,77 @@
-from sqlalchemy import create_engine, text
 from app.services.synonym_auto_consume_identity import confirmed_household_synonym_pair
 
 
-def _fixture():
-    engine = create_engine('sqlite://')
-    connection = engine.connect()
-    for statement in (
-        'CREATE TABLE global_products (id TEXT PRIMARY KEY, status TEXT)',
-        'CREATE TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT, status TEXT)',
-        'CREATE TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)',
-        "INSERT INTO global_products VALUES ('A','active'),('B','active'),('C','active')",
-        "INSERT INTO household_articles VALUES ('a','h1','A','active'),('b','h1','B','active'),('b2','h2','B','active')",
-        "INSERT INTO article_synonym_links VALUES ('A','B')",
-    ):
-        connection.execute(text(statement))
-    return connection
+class _Result:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def mappings(self):
+        return self
+
+    def all(self):
+        return self.rows
+
+
+class _FakeConnection:
+    def __init__(self):
+        self.products = {'A': 'active', 'B': 'active', 'C': 'active'}
+        self.articles = [
+            {'id': 'a', 'household_id': 'h1', 'global_product_id': 'A', 'status': 'active'},
+            {'id': 'b', 'household_id': 'h1', 'global_product_id': 'B', 'status': 'active'},
+            {'id': 'b2', 'household_id': 'h2', 'global_product_id': 'B', 'status': 'active'},
+        ]
+        self.links = [('A', 'B')]
+
+    def execute(self, statement, params):
+        sql = str(statement)
+        if 'SELECT ha.global_product_id' in sql:
+            return _Result([{'global_product_id': a['global_product_id']} for a in self.articles
+                if a['id'] == params['article_id'] and a['household_id'] == params['household_id']
+                and a['status'] == 'active' and self.products.get(a['global_product_id']) == 'active'])
+        if 'CASE WHEN left_product_id' in sql:
+            product = params['catalog_id']
+            return _Result([{'partner': right if left == product else left} for left, right in self.links
+                if product in (left, right)])
+        if 'SELECT 1 FROM article_synonym_links' in sql:
+            return _Result([{'exists': 1} for pair in self.links if params['partner'] in pair])
+        if 'SELECT ha.id, ha.global_product_id' in sql:
+            return _Result([{'id': a['id'], 'global_product_id': a['global_product_id']} for a in self.articles
+                if a['household_id'] == params['household_id'] and a['status'] == 'active'
+                and a['global_product_id'] in (params['catalog_id'], params['partner'])
+                and self.products.get(a['global_product_id']) == 'active'])
+        raise AssertionError(f'Unexpected database access: {sql[:100]}')
 
 
 def test_confirmed_direct_pair_is_household_scoped():
-    conn = _fixture()
+    conn = _FakeConnection()
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a', 'b')
     assert confirmed_household_synonym_pair(conn, 'h2', 'b2') == ('b2',)
     assert confirmed_household_synonym_pair(conn, 'h2', 'a') == ('a',)
 
 
 def test_absent_link_keeps_original_identity():
-    conn = _fixture()
-    conn.execute(text('DELETE FROM article_synonym_links'))
+    conn = _FakeConnection()
+    conn.links.clear()
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a',)
 
 
 def test_no_transitive_group_or_ambiguous_star():
-    conn = _fixture()
-    conn.execute(text("INSERT INTO article_synonym_links VALUES ('B','C')"))
+    conn = _FakeConnection()
+    conn.links.append(('B', 'C'))
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a',)
     assert confirmed_household_synonym_pair(conn, 'h1', 'b') == ('b',)
 
 
 def test_duplicate_household_representation_fails_closed():
-    conn = _fixture()
-    conn.execute(text("INSERT INTO household_articles VALUES ('a2','h1','A','active')"))
+    conn = _FakeConnection()
+    conn.articles.append({'id': 'a2', 'household_id': 'h1', 'global_product_id': 'A', 'status': 'active'})
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a',)
 
 
 def test_inactive_or_unlinked_catalog_does_not_guess_from_name():
-    conn = _fixture()
-    conn.execute(text("UPDATE global_products SET status='inactive' WHERE id='B'"))
+    conn = _FakeConnection()
+    conn.products['B'] = 'inactive'
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a',)
-    conn.execute(text("UPDATE global_products SET status='active' WHERE id='B'"))
-    conn.execute(text("UPDATE household_articles SET global_product_id=NULL WHERE id='a'"))
+    conn.products['B'] = 'active'
+    conn.articles[0]['global_product_id'] = None
     assert confirmed_household_synonym_pair(conn, 'h1', 'a') == ('a',)
