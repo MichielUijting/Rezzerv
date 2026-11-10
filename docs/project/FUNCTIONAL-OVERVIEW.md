@@ -487,15 +487,25 @@ gedeelde productidentiteit blijft niet koppelbaar.
 
 ## Productfoto's: centrale Catalogus, Voorraad en Bijna op (10 november 2026)
 
-Voorraad en Bijna op lezen een ontbrekende foto via dezelfde **alleen-lezen**
-Catalogusidentiteitsprojectie. Eerst geldt de bestaande directe centrale
-Cataloguskoppeling. Bij ontbrekende directe koppeling mag uitsluitend een
-aantoonbaar exacte bestaande barcode-/productidentiteit of een historisch
-**bevestigde centrale winkelartikel-/bonkoppeling** een afbeelding aanleveren.
-Een tegenstrijdige productidentiteit krijgt geen verzonnen foto. De resolver
-maakt of wijzigt geen huishoudartikel, synoniem, bon, voorraad of productlink.
-Bijna op raadpleegt de aanvullende fotobronnen alleen voor artikelen die
-daadwerkelijk als Bijna op-signaal zichtbaar zijn.
+Voorraad en Bijna op gebruiken dezelfde **alleen-lezen** fotoprojectie.
+De prioriteit is voortaan: (1) de foto van het exacte artikel uit de
+centrale Catalogus; (2) als deze ontbreekt: een foto van een **rechtstreeks
+bevestigd Catalogussynoniem** met een beschikbare afbeelding. Een synoniemlink
+werkt in beide richtingen; als meerdere bevestigde synoniemen een foto
+hebben, wordt stabiel op product-ID gekozen. Is bij het artikel én al zijn
+rechtstreeks bevestigde synoniemen geen foto bekend, dan wordt **Geen foto**
+getoond. Er wordt niet naar een willekeurig gelijknamig artikel,
+GPC/GS1-classificatie of impliciet verbonden synoniem gezocht.
+
+Een huishoudartikel wordt eerst uitsluitend via de bestaande aantoonbaar
+exacte Catalogusidentiteiten, barcode of historisch **bevestigde**
+winkelartikel-/bonrelaties bij een centraal product geïdentificeerd.
+Tegenstrijdige identiteiten leveren geen afgeleide foto op. Deze presentatie
+verandert geen huishoudartikel, bon, voorraad, synoniem of productkoppeling.
+Bijna op controleert alleen de artikelen die daadwerkelijk als signaal
+zichtbaar zijn. Historisch opgeslagen, grof op GPC gebaseerde
+representatieve foto's hebben geen voorrang en worden niet als presentatiebron
+voor Voorraad gebruikt.
 
 De centrale Catalogus vult ontbrekende foto's daarnaast op de achtergrond,
 maximaal **vijf exacte OFF-GTIN-opvragen per uur per backendproces**, vanaf
