@@ -92,18 +92,23 @@ def plan_confirmed_synonym_deduction(
     pre = {}
     prior_purchased = {}
     prior_deducted = {}
+    stock_rows = {}
     for row in member_rows:
         article_id = str(row['id'])
-        total = conn.execute(text("""
-            SELECT COALESCE(SUM(aantal), 0)
+        # Lock the exact stock rows, including their locations, while planning.
+        # No name-based or cross-household inventory read is permitted.
+        positions = conn.execute(text("""
+            SELECT id, aantal, space_id, sublocation_id
             FROM inventory
             WHERE household_id=:household_id
               AND household_article_id=:article_id
               AND COALESCE(status,'active')='active'
-        """), {'household_id': household_id, 'article_id': article_id}).scalar()
-        pre[article_id] = _whole(total)
+            ORDER BY id ASC FOR UPDATE
+        """), {'household_id': household_id, 'article_id': article_id}).mappings().all()
+        stock_rows[article_id] = [dict(position) for position in positions]
+        pre[article_id] = sum(_whole(position['aantal']) for position in positions)
         events = conn.execute(text("""
-            SELECT event_type, source, quantity
+            SELECT event_type, source, quantity, location_id
             FROM inventory_events
             WHERE household_id=:household_id AND household_article_id=:article_id
               AND substr(trim(COALESCE(CAST(purchase_date AS TEXT),'')),1,10)=:day
@@ -117,6 +122,30 @@ def plan_confirmed_synonym_deduction(
             _whole(abs(Decimal(str(e['quantity'] or 0))))
             for e in events if e['event_type'] == 'auto_repurchase'
         )
+        # Reserve same-day purchases *at their actual locations*. When an
+        # earlier direct-consumption receipt produced no stock or legacy
+        # locations are ambiguous, return to the safe existing single-item
+        # path instead of accidentally deducting fresh inventory.
+        protected_by_location = {}
+        for event in events:
+            if event['event_type'] != 'purchase':
+                continue
+            key = str(event.get('location_id') or '')
+            protected_by_location[key] = (
+                protected_by_location.get(key, 0) + _whole(event['quantity'])
+            )
+        observed_locations = set()
+        for position in stock_rows[article_id]:
+            key = str(position.get('sublocation_id') or position.get('space_id') or '')
+            if key in observed_locations:
+                return None  # ambiguous old/new stock split at this location
+            observed_locations.add(key)
+            protected = protected_by_location.get(key, 0)
+            if protected > _whole(position['aantal']):
+                return None
+            position['available_old'] = _whole(position['aantal']) - protected
+        if any(key not in observed_locations for key in protected_by_location):
+            return None
 
     total_pre = sum(pre.values())
     total_prior_purchases = sum(prior_purchased.values())
@@ -133,25 +162,33 @@ def plan_confirmed_synonym_deduction(
         desired = min(start_stock, cumulative)
     requested = max(0, desired - total_prior_deductions)
 
-    # Strict group-wide protection for all earlier purchases on this date.
-    old_available = {
-        article_id: max(0, pre[article_id] - prior_purchased[article_id])
-        for article_id in pair
-    }
-    requested = min(requested, sum(old_available.values()))
-    # Prefer consuming the previously stocked synonym over the newly bought
-    # article. Each member's actual event is posted to that member alone.
+    # Plan from the *specific pre-purchase stock rows*, not just article totals.
+    # This protects previous same-day purchases even when the household keeps
+    # multiple stock locations or the new purchase joins an existing row.
+    requested = min(requested, sum(
+        pos['available_old'] for positions in stock_rows.values() for pos in positions
+    ))
     order = [article_id for article_id in pair if article_id != purchased_article_id]
     order.append(purchased_article_id)
     allocations = []
     remaining = requested
     for article_id in order:
-        quantity = min(remaining, old_available[article_id])
-        if quantity:
-            allocations.append({'article_id': article_id, 'article_name': next(
-                row['naam'] for row in member_rows if row['id'] == article_id
-            ), 'quantity': quantity})
+        for pos in stock_rows[article_id]:
+            quantity = min(remaining, pos['available_old'])
+            if not quantity:
+                continue
+            allocations.append({
+                'article_id': article_id,
+                'article_name': next(row['naam'] for row in member_rows if row['id'] == article_id),
+                'inventory_id': str(pos['id']),
+                'pre_quantity': _whole(pos['aantal']),
+                'space_id': pos.get('space_id'),
+                'sublocation_id': pos.get('sublocation_id'),
+                'quantity': quantity,
+            })
             remaining -= quantity
+            if remaining == 0:
+                break
 
     return {
         'mode': mode,
@@ -176,40 +213,77 @@ def apply_confirmed_synonym_deduction(
     resolved_location: dict,
     plan: dict,
     create_auto_event,
-    apply_stock_consumption,
 ) -> dict:
-    """Apply the plan after the purchase row has been created in one transaction.
+    """Deduct exact old stock rows at their own location; create matching events.
 
-    Callers roll the whole receipt transaction back on any mismatch; never
-    fabricate a successful history record from a partial stock deduction.
+    This is run after the purchase within the same receipt transaction. All
+    failures must roll back that transaction, including newly written events.
+    A purchased unit never enters a pre-purchase allocation.
     """
     event_ids = []
     applied = 0
     for item in plan['allocations']:
-        article_id = item['article_id']
-        quantity = item['quantity']
-        protected_quantity = (
-            purchased_quantity if article_id == purchased_article_id else 0
-        )
-        protected_id = (
-            purchase_inventory_id if article_id == purchased_article_id else None
-        )
+        article_id = str(item['article_id'])
+        inventory_id = str(item['inventory_id'])
+        quantity = _whole(item['quantity'])
+        row = conn.execute(text("""
+            SELECT id, aantal, space_id, sublocation_id
+            FROM inventory
+            WHERE id=:inventory_id AND household_id=:household_id
+              AND household_article_id=:article_id
+              AND COALESCE(status,'active')='active'
+            FOR UPDATE
+        """), {
+            'inventory_id': inventory_id,
+            'household_id': str(household_id),
+            'article_id': article_id,
+        }).mappings().first()
+        if not row:
+            raise RuntimeError('Synoniemafboeking: verwachte voorraadregel ontbreekt')
+        if (row['space_id'] != item['space_id']
+                or row['sublocation_id'] != item['sublocation_id']):
+            raise RuntimeError('Synoniemafboeking: voorraadlocatie gewijzigd')
+        now = _whole(row['aantal'])
+        if now < _whole(item['pre_quantity']) or now < quantity:
+            raise RuntimeError('Synoniemafboeking: beschermde voorraad gewijzigd')
+        # The newly bought quantity may only have increased its own purchase
+        # row; no prepared deduction exceeds the old available quantity.
+        location = {
+            'space_id': row['space_id'],
+            'sublocation_id': row['sublocation_id'],
+            'location_id': row['sublocation_id'] or row['space_id'],
+            'location_label': '',
+        }
         event_id = create_auto_event(
             conn, household_id, article_id, item['article_name'],
-            resolved_location, quantity=quantity,
-            purchase_date=plan['purchase_day'],
+            location, quantity=quantity, purchase_date=plan['purchase_day'],
         )
         if not event_id:
             raise RuntimeError('Synoniemafboeking: mutatiebewijs ontbreekt')
-        result = apply_stock_consumption(
-            conn, household_id, item['article_name'], quantity, resolved_location,
-            household_article_id=article_id,
-            mode=AUTO_CONSUME_ALL_EXISTING,
-            protected_quantity_on_purchase_row=protected_quantity,
-            protected_purchase_inventory_id=protected_id,
-        )
-        if _whole(result.get('applied_quantity')) != quantity:
-            raise RuntimeError('Synoniemafboeking: voorraad en mutatiebewijs verschillen')
+        after = now - quantity
+        params = {
+            'inventory_id': inventory_id,
+            'household_id': str(household_id),
+            'article_id': article_id,
+            'before': now,
+            'after': after,
+        }
+        if after:
+            write = conn.execute(text("""
+                UPDATE inventory SET aantal=:after, updated_at=CURRENT_TIMESTAMP
+                WHERE id=:inventory_id AND household_id=:household_id
+                  AND household_article_id=:article_id
+                  AND aantal=:before AND COALESCE(status,'active')='active'
+            """), params)
+        else:
+            write = conn.execute(text("""
+                DELETE FROM inventory
+                WHERE id=:inventory_id AND household_id=:household_id
+                  AND household_article_id=:article_id
+                  AND aantal=:before AND COALESCE(status,'active')='active'
+            """), params)
+        if int(write.rowcount or 0) != 1:
+            raise RuntimeError('Synoniemafboeking: voorraadmutatie niet atomair bevestigd')
         event_ids.append(event_id)
         applied += quantity
     if applied != plan['requested_deduction_quantity']:
