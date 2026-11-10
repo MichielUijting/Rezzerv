@@ -53,3 +53,47 @@ test('horizontal scrollbar remains below the last row for all shared table wrapp
     expect(result.clearSpace, result.className).toBeGreaterThanOrEqual(12)
   }
 })
+
+
+test('shared table pagination clears bottom scrollbar on stock, low-stock and catalog layouts', async ({ page }) => {
+  await page.goto('/login')
+  const measurements = await page.evaluate(() => {
+    const types = ['rz-pagination', 'rz-external-databases-pagination', 'rz-data-table-controls']
+    return types.map((type) => {
+      const shell = document.createElement('section')
+      shell.className = 'rz-data-table-shell'
+      shell.style.cssText = 'position:fixed; left:10px; top:10px; width:320px; z-index:99999'
+      const wrapper = document.createElement('div')
+      wrapper.className = 'rz-table-wrapper'
+      wrapper.style.cssText = 'max-height:110px; width:300px'
+      const table = document.createElement('table')
+      table.className = 'rz-table'
+      table.style.cssText = 'width:900px; min-width:900px'
+      const body = document.createElement('tbody')
+      for (let i = 0; i < 8; i += 1) {
+        const tr = document.createElement('tr')
+        const td = document.createElement('td')
+        td.style.height = '38px'
+        td.textContent = 'Voorraadartikel ' + i
+        tr.appendChild(td)
+        body.appendChild(tr)
+      }
+      table.appendChild(body)
+      wrapper.appendChild(table)
+      const pager = document.createElement('nav')
+      pager.className = type
+      pager.textContent = '1 - 2 + 15'
+      shell.append(wrapper, pager)
+      document.body.appendChild(shell)
+      const scrollBottom = wrapper.getBoundingClientRect().bottom
+      const paginationTop = pager.getBoundingClientRect().top
+      const horizontalOverflow = wrapper.scrollWidth > wrapper.clientWidth
+      shell.remove()
+      return { type, distance: paginationTop - scrollBottom, horizontalOverflow }
+    })
+  })
+  for (const item of measurements) {
+    expect(item.horizontalOverflow, item.type).toBe(true)
+    expect(item.distance, item.type).toBeGreaterThanOrEqual(18)
+  }
+})
