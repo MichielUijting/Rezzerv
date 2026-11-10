@@ -318,6 +318,28 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
     return images_by_article
 
 
+
+def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Read-only image fallback for both Voorraad and Bijna op.
+
+    Only exact Catalogus identities (canonical product ID or GTIN) and
+    individually confirmed central retailer/receipt identities are allowed.
+    No synonym, product name, GPC Brick or household-crossing guess is made.
+    Ambiguous references intentionally resolve to no image.
+    """
+    if not article_rows:
+        return {}
+    canonical = _canonical_catalog_images_for_household_articles(conn, text, article_rows)
+    unresolved = [
+        {**dict(row), 'image_url': canonical.get(str(row.get('id') or '').strip(), '')}
+        for row in article_rows
+        if not str(row.get('image_url') or '').strip()
+        and not canonical.get(str(row.get('id') or '').strip(), '')
+    ]
+    central = _central_catalog_images_for_household_articles(conn, text, unresolved) if unresolved else {}
+    return {**central, **canonical}
+
+
 def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
     if not isinstance(payload, dict) or not isinstance(payload.get('rows'), list):
         return payload
@@ -364,18 +386,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             ),
             params,
         ).mappings().all()
-        canonical_images = _canonical_catalog_images_for_household_articles(conn, text, article_rows)
-        central_projection_rows = [
-            {
-                **dict(article),
-                'image_url': (
-                    str(article.get('image_url') or '').strip()
-                    or canonical_images.get(str(article.get('id') or '').strip(), '')
-                ),
-            }
-            for article in article_rows
-        ]
-        derived_images = _central_catalog_images_for_household_articles(conn, text, central_projection_rows)
+        catalog_images = resolve_household_catalog_images(conn, text, article_rows)
 
     articles_by_id = {str(row.get('id') or ''): row for row in article_rows}
     projected = []
@@ -392,8 +403,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             str(article.get('representative_image_url') or '').strip()
             or materialized_representative_images.get(article_id, '')
             or str(article.get('image_url') or '').strip()
-            or canonical_images.get(article_id, '')
-            or derived_images.get(article_id, '')
+            or catalog_images.get(article_id, '')
         )
         row['household_article_name'] = custom_name or canonical_name or str(row.get('artikel') or '')
         row['product_name'] = product_name or canonical_name or str(row.get('artikel') or '')
