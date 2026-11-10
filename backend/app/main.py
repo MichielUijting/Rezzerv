@@ -18669,6 +18669,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                 history_lookup_result_count = 0
                 history_contains_purchase_event = False
                 applied_deduction_quantity = 0
+                synonym_savepoint = conn.begin_nested() if synonym_plan is not None else None
                 try:
                     event_id = create_inventory_purchase_event(
                         conn,
@@ -18738,6 +18739,8 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
                     inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))
                 except Exception as exc:
+                    if synonym_savepoint is not None:
+                        synonym_savepoint.rollback()
                     detail_parts = [
                         f'exception_type={exc.__class__.__name__}',
                         f'exception_message={str(exc) or exc.__class__.__name__}',
@@ -18767,6 +18770,8 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error, "diagnostic": diagnostic})
                     failed_count += 1
                     continue
+                if synonym_savepoint is not None:
+                    synonym_savepoint.commit()
                 diagnostic = build_purchase_import_line_diagnostic(
                     line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
                     resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
