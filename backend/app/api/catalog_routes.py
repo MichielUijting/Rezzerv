@@ -25,6 +25,7 @@ from app.services.external_article_product_link_service import (
 )
 from app.services.off_search_service import OffSearchError, OffUnavailableError, search_off_candidates
 from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
+from app.services.off_manual_search_proof import issue_manual_off_proof
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_household_admin_from_session,
@@ -76,6 +77,8 @@ class Ed2ManualBarcodeRequest(BaseModel):
     receipt_item_id: str
     gtin: str
     allow_off_mismatch: bool = False
+    # Exclusive to Superuser barcode import: attach the full OFF product after explicit review.
+    import_off_product_override: bool = False
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -787,6 +790,9 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
     link, receipt row, household article or inventory. It never invents a GPC.
     """
     require_platform_permission_from_session("platform.external_products.link_existing")
+    if payload.import_off_product_override:
+        if not payload.allow_off_mismatch or not resolve_current_server_session().is_platform_superuser:
+            raise HTTPException(status_code=403, detail="Alleen de Superuser mag een OFF-afwijking volledig koppelen.")
     _ed2_barcode_tables_ready()
     validation = validate_barcode(payload.gtin, "gtin")
     if not validation["valid"]:
@@ -841,25 +847,34 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
                         "conflict_reason": str(candidate.get("identity_conflict_message") or ""),
                     },
                 )
-            # Superuser explicitly opted to keep the GTIN only. Never confirm the
-            # incompatible OFF product or import its identity, metadata or image.
-            results = []
-    # For an explicit barcode-only override, never retry OFF confirmation. Its
-    # receipt-bound selection proof may be incompatible, but must not be
-    # bypassed to confirm the OFF product. Save only manual GTIN evidence.
-    if payload.allow_off_mismatch:
+            # Existing manual entry still supports barcode-only override.
+            # The Superuser import choice instead confirms all OFF metadata.
+            if not payload.import_off_product_override:
+                results = []
+    if payload.allow_off_mismatch and not payload.import_off_product_override:
         results = []
     if results:
         candidate = results[0]
-        if not candidate.get("selection_proof"):
+        # OFF product is resolved on the server for the exact GTIN. Never accept
+        # client-provided metadata or bypass signature/receipt validation.
+        if str(candidate.get("gtin") or "") != gtin:
+            raise HTTPException(status_code=409, detail="OFF-barcode wijkt af van de geselecteerde barcode.")
+        proof = candidate.get("selection_proof")
+        if payload.import_off_product_override:
+            # Re-issue for this exact bonartikel from the trusted OFF response.
+            # This also repairs a stale/foreign receipt-bound proof without
+            # treating it as permission to confirm an unrelated browser result.
+            proof = issue_manual_off_proof(receipt_item_id, candidate)
+        if not proof:
             raise HTTPException(status_code=409, detail="OFF kon deze barcode niet betrouwbaar bevestigen")
-        # Reuse the established signed, receipt-bound OFF confirmation and its
-        # image/product metadata, classification and identity conflict checks.
         try:
             result = confirm_selected_off_catalog_product({
                 "receipt_item_id": receipt_item_id,
                 "gtin": gtin,
-                "selection_proof": candidate["selection_proof"],
+                "selection_proof": proof,
+                **({"override_private_label_conflict": True}
+                   if payload.import_off_product_override and candidate.get("identity_compatible") is False
+                   else {}),
             })
         except ValueError as error:
             # A receipt-bound proof mismatch is a product-identity warning,
