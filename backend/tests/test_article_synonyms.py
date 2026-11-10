@@ -17,6 +17,7 @@ from sqlalchemy.engine import make_url
 from app.api import article_synonym_routes as routes
 from app.api import catalog_routes
 from app.services import article_synonym_service as service
+from app.services.synonym_equivalence_review import review_pair
 from app.services import synonym_classification_inheritance_service as inheritance
 from app.services import synonym_classification_review_service as classification_review
 
@@ -37,6 +38,43 @@ def migration_module(name):
 
 
 class MatchingTest(unittest.TestCase):
+    def test_quality_review_cross_brand_and_retailer_prefixes(self):
+        left = product('a', 'AH Halfvolle melk', brick='milk')
+        right = product('b', 'Jumbo Halfvolle melk', retailer_code='jumbo', brick='milk')
+        result = review_pair(left, right)
+        self.assertEqual(result['review_level'], 'strong')
+        self.assertNotIn('link', result)
+        options = service.product_link_options([left, right], set(), 'a')
+        self.assertEqual(options[0]['review_level'], 'strong')
+        self.assertTrue(options[0]['linkable'])
+
+    def test_quality_review_flags_suspect_existing_links_without_unlinking(self):
+        left = product('a', 'Zaanse halfvolle mayo')
+        right = product('b', 'AH Houdbare halfvolle melk', retailer_code='jumbo')
+        options = service.product_link_options([left, right], {('a', 'b')}, 'a')
+        self.assertEqual(options[0]['status'], 'linked')
+        self.assertEqual(options[0]['review_level'], 'check')
+        self.assertIn('productsoorten', options[0]['review_reason'])
+        self.assertFalse(options[0]['linkable'])
+
+    def test_quality_review_blocks_false_confidence_on_variants(self):
+        for left, right in (('Halfvolle melk', 'Volle melk'),
+                            ('Magere kwark', 'Magere yoghurt'),
+                            ('Noten', 'Kruidnoten'),
+                            ('Roomboter ongezouten', 'Roomboter gezouten')):
+            with self.subTest(left=left, right=right):
+                self.assertEqual(
+                    review_pair(product('a', left), product('b', right))['review_level'],
+                    'check'
+                )
+
+    def test_quality_review_package_difference_needs_review(self):
+        left = product('a', 'Burrata')
+        right = product('b', 'Burrata')
+        left['size_value'], left['size_unit'] = '125', 'g'
+        right['size_value'], right['size_unit'] = '150', 'g'
+        self.assertEqual(review_pair(left, right)['review_level'], 'check')
+
     def test_cross_retailer_different_gtins(self):
         items = [product('a', 'AH Halfvolle melk', '08719587325926'), product('b', 'Jumbo Halfvolle melk', '08718452513666', retailer_code='jumbo'), product('c', 'Appels', brick='fruit')]
         result = service.suggest_pairs(items)
