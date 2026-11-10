@@ -18711,7 +18711,6 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                                 resolved_location=resolved_location,
                                 plan=synonym_plan,
                                 create_auto_event=create_auto_repurchase_event,
-                                apply_stock_consumption=apply_inventory_consumption,
                             )
                             applied_deduction_quantity = int(synonym_result["applied_quantity"])
                             auto_event_id = next(iter(synonym_result["event_ids"]), None)
