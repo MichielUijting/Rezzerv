@@ -67,11 +67,7 @@ def review_pair(left, right):
         if len(a) == 1 and len(b) == 1 and a != b:
             warnings.append("Verschil in " + label)
     # Only flag an actual incompatible food type, not shared fragments ('noten'/'kruidnoten').
-    category_words = (
-        ("mayonaise", "mayo"), ("melk",), ("yoghurt", "yogurt"),
-        ("kwark",), ("kruidnoten",), ("noten",), ("gehakt",),
-    )
-    for group in (("mayonaise", "melk"), ("kwark", "yoghurt"), ("noten", "kruidnoten")):
+    for group in (("mayonaise", "melk"), ("mayo", "melk"), ("kwark", "yoghurt"), ("kwark", "yogurt"), ("noten", "kruidnoten")):
         if any(_contains(text_l, a) and _contains(text_r, b)
                or _contains(text_r, a) and _contains(text_l, b) for a in (group[0],) for b in (group[1],)):
             warnings.append("Verschillende productsoorten")
