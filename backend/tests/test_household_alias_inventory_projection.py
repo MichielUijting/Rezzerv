@@ -493,6 +493,8 @@ class ExactNameCatalogConnection(CentralCatalogProjectionConnection):
 
     def execute(self, statement, params=None):
         sql = str(statement)
+        if 'FROM global_products' in sql and 'primary_gtin IN' in sql:
+            return Result(rows=[])
         if 'FROM global_products' in sql and 'lower(trim(name))' in sql:
             rows = [{'id': 'name-catalog-product', 'name': 'Aardappelpuree', 'image_url': self.photo}]
             if self.duplicate:
