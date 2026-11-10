@@ -147,6 +147,7 @@ def test_import_approval_passes_explicit_off_mismatch_choice(monkeypatch):
     payload.allow_off_mismatch = True
     assert imports.approve_barcode_import(payload)["saved"]
     assert len(sent) == 1 and sent[0].allow_off_mismatch is True
+    assert sent[0].import_off_product_override is True
 
 
 def test_off_names_fetch_exact_gtins_without_changing_catalog(monkeypatch):
