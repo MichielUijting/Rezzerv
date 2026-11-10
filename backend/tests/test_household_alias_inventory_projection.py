@@ -118,6 +118,38 @@ class CentralCatalogProjectionEngine:
         yield CentralCatalogProjectionConnection(ambiguous=self.ambiguous)
 
 
+class SynonymPhotoConnection(CentralCatalogProjectionConnection):
+    def __init__(self, *, own_image='', peer_image='https://images.example.test/confirmed-peer.jpg', ambiguous=False):
+        super().__init__(ambiguous=ambiguous)
+        self.own_image = own_image
+        self.peer_image = peer_image
+        self.synonym_queries = 0
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM article_synonym_links asl' in sql:
+            self.synonym_queries += 1
+            return Result(rows=([{
+                'source_id': 'global-product-a',
+                'peer_id': 'confirmed-synonym-b',
+                'image_url': self.peer_image,
+            }] if self.peer_image else []))
+        result = super().execute(statement, params)
+        if 'FROM external_article_product_links link' in sql:
+            for row in result.rows:
+                row['image_url'] = self.own_image
+        return result
+
+
+class SynonymPhotoEngine:
+    def __init__(self, **options):
+        self.conn = SynonymPhotoConnection(**options)
+
+    @contextmanager
+    def begin(self):
+        yield self.conn
+
+
 class CanonicalIdentityProjectionConnection:
     def execute(self, statement, params=None):
         sql = str(statement)
@@ -395,6 +427,52 @@ def test_almost_out_never_guesses_ambiguous_receipt_product():
     assert images == {}
 
 
+def _unlinked_receipt_article():
+    return {
+        'id': ARTICLE_ID, 'household_id': 'household-a',
+        'naam': 'Bio dadeltjes', 'global_product_id': None,
+        'barcode': '', 'image_url': '',
+    }
+
+
+def test_confirmed_synonym_photo_is_used_when_own_catalog_product_has_no_photo():
+    engine = SynonymPhotoEngine()
+    with engine.begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda value: value, [_unlinked_receipt_article()])
+    assert images == {ARTICLE_ID: 'https://images.example.test/confirmed-peer.jpg'}
+    assert engine.conn.synonym_queries == 1
+
+
+def test_own_catalog_photo_has_priority_over_confirmed_synonym():
+    engine = SynonymPhotoEngine(own_image='https://images.example.test/own.jpg')
+    with engine.begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda value: value, [_unlinked_receipt_article()])
+    assert images == {ARTICLE_ID: 'https://images.example.test/own.jpg'}
+    assert engine.conn.synonym_queries == 0
+
+
+def test_no_photo_when_neither_own_product_nor_confirmed_synonym_has_one():
+    engine = SynonymPhotoEngine(peer_image='')
+    with engine.begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda value: value, [_unlinked_receipt_article()])
+    assert images == {}
+
+
+def test_ambiguous_catalog_identification_never_borrows_synonym_photo():
+    engine = SynonymPhotoEngine(ambiguous=True)
+    with engine.begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda value: value, [_unlinked_receipt_article()])
+    assert images == {}
+    assert engine.conn.synonym_queries == 0
+
+
+def test_inventory_uses_confirmed_synonym_photo_not_broad_gpc_representative():
+    engine = SynonymPhotoEngine()
+    payload = {'rows': [{'id': INVENTORY_ID, 'household_article_id': ARTICLE_ID, 'artikel': 'Bio dadeltjes'}]}
+    result = _inventory_alias_projection(SimpleNamespace(engine=engine, text=lambda x: x), payload)
+    assert result['rows'][0]['image_url'] == 'https://images.example.test/confirmed-peer.jpg'
+
+
 def test_almost_out_image_fallback_happens_after_visibility_filtering():
     source = (Path(__file__).resolve().parents[1] / 'app' / 'main.py').read_text(encoding='utf-8')
     body = source.split('def build_almost_out_items(', 1)[1].split('def get_household_article_details_for_inventory(', 1)[0]
@@ -445,6 +523,11 @@ def run_contract() -> None:
     test_inventory_preview_uses_canonical_product_identity_image()
     test_inventory_preview_uses_household_barcode_for_catalog_image()
     test_inventory_preview_does_not_guess_image_when_one_household_article_maps_to_multiple_products()
+    test_confirmed_synonym_photo_is_used_when_own_catalog_product_has_no_photo()
+    test_own_catalog_photo_has_priority_over_confirmed_synonym()
+    test_no_photo_when_neither_own_product_nor_confirmed_synonym_has_one()
+    test_ambiguous_catalog_identification_never_borrows_synonym_photo()
+    test_inventory_uses_confirmed_synonym_photo_not_broad_gpc_representative()
     test_inventory_inline_household_name_does_not_rename_inventory_identity()
     print('HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN')
 
