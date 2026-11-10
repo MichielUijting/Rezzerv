@@ -228,7 +228,7 @@ export default function BarcodeImportReview() {
         row.offProduct?.brand ? `Merk: ${row.offProduct.brand}` : '',
         row.offProduct?.quantity ? `Inhoud: ${row.offProduct.quantity}` : '',
         row.offProduct?.conflict_reason ? `Afwijking: ${row.offProduct.conflict_reason}` : '',
-        'Bij Toch koppelen wordt alleen de barcode opgeslagen, niet de afwijkende OFF-productgegevens.',
+        'Bij Toch koppelen bevestig je als Superuser het OFF-product inclusief beschikbare gegevens, merk, inhoud en foto.',
       ].filter(Boolean).join(' · '),
       dismissMode: 'blocked',
       primaryActionLabel: 'Toch koppelen',
@@ -245,7 +245,9 @@ export default function BarcodeImportReview() {
           }),
         })
         const result = await readResponse(response)
-        if (!result.saved) throw new Error('De barcode is niet opgeslagen.')
+        if (!result.saved || result.source !== 'off' || !result.off_found) {
+          throw new Error('De volledige OFF-productkoppeling is niet bevestigd.')
+        }
         setApproved((current) => [...new Set([...current, row.line])])
         setSelectedIds((current) => current.filter((id) => id !== row.line))
         setFailures((current) => {
@@ -255,7 +257,7 @@ export default function BarcodeImportReview() {
         })
         if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
         else showFeedback({ variant: 'success', title: 'Barcode opgeslagen',
-          message: 'De barcode is opgeslagen zonder afwijkende OFF-productgegevens.', dedupeMs: 0 })
+          message: 'Barcode en beschikbare OFF-productgegevens gekoppeld aan het Catalogusartikel.', dedupeMs: 0 })
       },
       onSecondaryAction: () => {
         if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
