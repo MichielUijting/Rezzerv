@@ -831,6 +831,10 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         raise HTTPException(status_code=422, detail=str(error)) from error
 
     results = search.get("results") or []
+    # OFF indexes a GTIN-14 with one leading zero under its equivalent EAN-13.
+    # Compare canonical identities, not their textual width. Never remove a
+    # nonzero packaging indicator or accept a different product GTIN.
+    off_gtin = gtin[1:] if len(gtin) == 14 and gtin.startswith("0") else gtin
     if results:
         candidate = results[0]
         if candidate.get("identity_compatible") is False:
@@ -857,20 +861,20 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         candidate = results[0]
         # OFF product is resolved on the server for the exact GTIN. Never accept
         # client-provided metadata or bypass signature/receipt validation.
-        if str(candidate.get("gtin") or "") != gtin:
+        if str(candidate.get("gtin") or "") != off_gtin:
             raise HTTPException(status_code=409, detail="OFF-barcode wijkt af van de geselecteerde barcode.")
         proof = candidate.get("selection_proof")
         if payload.import_off_product_override:
             # Re-issue for this exact bonartikel from the trusted OFF response.
-            # This also repairs a stale/foreign receipt-bound proof without
-            # treating it as permission to confirm an unrelated browser result.
+            # Preserve signature binding to the OFF-canonical GTIN, not the
+            # optional leading zero in the uploaded GTIN-14.
             proof = issue_manual_off_proof(receipt_item_id, candidate)
         if not proof:
             raise HTTPException(status_code=409, detail="OFF kon deze barcode niet betrouwbaar bevestigen")
         try:
             result = confirm_selected_off_catalog_product({
                 "receipt_item_id": receipt_item_id,
-                "gtin": gtin,
+                "gtin": off_gtin,
                 "selection_proof": proof,
                 **({"override_private_label_conflict": True}
                    if payload.import_off_product_override and candidate.get("identity_compatible") is False
