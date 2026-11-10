@@ -1,0 +1,68 @@
+name: Catalogus synonym photo and pagination validation
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches: [main]
+    paths:
+      - '.github/workflows/catalog-synonym-photo-validation.yml'
+      - 'backend/app/services/household_alias_policy.py'
+      - 'backend/app/services/catalog_photo_refresh_service.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/test_household_alias_inventory_projection.py'
+      - 'backend/tests/test_catalog_product_image_enrichment_backfill.py'
+      - 'frontend/src/ui/components/table.css'
+      - 'frontend/tests/e2e/table-scrollbar-clearance.frontend-regression.spec.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  photo-contracts:
+    name: Exact Catalogus and confirmed synonym photo contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://test:test@127.0.0.1:5432/inhuis_test
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend test dependencies
+        run: python -m pip install -r backend/requirements.txt pytest
+      - name: Compile photo code and contract tests
+        run: |
+          python -m py_compile backend/app/services/household_alias_policy.py backend/app/services/catalog_photo_refresh_service.py backend/tests/test_household_alias_inventory_projection.py backend/tests/test_catalog_product_image_enrichment_backfill.py
+      - name: Test own-first, confirmed synonym, wrong-ID and OFF image safety
+        run: python -m pytest -q backend/tests/test_household_alias_inventory_projection.py backend/tests/test_catalog_product_image_enrichment_backfill.py backend/tests/test_operational_catalog_image_projection_contract.py
+
+  table-pager-clearance:
+    name: Shared table pager and scrollbar visual clearance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Start isolated frontend
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 --strictPort > /tmp/inhuis-pager-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -80 /tmp/inhuis-pager-vite.log
+          exit 1
+      - name: Verify last row and pagination clearance
+        run: ./node_modules/.bin/playwright test tests/e2e/table-scrollbar-clearance.frontend-regression.spec.js --project=chromium --no-deps

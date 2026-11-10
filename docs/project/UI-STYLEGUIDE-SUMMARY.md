@@ -1752,3 +1752,16 @@ niet-gekoppelde kandidaten voorselecteren. De bestaande knoppen
 **Koppelen**/**Ontkoppelen**, beveiligde overlays en expliciete
 bevestigingsmomenten blijven ongewijzigd. De actiebalk mag op smalle schermen
 afbreken zonder een rij of de horizontale scrollbar te overlappen.
+
+
+### Standaardtabel: paginering onder horizontale scrollbar — 10 november 2026
+
+De pagineringsknoppen moeten onder de complete tabelrand en eventuele
+horizontale scrollbar staan, zonder de onderste tabelrij te overlappen.
+De gedeelde `DataTable` houdt daarom minstens 20 px afstand tussen
+de scrollbare tabel en zijn actie-/pagineringsbalk. Schermen die het
+standaard `Table`-component met een losse `Pagination` gebruiken
+(onder andere Catalogus, Voorraad en Bijna op) krijgen minimaal
+24 px ruimte onder hun tabelviewport. Dit is alleen een visuele
+afstandscorrectie; het aantal rijen, sortering, filters, scrollbar,
+selectie en keyboardbediening blijven gelijk.

@@ -270,3 +270,22 @@ table.rz-table{
   margin: 0;
   vertical-align: middle;
 }
+
+/* Standard DataTable: pagination/actions stay visibly below the table viewport.
+   The horizontal scrollbar occupies the table wrapper, never the pager row. */
+.rz-data-table-shell > .rz-data-table-controls {
+  position: relative;
+  clear: both;
+  margin-top: 20px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+/* Legacy screens that use the shared Table and standalone Pagination
+   (Catalogus, Voorraad, Bijna op) need the same visual clearance. */
+.rz-table-wrapper + .rz-pagination,
+.rz-table-wrapper + .rz-external-databases-pagination {
+  position: relative;
+  clear: both;
+  margin-top: 24px;
+}

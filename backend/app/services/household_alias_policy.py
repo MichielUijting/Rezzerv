@@ -3,13 +3,12 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any, Callable
 
+from sqlalchemy import text
+
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
     normalize_external_link_retailer_code,
-)
-from app.services.household_representative_image_service import (
-    materialize_household_representative_images,
 )
 
 
@@ -37,7 +36,7 @@ def _normalize_catalog_gtin(value: Any) -> str:
     return ''.join(character for character in str(value or '') if character.isdigit())
 
 
-def _canonical_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+def _canonical_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None, ambiguous_articles=None) -> dict[str, str]:
     """Resolve images from canonical household/product identities without guessing by name.
 
     Some existing households predate household_articles.global_product_id. They can still
@@ -128,13 +127,20 @@ def _canonical_catalog_images_for_household_articles(conn, text, article_rows: l
     images_by_article: dict[str, str] = {}
     for article_id, products in products_by_article.items():
         if len(products) != 1:
+            if len(products) > 1 and ambiguous_articles is not None:
+                ambiguous_articles.add(article_id)
             continue
-        image_url = next(iter(products.values()))
+        product_id, image_url = next(iter(products.items()))
+        if identity_by_article is not None:
+            previous_id = identity_by_article.get(article_id)
+            if previous_id and previous_id != product_id:
+                continue  # Conflicting product identity: fail closed.
+            identity_by_article[article_id] = product_id
         if image_url:
             images_by_article[article_id] = image_url
     return images_by_article
 
-def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None, ambiguous_articles=None) -> dict[str, str]:
     """Resolve Catalogus images without mutating household-specific article links.
 
     Exact Catalogus links created in Externe databases are platform-wide and deliberately
@@ -311,12 +317,169 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
             product_id = str(link.get('global_product_id') or '').strip()
             if product_id:
                 products[product_id] = str(link.get('image_url') or '').strip()
+        if len(products) > 1 and ambiguous_articles is not None:
+            ambiguous_articles.add(article_id)
         if len(products) == 1:
-            image_url = next(iter(products.values()))
+            product_id, image_url = next(iter(products.items()))
+            if identity_by_article is not None:
+                previous_id = identity_by_article.get(article_id)
+                if previous_id and previous_id != product_id:
+                    continue  # Never override a canonical product with a receipt.
+                identity_by_article[article_id] = product_id
             if image_url:
                 images_by_article[article_id] = image_url
     return images_by_article
 
+
+
+def _unique_exact_name_catalog_identifications(conn, article_rows: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
+    """Safe read-only bridge for legacy household records without product IDs.
+
+    Only a UNIQUE, exactly equal central Catalogus product name counts. We
+    never strip brands, pluralize or fuzzy-match names; duplicate names fail
+    closed even when one candidate has a photo.
+    """
+    names = {
+        ' '.join(str(row.get('naam') or '').strip().lower().split())
+        for row in article_rows if str(row.get('naam') or '').strip()
+    }
+    if not names:
+        return {}
+    result = {}
+    sorted_names = sorted(names)
+    for offset in range(0, len(sorted_names), 150):
+        batch = sorted_names[offset:offset + 150]
+        params = {f'exact_name_{i}': name for i, name in enumerate(batch)}
+        placeholders = ', '.join(':' + key for key in params)
+        rows = conn.execute(text(f'''
+            SELECT id, name, COALESCE(image_url, '') AS image_url
+              FROM global_products
+             WHERE lower(trim(name)) IN ({placeholders})
+               AND lower(COALESCE(status, 'active')) = 'active'
+             ORDER BY id
+        '''), params).mappings().all()
+        for product in rows:
+            key = ' '.join(str(product.get('name') or '').strip().lower().split())
+            result.setdefault(key, []).append((
+                str(product.get('id') or '').strip(),
+                str(product.get('image_url') or '').strip(),
+            ))
+    unique = {
+        name: entries[0] for name, entries in result.items()
+        if len(entries) == 1 and entries[0][0]
+    }
+    return {
+        str(row.get('id') or '').strip(): unique[' '.join(str(row.get('naam') or '').strip().lower().split())]
+        for row in article_rows
+        if str(row.get('id') or '').strip()
+        and ' '.join(str(row.get('naam') or '').strip().lower().split()) in unique
+    }
+
+
+def _confirmed_synonym_photo_urls(conn, product_ids: set[str]) -> dict[str, str]:
+    """Use ONLY directly confirmed central Catalogus synonym pairs.
+
+    Deliberately no name/Brick equivalence or transitive graph expansion.
+    Pick a stable peer with a photo; never modify a synonym or product.
+    """
+    if not product_ids:
+        return {}
+    placeholders = ', '.join(f':synonym_id_{i}' for i in range(len(product_ids)))
+    params = {f'synonym_id_{i}': pid for i, pid in enumerate(sorted(product_ids))}
+    rows = conn.execute(
+        text(f'''
+            SELECT asl.left_product_id AS source_id,
+                   peer.id AS peer_id, COALESCE(peer.image_url, '') AS image_url
+            FROM article_synonym_links asl
+            JOIN global_products peer ON peer.id = asl.right_product_id
+            WHERE asl.left_product_id IN ({placeholders})
+              AND lower(COALESCE(peer.status, 'active')) = 'active'
+              AND COALESCE(trim(peer.image_url), '') <> ''
+            UNION ALL
+            SELECT asl.right_product_id AS source_id,
+                   peer.id AS peer_id, COALESCE(peer.image_url, '') AS image_url
+            FROM article_synonym_links asl
+            JOIN global_products peer ON peer.id = asl.left_product_id
+            WHERE asl.right_product_id IN ({placeholders})
+              AND lower(COALESCE(peer.status, 'active')) = 'active'
+              AND COALESCE(trim(peer.image_url), '') <> ''
+            ORDER BY source_id, peer_id
+        '''),
+        params,
+    ).mappings().all()
+    found = {}
+    for row in rows:
+        source = str(row.get('source_id') or '').strip()
+        image_url = str(row.get('image_url') or '').strip()
+        if source and image_url:
+            found.setdefault(source, image_url)
+    return found
+
+
+def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Read-only own Catalogus photo first, then direct confirmed synonym photo.
+
+    An article is matched to a central product through its exact GTIN, product
+    identity or confirmed receipt/store link. Contradictory identities fail
+    closed. The confirmed synonym fallback is applied only if the own product
+    has no image; household data is never modified.
+    """
+    if not article_rows:
+        return {}
+    by_article = {}
+    for row in article_rows:
+        article_id = str(row.get('id') or '').strip()
+        product_id = str(row.get('global_product_id') or '').strip()
+        if article_id and product_id:
+            by_article[article_id] = product_id
+    ambiguous_articles = set()
+    canonical = _canonical_catalog_images_for_household_articles(
+        conn, text, article_rows, identity_by_article=by_article,
+        ambiguous_articles=ambiguous_articles,
+    )
+    unresolved = [
+        {**dict(row), 'image_url': canonical.get(str(row.get('id') or '').strip(), '')}
+        for row in article_rows
+        if not str(row.get('image_url') or '').strip()
+        and not canonical.get(str(row.get('id') or '').strip(), '')
+    ]
+    # When an exact product is known, no other historical product may replace
+    # its own photo evidence; only a confirmed synonym can supply a fallback.
+    central_candidates = [
+        row for row in unresolved
+        if not by_article.get(str(row.get('id') or '').strip())
+    ]
+    central = _central_catalog_images_for_household_articles(
+        conn, text, central_candidates, identity_by_article=by_article,
+        ambiguous_articles=ambiguous_articles,
+    ) if central_candidates else {}
+    images = {**central, **canonical}
+    # Older households can predate all canonical IDs/receipt links. Only
+    # a unique, literal Catalogus name can then identify their exact product.
+    # If a barcode exists but no exact match was proven, do not override it.
+    exact_name_rows = [
+        row for row in unresolved
+        if not by_article.get(str(row.get('id') or '').strip())
+        and str(row.get('id') or '').strip() not in ambiguous_articles
+        and not str(row.get('barcode') or '').strip()
+        and str(row.get('naam') or '').strip()
+    ]
+    unique_names = _unique_exact_name_catalog_identifications(conn, exact_name_rows)
+    for article_id, (product_id, image_url) in unique_names.items():
+        by_article[article_id] = product_id
+        if image_url:
+            images[article_id] = image_url
+    unresolved_ids = {
+        str(row.get('id') or '').strip() for row in unresolved
+        if not images.get(str(row.get('id') or '').strip(), '')
+    }
+    source_product_ids = {by_article[a] for a in unresolved_ids if by_article.get(a)}
+    synonym_images = _confirmed_synonym_photo_urls(conn, source_product_ids)
+    for article_id in unresolved_ids:
+        product_id = by_article.get(article_id)
+        if product_id and synonym_images.get(product_id):
+            images[article_id] = synonym_images[product_id]
+    return images
 
 def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
     if not isinstance(payload, dict) or not isinstance(payload.get('rows'), list):
@@ -338,10 +501,6 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
     placeholders = ', '.join(f':article_id_{index}' for index in range(len(article_ids)))
     params = {f'article_id_{index}': article_id for index, article_id in enumerate(article_ids)}
     with engine.begin() as conn:
-        materialized_representative_images = materialize_household_representative_images(
-            conn,
-            article_ids,
-        )
         article_rows = conn.execute(
             text(
                 f'''
@@ -364,18 +523,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             ),
             params,
         ).mappings().all()
-        canonical_images = _canonical_catalog_images_for_household_articles(conn, text, article_rows)
-        central_projection_rows = [
-            {
-                **dict(article),
-                'image_url': (
-                    str(article.get('image_url') or '').strip()
-                    or canonical_images.get(str(article.get('id') or '').strip(), '')
-                ),
-            }
-            for article in article_rows
-        ]
-        derived_images = _central_catalog_images_for_household_articles(conn, text, central_projection_rows)
+        catalog_images = resolve_household_catalog_images(conn, text, article_rows)
 
     articles_by_id = {str(row.get('id') or ''): row for row in article_rows}
     projected = []
@@ -388,12 +536,11 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         canonical_name = str(article.get('naam') or '').strip()
         custom_name = str(article.get('custom_name') or '').strip()
         product_name = str(article.get('product_name') or '').strip()
+        # The Catalogus article, or one of its confirmed synonyms, is the
+        # sole presentation source. A broad GPC representative is not proof.
         image_url = (
-            str(article.get('representative_image_url') or '').strip()
-            or materialized_representative_images.get(article_id, '')
-            or str(article.get('image_url') or '').strip()
-            or canonical_images.get(article_id, '')
-            or derived_images.get(article_id, '')
+            str(article.get('image_url') or '').strip()
+            or catalog_images.get(article_id, '')
         )
         row['household_article_name'] = custom_name or canonical_name or str(row.get('artikel') or '')
         row['product_name'] = product_name or canonical_name or str(row.get('artikel') or '')

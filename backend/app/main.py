@@ -4490,7 +4490,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         text(
             """
             SELECT ha.id, ha.household_id, ha.naam, ha.custom_name, ha.min_stock, ha.ideal_stock, ha.favorite_store, ha.status,
-                   ha.global_product_id,
+                   ha.global_product_id, ha.barcode,
                    COALESCE(gp.name, '') AS product_name,
                    COALESCE(gp.image_url, '') AS image_url
             FROM household_articles ha
@@ -4568,6 +4568,24 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
 
+    # Enrich only the visible signals. Resolving every household item on each
+    # Bijna op refresh would make reads unnecessarily expensive for large homes.
+    missing_photo_ids = {
+        str(item.get('household_article_id') or '').strip()
+        for item in items if not normalize_optional_text_field(item.get('image_url'))
+    }
+    if missing_photo_ids:
+        from app.services.household_alias_policy import resolve_household_catalog_images
+        source_rows = [
+            dict(row) for row in article_rows
+            if str(row.get('id') or '').strip() in missing_photo_ids
+        ]
+        images = resolve_household_catalog_images(conn, text, source_rows)
+        for item in items:
+            if not normalize_optional_text_field(item.get('image_url')):
+                item['image_url'] = images.get(
+                    str(item.get('household_article_id') or '').strip(), ''
+                )
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),
@@ -19550,3 +19568,8 @@ app.include_router(api_router)
 # enrichment helpers exist. This makes Catalogus image_url and household aliases
 # part of the actual /api/dev/inventory-preview runtime response.
 install_household_alias_policy(sys.modules[__name__])
+
+# Delayed, bounded OFF photo fill is scheduled only after runtime startup.
+# It never blocks Kassa, Voorraad or Bijna op and does not edit existing photos.
+from app.services.catalog_photo_refresh_service import register_catalog_photo_refresh
+register_catalog_photo_refresh(app, engine)

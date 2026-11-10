@@ -483,3 +483,68 @@ prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
 Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
 vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
 gedeelde productidentiteit blijft niet koppelbaar.
+
+
+## Productfoto's: centrale Catalogus, Voorraad en Bijna op (10 november 2026)
+
+Voorraad en Bijna op gebruiken dezelfde **alleen-lezen** fotoprojectie.
+De prioriteit is voortaan: (1) de foto van het exacte artikel uit de
+centrale Catalogus; (2) als deze ontbreekt: een foto van een **rechtstreeks
+bevestigd Catalogussynoniem** met een beschikbare afbeelding. Een synoniemlink
+werkt in beide richtingen; als meerdere bevestigde synoniemen een foto
+hebben, wordt stabiel op product-ID gekozen. Is bij het artikel én al zijn
+rechtstreeks bevestigde synoniemen geen foto bekend, dan wordt **Geen foto**
+getoond. Er wordt niet naar een willekeurig gelijknamig artikel,
+GPC/GS1-classificatie of impliciet verbonden synoniem gezocht.
+
+Een huishoudartikel wordt eerst uitsluitend via de bestaande aantoonbaar
+exacte Catalogusidentiteiten, barcode of historisch **bevestigde**
+winkelartikel-/bonrelaties bij een centraal product geïdentificeerd.
+Tegenstrijdige identiteiten leveren geen afgeleide foto op. Deze presentatie
+verandert geen huishoudartikel, bon, voorraad, synoniem of productkoppeling.
+Bijna op controleert alleen de artikelen die daadwerkelijk als signaal
+zichtbaar zijn. Historisch opgeslagen, grof op GPC gebaseerde
+representatieve foto's hebben geen voorrang en worden niet als presentatiebron
+voor Voorraad gebruikt.
+
+De centrale Catalogus vult ontbrekende foto's daarnaast op de achtergrond,
+maximaal **vijf exacte OFF-GTIN-opvragen per uur per backendproces**, vanaf
+vijf minuten na de applicatiestart. De bestaande officiële OFF-adapter verifieert
+de barcode. Alleen een HTTPS-afbeelding op een vertrouwd OFF-afbeeldingsdomein
+mag als nieuwe `global_products.image_url` worden opgeslagen. De database
+controleert bij schrijven opnieuw dat de betrokken Catalogusproduct-ID én
+barcode onveranderd zijn en dat de foto nog steeds ontbreekt. OFF-uitval laat
+de catalogusgegevens intact en wordt later opnieuw geprobeerd. Artikelen
+zonder geldige barcode krijgen geen foto op basis van hun naam.
+
+Deze achtergrondtaak blokkeert geen scherm of opstarthealthcheck, vraagt geen
+AI-/OFF-licentie en kan voor offline omgevingen worden uitgezet via
+`REZZERV_CATALOG_PHOTO_AUTOFILL_ENABLED=0`. De automatische aanvulling betekent
+niet dat OFF voor iedere barcode een foto heeft; gebroken historische fotolinks
+worden niet automatisch vervangen. Deze taak verricht geen downloads van
+afbeeldingsbestanden, maar slaat alleen de expliciete OFF-foto-URL op.
+
+
+### Historische huishoudartikelen zonder directe Cataloguskoppeling
+
+Veel bestaande huishoudartikelen hebben geen `global_product_id` en zijn
+gemaakt voordat centrale koppelingen werden vastgelegd. Ook bij deze
+artikelen blijft de fotoregel gelden: eigen Catalogusfoto vóór een direct
+bevestigd synoniem. De uitleesprojectie mag daarom aanvullend een
+**unieke exact gelijke artikelnaam** gebruiken om een centrale identiteit
+te herkennen wanneer barcode-, productidentiteits- en bevestigde
+bon/winkelkoppelingen ontbreken. Dit vereist precies één actief
+Catalogusartikel met exact dezelfde naam (hoofdlettergebruik en
+omringende spaties buiten beschouwing); bij dubbele Catalogusnamen,
+afwijkende barcodes of tegenstrijdige eerdere productidentiteiten gebeurt
+dit nadrukkelijk niet. Een vergelijkbare naam, vertaling, enkelvoud/
+meervoud, ingekorte kassabonafkorting, winkelmerk of taxonomie is
+nooit voldoende. Er worden geen koppelingen in de database aangemaakt.
+Een artikel zonder verifieerbare Catalogusidentiteit blijft op **Geen foto**
+staan, ook als een los Catalogusartikel met een vergelijkbare naam wél
+een afbeelding heeft.
+
+De Bijna op-tabel behoudt bij verticaal scrollen de kolomkoppen en
+filterrij zichtbaar, met dezelfde sticky-header en sticky-filters-regels
+als de standaard Voorraadtabel. De scrollbar en pagineringsknoppen
+blijven onder de tabel en overdekken geen rij.
