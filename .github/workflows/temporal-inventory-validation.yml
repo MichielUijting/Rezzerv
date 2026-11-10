@@ -9,6 +9,8 @@ on:
       - 'backend/app/services/canonical_inventory_identity_service.py'
       - 'backend/app/services/synonym_auto_consume_identity.py'
       - 'backend/app/services/synonym_auto_consume_service.py'
+      - 'backend/app/services/purchase_import_location_policy_patch.py'
+      - 'backend/tests/test_synonym_auto_consume_route_wiring.py'
       - 'backend/tests/test_synonym_auto_consume_identity.py'
       - 'backend/tests/test_synonym_auto_consume_service.py'
       - 'backend/app/integrations/receipt_scanners/**'
@@ -35,6 +37,8 @@ jobs:
           backend/app/services/canonical_inventory_identity_service.py
           backend/app/services/synonym_auto_consume_identity.py
           backend/app/services/synonym_auto_consume_service.py
+          backend/app/services/purchase_import_location_policy_patch.py
+          backend/tests/test_synonym_auto_consume_route_wiring.py
           backend/tests/test_synonym_auto_consume_identity.py
           backend/tests/test_synonym_auto_consume_service.py
           backend/tests/test_inventory_event_writer_temporal_contract.py
@@ -52,5 +56,6 @@ jobs:
           backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
           backend/tests/test_synonym_auto_consume_identity.py
           backend/tests/test_synonym_auto_consume_service.py
+          backend/tests/test_synonym_auto_consume_route_wiring.py
           backend/tests/test_product_day_auto_consume_service.py
           backend/tests/test_product_day_auto_consume_integration_contract.py
