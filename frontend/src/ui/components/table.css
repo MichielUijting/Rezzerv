@@ -280,3 +280,12 @@ table.rz-table{
   padding-top: 4px;
   flex-shrink: 0;
 }
+
+/* Legacy screens that use the shared Table and standalone Pagination
+   (Catalogus, Voorraad, Bijna op) need the same visual clearance. */
+.rz-table-wrapper + .rz-pagination,
+.rz-table-wrapper + .rz-external-databases-pagination {
+  position: relative;
+  clear: both;
+  margin-top: 24px;
+}
