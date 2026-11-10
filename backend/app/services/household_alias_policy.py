@@ -335,20 +335,22 @@ def _confirmed_synonym_photo_urls(conn, product_ids: set[str]) -> dict[str, str]
     params = {f'synonym_id_{i}': pid for i, pid in enumerate(sorted(product_ids))}
     rows = conn.execute(
         text(f'''
-            SELECT
-                CASE WHEN asl.left_product_id IN ({placeholders})
-                     THEN asl.left_product_id ELSE asl.right_product_id END AS source_id,
-                peer.id AS peer_id,
-                COALESCE(peer.image_url, '') AS image_url
+            SELECT asl.left_product_id AS source_id,
+                   peer.id AS peer_id, COALESCE(peer.image_url, '') AS image_url
             FROM article_synonym_links asl
-            JOIN global_products peer ON peer.id = CASE
-                WHEN asl.left_product_id IN ({placeholders})
-                THEN asl.right_product_id ELSE asl.left_product_id END
-            WHERE (asl.left_product_id IN ({placeholders})
-                OR asl.right_product_id IN ({placeholders}))
+            JOIN global_products peer ON peer.id = asl.right_product_id
+            WHERE asl.left_product_id IN ({placeholders})
               AND lower(COALESCE(peer.status, 'active')) = 'active'
               AND COALESCE(trim(peer.image_url), '') <> ''
-            ORDER BY source_id, peer.id
+            UNION ALL
+            SELECT asl.right_product_id AS source_id,
+                   peer.id AS peer_id, COALESCE(peer.image_url, '') AS image_url
+            FROM article_synonym_links asl
+            JOIN global_products peer ON peer.id = asl.left_product_id
+            WHERE asl.right_product_id IN ({placeholders})
+              AND lower(COALESCE(peer.status, 'active')) = 'active'
+              AND COALESCE(trim(peer.image_url), '') <> ''
+            ORDER BY source_id, peer_id
         '''),
         params,
     ).mappings().all()
