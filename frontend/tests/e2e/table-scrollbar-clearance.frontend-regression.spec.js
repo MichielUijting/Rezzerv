@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 
 // CSS layout tests do not depend on an authenticated session.
 test.use({ storageState: { cookies: [], origins: [] } })
@@ -103,6 +104,8 @@ test('shared table pagination clears bottom scrollbar on stock, low-stock and ca
 
 
 test('Bijna op retains column headings and filter fields during vertical table scroll', async ({ page }) => {
+  const source = readFileSync(new URL('../../src/features/almostOut/AlmostOutPage.jsx', import.meta.url), 'utf8')
+  expect(source).toContain('tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters"')
   await page.goto('/login')
   const geometry = await page.evaluate(() => {
     const wrapper = document.createElement('div')
