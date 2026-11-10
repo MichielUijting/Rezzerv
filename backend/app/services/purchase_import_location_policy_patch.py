@@ -797,6 +797,7 @@ def _process_locationless_ready_only_batch(
                 history_lookup_result_count = 0
                 history_contains_purchase_event = False
                 applied_deduction_quantity = 0
+                synonym_savepoint = conn.begin_nested() if synonym_plan is not None else None
 
                 try:
                     event_id = m.create_inventory_purchase_event(
@@ -906,6 +907,8 @@ def _process_locationless_ready_only_batch(
                         )
                     )
                 except Exception as exc:
+                    if synonym_savepoint is not None:
+                        synonym_savepoint.rollback()
                     detail_parts = [
                         f"exception_type={exc.__class__.__name__}",
                         f"exception_message={str(exc) or exc.__class__.__name__}",
@@ -972,6 +975,8 @@ def _process_locationless_ready_only_batch(
                     )
                     failed_count += 1
                     continue
+                if synonym_savepoint is not None:
+                    synonym_savepoint.commit()
 
                 diagnostic = m.build_purchase_import_line_diagnostic(
                     line=line,
