@@ -36,7 +36,7 @@ def _normalize_catalog_gtin(value: Any) -> str:
     return ''.join(character for character in str(value or '') if character.isdigit())
 
 
-def _canonical_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None) -> dict[str, str]:
+def _canonical_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None, ambiguous_articles=None) -> dict[str, str]:
     """Resolve images from canonical household/product identities without guessing by name.
 
     Some existing households predate household_articles.global_product_id. They can still
@@ -127,6 +127,8 @@ def _canonical_catalog_images_for_household_articles(conn, text, article_rows: l
     images_by_article: dict[str, str] = {}
     for article_id, products in products_by_article.items():
         if len(products) != 1:
+            if len(products) > 1 and ambiguous_articles is not None:
+                ambiguous_articles.add(article_id)
             continue
         product_id, image_url = next(iter(products.items()))
         if identity_by_article is not None:
@@ -138,7 +140,7 @@ def _canonical_catalog_images_for_household_articles(conn, text, article_rows: l
             images_by_article[article_id] = image_url
     return images_by_article
 
-def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None) -> dict[str, str]:
+def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]], *, identity_by_article=None, ambiguous_articles=None) -> dict[str, str]:
     """Resolve Catalogus images without mutating household-specific article links.
 
     Exact Catalogus links created in Externe databases are platform-wide and deliberately
@@ -315,6 +317,8 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
             product_id = str(link.get('global_product_id') or '').strip()
             if product_id:
                 products[product_id] = str(link.get('image_url') or '').strip()
+        if len(products) > 1 and ambiguous_articles is not None:
+            ambiguous_articles.add(article_id)
         if len(products) == 1:
             product_id, image_url = next(iter(products.items()))
             if identity_by_article is not None:
@@ -428,8 +432,10 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
         product_id = str(row.get('global_product_id') or '').strip()
         if article_id and product_id:
             by_article[article_id] = product_id
+    ambiguous_articles = set()
     canonical = _canonical_catalog_images_for_household_articles(
-        conn, text, article_rows, identity_by_article=by_article
+        conn, text, article_rows, identity_by_article=by_article,
+        ambiguous_articles=ambiguous_articles,
     )
     unresolved = [
         {**dict(row), 'image_url': canonical.get(str(row.get('id') or '').strip(), '')}
@@ -444,7 +450,8 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
         if not by_article.get(str(row.get('id') or '').strip())
     ]
     central = _central_catalog_images_for_household_articles(
-        conn, text, central_candidates, identity_by_article=by_article
+        conn, text, central_candidates, identity_by_article=by_article,
+        ambiguous_articles=ambiguous_articles,
     ) if central_candidates else {}
     images = {**central, **canonical}
     # Older households can predate all canonical IDs/receipt links. Only
@@ -453,6 +460,7 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
     exact_name_rows = [
         row for row in unresolved
         if not by_article.get(str(row.get('id') or '').strip())
+        and str(row.get('id') or '').strip() not in ambiguous_articles
         and not str(row.get('barcode') or '').strip()
         and str(row.get('naam') or '').strip()
     ]
