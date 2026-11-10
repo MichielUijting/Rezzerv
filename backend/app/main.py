@@ -4490,7 +4490,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         text(
             """
             SELECT ha.id, ha.household_id, ha.naam, ha.custom_name, ha.min_stock, ha.ideal_stock, ha.favorite_store, ha.status,
-                   ha.global_product_id,
+                   ha.global_product_id, ha.barcode,
                    COALESCE(gp.name, '') AS product_name,
                    COALESCE(gp.image_url, '') AS image_url
             FROM household_articles ha
@@ -4504,6 +4504,22 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     ).mappings().all()
 
     total_active = len(article_rows)
+    if article_rows:
+        # Voorraad and Bijna op must use the same exact Catalogus photo
+        # evidence, including historically confirmed receipt/product links.
+        # The resolver is read-only: never copy an arbitrary synonym/Brick image.
+        from app.services.household_alias_policy import resolve_household_catalog_images
+        catalog_images = resolve_household_catalog_images(conn, text, [dict(row) for row in article_rows])
+        article_rows = [
+            {
+                **dict(row),
+                'image_url': (
+                    normalize_optional_text_field(row.get('image_url'))
+                    or catalog_images.get(str(row.get('id') or '').strip(), '')
+                ),
+            }
+            for row in article_rows
+        ]
     if not article_rows:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
         return []
