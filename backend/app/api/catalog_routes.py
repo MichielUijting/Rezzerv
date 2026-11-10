@@ -844,6 +844,11 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
             # Superuser explicitly opted to keep the GTIN only. Never confirm the
             # incompatible OFF product or import its identity, metadata or image.
             results = []
+    # For an explicit barcode-only override, never retry OFF confirmation. Its
+    # receipt-bound selection proof may be incompatible, but must not be
+    # bypassed to confirm the OFF product. Save only manual GTIN evidence.
+    if payload.allow_off_mismatch:
+        results = []
     if results:
         candidate = results[0]
         if not candidate.get("selection_proof"):
@@ -857,6 +862,22 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
                 "selection_proof": candidate["selection_proof"],
             })
         except ValueError as error:
+            # A receipt-bound proof mismatch is a product-identity warning,
+            # not authorization to bypass signature checks or link OFF data.
+            # Offer the Superuser an explicit GTIN-only choice instead.
+            if str(error) == "Dit zoekresultaat hoort niet bij het geselecteerde bonartikel.":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "off_identity_mismatch",
+                        "message": "Dit OFF-zoekresultaat hoort niet bij het geselecteerde bonartikel. Er is niets opgeslagen.",
+                        "product_name": str(candidate.get("product_name") or ""),
+                        "brand": str(candidate.get("brand") or ""),
+                        "quantity": str(candidate.get("quantity") or ""),
+                        "gtin": gtin,
+                        "conflict_reason": str(error),
+                    },
+                ) from error
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {
             "saved": bool(result.get("ok")), "source": "off",
