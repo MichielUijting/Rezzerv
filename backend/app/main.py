@@ -19568,3 +19568,8 @@ app.include_router(api_router)
 # enrichment helpers exist. This makes Catalogus image_url and household aliases
 # part of the actual /api/dev/inventory-preview runtime response.
 install_household_alias_policy(sys.modules[__name__])
+
+# Delayed, bounded OFF photo fill is scheduled only after runtime startup.
+# It never blocks Kassa, Voorraad or Bijna op and does not edit existing photos.
+from app.services.catalog_photo_refresh_service import register_catalog_photo_refresh
+register_catalog_photo_refresh(app, engine)
