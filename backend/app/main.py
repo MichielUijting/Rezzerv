@@ -69,6 +69,10 @@ from app.services.canonical_inventory_identity_service import (
     get_inventory_total_by_household_article,
 )
 from app.services.product_day_auto_consume_service import compute_product_day_auto_deduction
+from app.services.synonym_auto_consume_service import (
+    plan_confirmed_synonym_deduction,
+    apply_confirmed_synonym_deduction,
+)
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.services.receipt_inventory_lifecycle_service import (
@@ -18629,6 +18633,34 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                 decision_reason = auto_consume_decision["decision_reason"]
                 should_auto_consume = auto_consume_decision["should_auto_consume"]
                 requested_deduction_quantity = auto_consume_decision["requested_deduction_quantity"]
+
+                synonym_plan = None
+                if household_mode != ARTICLE_AUTO_CONSUME_NONE:
+                    def _synonym_member_mode(member_id, member_name):
+                        member_override = get_household_article_auto_consume_override(
+                            conn, str(batch["household_id"]), str(member_id)
+                        )
+                        member_consumable = get_article_consumable_state(
+                            conn, str(batch["household_id"]), str(member_id), member_name
+                        )
+                        return resolve_auto_consume_effective_mode(
+                            household_mode, member_override, member_consumable
+                        )
+
+                    synonym_plan = plan_confirmed_synonym_deduction(
+                        conn,
+                        household_id=str(batch["household_id"]),
+                        purchased_article_id=str(article_id),
+                        purchase_date=purchase_date,
+                        purchased_quantity=quantity,
+                        household_mode=household_mode,
+                        effective_mode_for_article=_synonym_member_mode,
+                    )
+                    if synonym_plan is not None:
+                        requested_deduction_quantity = synonym_plan["requested_deduction_quantity"]
+                        should_auto_consume = requested_deduction_quantity > 0
+                        effective_mode = synonym_plan["mode"]
+                        decision_reason = "confirmed direct Catalogus synonym pair"
                 current_stage = 'purchase_event_write'
                 event_id = None
                 auto_event_id = None
@@ -18669,27 +18701,42 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     applied_deduction_quantity = 0
                     if should_auto_consume:
                         current_stage = 'auto_consume_write'
-                        auto_event_id = create_auto_repurchase_event(
-                            conn,
-                            batch["household_id"],
-                            article_id,
-                            article_name,
-                            resolved_location,
-                            quantity=requested_deduction_quantity,
-                            purchase_date=purchase_date,
-                        )
-                        consumption_result = apply_inventory_consumption(
-                            conn,
-                            batch["household_id"],
-                            article_name,
-                            requested_deduction_quantity,
-                            resolved_location,
-                            household_article_id=str(article_id),
-                            mode=effective_mode,
-                            protected_quantity_on_purchase_row=int(quantity),
-                            protected_purchase_inventory_id=purchase_inventory_id,
-                        )
-                        applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
+                        if synonym_plan is not None:
+                            synonym_result = apply_confirmed_synonym_deduction(
+                                conn,
+                                household_id=str(batch["household_id"]),
+                                purchased_article_id=str(article_id),
+                                purchased_quantity=int(quantity),
+                                purchase_inventory_id=purchase_inventory_id,
+                                resolved_location=resolved_location,
+                                plan=synonym_plan,
+                                create_auto_event=create_auto_repurchase_event,
+                                apply_stock_consumption=apply_inventory_consumption,
+                            )
+                            applied_deduction_quantity = int(synonym_result["applied_quantity"])
+                            auto_event_id = next(iter(synonym_result["event_ids"]), None)
+                        else:
+                            auto_event_id = create_auto_repurchase_event(
+                                conn,
+                                batch["household_id"],
+                                article_id,
+                                article_name,
+                                resolved_location,
+                                quantity=requested_deduction_quantity,
+                                purchase_date=purchase_date,
+                            )
+                            consumption_result = apply_inventory_consumption(
+                                conn,
+                                batch["household_id"],
+                                article_name,
+                                requested_deduction_quantity,
+                                resolved_location,
+                                household_article_id=str(article_id),
+                                mode=effective_mode,
+                                protected_quantity_on_purchase_row=int(quantity),
+                                protected_purchase_inventory_id=purchase_inventory_id,
+                            )
+                            applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
                     inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))
                 except Exception as exc:
                     detail_parts = [
