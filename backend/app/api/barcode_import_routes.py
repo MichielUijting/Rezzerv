@@ -83,6 +83,32 @@ def _live_index() -> dict[tuple[str, str, str], list[dict]]:
     return index
 
 
+def _matches_for_import(
+    index: dict[tuple[str, str, str], list[dict]],
+    key: tuple[str, str, str],
+) -> list[dict]:
+    """Resolve exact retailer identity, with a safe name-only fallback.
+
+    A blank retail article number is a legitimate source identity, not a
+    validation error. For it, require a unique retailer + normalized bontekst
+    across *all* article numbers. Never attach a numberless CSV row to a
+    differently numbered source or silently pick one of several candidates.
+    """
+    if key[2]:
+        return index.get(key, [])
+    same_name = [
+        item
+        for (retailer, label, _number), items in index.items()
+        if retailer == key[0] and label == key[1]
+        for item in items
+    ]
+    if len(same_name) != 1:
+        return same_name
+    if normalize_external_link_article_code(same_name[0].get("receipt_article_number")):
+        return []
+    return same_name
+
+
 @router.post("/preview")
 def preview_barcode_import(payload: PreviewRequest):
     _require_superuser()
@@ -122,11 +148,11 @@ def preview_barcode_import(payload: PreviewRequest):
             continue
         key = _key(row.get("Winkelketen"), row.get("Artikel"), row.get("Bonartikelnummer"))
         validation = validate_barcode(barcode, "gtin")
-        current = index.get(key, [])
+        current = _matches_for_import(index, key)
         status = "klaar"
         reason = ""
-        if not key[0] or not key[1] or not key[2]:
-            status, reason = "geblokkeerd", "Winkel, artikelnaam of bonartikelnummer ontbreekt."
+        if not key[0] or not key[1]:
+            status, reason = "geblokkeerd", "Winkelketen of artikelnaam ontbreekt."
         elif key in seen:
             status, reason = "geblokkeerd", "Dubbele artikelregel in het importbestand."
         elif not validation["valid"]:
@@ -137,7 +163,10 @@ def preview_barcode_import(payload: PreviewRequest):
                 "Afgeleide code uit het bonartikelnummer; geen aangetoonde productbarcode.",
             )
         elif len(current) != 1:
-            status, reason = "geblokkeerd", "Geen unieke overeenkomst in Artikelbeheer."
+            status, reason = "geblokkeerd", (
+                "Bonartikel zonder nummer is niet uniek op winkelketen en bonomschrijving."
+                if not key[2] else "Geen unieke overeenkomst in Artikelbeheer."
+            )
         elif current[0].get("link_status") != "unlinked" or current[0].get("article_code") or current[0].get("manual_barcode"):
             existing = current[0]
             catalog_gtin = str(existing.get("article_code") or "").strip()
@@ -238,7 +267,9 @@ def approve_barcode_import(payload: ApproveRequest):
             status_code=422,
             detail="Afgeleide code uit het bonartikelnummer is geen aangetoonde productbarcode.",
         )
-    matches = _live_index().get(_key(payload.retailer, payload.article, payload.article_number), [])
+    matches = _matches_for_import(
+        _live_index(), _key(payload.retailer, payload.article, payload.article_number),
+    )
     if len(matches) != 1 or str(matches[0].get("id")) != payload.receipt_item_id:
         raise HTTPException(status_code=409, detail="Artikelidentiteit is gewijzigd. Importeer het bestand opnieuw.")
     item = matches[0]
