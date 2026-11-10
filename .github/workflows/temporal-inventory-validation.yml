@@ -7,6 +7,10 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/services/temporal_inventory_service.py'
       - 'backend/app/services/canonical_inventory_identity_service.py'
+      - 'backend/app/services/synonym_auto_consume_identity.py'
+      - 'backend/app/services/synonym_auto_consume_service.py'
+      - 'backend/tests/test_synonym_auto_consume_identity.py'
+      - 'backend/tests/test_synonym_auto_consume_service.py'
       - 'backend/app/integrations/receipt_scanners/**'
       - 'backend/tests/test_inventory_event_writer_temporal_contract.py'
       - 'backend/tests/test_temporal_inventory_service.py'
@@ -29,6 +33,10 @@ jobs:
           python -m compileall -q
           backend/app/services/temporal_inventory_service.py
           backend/app/services/canonical_inventory_identity_service.py
+          backend/app/services/synonym_auto_consume_identity.py
+          backend/app/services/synonym_auto_consume_service.py
+          backend/tests/test_synonym_auto_consume_identity.py
+          backend/tests/test_synonym_auto_consume_service.py
           backend/tests/test_inventory_event_writer_temporal_contract.py
           backend/tests/test_temporal_inventory_service.py
           backend/tests/test_temporal_inventory_decimal_reconciliation.py
@@ -42,3 +50,7 @@ jobs:
           backend/tests/test_temporal_inventory_service.py
           backend/tests/test_temporal_inventory_decimal_reconciliation.py
           backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
+          backend/tests/test_synonym_auto_consume_identity.py
+          backend/tests/test_synonym_auto_consume_service.py
+          backend/tests/test_product_day_auto_consume_service.py
+          backend/tests/test_product_day_auto_consume_integration_contract.py
