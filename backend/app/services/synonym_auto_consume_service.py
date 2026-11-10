@@ -1,11 +1,10 @@
-"""Household-scoped, direct-Catalogus-pair repurchase deduction.
+"""Household-scoped, confirmed Catalogus synonym-group repurchase deduction.
 
-A pair is opt-in by verified identity, never by a household article name. All
+A group is derived from confirmed links and verified identity, never names. All
 reads/writes run inside the caller's receipt transaction. No schema mutation.
 """
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -16,7 +15,7 @@ from app.services.product_day_auto_consume_service import (
     AUTO_CONSUME_PURCHASED_QUANTITY,
     _canonical_purchase_day,
 )
-from app.services.synonym_auto_consume_identity import confirmed_household_synonym_pair
+from app.services.synonym_auto_consume_identity import confirmed_household_synonym_group
 
 
 def _whole(value) -> int:
@@ -36,7 +35,7 @@ def plan_confirmed_synonym_deduction(
     household_mode: str,
     effective_mode_for_article,
 ) -> dict | None:
-    """Plan a non-transitive two-article group; None means legacy single-article flow.
+    """Plan the whole confirmed component; None means legacy single-article flow.
 
     Does not write. The caller must keep the transaction open until the returned
     plan has been applied. A household mode of 'none' never deducts anything.
@@ -48,14 +47,14 @@ def plan_confirmed_synonym_deduction(
         return None
     household_id = str(household_id)
     purchased_article_id = str(purchased_article_id)
-    pair = confirmed_household_synonym_pair(conn, household_id, purchased_article_id)
-    if len(pair) != 2 or purchased_article_id not in pair:
+    group = confirmed_household_synonym_group(conn, household_id, purchased_article_id)
+    if len(group) < 2 or purchased_article_id not in group:
         return None
 
     # Both article rows are locked in deterministic order before any group read.
     # The purchase route already owns the containing transaction.
     member_rows = []
-    for article_id in sorted(pair):
+    for article_id in sorted(group):
         row = conn.execute(text("""
             SELECT id, naam, default_inventory_handling
             FROM household_articles
@@ -83,9 +82,9 @@ def plan_confirmed_synonym_deduction(
         SELECT MAX(substr(CAST(purchase_date AS TEXT),1,10))
         FROM inventory_events
         WHERE household_id=:household_id
-          AND household_article_id IN (:article_a, :article_b)
+          AND household_article_id = ANY(:article_ids)
           AND event_type='purchase' AND source='store_import'
-    """), {'household_id': household_id, 'article_a': pair[0], 'article_b': pair[1]}).scalar()
+    """), {'household_id': household_id, 'article_ids': list(group)}).scalar()
     if recent and str(recent) > day:
         return None
 
@@ -151,7 +150,7 @@ def plan_confirmed_synonym_deduction(
     total_prior_purchases = sum(prior_purchased.values())
     total_prior_deductions = sum(prior_deducted.values())
     # Today's preceding receipts are added back/removed to recover the
-    # start-of-day baseline even when a second shop sells a different synonym.
+    # start-of-day baseline even when other shops sell different group members.
     start_stock = total_pre - total_prior_purchases + total_prior_deductions
     if start_stock < 0:
         return None  # stock ledger cannot safely establish the baseline
@@ -168,7 +167,7 @@ def plan_confirmed_synonym_deduction(
     requested = min(requested, sum(
         pos['available_old'] for positions in stock_rows.values() for pos in positions
     ))
-    order = [article_id for article_id in pair if article_id != purchased_article_id]
+    order = [article_id for article_id in group if article_id != purchased_article_id]
     order.append(purchased_article_id)
     allocations = []
     remaining = requested
@@ -192,7 +191,7 @@ def plan_confirmed_synonym_deduction(
 
     return {
         'mode': mode,
-        'members': tuple(pair),
+        'members': tuple(group),
         'purchase_day': day,
         'requested_deduction_quantity': requested,
         'allocations': allocations,
