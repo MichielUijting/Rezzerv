@@ -128,6 +128,9 @@ def _canonical_catalog_images_for_household_articles(conn, text, article_rows: l
             continue
         product_id, image_url = next(iter(products.items()))
         if identity_by_article is not None:
+            previous_id = identity_by_article.get(article_id)
+            if previous_id and previous_id != product_id:
+                continue  # Conflicting product identity: fail closed.
             identity_by_article[article_id] = product_id
         if image_url:
             images_by_article[article_id] = image_url
@@ -313,6 +316,9 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
         if len(products) == 1:
             product_id, image_url = next(iter(products.items()))
             if identity_by_article is not None:
+                previous_id = identity_by_article.get(article_id)
+                if previous_id and previous_id != product_id:
+                    continue  # Never override a canonical product with a receipt.
                 identity_by_article[article_id] = product_id
             if image_url:
                 images_by_article[article_id] = image_url
@@ -385,9 +391,15 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
         if not str(row.get('image_url') or '').strip()
         and not canonical.get(str(row.get('id') or '').strip(), '')
     ]
+    # When an exact product is known, no other historical product may replace
+    # its own photo evidence; only a confirmed synonym can supply a fallback.
+    central_candidates = [
+        row for row in unresolved
+        if not by_article.get(str(row.get('id') or '').strip())
+    ]
     central = _central_catalog_images_for_household_articles(
-        conn, text, unresolved, identity_by_article=by_article
-    ) if unresolved else {}
+        conn, text, central_candidates, identity_by_article=by_article
+    ) if central_candidates else {}
     images = {**central, **canonical}
     unresolved_ids = {
         str(row.get('id') or '').strip() for row in unresolved
