@@ -1,0 +1,55 @@
+name: Synonym auto-consume PostgreSQL validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/services/synonym_auto_consume_identity.py'
+      - 'backend/app/services/synonym_auto_consume_service.py'
+      - 'backend/app/services/purchase_import_location_policy_patch.py'
+      - 'backend/tests/postgresql_synonym_auto_consume_selftest.py'
+      - '.github/workflows/synonym-auto-consume-postgresql-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgresql-synonym-repurchase:
+    name: Synonym repurchase event and stock integrity (PostgreSQL 17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_synonym_ci
+          POSTGRES_PASSWORD: only_for_isolated_ci
+          POSTGRES_DB: rezzerv_synonym_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_synonym_ci -d rezzerv_synonym_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_synonym_ci:only_for_isolated_ci@127.0.0.1:5432/rezzerv_synonym_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned minimal PostgreSQL dependencies
+        run: |
+          mapfile -t packages < <(grep -E '^(sqlalchemy|psycopg\[binary\])==' backend/requirements.txt)
+          test "${#packages[@]}" -eq 2
+          python -m pip install "${packages[@]}"
+      - name: Compile isolated PostgreSQL selftest
+        run: python -m py_compile backend/tests/postgresql_synonym_auto_consume_selftest.py
+      - name: Validate both modes same-day freshness actual stock locations and household isolation
+        run: python backend/tests/postgresql_synonym_auto_consume_selftest.py
