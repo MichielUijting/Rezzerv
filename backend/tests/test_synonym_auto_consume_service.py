@@ -1,4 +1,4 @@
-"""Targeted no-SQLite contracts for direct synonym repurchase processing."""
+"""Targeted no-SQLite contracts for confirmed synonym-group repurchase processing."""
 from __future__ import annotations
 
 from app.services import synonym_auto_consume_service as svc
@@ -27,14 +27,16 @@ class _Result:
 
 
 class _Conn:
-    def __init__(self, *, pre_a=2, pre_b=3, purchases_a=0, purchases_b=0,
-                 deducted_a=0, deducted_b=0, future=None, direct=False):
+    def __init__(self, *, pre_a=2, pre_b=3, pre_c=0, purchases_a=0, purchases_b=0,
+                 purchases_c=0, deducted_a=0, deducted_b=0, deducted_c=0,
+                 future=None, direct=False):
         self.rows = {
             "a": [] if pre_a == 0 else [dict(id="inv-a", aantal=pre_a, space_id="loc-a", sublocation_id=None)],
             "b": [] if pre_b == 0 else [dict(id="inv-b", aantal=pre_b, space_id="loc-b", sublocation_id=None)],
+            "c": [] if pre_c == 0 else [dict(id="inv-c", aantal=pre_c, space_id="loc-c", sublocation_id=None)],
         }
-        self.purchases = {"a": purchases_a, "b": purchases_b}
-        self.deducted = {"a": deducted_a, "b": deducted_b}
+        self.purchases = {"a": purchases_a, "b": purchases_b, "c": purchases_c}
+        self.deducted = {"a": deducted_a, "b": deducted_b, "c": deducted_c}
         self.future = future
         self.direct = direct
         self.queries = []
@@ -87,7 +89,7 @@ class _Conn:
 def _plan(monkeypatch, conn, *, mode="consume_purchased_quantity",
           new="a", bought=2, day="2026-11-10", household="h1",
           mode_for_article=None):
-    monkeypatch.setattr(svc, "confirmed_household_synonym_pair",
+    monkeypatch.setattr(svc, "confirmed_household_synonym_group",
                         lambda connection, household_id, article_id: ("a", "b"))
     return svc.plan_confirmed_synonym_deduction(
         conn,
@@ -252,3 +254,69 @@ def test_partial_write_raises_and_requires_transaction_rollback():
         assert "niet atomair bevestigd" in str(error)
     else:
         raise AssertionError("partial deduction must abort the transaction")
+
+
+def test_confirmed_three_member_chain_quantity_mode(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=3, pre_c=4)
+    monkeypatch.setattr(svc, "confirmed_household_synonym_group",
+                        lambda connection, household_id, article_id: ("a", "b", "c"))
+    result = svc.plan_confirmed_synonym_deduction(
+        conn, household_id="h1", purchased_article_id="a",
+        purchase_date="2026-11-10", purchased_quantity=6,
+        household_mode="consume_purchased_quantity",
+        effective_mode_for_article=lambda article_id, name: "consume_purchased_quantity",
+    )
+    assert result["members"] == ("a", "b", "c")
+    assert result["requested_deduction_quantity"] == 6
+    assert [(x["article_id"], x["quantity"]) for x in result["allocations"]] == [
+        ("b", 3), ("c", 3)
+    ]
+
+
+def test_three_member_group_all_existing_cross_location(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=3, pre_c=4)
+    monkeypatch.setattr(svc, "confirmed_household_synonym_group",
+                        lambda connection, household_id, article_id: ("a", "b", "c"))
+    result = svc.plan_confirmed_synonym_deduction(
+        conn, household_id="h1", purchased_article_id="c",
+        purchase_date="2026-11-10", purchased_quantity=1,
+        household_mode="consume_all_existing_before_purchase",
+        effective_mode_for_article=lambda article_id, name: "consume_all_existing_before_purchase",
+    )
+    assert result["requested_deduction_quantity"] == 9
+    assert [(x["article_id"], x["quantity"]) for x in result["allocations"]] == [
+        ("a", 2), ("b", 3), ("c", 4)
+    ]
+
+
+def test_group_cumulative_multiple_shops_preserves_today_stock(monkeypatch):
+    # A first shop bought A2, consuming B2; a different shop then bought C3.
+    conn = _Conn(pre_a=4, pre_b=1, pre_c=4, purchases_a=2, deducted_b=2)
+    monkeypatch.setattr(svc, "confirmed_household_synonym_group",
+                        lambda connection, household_id, article_id: ("a", "b", "c"))
+    result = svc.plan_confirmed_synonym_deduction(
+        conn, household_id="h1", purchased_article_id="c",
+        purchase_date="2026-11-10", purchased_quantity=3,
+        household_mode="consume_purchased_quantity",
+        effective_mode_for_article=lambda article_id, name: "consume_purchased_quantity",
+    )
+    assert result["day_start_stock"] == 9
+    assert result["prior_day_purchased_quantity"] == 2
+    assert result["cumulative_day_purchased_quantity"] == 5
+    assert result["requested_deduction_quantity"] == 3
+    assert [(x["article_id"], x["quantity"]) for x in result["allocations"]] == [
+        ("a", 2), ("b", 1)
+    ]
+
+
+def test_three_member_group_conflicting_override_fails_closed(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=3, pre_c=4)
+    monkeypatch.setattr(svc, "confirmed_household_synonym_group",
+                        lambda connection, household_id, article_id: ("a", "b", "c"))
+    assert svc.plan_confirmed_synonym_deduction(
+        conn, household_id="h1", purchased_article_id="a",
+        purchase_date="2026-11-10", purchased_quantity=3,
+        household_mode="consume_purchased_quantity",
+        effective_mode_for_article=lambda article_id, name:
+            "none" if article_id == "c" else "consume_purchased_quantity",
+    ) is None
