@@ -15,9 +15,13 @@ for (const width of [390, 1280]) {
     const options = [
       { id: 'c', name: 'Kruimige aardappelen', primary_gtin: '08712345678906',
         status: 'linked', status_label: 'Al gekoppeld', linkable: false,
+        review_level: 'check', review_label: 'Controleren',
+        review_reason: 'Verschil in productsoort',
         fingerprint: 'c'.repeat(64), reason: 'Al gekoppeld', manual: true },
       { id: 'b', name: 'Aardappelen', primary_gtin: '08718452513666',
         status: 'suggested', status_label: 'Voorstel', linkable: true,
+        review_level: 'strong', review_label: 'Sterke kandidaat',
+        review_reason: 'Zelfde artikelnaam en inhoud; controleer de overige productkenmerken.',
         fingerprint: 'b'.repeat(64), manual: false },
       { id: 'd', name: 'Snijbonen', primary_gtin: '08712345678913',
         status: 'other', status_label: 'Classificatie kiezen', linkable: false,
@@ -137,6 +141,14 @@ for (const width of [390, 1280]) {
     await expect(right.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-linked/)
     await expect(right.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-suggested/)
     await expect(right.locator('tbody tr').nth(2)).toHaveClass(/rz-synonym-relation-other/)
+    await expect(right.getByTestId('synonym-review-c')).toContainText('Controleren')
+    await expect(right.getByTestId('synonym-review-b')).toContainText('Sterke kandidaat')
+    // Preselection is never a write and never selects already-confirmed relations.
+    await page.getByRole('button', { name: 'Sterke voorstellen selecteren' }).click()
+    await expect(right.locator('tbody tr').nth(0).getByRole('checkbox')).not.toBeChecked()
+    await expect(right.locator('tbody tr').nth(1).getByRole('checkbox')).toBeChecked()
+    expect(posts).toHaveLength(0)
+    await right.locator('tbody tr').nth(1).getByRole('checkbox').uncheck()
     await expect(right).not.toContainText('08719587325926')
     await expect(right.getByRole('checkbox')).toHaveCount(10)
     const conflictCheckbox = right.locator('tbody tr').filter({ hasText: '08712345678913' }).getByRole('checkbox')

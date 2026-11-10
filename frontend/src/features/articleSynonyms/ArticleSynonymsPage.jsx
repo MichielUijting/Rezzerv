@@ -131,6 +131,14 @@ export default function ArticleSynonymsPage({ embedded = false }) {
   )
   const selectedLinks = options.filter((item) => checked.has(item.id) && item.status !== 'linked')
   const selectedUnlinks = options.filter((item) => checked.has(item.id) && item.status === 'linked')
+  const strongSuggestions = options.filter((item) =>
+    item.status !== 'linked' && item.linkable && item.review_level === 'strong'
+  )
+  function selectStrongSuggestions() {
+    if (savingRef.current || loadingOptions) return
+    // Explicit user action: only preselect; never commit a relation.
+    setChecked(new Set(strongSuggestions.slice(0, 200).map((item) => item.id)))
+  }
 
   async function submitChange(action, selections, decisions = [], rethrow = false) {
     if (savingRef.current) return
@@ -372,7 +380,7 @@ export default function ArticleSynonymsPage({ embedded = false }) {
               className={`rz-synonym-analysis-candidate-row rz-synonym-relation-${item.status}`}
               aria-selected={checked.has(item.id)}
               aria-label={`${item.status_label}: ${item.name}, barcode ${item.code}`}
-              title={item.reason ? `${item.status_label}: ${item.reason}` : item.status_label}
+              title={[item.status_label, item.review_label, item.review_reason, item.reason].filter(Boolean).join(': ')}
               onClick={() => toggle(item)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -387,11 +395,16 @@ export default function ArticleSynonymsPage({ embedded = false }) {
                 onClick={(event) => event.stopPropagation()}
                 onChange={() => toggle(item)} /></td>
               <td><CatalogProductImage imageUrl={item.image_url} productName={item.name} compact /></td>
-              <td>{item.name}</td>
+              <td>{item.name}{item.review_label ? <div className="rz-synonym-review-hint"
+                data-testid={`synonym-review-${item.id}`}>
+                {item.review_label}{item.review_reason ? `: ${item.review_reason}` : ''}
+              </div> : null}</td>
               <td>{item.code}</td>
             </tr>}
           />
           <div className="rz-synonym-analysis-actions">
+            <Button disabled={loading || loadingOptions || saving || !strongSuggestions.length}
+              onClick={selectStrongSuggestions}>Sterke voorstellen selecteren</Button>
             <Button disabled={loading || loadingOptions || saving || !selectedLinks.length}
               onClick={() => changeLinks('link')}>Koppelen</Button>
             <Button disabled={loading || loadingOptions || saving || !selectedUnlinks.length}

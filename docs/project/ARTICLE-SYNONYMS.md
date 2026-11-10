@@ -424,3 +424,32 @@ een **lees-/beoordelingsroute**, geen belofte dat de barcode daar direct
 gewijzigd kan worden. Correctie van een bestaande foutieve GTIN vraagt
 een afzonderlijke bevoegdheidsbewaakte identiteitsbeheerroute en maakt
 uitdrukkelijk geen deel uit van deze PR.
+
+## Read-only kwaliteitsbeoordeling en voorselectie (10 november 2026)
+
+Bij de bestaande winkelonafhankelijke Synoniemen-actie toont het rechterpaneel
+een verklaarbaar kwaliteitsadvies per andere Catalogusartikel, ook bij bestaande
+bevestigde relaties. Een signaal **Controleren** wijst op bekende verschillen in
+productsoort, melkvet, lactose, zout, suiker, bereiding, smaak of verpakking.
+Dit is een **controleverzoek**, geen constatering dat een bevestigde relatie
+automatisch ongeldig is. Ontbrekende kenmerken zijn nooit bewijs van gelijkheid.
+
+**Sterke kandidaat** vereist momenteel expliciet dezelfde genormaliseerde
+artikelnaam én bekende gelijke inhoud (gram/kilogram of liter/milliliter
+genormaliseerd). Verschillende winkels en merken zijn geen tegenindicatie.
+Andere voorstellen krijgen **Beoordelen**. Scores blijven tekstscores,
+geen betrouwbaarheidspercentages. Het kwalificerende advies vervangt
+nooit de bestaande identiteits-, fingerprint-, classificatie- of
+autorisatiechecks.
+
+De knop **Sterke voorstellen selecteren** selecteert alleen niet-gekoppelde,
+nog koppelbare sterke kandidaten (maximaal 200). Die selectie schrijft niets.
+Pas een expliciete druk op **Koppelen** door de bevoegde gebruiker start de
+bestaande review/keuze-overlay en atomische bevestiging. **Ontkoppelen**
+blijft eveneens expliciet. Er worden nooit bestaande relaties zelfstandig
+verwijderd, producten samengevoegd, of private huishoud-/voorraadgegevens
+gelezen of gewijzigd. De risicobeoordeling geldt voor het gecontroleerde paar
+en kan zonder aanvullende productgegevens conservatief blijven.
+
+Deze stap voegt geen analyse van onzichtbare bonartikeldata toe, gebruikt
+geen externe AI- of licentiebron en verandert de Bijna op-aggregatie niet.

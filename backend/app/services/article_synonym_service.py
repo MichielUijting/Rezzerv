@@ -15,6 +15,7 @@ import unicodedata
 from sqlalchemy import inspect, text
 
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.synonym_equivalence_review import review_pair
 
 METHOD = 'word12-char35-tfidf-v1'
 MIN_SCORE = 0.20
@@ -271,6 +272,7 @@ def product_link_options(products, confirmed, product_id):
         conflict = _manual_pair_conflict(left, right) if not linked else None
         safe = conflict is None
         state = 'linked' if linked else 'suggested' if suggestion else 'other'
+        review = review_pair(left, right)
         options.append({
             'id': product['id'],
             'name': product['name'],
@@ -281,6 +283,7 @@ def product_link_options(products, confirmed, product_id):
             'primary_gtin': product.get('primary_gtin') or '',
             'article_codes': product.get('article_codes') or [],
             'status': state,
+            **review,
             'status_label': ('Al gekoppeld' if linked
                              else 'Classificatie kiezen' if (conflict or {}).get('type') == 'gpc_mismatch'
                              else 'Niet koppelbaar' if not safe
