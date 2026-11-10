@@ -247,5 +247,6 @@ def approve_barcode_import(payload: ApproveRequest):
     return save_ed2_manual_barcode(
         Ed2ManualBarcodeRequest(receipt_item_id=payload.receipt_item_id,
                                 gtin=validation["normalized_value"],
-                                allow_off_mismatch=payload.allow_off_mismatch)
+                                allow_off_mismatch=payload.allow_off_mismatch,
+                                import_off_product_override=payload.allow_off_mismatch)
     )
