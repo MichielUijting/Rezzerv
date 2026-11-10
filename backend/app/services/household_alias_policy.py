@@ -8,9 +8,6 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_receipt_text,
     normalize_external_link_retailer_code,
 )
-from app.services.household_representative_image_service import (
-    materialize_household_representative_images,
-)
 
 
 _POLICY_MARKER = '_rezzerv_household_alias_policy_installed'
