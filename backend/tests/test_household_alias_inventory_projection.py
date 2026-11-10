@@ -8,6 +8,7 @@ from app.services.household_alias_policy import (
     _install_inventory_alias_update,
     _inventory_alias_projection,
     install_household_alias_policy,
+    resolve_household_catalog_images,
 )
 
 
@@ -364,6 +365,44 @@ def test_inventory_preview_does_not_guess_image_when_one_household_article_maps_
     projected = _inventory_alias_projection(main_module, payload)
 
     assert projected['rows'][0]['image_url'] == ''
+
+
+
+def test_almost_out_can_reuse_exact_confirmed_catalog_image_from_receipt():
+    with CentralCatalogProjectionEngine().begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda query: query, [{
+            'id': ARTICLE_ID, 'household_id': 'household-a', 'naam': 'Bio dadeltjes',
+            'barcode': '', 'global_product_id': None, 'image_url': '',
+        }])
+    assert images == {ARTICLE_ID: 'https://images.example.test/bio-dadeltjes.jpg'}
+
+
+def test_almost_out_can_reuse_canonical_household_gtin():
+    with CanonicalBarcodeProjectionEngine().begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda query: query, [{
+            'id': ARTICLE_ID, 'household_id': 'household-a', 'barcode': '8712345678901',
+            'global_product_id': None, 'image_url': '',
+        }])
+    assert images == {ARTICLE_ID: 'https://images.example.test/rijstwafel.jpg'}
+
+
+def test_almost_out_never_guesses_ambiguous_receipt_product():
+    with CentralCatalogProjectionEngine(ambiguous=True).begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda query: query, [{
+            'id': ARTICLE_ID, 'household_id': 'household-a', 'naam': 'Bio dadeltjes',
+            'barcode': '', 'global_product_id': None, 'image_url': '',
+        }])
+    assert images == {}
+
+
+def test_almost_out_image_fallback_happens_after_visibility_filtering():
+    source = (Path(__file__).resolve().parents[1] / 'app' / 'main.py').read_text(encoding='utf-8')
+    body = source.split('def build_almost_out_items(', 1)[1].split('def get_household_article_details_for_inventory(', 1)[0]
+    assert body.index("if evaluation.get('include_in_almost_out'):") < body.index(
+        'images = resolve_household_catalog_images(conn, text, source_rows)'
+    )
+    assert "ha.global_product_id, ha.barcode" in body
+    assert "item['image_url'] = images.get(" in body
 
 
 def test_inventory_inline_household_name_does_not_rename_inventory_identity():
