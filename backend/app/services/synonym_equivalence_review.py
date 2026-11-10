@@ -27,6 +27,14 @@ def _plain(value):
     return " ".join(re.findall(r"[a-z0-9]+", value))
 
 
+def _catalog_name(value):
+    # Product equivalence is independent of the retail channel. Only remove
+    # explicitly known retailer tokens; keep all product/dietary adjectives.
+    words = _plain(value).split()
+    return " ".join(word for word in words
+                    if word not in {"ah", "jumbo", "lidl", "albert", "heijn"})
+
+
 def _contains(value, phrase):
     return bool(re.search(r"(?<![a-z0-9])" + re.escape(_plain(phrase)) + r"(?![a-z0-9])", value))
 
@@ -56,7 +64,7 @@ def _quantity(p):
 
 def review_pair(left, right):
     """Return conservative display-only signals, never an automatic link decision."""
-    name_l, name_r = _plain(left.get("name")), _plain(right.get("name"))
+    name_l, name_r = _catalog_name(left.get("name")), _catalog_name(right.get("name"))
     # Include known variants, but do not interpret brand/store as a product property.
     text_l = _plain(" ".join((name_l, str(left.get("variant") or ""))))
     text_r = _plain(" ".join((name_r, str(right.get("variant") or ""))))
