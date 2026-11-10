@@ -328,6 +328,50 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
 
 
 
+def _unique_exact_name_catalog_identifications(conn, article_rows: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
+    """Safe read-only bridge for legacy household records without product IDs.
+
+    Only a UNIQUE, exactly equal central Catalogus product name counts. We
+    never strip brands, pluralize or fuzzy-match names; duplicate names fail
+    closed even when one candidate has a photo.
+    """
+    names = {
+        ' '.join(str(row.get('naam') or '').strip().lower().split())
+        for row in article_rows if str(row.get('naam') or '').strip()
+    }
+    if not names:
+        return {}
+    result = {}
+    sorted_names = sorted(names)
+    for offset in range(0, len(sorted_names), 150):
+        batch = sorted_names[offset:offset + 150]
+        params = {f'exact_name_{i}': name for i, name in enumerate(batch)}
+        placeholders = ', '.join(':' + key for key in params)
+        rows = conn.execute(text(f'''
+            SELECT id, name, COALESCE(image_url, '') AS image_url
+              FROM global_products
+             WHERE lower(trim(name)) IN ({placeholders})
+               AND lower(COALESCE(status, 'active')) = 'active'
+             ORDER BY id
+        '''), params).mappings().all()
+        for product in rows:
+            key = ' '.join(str(product.get('name') or '').strip().lower().split())
+            result.setdefault(key, []).append((
+                str(product.get('id') or '').strip(),
+                str(product.get('image_url') or '').strip(),
+            ))
+    unique = {
+        name: entries[0] for name, entries in result.items()
+        if len(entries) == 1 and entries[0][0]
+    }
+    return {
+        str(row.get('id') or '').strip(): unique[' '.join(str(row.get('naam') or '').strip().lower().split())]
+        for row in article_rows
+        if str(row.get('id') or '').strip()
+        and ' '.join(str(row.get('naam') or '').strip().lower().split()) in unique
+    }
+
+
 def _confirmed_synonym_photo_urls(conn, product_ids: set[str]) -> dict[str, str]:
     """Use ONLY directly confirmed central Catalogus synonym pairs.
 
@@ -403,6 +447,20 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
         conn, text, central_candidates, identity_by_article=by_article
     ) if central_candidates else {}
     images = {**central, **canonical}
+    # Older households can predate all canonical IDs/receipt links. Only
+    # a unique, literal Catalogus name can then identify their exact product.
+    # If a barcode exists but no exact match was proven, do not override it.
+    exact_name_rows = [
+        row for row in unresolved
+        if not by_article.get(str(row.get('id') or '').strip())
+        and not str(row.get('barcode') or '').strip()
+        and str(row.get('naam') or '').strip()
+    ]
+    unique_names = _unique_exact_name_catalog_identifications(conn, exact_name_rows)
+    for article_id, (product_id, image_url) in unique_names.items():
+        by_article[article_id] = product_id
+        if image_url:
+            images[article_id] = image_url
     unresolved_ids = {
         str(row.get('id') or '').strip() for row in unresolved
         if not images.get(str(row.get('id') or '').strip(), '')
