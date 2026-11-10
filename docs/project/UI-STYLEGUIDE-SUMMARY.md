@@ -14,6 +14,10 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Gedeelde tabel: horizontale scrollbar onder de laatste rij — 10 november 2026
+
+Alle schermen die het standaard Inhuis-tabelcomponent `Table` / `DataTable` gebruiken, tonen een eventuele horizontale scrollbar **onder** de laatste zichtbare tabelrij. De scrollbar mag niet over de onderste rij, checkbox of tekst heen vallen. De gedeelde `.rz-table-wrapper` reserveert hiervoor een eigen onderruimte van 24 px en telt die mee in de maximale tabelhoogte. Dezelfde ruimte geldt voor de gespecialiseerde Voorraad- en winkelbatchtabellen. Paginering en bulkacties blijven buiten de tabelscrollcontainer staan; horizontaal scrollen verandert geen selectie of zichtbare regels.
+
 ## App-brede responsieve UI-selectie vanaf 25 september 2026
 
 De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie is **uitsluitend viewport-gestuurd** en geldt app-breed:
