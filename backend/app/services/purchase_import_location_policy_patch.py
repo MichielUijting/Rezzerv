@@ -751,6 +751,7 @@ def _process_locationless_ready_only_batch(
                     article_name,
                     pre_purchase_total,
                     quantity,
+                    purchase_date=purchase_date,
                 )
                 household_mode = auto_consume_decision["household_mode"]
                 article_override = auto_consume_decision["article_override"]
@@ -760,6 +761,34 @@ def _process_locationless_ready_only_batch(
                 requested_deduction_quantity = auto_consume_decision[
                     "requested_deduction_quantity"
                 ]
+
+                synonym_plan = None
+                if household_mode != m.ARTICLE_AUTO_CONSUME_NONE:
+                    def _synonym_member_mode(member_id, member_name):
+                        override = m.get_household_article_auto_consume_override(
+                            conn, str(batch["household_id"]), str(member_id)
+                        )
+                        consumable = m.get_article_consumable_state(
+                            conn, str(batch["household_id"]), str(member_id), member_name
+                        )
+                        return m.resolve_auto_consume_effective_mode(
+                            household_mode, override, consumable
+                        )
+
+                    synonym_plan = m.plan_confirmed_synonym_deduction(
+                        conn,
+                        household_id=str(batch["household_id"]),
+                        purchased_article_id=str(article_id),
+                        purchase_date=purchase_date,
+                        purchased_quantity=quantity,
+                        household_mode=household_mode,
+                        effective_mode_for_article=_synonym_member_mode,
+                    )
+                    if synonym_plan is not None:
+                        requested_deduction_quantity = synonym_plan["requested_deduction_quantity"]
+                        should_auto_consume = requested_deduction_quantity > 0
+                        effective_mode = synonym_plan["mode"]
+                        decision_reason = "confirmed direct Catalogus synonym pair"
                 current_stage = "purchase_event_write"
                 event_id = None
                 auto_event_id = None
@@ -832,29 +861,43 @@ def _process_locationless_ready_only_batch(
                     current_stage = "auto_consume_decision"
                     if should_auto_consume:
                         current_stage = "auto_consume_write"
-                        auto_event_id = m.create_auto_repurchase_event(
-                            conn,
-                            batch["household_id"],
-                            article_id,
-                            article_name,
-                            resolved_location,
-                            quantity=requested_deduction_quantity,
-                            purchase_date=purchase_date,
-                        )
-                        consumption_result = m.apply_inventory_consumption(
-                            conn,
-                            batch["household_id"],
-                            article_name,
-                            requested_deduction_quantity,
-                            resolved_location,
-                            household_article_id=str(article_id),
-                            mode=effective_mode,
-                            protected_quantity_on_purchase_row=int(quantity),
-                            protected_purchase_inventory_id=purchase_inventory_id,
-                        )
-                        applied_deduction_quantity = int(
-                            consumption_result.get("applied_quantity") or 0
-                        )
+                        if synonym_plan is not None:
+                            result = m.apply_confirmed_synonym_deduction(
+                                conn,
+                                household_id=str(batch["household_id"]),
+                                purchased_article_id=str(article_id),
+                                purchased_quantity=int(quantity),
+                                purchase_inventory_id=purchase_inventory_id,
+                                resolved_location=resolved_location,
+                                plan=synonym_plan,
+                                create_auto_event=m.create_auto_repurchase_event,
+                            )
+                            applied_deduction_quantity = int(result["applied_quantity"])
+                            auto_event_id = next(iter(result["event_ids"]), None)
+                        else:
+                            auto_event_id = m.create_auto_repurchase_event(
+                                conn,
+                                batch["household_id"],
+                                article_id,
+                                article_name,
+                                resolved_location,
+                                quantity=requested_deduction_quantity,
+                                purchase_date=purchase_date,
+                            )
+                            consumption_result = m.apply_inventory_consumption(
+                                conn,
+                                batch["household_id"],
+                                article_name,
+                                requested_deduction_quantity,
+                                resolved_location,
+                                household_article_id=str(article_id),
+                                mode=effective_mode,
+                                protected_quantity_on_purchase_row=int(quantity),
+                                protected_purchase_inventory_id=purchase_inventory_id,
+                            )
+                            applied_deduction_quantity = int(
+                                consumption_result.get("applied_quantity") or 0
+                            )
                     inventory_after_auto_consume_total = (
                         m.get_inventory_total_by_household_article(
                             conn,
