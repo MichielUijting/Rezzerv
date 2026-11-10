@@ -1736,3 +1736,19 @@ Boven de **linker** standaardtabel van Artikelsynoniemen staat `Toegevoegd vanaf
 ### Standaardtabel: lege kolomwaarden filteren — 8 november 2026
 
 De centrale `DataTable` accepteert in bestaande tekstkolomfilters exact de opdrachten `=leeg` en `=nietleeg` (hoofdletterongevoelig). `=leeg` toont uitsluitend rijen waarvan de kolomwaarde ontbreekt, `null` is, een lege/alleen-spaties-tekst is of een lege lijst is; `=nietleeg` toont de overige rijen, inclusief `0` en `false`. De opdracht werkt op de reeds vastgelegde kolomfilterwaarde (`getFilterValue`, `getValue` of normale celwaarde) en overschrijft alleen voor deze twee exacte opdrachten een eventueel vrij-tekst-filterpredicaat. Een leeg filterveld houdt alle rijen; gewone tekstfiltering, sorting, paginering, selectie en lay-out blijven behouden. Er komt geen aparte filterknop of extra rij bij.
+
+### Artikelsynoniemen: compacte kwaliteitsadviezen bij kandidaten — 10 november 2026
+
+De bestaande twee standaard-DataTables behouden hun kolommen, tabelkoppen,
+rijselectie, kleuren, paginering en responsieve plaatsing. In de rechtertabel
+staat uitsluitend onder de bestaande artikelnaam een kleine, ingetogen
+beoordelingsregel: **Sterke kandidaat**, **Beoordelen** of **Controleren**,
+met een concrete producteigenschapsreden. Lange tekst wordt op één regel
+afgekapt; de volledige verklaring blijft via het bestaande rij-`title`
+beschikbaar. Dit is informatieve schermtekst en geen aparte in-screen
+succes-, fout- of bevestigingsmelding. De gedeelde `DataTable` wordt niet
+gewijzigd. Een extra standaard-`Button` onder de rechtertabel kan sterke,
+niet-gekoppelde kandidaten voorselecteren. De bestaande knoppen
+**Koppelen**/**Ontkoppelen**, beveiligde overlays en expliciete
+bevestigingsmomenten blijven ongewijzigd. De actiebalk mag op smalle schermen
+afbreken zonder een rij of de horizontale scrollbar te overlappen.
