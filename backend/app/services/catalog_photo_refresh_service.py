@@ -27,13 +27,15 @@ def _trusted_off_image_url(value):
     candidate = str(value or "").strip()
     try:
         parsed = urlsplit(candidate)
+        valid_port = parsed.port in (None, 443)
     except ValueError:
         return ""
     if (
-        parsed.scheme != "https"
+        len(candidate) > 2048
+        or parsed.scheme != "https"
         or parsed.hostname not in _ALLOWED_IMAGE_HOSTS
         or parsed.username or parsed.password
-        or parsed.port not in (None, 443)
+        or not valid_port
         or not parsed.path.startswith("/")
     ):
         return ""
