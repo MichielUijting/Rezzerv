@@ -483,3 +483,33 @@ prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
 Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
 vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
 gedeelde productidentiteit blijft niet koppelbaar.
+
+
+## Productfoto's: centrale Catalogus, Voorraad en Bijna op (10 november 2026)
+
+Voorraad en Bijna op lezen een ontbrekende foto via dezelfde **alleen-lezen**
+Catalogusidentiteitsprojectie. Eerst geldt de bestaande directe centrale
+Cataloguskoppeling. Bij ontbrekende directe koppeling mag uitsluitend een
+aantoonbaar exacte bestaande barcode-/productidentiteit of een historisch
+**bevestigde centrale winkelartikel-/bonkoppeling** een afbeelding aanleveren.
+Een tegenstrijdige productidentiteit krijgt geen verzonnen foto. De resolver
+maakt of wijzigt geen huishoudartikel, synoniem, bon, voorraad of productlink.
+Bijna op raadpleegt de aanvullende fotobronnen alleen voor artikelen die
+daadwerkelijk als Bijna op-signaal zichtbaar zijn.
+
+De centrale Catalogus vult ontbrekende foto's daarnaast op de achtergrond,
+maximaal **vijf exacte OFF-GTIN-opvragen per uur per backendproces**, vanaf
+vijf minuten na de applicatiestart. De bestaande officiële OFF-adapter verifieert
+de barcode. Alleen een HTTPS-afbeelding op een vertrouwd OFF-afbeeldingsdomein
+mag als nieuwe `global_products.image_url` worden opgeslagen. De database
+controleert bij schrijven opnieuw dat de betrokken Catalogusproduct-ID én
+barcode onveranderd zijn en dat de foto nog steeds ontbreekt. OFF-uitval laat
+de catalogusgegevens intact en wordt later opnieuw geprobeerd. Artikelen
+zonder geldige barcode krijgen geen foto op basis van hun naam.
+
+Deze achtergrondtaak blokkeert geen scherm of opstarthealthcheck, vraagt geen
+AI-/OFF-licentie en kan voor offline omgevingen worden uitgezet via
+`REZZERV_CATALOG_PHOTO_AUTOFILL_ENABLED=0`. De automatische aanvulling betekent
+niet dat OFF voor iedere barcode een foto heeft; gebroken historische fotolinks
+worden niet automatisch vervangen. Deze taak verricht geen downloads van
+afbeeldingsbestanden, maar slaat alleen de expliciete OFF-foto-URL op.
