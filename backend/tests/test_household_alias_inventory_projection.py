@@ -458,6 +458,16 @@ def test_no_photo_when_neither_own_product_nor_confirmed_synonym_has_one():
     assert images == {}
 
 
+def test_direct_catalog_identity_is_not_replaced_by_different_receipt_product():
+    engine = SynonymPhotoEngine()
+    article = {**_unlinked_receipt_article(), 'global_product_id': 'different-global-product'}
+    with engine.begin() as conn:
+        images = resolve_household_catalog_images(conn, lambda value: value, [article])
+    # A historical receipt link to global-product-a cannot override this known
+    # central identity. Nor can the peer of global-product-a be borrowed.
+    assert images == {}
+
+
 def test_ambiguous_catalog_identification_never_borrows_synonym_photo():
     engine = SynonymPhotoEngine(ambiguous=True)
     with engine.begin() as conn:
@@ -527,6 +537,7 @@ def run_contract() -> None:
     test_own_catalog_photo_has_priority_over_confirmed_synonym()
     test_no_photo_when_neither_own_product_nor_confirmed_synonym_has_one()
     test_ambiguous_catalog_identification_never_borrows_synonym_photo()
+    test_direct_catalog_identity_is_not_replaced_by_different_receipt_product()
     test_inventory_uses_confirmed_synonym_photo_not_broad_gpc_representative()
     test_inventory_inline_household_name_does_not_rename_inventory_identity()
     print('HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN')
