@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 
+// CSS layout tests do not depend on an authenticated session.
+test.use({ storageState: { cookies: [], origins: [] } })
+
 // Shared Table is used by DataTable and the specialized stock/store wrappers.
 test('horizontal scrollbar remains below the last row for all shared table wrappers', async ({ page }) => {
   await page.goto('/login')
