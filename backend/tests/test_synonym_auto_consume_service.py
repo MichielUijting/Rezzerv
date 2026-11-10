@@ -8,9 +8,10 @@ B = "b"
 
 
 class _Result:
-    def __init__(self, rows=(), scalar=None):
+    def __init__(self, rows=(), scalar=None, rowcount=0):
         self.rows = list(rows)
         self.value = scalar
+        self.rowcount = rowcount
 
     def mappings(self):
         return self
@@ -28,12 +29,16 @@ class _Result:
 class _Conn:
     def __init__(self, *, pre_a=2, pre_b=3, purchases_a=0, purchases_b=0,
                  deducted_a=0, deducted_b=0, future=None, direct=False):
-        self.stock = {"a": pre_a, "b": pre_b}
+        self.rows = {
+            "a": [] if pre_a == 0 else [dict(id="inv-a", aantal=pre_a, space_id="loc-a", sublocation_id=None)],
+            "b": [] if pre_b == 0 else [dict(id="inv-b", aantal=pre_b, space_id="loc-b", sublocation_id=None)],
+        }
         self.purchases = {"a": purchases_a, "b": purchases_b}
         self.deducted = {"a": deducted_a, "b": deducted_b}
         self.future = future
         self.direct = direct
         self.queries = []
+        self.fail_write = False
 
     def execute(self, stmt, params):
         sql = str(stmt)
@@ -47,18 +52,35 @@ class _Conn:
             }])
         if "MAX(substr(CAST(purchase_date" in sql:
             return _Result(scalar=self.future)
-        if "SUM(aantal)" in sql:
-            return _Result(scalar=self.stock[params["article_id"]])
+        if "SELECT id, aantal, space_id, sublocation_id" in sql:
+            article_id = params["article_id"]
+            positions = self.rows[article_id]
+            if "id=:inventory_id" in sql:
+                positions = [p for p in positions if p["id"] == params["inventory_id"]]
+            return _Result([dict(p) for p in positions])
         if "SELECT event_type, source, quantity" in sql:
             member = params["article_id"]
             rows = []
             if self.purchases[member]:
+                location = self.rows[member][0]['sublocation_id'] or self.rows[member][0]['space_id']
                 rows.append({"event_type": "purchase", "source": "store_import",
-                             "quantity": self.purchases[member]})
+                             "quantity": self.purchases[member], "location_id": location})
             if self.deducted[member]:
                 rows.append({"event_type": "auto_repurchase", "source": "auto_repurchase",
-                             "quantity": -self.deducted[member]})
+                             "quantity": -self.deducted[member], "location_id": None})
             return _Result(rows)
+        if "UPDATE inventory SET" in sql or "DELETE FROM inventory" in sql:
+            if self.fail_write:
+                return _Result(rowcount=0)
+            matches = [p for p in self.rows[params["article_id"]]
+                       if p["id"] == params["inventory_id"] and p["aantal"] == params["before"]]
+            if len(matches) != 1:
+                return _Result(rowcount=0)
+            if "UPDATE inventory SET" in sql:
+                matches[0]["aantal"] = params["after"]
+            else:
+                self.rows[params["article_id"]].remove(matches[0])
+            return _Result(rowcount=1)
         raise AssertionError(f"unexpected SQL: {sql}")
 
 
@@ -82,8 +104,9 @@ def test_first_purchase_by_quantity_debits_partner_before_new_purchase(monkeypat
     conn = _Conn(pre_a=2, pre_b=3)
     plan = _plan(monkeypatch, conn)
     assert plan["requested_deduction_quantity"] == 2
-    assert plan["allocations"] == [{"article_id": "b", "article_name": "Melk b",
-                                    "quantity": 2}]
+    assert [(r["article_id"], r["inventory_id"], r["quantity"]) for r in plan["allocations"]] == [
+        ("b", "inv-b", 2)
+    ]
     assert plan["day_start_stock"] == 5
     assert all("household_id" in params for sql, params in conn.queries)
 
@@ -139,57 +162,93 @@ def test_invalid_date_does_not_use_group(monkeypatch):
     assert _plan(monkeypatch, _Conn(), day="10-11-2026") is None
 
 
-def test_group_allocation_posts_exact_member_events_and_protects_new_purchase():
+def test_group_allocation_posts_events_on_actual_inventory_locations():
     conn = _Conn()
+    # This is the post-purchase state: A was 2 before buying 2 more.
+    conn.rows["a"][0]["aantal"] = 4
     events = []
-    consumed = []
 
     def event(connection, household_id, article_id, name, location, **kwargs):
-        events.append((household_id, article_id, kwargs["quantity"]))
+        events.append((household_id, article_id, kwargs["quantity"], location["location_id"]))
         return "event-" + article_id
 
-    def stock(connection, household_id, name, qty, location, **kwargs):
-        consumed.append((kwargs["household_article_id"], qty,
-                         kwargs["protected_quantity_on_purchase_row"],
-                         kwargs["protected_purchase_inventory_id"]))
-        return {"applied_quantity": qty}
-
+    plan = {"purchase_day": "2026-11-10", "requested_deduction_quantity": 5,
+            "allocations": [
+                dict(article_id="b", article_name="Melk b", inventory_id="inv-b",
+                     pre_quantity=3, space_id="loc-b", sublocation_id=None, quantity=3),
+                dict(article_id="a", article_name="Melk a", inventory_id="inv-a",
+                     pre_quantity=2, space_id="loc-a", sublocation_id=None, quantity=2),
+            ]}
     result = svc.apply_confirmed_synonym_deduction(
         conn, household_id="h1", purchased_article_id="a",
-        purchased_quantity=2, purchase_inventory_id="purchase-1",
-        resolved_location={"location_id": None},
-        plan={"purchase_day": "2026-11-10", "requested_deduction_quantity": 5,
-              "allocations": [
-                  {"article_id": "b", "article_name": "Melk b", "quantity": 3},
-                  {"article_id": "a", "article_name": "Melk a", "quantity": 2},
-              ]},
-        create_auto_event=event, apply_stock_consumption=stock,
+        purchased_quantity=2, purchase_inventory_id="inv-a",
+        resolved_location={"location_id": "loc-a"},
+        plan=plan, create_auto_event=event,
     )
     assert result == {"applied_quantity": 5, "event_ids": ["event-b", "event-a"]}
-    assert events == [("h1", "b", 3), ("h1", "a", 2)]
-    assert consumed == [("b", 3, 0, None), ("a", 2, 2, "purchase-1")]
+    assert events == [("h1", "b", 3, "loc-b"), ("h1", "a", 2, "loc-a")]
+    assert conn.rows["b"] == []
+    assert conn.rows["a"][0]["aantal"] == 2
 
 
-def test_partial_mutation_fails_transaction_instead_of_claiming_success():
+def test_group_stock_spread_over_distinct_locations_is_allocated_per_row(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=0)
+    conn.rows["b"] = [
+        dict(id="b-in-1", aantal=2, space_id="kitchen", sublocation_id=None),
+        dict(id="b-in-2", aantal=3, space_id="pantry", sublocation_id=None),
+    ]
+    plan = _plan(monkeypatch, conn, mode="consume_all_existing_before_purchase")
+    assert [(p["inventory_id"], p["quantity"]) for p in plan["allocations"]] == [
+        ("b-in-1", 2), ("b-in-2", 3), ("inv-a", 2),
+    ]
+
+
+def test_prior_purchase_location_is_protected(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=0)
+    conn.rows["b"] = [
+        dict(id="old", aantal=4, space_id="old-shelf", sublocation_id=None),
+        dict(id="today", aantal=3, space_id="new-shelf", sublocation_id=None),
+    ]
+    conn.purchases["b"] = 3
+    # The prior purchase was actually on the new shelf.
+    conn.execute_original = conn.execute
+    def custom_execute(stmt, params):
+        sql = str(stmt)
+        if "SELECT event_type, source, quantity" in sql and params["article_id"] == "b":
+            return _Result([dict(event_type="purchase", source="store_import",
+                                 quantity=3, location_id="new-shelf")])
+        return conn.execute_original(stmt, params)
+    conn.execute = custom_execute
+    plan = _plan(monkeypatch, conn, mode="consume_all_existing_before_purchase")
+    assert plan is not None
+    assert all(row["inventory_id"] != "today" for row in plan["allocations"])
+
+
+def test_ambiguous_stock_location_falls_back(monkeypatch):
     conn = _Conn()
+    conn.rows["b"].append(dict(id="extra", aantal=2, space_id="loc-b", sublocation_id=None))
+    assert _plan(monkeypatch, conn) is None
+
+
+def test_partial_write_raises_and_requires_transaction_rollback():
+    conn = _Conn()
+    conn.fail_write = True
 
     def event(*args, **kwargs):
         return "event-1"
 
-    def partial(*args, **kwargs):
-        return {"applied_quantity": 0}
-
     try:
         svc.apply_confirmed_synonym_deduction(
             conn, household_id="h1", purchased_article_id="a",
-            purchased_quantity=2, purchase_inventory_id="purchase-1",
+            purchased_quantity=2, purchase_inventory_id="inv-a",
             resolved_location={},
             plan={"purchase_day": "2026-11-10", "requested_deduction_quantity": 2,
-                  "allocations": [{"article_id": "b", "article_name": "Melk b",
-                                   "quantity": 2}]},
-            create_auto_event=event, apply_stock_consumption=partial,
+                  "allocations": [dict(article_id="b", article_name="Melk b",
+                                       inventory_id="inv-b", pre_quantity=3,
+                                       space_id="loc-b", sublocation_id=None, quantity=2)]},
+            create_auto_event=event,
         )
     except RuntimeError as error:
-        assert "voorraad en mutatiebewijs" in str(error)
+        assert "niet atomair bevestigd" in str(error)
     else:
         raise AssertionError("partial deduction must abort the transaction")
