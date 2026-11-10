@@ -15,6 +15,11 @@ class SynonymEquivalenceReviewTest(unittest.TestCase):
         self.assertEqual(result["review_level"], "strong")
         self.assertNotIn("link", result)
 
+    def test_retailer_prefixes_are_not_part_of_product_identity(self):
+        result = review_pair(item("AH Halfvolle melk", brand="Albert Heijn"),
+                             item("Jumbo Halfvolle melk", brand="JUMBO"))
+        self.assertEqual(result["review_level"], "strong")
+
     def test_milk_fat_contrast_requires_review(self):
         result = review_pair(item("Halfvolle melk"), item("Volle melk"))
         self.assertEqual(result["review_level"], "check")
@@ -22,6 +27,7 @@ class SynonymEquivalenceReviewTest(unittest.TestCase):
 
     def test_functionally_distinct_types_require_review(self):
         for left, right in (("Halfvolle mayonaise", "Houdbare halfvolle melk"),
+                            ("Zaanse halfvolle mayo", "AH Houdbare halfvolle melk"),
                             ("Magere kwark", "Magere yoghurt"),
                             ("Noten", "Kruidnoten")):
             with self.subTest(left=left, right=right):
