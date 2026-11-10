@@ -755,12 +755,17 @@ def stage_external_article_product_link_without_gpc(
     if not product or str(product.get("status") or "").strip().lower() != "active":
         raise ValueError("Catalogusproduct is niet actief")
 
-    conflicts = []
+    # Retailer + bonartikelnummer is the identity when a number is present.
+    # A label match for a differently numbered product must never block or
+    # deactivate the selected article's confirmed/pending link.
     if code:
-        conflicts.append("(retailer_code = :retailer_code AND external_article_code = :external_article_code)")
-    if label:
-        conflicts.append("(retailer_code = :retailer_code AND receipt_text_normalized = :receipt_text_normalized)")
-    identity_where = " OR ".join(conflicts)
+        identity_where = "(retailer_code = :retailer_code AND external_article_code = :external_article_code)"
+    else:
+        identity_where = (
+            "(retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND COALESCE(TRIM(external_article_code), '') = '')"
+        )
     params = {"retailer_code": retailer, "external_article_code": code,
               "receipt_text_normalized": label, "global_product_id": product_id}
     # A partial OFF candidate must never silently demote an already confirmed
@@ -823,25 +828,33 @@ def get_pending_classification_external_article_link(
     label = normalize_external_link_receipt_text(receipt_text)
     if not retailer:
         return None
-    for column, value in (("external_article_code", code), ("receipt_text_normalized", label)):
-        if not value:
-            continue
-        row = conn.execute(text(f"""
-            SELECT link.*, gp.name AS global_product_name, gp.primary_gtin
-            FROM external_article_product_links link
-            JOIN global_products gp ON gp.id = link.global_product_id
-            WHERE link.retailer_code = :retailer_code
-              AND link.{column} = :identity_value
-              AND link.status = 'classification_pending'
-              AND LOWER(COALESCE(gp.status, 'active')) = 'active'
-            ORDER BY link.confirmed_at DESC, link.id DESC LIMIT 1
-        """), {"retailer_code": retailer, "identity_value": value}).mappings().first()
-        if row:
-            complete = _complete_global_product_link_data(conn, row.get("global_product_id"))
-            if (complete.get("has_valid_primary_gtin")
-                    and complete.get("has_matching_gtin_identity")
-                    and not complete.get("is_generic_catalog_product")):
-                return _serialize_external_article_product_link(row)
+    if not (code or label):
+        return None
+    if code:
+        identity_predicate = "link.external_article_code = :identity_value"
+        identity_value = code
+    else:
+        identity_predicate = (
+            "link.receipt_text_normalized = :identity_value "
+            "AND COALESCE(TRIM(link.external_article_code), '') = ''"
+        )
+        identity_value = label
+    row = conn.execute(text(f"""
+        SELECT link.*, gp.name AS global_product_name, gp.primary_gtin
+        FROM external_article_product_links link
+        JOIN global_products gp ON gp.id = link.global_product_id
+        WHERE link.retailer_code = :retailer_code
+          AND {identity_predicate}
+          AND link.status = 'classification_pending'
+          AND LOWER(COALESCE(gp.status, 'active')) = 'active'
+        ORDER BY link.confirmed_at DESC, link.id DESC LIMIT 1
+    """), {"retailer_code": retailer, "identity_value": identity_value}).mappings().first()
+    if row:
+        complete = _complete_global_product_link_data(conn, row.get("global_product_id"))
+        if (complete.get("has_valid_primary_gtin")
+                and complete.get("has_matching_gtin_identity")
+                and not complete.get("is_generic_catalog_product")):
+            return _serialize_external_article_product_link(row)
     return None
 
 

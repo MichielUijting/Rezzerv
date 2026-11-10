@@ -25,6 +25,7 @@ from app.services.external_article_product_link_service import (
 )
 from app.services.off_search_service import OffSearchError, OffUnavailableError, search_off_candidates
 from app.services.off_manual_catalog_link_service import confirm_selected_off_catalog_product
+from app.services.off_manual_search_proof import issue_manual_off_proof
 from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_household_admin_from_session,
@@ -75,6 +76,9 @@ class CatalogGtinUpdateRequest(BaseModel):
 class Ed2ManualBarcodeRequest(BaseModel):
     receipt_item_id: str
     gtin: str
+    allow_off_mismatch: bool = False
+    # Exclusive to Superuser barcode import: attach the full OFF product after explicit review.
+    import_off_product_override: bool = False
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -744,17 +748,22 @@ def _ed2_normalized_source(conn, receipt_item_id: str) -> dict[str, str]:
 
 
 def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
-    conditions = []
+    # A receipt article code is the strongest retailer-scoped identity.
+    # Never treat another item with the same receipt text but a different
+    # article code as a collision. Only fall back to name when code is absent.
     if identity["external_article_code"]:
-        conditions.append("external_article_code = :external_article_code")
-    if identity["receipt_text_normalized"]:
-        conditions.append("receipt_text_normalized = :receipt_text_normalized")
-    if not conditions:
+        predicate = "external_article_code = :external_article_code"
+    elif identity["receipt_text_normalized"]:
+        predicate = (
+            "receipt_text_normalized = :receipt_text_normalized "
+            "AND COALESCE(TRIM(external_article_code), '') = ''"
+        )
+    else:
         raise HTTPException(status_code=422, detail="Een stabiele bonartikelidentiteit ontbreekt")
     collision = conn.execute(text(
         "SELECT id FROM external_article_product_links "
         "WHERE retailer_code = :retailer_code AND status IN ('confirmed', 'classification_pending') "
-        "AND (" + " OR ".join(conditions) + ") LIMIT 1"
+        "AND " + predicate + " LIMIT 1"
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
@@ -781,6 +790,9 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
     link, receipt row, household article or inventory. It never invents a GPC.
     """
     require_platform_permission_from_session("platform.external_products.link_existing")
+    if payload.import_off_product_override:
+        if not payload.allow_off_mismatch or not resolve_current_server_session().is_platform_superuser:
+            raise HTTPException(status_code=403, detail="Alleen de Superuser mag een OFF-afwijking volledig koppelen.")
     _ed2_barcode_tables_ready()
     validation = validate_barcode(payload.gtin, "gtin")
     if not validation["valid"]:
@@ -819,24 +831,72 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         raise HTTPException(status_code=422, detail=str(error)) from error
 
     results = search.get("results") or []
+    # OFF indexes a GTIN-14 with one leading zero under its equivalent EAN-13.
+    # Compare canonical identities, not their textual width. Never remove a
+    # nonzero packaging indicator or accept a different product GTIN.
+    off_gtin = gtin[1:] if len(gtin) == 14 and gtin.startswith("0") else gtin
     if results:
         candidate = results[0]
         if candidate.get("identity_compatible") is False:
-            raise HTTPException(
-                status_code=409,
-                detail="De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
-            )
-        if not candidate.get("selection_proof"):
+            if not payload.allow_off_mismatch:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "off_identity_mismatch",
+                        "message": "De OFF-productgegevens passen niet veilig bij dit bonartikel. Er is niets opgeslagen.",
+                        "product_name": str(candidate.get("product_name") or ""),
+                        "brand": str(candidate.get("brand") or ""),
+                        "quantity": str(candidate.get("quantity") or ""),
+                        "gtin": gtin,
+                        "conflict_reason": str(candidate.get("identity_conflict_message") or ""),
+                    },
+                )
+            # Existing manual entry still supports barcode-only override.
+            # The Superuser import choice instead confirms all OFF metadata.
+            if not payload.import_off_product_override:
+                results = []
+    if payload.allow_off_mismatch and not payload.import_off_product_override:
+        results = []
+    if results:
+        candidate = results[0]
+        # OFF product is resolved on the server for the exact GTIN. Never accept
+        # client-provided metadata or bypass signature/receipt validation.
+        if str(candidate.get("gtin") or "") != off_gtin:
+            raise HTTPException(status_code=409, detail="OFF-barcode wijkt af van de geselecteerde barcode.")
+        proof = candidate.get("selection_proof")
+        if payload.import_off_product_override:
+            # Re-issue for this exact bonartikel from the trusted OFF response.
+            # Preserve signature binding to the OFF-canonical GTIN, not the
+            # optional leading zero in the uploaded GTIN-14.
+            proof = issue_manual_off_proof(receipt_item_id, candidate)
+        if not proof:
             raise HTTPException(status_code=409, detail="OFF kon deze barcode niet betrouwbaar bevestigen")
-        # Reuse the established signed, receipt-bound OFF confirmation and its
-        # image/product metadata, classification and identity conflict checks.
         try:
             result = confirm_selected_off_catalog_product({
                 "receipt_item_id": receipt_item_id,
-                "gtin": gtin,
-                "selection_proof": candidate["selection_proof"],
+                "gtin": off_gtin,
+                "selection_proof": proof,
+                **({"override_private_label_conflict": True}
+                   if payload.import_off_product_override and candidate.get("identity_compatible") is False
+                   else {}),
             })
         except ValueError as error:
+            # A receipt-bound proof mismatch is a product-identity warning,
+            # not authorization to bypass signature checks or link OFF data.
+            # Offer the Superuser an explicit GTIN-only choice instead.
+            if str(error) == "Dit zoekresultaat hoort niet bij het geselecteerde bonartikel.":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "off_identity_mismatch",
+                        "message": "Dit OFF-zoekresultaat hoort niet bij het geselecteerde bonartikel. Er is niets opgeslagen.",
+                        "product_name": str(candidate.get("product_name") or ""),
+                        "brand": str(candidate.get("brand") or ""),
+                        "quantity": str(candidate.get("quantity") or ""),
+                        "gtin": gtin,
+                        "conflict_reason": str(error),
+                    },
+                ) from error
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {
             "saved": bool(result.get("ok")), "source": "off",

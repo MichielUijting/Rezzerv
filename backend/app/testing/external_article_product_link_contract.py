@@ -575,7 +575,11 @@ def run_contract() -> None:
         ) is None, "Kassa kreeg een incomplete pending-koppeling")
         _assert(get_pending_classification_external_article_link(
             conn, retailer_code="lidl", receipt_text="Artikel zonder GPC",
+            external_article_code="sku-123",
         )["global_product_id"] == "product-no-gpc", "Barcode-overzicht mist pending product")
+        _assert(get_pending_classification_external_article_link(
+            conn, retailer_code="lidl", receipt_text="Artikel zonder GPC",
+        ) is None, "Een naam zonder artikelcode mag een gekoppeld SKU niet overnemen")
         _assert(get_pending_classification_external_article_link(
             conn, retailer_code="jumbo", receipt_text="Artikel zonder GPC",
         ) is None, "Wachtende relatie lekt naar andere winkelketen")

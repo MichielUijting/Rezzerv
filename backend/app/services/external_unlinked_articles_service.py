@@ -283,11 +283,17 @@ def list_all_external_articles(*, conn=None) -> dict:
                 "article_code": article_code,
                 # An explicit user-entered barcode is evidence, not a
                 # confirmed Catalogus product identity or a GS1 status.
+                # Preserve and expose historical manual evidence even when a
+                # verified Catalogus link is pending. A different manual GTIN
+                # must be visible for review, never silently hidden or applied.
                 "manual_barcode": manual_barcodes.get(
                     _ed2_manual_barcode_identity(
                         source.get("retailer_code"), receipt_text, article_number,
                     ), ""
-                ) if status == "unlinked" else "",
+                ),
+                "catalog_product_name": str(
+                    central_link.get("global_product_name") or ""
+                ),
                 "link_status": status,
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")

@@ -10,6 +10,7 @@ import csv
 import io
 from collections import Counter
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
@@ -23,15 +24,21 @@ from app.services.external_article_product_link_service import (
 )
 from app.services.barcode_identity_service import validate_barcode, calculate_gtin_check_digit
 from app.services.session_request_context import resolve_current_server_session
+from app.services.off_search_service import lookup_off_product_by_gtin
 
 router = APIRouter(prefix="/api/catalog/ed2/barcode-import", tags=["catalog"])
 HEADERS = ("Artikel", "Winkelketen", "Bonartikelnummer", "Art./Barcode")
 MAX_BYTES = 2_000_000
 MAX_ROWS = 3000
+MAX_OFF_NAMES = 10
 
 
 class PreviewRequest(BaseModel):
     csv_text: str
+
+
+class OffNamesRequest(BaseModel):
+    gtins: list[str]
 
 
 class ApproveRequest(BaseModel):
@@ -40,6 +47,7 @@ class ApproveRequest(BaseModel):
     article: str
     article_number: str
     gtin: str
+    allow_off_mismatch: bool = False
 
 
 def _require_superuser() -> None:
@@ -73,6 +81,32 @@ def _live_index() -> dict[tuple[str, str, str], list[dict]]:
                    item.get("receipt_article_number"))
         index.setdefault(key, []).append(item)
     return index
+
+
+def _matches_for_import(
+    index: dict[tuple[str, str, str], list[dict]],
+    key: tuple[str, str, str],
+) -> list[dict]:
+    """Resolve exact retailer identity, with a safe name-only fallback.
+
+    A blank retail article number is a legitimate source identity, not a
+    validation error. For it, require a unique retailer + normalized bontekst
+    across *all* article numbers. Never attach a numberless CSV row to a
+    differently numbered source or silently pick one of several candidates.
+    """
+    if key[2]:
+        return index.get(key, [])
+    same_name = [
+        item
+        for (retailer, label, _number), items in index.items()
+        if retailer == key[0] and label == key[1]
+        for item in items
+    ]
+    if len(same_name) != 1:
+        return same_name
+    if normalize_external_link_article_code(same_name[0].get("receipt_article_number")):
+        return []
+    return same_name
 
 
 @router.post("/preview")
@@ -114,11 +148,11 @@ def preview_barcode_import(payload: PreviewRequest):
             continue
         key = _key(row.get("Winkelketen"), row.get("Artikel"), row.get("Bonartikelnummer"))
         validation = validate_barcode(barcode, "gtin")
-        current = index.get(key, [])
+        current = _matches_for_import(index, key)
         status = "klaar"
         reason = ""
-        if not key[0] or not key[1] or not key[2]:
-            status, reason = "geblokkeerd", "Winkel, artikelnaam of bonartikelnummer ontbreekt."
+        if not key[0] or not key[1]:
+            status, reason = "geblokkeerd", "Winkelketen of artikelnaam ontbreekt."
         elif key in seen:
             status, reason = "geblokkeerd", "Dubbele artikelregel in het importbestand."
         elif not validation["valid"]:
@@ -129,10 +163,29 @@ def preview_barcode_import(payload: PreviewRequest):
                 "Afgeleide code uit het bonartikelnummer; geen aangetoonde productbarcode.",
             )
         elif len(current) != 1:
-            status, reason = "geblokkeerd", "Geen unieke overeenkomst in Artikelbeheer."
+            status, reason = "geblokkeerd", (
+                "Bonartikel zonder nummer is niet uniek op winkelketen en bonomschrijving."
+                if not key[2] else "Geen unieke overeenkomst in Artikelbeheer."
+            )
         elif current[0].get("link_status") != "unlinked" or current[0].get("article_code") or current[0].get("manual_barcode"):
-            status, reason = "geblokkeerd", "Artikel heeft al een barcode of Cataloguskoppeling."
+            existing = current[0]
+            catalog_gtin = str(existing.get("article_code") or "").strip()
+            manual_gtin = str(existing.get("manual_barcode") or "").strip()
+            proposed = validation["normalized_value"]
+            if (catalog_gtin and manual_gtin and catalog_gtin != manual_gtin):
+                status, reason = "conflict", "Barcodeconflict: Catalogus en handmatige barcode verschillen"
+            elif (catalog_gtin and catalog_gtin == proposed) or (
+                not catalog_gtin and manual_gtin == proposed
+            ):
+                status, reason = "al_gekoppeld", "Al gekoppeld – barcode komt overeen"
+                if existing.get("link_status") == "classification_pending":
+                    reason += " (classificatie ontbreekt)"
+            elif (catalog_gtin and catalog_gtin != proposed) or (manual_gtin and manual_gtin != proposed):
+                status, reason = "conflict", "Barcodeconflict: bestaande barcode wijkt af"
+            else:
+                status, reason = "geblokkeerd", "Cataloguskoppeling bestaat zonder zichtbare barcode"
         seen.add(key)
+        existing = current[0] if len(current) == 1 else {}
         results.append({
             "line": line, "article": row.get("Artikel") or "",
             "retailer": row.get("Winkelketen") or "",
@@ -142,13 +195,65 @@ def preview_barcode_import(payload: PreviewRequest):
             "product_name": row.get("Gevonden productnaam") or "",
             "receipt_item_id": str(current[0].get("id")) if len(current) == 1 else "",
             "status": status, "reason": reason,
+            "existing_catalog_gtin": str(existing.get("article_code") or ""),
+            "existing_manual_gtin": str(existing.get("manual_barcode") or ""),
+            "existing_catalog_product": str(existing.get("catalog_product_name") or ""),
+            "existing_link_status": str(existing.get("link_status") or ""),
+            "has_barcode_conflict": bool(
+                existing.get("article_code") and existing.get("manual_barcode")
+                and existing.get("article_code") != existing.get("manual_barcode")
+            ) or status == "conflict",
         })
     return {
         "items": results, "skipped": skipped,
         "ready": sum(item["status"] == "klaar" for item in results),
-        "blocked": sum(item["status"] == "geblokkeerd" for item in results),
+        "blocked": sum(item["status"] != "klaar" for item in results),
         "total": len(source_rows),
     }
+
+
+def _off_name_lookup(gtin: str) -> dict:
+    """Exact GTIN lookup, never a fuzzy product suggestion or catalog write."""
+    try:
+        result = lookup_off_product_by_gtin(gtin)
+    except Exception:
+        return {"gtin": gtin, "status": "unavailable", "product_name": "", "brand": "", "quantity": ""}
+    product = result.get("product") or {}
+    status = result.get("status")
+    if status == "found" and str(product.get("product_name") or "").strip():
+        return {
+            "gtin": gtin, "status": "found",
+            "product_name": str(product["product_name"]).strip(),
+            "brand": str(product.get("brand") or "").strip(),
+            "quantity": str(product.get("quantity") or "").strip(),
+        }
+    return {
+        "gtin": gtin,
+        "status": "unavailable" if status == "external_source_unavailable" else (
+            "no_name" if status == "found" else "not_found"
+        ),
+        "product_name": "", "brand": "", "quantity": "",
+    }
+
+
+@router.post("/off-names")
+def lookup_barcode_import_off_names(payload: OffNamesRequest):
+    """Read-only enrichment for the visible import page; never writes to InHuis."""
+    _require_superuser()
+    if not payload.gtins or len(payload.gtins) > MAX_OFF_NAMES:
+        raise HTTPException(status_code=422, detail="Maximaal 10 barcodes per OFF-controle.")
+    normalized = []
+    for raw in payload.gtins:
+        validation = validate_barcode(raw, "gtin")
+        if not validation["valid"]:
+            raise HTTPException(status_code=422, detail="Ongeldige barcode voor OFF-controle.")
+        gtin = validation["normalized_value"]
+        if gtin not in normalized:
+            normalized.append(gtin)
+    # Bounded requests: one page, maximum three simultaneous OFF lookups.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        items = list(pool.map(_off_name_lookup, normalized))
+    return {"items": items, "mutated": False}
 
 
 @router.post("/approve")
@@ -162,7 +267,9 @@ def approve_barcode_import(payload: ApproveRequest):
             status_code=422,
             detail="Afgeleide code uit het bonartikelnummer is geen aangetoonde productbarcode.",
         )
-    matches = _live_index().get(_key(payload.retailer, payload.article, payload.article_number), [])
+    matches = _matches_for_import(
+        _live_index(), _key(payload.retailer, payload.article, payload.article_number),
+    )
     if len(matches) != 1 or str(matches[0].get("id")) != payload.receipt_item_id:
         raise HTTPException(status_code=409, detail="Artikelidentiteit is gewijzigd. Importeer het bestand opnieuw.")
     item = matches[0]
@@ -170,5 +277,7 @@ def approve_barcode_import(payload: ApproveRequest):
         raise HTTPException(status_code=409, detail="Artikel is intussen gekoppeld of heeft al een barcode.")
     return save_ed2_manual_barcode(
         Ed2ManualBarcodeRequest(receipt_item_id=payload.receipt_item_id,
-                                gtin=validation["normalized_value"])
+                                gtin=validation["normalized_value"],
+                                allow_off_mismatch=payload.allow_off_mismatch,
+                                import_off_product_override=payload.allow_off_mismatch)
     )

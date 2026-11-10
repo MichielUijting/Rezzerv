@@ -256,3 +256,302 @@ def test_retry_after_outage_enriches_existing_barcode_when_off_recovers(guard, m
     })
     assert save(code)["off_found"] is True
     assert linked and linked[0]["selection_proof"] == "server-proof"
+
+
+def test_explicit_off_mismatch_override_saves_only_manual_barcode(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": code, "identity_compatible": False,
+                     "selection_proof": "must-not-be-used", "image_url": "https://example.test/other.jpg"}],
+    })
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=code, allow_off_mismatch=True,
+        )
+    )
+    assert result["saved"] is True and result["source"] == "manual"
+    assert not result["off_found"] and not result["photo_loaded"]
+    assert not linked
+    assert conn.manual == {("jumbo", "melk", "123"): code}
+    assert conn.household_articles == [{"id": "h1", "stock": 4}]
+    assert conn.receipt_lines == [{"id": "r1", "label": "Melk"}]
+
+
+def test_mismatch_returns_off_product_name_and_exact_barcode(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    code = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": code, "product_name": "Ander merk Amsterdamse uien",
+                     "brand": "Voorbeeldmerk", "quantity": "320 g",
+                     "identity_compatible": False,
+                     "identity_conflict_message": "Huismerk wijkt af",
+                     "selection_proof": "unused"}],
+    })
+    with pytest.raises(HTTPException) as exc:
+        save(code)
+    assert exc.value.status_code == 409
+    detail = exc.value.detail
+    assert detail["code"] == "off_identity_mismatch"
+    assert detail["product_name"] == "Ander merk Amsterdamse uien"
+    assert detail["gtin"] == code
+    assert detail["quantity"] == "320 g"
+    assert detail["conflict_reason"] == "Huismerk wijkt af"
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_unlinked_collision_uses_exact_receipt_number_when_present():
+    from app.api.catalog_routes import _ed2_require_unlinked
+
+    class QueryConnection:
+        def __init__(self):
+            self.sql = ""
+            self.params = None
+        def execute(self, statement, params):
+            self.sql = str(statement)
+            self.params = params
+            return Result([])
+
+    conn = QueryConnection()
+    _ed2_require_unlinked(conn, {
+        "retailer_code": "ah",
+        "receipt_text_normalized": "ah bouillon",
+        "external_article_code": "845556",
+    })
+    assert "external_article_code = :external_article_code" in conn.sql
+    assert "receipt_text_normalized = :receipt_text_normalized" not in conn.sql
+    assert conn.params["external_article_code"] == "845556"
+
+
+def test_name_fallback_cannot_block_another_numbered_item():
+    from app.api.catalog_routes import _ed2_require_unlinked
+
+    class QueryConnection:
+        def __init__(self):
+            self.sql = ""
+        def execute(self, statement, params):
+            self.sql = str(statement)
+            return Result([])
+
+    conn = QueryConnection()
+    _ed2_require_unlinked(conn, {
+        "retailer_code": "ah",
+        "receipt_text_normalized": "ah bouillon",
+        "external_article_code": "",
+    })
+    assert "receipt_text_normalized = :receipt_text_normalized" in conn.sql
+    assert "COALESCE(TRIM(external_article_code), '') = ''" in conn.sql
+
+
+def test_receipt_bound_off_proof_mismatch_shows_override_without_saving(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{
+            "gtin": gtin, "product_name": "Hertog Jan Pilsener",
+            "brand": "Hertog Jan", "quantity": "330 ml",
+            "identity_compatible": True, "selection_proof": "other-receipt",
+        }],
+    })
+    def reject_proof(payload):
+        raise ValueError("Dit zoekresultaat hoort niet bij het geselecteerde bonartikel.")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", reject_proof)
+    with pytest.raises(HTTPException) as exc:
+        save(gtin)
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "off_identity_mismatch"
+    assert exc.value.detail["gtin"] == gtin
+    assert exc.value.detail["product_name"] == "Hertog Jan Pilsener"
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_receipt_bound_off_proof_mismatch_superuser_override_saves_only_gtin(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{
+            "gtin": gtin, "product_name": "Hertog Jan Pilsener",
+            "identity_compatible": True, "selection_proof": "other-receipt",
+        }],
+    })
+    def unexpected_confirm(payload):
+        raise AssertionError("OFF confirmation must not run after explicit GTIN-only override")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", unexpected_confirm)
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=gtin,
+            allow_off_mismatch=True,
+        ),
+    )
+    assert result["saved"] is True
+    assert result["source"] == "manual"
+    assert result["off_found"] is False
+    assert result["photo_loaded"] is False
+    assert conn.manual == {("jumbo", "melk", "123"): gtin}
+    assert not linked
+
+
+def test_unrelated_invalid_off_proof_still_fails_closed(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": gtin, "selection_proof": "expired", "identity_compatible": True}],
+    })
+    def invalid_proof(payload):
+        raise ValueError("Het zoekresultaat is verlopen. Zoek opnieuw in OFF.")
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", invalid_proof)
+    with pytest.raises(HTTPException) as exc:
+        save(gtin)
+    assert exc.value.status_code == 409
+    assert isinstance(exc.value.detail, str)
+    assert "verlopen" in exc.value.detail
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_superuser_import_override_confirms_complete_off_product(guard, monkeypatch):
+    from app.services.off_manual_search_proof import verify_manual_off_proof
+    conn, _, _, linked, _ = guard
+    gtin = valid_gtin()
+    off = {
+        "gtin": gtin, "product_name": "Hertog Jan Pilsener",
+        "brand": "Hertog Jan", "quantity": "330 ml", "category": "beer",
+        "category_tags": ["en:beers"], "image_url": "https://example.test/off-photo.jpg",
+        "identity_compatible": False, "selection_proof": "stale-other-receipt",
+    }
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: {"results": [off]})
+    def confirm(payload):
+        saved = verify_manual_off_proof(payload["selection_proof"],
+                                        receipt_item_id=payload["receipt_item_id"],
+                                        gtin=payload["gtin"])
+        assert saved["product_name"] == off["product_name"]
+        assert saved["brand"] == off["brand"]
+        assert saved["quantity"] == off["quantity"]
+        assert saved["category"] == off["category"]
+        assert saved["category_tags"] == off["category_tags"]
+        assert saved["image_url"] == off["image_url"]
+        assert payload["override_private_label_conflict"] is True
+        linked.append(payload)
+        return {"ok": True, "classification_pending": True}
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", confirm)
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=gtin,
+            allow_off_mismatch=True, import_off_product_override=True,
+        )
+    )
+    assert result["saved"] is True
+    assert result["source"] == "off"
+    assert result["off_found"] is True
+    assert result["classification_pending"] is True
+    assert result["photo_loaded"] is True
+    assert conn.manual == {}
+    assert len(linked) == 1
+
+
+def test_import_off_override_denied_for_non_superuser(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=False))
+    with pytest.raises(HTTPException) as exc:
+        catalog_routes.save_ed2_manual_barcode(
+            catalog_routes.Ed2ManualBarcodeRequest(
+                receipt_item_id="receipt-table-line:r1", gtin=valid_gtin(),
+                allow_off_mismatch=True, import_off_product_override=True,
+            )
+        )
+    assert exc.value.status_code == 403
+    assert conn.manual == {}
+    assert not linked
+
+
+def test_import_off_override_requires_explicit_mismatch_confirmation(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    with pytest.raises(HTTPException) as exc:
+        catalog_routes.save_ed2_manual_barcode(
+            catalog_routes.Ed2ManualBarcodeRequest(
+                receipt_item_id="receipt-table-line:r1", gtin=valid_gtin(),
+                import_off_product_override=True,
+            )
+        )
+    assert exc.value.status_code == 403
+    assert conn.manual == {}
+    assert not linked
+
+
+@pytest.mark.parametrize("csv_gtin,off_gtin", [
+    ("08710956001151", "8710956001151"),
+    ("08710400347927", "8710400347927"),
+    ("08710400131465", "8710400131465"),
+    ("08019873824530", "8019873824530"),
+])
+def test_leading_zero_gtin14_is_same_off_ean13_for_superuser_import(
+    guard, monkeypatch, csv_gtin, off_gtin,
+):
+    from app.services.off_manual_search_proof import issue_manual_off_proof, verify_manual_off_proof
+    conn, _, _, linked, _ = guard
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    def search(payload):
+        assert payload["gtin"] == csv_gtin
+        product = {
+            "gtin": off_gtin, "product_name": "Correct OFF-product",
+            "brand": "Merk", "quantity": "330 ml", "category": "drinks",
+            "category_tags": ["en:drinks"], "image_url": "https://example.test/p.jpg",
+            "identity_compatible": False,
+        }
+        product["selection_proof"] = issue_manual_off_proof(payload["receipt_item_id"], product)
+        return {"results": [product]}
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", search)
+    def confirm(payload):
+        assert payload["gtin"] == off_gtin
+        product = verify_manual_off_proof(
+            payload["selection_proof"], receipt_item_id=payload["receipt_item_id"],
+            gtin=payload["gtin"],
+        )
+        assert product["product_name"] == "Correct OFF-product"
+        assert product["image_url"] == "https://example.test/p.jpg"
+        assert payload["override_private_label_conflict"] is True
+        linked.append(payload)
+        return {"ok": True, "classification_pending": True}
+    monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", confirm)
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=csv_gtin,
+            allow_off_mismatch=True, import_off_product_override=True,
+        )
+    )
+    assert result["saved"] is True
+    assert result["source"] == "off"
+    assert result["off_found"] is True
+    assert len(linked) == 1
+    assert conn.manual == {}
+
+
+def test_real_off_gtin_difference_remains_blocked_even_for_superuser(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    csv_gtin = "08710956001151"
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
+        "results": [{"gtin": "8710400131465", "product_name": "Andere EAN",
+                     "identity_compatible": False, "selection_proof": "irrelevant"}],
+    })
+    with pytest.raises(HTTPException) as exc:
+        catalog_routes.save_ed2_manual_barcode(
+            catalog_routes.Ed2ManualBarcodeRequest(
+                receipt_item_id="receipt-table-line:r1", gtin=csv_gtin,
+                allow_off_mismatch=True, import_off_product_override=True,
+            ),
+        )
+    assert exc.value.status_code == 409
+    assert "OFF-barcode wijkt af" in exc.value.detail
+    assert conn.manual == {}
+    assert not linked

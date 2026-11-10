@@ -22,9 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Eerst basis tooling, dan PaddlePaddle CPU-wheel, daarna Python requirements
+# Eerst basis tooling, dan dezelfde PaddlePaddle CPU-versie vanaf PyPI (gepubliceerde\n# Python 3.11 Linux x86_64 wheel), daarna Python requirements. De externe\n# Paddle-spiegel leverde in de release-CI geen 3.2.0-wheel meer.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
- && pip install --no-cache-dir paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
+ && pip install --no-cache-dir paddlepaddle==3.2.0 \
  && pip install --no-cache-dir -r requirements.txt
 
 COPY alembic.ini ./alembic.ini

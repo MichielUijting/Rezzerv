@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import DataTable from '../../ui/DataTable'
@@ -19,7 +19,13 @@ const columns = [
 
 async function readResponse(response) {
   const result = await response.json()
-  if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'De import kon niet worden verwerkt.')
+  if (!response.ok) {
+    const detail = result.detail
+    const error = new Error(typeof detail === 'string' ? detail
+      : detail?.message || 'De import kon niet worden verwerkt.')
+    if (detail?.code === 'off_identity_mismatch') error.offMismatch = detail
+    throw error
+  }
   return result
 }
 
@@ -29,6 +35,10 @@ export default function BarcodeImportReview() {
   const [removed, setRemoved] = useState([])
   const [approved, setApproved] = useState([])
   const [failures, setFailures] = useState({})
+  const [foundProducts, setFoundProducts] = useState({})
+  const [offNames, setOffNames] = useState({})
+  const offLookupPending = useRef(new Set())
+  const offLookupGeneration = useRef(0)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -46,15 +56,75 @@ export default function BarcodeImportReview() {
     setFilteredIds((previous) => previous.length === ids.length && previous.every((id, i) => id === ids[i]) ? previous : ids)
   }, [])
 
+  // Enrich only the visible rows. The CSV never needs a product-name column,
+  // and reading OFF must not persist or approve any product information.
+  useEffect(() => {
+    if (!preview?.items?.length || !pageIds.length) return
+    const visible = new Set(pageIds)
+    const gtins = [...new Set(preview.items
+      .filter((row) => visible.has(row.line) && /^[0-9]{8,14}$/.test(String(row.gtin || '')))
+      .map((row) => row.gtin))]
+      .filter((gtin) => !Object.prototype.hasOwnProperty.call(offNames, gtin)
+        && !offLookupPending.current.has(gtin))
+      .slice(0, 10)
+    if (!gtins.length) return
+    const generation = offLookupGeneration.current
+    gtins.forEach((gtin) => offLookupPending.current.add(gtin))
+    void (async () => {
+      try {
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/off-names', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gtins }),
+        })
+        const result = await readResponse(response)
+        if (offLookupGeneration.current !== generation) return
+        setOffNames((current) => {
+          const next = { ...current }
+          for (const entry of result.items || []) {
+            if (gtins.includes(entry.gtin)) next[entry.gtin] = entry
+          }
+          // Avoid endlessly retrying malformed or missing response entries.
+          for (const gtin of gtins) {
+            if (!next[gtin]) next[gtin] = { status: 'unavailable', product_name: '' }
+          }
+          return next
+        })
+      } catch {
+        if (offLookupGeneration.current === generation) {
+          setOffNames((current) => Object.fromEntries([
+            ...Object.entries(current),
+            ...gtins.map((gtin) => [gtin, { status: 'unavailable', product_name: '' }]),
+          ]))
+        }
+      } finally {
+        if (offLookupGeneration.current === generation) {
+          gtins.forEach((gtin) => offLookupPending.current.delete(gtin))
+        }
+      }
+    })()
+  }, [preview, pageIds, offNames])
+
+  function offNameFor(row) {
+    const entry = offNames[row.gtin]
+    if (entry?.status === 'found') return entry.product_name
+    if (foundProducts[row.line]) return foundProducts[row.line]
+    if (entry?.status === 'not_found') return 'Niet gevonden in OFF'
+    if (entry?.status === 'no_name') return 'Naam ontbreekt in OFF'
+    if (entry?.status === 'unavailable') return 'OFF tijdelijk niet bereikbaar'
+    return /^[0-9]{8,14}$/.test(String(row.gtin || '')) ? 'OFF opzoeken…' : 'Geen geldige barcode'
+  }
+
   const items = useMemo(() => (preview?.items || [])
     .filter((row) => !removed.includes(row.line))
     .map((row) => ({
       ...row,
+      product_name: offNameFor(row),
       status: approved.includes(row.line) ? 'Goedgekeurd'
         : failures[row.line] ? `Niet opgeslagen: ${failures[row.line]}`
           : row.status === 'klaar' ? 'Te beoordelen'
             : row.reason || 'Geblokkeerd',
-    })), [preview, removed, approved, failures])
+    })), [preview, removed, approved, failures, foundProducts, offNames])
   // Geblokkeerde voorstellen mogen wel uit de importlijst worden verwijderd,
   // maar kunnen nooit ter goedkeuring worden aangeboden.
   const selectableIds = useMemo(() => new Set(items.filter((row) => (
@@ -88,6 +158,11 @@ export default function BarcodeImportReview() {
     setRemoved([])
     setApproved([])
     setFailures({})
+    setFoundProducts({})
+    setOffNames({})
+    setPageIds([])
+    offLookupGeneration.current += 1
+    offLookupPending.current.clear()
     setSelectedIds([])
     setFilters({})
     setPage(1)
@@ -139,6 +214,57 @@ export default function BarcodeImportReview() {
     })
   }
 
+  function offerOffMismatchOverride(rows, index = 0) {
+    const row = rows[index]
+    if (!row) return
+    showFeedback({
+      variant: 'warning',
+      title: 'OFF-productgegevens wijken af',
+      message: 'De OFF-productgegevens komen niet veilig overeen met dit bonartikel.',
+      detail: [
+        `Bonartikel: ${row.article} (artikelnummer ${row.article_number || 'onbekend'})`,
+        `Voorgestelde barcode: ${row.gtin}`,
+        `OFF gevonden product: ${row.offProduct?.product_name || 'Naam ontbreekt'}`,
+        row.offProduct?.brand ? `Merk: ${row.offProduct.brand}` : '',
+        row.offProduct?.quantity ? `Inhoud: ${row.offProduct.quantity}` : '',
+        row.offProduct?.conflict_reason ? `Afwijking: ${row.offProduct.conflict_reason}` : '',
+        'Bij Toch koppelen bevestig je als Superuser het OFF-product inclusief beschikbare gegevens, merk, inhoud en foto.',
+      ].filter(Boolean).join(' · '),
+      dismissMode: 'blocked',
+      primaryActionLabel: 'Toch koppelen',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'barcode-import-off-mismatch',
+      onPrimaryAction: async () => {
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/barcode-import/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receipt_item_id: row.receipt_item_id, retailer: row.retailer,
+            article: row.article, article_number: row.article_number, gtin: row.gtin,
+            allow_off_mismatch: true,
+          }),
+        })
+        const result = await readResponse(response)
+        if (!result.saved || result.source !== 'off' || !result.off_found) {
+          throw new Error('De volledige OFF-productkoppeling is niet bevestigd.')
+        }
+        setApproved((current) => [...new Set([...current, row.line])])
+        setSelectedIds((current) => current.filter((id) => id !== row.line))
+        setFailures((current) => {
+          const next = { ...current }
+          delete next[row.line]
+          return next
+        })
+        if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
+        else showFeedback({ variant: 'success', title: 'Barcode opgeslagen',
+          message: 'Barcode en beschikbare OFF-productgegevens gekoppeld aan het Catalogusartikel.', dedupeMs: 0 })
+      },
+      onSecondaryAction: () => {
+        if (index + 1 < rows.length) offerOffMismatchOverride(rows, index + 1)
+      },
+    })
+  }
+
   async function approveSelected(ids) {
     setBusy(true)
     showFeedback({ variant: 'progress', title: 'Barcodes verwerken',
@@ -146,6 +272,7 @@ export default function BarcodeImportReview() {
       dismissMode: 'blocked', key: 'barcode-import-processing', dedupeMs: 0 })
     let succeeded = 0
     let failed = 0
+    const mismatches = []
     for (const id of ids) {
       const row = selectedRows.find((item) => item.line === id)
       if (!row) continue
@@ -164,11 +291,26 @@ export default function BarcodeImportReview() {
         setSelectedIds((current) => current.filter((currentId) => currentId !== id))
         succeeded += 1
       } catch (err) {
-        setFailures((current) => ({ ...current, [id]: err.message }))
-        failed += 1
+        if (err.offMismatch) {
+          const detail = err.offMismatch
+          if (detail.gtin !== row.gtin) {
+            setFailures((current) => ({ ...current, [id]: 'OFF gaf een andere barcode terug.' }))
+            failed += 1
+            continue
+          }
+          setFoundProducts((current) => ({ ...current, [id]: detail.product_name || '' }))
+          mismatches.push({ ...row, offProduct: detail })
+        } else {
+          setFailures((current) => ({ ...current, [id]: err.message }))
+          failed += 1
+        }
       }
     }
     setBusy(false)
+    if (mismatches.length) {
+      offerOffMismatchOverride(mismatches)
+      return
+    }
     showFeedback({
       variant: failed ? 'warning' : 'success',
       title: 'Importresultaat',
@@ -188,8 +330,9 @@ export default function BarcodeImportReview() {
     <ScreenCard fullWidth>
       <div className="rz-barcode-import-page">
         <h2>Barcodes importeren</h2>
-        <p>Importeer een CSV met Artikel, Winkelketen, Bonartikelnummer en Art./Barcode. Een kolom Aanvulstatus mag ook.
-          Afgeleide codes uit bonartikelnummers worden ter controle getoond maar niet opgeslagen.
+        <p>Importeer een CSV met Artikel, Winkelketen, Bonartikelnummer en Art./Barcode. Bonartikelnummer mag leeg zijn:
+          InHuis gebruikt dan uitsluitend een unieke combinatie van winkelketen en exacte bonomschrijving.
+          Een kolom Aanvulstatus mag ook. Afgeleide codes uit bonartikelnummers worden ter controle getoond maar niet opgeslagen.
           Goedkeuren slaat alleen toegestane geselecteerde barcodes op; Verwijderen verwijdert alleen voorstellen uit deze lijst.</p>
         <label className="rz-input-field">
           <span className="rz-label">CSV-bestand</span>
@@ -233,8 +376,22 @@ export default function BarcodeImportReview() {
               <td>{row.retailer}</td>
               <td>{row.article_number}</td>
               <td>{row.gtin}</td>
-              <td title={row.source}>{row.product_name || row.source}</td>
-              <td title={row.reason}>{row.status}</td>
+              <td title={offNames[row.gtin]?.status === 'found' ? [row.product_name,
+                offNames[row.gtin]?.brand, offNames[row.gtin]?.quantity].filter(Boolean).join(' · ') : row.product_name}>{row.product_name}</td>
+              <td title={[
+                row.reason,
+                row.existing_catalog_product ? `Catalogusproduct: ${row.existing_catalog_product}` : '',
+                row.existing_catalog_gtin ? `Catalogusbarcode: ${row.existing_catalog_gtin}` : '',
+                row.existing_manual_gtin ? `Handmatige barcode: ${row.existing_manual_gtin}` : '',
+              ].filter(Boolean).join(' · ')}>
+                <span>{row.status}</span>
+                {row.existing_catalog_product && row.status !== 'Te beoordelen'
+                  ? <div><small>Catalogus: {row.existing_catalog_product}</small></div> : null}
+                {row.has_barcode_conflict ? <div>
+                  <small>Catalogus: {row.existing_catalog_gtin || 'geen barcode'}</small>
+                  <div><small>Handmatig: {row.existing_manual_gtin || 'geen barcode'}</small></div>
+                </div> : null}
+              </td>
             </tr>}
           />
           <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">

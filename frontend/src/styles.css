@@ -465,12 +465,16 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-table-wrapper{
+  /* Keep the horizontal scrollbar below the final table row on all screens.
+     Reserve a scrollable bottom gutter and include it in the row-height cap. */
+  --rz-table-scrollbar-clearance: 24px;
   width:100%;
   max-width:100%;
   min-width:0;
   overflow-x:auto;
   overflow-y:auto;
-  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count)) + 2px);
+  padding-bottom:var(--rz-table-scrollbar-clearance);
+  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count)) + 2px + var(--rz-table-scrollbar-clearance));
 }
 
 .rz-data-table-controls{
@@ -500,8 +504,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 .rz-store-batch-table-wrapper{
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count)) + 2px);
-  padding-bottom: 24px;
+  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count)) + 2px + var(--rz-table-scrollbar-clearance, 24px));
   margin-bottom: 12px;
 }
 
@@ -573,6 +576,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
     + var(--rz-table-filter-row-height)
     + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count))
     + 2px
+    + var(--rz-table-scrollbar-clearance, 24px)
   );
 }
 

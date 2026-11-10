@@ -23,11 +23,17 @@ const columns = [
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
   { key: 'article_code', label: 'Art./Barcode', width: 185, sortable: true, filterable: true,
     getSortValue: (row) => row.article_code || row.manual_barcode || '',
-    getFilterValue: (row) => row.article_code || row.manual_barcode || '',
-    filterPredicate: (row, filter) => String(row.article_code || row.manual_barcode || '').toLowerCase().includes(String(filter).toLowerCase()),
-    renderCell: (row) => row.article_code || (row.manual_barcode
-      ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
-      : '') },
+    getFilterValue: (row) => [row.article_code, row.manual_barcode].filter(Boolean).join(' '),
+    filterPredicate: (row, filter) => [row.article_code, row.manual_barcode].filter(Boolean)
+      .join(' ').toLowerCase().includes(String(filter).toLowerCase()),
+    renderCell: (row) => row.article_code && row.manual_barcode && row.article_code !== row.manual_barcode
+      ? <span title={`Barcodeconflict: Catalogus ${row.article_code}; handmatig ${row.manual_barcode}. Geen automatische wijziging.`}>
+        <span>{row.article_code}</span>
+        <span style={{ display: 'block' }}>Handmatig: {row.manual_barcode}</span>
+      </span>
+      : row.article_code || (row.manual_barcode
+        ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
+        : '') },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
