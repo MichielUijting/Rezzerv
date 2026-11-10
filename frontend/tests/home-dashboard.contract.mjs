@@ -202,3 +202,12 @@ assert.match(mobileChrome, /MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'/)
 assert.match(mobileChrome, /aria-modal="true"/)
 
 assert.match(mobileChrome, /kassa: 'payment-card'/)
+
+
+// Artikel-synoniemen is a management subview, never a duplicate Home/Meer tile.
+const homeNavigation = readFileSync(new URL('../src/features/home/homeNavigation.js', import.meta.url), 'utf8')
+const articleManagement = readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
+assert.doesNotMatch(homeNavigation, /key:\s*'artikelsynoniemen'/)
+assert.match(homeNavigation, /key:\s*'externe-databases-2', label:\s*'Artikelbeheer'/)
+assert.match(articleManagement, /activeArea === "synonyms"\s*\?\s*<ArticleSynonymsPage embedded\s*\/>/)
+assert.match(articleManagement, /import ArticleSynonymsPage from/)
