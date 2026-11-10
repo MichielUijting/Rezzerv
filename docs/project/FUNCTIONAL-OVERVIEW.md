@@ -523,3 +523,28 @@ AI-/OFF-licentie en kan voor offline omgevingen worden uitgezet via
 niet dat OFF voor iedere barcode een foto heeft; gebroken historische fotolinks
 worden niet automatisch vervangen. Deze taak verricht geen downloads van
 afbeeldingsbestanden, maar slaat alleen de expliciete OFF-foto-URL op.
+
+
+### Historische huishoudartikelen zonder directe Cataloguskoppeling
+
+Veel bestaande huishoudartikelen hebben geen `global_product_id` en zijn
+gemaakt voordat centrale koppelingen werden vastgelegd. Ook bij deze
+artikelen blijft de fotoregel gelden: eigen Catalogusfoto vóór een direct
+bevestigd synoniem. De uitleesprojectie mag daarom aanvullend een
+**unieke exact gelijke artikelnaam** gebruiken om een centrale identiteit
+te herkennen wanneer barcode-, productidentiteits- en bevestigde
+bon/winkelkoppelingen ontbreken. Dit vereist precies één actief
+Catalogusartikel met exact dezelfde naam (hoofdlettergebruik en
+omringende spaties buiten beschouwing); bij dubbele Catalogusnamen,
+afwijkende barcodes of tegenstrijdige eerdere productidentiteiten gebeurt
+dit nadrukkelijk niet. Een vergelijkbare naam, vertaling, enkelvoud/
+meervoud, ingekorte kassabonafkorting, winkelmerk of taxonomie is
+nooit voldoende. Er worden geen koppelingen in de database aangemaakt.
+Een artikel zonder verifieerbare Catalogusidentiteit blijft op **Geen foto**
+staan, ook als een los Catalogusartikel met een vergelijkbare naam wél
+een afbeelding heeft.
+
+De Bijna op-tabel behoudt bij verticaal scrollen de kolomkoppen en
+filterrij zichtbaar, met dezelfde sticky-header en sticky-filters-regels
+als de standaard Voorraadtabel. De scrollbar en pagineringsknoppen
+blijven onder de tabel en overdekken geen rij.
