@@ -66,6 +66,8 @@ class CentralCatalogProjectionConnection:
                 'product_name': '',
                 'image_url': '',
             }])
+        if 'FROM global_products' in sql and 'lower(trim(name))' in sql:
+            return Result(rows=[])
         if 'FROM product_identities pi' in sql:
             return Result(rows=[])
         if 'WITH source_identities AS' in sql:
@@ -483,6 +485,66 @@ def test_inventory_uses_confirmed_synonym_photo_not_broad_gpc_representative():
     assert result['rows'][0]['image_url'] == 'https://images.example.test/confirmed-peer.jpg'
 
 
+
+class ExactNameCatalogConnection(CentralCatalogProjectionConnection):
+    def __init__(self, *, duplicate=False, photo='', peer_photo=''):
+        super().__init__()
+        self.duplicate, self.photo, self.peer_photo = duplicate, photo, peer_photo
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM global_products' in sql and 'lower(trim(name))' in sql:
+            rows = [{'id': 'name-catalog-product', 'name': 'Aardappelpuree', 'image_url': self.photo}]
+            if self.duplicate:
+                rows.append({'id': 'different-gtin', 'name': 'Aardappelpuree',
+                             'image_url': 'https://images.example.test/wrong.jpg'})
+            return Result(rows=rows)
+        if 'FROM article_synonym_links asl' in sql:
+            return Result(rows=[{'source_id': 'name-catalog-product',
+                                 'peer_id': 'confirmed-peer',
+                                 'image_url': self.peer_photo}] if self.peer_photo else [])
+        if 'FROM product_identities pi' in sql:
+            return Result(rows=[])
+        if 'WITH source_identities AS' in sql:
+            return Result(rows=[])
+        return super().execute(statement, params)
+
+
+def test_unique_exact_catalog_name_has_own_photo_without_stored_household_link():
+    conn = ExactNameCatalogConnection(photo='https://images.example.test/own.jpg')
+    with_source = {
+        'id': ARTICLE_ID, 'household_id': 'household-a',
+        'naam': 'Aardappelpuree', 'barcode': '', 'global_product_id': None, 'image_url': '',
+    }
+    assert resolve_household_catalog_images(conn, lambda q: q, [with_source]) == {
+        ARTICLE_ID: 'https://images.example.test/own.jpg'
+    }
+
+
+def test_unique_exact_catalog_name_can_use_confirmed_synonym_photo():
+    conn = ExactNameCatalogConnection(peer_photo='https://images.example.test/peer.jpg')
+    item = {'id': ARTICLE_ID, 'naam': 'Aardappelpuree',
+            'barcode': '', 'global_product_id': None, 'image_url': ''}
+    assert resolve_household_catalog_images(conn, lambda q: q, [item]) == {
+        ARTICLE_ID: 'https://images.example.test/peer.jpg'
+    }
+
+
+def test_duplicate_catalog_name_never_guesses_even_if_one_has_photo():
+    conn = ExactNameCatalogConnection(duplicate=True, photo='https://images.example.test/own.jpg',
+                                      peer_photo='https://images.example.test/peer.jpg')
+    item = {'id': ARTICLE_ID, 'naam': 'Aardappelpuree',
+            'barcode': '', 'global_product_id': None, 'image_url': ''}
+    assert resolve_household_catalog_images(conn, lambda q: q, [item]) == {}
+
+
+def test_catalog_name_does_not_override_unmatched_household_barcode():
+    conn = ExactNameCatalogConnection(photo='https://images.example.test/own.jpg')
+    item = {'id': ARTICLE_ID, 'naam': 'Aardappelpuree',
+            'barcode': '8718265614512', 'global_product_id': None, 'image_url': ''}
+    assert resolve_household_catalog_images(conn, lambda q: q, [item]) == {}
+
+
 def test_almost_out_image_fallback_happens_after_visibility_filtering():
     source = (Path(__file__).resolve().parents[1] / 'app' / 'main.py').read_text(encoding='utf-8')
     body = source.split('def build_almost_out_items(', 1)[1].split('def get_household_article_details_for_inventory(', 1)[0]
@@ -538,6 +600,10 @@ def run_contract() -> None:
     test_no_photo_when_neither_own_product_nor_confirmed_synonym_has_one()
     test_ambiguous_catalog_identification_never_borrows_synonym_photo()
     test_direct_catalog_identity_is_not_replaced_by_different_receipt_product()
+    test_unique_exact_catalog_name_has_own_photo_without_stored_household_link()
+    test_unique_exact_catalog_name_can_use_confirmed_synonym_photo()
+    test_duplicate_catalog_name_never_guesses_even_if_one_has_photo()
+    test_catalog_name_does_not_override_unmatched_household_barcode()
     test_inventory_uses_confirmed_synonym_photo_not_broad_gpc_representative()
     test_inventory_inline_household_name_does_not_rename_inventory_identity()
     print('HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN')
