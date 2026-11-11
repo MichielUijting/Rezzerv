@@ -113,3 +113,62 @@ def test_user_confirmed_identity_can_be_pending_classification():
     finally:
         conn.close()
         engine.dispose()
+
+
+def test_scanned_gtin_confirmation_creates_idempotent_store_identity_without_classification():
+    from app.services.catalog_identity_confirmation_service import (
+        confirm_scanned_retailer_identity,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN id TEXT"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN receipt_text_normalized TEXT"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN confirmed_at TIMESTAMP"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN source_candidate_id TEXT"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN created_at TIMESTAMP"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN updated_at TIMESTAMP"))
+        result = confirm_scanned_retailer_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            scanned_gtin="8712345678906", confirmed_by="authenticated-user-test",
+        )
+        assert result["status"] == "confirmed", result
+        assert result["changes"] == 1
+        assert resolve_catalog_identity(conn, retailer_code="lidl",
+                                        external_article_code="0082346")["global_product_id"] == "p1"
+        again = confirm_scanned_retailer_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            scanned_gtin="8712345678906", confirmed_by="authenticated-user-test",
+        )
+        assert again["status"] == "already_confirmed"
+        assert again["changes"] == 0
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_scanned_gtin_confirmation_rejects_unverified_and_conflicting_code():
+    from app.services.catalog_identity_confirmation_service import (
+        confirm_scanned_retailer_identity,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status)
+            VALUES ('p2','lidl','0082346','confirmed')
+        """))
+        with pytest.raises(ValueError, match="tegenstrijdige"):
+            confirm_scanned_retailer_identity(
+                conn, retailer_code="lidl", external_article_code="0082346",
+                scanned_gtin="8712345678906", confirmed_by="tester",
+            )
+        with pytest.raises(ValueError, match="Barcode"):
+            confirm_scanned_retailer_identity(
+                conn, retailer_code="lidl", external_article_code="0083006",
+                scanned_gtin="8712345678900", confirmed_by="tester",
+            )
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
