@@ -134,7 +134,7 @@ jobs:
 
       - name: Install Playwright browser
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run Platformautorisaties frontend regression
         working-directory: frontend
