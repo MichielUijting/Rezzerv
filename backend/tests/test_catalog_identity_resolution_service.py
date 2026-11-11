@@ -17,7 +17,7 @@ def _conn():
     conn = engine.connect()
     conn.execute(text("CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)"))
     conn.execute(text("CREATE TEMP TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)"))
-    conn.execute(text("CREATE TEMP TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL)"))
+    conn.execute(text("CREATE TEMP TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL, id TEXT, receipt_text_normalized TEXT, confirmed_at TIMESTAMP, source_candidate_id TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)"))
     conn.execute(text("INSERT INTO global_products VALUES ('p1', '8712345678906', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
     return engine, conn
 
@@ -121,12 +121,6 @@ def test_scanned_gtin_confirmation_creates_idempotent_store_identity_without_cla
     )
     engine, conn = _conn()
     try:
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN id TEXT"))
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN receipt_text_normalized TEXT"))
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN confirmed_at TIMESTAMP"))
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN source_candidate_id TEXT"))
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN created_at TIMESTAMP"))
-        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN updated_at TIMESTAMP"))
         result = confirm_scanned_retailer_identity(
             conn, retailer_code="Lidl", external_article_code="0082346",
             scanned_gtin="8712345678906", confirmed_by="authenticated-user-test",
