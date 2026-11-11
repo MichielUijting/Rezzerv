@@ -146,6 +146,8 @@ def _source_articles(conn):
     for row in purchases:
         item = _m2c2h5_purchase_import_placeholder(dict(row))
         item["external_article_code"] = row["external_article_code"]
+        # The source projection does not establish a GTIN from a store code.
+        item["gtin"] = ""
         yield item
 
     # Receipt-derived Uitpakken/import rows are copies, not another source of
@@ -157,6 +159,7 @@ def _source_articles(conn):
                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
                COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                rtl.external_article_code AS retailer_article_number,
+               rtl.barcode AS source_gtin,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
@@ -170,6 +173,9 @@ def _source_articles(conn):
     for row in receipts:
         item = _receipt_table_line_placeholder(dict(row))
         item["external_article_code"] = row["retailer_article_number"]
+        # The legacy placeholder fills gtin from retailer_article_number.
+        # Use ONLY the canonical barcode field as GTIN evidence.
+        item["gtin"] = str(row["source_gtin"] or "")
         yield item
 
 
