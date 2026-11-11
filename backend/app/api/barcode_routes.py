@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.db import engine
 from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
 from app.services.catalog_identity_live_repair_service import repair_household_articles_for_confirmed_store_code
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.services.session_request_context import require_platform_permission_from_session
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_retailer_code,
@@ -68,7 +69,7 @@ def confirm_retailer_code_from_barcode(
         raise HTTPException(status_code=403, detail="Alleen een lid of beheerder mag artikelen koppelen.")
     household = str(household_context.active_household_id or "").strip()
     receipt_item_id = str(payload.get("receipt_item_id") or "").strip()
-    retailer = normalize_external_link_retailer_code(payload.get("retailer_code"))
+    retailer = canonical_catalog_retailer(payload.get("retailer_code"))
     code = normalize_external_link_article_code(payload.get("external_article_code"))
     gtin = str(payload.get("gtin") or "").strip()
     if not household or not receipt_item_id or not retailer or not code or not gtin:
@@ -93,7 +94,7 @@ def confirm_retailer_code_from_barcode(
             """), {"household": household, "line": receipt_line_id}).mappings().first()
             if source is None:
                 raise HTTPException(status_code=404, detail="Originele bonregel is niet beschikbaar in dit huishouden")
-            if (normalize_external_link_retailer_code(source["retailer"]) != retailer
+            if (canonical_catalog_retailer(source["retailer"]) != retailer
                 or normalize_external_link_article_code(source["article_code"]) != code):
                 raise HTTPException(
                     status_code=409,
