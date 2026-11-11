@@ -130,3 +130,47 @@ gerichte PostgreSQL-regressietest toegevoegd.
 veiligheidsreparatie uit stap 3 gecommit. Nieuwe PostgreSQL-gate en daaropvolgende
 alleen-lezen hertelling moeten nog afgerond worden. Het terugschrijven van
 historische gebruikersgegevens staat bewust nog uit.
+
+## Proef 20 Lidl-winkelcodes — gecontroleerde bronselectie
+
+De lokale read-only diagnose toont **297** verschillende codes zonder
+bruikbare winkelcodekoppeling (AH en Lidl samen), **578** betrokken bronregels
+zonder bron-GTIN, en **161** `classification_pending`-bronregels zonder
+vereiste bijpassende GTIN-identiteitsregistratie.
+
+De bestaande JSON-rapporten bevatten *geen ruwe winkelartikelcodes*, alleen
+geanonimiseerde voorbeelden en aggregaten. Daarmee is het onmogelijk om
+verantwoord 20 concrete Lidl-codes in Open Food Facts/Lidl op te zoeken.
+Een productnaamzoekresultaat zou bovendien nooit zelfstandig identiteitsbewijs
+zijn.
+
+Daarom is een lokaal read-only proefscript voorbereid:
+`Inhuis_PR671_Lidl20_Broncodes_Proef.cmd`. Het selecteert deterministisch
+20 meest voorkomende Lidl-winkelartikelcodes zonder bestaande
+`external_article_product_links`-registratie, uitsluitend via exacte
+`receipt:<id>` + `receipt-line:<id>`-verwijzingen. Het verzamelt per code
+bronaantallen, eventuele bron-GTIN's en bestaande Catalogusverwijzingen,
+zonder die verwijzingen als codebewijs te beschouwen.
+
+Het script vereist de reeds draaiende officiële Inhuis-runtime, doet uitsluitend
+`SELECT` onder `SET TRANSACTION READ ONLY`, valideert database/schema, en
+schrijft uitsluitend een JSON-rapport in Downloads. Geen netwerkverzoeken,
+geen Docker-start/stop, geen database-/voorraadmutaties.
+
+**Volgorde na ontvangst van het echte sample:**
+1. Per code interne identiteitsbewijzen beoordelen; codes niet interpreteren
+   als GTIN.
+2. Waar er een verifieerbare GTIN is, OFF rechtstreeks op die GTIN opzoeken.
+   OFF zoekt niet betrouwbaar op een los Lidl-winkelartikelnummer; eventuele
+   artikelnaamresultaten zijn hoogstens voorstellen, geen bevestiging.
+3. Lidl-productinformatie alleen aanvaarden wanneer de relatie met de
+   *exacte* winkelartikelcode aantoonbaar is; bij tegenstrijdig/ontbrekend
+   bewijs geen koppeling.
+4. Per code melden: bewezen automatisch, voorstel voor beoordeling, of
+   onbekend. Vervolgens pas een gerichte codewijziging indien er een
+   daadwerkelijke tekortkoming in de bestaande centrale resolver is.
+
+**Status:** voorbereid, lokaal Python-deel syntactisch gecontroleerd;
+nog geen uitvoering op de gebruikersdatabase of externe broncontrole van
+de 20 werkelijke codes. Er is geen toestemming om de historische gegevens
+automatisch te wijzigen.
