@@ -1,0 +1,48 @@
+name: PR671 exact Catalogus identity PostgreSQL tests
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/catalog_identity_resolution_service.py'
+      - 'backend/app/services/catalog_identity_backfill_preview_service.py'
+      - 'backend/tests/test_catalog_identity_resolution_service.py'
+      - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
+      - '.github/workflows/pr671-catalog-identity-postgresql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-catalog-identity:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: inhuis_identity_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d inhuis_identity_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      INHUIS_IDENTITY_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/inhuis_identity_test
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated test dependencies
+        run: python -m pip install --quiet pytest==8.4.2 sqlalchemy==2.0.36 'psycopg[binary]==3.3.4'
+      - name: PostgreSQL exact identity and historical preview tests
+        run: |
+          python -m pytest -q \
+            backend/tests/test_catalog_identity_resolution_service.py \
+            backend/tests/test_catalog_identity_backfill_preview_service.py \
+            backend/tests/test_receipt_to_unpack_retailer_code_contract.py
