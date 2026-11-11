@@ -25,7 +25,7 @@ def _conn():
 def test_confirmed_store_code_matches_without_classification():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','ABC-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','abc-123','confirmed')"))
         result = resolve_catalog_identity(conn, retailer_code="Lidl", external_article_code="ABC-123")
         assert result["status"] == "matched", result
         assert result["global_product_id"] == "p1"
@@ -37,7 +37,7 @@ def test_confirmed_store_code_matches_without_classification():
 def test_pending_classification_is_not_confirmation():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','ABC-123','classification_pending')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','abc-123','classification_pending')"))
         assert resolve_catalog_identity(conn, retailer_code="lidl", external_article_code="ABC-123")["status"] == "not_found"
     finally:
         conn.close()
@@ -47,8 +47,8 @@ def test_pending_classification_is_not_confirmation():
 def test_ambiguous_code_fails_closed():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','ABC-123','confirmed')"))
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p2','lidl','ABC-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','abc-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p2','lidl','abc-123','confirmed')"))
         assert resolve_catalog_identity(conn, retailer_code="lidl", external_article_code="ABC-123")["status"] == "conflict"
     finally:
         conn.close()
@@ -58,7 +58,7 @@ def test_ambiguous_code_fails_closed():
 def test_same_code_in_other_shop_does_not_match():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','ABC-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','abc-123','confirmed')"))
         assert resolve_catalog_identity(conn, retailer_code="jumbo", external_article_code="ABC-123")["status"] == "not_found"
         assert resolve_catalog_identity(conn, external_article_code="ABC-123")["status"] == "retailer_required"
     finally:
@@ -69,7 +69,7 @@ def test_same_code_in_other_shop_does_not_match():
 def test_gtin_and_retailer_identity_must_agree():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p2','lidl','ABC-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p2','lidl','abc-123','confirmed')"))
         result = resolve_catalog_identity(conn, gtin="8712345678906", retailer_code="lidl", external_article_code="ABC-123")
         assert result["status"] == "conflict", result
         assert result["global_product_id"] is None
@@ -81,7 +81,7 @@ def test_gtin_and_retailer_identity_must_agree():
 def test_inactive_products_are_not_candidates():
     engine, conn = _conn()
     try:
-        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p3','lidl','ABC-123','confirmed')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p3','lidl','abc-123','confirmed')"))
         assert resolve_catalog_identity(conn, retailer_code="lidl", external_article_code="ABC-123")["status"] == "not_found"
     finally:
         conn.close()
@@ -105,7 +105,7 @@ def test_user_confirmed_identity_can_be_pending_classification():
         conn.execute(text("""
             INSERT INTO external_article_product_links
                 (global_product_id,retailer_code,external_article_code,status,confirmed_by)
-            VALUES ('p1','lidl','ABC-123','classification_pending','external_databases_off_pending_gpc')
+            VALUES ('p1','lidl','abc-123','classification_pending','external_databases_off_pending_gpc')
         """))
         result = resolve_catalog_identity(conn, retailer_code="lidl", external_article_code="ABC-123")
         assert result["status"] == "matched", result
