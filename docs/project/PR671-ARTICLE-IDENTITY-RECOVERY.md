@@ -59,6 +59,32 @@ De opgeslagen 72 Jumbo-bronregels bevatten evenmin een code.
 aanbiedt. Dat vereist een afzonderlijke, privacyveilige inspectie van de
 Jumbo-bronstructuur; de bestaande import mag geen code fabriceren.
 
+
+## Nieuwe gecontroleerde herstellaag (Draft)
+- `preview_household_catalog_identity_backfill` geeft een SHA-256-plan-token
+  dat is afgeleid van het huishouden, de volledige kandidaatlijst en de
+  relevante conflict- en bronstatistieken. Kandidaten worden standaard niet
+  openbaar in het rapport opgenomen.
+- `apply_reviewed_household_catalog_identity_backfill` is een **opt-in
+  interne service**; er is bewust geen publiek endpoint, UI-knop, scheduler
+  of automatische startup-route toegevoegd.
+- De service vereist een exact vooraf beoordeeld token, een volledige scan,
+  maximaal 500 mutaties, afwezigheid van conflicten en exclusieve
+  household-scoped producttoewijzingen. In dezelfde transactie worden
+  de actuele gegevens en het token opnieuw gecontroleerd.
+- Alleen `household_articles.global_product_id` is schrijfbaar via deze
+  service. Bon-, voorraad- en voorraadgebeurtenistabellen blijven ongemoeid.
+  Een fout moet door de aanroeper tot rollback van de **hele** transactie
+  leiden; hiervoor hoort `engine.begin()` te worden gebruikt.
+- De nieuw toegevoegde PostgreSQL-tests controleren de identiteitsafbakening,
+  dubbele toewijzing, herhaalde uitvoering en ongeldige tokens.
+
+**Nog open voor activatie:** actuele alleen-lezen voorbeeldtelling op
+Mijn huishouden1, beoordelingsproces voor conflicten, autorisatie-/rolroute,
+gericht PostgreSQL-ketenbewijs voor het definitieve schrijfpunt en de
+toepasselijke versie-/release- en exact-kandidaatchecks. Zonder die voorwaarden
+wordt de functie niet op de gebruikersdatabase uitgevoerd.
+
 ## Verplicht vóór Ready
 1. Gerichte Python/SQL-contracttests en werkelijke PostgreSQL-ketentest op
    nieuwe én reeds bestaande AH/Lidl-importregels.
