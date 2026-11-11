@@ -106,6 +106,7 @@ from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
     reconcile_incomplete_confirmed_external_links,
 )
+from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 from app.services.authorization_foundation_service import assert_last_household_admin_remains
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
@@ -5359,23 +5360,41 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
     ).mappings().first()
     if not line:
         return None
-    confirmed_link = get_confirmed_external_article_product_link(
+    identity = resolve_catalog_identity(
         conn,
+        gtin=line.get('barcode'),
         retailer_code=receipt_header.get('store_name'),
-        receipt_text=line.get('article_name'),
         external_article_code=line.get('external_article_code'),
     )
+    existing_id = str(line.get('matched_global_product_id') or '').strip() or None
+    exact_id = (
+        str(identity.get('global_product_id'))
+        if identity.get('status') == 'matched'
+        else None
+    )
+    # Existing reviewed identity must not be silently overwritten by a
+    # conflicting new barcode/store-code lookup.
+    if exact_id and existing_id and exact_id != existing_id:
+        return {
+            'matched_global_product_id': existing_id,
+            'matched_household_article_id': None,
+            'match_method': 'identity:conflict',
+            'conflict_reason': 'existing_catalog_link_disagrees_with_exact_identity',
+        }
+    if identity.get('status') in {'conflict', 'invalid_gtin'}:
+        return {
+            'matched_global_product_id': existing_id,
+            'matched_household_article_id': None,
+            'match_method': 'identity:conflict',
+            'conflict_reason': identity.get('status'),
+        }
 
     resolved = {
-        'matched_global_product_id': (
-            confirmed_link.get('global_product_id')
-            if confirmed_link
-            else None
-        ),
+        'matched_global_product_id': exact_id or existing_id,
         'matched_household_article_id': None,
         'match_method': (
-            'external_databases:confirmed'
-            if confirmed_link
+            'identity:exact' if exact_id
+            else 'existing' if existing_id
             else None
         ),
     }
