@@ -1,4 +1,4 @@
-name: PR671 exact Catalogus identity PostgreSQL tests
+name: Catalogus article identity permanent regressions
 
 on:
   pull_request:
@@ -10,6 +10,8 @@ on:
       - 'backend/app/services/catalog_identity_live_repair_service.py'
       - 'backend/app/services/catalog_retailer_identity_keys.py'
       - 'backend/app/api/barcode_routes.py'
+      - 'backend/app/main.py'
+      - 'backend/app/services/almost_out_group_service.py'
       - 'backend/app/services/external_article_product_link_service.py'
       - 'backend/app/services/external_article_ui_projection.py'
       - 'backend/app/services/external_unlinked_articles_service.py'
@@ -17,6 +19,20 @@ on:
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
       - 'backend/tests/test_catalog_identity_route_security.py'
       - 'backend/tests/test_catalog_identity_chain_postgresql.py'
+      - 'backend/tests/test_receipt_to_unpack_retailer_code_contract.py'
+      - 'frontend/src/features/externalDatabases/**'
+      - 'frontend/src/features/barcodes/**'
+      - 'frontend/src/features/articles/**'
+      - 'frontend/src/features/almostOut/**'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/purchaseImport/**'
+      - 'frontend/src/lib/barcodeScanner.js'
+      - 'frontend/src/lib/useBarcodeScanner.js'
+      - 'frontend/src/ui/AppFeedbackProvider.jsx'
+      - 'frontend/tests/e2e/article-identity-confirmation.frontend-regression.spec.js'
+      - 'frontend/playwright.identity.config.js'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
       - '.github/workflows/pr671-catalog-identity-postgresql.yml'
   workflow_dispatch:
 
@@ -60,3 +76,35 @@ jobs:
             backend/tests/test_receipt_to_unpack_retailer_code_contract.py \
             backend/tests/test_catalog_identity_route_security.py \
             backend/tests/test_catalog_identity_chain_postgresql.py
+
+  articlebeheer-browser:
+    name: Articlebeheer barcode confirmation browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Exercise real Artikelbeheer UI with isolated backend mocks
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: npx playwright test --config=playwright.identity.config.js
+      - name: Capture browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-identity-browser-regression
+          if-no-files-found: ignore
+          path: |
+            frontend/test-results/
+            frontend/playwright-report-identity/
