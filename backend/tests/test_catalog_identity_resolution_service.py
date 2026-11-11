@@ -157,7 +157,7 @@ def test_scanned_gtin_confirmation_rejects_unverified_and_conflicting_code():
                 conn, retailer_code="lidl", external_article_code="0082346",
                 scanned_gtin="8712345678906", confirmed_by="tester",
             )
-        with pytest.raises(ValueError, match="Barcode"):
+        with pytest.raises(ValueError, match="geldige barcode"):
             confirm_scanned_retailer_identity(
                 conn, retailer_code="lidl", external_article_code="0083006",
                 scanned_gtin="8712345678900", confirmed_by="tester",
