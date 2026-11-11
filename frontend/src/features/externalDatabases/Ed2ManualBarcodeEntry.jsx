@@ -12,6 +12,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   const [checkingCatalog, setCheckingCatalog] = useState(false)
   const validLength = /^(?:[0-9]{8}|[0-9]{12,14})$/.test(barcode.trim())
   const canSave = !item.link_status || item.link_status === 'unlinked'
+  const canConfirm = canSave || item.link_status === 'classification_pending'
 
   useEffect(() => {
     setBarcode('')
@@ -19,7 +20,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   }, [item.id])
 
   useEffect(() => {
-    if (scannedBarcode?.receiptItemId !== item.id || !canSave) return
+    if (scannedBarcode?.receiptItemId !== item.id || !canConfirm) return
     setBarcode(String(scannedBarcode.value || '').trim())
     // A scan is not a write. Show the verified product before the user confirms.
     if (item.receipt_article_number && item.id?.startsWith('receipt-table-line:')) {
@@ -30,7 +31,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   }, [scannedBarcode, item.id, canSave])
 
   async function checkAndConfirmCatalog(candidateBarcode = barcode.trim()) {
-    if (checkingCatalog || saving || !canSave) return
+    if (checkingCatalog || saving || !canConfirm) return
     if (!item.receipt_article_number || !item.id?.startsWith('receipt-table-line:')) {
       showFeedback({ variant: 'warning', title: 'Artikelcode ontbreekt',
         message: 'Een bewezen kassabonartikelcode is nodig om de barcode centraal te koppelen. U kunt de barcode wel apart opslaan.' })
@@ -139,7 +140,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
     }
   }
 
-  if (!canSave) return null
+  if (!canConfirm) return null
   return (
     <section className="rz-external-manual-barcode" aria-label="Barcode handmatig opslaan" data-testid="ed2-manual-barcode-entry">
       <h4>Barcode handmatig opslaan</h4>
@@ -157,12 +158,12 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
           onClick={() => void checkAndConfirmCatalog()} data-testid="ed2-catalog-identity-check">
           {checkingCatalog ? 'Controleren...' : 'Koppelen aan Catalogus'}
         </Button> : null}
-        <Button type="button" variant="secondary" disabled={!validLength || saving || checkingCatalog}
+        {canSave ? <Button type="button" variant="secondary" disabled={!validLength || saving || checkingCatalog}
           onClick={() => setConfirm(true)} data-testid="ed2-manual-barcode-save">
           {saving ? 'Opslaan...' : 'Barcode bewaren'}
-        </Button>
+        </Button> : null}
       </div>
-      {confirm ? <div className="rz-modal-backdrop">
+      {canSave && confirm ? <div className="rz-modal-backdrop">
         <div className="rz-modal-card" role="alertdialog" aria-modal="true"
           aria-labelledby="ed2-manual-barcode-confirm">
           <p id="ed2-manual-barcode-confirm" className="rz-modal-text">
