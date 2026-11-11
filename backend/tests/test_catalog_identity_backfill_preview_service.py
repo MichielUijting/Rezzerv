@@ -69,3 +69,32 @@ def test_preview_rejects_pending_identity():
     finally:
         conn.close()
         engine.dispose()
+
+
+def test_truncated_preview_never_advertises_write_ready_candidates():
+    engine, conn = _fixture()
+    try:
+        result = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", limit=1
+        )
+        assert result["limited"] is True
+        assert result["eligible"] == 0, result
+        assert result["eligible_withheld_due_to_limit"] == 1
+    finally:
+        conn.close()
+        engine.dispose()
+
+
+def test_conflicting_history_for_single_household_article():
+    engine, conn = _fixture()
+    try:
+        conn.execute(text("INSERT INTO global_products VALUES ('p2', NULL, 'active')"))
+        conn.execute(text("INSERT INTO external_article_product_links (global_product_id, retailer_code, external_article_code, status) VALUES ('p2','lidl','code2','confirmed')"))
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code2',0)"))
+        conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a1')"))
+        result = preview_household_catalog_identity_backfill(conn, household_id="h1")
+        assert result["conflict"] == 1, result
+        assert result["eligible"] == 0, result
+    finally:
+        conn.close()
+        engine.dispose()
