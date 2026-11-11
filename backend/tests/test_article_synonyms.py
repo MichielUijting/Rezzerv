@@ -1418,7 +1418,7 @@ class StoreTest(unittest.TestCase):
                 CREATE TABLE receipt_table_lines (
                     id TEXT PRIMARY KEY, receipt_table_id TEXT,
                     corrected_raw_label TEXT, normalized_label TEXT, raw_label TEXT,
-                    external_article_code TEXT, quantity NUMERIC, unit TEXT,
+                    external_article_code TEXT, barcode TEXT, quantity NUMERIC, unit TEXT,
                     is_deleted BOOLEAN, line_role TEXT,
                     inventory_eligible INTEGER, line_index INTEGER
                 )
