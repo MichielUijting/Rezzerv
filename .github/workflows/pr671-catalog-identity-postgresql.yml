@@ -79,28 +79,20 @@ jobs:
 
   articlebeheer-browser:
     name: Articlebeheer barcode confirmation browser regression
-    # Playwright Chromium release in the locked frontend package does not
-    # support the GitHub ubuntu-26.04 runner image yet.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install locked frontend dependencies
-        working-directory: frontend
-        run: npm ci --no-audit --no-fund
-      - name: Install Chromium browser
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-      - name: Exercise real Artikelbeheer UI with isolated backend mocks
-        working-directory: frontend
-        env:
-          CI: 'true'
-        run: npx playwright test --config=playwright.identity.config.js
+      - name: Run locked Chromium test in existing official Playwright image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e CI=true \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc 'set -euo pipefail; npm ci --no-audit --no-fund && npx playwright test --config=playwright.identity.config.js'
       - name: Capture browser failures
         if: failure()
         uses: actions/upload-artifact@v4
