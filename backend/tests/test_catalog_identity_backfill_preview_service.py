@@ -34,7 +34,7 @@ def _fixture():
     conn.execute(text("INSERT INTO external_article_product_links (global_product_id,retailer_code,external_article_code,status) VALUES ('p1','lidl','code1','confirmed')"))
     conn.execute(text("INSERT INTO household_articles VALUES ('a1','h1',NULL), ('a2','h2',NULL)"))
     conn.execute(text("INSERT INTO receipt_tables VALUES ('r1','h1','lidl'), ('r2','h2','lidl')"))
-    conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l1','r1',NULL,'code1',0), ('l2','r2',NULL,'code1',0)"))
+    conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l1','r1',NULL,'code1',FALSE), ('l2','r2',NULL,'code1',FALSE)"))
     conn.execute(text("INSERT INTO purchase_import_batches VALUES ('b1','h1','receipt:r1','receipt'), ('b2','h2','receipt:r2','receipt')"))
     conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l1','a1'), ('b2','receipt-line:l2','a2')"))
     return engine, conn
@@ -99,7 +99,7 @@ def test_conflicting_history_for_single_household_article():
     try:
         conn.execute(text("INSERT INTO global_products VALUES ('p2', NULL, 'active')"))
         conn.execute(text("INSERT INTO external_article_product_links (global_product_id, retailer_code, external_article_code, status) VALUES ('p2','lidl','code2','confirmed')"))
-        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code2',0)"))
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code2',FALSE)"))
         conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a1')"))
         result = preview_household_catalog_identity_backfill(conn, household_id="h1")
         assert result["conflict"] == 1, result
