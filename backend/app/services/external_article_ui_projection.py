@@ -166,10 +166,9 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
                     candidate.get("gtin"),
                     candidate.get("ean"),
                     candidate.get("barcode"),
-                    candidate.get("code"),
-                    candidate.get("external_source_product_code"),
-                    candidate.get("candidate_source_product_code"),
-                    candidate.get("source_product_code"),
+                    # Unqualified candidate codes and retailer article numbers
+                    # are never GTIN evidence, even if they happen to have a
+                    # valid GTIN length and checksum.
                 ]
             )
 
@@ -179,7 +178,7 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
             next_row.get("primary_gtin"),
             next_row.get("linked_gtin"),
             next_row.get("barcode"),
-            external_article_code,
+            # The retailer-specific article code is not a GTIN.
             *candidate_gtin_values,
         )
         # A GTIN appearing in Catalogus is not in itself a completed central
