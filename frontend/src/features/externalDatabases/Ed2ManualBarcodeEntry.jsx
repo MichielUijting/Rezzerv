@@ -25,10 +25,13 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
     // A scan is not a write. Show the verified product before the user confirms.
     if (item.receipt_article_number && item.id?.startsWith('receipt-table-line:')) {
       void checkAndConfirmCatalog(String(scannedBarcode.value || '').trim())
-    } else {
+    } else if (canSave) {
       setConfirm(true)
+    } else {
+      showFeedback({ variant: 'warning', title: 'Winkelartikelcode ontbreekt',
+        message: 'Een winkelartikelcode is nodig om de gescande GTIN centraal te bevestigen.' })
     }
-  }, [scannedBarcode, item.id, canSave])
+  }, [scannedBarcode, item.id, canConfirm])
 
   async function checkAndConfirmCatalog(candidateBarcode = barcode.trim()) {
     if (checkingCatalog || saving || !canConfirm) return
@@ -76,11 +79,15 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
           if (!saved.ok || !['confirmed', 'already_confirmed'].includes(payload.status)) {
             throw new Error(typeof payload.detail === 'string' ? payload.detail : 'De artikelidentiteit kon niet worden bevestigd.')
           }
+          const repaired = Number(payload.historical_repair?.updated || 0)
+          const deferred = payload.historical_repair?.status === 'deferred'
           onSaved({
-            status: 'success',
-            message: payload.status === 'already_confirmed'
+            status: deferred ? 'warning' : 'success',
+            message: (payload.status === 'already_confirmed'
               ? 'Deze winkelartikelcode was al aan het juiste Catalogusproduct gekoppeld.'
-              : 'Winkelartikelcode en barcode definitief gekoppeld aan de Catalogus.',
+              : 'Winkelartikelcode en barcode definitief gekoppeld aan de Catalogus.')
+              + (repaired ? ` ${repaired} bestaand huishoudartikel automatisch bijgewerkt.` : '')
+              + (deferred ? ' Historische koppelingen zijn nog niet bijgewerkt; controle vereist.' : ''),
           })
           return false
         },
@@ -142,8 +149,8 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
 
   if (!canConfirm) return null
   return (
-    <section className="rz-external-manual-barcode" aria-label="Barcode handmatig opslaan" data-testid="ed2-manual-barcode-entry">
-      <h4>Barcode handmatig opslaan</h4>
+    <section className="rz-external-manual-barcode" aria-label="Barcode koppelen of bewaren" data-testid="ed2-manual-barcode-entry">
+      <h4>{canSave ? 'Barcode koppelen of bewaren' : 'Artikelidentiteit bevestigen'}</h4>
       <p>Controleer en bevestig de barcode bij het gevonden Catalogusproduct. Staat dat product nog niet in de Catalogus? Bewaar dan eerst de barcode als aanwijzing; voorraad wordt niet aangepast.</p>
       <div className="rz-external-off-manual-form">
         <label className="rz-input-field">
