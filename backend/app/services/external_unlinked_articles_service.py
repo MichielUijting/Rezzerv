@@ -22,12 +22,12 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
 
 def _overview_retailer_code(value):
-    code = normalize_external_link_retailer_code(value)
-    return 'ah' if code in {'ah', 'albert-heijn', 'albert-heijn-digitaal'} else code
+    return canonical_catalog_retailer(value)
 
 
 def _ed2_manual_barcode_identity(retailer_code, receipt_text, article_code):
