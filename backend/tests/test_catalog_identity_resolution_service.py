@@ -1,14 +1,23 @@
 """Catalogus identity must be exact, unique and classification-independent."""
+import os
+import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 
 
 def _conn():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    url = os.environ.get("INHUIS_IDENTITY_TEST_DATABASE_URL", "")
+    if not url:
+        pytest.skip("Dedicated PostgreSQL identity test database not configured")
+    parsed = make_url(url)
+    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_identity_test"):
+        raise RuntimeError("Refusing non-isolated identity test database")
+    engine = create_engine(url)
     conn = engine.connect()
-    conn.execute(text("CREATE TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)"))
-    conn.execute(text("CREATE TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)"))
-    conn.execute(text("CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL)"))
+    conn.execute(text("CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)"))
+    conn.execute(text("CREATE TEMP TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)"))
+    conn.execute(text("CREATE TEMP TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL)"))
     conn.execute(text("INSERT INTO global_products VALUES ('p1', '8712345678904', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
     return engine, conn
 
