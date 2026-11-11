@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
+from app.services.almost_out_group_service import load_groups, load_group_projection
 from app.services.catalog_identity_live_repair_service import repair_household_articles_for_confirmed_store_code
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 from app.services.external_article_product_link_service import get_confirmed_external_article_product_link
@@ -28,7 +29,7 @@ def _chain():
     engine = create_engine(url)
     conn = engine.connect()
     for sql in (
-        "CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, name TEXT, primary_gtin TEXT, status TEXT)",
+        "CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, name TEXT, primary_gtin TEXT, status TEXT, size_value NUMERIC, size_unit TEXT, variant TEXT)",
         "CREATE TEMP TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)",
         """CREATE TEMP TABLE external_article_product_links (
             id TEXT, retailer_code TEXT, receipt_text_normalized TEXT,
@@ -36,7 +37,7 @@ def _chain():
             status TEXT, confirmed_by TEXT, confirmed_at TIMESTAMP,
             source_candidate_id TEXT, created_at TIMESTAMP, updated_at TIMESTAMP
         )""",
-        "CREATE TEMP TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT)",
+        "CREATE TEMP TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT, status TEXT)",
         "CREATE TEMP TABLE receipt_tables (id TEXT PRIMARY KEY, household_id TEXT, store_chain TEXT, store_name TEXT, deleted_at TIMESTAMP)",
         """CREATE TEMP TABLE receipt_table_lines (
             id TEXT PRIMARY KEY, receipt_table_id TEXT, barcode TEXT,
@@ -45,14 +46,19 @@ def _chain():
         )""",
         "CREATE TEMP TABLE purchase_import_batches (id TEXT PRIMARY KEY, household_id TEXT, source_reference TEXT, source_type TEXT)",
         "CREATE TEMP TABLE purchase_import_lines (batch_id TEXT, external_line_ref TEXT, matched_household_article_id TEXT)",
-        "CREATE TEMP TABLE inventory (id TEXT, household_id TEXT, household_article_id TEXT, quantity NUMERIC)",
-        "CREATE TEMP TABLE inventory_events (id TEXT, household_id TEXT, household_article_id TEXT, delta NUMERIC)",
+        "CREATE TEMP TABLE inventory (id TEXT, household_id TEXT, household_article_id TEXT, quantity NUMERIC, naam TEXT, aantal NUMERIC, space_id TEXT, sublocation_id TEXT, status TEXT)",
+        "CREATE TEMP TABLE inventory_events (id TEXT, household_id TEXT, household_article_id TEXT, delta NUMERIC, article_id TEXT, quantity NUMERIC, created_at TIMESTAMP)",
         "CREATE TEMP TABLE almost_out_inputs (household_id TEXT, household_article_id TEXT, threshold NUMERIC)",
+        "CREATE TEMP TABLE global_product_gpc_bricks (global_product_id TEXT, brick_code TEXT)",
+        "CREATE TEMP TABLE global_product_consumption_profiles (global_product_id TEXT, facts_json TEXT)",
+        "CREATE TEMP TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)",
+        "CREATE TEMP TABLE spaces (id TEXT, household_id TEXT, naam TEXT)",
+        "CREATE TEMP TABLE sublocations (id TEXT, space_id TEXT, naam TEXT)",
     ):
         conn.execute(text(sql))
-    conn.execute(text("INSERT INTO global_products VALUES ('p1','Lidl melk',:gtin,'active')"), {"gtin": GTIN})
+    conn.execute(text("INSERT INTO global_products (id,name,primary_gtin,status) VALUES ('p1','Lidl melk',:gtin,'active')"), {"gtin": GTIN})
     conn.execute(text("INSERT INTO product_identities VALUES ('pi1','p1','gtin',:gtin)"), {"gtin": GTIN})
-    conn.execute(text("INSERT INTO household_articles VALUES ('a1','h1',NULL),('a2','h2',NULL)"))
+    conn.execute(text("INSERT INTO household_articles (id,household_id,global_product_id) VALUES ('a1','h1',NULL),('a2','h2',NULL)"))
     conn.execute(text("""
         INSERT INTO receipt_tables VALUES
         ('r1','h1','Lidl Nederland GmbH','Lidl',NULL),
@@ -73,8 +79,8 @@ def _chain():
         ('b1','receipt-line:l1','a1'),
         ('b2','receipt-line:l2','a2')
     """))
-    conn.execute(text("INSERT INTO inventory VALUES ('s1','h1','a1',2),('s2','h2','a2',3)"))
-    conn.execute(text("INSERT INTO inventory_events VALUES ('e1','h1','a1',2),('e2','h2','a2',3)"))
+    conn.execute(text("INSERT INTO inventory (id,household_id,household_article_id,quantity,naam,aantal,status) VALUES ('s1','h1','a1',2,'Lidl melk',2,'active'),('s2','h2','a2',3,'Lidl melk',3,'active')"))
+    conn.execute(text("INSERT INTO inventory_events (id,household_id,household_article_id,delta,article_id,quantity,created_at) VALUES ('e1','h1','a1',2,'a1',2,CURRENT_TIMESTAMP),('e2','h2','a2',3,'a2',3,CURRENT_TIMESTAMP)"))
     conn.execute(text("INSERT INTO almost_out_inputs VALUES ('h1','a1',4),('h2','a2',1)"))
     return engine, conn
 
@@ -152,6 +158,18 @@ def test_confirmed_barcode_flows_through_exact_receipt_unpack_household_and_stoc
         assert joined["global_product_id"] == "p1"
         assert joined["quantity"] == 2
         assert joined["below"] is True
+        # Exercise the ACTUAL Bijna op grouping and inventory/event projection
+        # rather than only comparing an invented threshold view.
+        groups = load_groups(conn, "h1", [{"id": "a1", "name": "Lidl melk"}], {})
+        assert len(groups) == 1
+        assert groups[0]["key"] == ("product", "p1")
+        projected = load_group_projection(conn, "h1", groups[0])
+        assert projected["member_article_ids"] == ["a1"]
+        assert projected["member_data_inconsistent"] is False
+        assert len(projected["inventory_rows"]) == 1
+        assert projected["inventory_rows"][0]["quantity"] == 2
+        assert len(projected["event_rows"]) == 1
+        assert projected["event_rows"][0]["quantity"] == 2
         assert stock_before == _snap(conn, "inventory")
         assert events_before == _snap(conn, "inventory_events")
         assert signals_before == conn.execute(text("""
