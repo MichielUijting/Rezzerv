@@ -12,6 +12,7 @@ from collections import defaultdict
 from sqlalchemy import text
 
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_retailer_code,
@@ -25,7 +26,7 @@ def repair_household_articles_for_confirmed_store_code(
 ) -> dict:
     """Repair only exact, unique, entirely consistent historical identities."""
     household = str(household_id or "").strip()
-    retailer = normalize_external_link_retailer_code(retailer_code)
+    retailer = canonical_catalog_retailer(retailer_code)
     code = normalize_external_link_article_code(external_article_code)
     product = str(global_product_id or "").strip()
     if not household or not retailer or not code or not product:
@@ -89,7 +90,7 @@ def repair_household_articles_for_confirmed_store_code(
     candidates: list[str] = []
     for article_id, sources in grouped.items():
         belongs_to_code = any(
-            normalize_external_link_retailer_code(row["retailer"]) == retailer
+            canonical_catalog_retailer(row["retailer"]) == retailer
             and normalize_external_link_article_code(row["code"]) == code
             for row in sources
         )
