@@ -219,3 +219,53 @@ product/GTIN koppelen; daarnaast kan een gebruiker zelf een gescande GTIN
 bevestigen. Een zoekhit voor een willekeurige leverancier met dezelfde
 numerieke artikelcode is categorisch onvoldoende. We bewaren onbewezen
 kandidaten desgewenst als voorstel met herkomst, niet als identiteit.
+
+## Implementatie centrale artikelidentiteit (11 november 2026)
+
+Na de expliciete PO-opdracht tot implementatie is op deze Draft-branch
+de volgende samenhangende voorziening gebouwd:
+
+1. `catalog_retailer_identity_keys` normaliseert bekende AH- en Lidl-
+   ketenvarianten, zonder winkelartikelcodes over verschillende winkelketens
+   te vermengen. De Catalogusresolver controleert alle varianten samen op
+   uniekheid; een conflict blijft een conflict.
+2. `catalog_identity_confirmation_service` bevestigt een
+   (winkel, winkelartikelcode)-identiteit uitsluitend als de gescande GTIN
+   eenduidig naar één actief Catalogusproduct verwijst. De handeling vereist
+   expliciete bevestiging, controleert bestaande conflicten en is idempotent.
+   Productclassificatie is geen voorwaarde.
+3. `POST /api/barcodes/confirm-retailer-code` vereist de bestaande
+   platformkoppelbevoegdheid, een geauthenticeerd niet-viewer huishoudlid,
+   en een exacte oorspronkelijke bonregel in diens actieve huishouden.
+   Client-invoer geeft geen eigen huishoud- of productautorisatie.
+4. In Artikelbeheer hergebruikt `Ed2BarcodeScanner` de bestaande scanner.
+   `Ed2ManualBarcodeEntry` toont de Cataloguscontrole en vraagt via de
+   centrale Melding-overlay expliciet om de winkelcode te koppelen.
+   Onbekende GTIN's blijven bewijs/voorstel; zonder uniek actief product
+   wordt geen nieuwe identiteit geclaimd.
+5. De operationele `get_confirmed_external_article_product_link` leest
+   exact bewezen winkelcode-identiteiten zonder verplichte GPC/CBS.
+   Bij een opgegeven winkelartikelcode valt deze niet terug op naam-/bontekst.
+   De centrale UI-projectie laat een bewezen code niet meer door
+   naam-/merkvergelijking afwijzen.
+6. `catalog_identity_live_repair_service` controleert na een expliciete
+   bevestiging uitsluitend de exacte historische bonregelverwijzingen van
+   het actieve huishouden. Alleen één unieke, volledig consistente kandidaat
+   zonder bestaande eigenaar wordt via `household_articles.global_product_id`
+   gekoppeld. Andere oude artikelen, voorraad, evenementen en kassabonnen
+   worden niet herschreven. Bij twijfel schrijft de routine niets.
+   Een onverwachte herstelfout wordt teruggedraaid in een savepoint; de
+   wel bewezen centrale codebevestiging blijft behouden en de gebruiker
+   krijgt een niet-succesvolle herstelstatus.
+7. Gerichte PostgreSQL-tests controleren onder meer aliasconflicten,
+   idempotentie, ontbrekende GTIN-bevestiging, ontbrekende classificatie,
+   geen naamfallback, huishoudisolatie, dubbele kandidaten en gedeeltelijke
+   historische broninformatie.
+
+**Buiten deze codelevering / nog vereist vóór Ready:** lokale functionele
+PO-ketentest op de uiteindelijke kandidaat met echte AH/Lidl/Jumbo-
+bronvarianten; controle van bevoegde Artikelbeheer-sessies en scanner;
+versie-/preflightchecks en definitieve exact-candidate F7. De lokale
+gebruikersdatabase is niet vanuit GitHub getest of gewijzigd; productie
+wordt niet aangeraakt. Bestaande artikelen zonder bewezen GTIN of
+winkelcode-identiteit worden niet automatisch gekoppeld.
