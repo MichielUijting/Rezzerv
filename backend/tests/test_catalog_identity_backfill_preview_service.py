@@ -107,3 +107,64 @@ def test_conflicting_history_for_single_household_article():
     finally:
         conn.close()
         engine.dispose()
+
+
+def test_reviewed_backfill_updates_only_the_target_household_and_is_repeat_safe():
+    from app.services.catalog_identity_backfill_apply_service import (
+        apply_reviewed_household_catalog_identity_backfill,
+    )
+
+    engine, conn = _fixture()
+    try:
+        preview = preview_household_catalog_identity_backfill(conn, household_id="h1")
+        assert preview["eligible"] == 1, preview
+        result = apply_reviewed_household_catalog_identity_backfill(
+            conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+        )
+        assert result["updated"] == 1, result
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() == "p1"
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a2'"
+        )).scalar_one() is None
+        result2 = preview_household_catalog_identity_backfill(conn, household_id="h1")
+        assert result2["eligible"] == 0, result2
+        assert result2["already_linked"] == 1, result2
+        with pytest.raises(ValueError, match="changed"):
+            apply_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+            )
+        assert result["inventory_changes"] == result["receipt_changes"] == 0
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_reviewed_backfill_rejects_new_conflicts_and_wrong_token():
+    from app.services.catalog_identity_backfill_apply_service import (
+        apply_reviewed_household_catalog_identity_backfill,
+    )
+
+    engine, conn = _fixture()
+    try:
+        preview = preview_household_catalog_identity_backfill(conn, household_id="h1")
+        with pytest.raises(ValueError, match="changed"):
+            apply_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token="0" * 64,
+            )
+        conn.execute(text(
+            "INSERT INTO household_articles VALUES ('a3','h1','p1')"
+        ))
+        with pytest.raises(ValueError, match="changed"):
+            apply_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+            )
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
