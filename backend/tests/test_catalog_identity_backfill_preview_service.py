@@ -292,3 +292,24 @@ def test_live_repair_does_not_override_existing_catalog_assignment():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_live_repair_handles_canonical_lidl_name_variants():
+    from app.services.catalog_identity_live_repair_service import (
+        repair_household_articles_for_confirmed_store_code,
+    )
+    engine, conn = _fixture()
+    try:
+        _prepare_live_repair_source_schema(conn)
+        conn.execute(text(
+            "UPDATE receipt_tables SET store_chain='Lidl Nederland GmbH' WHERE id='r1'"
+        ))
+        result = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="lidl",
+            external_article_code="code1", global_product_id="p1",
+        )
+        assert result["updated"] == 1, result
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
