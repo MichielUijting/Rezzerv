@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 
@@ -74,6 +74,23 @@ def preview_household_catalog_identity_backfill(
             # automatic writeback of the household article.
             article["unresolved"] += 1
 
+    candidate_owners: dict[str, set[str]] = defaultdict(set)
+    for article_id, article in by_article.items():
+        for product_id in article["candidates"]:
+            candidate_owners[product_id].add(article_id)
+
+    occupied_products: set[str] = set()
+    if candidate_owners:
+        occupied = conn.execute(
+            text("""
+                SELECT DISTINCT global_product_id FROM household_articles
+                WHERE household_id = :household_id
+                  AND global_product_id IN :candidate_ids
+            """).bindparams(bindparam("candidate_ids", expanding=True)),
+            {"household_id": household, "candidate_ids": sorted(candidate_owners)},
+        ).scalars().all()
+        occupied_products = {str(value) for value in occupied if value}
+
     report = {
         "household_id": household,
         "source_rows_examined": len(rows),
@@ -86,7 +103,7 @@ def preview_household_catalog_identity_backfill(
         "limited": len(rows) >= limit,
         "changes": "none",
     }
-    for article in by_article.values():
+    for article_id, article in by_article.items():
         current = article["current"]
         candidates = article["candidates"]
         if len(current) > 1 or len(candidates) > 1 or (current and candidates and current != candidates):
@@ -96,7 +113,11 @@ def preview_household_catalog_identity_backfill(
         elif article["unresolved"]:
             report["unresolved"] += 1
         elif len(candidates) == 1:
-            report["eligible"] += 1
+            target = next(iter(candidates))
+            if target in occupied_products or len(candidate_owners[target]) > 1:
+                report["conflict"] += 1
+            else:
+                report["eligible"] += 1
         else:
             report["no_confirmed_identity"] += 1
     return report
