@@ -313,3 +313,113 @@ def test_live_repair_handles_canonical_lidl_name_variants():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+
+def test_selective_reviewed_backfill_skips_unrelated_conflicts_and_unresolved():
+    from app.services.catalog_identity_backfill_apply_service import (
+        apply_selective_reviewed_household_catalog_identity_backfill,
+    )
+    engine, conn = _fixture()
+    try:
+        # a1 has exact proof. A different household article has conflicting
+        # historical identities, and another has no confirmed identity.
+        conn.execute(text("INSERT INTO global_products VALUES ('p2',NULL,'active')"))
+        conn.execute(text("INSERT INTO external_article_product_links "
+                          "(global_product_id,retailer_code,external_article_code,status) "
+                          "VALUES ('p2','lidl','code2','confirmed')"))
+        conn.execute(text("INSERT INTO household_articles VALUES "
+                          "('a3','h1',NULL), ('a4','h1',NULL)"))
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES "
+                          "('l3','r1',NULL,'code1',FALSE), "
+                          "('l4','r1',NULL,'code2',FALSE), "
+                          "('l5','r1',NULL,NULL,FALSE)"))
+        conn.execute(text("INSERT INTO purchase_import_lines VALUES "
+                          "('b1','receipt-line:l3','a3'), "
+                          "('b1','receipt-line:l4','a3'), "
+                          "('b1','receipt-line:l5','a4')"))
+        preview = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_candidates=True,
+        )
+        assert (preview["eligible"], preview["conflict"], preview["no_confirmed_identity"]) == (1, 1, 1), preview
+        result = apply_selective_reviewed_household_catalog_identity_backfill(
+            conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+            reviewed_candidates=preview["eligible_candidates"], expected_eligible=1,
+        )
+        assert result["updated"] == 1
+        assert result["skipped_conflict"] == 1
+        assert result["skipped_no_identity"] == 1
+        assert dict(conn.execute(text("SELECT id, global_product_id FROM household_articles")).all()) == {
+            "a1": "p1", "a2": None, "a3": None, "a4": None
+        }
+        again = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_candidates=True,
+        )
+        assert again["eligible"] == 0
+        with pytest.raises(ValueError, match="changed"):
+            apply_selective_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+                reviewed_candidates=preview["eligible_candidates"], expected_eligible=1,
+            )
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_selective_review_refuses_modified_candidate_and_stale_plan():
+    from app.services.catalog_identity_backfill_apply_service import (
+        apply_selective_reviewed_household_catalog_identity_backfill,
+    )
+    engine, conn = _fixture()
+    try:
+        preview = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_candidates=True,
+        )
+        with pytest.raises(ValueError, match="differ"):
+            apply_selective_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+                reviewed_candidates=[{"article_id":"a1","global_product_id":"wrong"}],
+                expected_eligible=1,
+            )
+        with pytest.raises(ValueError, match="changed"):
+            apply_selective_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token="0" * 64,
+                reviewed_candidates=preview["eligible_candidates"], expected_eligible=1,
+            )
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_selective_review_refuses_incomplete_review_and_new_owner():
+    from app.services.catalog_identity_backfill_apply_service import (
+        apply_selective_reviewed_household_catalog_identity_backfill,
+    )
+    engine, conn = _fixture()
+    try:
+        preview = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_candidates=True,
+        )
+        with pytest.raises(ValueError, match="complete candidate"):
+            apply_selective_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+                reviewed_candidates=[], expected_eligible=1,
+            )
+        conn.execute(text("INSERT INTO household_articles VALUES ('a3','h1','p1')"))
+        with pytest.raises(ValueError, match="changed"):
+            apply_selective_reviewed_household_catalog_identity_backfill(
+                conn, household_id="h1", reviewed_plan_token=preview["plan_token"],
+                reviewed_candidates=preview["eligible_candidates"], expected_eligible=1,
+            )
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
