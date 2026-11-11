@@ -19,7 +19,7 @@ import unicodedata
 import uuid
 from typing import Any, Mapping, Optional
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.gtin_validation_service import is_valid_gtin
@@ -898,32 +898,40 @@ def get_confirmed_external_article_product_link(
         return None
 
     if normalized_code:
-        row = conn.execute(
-            text(
-                """
+        # This is the shared operational Catalogus identity reader. A valid
+        # retailer/article-code identity is independent from GS1/CBS
+        # classification. Never fall back to a receipt-text match when the
+        # actual article code has no unique, proven owner.
+        from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+        from app.services.catalog_retailer_identity_keys import catalog_retailer_aliases
+
+        identity = resolve_catalog_identity(
+            conn, retailer_code=normalized_retailer,
+            external_article_code=normalized_code,
+        )
+        if identity["status"] != "matched":
+            return None
+        rows = conn.execute(
+            text("""
                 SELECT link.*, gp.name AS global_product_name
                 FROM external_article_product_links link
                 JOIN global_products gp ON gp.id = link.global_product_id
-                WHERE link.retailer_code = :retailer_code
+                WHERE link.retailer_code IN :retailer_aliases
                   AND link.external_article_code = :external_article_code
+                  AND link.global_product_id = :global_product_id
                   AND link.status IN ('confirmed', 'classification_pending')
-                  AND lower(COALESCE(gp.status, 'active')) = 'active'
+                  AND LOWER(COALESCE(gp.status, 'active')) = 'active'
                 ORDER BY CASE WHEN link.status = 'confirmed' THEN 0 ELSE 1 END,
                          link.confirmed_at DESC, link.id DESC
                 LIMIT 1
-                """
-            ),
+            """).bindparams(bindparam("retailer_aliases", expanding=True)),
             {
-                "retailer_code": normalized_retailer,
+                "retailer_aliases": catalog_retailer_aliases(normalized_retailer),
                 "external_article_code": normalized_code,
+                "global_product_id": identity["global_product_id"],
             },
         ).mappings().first()
-        if row:
-            serialized = _serialize_external_article_product_link(row)
-            if serialized and _complete_global_product_link_data(
-                conn, serialized.get("global_product_id") or ""
-            ).get("complete"):
-                return serialized
+        return _serialize_external_article_product_link(rows) if rows else None
 
     if normalized_text:
         row = conn.execute(
