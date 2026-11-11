@@ -79,7 +79,9 @@ jobs:
 
   articlebeheer-browser:
     name: Articlebeheer barcode confirmation browser regression
-    runs-on: ubuntu-latest
+    # Playwright Chromium release in the locked frontend package does not
+    # support the GitHub ubuntu-26.04 runner image yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
