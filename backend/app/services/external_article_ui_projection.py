@@ -128,7 +128,11 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     if central_link:
         candidate_product_id = _text(central_link.get("global_product_id"))
         central_product_details = _central_product_details(conn, candidate_product_id)
-        if not generic_central_link:
+        # A unique, verified retailer+article-code link is identity proof.
+        # Receipt names/brand spelling are mutable display data, not grounds
+        # to hide an already confirmed Catalogus identity. Preserve the old
+        # text-compatibility guard only for legacy text-only matches.
+        if not generic_central_link and not external_article_code:
             identity_check = external_product_identity_compatibility(
                 retailer_code=retailer_code,
                 receipt_text=receipt_text,
