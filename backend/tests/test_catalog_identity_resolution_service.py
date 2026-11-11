@@ -9,7 +9,7 @@ def _conn():
     conn.execute(text("CREATE TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)"))
     conn.execute(text("CREATE TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)"))
     conn.execute(text("CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)"))
-    conn.execute(text("INSERT INTO global_products VALUES ('p1', '8712345678906', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
+    conn.execute(text("INSERT INTO global_products VALUES ('p1', '8712345678904', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
     return engine, conn
 
 
@@ -61,7 +61,7 @@ def test_gtin_and_retailer_identity_must_agree():
     engine, conn = _conn()
     try:
         conn.execute(text("INSERT INTO external_article_product_links VALUES ('p2','lidl','ABC-123','confirmed')"))
-        result = resolve_catalog_identity(conn, gtin="8712345678906", retailer_code="lidl", external_article_code="ABC-123")
+        result = resolve_catalog_identity(conn, gtin="8712345678904", retailer_code="lidl", external_article_code="ABC-123")
         assert result["status"] == "conflict", result
         assert result["global_product_id"] is None
     finally:
