@@ -55,7 +55,7 @@ def preview_household_catalog_identity_backfill(
         {"household_id": household, "limit": limit},
     ).mappings().all()
     by_article: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"candidates": set(), "current": set(), "unresolved": 0, "sources": 0}
+        lambda: {"candidates": set(), "current": set(), "unresolved": 0, "without_identity": 0, "sources": 0}
     )
     for row in rows:
         article = by_article[str(row["household_article_id"])]
@@ -71,7 +71,11 @@ def preview_household_catalog_identity_backfill(
         )
         if result["status"] == "matched":
             article["candidates"].add(result["global_product_id"])
-        elif result["status"] != "no_identity":
+        elif result["status"] == "no_identity":
+            # A second historical line lacking any code does not prove that
+            # it is the same product. Do not auto-link from a partial trail.
+            article["without_identity"] += 1
+        else:
             # Pending, missing, invalid or conflicting identity prevents
             # automatic writeback of the household article.
             article["unresolved"] += 1
@@ -113,7 +117,7 @@ def preview_household_catalog_identity_backfill(
             report["conflict"] += 1
         elif current:
             report["already_linked"] += 1
-        elif article["unresolved"]:
+        elif article["unresolved"] or (candidates and article["without_identity"]):
             report["unresolved"] += 1
         elif len(candidates) == 1:
             target = next(iter(candidates))
