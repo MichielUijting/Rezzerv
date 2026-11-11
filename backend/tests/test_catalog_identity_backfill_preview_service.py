@@ -168,3 +168,26 @@ def test_reviewed_backfill_rejects_new_conflicts_and_wrong_token():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_unidentified_historical_line_blocks_partial_auto_link():
+    engine, conn = _fixture()
+    try:
+        # One exact identity and a second receipt line without any identifier:
+        # we cannot prove both refer to the same Catalogus product.
+        conn.execute(text(
+            "INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,NULL,FALSE)"
+        ))
+        conn.execute(text(
+            "INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a1')"
+        ))
+        result = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_candidates=True,
+        )
+        assert result["eligible"] == 0, result
+        assert result["unresolved"] == 1, result
+        assert result["eligible_candidates"] == [], result
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
