@@ -7,13 +7,13 @@ part of the identity proof.
 from __future__ import annotations
 
 import uuid
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.barcode_identity_service import validate_barcode
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
-from app.services.external_article_product_link_service import (
-    normalize_external_link_article_code,
-    normalize_external_link_retailer_code,
+from app.services.external_article_product_link_service import normalize_external_link_article_code
+from app.services.catalog_retailer_identity_keys import (
+    canonical_catalog_retailer, catalog_retailer_aliases,
 )
 
 
@@ -26,7 +26,7 @@ def confirm_scanned_retailer_identity(
     Caller is responsible for authenticated authorization and transaction
     commit/rollback. No household article or stock is updated here.
     """
-    retailer = normalize_external_link_retailer_code(retailer_code)
+    retailer = canonical_catalog_retailer(retailer_code)
     article_code = normalize_external_link_article_code(external_article_code)
     actor = str(confirmed_by or "").strip()
     checked = validate_barcode(scanned_gtin, "gtin")
@@ -49,11 +49,12 @@ def confirm_scanned_retailer_identity(
 
     existing = conn.execute(text("""
         SELECT id, global_product_id, status FROM external_article_product_links
-        WHERE retailer_code = :retailer
+        WHERE retailer_code IN :retailer_aliases
           AND external_article_code = :code
           AND status IN ('confirmed', 'classification_pending')
         FOR UPDATE
-    """), {"retailer": retailer, "code": article_code}).mappings().all()
+    """).bindparams(bindparam("retailer_aliases", expanding=True)),
+    {"retailer_aliases": catalog_retailer_aliases(retailer), "code": article_code}).mappings().all()
     if any(str(row["global_product_id"]) != product_id for row in existing):
         raise ValueError("Winkelartikelcode heeft een tegenstrijdige Cataloguskoppeling")
     confirmed = [row for row in existing if row["status"] == "confirmed"]
