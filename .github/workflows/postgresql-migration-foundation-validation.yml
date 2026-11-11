@@ -251,7 +251,8 @@ jobs:
           python -m alembic -c backend/alembic.ini upgrade head
           python -m pip install pytest==8.4.2
           PYTHONPATH=backend python -m pytest -q backend/tests/test_retailer_queue_schema_drift_repair.py
-          PYTHONPATH=backend python backend/tests/retailer_queue_drift_postgresql_selftest.py
+          PYTHONPATH=backend python backend/tests/retailer_queue_drift_postgresql_selftest.py | tee /tmp/retailer-queue-drift.log
+          grep -F 'RETAILER_QUEUE_SCHEMA_DRIFT_REPAIR_POSTGRESQL_GREEN' /tmp/retailer-queue-drift.log
           python backend/tests/migration_foundation_head_selftest.py | tee /tmp/migration-postgresql.log
           grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
