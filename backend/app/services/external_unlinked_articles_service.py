@@ -251,10 +251,15 @@ def list_all_external_articles(*, conn=None) -> dict:
                 skipped += 1
                 projected = {}
             if projected.get("central_link_active") is True:
-                status = "linked"
+                central_link = projected.get("central_external_article_product_link") or {}
+                # Identity can be proven while the independent GS1/CBS
+                # classification is still pending. Do not report this as
+                # classified merely because its retailer code now resolves.
+                status = ("classification_pending"
+                          if central_link.get("status") == "classification_pending"
+                          else "linked")
                 linked_gtin = str(projected.get("linked_gtin") or "")
                 article_code = linked_gtin if is_valid_gtin(linked_gtin) else ""
-                central_link = projected.get("central_external_article_product_link") or {}
             else:
                 pending = get_pending_classification_external_article_link(
                     conn,
