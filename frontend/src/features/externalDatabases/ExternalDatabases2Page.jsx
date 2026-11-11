@@ -252,7 +252,7 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     if (!offLinkOutcome?.message) return undefined
-    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : 'error', message: offLinkOutcome.message })
+    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : (offLinkOutcome.status === 'warning' ? 'warning' : 'error'), message: offLinkOutcome.message })
     const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
     return () => window.clearTimeout(timeout)
   }, [offLinkOutcome, showFeedback])
