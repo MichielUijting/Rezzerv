@@ -8,6 +8,8 @@ automated until preview counts and conflicts are validated on a real runtime.
 from __future__ import annotations
 
 from collections import defaultdict
+import hashlib
+import json
 from typing import Any
 
 from sqlalchemy import bindparam, text
@@ -16,7 +18,7 @@ from app.services.catalog_identity_resolution_service import resolve_catalog_ide
 
 
 def preview_household_catalog_identity_backfill(
-    conn, *, household_id: str, limit: int = 10000,
+    conn, *, household_id: str, limit: int = 10000, include_candidates: bool = False,
 ) -> dict[str, Any]:
     household = str(household_id or "").strip()
     if not household:
@@ -103,6 +105,7 @@ def preview_household_catalog_identity_backfill(
         "limited": len(rows) >= limit,
         "changes": "none",
     }
+    eligible_candidates: list[dict[str, str]] = []
     for article_id, article in by_article.items():
         current = article["current"]
         candidates = article["candidates"]
@@ -118,6 +121,7 @@ def preview_household_catalog_identity_backfill(
                 report["conflict"] += 1
             else:
                 report["eligible"] += 1
+                eligible_candidates.append({"article_id": article_id, "global_product_id": target})
         else:
             report["no_confirmed_identity"] += 1
     if report["limited"]:
@@ -125,4 +129,20 @@ def preview_household_catalog_identity_backfill(
         # advertise any candidate as eligible from an incomplete scan.
         report["eligible_withheld_due_to_limit"] = report["eligible"]
         report["eligible"] = 0
+        eligible_candidates.clear()
+    # The token binds the reviewed household and *entire* reviewed plan, not
+    # merely the number of eligible articles. Apply always recalculates it.
+    stable = {
+        "household_id": household,
+        "candidates": sorted(eligible_candidates, key=lambda item: item["article_id"]),
+        "counts": {key: report[key] for key in (
+            "source_rows_examined", "articles_examined", "already_linked",
+            "conflict", "unresolved", "no_confirmed_identity", "limited",
+        )},
+    }
+    report["plan_token"] = hashlib.sha256(
+        json.dumps(stable, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if include_candidates:
+        report["eligible_candidates"] = stable["candidates"]
     return report
