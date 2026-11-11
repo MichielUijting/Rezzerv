@@ -269,3 +269,47 @@ versie-/preflightchecks en definitieve exact-candidate F7. De lokale
 gebruikersdatabase is niet vanuit GitHub getest of gewijzigd; productie
 wordt niet aangeraakt. Bestaande artikelen zonder bewezen GTIN of
 winkelcode-identiteit worden niet automatisch gekoppeld.
+
+## Permanente regressiebewaking (PO-opdracht 11 november 2026)
+
+De workflow `.github/workflows/pr671-catalog-identity-postgresql.yml` heeft
+de taaknaamonafhankelijke GitHub Actions-titel **Catalogus article identity
+permanent regressions** en draait op toekomstige PR's met wijzigingen aan de
+relevante backend-/frontendpaden, plus handmatig via `workflow_dispatch`.
+
+Vier afzonderlijke beschermingslagen:
+
+1. **PostgreSQL-domeinregels:** bestaande unieke GTIN/winkelcode-, pending-,
+   conflict-, winkelalias- en historische backfill-tests.
+2. **HTTP-autorisatie en huishoudisolatie:**
+   `backend/tests/test_catalog_identity_route_security.py` maakt echte
+   FastAPI HTTP-verzoeken tegen de nieuwe bevestigingsroute, met geïsoleerde
+   sessie-/database-fakes. Controleert 401, 403, cross-household 404,
+   verkeerde winkel/code 409, ongeldige bron 422, exact geautoriseerde POST,
+   ontbreken van schrijfacties bij afwijzing en een defer bij herstelfout.
+   De afzonderlijke PostgreSQL-tests blijven autoriteit voor echte SQL.
+3. **PostgreSQL-dataketen:**
+   `backend/tests/test_catalog_identity_chain_postgresql.py` maakt alleen
+   transactionele tijdelijke PostgreSQL-tabellen op een verplichte speciale
+   `*_identity_test`-database. Roept productie-bevestiging, resolver,
+   operationele codelezer, historisch herstel en de werkelijke
+   `almost_out_group_service.load_groups/load_group_projection` aan. Toetst
+   Kassa-code versus GTIN, Uitpakken-bronverwijzing, Catalogus,
+   hetzelfde `household_article_id` voor Voorraad en Bijna op, onveranderde
+   hoeveelheden/events, idempotentie, huishoudisolatie en conflictweigering.
+   Dit vervangt **niet** de volledige geïntegreerde gebruikersbrowserketen
+   op een echte uitgerolde Inhuis-runtime.
+4. **Browser en centrale overlay:**
+   `frontend/tests/e2e/article-identity-confirmation.frontend-regression.spec.js`
+   draait in Chromium met de echte React-UI en geïsoleerde API-responsen.
+   Controleert kandidaatweergave, geen opslag vóór expliciete bevestiging,
+   annuleren zonder mutatie, exacte POST, historische-herstelmelding en
+   geen koppeling bij onbekende GTIN. De bestaande scanner/cameradecoder-
+   regressies blijven aanvullend van toepassing; deze UI-test simuleert
+   geen fysieke camera. De configuratie staat in
+   `frontend/playwright.identity.config.js`.
+
+Deze twee CI-jobs mogen geen data van de PO, bestaande Docker-volumes of
+productieruntimes wijzigen. Een mislukte route of browserassertie blokkeert
+de identity-workflow. Zware finale exact-candidate F7 blijft een **aparte**
+PR-gate vóór merge; de 4 tests vervangen die niet.
