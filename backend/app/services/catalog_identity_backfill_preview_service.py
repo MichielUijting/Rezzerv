@@ -120,4 +120,9 @@ def preview_household_catalog_identity_backfill(
                 report["eligible"] += 1
         else:
             report["no_confirmed_identity"] += 1
+    if report["limited"]:
+        # LIMIT can hide another line for the same household article. Never
+        # advertise any candidate as eligible from an incomplete scan.
+        report["eligible_withheld_due_to_limit"] = report["eligible"]
+        report["eligible"] = 0
     return report
