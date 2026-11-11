@@ -15,10 +15,10 @@ def _conn():
         raise RuntimeError("Refusing non-isolated identity test database")
     engine = create_engine(url)
     conn = engine.connect()
-    conn.execute(text("CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)"))
+    conn.execute(text("CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT, name TEXT)"))
     conn.execute(text("CREATE TEMP TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)"))
     conn.execute(text("CREATE TEMP TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL, id TEXT, receipt_text_normalized TEXT, confirmed_at TIMESTAMP, source_candidate_id TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)"))
-    conn.execute(text("INSERT INTO global_products VALUES ('p1', '8712345678906', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
+    conn.execute(text("INSERT INTO global_products (id, primary_gtin, status) VALUES ('p1', '8712345678906', 'active'), ('p2', NULL, 'active'), ('p3', NULL, 'inactive')"))
     return engine, conn
 
 
