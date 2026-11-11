@@ -2,8 +2,7 @@
 
 The resolver never uses article names, receipt text or classification.
 It is read-only, and callers decide whether an authorized household link may
-be written.  Classification-pending external links are deliberately excluded:
-they are not an explicit confirmation of the retailer-code identity.
+be written.  User-confirmed, GTIN-verified pending-classification links may be used as\nidentities without claiming that GS1/CBS classification is complete.
 """
 from __future__ import annotations
 
@@ -68,7 +67,22 @@ def resolve_catalog_identity(
                 JOIN global_products gp ON gp.id = e.global_product_id
                 WHERE e.retailer_code = :retailer
                   AND e.external_article_code = :code
-                  AND e.status = 'confirmed'
+                  AND (
+                        e.status = 'confirmed'
+                        OR (
+                            e.status = 'classification_pending'
+                            AND e.confirmed_by IN (
+                                'external_databases_off_pending_gpc',
+                                'external_databases_off_pending_gpc_brand_override'
+                            )
+                            AND EXISTS (
+                                SELECT 1 FROM product_identities pi_verified
+                                WHERE pi_verified.global_product_id = gp.id
+                                  AND pi_verified.identity_type = 'gtin'
+                                  AND pi_verified.identity_value = gp.primary_gtin
+                            )
+                        )
+                  )
                   AND LOWER(COALESCE(gp.status, 'active')) = 'active'
             """),
             {"retailer": retailer, "code": article_code},
