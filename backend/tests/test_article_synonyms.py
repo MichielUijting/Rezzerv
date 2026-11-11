@@ -1606,9 +1606,9 @@ class StoreTest(unittest.TestCase):
                 text("SELECT COUNT(*) FROM inventory_events")
             ).scalar_one(), 0)
 
-        # A manually confirmed synonym remains a separate, explicit authority
-        # even if one product later loses its GPC classification. That does not
-        # recreate a missing Catalogus link or change any household stock.
+        # A confirmed synonym remains an explicit authority when GPC
+        # classification is removed. Catalogus identity is independent of
+        # classification (PR #671) and stock must remain unchanged.
         with self.engine.begin() as conn:
             conn.execute(text("""
                 DELETE FROM global_product_gpc_bricks WHERE global_product_id='b'
@@ -1620,7 +1620,7 @@ class StoreTest(unittest.TestCase):
             downgraded_ed2 = ed2.list_all_external_articles(conn=conn)
         statuses = {row["retailer_code"]: row["link_status"]
                     for row in downgraded_ed2["items"]}
-        self.assertEqual(statuses, {"ah": "linked", "jumbo": "unlinked"})
+        self.assertEqual(statuses, {"ah": "linked", "jumbo": "linked"})
         groups_missing_type, projections_missing_type, stock_missing_type = project_almost_out()
         self.assertEqual(len(groups_missing_type), 1)
         self.assertEqual(
