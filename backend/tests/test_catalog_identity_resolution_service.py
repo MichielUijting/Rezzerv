@@ -166,3 +166,53 @@ def test_scanned_gtin_confirmation_rejects_unverified_and_conflicting_code():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_ah_chain_alias_is_same_retailer_but_never_other_store():
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status)
+            VALUES ('p1','albert-heijn','n001','confirmed')
+        """))
+        assert resolve_catalog_identity(
+            conn, retailer_code="AH", external_article_code="N001",
+        )["global_product_id"] == "p1"
+        assert resolve_catalog_identity(
+            conn, retailer_code="Jumbo", external_article_code="N001",
+        )["status"] == "not_found"
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status)
+            VALUES ('p2','ah','n001','confirmed')
+        """))
+        assert resolve_catalog_identity(
+            conn, retailer_code="Albert Heijn", external_article_code="n001",
+        )["status"] == "conflict"
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_confirmed_retailer_alias_conflict_blocks_scanned_identity():
+    from app.services.catalog_identity_confirmation_service import (
+        confirm_scanned_retailer_identity,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status)
+            VALUES ('p2','lidl-nederland-gmbh','0082346','confirmed')
+        """))
+        with pytest.raises(ValueError, match="tegenstrijdige"):
+            confirm_scanned_retailer_identity(
+                conn, retailer_code="Lidl", external_article_code="0082346",
+                scanned_gtin="8712345678906", confirmed_by="tester",
+            )
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
