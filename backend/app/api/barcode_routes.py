@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
+from app.services.session_request_context import require_platform_permission_from_session
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_retailer_code,
 )
@@ -60,6 +61,7 @@ def confirm_retailer_code_from_barcode(
     a retailer-code identity. This action never modifies household stock.
     """
     runtime_context = _require_auth(authorization)
+    require_platform_permission_from_session("platform.external_products.link_existing")
     household_context = household_context_from_runtime_context(runtime_context)
     if household_context.role == "viewer":
         raise HTTPException(status_code=403, detail="Alleen een lid of beheerder mag artikelen koppelen.")
