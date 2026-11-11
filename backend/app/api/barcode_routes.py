@@ -53,62 +53,53 @@ def confirm_retailer_code_from_barcode(
     payload: dict[str, Any] = Body(default_factory=dict),
     authorization: Optional[str] = Header(None),
 ):
-    """Confirm a store code using an actual receipt line in the actor's household.
+    """Confirm an existing Catalogus GTIN for a real receipt line.
 
-    The caller never supplies a trusted household ID. A scanned barcode is
-    required, and the supplied retailer+code must belong to the exact
-    household article via the canonical receipt import lineage.
+    No caller-supplied household or product ID is trusted. Only a receipt
+    line that belongs to the current authenticated household may authorize
+    a retailer-code identity. This action never modifies household stock.
     """
     runtime_context = _require_auth(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     if household_context.role == "viewer":
         raise HTTPException(status_code=403, detail="Alleen een lid of beheerder mag artikelen koppelen.")
     household = str(household_context.active_household_id or "").strip()
-    article_id = str(payload.get("household_article_id") or "").strip()
+    receipt_item_id = str(payload.get("receipt_item_id") or "").strip()
     retailer = normalize_external_link_retailer_code(payload.get("retailer_code"))
     code = normalize_external_link_article_code(payload.get("external_article_code"))
     gtin = str(payload.get("gtin") or "").strip()
-    if not household or not article_id or not retailer or not code or not gtin:
-        raise HTTPException(status_code=422, detail="Huishoudartikel, winkel, artikelcode en barcode zijn verplicht")
+    if not household or not receipt_item_id or not retailer or not code or not gtin:
+        raise HTTPException(status_code=422, detail="Bonregel, winkel, artikelcode en barcode zijn verplicht")
+    if not receipt_item_id.startswith("receipt-table-line:"):
+        raise HTTPException(status_code=422, detail="Bevestiging vereist een originele kassabonregel")
+    receipt_line_id = receipt_item_id[len("receipt-table-line:"):]
+    if not receipt_line_id:
+        raise HTTPException(status_code=422, detail="Kassabonregel ontbreekt")
     try:
         with engine.begin() as conn:
-            existing_article = conn.execute(text("""
-                SELECT id FROM household_articles
-                WHERE id = :article AND household_id = :household
-            """), {"article": article_id, "household": household}).first()
-            if existing_article is None:
-                raise HTTPException(status_code=404, detail="Huishoudartikel is niet gevonden")
-            sources = conn.execute(text("""
+            source = conn.execute(text("""
                 SELECT COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer,
                        rtl.external_article_code AS article_code
-                FROM purchase_import_lines pil
-                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
-                JOIN receipt_tables rt
-                  ON rt.id = substr(pib.source_reference, 9)
-                 AND rt.household_id = pib.household_id
-                JOIN receipt_table_lines rtl
-                  ON rtl.id = substr(pil.external_line_ref, 14)
-                 AND rtl.receipt_table_id = rt.id
-                WHERE pib.household_id = :household
-                  AND pib.source_type = 'receipt'
-                  AND pib.source_reference LIKE 'receipt:%'
-                  AND pil.external_line_ref LIKE 'receipt-line:%'
-                  AND pil.matched_household_article_id = :article
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                WHERE rtl.id = :line AND rt.household_id = :household
                   AND COALESCE(rtl.is_deleted, FALSE) = FALSE
-            """), {"household": household, "article": article_id}).mappings().all()
-            if not any(
-                normalize_external_link_retailer_code(row["retailer"]) == retailer
-                and normalize_external_link_article_code(row["article_code"]) == code
-                for row in sources
-            ):
+                  AND rt.deleted_at IS NULL
+                  AND rtl.line_role = 'product'
+                  AND CAST(rtl.inventory_eligible AS INTEGER) = 1
+            """), {"household": household, "line": receipt_line_id}).mappings().first()
+            if source is None:
+                raise HTTPException(status_code=404, detail="Originele bonregel is niet beschikbaar in dit huishouden")
+            if (normalize_external_link_retailer_code(source["retailer"]) != retailer
+                or normalize_external_link_article_code(source["article_code"]) != code):
                 raise HTTPException(
                     status_code=409,
-                    detail="Deze winkelartikelcode is niet aantoonbaar gekoppeld aan dit huishoudartikel",
+                    detail="De winkelartikelcode komt niet overeen met de originele bonregel",
                 )
+            actor = str(runtime_context.get("user_id") or runtime_context.get("email") or "").strip()
             return confirm_scanned_retailer_identity(
                 conn, retailer_code=retailer, external_article_code=code,
-                scanned_gtin=gtin,
-                confirmed_by=str(runtime_context.get("user_id") or runtime_context.get("username") or "").strip(),
+                scanned_gtin=gtin, confirmed_by=actor,
             )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
