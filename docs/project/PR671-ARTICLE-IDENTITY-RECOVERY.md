@@ -93,3 +93,40 @@ wordt de functie niet op de gebruikersdatabase uitgevoerd.
    household isolation, voorraadbehoud en herhaalde uitvoering.
 4. Definitieve versie-/patchsync, normale/preflightchecks, Ready en
    exact-kandidaat F7. Geen merge zonder specifieke PO-GO; geen deployment.
+
+## Mijn huishouden1 — diagnose winkelcodes en pending (11 november 2026)
+
+De PO heeft een alleen-lezen diagnose van de actuele lokale PostgreSQL-database
+aangeleverd. De onderzochte populatie bevat 567 huishoudartikelen, waarvan
+563 via 995 exacte bronregels herleidbaar zijn. De primaire oorzaken van
+398 onopgeloste artikelen zijn:
+
+- 294: geen bewezen winkelartikelcode-naar-Cataloguskoppeling;
+- 98: pending-identiteit niet bewezen;
+- 4: ongeldige GTIN in de bron;
+- 2: verloren broncode bij Uitpakken als primaire blokkade.
+
+De volgende bronregels zijn een **andere eenheid dan huishoudartikelen**:
+- 578 bronregels zonder Cataloguskoppeling hebben alle 578 **geen GTIN**.
+- 161 `classification_pending`-bronregels hebben alle 161 **geen passende
+  GTIN-identiteitsregistratie**, die voor veilige automatische bevestiging
+  noodzakelijk is.
+- Winkelcodes voor de ontbrekende relaties betreffen vooral Lidl; er zijn
+  297 verschillende winkelcodes in de diagnoseset.
+
+**Veiligheidsconclusie:** aan deze bronregels kan niet alsnog een concrete
+Catalogusidentiteit worden toegekend zonder onafhankelijk bewijs (bijvoorbeeld
+een expliciete gebruikersbevestiging of aantoonbaar unieke geldige GTIN uit een
+andere geverifieerde bron). Een winkelcode alleen identificeert geen willekeurig
+Catalogusproduct. Ook `classification_pending` wordt niet stilzwijgend
+omgezet naar `confirmed`.
+
+De historische voorvertoning is aangescherpt: wanneer een huishoudartikel
+zowel een bewezen bronregel als een bronregel zonder enige identiteit heeft,
+wordt de kandidaat **niet** automatisch teruggeschreven. Hiervoor is een
+gerichte PostgreSQL-regressietest toegevoegd.
+
+**Uitvoering:** diagnosevolgorde 1 en 2 voltooid, gerichte
+veiligheidsreparatie uit stap 3 gecommit. Nieuwe PostgreSQL-gate en daaropvolgende
+alleen-lezen hertelling moeten nog afgerond worden. Het terugschrijven van
+historische gebruikersgegevens staat bewust nog uit.
