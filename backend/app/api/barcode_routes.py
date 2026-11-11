@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
+from app.services.catalog_identity_live_repair_service import repair_household_articles_for_confirmed_store_code
 from app.services.session_request_context import require_platform_permission_from_session
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_retailer_code,
@@ -99,10 +100,28 @@ def confirm_retailer_code_from_barcode(
                     detail="De winkelartikelcode komt niet overeen met de originele bonregel",
                 )
             actor = str(runtime_context.get("user_id") or runtime_context.get("email") or "").strip()
-            return confirm_scanned_retailer_identity(
+            confirmed = confirm_scanned_retailer_identity(
                 conn, retailer_code=retailer, external_article_code=code,
                 scanned_gtin=gtin, confirmed_by=actor,
             )
+            # Historical repair is a separate savepoint: a verified central
+            # identity must survive even when an old receipt is inconsistent.
+            try:
+                with conn.begin_nested():
+                    repair = repair_household_articles_for_confirmed_store_code(
+                        conn, household_id=household, retailer_code=retailer,
+                        external_article_code=code,
+                        global_product_id=confirmed["global_product_id"],
+                    )
+            except Exception:
+                # The savepoint rolls back *every* attempted historical write;
+                # the response must not pretend the historical repair worked.
+                import logging
+                logging.getLogger(__name__).exception(
+                    "Historical household identity repair deferred after confirmation"
+                )
+                repair = {"updated": 0, "status": "deferred"}
+            return {**confirmed, "historical_repair": repair}
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
