@@ -1,5 +1,8 @@
 """Exact historical receipt lineage must be dry-run and conflict-safe."""
+import os
+import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 from app.services.catalog_identity_backfill_preview_service import (
     preview_household_catalog_identity_backfill,
@@ -7,17 +10,23 @@ from app.services.catalog_identity_backfill_preview_service import (
 
 
 def _fixture():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    url = os.environ.get("INHUIS_IDENTITY_TEST_DATABASE_URL", "")
+    if not url:
+        pytest.skip("Dedicated PostgreSQL identity test database not configured")
+    parsed = make_url(url)
+    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_identity_test"):
+        raise RuntimeError("Refusing non-isolated identity test database")
+    engine = create_engine(url)
     conn = engine.connect()
     statements = [
-        "CREATE TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)",
-        "CREATE TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)",
-        "CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL)",
-        "CREATE TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT)",
-        "CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, household_id TEXT, store_name TEXT)",
-        "CREATE TABLE receipt_table_lines (id TEXT PRIMARY KEY, receipt_table_id TEXT, barcode TEXT, external_article_code TEXT, is_deleted BOOLEAN)",
-        "CREATE TABLE purchase_import_batches (id TEXT PRIMARY KEY, household_id TEXT, source_reference TEXT, source_type TEXT)",
-        "CREATE TABLE purchase_import_lines (batch_id TEXT, external_line_ref TEXT, matched_household_article_id TEXT)",
+        "CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY, primary_gtin TEXT, status TEXT)",
+        "CREATE TEMP TABLE product_identities (id TEXT, global_product_id TEXT, identity_type TEXT, identity_value TEXT)",
+        "CREATE TEMP TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT, confirmed_by TEXT DEFAULT NULL)",
+        "CREATE TEMP TABLE household_articles (id TEXT PRIMARY KEY, household_id TEXT, global_product_id TEXT)",
+        "CREATE TEMP TABLE receipt_tables (id TEXT PRIMARY KEY, household_id TEXT, store_name TEXT)",
+        "CREATE TEMP TABLE receipt_table_lines (id TEXT PRIMARY KEY, receipt_table_id TEXT, barcode TEXT, external_article_code TEXT, is_deleted BOOLEAN)",
+        "CREATE TEMP TABLE purchase_import_batches (id TEXT PRIMARY KEY, household_id TEXT, source_reference TEXT, source_type TEXT)",
+        "CREATE TEMP TABLE purchase_import_lines (batch_id TEXT, external_line_ref TEXT, matched_household_article_id TEXT)",
     ]
     for sql in statements:
         conn.execute(text(sql))
