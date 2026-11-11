@@ -216,3 +216,75 @@ def test_confirmed_retailer_alias_conflict_blocks_scanned_identity():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_operational_reader_accepts_proven_code_without_any_gpc_classification():
+    from app.services.external_article_product_link_service import (
+        get_confirmed_external_article_product_link,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status)
+            VALUES ('p1','lidl-nederland-gmbh','abc-123','confirmed')
+        """))
+        result = get_confirmed_external_article_product_link(
+            conn, retailer_code="Lidl", external_article_code="ABC-123",
+        )
+        assert result and result["global_product_id"] == "p1", result
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_operational_reader_requires_off_pending_gtin_evidence():
+    from app.services.external_article_product_link_service import (
+        get_confirmed_external_article_product_link,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,status,confirmed_by)
+            VALUES ('p1','lidl','abc-123','classification_pending',
+                    'external_databases_off_pending_gpc')
+        """))
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="lidl", external_article_code="abc-123",
+        ) is None
+        conn.execute(text(
+            "INSERT INTO product_identities VALUES ('i1','p1','gtin','8712345678906')"
+        ))
+        matched = get_confirmed_external_article_product_link(
+            conn, retailer_code="lidl", external_article_code="abc-123",
+        )
+        assert matched and matched["global_product_id"] == "p1", matched
+        assert matched["status"] == "classification_pending"
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_operational_reader_never_falls_back_to_name_for_unknown_store_code():
+    from app.services.external_article_product_link_service import (
+        get_confirmed_external_article_product_link,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+                (global_product_id,retailer_code,external_article_code,
+                 receipt_text_normalized,status)
+            VALUES ('p1','lidl','abc-123','the product','confirmed')
+        """))
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="lidl", external_article_code="unknown",
+            receipt_text="the product",
+        ) is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
