@@ -9294,7 +9294,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 {
                     'batch_id': batch_id,
                     'external_line_ref': external_line_ref,
-                    'external_article_code': line.get('barcode'),
+                    'external_article_code': line.get('external_article_code'),
                     'article_name_raw': article_name,
                     'brand_raw': (receipt or {}).get('store_name') or '',
                     'quantity_raw': quantity_value,
@@ -9333,7 +9333,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'id': str(uuid.uuid4()),
                 'batch_id': batch_id,
                 'external_line_ref': external_line_ref,
-                'external_article_code': line.get('barcode'),
+                'external_article_code': line.get('external_article_code'),
                 'article_name_raw': article_name,
                 'brand_raw': (receipt or {}).get('store_name') or '',
                 'quantity_raw': quantity_value,
