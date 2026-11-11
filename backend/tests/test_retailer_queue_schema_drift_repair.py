@@ -127,3 +127,58 @@ def test_sqlite_is_not_modified(monkeypatch):
 def test_queue_downgrade_never_drops_history():
     with pytest.raises(RuntimeError, match="Refuse destructive"):
         revision.downgrade()
+
+
+class _RuntimeConnection:
+    def __init__(self, *, table_exists, barrier_exists):
+        self.table_exists = table_exists
+        self.barrier_exists = barrier_exists
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, statement):
+        query = str(statement)
+        if "to_regclass('retailer_import_queue') IS NULL" in query:
+            return _Result(not self.table_exists)
+        if "pg_trigger" in query:
+            return _Result(
+                "CREATE TRIGGER inhuis_maintenance_write_gate "
+                "EXECUTE FUNCTION inhuis_maintenance_write_barrier()"
+                if self.barrier_exists else None
+            )
+        raise AssertionError("Unexpected runtime authority query")
+
+
+@pytest.mark.parametrize(
+    ("table_exists", "barrier_exists", "expected_error"),
+    [
+        (False, False, "Runtime-schema mist retailer_import_queue"),
+        (True, False, "onderhoudsbeveiliging"),
+        (True, True, None),
+    ],
+)
+def test_runtime_preflight_rejects_schema_drift_after_alembic_head(
+    monkeypatch, table_exists, barrier_exists, expected_error,
+):
+    from app import schema_migration_preflight as preflight
+
+    runtime = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql"),
+        connect=lambda: _RuntimeConnection(
+            table_exists=table_exists, barrier_exists=barrier_exists
+        ),
+    )
+    migrator = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    monkeypatch.setattr(preflight, "engine", runtime)
+    monkeypatch.setattr(preflight, "migration_engine", migrator)
+    monkeypatch.setattr(preflight, "_expected_head", lambda *_: "20261111_01")
+    monkeypatch.setattr(preflight, "_runtime_revision", lambda: "20261111_01")
+    if expected_error:
+        with pytest.raises(RuntimeError, match=expected_error):
+            preflight.validate_runtime_schema_authority(object())
+    else:
+        assert preflight.validate_runtime_schema_authority(object()) == "20261111_01"
