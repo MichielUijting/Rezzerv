@@ -122,8 +122,7 @@ def _requires_central_resolution(source, keys) -> bool:
     for candidate in source.get("candidates") or ():
         if isinstance(candidate, dict):
             possible_gtins.extend(candidate.get(field) for field in (
-                "gtin", "ean", "barcode", "code", "external_source_product_code",
-                "candidate_source_product_code", "source_product_code",
+                "gtin", "ean", "barcode",
             ))
     return any(
         is_valid_gtin("".join(character for character in str(value or "")
