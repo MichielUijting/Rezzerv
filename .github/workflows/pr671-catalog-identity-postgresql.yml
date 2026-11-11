@@ -6,6 +6,8 @@ on:
       - 'backend/app/services/catalog_identity_resolution_service.py'
       - 'backend/app/services/catalog_identity_backfill_preview_service.py'
       - 'backend/app/services/catalog_identity_backfill_apply_service.py'
+      - 'backend/app/services/catalog_identity_confirmation_service.py'
+      - 'backend/app/api/barcode_routes.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
       - '.github/workflows/pr671-catalog-identity-postgresql.yml'
