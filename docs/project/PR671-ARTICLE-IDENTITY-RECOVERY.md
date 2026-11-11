@@ -174,3 +174,48 @@ geen Docker-start/stop, geen database-/voorraadmutaties.
 nog geen uitvoering op de gebruikersdatabase of externe broncontrole van
 de 20 werkelijke codes. Er is geen toestemming om de historische gegevens
 automatisch te wijzigen.
+
+## Proefresultaat: 20 concrete Lidl-codes (11 november 2026)
+
+Ontvangen read-only lokale selectie: **20** Lidl-codes, samen **155**
+exacte bonregels, uit **295** Lidl-codes zonder centrale koppeling.
+Voor deze twintig bevat het rapport **geen enkele bron-GTIN**, geen bestaande
+huishoudartikel-naar-Catalogusverwijzing en geen bewezen
+winkelcode-naar-productrelatie.
+
+De twintig codes zijn:
+`0082346`, `0083006`, `0083383`, `0082756`, `0082231`,
+`0001000`, `0082181`, `0083096`, `0000517`, `0006590`,
+`0082318`, `0084597`, `0081536`, `0082616`, `0001350`,
+`6605251`, `6610492`, `6613882`, `0001304`, `0002848`.
+
+Een gerichte publieke webverkenning op de exacte codes + Lidl/GTIN/EAN
+leverde **geen geverifieerde Lidl Nederland-code → GTIN-relatie** op.
+Wel is voor `0081536` een *Zwitserse Lidl*-productvermelding
+("Bio Zitronen") aangetroffen zonder GTIN: dit is hoogstens een
+landspecifiek productvoorstel, niet bewezen dezelfde Nederlandse identiteit.
+Bron: https://huggingface.co/datasets/Yelinz/lidl-ch-products/viewer/default/train?p=876
+(een externe onofficiële dataset).
+
+Het gevaar van kale artikelnummermatches is concreet: `0082346`
+werd bij Winparts als auto-onderdeel aangetroffen, `6613882` bij
+Light & Living als decoratieschaal, en `6605251` als een Samsung-laptop
+bij een IT-distributeur. Deze zijn **geen Lidl-match** en mogen niet aan de
+Catalogus worden toegewezen.
+Voorbeelden: https://www.winparts.nl/koelsysteem-verwarming/airco-condensor/smart/fortwo-cabrio-450-bouwjaar-2004-01-2007-01/c15-535-13684/condensor-smart-fortwo-city-vanaf-0306-29005010-international-radiators-plus/p82346.html ;
+https://www.light-living.com/nl_NL/p/schaal-op-voet-o245x12-cm-ota-zand-licht-bruin-gespikkeld/20643/ ;
+https://nl.ingrammicro.com/site/productdetail?id=A001-000000000006605251
+
+De webverkenning is geen volledige inventaris van alle mogelijke
+databronnen, maar bewijst dat een ongerichte zoekmachinekoppeling op een
+7-cijferige winkelcode onveilig is. **Automatisch verifieerbaar: 0/20** op
+basis van het hier beschikbare bewijs. Alle twintig blijven onbekend,
+waarvan één mogelijk, maar niet bewezen, productsuggestie uit Zwitserland.
+Geen automatische backfill, statuspromotie of aanpassing in gebruikersdata.
+
+**Architectuurconsequentie:** uitsluitend bronnen gebruiken die expliciet
+én controleerbaar dezelfde retailer/scope, externe artikelcode en
+product/GTIN koppelen; daarnaast kan een gebruiker zelf een gescande GTIN
+bevestigen. Een zoekhit voor een willekeurige leverancier met dezelfde
+numerieke artikelcode is categorisch onvoldoende. We bewaren onbewezen
+kandidaten desgewenst als voorstel met herkomst, niet als identiteit.
