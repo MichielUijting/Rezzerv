@@ -191,3 +191,104 @@ def test_unidentified_historical_line_blocks_partial_auto_link():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def _prepare_live_repair_source_schema(conn):
+    conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT"))
+    conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN deleted_at TIMESTAMP"))
+    conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN line_role TEXT DEFAULT 'product'"))
+    conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN inventory_eligible INTEGER DEFAULT 1"))
+
+
+def test_live_repair_updates_only_exact_household_article_without_stock_writes():
+    from app.services.catalog_identity_live_repair_service import (
+        repair_household_articles_for_confirmed_store_code,
+    )
+    engine, conn = _fixture()
+    try:
+        _prepare_live_repair_source_schema(conn)
+        result = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="Lidl",
+            external_article_code="CODE1", global_product_id="p1",
+        )
+        assert result["updated"] == 1, result
+        assert result["stock_changes"] == result["receipt_changes"] == 0
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() == "p1"
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a2'"
+        )).scalar_one() is None
+        again = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="lidl",
+            external_article_code="code1", global_product_id="p1",
+        )
+        assert again["updated"] == 0
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_live_repair_refuses_multiple_household_articles_for_one_store_code():
+    from app.services.catalog_identity_live_repair_service import (
+        repair_household_articles_for_confirmed_store_code,
+    )
+    engine, conn = _fixture()
+    try:
+        _prepare_live_repair_source_schema(conn)
+        conn.execute(text("INSERT INTO household_articles VALUES ('a3','h1',NULL)"))
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code1',FALSE)"))
+        conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a3')"))
+        result = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="lidl",
+            external_article_code="code1", global_product_id="p1",
+        )
+        assert result["status"] == "ambiguous", result
+        assert result["updated"] == 0
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_live_repair_refuses_partial_historical_evidence():
+    from app.services.catalog_identity_live_repair_service import (
+        repair_household_articles_for_confirmed_store_code,
+    )
+    engine, conn = _fixture()
+    try:
+        _prepare_live_repair_source_schema(conn)
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,NULL,FALSE)"))
+        conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a1')"))
+        result = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="lidl",
+            external_article_code="code1", global_product_id="p1",
+        )
+        assert result["updated"] == 0, result
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar_one() is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_live_repair_does_not_override_existing_catalog_assignment():
+    from app.services.catalog_identity_live_repair_service import (
+        repair_household_articles_for_confirmed_store_code,
+    )
+    engine, conn = _fixture()
+    try:
+        _prepare_live_repair_source_schema(conn)
+        conn.execute(text("UPDATE household_articles SET global_product_id='different' WHERE id='a1'"))
+        result = repair_household_articles_for_confirmed_store_code(
+            conn, household_id="h1", retailer_code="lidl",
+            external_article_code="code1", global_product_id="p1",
+        )
+        assert result["updated"] == 0, result
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
