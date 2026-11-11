@@ -324,15 +324,15 @@ def test_selective_reviewed_backfill_skips_unrelated_conflicts_and_unresolved():
     try:
         # a1 has exact proof. A different household article has conflicting
         # historical identities, and another has no confirmed identity.
-        conn.execute(text("INSERT INTO global_products VALUES ('p2',NULL,'active')"))
+        conn.execute(text("INSERT INTO global_products VALUES ('p2',NULL,'active'), ('p3',NULL,'active')"))
         conn.execute(text("INSERT INTO external_article_product_links "
                           "(global_product_id,retailer_code,external_article_code,status) "
-                          "VALUES ('p2','lidl','code2','confirmed')"))
+                          "VALUES ('p2','lidl','code2','confirmed'), ('p3','lidl','code3','confirmed')"))
         conn.execute(text("INSERT INTO household_articles VALUES "
                           "('a3','h1',NULL), ('a4','h1',NULL)"))
         conn.execute(text("INSERT INTO receipt_table_lines VALUES "
                           "('l3','r1',NULL,'code1',FALSE), "
-                          "('l4','r1',NULL,'code2',FALSE), "
+                          "('l4','r1',NULL,'code3',FALSE), "
                           "('l5','r1',NULL,NULL,FALSE)"))
         conn.execute(text("INSERT INTO purchase_import_lines VALUES "
                           "('b1','receipt-line:l3','a3'), "
