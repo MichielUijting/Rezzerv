@@ -331,7 +331,7 @@ def test_selective_reviewed_backfill_skips_unrelated_conflicts_and_unresolved():
         conn.execute(text("INSERT INTO household_articles VALUES "
                           "('a3','h1',NULL), ('a4','h1',NULL)"))
         conn.execute(text("INSERT INTO receipt_table_lines VALUES "
-                          "('l3','r1',NULL,'code1',FALSE), "
+                          "('l3','r1',NULL,'code2',FALSE), "
                           "('l4','r1',NULL,'code3',FALSE), "
                           "('l5','r1',NULL,NULL,FALSE)"))
         conn.execute(text("INSERT INTO purchase_import_lines VALUES "
