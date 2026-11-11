@@ -9,6 +9,8 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
+import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -77,6 +79,7 @@ export default function ExternalDatabases2Page() {
   const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -249,7 +252,7 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     if (!offLinkOutcome?.message) return undefined
-    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : 'error', message: offLinkOutcome.message })
+    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : (offLinkOutcome.status === 'warning' ? 'warning' : 'error'), message: offLinkOutcome.message })
     const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
     return () => window.clearTimeout(timeout)
   }, [offLinkOutcome, showFeedback])
@@ -368,15 +371,29 @@ export default function ExternalDatabases2Page() {
         </p> : null}
         {selectedItem?.link_status === 'classification_pending'
           && selectedItem.pending_global_product_id && selectedItem.off_link_id
-          ? <Ed2GpcClassificationPanel key={selectedItem.id} item={selectedItem}
-            onClassified={(message) => {
-              setSelectedItem(null)
-              setSelectedIds([])
-              setActiveStatusCounter('')
-              setFilters((previous) => ({ ...previous, link_status: '' }))
-              setOffLinkOutcome({ status: 'success', message })
-              setRefreshVersion((value) => value + 1)
-            }} />
+          ? <div key={selectedItem.id}>
+            <Ed2GpcClassificationPanel item={selectedItem}
+              onClassified={(message) => {
+                setSelectedItem(null)
+                setSelectedIds([])
+                setActiveStatusCounter('')
+                setFilters((previous) => ({ ...previous, link_status: '' }))
+                setOffLinkOutcome({ status: 'success', message })
+                setRefreshVersion((value) => value + 1)
+              }} />
+            <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
+              <Ed2BarcodeScanner receiptItemId={selectedItem.id}
+                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} />
+              <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
+                onSaved={(outcome) => {
+                  setSelectedItem(null)
+                  setSelectedIds([])
+                  setPendingScannedBarcode(null)
+                  setOffLinkOutcome(outcome)
+                  setRefreshVersion((value) => value + 1)
+                }} />
+            </section>
+          </div>
           : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)

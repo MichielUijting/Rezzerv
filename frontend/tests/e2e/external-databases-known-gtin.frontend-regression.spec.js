@@ -372,7 +372,9 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await panel.getByRole('button', { name: 'Opnieuw zoeken' }).click()
       await expect(panel.getByTestId('external-databases-2-off-candidates')).toContainText('Tweede suggestie')
       await expect(table.locator('tbody tr')).toHaveCount(3)
-      await expect(page.getByRole('button', { name: /Koppel|Opslaan|Afsluiten/ })).toHaveCount(0)
+      // Check only legacy standalone actions: the confirmed identity workflow
+      // legitimately offers a separate 'Koppelen aan Catalogus' button.
+      await expect(page.getByRole('button', { name: /^(Koppel|Koppelen|Opslaan|Afsluiten)$/ })).toHaveCount(0)
       slowMilk = true
       await open(0)
       await expect(panel.getByRole('status')).toContainText('Kandidaten zoeken')

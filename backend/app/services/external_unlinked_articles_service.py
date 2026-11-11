@@ -22,12 +22,12 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
 
 def _overview_retailer_code(value):
-    code = normalize_external_link_retailer_code(value)
-    return 'ah' if code in {'ah', 'albert-heijn', 'albert-heijn-digitaal'} else code
+    return canonical_catalog_retailer(value)
 
 
 def _ed2_manual_barcode_identity(retailer_code, receipt_text, article_code):
@@ -122,8 +122,7 @@ def _requires_central_resolution(source, keys) -> bool:
     for candidate in source.get("candidates") or ():
         if isinstance(candidate, dict):
             possible_gtins.extend(candidate.get(field) for field in (
-                "gtin", "ean", "barcode", "code", "external_source_product_code",
-                "candidate_source_product_code", "source_product_code",
+                "gtin", "ean", "barcode",
             ))
     return any(
         is_valid_gtin("".join(character for character in str(value or "")
@@ -147,6 +146,8 @@ def _source_articles(conn):
     for row in purchases:
         item = _m2c2h5_purchase_import_placeholder(dict(row))
         item["external_article_code"] = row["external_article_code"]
+        # The source projection does not establish a GTIN from a store code.
+        item["gtin"] = ""
         yield item
 
     # Receipt-derived Uitpakken/import rows are copies, not another source of
@@ -158,6 +159,7 @@ def _source_articles(conn):
                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
                COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                rtl.external_article_code AS retailer_article_number,
+               rtl.barcode AS source_gtin,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
@@ -171,6 +173,9 @@ def _source_articles(conn):
     for row in receipts:
         item = _receipt_table_line_placeholder(dict(row))
         item["external_article_code"] = row["retailer_article_number"]
+        # The legacy placeholder fills gtin from retailer_article_number.
+        # Use ONLY the canonical barcode field as GTIN evidence.
+        item["gtin"] = str(row["source_gtin"] or "")
         yield item
 
 
@@ -251,10 +256,15 @@ def list_all_external_articles(*, conn=None) -> dict:
                 skipped += 1
                 projected = {}
             if projected.get("central_link_active") is True:
-                status = "linked"
+                central_link = projected.get("central_external_article_product_link") or {}
+                # Identity can be proven while the independent GS1/CBS
+                # classification is still pending. Do not report this as
+                # classified merely because its retailer code now resolves.
+                status = ("classification_pending"
+                          if central_link.get("status") == "classification_pending"
+                          else "linked")
                 linked_gtin = str(projected.get("linked_gtin") or "")
                 article_code = linked_gtin if is_valid_gtin(linked_gtin) else ""
-                central_link = projected.get("central_external_article_product_link") or {}
             else:
                 pending = get_pending_classification_external_article_link(
                     conn,
