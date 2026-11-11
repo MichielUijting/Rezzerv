@@ -7,6 +7,8 @@ on:
       - 'backend/app/services/catalog_identity_backfill_preview_service.py'
       - 'backend/app/services/catalog_identity_backfill_apply_service.py'
       - 'backend/app/services/catalog_identity_confirmation_service.py'
+      - 'backend/app/services/catalog_identity_live_repair_service.py'
+      - 'backend/app/services/catalog_retailer_identity_keys.py'
       - 'backend/app/api/barcode_routes.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
