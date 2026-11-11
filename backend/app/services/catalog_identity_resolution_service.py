@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.barcode_identity_service import validate_barcode
-from app.services.external_article_product_link_service import (
-    normalize_external_link_article_code,
-    normalize_external_link_retailer_code,
+from app.services.external_article_product_link_service import normalize_external_link_article_code
+from app.services.catalog_retailer_identity_keys import (
+    canonical_catalog_retailer, catalog_retailer_aliases,
 )
 
 
@@ -31,7 +31,7 @@ def resolve_catalog_identity(
     a matching condition.
     """
     raw_gtin = str(gtin or "").strip()
-    retailer = normalize_external_link_retailer_code(retailer_code)
+    retailer = canonical_catalog_retailer(retailer_code)
     article_code = normalize_external_link_article_code(external_article_code)
     candidates: dict[str, set[str]] = {}
     evidence: list[str] = []
@@ -65,7 +65,7 @@ def resolve_catalog_identity(
                 SELECT DISTINCT gp.id
                 FROM external_article_product_links e
                 JOIN global_products gp ON gp.id = e.global_product_id
-                WHERE e.retailer_code = :retailer
+                WHERE e.retailer_code IN :retailer_aliases
                   AND e.external_article_code = :code
                   AND (
                         e.status = 'confirmed'
@@ -84,8 +84,8 @@ def resolve_catalog_identity(
                         )
                   )
                   AND LOWER(COALESCE(gp.status, 'active')) = 'active'
-            """),
-            {"retailer": retailer, "code": article_code},
+            """).bindparams(bindparam("retailer_aliases", expanding=True)),
+            {"retailer_aliases": catalog_retailer_aliases(retailer), "code": article_code},
         ).scalars().all()
         candidates["retailer_code"] = {str(value) for value in code_rows if value}
         evidence.append("retailer_code")
