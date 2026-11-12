@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.db import engine
+from app.services.barcode_identity_service import validate_barcode
 from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
 from app.services.session_request_context import require_platform_permission_from_session
 from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer, catalog_retailer_aliases
@@ -200,8 +201,10 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         # No automatic reassignment of historical receipt, household or stock records.
         # Require confirmed active target GTIN, check-code ownership and source review.
         gtin = str(request.target_gtin or "").strip()
-        if not gtin or not gtin.isdigit():
-            raise HTTPException(422, "Voer de bevestigde barcode van het juiste Catalogusproduct in")
+        checked_gtin = validate_barcode(gtin, "gtin")
+        if not checked_gtin["valid"]:
+            raise HTTPException(422, "Voer een geldige Artikel-/barcode met correcte controlecijfers in")
+        gtin = checked_gtin["normalized_value"]
         target = conn.execute(text("""
             SELECT id, name, primary_gtin FROM global_products
             WHERE primary_gtin=:gtin AND LOWER(COALESCE(status,'active'))='active'
