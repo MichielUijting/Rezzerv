@@ -11,6 +11,11 @@ on:
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
       - 'backend/tests/test_catalog_shared_name_update.py'
+      - 'backend/app/services/ed2_confirmed_barcode_service.py'
+      - 'backend/app/services/ed2_barcode_correction_service.py'
+      - 'backend/tests/test_ed2_saved_barcode_catalog.py'
+      - 'frontend/src/features/externalDatabases/Ed2ManualBarcodeEntry.jsx'
+      - 'frontend/src/features/externalDatabases/OffCandidatePanel.jsx'
       - 'backend/app/services/external_ed2_delete_service.py'
       - 'backend/app/services/external_unlinked_articles_service.py'
       - 'backend/tests/test_external_ed2_delete_service.py'
@@ -59,9 +64,11 @@ jobs:
         run: |
           python -m py_compile backend/app/api/catalog_routes.py backend/app/api/barcode_import_routes.py backend/tests/test_superuser_barcode_import.py backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
           python -m py_compile backend/app/services/external_ed2_delete_service.py backend/tests/test_external_ed2_delete_service.py
+          python -m py_compile backend/app/services/ed2_confirmed_barcode_service.py backend/app/services/ed2_barcode_correction_service.py backend/tests/test_ed2_saved_barcode_catalog.py
           python -m pytest -q backend/tests/test_superuser_barcode_import.py
           python -m pytest -q backend/tests/test_catalog_shared_gtin_assignment.py backend/tests/test_catalog_shared_name_update.py
           python -m pytest -q backend/tests/test_external_ed2_delete_service.py
+          python -m pytest -q backend/tests/test_ed2_saved_barcode_catalog.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -48,10 +48,10 @@ blijft onderdeel van **Artikelbeheer → Identificeren**.
 
 ## Nog niet geleverd in dit deeltraject
 
-- Correctie van een **andere, reeds opgeslagen Lidl-code** met een
-  afzonderlijk gevolgenoverzicht, expliciete bevestiging en auditregistratie.
-  De PO beoordeelt die codes per artikel in Identificeren; geen automatische
-  vervanging van het bestaande bewijs.
+- Volledig **historisch herstel** van al gekoppelde bon-/huishoudverwijzingen
+  als er nog een andere actieve Cataloguskoppeling bestaat. Zulke gevallen
+  blijven voorlopig zichtbaar maar worden geblokkeerd, met concrete reden.
+  De PO beoordeelt Lidl-codes individueel; er is geen automatische massamutatie.
 - Resolutie van historisch al ten onrechte globaal geclaimde restricted codes.
   Bestaande conflicten stoppen veilig; zij worden niet automatisch gemerged.
 - Semantische synoniemen, geverifieerde productfamilies en hoeveelheidsfactoren
@@ -129,6 +129,40 @@ opnieuw als actief product te gebruiken. Gerichte tests leggen dit vast.
 Dit is **geen** bewijs dat de lokale oude referenties verdwenen zijn; er is
 geen lokale gebruikersdatabase uitgelezen. Een eventuele echte
 barcodecorrectie van een eerder bewaarde onjuiste Lidl-code blijft
-een expliciete, nog te implementeren stap in **Identificeren** met
-gevolgenoverzicht en audit. De PO hoeft de oude verwijderde
+een expliciete individuele stap in **Identificeren** met een
+read-only gevolgenoverzicht en bevestiging. Bestaande externe links of
+huishoudartikelen op het oude product blokkeren de correctie tot daarvoor
+gecontroleerd historisch herstel bestaat. De PO hoeft de oude verwijderde
 Catalogusproducten niet opnieuw aan te maken.
+
+
+## Deelstap: bewaarde Lidl-barcode individueel corrigeren
+
+De Lidl-rij in **Artikelbeheer → Identificeren** met al opgeslagen
+\`manual_barcode\` toont **Nieuwe barcode → Gevolgen bekijken**.
+Een wijziging gebeurt nooit via de gewone Opslaan-route.
+
+- Read-only preview herleidt de exacte bonartikelidentiteit opnieuw aan de
+  serverkant. Hij toont oude/nieuwe barcode en scope, oud Catalogusproduct
+  en de verwachte nieuwe Cataloguskoppeling. Zelfs een soft-deleted product
+  wordt niet geheractiveerd.
+- Externe bevestigde of wachtende Cataloguskoppelingen, andere
+  identiteitsbronnen en huishoudartikelverwijzingen op het oude product
+  blokkeren de correctie; niets wordt blind hergekoppeld.
+- Bevoegdheid: server-side \`platform.external_products.link_existing\`.
+  Dit vereist een actuele actieve geautoriseerde platformrol, waaronder
+  Superuser of Frontteam. Browserrollen alleen zijn niet voldoende.
+- De uitdrukkelijke bevestiging bevat een fingerprint van de getoonde
+  gevolgen. De backend vergrendelt de oude én nieuwe identiteit, herberekent
+  de gevolgen onder een transactie en weigert een gewijzigde situatie.
+- Alleen het bewezen oude ED2-retailer_barcode-identiteitsrecord wordt
+  gepensioneerd, de opgeslagen Lidl-barcode wordt vervangen en de nieuwe
+  Cataloguskoppeling wordt met de bestaande centrale dienst bevestigd.
+  Oude Catalogusproducten, bronbonnen, huishoudartikelen en voorraad worden
+  niet verwijderd of gemuteerd.
+- De bestaande autorisatie-audit schrijft atomair actor, originele en nieuwe
+  barcode, scope en Catalogusproduct-ID. Ontbrekende audit betekent dat ook
+  de correctietransactie niet slaagt.
+- Backend regressie in \`backend/tests/test_ed2_saved_barcode_catalog.py\`;
+  browserregressie in de officiële \`playwright.identity.config.js\`-suite.
+  De gedeelde barcode-CI voert deze tests blijvend uit.

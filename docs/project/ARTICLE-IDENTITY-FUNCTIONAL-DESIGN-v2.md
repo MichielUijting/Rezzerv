@@ -169,3 +169,19 @@ Gevolgen voor het ontwerp:
   **fail-closed** bij een verwijderde Catalogusidentiteit of nog bestaande
   historische globale claim. Geen automatische databasecleanup,
   migratie of reactivering zonder afzonderlijk veilig bewijs.
+
+
+## Lidl-correctie: begrensde veilige implementatie
+
+De correctie van een eerder bewaarde Lidl-code is **per artikel** en gebruikt
+een afzonderlijke read-only gevolgencontrole plus expliciete bevestiging.
+De bewaarde oude barcode blijft bewijs van de eerdere keuze, niet van een
+mondiale identiteit. De correctie registreert oude/nieuwe code,
+betrokken Catalogusproducten en de geautoriseerde gebruiker.
+
+Wanneer oudere bevestigde externe koppelingen of huishoudartikelen nog
+naar het oude Catalogusproduct verwijzen, blokkeert deze deelstap bewust:
+daarvoor is het afzonderlijke gecontroleerde historische herstel volgens
+besluiten 19B/26A vereist. Ook soft-deleted Catalogusproducten worden
+niet gereactiveerd. Er is **geen** bronbon- of voorraadmutatie in
+de Lidl-correctiefase.

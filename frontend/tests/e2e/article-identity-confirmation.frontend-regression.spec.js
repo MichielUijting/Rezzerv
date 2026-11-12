@@ -90,3 +90,141 @@ test('Artikelbeheer: unknown Catalogus GTIN never confirms by name or code alone
   await expect(panel.getByTestId('ed2-manual-barcode-save')).toBeEnabled()
   await expect(page.getByTestId('ed2-catalog-identity-confirm-overlay')).toHaveCount(0)
 })
+
+
+test('Lidl: individual correction previews, can cancel and writes only after confirmation', async ({ page }) => {
+  const oldCode = '2008234600001'
+  const newCode = '2012345678903'
+  let savedCode = oldCode
+  const confirmations = []
+  let previews = 0
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'frontteam-editor', active_household_id: '0', context_type: 'system',
+      role: 'member', is_platform_superuser: false,
+      permissions: { 'platform.external_products.link_existing': true },
+    } })
+    if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+      items: [{
+        id: 'receipt-table-line:lidl-correction', receipt_line_text: 'Lidl courgette groen',
+        retailer_code: 'lidl', receipt_article_number: '123',
+        article_code: '', link_status: 'unlinked',
+        quantity_label: '1 stuk', manual_barcode: savedCode,
+      }],
+      counts: { unlinked: 1, linked: 0, classification_pending: 0 },
+    } })
+    if (path === '/api/external-databases/products/search-preview') {
+      return route.fulfill({ json: { provider: 'none', results: [] } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/lidl/preview-correction') {
+      previews++
+      expect(route.request().postDataJSON()).toEqual({
+        receipt_item_id: 'receipt-table-line:lidl-correction', new_gtin: newCode,
+      })
+      return route.fulfill({ json: {
+        can_confirm: true, receipt_item_id: 'receipt-table-line:lidl-correction',
+        old_gtin: oldCode, new_gtin: newCode, new_scope: 'restricted',
+        new_product_will_be_created: true, preview_fingerprint: 'a'.repeat(64),
+        legacy_link_count: 0, household_article_count: 0, blocked_reasons: [],
+      } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/lidl/confirm-correction') {
+      confirmations.push(route.request().postDataJSON())
+      savedCode = newCode
+      return route.fulfill({ json: {
+        corrected: true, old_gtin: oldCode, gtin: newCode,
+        barcode_scope: 'restricted', global_product_id: 'new-lidl-product',
+        catalog_product_created: true, stock_changes: 0,
+      } })
+    }
+    return route.fulfill({ json: {} })
+  })
+
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'Lidl courgette groen' }).dblclick()
+  const correction = page.getByTestId('ed2-lidl-barcode-correction')
+  await expect(correction).toBeVisible()
+  await expect(correction).toContainText(oldCode)
+  await expect(page.getByTestId('ed2-manual-barcode-save')).toHaveCount(0)
+  await correction.getByTestId('ed2-lidl-correction-input').fill(newCode)
+  await correction.getByTestId('ed2-lidl-correction-preview').click()
+  const confirm = page.getByTestId('ed2-lidl-correction-confirm-overlay')
+  await expect(confirm).toBeVisible()
+  await expect(confirm).toContainText(oldCode)
+  await expect(confirm).toContainText(newCode)
+  expect(confirmations).toHaveLength(0)
+  await confirm.getByRole('button', { name: 'Annuleren' }).click()
+  expect(confirmations).toHaveLength(0)
+
+  await correction.getByTestId('ed2-lidl-correction-preview').click()
+  await expect(confirm).toBeVisible()
+  await confirm.getByRole('button', { name: 'Correctie bevestigen' }).click()
+  await expect.poll(() => confirmations.length).toBe(1)
+  expect(confirmations[0]).toEqual({
+    receipt_item_id: 'receipt-table-line:lidl-correction',
+    new_gtin: newCode, expected_old_gtin: oldCode,
+    preview_fingerprint: 'a'.repeat(64),
+  })
+  expect(previews).toBe(2)
+  await expect(page.getByText(/Lidl-barcode gecorrigeerd/)).toBeVisible()
+})
+
+test('Lidl: historical conflict preview never offers the confirmation action', async ({ page }) => {
+  let writes = 0
+  const oldCode = '2008234600001'
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'frontteam-editor', active_household_id: '0', context_type: 'system',
+      role: 'member', is_platform_superuser: false,
+      permissions: { 'platform.external_products.link_existing': true },
+    } })
+    if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+      items: [{
+        id: 'receipt-table-line:blocked-lidl', receipt_line_text: 'Lidl groene courgette',
+        retailer_code: 'lidl', receipt_article_number: '456',
+        article_code: '', link_status: 'linked', manual_barcode: oldCode,
+      }],
+      counts: { unlinked: 0, linked: 1, classification_pending: 0 },
+    } })
+    if (path === '/api/external-databases/products/search-preview') {
+      return route.fulfill({ json: { provider: 'none', results: [] } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/lidl/preview-correction') {
+      return route.fulfill({ json: {
+        can_confirm: false, blocked_reasons: [
+          'Er bestaat nog een bevestigde andere Cataloguskoppeling.',
+        ],
+      } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/lidl/confirm-correction') {
+      writes++
+    }
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'Lidl groene courgette' }).dblclick()
+  const correction = page.getByTestId('ed2-lidl-barcode-correction')
+  await expect(correction).toBeVisible()
+  await correction.getByTestId('ed2-lidl-correction-input').fill('2012345678903')
+  await correction.getByTestId('ed2-lidl-correction-preview').click()
+  const blocked = page.getByTestId('ed2-lidl-correction-blocked-overlay')
+  await expect(blocked).toBeVisible()
+  await expect(blocked).toContainText('bevestigde andere Cataloguskoppeling')
+  expect(writes).toBe(0)
+})
