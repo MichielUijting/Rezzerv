@@ -375,4 +375,3 @@ def test_household_zero_browser_fixture_never_substitutes_inventory_id_for_house
     assert "article_id=inventory_id," not in fixture
     assert '"articleId": household_article_id,' in fixture
     assert '"inventoryId": str(inventory_id),' in fixture
-
