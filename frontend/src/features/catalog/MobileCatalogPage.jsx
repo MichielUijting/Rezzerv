@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import CatalogProductImage from './CatalogProductImage'
+import CatalogHouseholdConflictsReview from './CatalogHouseholdConflictsReview'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Select from '../../ui/Select.jsx'
 import Pagination from '../../ui/Pagination.jsx'
-import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext, canCurrentUserPerform, isHouseholdAdminFromContext } from '../../lib/authSession'
 import './mobileCatalog.css'
 
 const PAGE_SIZE = 10
@@ -26,6 +27,10 @@ export default function MobileCatalogPage() {
   const restored = location.state?.mobileCatalogTableState
   const authContext = readStoredAuthContext()
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
+  const canReviewHistorical = canCurrentUserPerform('platform.external_products.link_existing', authContext)
+    && isHouseholdAdminFromContext(authContext)
+    && String(authContext?.active_household_id || '') !== '0'
+  const [showHistoricalReview, setShowHistoricalReview] = useState(false)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [query, setQuery] = useState(() => restored?.query || '')
@@ -105,6 +110,8 @@ export default function MobileCatalogPage() {
       <main className="rz-mobile-catalog-content">
         {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
         {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+        {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
+        {showHistoricalReview && canReviewHistorical ? <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} /> : null}
         <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
             <span className="rz-mobile-catalog-visually-hidden">Zoek</span>
