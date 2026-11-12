@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.db import engine
+from app.services.catalog_identity_confirmation_service import confirm_scanned_retailer_identity
 from app.services.session_request_context import require_platform_permission_from_session
 from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer, catalog_retailer_aliases
 from app.services.external_article_product_link_service import (
@@ -41,6 +42,79 @@ class ReviewRequest(BaseModel):
     external_article_code: str
     action: str
     target_gtin: str | None = None
+
+
+class AddRetailerCodeRequest(BaseModel):
+    retailer_code: str
+    receipt_text: str
+    external_article_code: str
+    expected_gtin: str
+
+
+@router.post("/add")
+def add_catalog_retailer_code(global_product_id: str, request: AddRetailerCodeRequest):
+    context = _permission()
+    actor = str(context.user_id or "").strip()
+    if not actor:
+        raise HTTPException(403, "Geen bevestigde gebruiker beschikbaar")
+    retailer, description, number = _key(
+        request.retailer_code, request.receipt_text, request.external_article_code
+    )
+    with engine.begin() as conn:
+        if conn.dialect.name != "postgresql":
+            raise HTTPException(503, "Winkelcodebevestiging vereist PostgreSQL")
+        product = conn.execute(text("""
+            SELECT id, primary_gtin FROM global_products
+            WHERE id=:id AND LOWER(COALESCE(status,'active'))='active'
+            FOR UPDATE
+        """), {"id":global_product_id}).mappings().first()
+        if not product:
+            raise HTTPException(404, "Catalogusproduct niet gevonden")
+        gtin = str(product["primary_gtin"] or "").strip()
+        if not gtin or gtin != request.expected_gtin:
+            raise HTTPException(409, "De barcode van het Catalogusproduct is gewijzigd of ontbreekt")
+        # A platform editor may only confirm a real receipt combination, not
+        # invent a source identity from a typed description.
+        evidence = conn.execute(text("""
+            SELECT COALESCE(NULLIF(rt.store_chain,''), rt.store_name,'') AS retailer,
+                   COALESCE(NULLIF(rtl.corrected_raw_label,''),
+                            NULLIF(rtl.normalized_label,''),rtl.raw_label) AS receipt_text
+            FROM receipt_table_lines rtl
+            JOIN receipt_tables rt ON rt.id=rtl.receipt_table_id
+            WHERE rtl.external_article_code=:article_number
+              AND COALESCE(rtl.is_deleted,FALSE)=FALSE
+              AND rt.deleted_at IS NULL
+            LIMIT 2000
+        """), {"article_number":number}).mappings().all()
+        if not any(
+            _key(source["retailer"], source["receipt_text"], number)
+              == (retailer, description, number)
+            for source in evidence
+        ):
+            raise HTTPException(409, "Deze combinatie is niet op een bestaande kassabon aangetroffen")
+        legacy = conn.execute(text("""
+            SELECT id FROM external_article_product_links
+            WHERE retailer_code = ANY(:aliases) AND external_article_code=:number
+              AND COALESCE(receipt_text_normalized,'')=''
+              AND status IN ('confirmed','classification_pending')
+            LIMIT 1
+        """), {"aliases":list(catalog_retailer_aliases(retailer)),
+               "number":number}).first()
+        if legacy:
+            raise HTTPException(409, "Deze winkelcode heeft een oude koppeling zonder bonomschrijving; eerst afzonderlijk beoordelen")
+        try:
+            saved = confirm_scanned_retailer_identity(
+                conn, retailer_code=retailer, receipt_text=description,
+                external_article_code=number, scanned_gtin=gtin, confirmed_by=actor,
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if saved["global_product_id"] != global_product_id:
+            raise HTTPException(409, "Bevestigde barcode hoort niet bij dit Catalogusproduct")
+        return {"status":saved["status"], "global_product_id":global_product_id,
+                "receipt_text":description, "external_article_code":number,
+                "changed":bool(saved["changes"])}
+
 
 @router.get("")
 def list_catalog_retailer_codes(global_product_id: str):
