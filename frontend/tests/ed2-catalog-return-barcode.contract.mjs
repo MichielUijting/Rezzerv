@@ -43,7 +43,7 @@ assert.doesNotMatch(ed2, /activeStatusCounter \|\| Object\.values\(filters\)\.so
 assert.doesNotMatch(ed2, /manualBarcodeKey/)
 // The ordinary per-item save endpoint belongs to the detail component.
 // The explicitly selected historical materialization belongs to the overview.
-assert.doesNotMatch(ed2, /\/api\/catalog\/ed2\/manual-barcodes['"]/) 
+assert.doesNotMatch(ed2, /\/api\/catalog\/ed2\/manual-barcodes['"]/)
 assert.match(ed2, /\/api\/catalog\/ed2\/manual-barcodes\/materialize-existing/)
 assert.match(ed2, /canMaterializeSaved/)
 assert.match(ed2, /selectedRows\.length <= 50/)
