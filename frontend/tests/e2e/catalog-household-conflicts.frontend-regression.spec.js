@@ -42,7 +42,8 @@ async function mockCatalog(page, { canReview = true, failSave = false } = {}) {
       role: canReview ? 'owner' : 'viewer', display_role: canReview ? 'admin' : 'viewer',
       permissions: { 'platform.external_products.link_existing': canReview,
         'admin.access': canReview },
-      is_platform_superuser: canReview,
+      is_platform_superuser: false,
+      is_frontteam: canReview,
     }),
   }))
   // Regular household sessions must complete the real AuthGuard onboarding
@@ -113,3 +114,51 @@ test('Zonder rechten is beoordeling niet beschikbaar', async ({ page }) => {
   await page.goto('/catalogus')
   await expect(page.getByRole('button', { name: 'Historische conflicten beoordelen' })).toHaveCount(0)
 })
+
+
+async function mockSystemCatalog(page) {
+  let householdReviewRequests = 0
+  await page.route('**/api/session', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      user_id: 'system-editor', active_household_id: '0',
+      context_type: 'system', role: 'superuser', display_role: 'superuser',
+      is_platform_superuser: true,
+      permissions: { 'platform.external_products.link_existing': true },
+    }),
+  }))
+  await page.route('**/api/catalog?*', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ total: 0, items: [] }),
+  }))
+  await page.route('**/api/catalog/household-identity-conflicts', route => {
+    householdReviewRequests += 1
+    return route.fulfill({
+      status: 403, contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Geen regulier huishouden actief' }),
+    })
+  })
+  return () => householdReviewRequests
+}
+
+for (const [name, width, height] of [
+  ['desktop', 1280, 800],
+  ['mobiel', 390, 844],
+]) {
+  test(`Superuser ziet beoordeling op ${name} maar krijgt uitleg zonder huishoudgegevens te lezen`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    const getReviewRequests = await mockSystemCatalog(page)
+    await page.goto('/catalogus')
+    const button = page.getByRole('button', { name: 'Historische conflicten beoordelen' })
+    await expect(button).toBeVisible()
+    await button.click()
+    const notice = page.getByTestId('catalog-historical-system-household-notice')
+    await expect(notice).toBeVisible()
+    await expect(notice).toContainText('Systeemhuishouden')
+    await expect(notice).toContainText('reguliere account')
+    expect(getReviewRequests()).toBe(0)
+    await notice.getByRole('button', { name: 'OK' }).click()
+    await expect(page.getByTestId('catalog-conflicts-table')).toHaveCount(0)
+    expect(getReviewRequests()).toBe(0)
+  })
+}
