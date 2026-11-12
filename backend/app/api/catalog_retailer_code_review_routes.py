@@ -12,8 +12,8 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.services.session_request_context import require_platform_permission_from_session
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer, catalog_retailer_aliases
 from app.services.external_article_product_link_service import (
-    normalize_external_link_retailer_code,
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
 )
@@ -25,7 +25,7 @@ def _permission():
 
 def _key(retailer, description, article_number):
     key = (
-        normalize_external_link_retailer_code(retailer),
+        canonical_catalog_retailer(retailer),
         normalize_external_link_receipt_text(description),
         normalize_external_link_article_code(article_number),
     )
@@ -73,6 +73,7 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         raise HTTPException(422, "Kies Bevestigen of Corrigeren")
     retailer, description, article_number = _key(
         request.retailer_code,request.receipt_text,request.external_article_code)
+    aliases = list(catalog_retailer_aliases(retailer))
     if request.expected_product_id != global_product_id:
         raise HTTPException(409, "Catalogusproduct is tussentijds gewijzigd")
     with engine.begin() as conn:
@@ -96,10 +97,10 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         # Unique *triple* is the PO authority. Never silently overwrite competitors.
         triples = conn.execute(text("""
             SELECT id, global_product_id FROM external_article_product_links
-            WHERE retailer_code=:retailer AND receipt_text_normalized=:description
+            WHERE retailer_code = ANY(:retailer_aliases) AND receipt_text_normalized=:description
               AND external_article_code=:article AND status='confirmed'
             FOR UPDATE
-        """), {"retailer":retailer,"description":description,"article":article_number}).mappings().all()
+        """), {"retailer_aliases":aliases,"description":description,"article":article_number}).mappings().all()
         if any(str(x["global_product_id"]) != global_product_id for x in triples):
             raise HTTPException(409, "Deze winkel, omschrijving en bonartikelnummer zijn al aan een ander product gekoppeld")
         if len(triples) > 1:
@@ -108,9 +109,9 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         # it understands the complete PO key, never create a code-only ambiguity.
         code_owners = conn.execute(text("""
             SELECT DISTINCT global_product_id FROM external_article_product_links
-            WHERE retailer_code=:retailer AND external_article_code=:article
+            WHERE retailer_code = ANY(:retailer_aliases) AND external_article_code=:article
               AND status='confirmed'
-        """), {"retailer":retailer,"article":article_number}).scalars().all()
+        """), {"retailer_aliases":aliases,"article":article_number}).scalars().all()
         if any(str(x)!=global_product_id for x in code_owners):
             raise HTTPException(409, "Deze winkelcode heeft elders een andere bevestigde productidentiteit; eerst resolver aanpassen")
         if request.action=="confirm":
@@ -144,10 +145,10 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         # creating a code-only ambiguity or silently changing other descriptions.
         code_rows = conn.execute(text("""
             SELECT id FROM external_article_product_links
-            WHERE retailer_code=:retailer AND external_article_code=:article
+            WHERE retailer_code = ANY(:retailer_aliases) AND external_article_code=:article
               AND status IN ('confirmed','classification_pending')
             FOR UPDATE
-        """), {"retailer":retailer,"article":article_number}).scalars().all()
+        """), {"retailer_aliases":aliases,"article":article_number}).scalars().all()
         if {str(v) for v in code_rows} != {str(request.link_id)}:
             raise HTTPException(409, "Dezelfde winkelcode komt bij meerdere omschrijvingen voor; correctie vereist eerst een uitgebreidere herkenningsregel")
         # The old product may already be bound to household stock. Never repoint
