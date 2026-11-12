@@ -20,7 +20,7 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_receipt_text,
 )
 
-_TABLE = "ed2_confirmed_barcode_links"
+_TABLE = "ed2_manual_barcodes"
 
 
 def _rows(conn, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
@@ -109,44 +109,42 @@ def materialize_saved_ed2_barcode(
         ), {"key": key})
 
     params = {"retailer": retailer, "label": label, "code": code}
-    current = _rows(conn, f"""
-        SELECT barcode_value, barcode_scope, global_product_id
-        FROM {_TABLE} WHERE retailer_code = :retailer
-          AND receipt_text_normalized = :label AND external_article_code = :code
-        FOR UPDATE
-    """, params)
-    if current:
-        old = current[0]
-        if old["barcode_value"] != value or old["barcode_scope"] != scope:
-            raise ValueError(
-                "Deze kassabonidentiteit heeft een andere bevestigde barcode. "
-                "Een centrale correctie vereist een afzonderlijke gevolgencontrole en bevestiging."
-            )
-        product = _rows(conn, """
-            SELECT id FROM global_products WHERE id = :id AND status = 'active'
-        """, {"id": old["global_product_id"]})
-        if len(product) != 1:
-            raise ValueError("De bevestigde Catalogusidentiteit is inmiddels ongeldig.")
-        return {
-            "status": "already_confirmed", "barcode": value, "barcode_scope": scope,
-            "global_product_id": old["global_product_id"], "catalog_product_created": False,
-            "household_changes": 0, "stock_changes": 0,
-        }
-
-    # A historical barcode-only entry is an additional consistency check.
+    # The already-saved barcode is the authoritative evidence. Resolve the
+    # same exact tuple across known retailer aliases without creating a second
+    # authoritative identity registry.
     manual_stmt = text("""
-        SELECT gtin FROM ed2_manual_barcodes
-        WHERE retailer_code IN :aliases AND receipt_text_normalized = :label
+        SELECT retailer_code, gtin, barcode_scope, global_product_id
+        FROM ed2_manual_barcodes
+        WHERE retailer_code IN :aliases
+          AND receipt_text_normalized = :label
           AND external_article_code = :code FOR UPDATE
     """).bindparams(bindparam("aliases", expanding=True))
     manual = [dict(row) for row in conn.execute(manual_stmt, {
         **params, "aliases": list(catalog_retailer_aliases(retailer)),
     }).mappings().all()]
-    if any(str(row["gtin"]) != value for row in manual):
+    if len(manual) > 1:
+        raise ValueError("Dubbele opgeslagen winkelidentiteit; veilige koppeling gestopt.")
+    if manual and str(manual[0]["gtin"]) != value:
         raise ValueError(
             "Dit bonartikel heeft een andere opgeslagen barcode. "
-            "Corrigeer die uitsluitend na een expliciete gevolgencontrole."
+            "Een correctie vereist een afzonderlijke gevolgencontrole."
         )
+    if manual and manual[0].get("global_product_id"):
+        old = manual[0]
+        if old.get("barcode_scope") != scope:
+            raise ValueError("De scope van de bestaande barcodekoppeling wijkt af.")
+        products = _rows(conn, """
+            SELECT id FROM global_products WHERE id = :id AND status = 'active'
+        """, {"id": old["global_product_id"]})
+        if len(products) != 1:
+            raise ValueError("De bestaande Catalogusidentiteit is niet langer actief.")
+        return {
+            "status": "already_confirmed", "barcode": value, "barcode_scope": scope,
+            "global_product_id": old["global_product_id"],
+            "catalog_product_created": False, "household_changes": 0,
+            "stock_changes": 0,
+        }
+
     product_id, known = _owner(conn, barcode=value, retailer=retailer, label=label, code=code, scope=scope)
 
     # Legacy confirmed and waiting identities may be superseded only by an
@@ -225,25 +223,37 @@ def materialize_saved_ed2_barcode(
         conn.execute(text("""
             INSERT INTO ed2_manual_barcodes (
                 retailer_code, receipt_text_normalized, external_article_code,
-                gtin, created_at, updated_at
+                gtin, barcode_scope, global_product_id, confirmed_by,
+                confirmed_at, created_at, updated_at
             ) VALUES (
-                :retailer, :label, :code, :barcode, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :retailer, :label, :code,
+                :barcode, :scope, :product_id, :actor,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
-        """), {**params, "barcode": value})
+        """), {
+            **params, "barcode": value, "scope": scope,
+            "product_id": product_id, "actor": actor,
+        })
+    else:
+        # Backward-compatible materialization: existing user confirmation
+        # remains the proof, never silently replace its original barcode.
+        result = conn.execute(text("""
+            UPDATE ed2_manual_barcodes
+            SET barcode_scope = :scope, global_product_id = :product_id,
+                confirmed_by = :actor, confirmed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE retailer_code = :saved_retailer
+              AND receipt_text_normalized = :label
+              AND external_article_code = :code AND gtin = :barcode
+              AND global_product_id IS NULL
+        """), {
+            **params, "saved_retailer": manual[0]["retailer_code"],
+            "barcode": value, "scope": scope,
+            "product_id": product_id, "actor": actor,
+        })
+        if result.rowcount != 1:
+            raise RuntimeError("De opgeslagen barcode is tussentijds gewijzigd.")
 
-    conn.execute(text(f"""
-        INSERT INTO {_TABLE} (
-            retailer_code, receipt_text_normalized, external_article_code,
-            barcode_value, barcode_scope, global_product_id,
-            confirmed_by, confirmed_at, updated_at
-        ) VALUES (
-            :retailer, :label, :code, :barcode, :scope, :product_id,
-            :actor, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-        )
-    """), {
-        **params, "barcode": value, "scope": scope,
-        "product_id": product_id, "actor": actor,
-    })
     return {
         "status": "confirmed", "barcode": value, "barcode_scope": scope,
         "global_product_id": product_id, "catalog_product_created": created,

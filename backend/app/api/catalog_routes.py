@@ -804,9 +804,6 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
     if not payload.import_off_product_override:
         # A saved barcode is already confirmed evidence under the current PO
         # contract. Neither OFF nor a GS1 classification is a prerequisite.
-        if "ed2_confirmed_barcode_links" not in _tables():
-            raise HTTPException(status_code=503,
-                                detail="Nieuwe Cataloguskoppeling is nog niet beschikbaar.")
         try:
             with engine.begin() as conn:
                 source = resolve_external_article_identity(conn, receipt_item_id)
