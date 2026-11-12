@@ -771,17 +771,31 @@ def stage_external_article_product_link_without_gpc(
     if not product or str(product.get("status") or "").strip().lower() != "active":
         raise ValueError("Catalogusproduct is niet actief")
 
-    # Retailer + bonartikelnummer is the identity when a number is present.
-    # A label match for a differently numbered product must never block or
-    # deactivate the selected article's confirmed/pending link.
-    if code:
-        identity_where = "(retailer_code = :retailer_code AND external_article_code = :external_article_code)"
+    # PO key: retailer + normalized receipt label + receipt article number.
+    # Different numbers on the same receipt label remain independent links.
+    # A code-only legacy record is never silently reclassified as another
+    # receipt description.
+    if code and label:
+        identity_where = (
+            "(retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND external_article_code = :external_article_code)"
+        )
+    elif code:
+        identity_where = (
+            "(retailer_code = :retailer_code "
+            "AND COALESCE(receipt_text_normalized, '') = '' "
+            "AND external_article_code = :external_article_code)"
+        )
     else:
         identity_where = (
             "(retailer_code = :retailer_code "
             "AND receipt_text_normalized = :receipt_text_normalized "
             "AND COALESCE(TRIM(external_article_code), '') = '')"
         )
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:identity_key, 672))"),
+                     {"identity_key": "|".join((retailer, label, code))})
     params = {"retailer_code": retailer, "external_article_code": code,
               "receipt_text_normalized": label, "global_product_id": product_id}
     # A partial OFF candidate must never silently demote an already confirmed
