@@ -36,6 +36,12 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
         if (!response.ok) throw new Error(typeof payload.detail === 'string'
           ? payload.detail : 'Historische conflicten konden niet worden geladen.')
         if (alive) {
+          if (!payload.complete) {
+            showFeedback({
+              variant: 'error',
+              message: 'De historische broncontrole is onvolledig. Beoordelen is geblokkeerd totdat alle bronregels zijn gecontroleerd.',
+            })
+          }
           setData(payload)
           setPage(1)
           setSelectedArticle(null)
@@ -114,7 +120,6 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
           <p data-testid="catalog-conflict-count">
             Te beoordelen huishoudartikelen: {data.conflict_count} · Bronregels gecontroleerd: {data.source_rows_examined}
           </p>
-          {!data.complete ? <p>De historische controle is onvolledig. Er kunnen daarom geen beoordelingen uit deze lijst worden gestart.</p> : null}
           {data.complete && !items.length ? <p>Geen historische Catalogusconflicten aangetroffen in dit huishouden.</p> : null}
           {data.complete && items.length ? (
             <Table dataTestId="catalog-conflicts-table" tableClassName="rz-catalog-detail-table">
