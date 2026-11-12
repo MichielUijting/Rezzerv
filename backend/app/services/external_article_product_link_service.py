@@ -924,6 +924,7 @@ def get_confirmed_external_article_product_link(
         identity = resolve_catalog_identity(
             conn, retailer_code=normalized_retailer,
             external_article_code=normalized_code,
+            receipt_text=normalized_text,
         )
         if identity["status"] != "matched":
             return None
@@ -934,6 +935,9 @@ def get_confirmed_external_article_product_link(
                 JOIN global_products gp ON gp.id = link.global_product_id
                 WHERE link.retailer_code IN :retailer_aliases
                   AND link.external_article_code = :external_article_code
+                  AND (:receipt_text_normalized = ''
+                       OR link.receipt_text_normalized = :receipt_text_normalized
+                       OR COALESCE(link.receipt_text_normalized, '') = '')
                   AND link.global_product_id = :global_product_id
                   AND link.status IN ('confirmed', 'classification_pending')
                   AND LOWER(COALESCE(gp.status, 'active')) = 'active'
@@ -944,6 +948,7 @@ def get_confirmed_external_article_product_link(
             {
                 "retailer_aliases": catalog_retailer_aliases(normalized_retailer),
                 "external_article_code": normalized_code,
+                "receipt_text_normalized": normalized_text,
                 "global_product_id": identity["global_product_id"],
             },
         ).mappings().first()
