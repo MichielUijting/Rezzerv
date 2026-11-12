@@ -33,7 +33,7 @@ const identity = {
   }],
 }
 
-async function mockCatalog(page, { canReview = true, failSave = false } = {}) {
+async function mockCatalog(page, { canReview = true, failSave = false, ordinaryAdmin = false } = {}) {
   let captured = null
   await page.route('**/api/session', route => route.fulfill({
     status: 200, contentType: 'application/json',
@@ -43,7 +43,7 @@ async function mockCatalog(page, { canReview = true, failSave = false } = {}) {
       permissions: { 'platform.external_products.link_existing': canReview,
         'admin.access': canReview },
       is_platform_superuser: false,
-      is_frontteam: canReview,
+      is_frontteam: canReview && !ordinaryAdmin,
     }),
   }))
   // Regular household sessions must complete the real AuthGuard onboarding
@@ -73,7 +73,7 @@ async function mockCatalog(page, { canReview = true, failSave = false } = {}) {
   return () => captured
 }
 
-test('Beheerder kan meerdere bonartikelnummers voor dezelfde omschrijving afzonderlijk bevestigen', async ({ page }) => {
+test('Frontteambeheerder kan meerdere bonartikelnummers voor dezelfde omschrijving afzonderlijk bevestigen', async ({ page }) => {
   const getCaptured = await mockCatalog(page)
   await page.goto('/catalogus')
   await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
@@ -134,8 +134,11 @@ async function mockSystemCatalog(page) {
   await page.route('**/api/catalog/household-identity-conflicts', route => {
     householdReviewRequests += 1
     return route.fulfill({
-      status: 403, contentType: 'application/json',
-      body: JSON.stringify({ detail: 'Geen regulier huishouden actief' }),
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        conflict_count: 0, source_rows_examined: 0, articles_examined: 0,
+        complete: true, data_changed: false, items: [], products: [],
+      }),
     })
   })
   return () => householdReviewRequests
@@ -145,20 +148,29 @@ for (const [name, width, height] of [
   ['desktop', 1280, 800],
   ['mobiel', 390, 844],
 ]) {
-  test(`Superuser ziet beoordeling op ${name} maar krijgt uitleg zonder huishoudgegevens te lezen`, async ({ page }) => {
+  test(`Superuser beoordeelt op ${name} uitsluitend Systeemhuishouden`, async ({ page }) => {
     await page.setViewportSize({ width, height })
     const getReviewRequests = await mockSystemCatalog(page)
     await page.goto('/catalogus')
     const button = page.getByRole('button', { name: 'Historische conflicten beoordelen' })
     await expect(button).toBeVisible()
     await button.click()
-    const notice = page.getByTestId('catalog-historical-system-household-notice')
-    await expect(notice).toBeVisible()
-    await expect(notice).toContainText('Systeemhuishouden')
-    await expect(notice).toContainText('reguliere account')
-    expect(getReviewRequests()).toBe(0)
-    await notice.getByRole('button', { name: 'OK' }).click()
+    await expect(page.getByTestId('catalog-historical-conflicts')).toBeVisible()
+    await expect(page.getByTestId('catalog-historical-conflicts')).toContainText('Systeemhuishouden')
+    await expect(page.getByTestId('catalog-conflict-count')).toContainText('0')
+    expect(getReviewRequests()).toBe(1)
     await expect(page.getByTestId('catalog-conflicts-table')).toHaveCount(0)
-    expect(getReviewRequests()).toBe(0)
+  })
+}
+
+for (const [name, width, height] of [
+  ['desktop', 1280, 800],
+  ['mobiel', 390, 844],
+]) {
+  test(`Gewone beheerder met technische koppelingpermissie ziet geen historische beoordeling op ${name}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await mockCatalog(page, { ordinaryAdmin: true })
+    await page.goto('/catalogus')
+    await expect(page.getByRole('button', { name: 'Historische conflicten beoordelen' })).toHaveCount(0)
   })
 }
