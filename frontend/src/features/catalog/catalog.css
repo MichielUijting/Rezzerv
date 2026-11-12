@@ -15,7 +15,24 @@
 
 .rz-catalog-card {
   display: grid;
+  /* Keep review DataTables inside the Catalogus viewport. Their own shared
+     wrappers are responsible for horizontal scrolling below the last row. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.rz-catalog-historical-review {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rz-catalog-historical-review > .rz-data-table-shell,
+.rz-catalog-historical-review > section,
+.rz-catalog-historical-review > section > .rz-data-table-shell {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .rz-catalog-header h2,
