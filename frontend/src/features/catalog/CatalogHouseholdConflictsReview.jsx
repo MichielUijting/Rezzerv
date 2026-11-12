@@ -137,15 +137,22 @@ export default function CatalogHouseholdConflictsReview() {
   }
 
   function startBarcodeDecision() {
-    if (selectedSources.length !== 1) {
+    const first = selectedSources[0]
+    if (!first) return
+    const sameIdentity = selectedSources.every(source => (
+      source.retailer_code === first.retailer_code
+      && source.receipt_text === first.receipt_text
+      && source.external_article_code === first.external_article_code
+    ))
+    if (!sameIdentity) {
       showFeedback({
         variant: 'warning',
         dismissMode: 'ok-only',
-        message: 'Selecteer precies één bonartikelcombinatie voor een barcodebesluit. Verschillende boncodes mogen niet automatisch dezelfde barcode krijgen.',
+        message: 'Je hebt verschillende bonartikelcombinaties geselecteerd. Beoordeel die afzonderlijk: ze mogen niet automatisch dezelfde barcode krijgen.',
       })
       return
     }
-    setSelectedSource(selectedSources[0])
+    setSelectedSource(first)
     setTargetGtin('')
   }
 
@@ -311,14 +318,10 @@ export default function CatalogHouseholdConflictsReview() {
 
   return (
     <section className="rz-catalog-historical-review" aria-label="Historische Catalogusconflicten beoordelen" data-testid="catalog-historical-conflicts">
-      <div className="rz-external-databases-actions">
-        <h3>Historische Catalogusconflicten</h3>
-        <Button type="button" variant="secondary" onClick={onClose}>Terug naar Catalogus</Button>
-      </div>
-      <p>Dit overzicht gebruikt uitsluitend de oorspronkelijke bonregels van {reviewScope}.
-        Beoordeel per winkel, kassabonomschrijving en bonartikelnummer de juiste Artikel-/barcode.
-        Meerdere bonartikelnummers bij dezelfde omschrijving zijn toegestaan.
-        Huishoudartikelen en voorraad worden nooit automatisch samengevoegd. Een conflict kan daarom na een juiste bronbevestiging nog apart beoordeeld moeten worden.</p>
+      <h3>Historische Catalogusconflicten</h3>
+      <p>Een conflict betekent niet automatisch dat de barcode fout is. Soms hebben twee
+        huishoudartikelen dezelfde Cataloguskandidaat; die artikelen worden hier niet
+        automatisch samengevoegd. Bonartikelnummer en barcode zijn verschillende gegevens.</p>
       {loading ? <p>Historische bonregels controleren…</p> : null}
       {!loading && data ? (
         <>
@@ -338,40 +341,92 @@ export default function CatalogHouseholdConflictsReview() {
               </section>
             ) : <p>Geen historische Catalogusconflicten aangetroffen in je actieve huishouden.</p>
           ) : null}
-          {data.complete && items.length ? (
-            <DataTable
-              columns={conflictColumns}
-              data={items}
-              getRowKey={item => item.household_article_id}
-              dataTestId="catalog-conflicts-table"
-              pagination
-              pageSize={PAGE_SIZE}
-              defaultSort={{ key: 'article_name', direction: 'asc' }}
-              stickyHeader
-              stickyFilters
-            />
-          ) : null}
-          {data.complete && selectedArticle ? (
-            <section aria-label="Oorspronkelijke bonregels" data-testid="catalog-conflict-sources">
-              <h3>Bonregels van {selectedArticle.article_name || 'huishoudartikel'}</h3>
-              <p>Huidige Cataloguskoppeling: {selectedArticle.current_product_ids?.map(productName).join(' · ') || 'Ontbreekt'}</p>
+          {data.complete && items.length > 0 && reviewingIds.length === 0 ? (
+            <>
+              <p data-testid="catalog-conflicts-instruction">
+                Stap 1. Vink één of meer huishoudartikelen aan. Kies daarna onder de tabel
+                <strong> Bonregels beoordelen</strong>. Je kunt dan zien welke boncodes daarbij horen.
+                Door alleen te bekijken verander je niets.
+              </p>
               <DataTable
-                key={selectedArticle.household_article_id}
+                columns={conflictColumns}
+                data={items}
+                getRowKey={item => item.household_article_id}
+                onPageRowsChange={setArticlePageRows}
+                dataTestId="catalog-conflicts-table"
+                pagination
+                pageSize={PAGE_SIZE}
+                defaultSort={{ key: 'article_name', direction: 'asc' }}
+                stickyHeader
+                stickyFilters
+                paginationActions={(
+                  <Button type="button" disabled={!checkedArticleIds.length}
+                    onClick={startSourceReview}>
+                    Bonregels beoordelen ({checkedArticleIds.length})
+                  </Button>
+                )}
+              />
+            </>
+          ) : null}
+          {data.complete && activeArticles.length > 0 ? (
+            <section aria-label="Oorspronkelijke bonregels" data-testid="catalog-conflict-sources">
+              <h3>Waarom staan deze artikelen op de conflictlijst?</h3>
+              {activeArticles.map(article => (
+                <div key={article.household_article_id} data-testid="catalog-conflict-explanation">
+                  <p><strong>{article.article_name || 'Huishoudartikel zonder naam'}</strong>:
+                    {' '}{reasonLabel(article.reason)}.</p>
+                  {article.related_household_articles?.length ? (
+                    <p>Dezelfde Cataloguskandidaat komt ook voor bij:
+                      {' '}{article.related_household_articles.map(peer =>
+                        peer.article_name || 'Huishoudartikel zonder naam').join(' · ')}.
+                      Dit bewijst niet dat de barcode onjuist is.</p>
+                  ) : article.reason === 'catalogusproduct_al_bezet' ? (
+                    <p>Dit Catalogusproduct heeft al een koppeling met een ander huishoudartikel.
+                      Er is nog geen veilige keuze welk huishoudartikel moet blijven.</p>
+                  ) : (
+                    <p>De beschikbare bonbronnen of de bestaande Cataloguskoppeling spreken elkaar tegen.
+                      Vergelijk de originele winkelgegevens voordat je een barcode kiest.</p>
+                  )}
+                  <p>Cataloguskandidaat:
+                    {' '}{article.candidate_product_ids?.map(productName).join(' · ') || 'Nog niet eenduidig'}.
+                    {' '}Huidige koppeling:
+                    {' '}{article.current_product_ids?.map(productName).join(' · ') || 'Ontbreekt'}.</p>
+                </div>
+              ))}
+              <p data-testid="catalog-source-instruction">
+                Stap 2. Selecteer een bonregel. De winkel, bonomschrijving en het bonartikelnummer
+                vormen samen de te beoordelen combinatie. Kies onder de tabel
+                <strong> Barcode bepalen</strong> om een bewezen Catalogusbarcode te bevestigen.
+                Verschillende bonartikelcombinaties beoordeel je afzonderlijk.
+              </p>
+              <DataTable
+                key={reviewingIds.join('|')}
                 columns={sourceColumns}
-                data={selectedArticle.sources || []}
-                getRowKey={source => `${source.retailer_code}|${source.receipt_text}|${source.external_article_code}|${source.receipt_line_id}`}
+                data={sourceRows}
+                getRowKey={source => source.source_selection_key}
+                onPageRowsChange={setSourcePageRows}
                 dataTestId="catalog-conflict-sources-table"
                 pagination
                 pageSize={PAGE_SIZE}
                 defaultSort={{ key: 'receipt_text', direction: 'asc' }}
                 stickyHeader
                 stickyFilters
+                paginationActions={(
+                  <Button type="button" disabled={!checkedSourceIds.length}
+                    onClick={startBarcodeDecision}>
+                    Barcode bepalen ({checkedSourceIds.length})
+                  </Button>
+                )}
               />
+              <p>Let op: het bevestigen van een boncode corrigeert alleen de centrale
+                artikelherkenning. Dubbele huishoudartikelen blijven bestaan; hun
+                geschiedenis en voorraad worden niet automatisch samengevoegd.
+                Gebruik de terugknop van je browser om terug te keren naar de conflictlijst.</p>
             </section>
           ) : null}
         </>
       ) : null}
-      {selectedSource && selectedArticle ? (
+      {selectedSource && sourceArticle ? (
         <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="dialog" aria-modal="true"
             aria-label="Artikelbarcode bij bonartikel bevestigen">
@@ -380,9 +435,9 @@ export default function CatalogHouseholdConflictsReview() {
             <p>Kassabonomschrijving: {selectedSource.receipt_text}</p>
             <p>Bonartikelnummer: {selectedSource.external_article_code}</p>
             <p>Kies bewust de juiste Catalogusbarcode. Een bestaande conflicterende of verouderde koppeling wordt geweigerd.</p>
-            {selectedArticle.candidate_product_ids?.length ? (
+            {sourceArticle.candidate_product_ids?.length ? (
               <div aria-label="Mogelijke Catalogusproducten">
-                {selectedArticle.candidate_product_ids.map(id => {
+                {sourceArticle.candidate_product_ids.map(id => {
                   const product = products.get(id)
                   return product?.primary_gtin ? (
                     <Button key={id} type="button" variant="secondary"
