@@ -443,6 +443,12 @@ def test_household_conflict_review_lists_all_shared_candidates_read_only():
         assert {item["household_article_id"] for item in report["conflict_items"]} == {"a1", "a3"}
         assert all(item["reason"] == "meerdere_huishoudartikelen" for item in report["conflict_items"])
         assert all(item["candidate_product_ids"] == ["p1"] for item in report["conflict_items"])
+        assert {
+            item["household_article_id"]: [
+                related["household_article_id"] for related in item["related_household_articles"]
+            ]
+            for item in report["conflict_items"]
+        } == {"a1": ["a3"], "a3": ["a1"]}
         assert all(item["sources"][0]["external_article_code"] == "code1"
                    and item["sources"][0]["receipt_text"] == "melk halfvol"
                    for item in report["conflict_items"])
