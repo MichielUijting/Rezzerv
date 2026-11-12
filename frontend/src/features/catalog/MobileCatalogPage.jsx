@@ -40,7 +40,12 @@ export default function MobileCatalogPage() {
     && String(authContext?.active_household_id) === '0'
     && canCurrentUserPerform('platform.external_products.link_existing', authContext)
   )
-  const [showHistoricalReview, setShowHistoricalReview] = useState(false)
+  const showHistoricalReview = new URLSearchParams(location.search).get('historischeConflicten') === '1'
+  function openHistoricalReview() {
+    const query = new URLSearchParams(location.search)
+    query.set('historischeConflicten', '1')
+    navigate(`${location.pathname}?${query.toString()}`, { state: location.state })
+  }
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [query, setQuery] = useState(() => restored?.query || '')
@@ -120,9 +125,9 @@ export default function MobileCatalogPage() {
       <main className="rz-mobile-catalog-content">
         {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
         {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
-        {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
+        {canReviewHistorical && !showHistoricalReview ? <Button type="button" variant="secondary" onClick={openHistoricalReview}>Historische conflicten beoordelen</Button> : null}
         {showHistoricalReview && canReviewHistorical ? (
-          <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} />
+          <CatalogHouseholdConflictsReview />
         ) : (
           <>
             <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
