@@ -27,26 +27,17 @@ export default function MobileCatalogPage() {
   const restored = location.state?.mobileCatalogTableState
   const authContext = readStoredAuthContext()
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
-  const canReviewHistorical = authContext?.context_type === 'regular'
-    && canCurrentUserPerform('platform.external_products.link_existing', authContext)
-    && isHouseholdAdminFromContext(authContext)
-    && Boolean(String(authContext?.active_household_id || '').trim())
-    && String(authContext?.active_household_id) !== '0'
-  const canShowHistoricalReviewAction = canReviewHistorical
-    || (authContext?.context_type === 'system' && Boolean(authContext?.is_platform_superuser))
-  function toggleHistoricalReview() {
-    if (!canReviewHistorical) {
-      showFeedback({
-        variant: 'warning',
-        dismissMode: 'ok-only',
-        title: 'Historische conflicten beoordelen',
-        message: 'Je werkt in Systeemhuishouden. De historische bonregels van een regulier huishouden zijn hier niet toegankelijk. Meld je aan met het reguliere account dat Beheerder is van het betreffende huishouden en bevoegd is voor Cataloguskoppelingen.',
-        testId: 'catalog-historical-system-household-notice',
-      })
-      return
-    }
-    setShowHistoricalReview(value => !value)
-  }
+  const canReviewHistorical = canCurrentUserPerform('platform.external_products.link_existing', authContext)
+    && (
+      (authContext?.context_type === 'system'
+        && authContext?.is_platform_superuser === true
+        && String(authContext?.active_household_id) === '0')
+      || (authContext?.context_type === 'regular'
+        && authContext?.is_frontteam === true
+        && isHouseholdAdminFromContext(authContext)
+        && Boolean(String(authContext?.active_household_id || '').trim())
+        && String(authContext?.active_household_id) !== '0')
+    )
   const [showHistoricalReview, setShowHistoricalReview] = useState(false)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -127,7 +118,7 @@ export default function MobileCatalogPage() {
       <main className="rz-mobile-catalog-content">
         {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
         {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
-        {canShowHistoricalReviewAction ? <Button type="button" variant="secondary" onClick={toggleHistoricalReview}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
+        {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
         {showHistoricalReview && canReviewHistorical ? <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} /> : null}
         <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
