@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import Pagination from '../../ui/Pagination.jsx'
@@ -23,6 +23,9 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
+  // React StrictMode replays effect setup on mount; share the same in-flight
+  // GET instead of making duplicate household-scoped requests.
+  const inFlightReviewRef = useRef(null)
   const [page, setPage] = useState(1)
   const [sourcePage, setSourcePage] = useState(1)
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -33,11 +36,24 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   useEffect(() => {
     let alive = true
     setLoading(true)
-    fetchJsonWithAuth(REVIEW_URL)
-      .then(async response => {
+    // The first StrictMode setup is cleaned up immediately, but the request
+    // remains in flight. Its second setup may safely observe the same response.
+    // After settlement, a later explicit refresh always fetches fresh data.
+    if (!inFlightReviewRef.current) {
+      const pending = fetchJsonWithAuth(REVIEW_URL).then(async response => {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(typeof payload.detail === 'string'
           ? payload.detail : 'Historische conflicten konden niet worden geladen.')
+        return payload
+      })
+      inFlightReviewRef.current = pending
+      pending.then(
+        () => { if (inFlightReviewRef.current === pending) inFlightReviewRef.current = null },
+        () => { if (inFlightReviewRef.current === pending) inFlightReviewRef.current = null },
+      )
+    }
+    inFlightReviewRef.current
+      .then(payload => {
         if (alive) {
           if (!payload.complete) {
             showFeedback({
