@@ -316,9 +316,13 @@ export default function CatalogPage() {
             {!canUpdateGpc ? <p>Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</p> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
-              {!showHistoricalReview && canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
-              {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
-              {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+              {!showHistoricalReview ? (
+                <>
+                  {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
+                  {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
+                  {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+                </>
+              ) : null}
               {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
               {!showHistoricalReview && isPlatformSuperuser ? (
                 <Button
