@@ -235,3 +235,118 @@ def test_normal_route_never_calls_off_or_second_confirmation(monkeypatch):
     assert result["saved"] is True and result["catalog_linked"] is True
     assert result["catalog_product_created"] is True
     assert len(conn.products) == 1 and len(conn.manual) == 1
+
+
+def test_historical_bulk_uses_existing_proof_without_off(monkeypatch):
+    conn = PGFixture()
+    conn.manual.extend([
+        {"retailer_code": "ah", "receipt_text_normalized": "courgette",
+         "external_article_code": "21003", "gtin": "8722800072026",
+         "barcode_scope": None, "global_product_id": None},
+        {"retailer_code": "jumbo", "receipt_text_normalized": "jumbo courgette",
+         "external_article_code": "99001", "gtin": "8722800072026",
+         "barcode_scope": None, "global_product_id": None},
+    ])
+
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {
+        "ed2_manual_barcodes", "external_article_product_links",
+        "global_products", "product_identities",
+    })
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda permission: SimpleNamespace(user_id="authorized-frontteam"))
+    sources = {
+        "r1": {"retailer_code": "AH", "receipt_text": "Courgette",
+               "external_article_code": "21003"},
+        "r2": {"retailer_code": "Jumbo", "receipt_text": "Jumbo courgette",
+               "external_article_code": "99001"},
+    }
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
+                        lambda _conn, receipt_id: sources[receipt_id])
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                            AssertionError("No OFF lookup permitted")))
+    result = catalog_routes.materialize_existing_ed2_manual_barcodes(
+        catalog_routes.Ed2HistoricalBarcodesRequest(selections=[
+            catalog_routes.Ed2HistoricalBarcodeSelection(
+                receipt_item_id="r1", gtin="8722800072026"),
+            catalog_routes.Ed2HistoricalBarcodeSelection(
+                receipt_item_id="r2", gtin="8722800072026"),
+        ])
+    )
+    assert result == {
+        "ok": True, "processed": 2, "catalog_links_created": 2,
+        "already_confirmed": 0, "catalog_products_created": 1,
+        "household_changes": 0, "stock_changes": 0,
+    }
+    assert len(conn.products) == 1 and len(conn.manual) == 2
+    assert all(row["global_product_id"] == conn.products[0]["id"] for row in conn.manual)
+    assert set(conn.writes) <= {
+        "global_products", "product_identities", "ed2_manual_barcodes",
+    }
+    before = len(conn.writes)
+    second = catalog_routes.materialize_existing_ed2_manual_barcodes(
+        catalog_routes.Ed2HistoricalBarcodesRequest(selections=[
+            catalog_routes.Ed2HistoricalBarcodeSelection(
+                receipt_item_id="r1", gtin="8722800072026"),
+        ])
+    )
+    assert second["already_confirmed"] == 1
+    assert len(conn.writes) == before
+
+
+def test_historical_bulk_rejects_missing_proof_and_changed_gtin(monkeypatch):
+    conn = PGFixture()
+    conn.manual.append({
+        "retailer_code": "ah", "receipt_text_normalized": "courgette",
+        "external_article_code": "21003", "gtin": "8722800072026",
+        "barcode_scope": None, "global_product_id": None,
+    })
+
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {
+        "ed2_manual_barcodes", "external_article_product_links",
+        "global_products", "product_identities",
+    })
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda _permission: SimpleNamespace(user_id="frontteam-1"))
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
+                        lambda _conn, receipt_id: {
+                            "retailer_code": "AH", "receipt_text": "Courgette",
+                            "external_article_code": "21003" if receipt_id == "r1" else "missing",
+                        })
+    for receipt_id, barcode in [
+        ("r1", _barcode("871234567890")),
+        ("missing", "8722800072026"),
+    ]:
+        with pytest.raises(catalog_routes.HTTPException) as exc:
+            catalog_routes.materialize_existing_ed2_manual_barcodes(
+                catalog_routes.Ed2HistoricalBarcodesRequest(selections=[
+                    catalog_routes.Ed2HistoricalBarcodeSelection(
+                        receipt_item_id=receipt_id, gtin=barcode),
+                ])
+            )
+        assert exc.value.status_code == 409
+    assert not conn.writes
+
+
+def test_historical_bulk_selection_bound_and_duplicates():
+    with pytest.raises(ValueError):
+        catalog_routes.Ed2HistoricalBarcodesRequest(selections=[])
+    with pytest.raises(ValueError):
+        catalog_routes.Ed2HistoricalBarcodesRequest(selections=[
+            catalog_routes.Ed2HistoricalBarcodeSelection(
+                receipt_item_id="same", gtin="8722800072026"),
+            catalog_routes.Ed2HistoricalBarcodeSelection(
+                receipt_item_id="same", gtin="8722800072026"),
+        ])

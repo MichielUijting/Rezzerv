@@ -83,6 +83,7 @@ def _owner(conn, *, barcode: str, retailer: str, label: str, code: str, scope: s
 def materialize_saved_ed2_barcode(
     conn, *, retailer_code: Any, receipt_text: Any,
     external_article_code: Any, barcode: Any, confirmed_by: Any,
+    require_existing: bool = False,
 ) -> dict[str, Any]:
     """One idempotent PostgreSQL transaction; the caller authenticates the actor."""
     retailer = canonical_catalog_retailer(retailer_code)
@@ -124,6 +125,11 @@ def materialize_saved_ed2_barcode(
     }).mappings().all()]
     if len(manual) > 1:
         raise ValueError("Dubbele opgeslagen winkelidentiteit; veilige koppeling gestopt.")
+    if require_existing and not manual:
+        raise ValueError(
+            "Voor dit bonartikel is geen eerder opgeslagen barcode gevonden; "
+            "er is niets nieuw bevestigd."
+        )
     if manual and str(manual[0]["gtin"]) != value:
         raise ValueError(
             "Dit bonartikel heeft een andere opgeslagen barcode. "

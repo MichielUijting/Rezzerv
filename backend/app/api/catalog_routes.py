@@ -82,6 +82,25 @@ class Ed2ManualBarcodeRequest(BaseModel):
     import_off_product_override: bool = False
 
 
+class Ed2HistoricalBarcodeSelection(BaseModel):
+    receipt_item_id: str
+    gtin: str
+
+
+class Ed2HistoricalBarcodesRequest(BaseModel):
+    selections: list[Ed2HistoricalBarcodeSelection]
+
+    @field_validator("selections")
+    @classmethod
+    def validate_selections(cls, value: list[Ed2HistoricalBarcodeSelection]):
+        if not 1 <= len(value) <= 50:
+            raise ValueError("Selecteer 1 tot en met 50 reeds opgeslagen barcodes.")
+        ids = [str(item.receipt_item_id or "").strip() for item in value]
+        if any(not item for item in ids) or len(ids) != len(set(ids)):
+            raise ValueError("Selecties moeten unieke, bestaande bonartikel-ID's bevatten.")
+        return value
+
+
 class CatalogImageUpdateRequest(BaseModel):
     image_data_url: str
 
@@ -781,6 +800,77 @@ def list_ed2_manual_barcodes():
             "FROM ed2_manual_barcodes ORDER BY retailer_code, receipt_text_normalized"
         )).mappings().all()
     return {"items": [dict(row) for row in rows]}
+
+
+@router.post("/ed2/manual-barcodes/materialize-existing")
+def materialize_existing_ed2_manual_barcodes(payload: Ed2HistoricalBarcodesRequest):
+    """Explicit, all-or-nothing Catalogus resolution of previously saved barcodes.
+
+    Every selected receipt identity is resolved server-side and must already
+    have exactly the selected stored GTIN. No OFF, receipt, household, stock
+    or synonym writes; any missing/changed/conflicting evidence rolls back
+    the entire batch. This endpoint is never called on list/GET or startup.
+    """
+    actor = require_platform_permission_from_session(
+        "platform.external_products.link_existing"
+    )
+    _ed2_barcode_tables_ready()
+    if "product_identities" not in _tables():
+        raise HTTPException(status_code=503, detail="Catalogus-identiteitstabel ontbreekt.")
+    # Stable order for concurrent, overlapping bulk requests.
+    selections = sorted(payload.selections, key=lambda item: item.receipt_item_id)
+    results = []
+    seen_sources = set()
+    try:
+        with engine.begin() as conn:
+            for selection in selections:
+                try:
+                    source = resolve_external_article_identity(
+                        conn, str(selection.receipt_item_id).strip()
+                    )
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Een geselecteerd bonartikel bestaat niet meer."
+                    ) from error
+                # Resolve canonical tuple server-side; a second receipt row
+                # for the same article cannot silently count as new evidence.
+                source_key = (
+                    normalize_external_link_retailer_code(source["retailer_code"]),
+                    normalize_external_link_receipt_text(source["receipt_text"]),
+                    normalize_external_link_article_code(source["external_article_code"]),
+                )
+                if source_key in seen_sources:
+                    raise ValueError(
+                        "De selectie bevat dezelfde winkelartikelidentiteit meerdere keren."
+                    )
+                seen_sources.add(source_key)
+                results.append(materialize_saved_ed2_barcode(
+                    conn,
+                    retailer_code=source["retailer_code"],
+                    receipt_text=source["receipt_text"],
+                    external_article_code=source["external_article_code"],
+                    barcode=selection.gtin,
+                    confirmed_by=actor.user_id,
+                    require_existing=True,
+                ))
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "ok": True,
+        "processed": len(results),
+        "catalog_links_created": sum(
+            result["status"] == "confirmed" for result in results
+        ),
+        "already_confirmed": sum(
+            result["status"] == "already_confirmed" for result in results
+        ),
+        "catalog_products_created": sum(
+            bool(result["catalog_product_created"]) for result in results
+        ),
+        "household_changes": 0,
+        "stock_changes": 0,
+    }
 
 
 @router.post("/ed2/manual-barcodes")
