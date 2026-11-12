@@ -13,6 +13,7 @@ import CatalogCameraModal from './CatalogCameraModal'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
 import CatalogBarcodeEntry from './CatalogBarcodeEntry'
+import CatalogRetailerCodesReview from './CatalogRetailerCodesReview'
 import CatalogNameEditor from './CatalogNameEditor'
 import { captureCatalogImageFromVideo, compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
@@ -63,6 +64,7 @@ export default function CatalogDetailPageV2() {
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
+  const canReviewRetailerCodes = canCurrentUserPerform('platform.external_products.link_existing', authContext)
   // A household owner can add a missing valid GTIN, but cannot edit Catalogus photos or existing GTINs.
   const canAddCatalogGtin = canUpdateCatalogImage || isHouseholdAdminFromContext(authContext)
   const uploadInputRef = useRef(null)
@@ -362,6 +364,8 @@ export default function CatalogDetailPageV2() {
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
               </section>
 
+              {canReviewRetailerCodes ? <section className="rz-mobile-catalog-detail-card"><CatalogRetailerCodesReview globalProductId={globalProductId} canEdit /></section> : null}
+
               <section className="rz-mobile-catalog-detail-card">
                 <h3>Identiteiten</h3>
                 <div className="rz-mobile-catalog-detail-list">
@@ -489,6 +493,8 @@ export default function CatalogDetailPageV2() {
               <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
+
+              {canReviewRetailerCodes ? <section className="rz-catalog-detail-section"><CatalogRetailerCodesReview globalProductId={globalProductId} canEdit /></section> : null}
 
               <section className="rz-catalog-detail-section">
                 <h3>Identiteiten</h3>
