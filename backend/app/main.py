@@ -8296,6 +8296,12 @@ def resolve_or_create_inventory_household_article(
         ).scalar()
         if existing_id:
             return str(existing_id)
+        # Do not silently reconstruct a deleted or cross-household canonical
+        # article by its display name. The caller must resolve the source link.
+        raise HTTPException(
+            status_code=409,
+            detail="Het gekozen huishoudartikel bestaat niet meer in dit huishouden; controleer de bronkoppeling",
+        )
 
     matches = conn.execute(
         text(
