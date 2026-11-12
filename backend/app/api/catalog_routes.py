@@ -13,6 +13,7 @@ from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
+from app.api.catalog_retailer_code_review_routes import router as retailer_code_review_router
 from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
 from app.services.global_product_service import build_global_product_fingerprint
@@ -37,6 +38,7 @@ from app.services.session_request_context import (
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 router.include_router(catalog_gpc_router)
 router.include_router(shopify_review_router)
+router.include_router(retailer_code_review_router)
 
 CATALOG_IMAGE_UPDATE_PERMISSION = "platform.catalog.update"
 CATALOG_IMAGE_MAX_BYTES = 350_000
