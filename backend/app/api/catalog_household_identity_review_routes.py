@@ -24,37 +24,53 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_receipt_text,
 )
 from app.services.session_request_context import (
-    require_household_admin_from_session, require_platform_permission_from_session,
+    require_household_admin_from_session,
+    require_platform_permission_from_session,
+    resolve_current_server_session,
 )
 
 router = APIRouter(prefix="/household-identity-conflicts", tags=["catalog"])
 
 
 def _authorized_review():
-    """Only canonical Frontteam and Superuser sessions may review their own source.
+    """Scope review to the canonical session and the actual household manager.
 
-    A Superuser owns the shared *system* household, not any regular household.
-    Frontteam can only inspect its own regular household. A household Admin
-    without the special Frontteam role must never gain this permission.
+    A regular household manager (including Frontteam) may review only their
+    own household. This grants no general platform Catalogus permission.
+    Superuser remains restricted to the shared system household 0 and its
+    existing platform permission. A browser-supplied household ID is never
+    accepted or used for authority.
     """
-    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    actor = resolve_current_server_session()
     household_id = str(actor.active_household_id or "").strip()
+    user_id = str(actor.user_id or "").strip()
+    if not user_id:
+        raise HTTPException(403, "Geen bevestigde gebruiker beschikbaar")
+
     if actor.context_type == "system":
         if not actor.is_platform_superuser or household_id != "0":
             raise HTTPException(403, "Alleen Superuser met Systeemhuishouden heeft toegang")
-        return str(actor.user_id), household_id
+        authorized = require_platform_permission_from_session(
+            "platform.external_products.link_existing"
+        )
+        if (str(authorized.user_id or "") != user_id
+                or str(authorized.active_household_id or "") != household_id):
+            raise HTTPException(403, "Superusercontext is intussen gewijzigd")
+        return user_id, household_id
 
-    if actor.context_type != "regular" or not actor.is_frontteam:
-        raise HTTPException(403, "Alleen Frontteam en Superuser mogen historische conflicten beoordelen")
+    if actor.context_type != "regular" or not household_id or household_id == "0":
+        raise HTTPException(403, "Alleen een beheerder van het eigen huishouden heeft toegang")
 
+    # This separate household guard resolves live membership and role from
+    # the server-side session. No Frontteam appointment is needed for an Admin.
     household_context = require_household_admin_from_session()
-    if str(actor.user_id or "") != str(household_context.get("user_id") or ""):
+    if user_id != str(household_context.get("user_id") or "").strip():
         raise HTTPException(403, "Huishoudcontext en beoordelaar komen niet overeen")
     if household_id != str(household_context.get("active_household_id") or "").strip():
         raise HTTPException(403, "Actief huishouden komt niet overeen met serversessie")
-    if not household_id or household_id == "0":
-        raise HTTPException(403, "Frontteam vereist een eigen regulier huishouden")
-    return str(actor.user_id), household_id
+    if str(household_context.get("role") or "").strip().lower() not in {"owner", "admin"}:
+        raise HTTPException(403, "Alleen de beheerder van het huishouden mag conflicten beoordelen")
+    return user_id, household_id
 
 
 def _identity_key(retailer, description, code):
