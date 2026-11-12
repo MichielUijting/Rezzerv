@@ -44,7 +44,11 @@ def preview_household_catalog_identity_backfill(
     # Only the authorized review view needs household names and exact source
     # line IDs. Preserve the existing read-only preview contract by default.
     extra_review_columns = ""
+    retailer_expression = "rt.store_name"
     if include_conflicts:
+        receipt_table_columns = {col["name"] for col in inspect(conn).get_columns("receipt_tables")}
+        if "store_chain" in receipt_table_columns:
+            retailer_expression = "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name)"
         article_columns = {col["name"] for col in inspect(conn).get_columns("household_articles")}
         name_parts = [f"NULLIF(ha.{col}, '')" for col in ("custom_name", "naam")
                       if col in article_columns]
@@ -57,7 +61,7 @@ def preview_household_catalog_identity_backfill(
                    rtl.barcode AS gtin,
                    rtl.external_article_code AS retailer_article_code,
                    {receipt_label_sql} AS receipt_text,
-                   COALESCE(NULLIF(rt.store_chain, ''), rt.store_name) AS retailer_code
+                   {retailer_expression} AS retailer_code
                    {extra_review_columns}
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
@@ -225,8 +229,11 @@ def preview_household_catalog_identity_backfill(
         })
         product_rows = []
         if product_ids:
-            product_rows = conn.execute(text("""
-                SELECT id, name, primary_gtin FROM global_products
+            product_columns = {col["name"] for col in inspect(conn).get_columns("global_products")}
+            name_expression = "name" if "name" in product_columns else "NULL AS name"
+            gtin_expression = "primary_gtin" if "primary_gtin" in product_columns else "NULL AS primary_gtin"
+            product_rows = conn.execute(text(f"""
+                SELECT id, {name_expression}, {gtin_expression} FROM global_products
                 WHERE id IN :ids AND LOWER(COALESCE(status, 'active')) = 'active'
             """).bindparams(bindparam("ids", expanding=True)),
                 {"ids": product_ids}).mappings().all()
