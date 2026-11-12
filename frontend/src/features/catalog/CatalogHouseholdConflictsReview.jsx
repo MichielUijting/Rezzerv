@@ -3,7 +3,7 @@ import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import Pagination from '../../ui/Pagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
 const REVIEW_URL = '/api/catalog/household-identity-conflicts'
@@ -17,6 +17,9 @@ function reasonLabel(reason) {
 /** The conflict list is from the current authorized household, never from a user-provided household ID. */
 export default function CatalogHouseholdConflictsReview({ onClose }) {
   const { showFeedback } = useAppFeedback()
+  const reviewScope = readStoredAuthContext()?.context_type === 'system'
+    ? 'Systeemhuishouden'
+    : 'je actieve huishouden'
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
@@ -110,7 +113,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
         <h3>Historische Catalogusconflicten</h3>
         <Button type="button" variant="secondary" onClick={onClose}>Terug naar Catalogus</Button>
       </div>
-      <p>Dit overzicht gebruikt uitsluitend de oorspronkelijke bonregels van je actieve huishouden.
+      <p>Dit overzicht gebruikt uitsluitend de oorspronkelijke bonregels van {reviewScope}.
         Beoordeel per winkel, kassabonomschrijving en bonartikelnummer de juiste Artikel-/barcode.
         Meerdere bonartikelnummers bij dezelfde omschrijving zijn toegestaan.
         Huishoudartikelen en voorraad worden nooit automatisch samengevoegd. Een conflict kan daarom na een juiste bronbevestiging nog apart beoordeeld moeten worden.</p>
