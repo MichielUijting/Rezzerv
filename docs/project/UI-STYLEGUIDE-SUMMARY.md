@@ -1752,3 +1752,12 @@ niet-gekoppelde kandidaten voorselecteren. De bestaande knoppen
 **Koppelen**/**Ontkoppelen**, beveiligde overlays en expliciete
 bevestigingsmomenten blijven ongewijzigd. De actiebalk mag op smalle schermen
 afbreken zonder een rij of de horizontale scrollbar te overlappen.
+
+
+## Catalogus — historische conflictbeoordeling met de standaard DataTable (12 november 2026)
+
+De schermen **Catalogus → Historische conflicten beoordelen** en **Bonregels beoordelen** gebruiken allebei zonder eigen tabelimplementatie de centrale `DataTable`. Dit geldt gelijkwaardig voor desktop en de mobiele viewport. In beide tabellen zijn de standaard kolomfilters, sortering, versleepbare kolombreedtes, sticky kolomtitels en filterrij, en centrale paginering van maximaal **10 regels** actief. Filters, sortering en paginering werken op de hele betreffende lijst, niet slechts op de zichtbare regels.
+
+De conflictentabel heeft de kolommen Huishoudartikel, Reden, Cataloguskandidaten, Bonregels en Actie. De detailtabel heeft Winkel, Kassabonomschrijving, Bonartikelnummer, Catalogusherkenning, Aantal bonregels en Actie. Tekstkolommen staan links en numerieke aantallen rechts uitgelijnd. De eerste kolom is hier **tekst, geen checkbox** en behoudt de normale tekstkolombreedte en linksuitlijning. Kolombreedtes mogen bij beperkte schermbreedte niet de omliggende Cataloguspagina vergroten: het beoordelingspaneel en de gridkolom zijn begrensd tot de beschikbare breedte, waarna de horizontale scrollbar binnen de standaard `.rz-table-wrapper` ontstaat.
+
+De gedeelde scrollbarregel van **10 november 2026** blijft ongewijzigd: de bestaande 24 px vrije onderruimte houdt een horizontale scrollbar onder de laatste zichtbare tabelregel. Standaardpaginering staat buiten de scrollcontainer. Tijdens de historische beoordeling zijn de reguliere Cataloguslijst, bijbehorende bulkacties en, op mobiel, de reguliere zoek-/filterlijst verborgen. De knop om de historische beoordeling te sluiten brengt de gebruiker terug naar de bestaande Catalogusweergave. Geen nieuwe tabel-, modal-, knop-, kleur- of feedbackcomponent is toegestaan voor deze tabellen.
