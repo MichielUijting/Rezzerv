@@ -415,3 +415,281 @@ def test_deleted_lidl_gtin_identity_without_primary_barcode_is_not_reused():
              barcode="2008234600001")
     assert conn.writes == []
     assert len(conn.products) == 1
+
+
+
+# Individuele Lidl-correctie: consequente gevolgencontrole, geen stil herstel.
+from app.services import ed2_barcode_correction_service as correction_service
+
+
+class CorrectionFixture(PGFixture):
+    """Only the SQL explicitly used by the correction; reject other writes."""
+
+    def __init__(self):
+        super().__init__()
+        self.household_refs = 0
+
+    def execute(self, statement, params=None):
+        sql = " ".join(str(statement).split())
+        p = params or {}
+        if sql.startswith(
+            "SELECT retailer_code, receipt_text_normalized, external_article_code, "
+            "gtin, barcode_scope, global_product_id, updated_at FROM ed2_manual_barcodes"
+        ):
+            return Rows([
+                dict(x) for x in self.manual
+                if x["retailer_code"] in p["aliases"]
+                and x["receipt_text_normalized"] == p["label"]
+                and x["external_article_code"] == p["code"]
+            ])
+        if sql.startswith("SELECT id, name, status, primary_gtin FROM global_products"):
+            return Rows([dict(x) for x in self.products if x["id"] == p["id"]])
+        if sql.startswith(
+            "SELECT id, global_product_id, source FROM product_identities"
+        ):
+            return Rows([
+                dict(x) for x in self.identities
+                if x["identity_type"] == "retailer_barcode"
+                and x["identity_value"] == p["value"]
+            ])
+        if sql.startswith(
+            "SELECT id, global_product_id, status FROM external_article_product_links"
+        ):
+            return Rows([
+                dict(x) for x in self.legacy
+                if x["retailer_code"] in p["aliases"]
+                and x["external_article_code"] == p["code"]
+                and x["receipt_text_normalized"] in ("", p["label"])
+                and x["status"] in ("confirmed", "classification_pending")
+            ])
+        if sql.startswith("SELECT COUNT(*) FROM household_articles"):
+            return SimpleNamespace(scalar=lambda: self.household_refs)
+        if sql.startswith("DELETE FROM product_identities"):
+            previous = len(self.identities)
+            self.identities = [
+                x for x in self.identities
+                if not (x.get("id") == p["id"]
+                        and x["identity_type"] == "retailer_barcode"
+                        and x.get("source") == "ed2_saved_barcode"
+                        and x["global_product_id"] == p["product_id"])
+            ]
+            count = previous - len(self.identities)
+            if count:
+                self.writes.append("product_identities")
+            return Rows(rowcount=count)
+        if sql.startswith("UPDATE ed2_manual_barcodes SET gtin"):
+            matched = [
+                x for x in self.manual
+                if x["retailer_code"] == p["saved_retailer"]
+                and x["receipt_text_normalized"] == p["label"]
+                and x["external_article_code"] == p["code"]
+                and x["gtin"] == p["old_gtin"]
+                and x.get("global_product_id") == p["old_product_id"]
+            ]
+            for x in matched:
+                x.update(gtin=p["new_gtin"], global_product_id=None,
+                         barcode_scope=None)
+            if matched:
+                self.writes.append("ed2_manual_barcodes")
+            return Rows(rowcount=len(matched))
+        return super().execute(statement, params)
+
+
+def _old_lidl_fixture():
+    conn = CorrectionFixture()
+    conn.products.append({
+        "id": "deleted-lidl", "name": "Oude Lidl courgette",
+        "status": "deleted", "primary_gtin": None,
+    })
+    conn.manual.append({
+        "retailer_code": "lidl", "receipt_text_normalized": "courgette groen",
+        "external_article_code": "123", "gtin": "2008234600001",
+        "barcode_scope": "restricted", "global_product_id": "deleted-lidl",
+        "updated_at": "2026-11-12T17:10:00",
+    })
+    conn.identities.append({
+        "id": "obsolete-identity", "global_product_id": "deleted-lidl",
+        "identity_type": "retailer_barcode",
+        "identity_value": "lidl:courgette groen:123:2008234600001",
+        "source": "ed2_saved_barcode",
+    })
+    return conn
+
+
+def _lidl_source():
+    return {
+        "retailer_code": "Lidl", "receipt_text": "Courgette groen",
+        "external_article_code": "123",
+    }
+
+
+def _preview_correction(conn, *, barcode=None, household_table=None):
+    return correction_service.preview_lidl_barcode_correction(
+        conn, source=_lidl_source(), receipt_item_id="receipt-table-line:r1",
+        new_gtin=barcode or _barcode("201234567890"),
+        household_table=household_table,
+    )
+
+
+def _confirm_correction(conn, preview, *, fingerprint=None, old=None):
+    return correction_service.confirm_lidl_barcode_correction(
+        conn, source=_lidl_source(), receipt_item_id="receipt-table-line:r1",
+        new_gtin=preview["new_gtin"],
+        expected_old_gtin=old or preview["old_gtin"],
+        preview_fingerprint=fingerprint or preview["preview_fingerprint"],
+        actor_user_id="authorized-frontteam",
+    )
+
+
+def test_lidl_correction_impact_preview_is_read_only():
+    conn = _old_lidl_fixture()
+    preview = _preview_correction(conn)
+    assert preview["can_confirm"] is True
+    assert preview["old_gtin"] == "2008234600001"
+    assert preview["old_product_id"] == "deleted-lidl"
+    assert preview["old_product_status"] == "deleted"
+    assert preview["new_scope"] == "restricted"
+    assert preview["new_product_will_be_created"] is True
+    assert preview["catalog_product_kept"] is True
+    assert preview["stock_changes"] == preview["household_changes"] == 0
+    assert len(preview["preview_fingerprint"]) == 64
+    assert conn.writes == []
+    assert len(conn.identities) == 1
+    assert conn.manual[0]["gtin"] == "2008234600001"
+
+
+def test_lidl_correction_only_retires_proven_ed2_identity_and_audits(monkeypatch):
+    conn = _old_lidl_fixture()
+    audit_events = []
+
+    def record_audit(_conn, **event):
+        audit_events.append(event)
+        conn.writes.append("auth_audit_log")
+        return "audit-1"
+
+    monkeypatch.setattr(correction_service, "write_authorization_audit", record_audit)
+    preview = _preview_correction(conn)
+    result = _confirm_correction(conn, preview)
+    assert result["corrected"] is True
+    assert result["gtin"] == preview["new_gtin"]
+    assert result["audit_id"] == "audit-1"
+    assert result["old_global_product_id"] == "deleted-lidl"
+    assert len(conn.products) == 2
+    assert conn.products[0]["status"] == "deleted"
+    assert conn.manual[0]["gtin"] == preview["new_gtin"]
+    assert conn.manual[0]["global_product_id"] == result["global_product_id"]
+    assert conn.manual[0]["global_product_id"] != "deleted-lidl"
+    assert not any(row.get("id") == "obsolete-identity" for row in conn.identities)
+    assert conn.identities[0]["identity_value"].endswith(preview["new_gtin"])
+    assert len(audit_events) == 1
+    assert audit_events[0]["actor_user_id"] == "authorized-frontteam"
+    assert audit_events[0]["old_value"]["gtin"] == "2008234600001"
+    assert audit_events[0]["new_value"]["gtin"] == preview["new_gtin"]
+    assert set(conn.writes) == {
+        "product_identities", "ed2_manual_barcodes", "global_products", "auth_audit_log",
+    }
+
+
+def test_lidl_correction_rejects_stale_preview_before_any_writes():
+    conn = _old_lidl_fixture()
+    preview = _preview_correction(conn)
+    with pytest.raises(ValueError, match="opnieuw de gevolgen"):
+        _confirm_correction(conn, preview, fingerprint="0" * 64)
+    assert conn.writes == []
+    assert len(conn.identities) == 1
+    assert conn.manual[0]["gtin"] == "2008234600001"
+
+
+def test_lidl_correction_rejects_changed_old_barcode_without_write():
+    conn = _old_lidl_fixture()
+    preview = _preview_correction(conn)
+    conn.manual[0]["gtin"] = _barcode("209999999999")
+    with pytest.raises(ValueError, match="opnieuw de gevolgen"):
+        _confirm_correction(conn, preview)
+    assert conn.writes == []
+
+
+def test_lidl_correction_blocks_legacy_links_instead_of_rewriting_receipts():
+    conn = _old_lidl_fixture()
+    conn.legacy.append({
+        "id": "legacy-1", "retailer_code": "lidl",
+        "external_article_code": "123", "receipt_text_normalized": "courgette groen",
+        "status": "confirmed", "global_product_id": "deleted-lidl",
+    })
+    preview = _preview_correction(conn)
+    assert preview["can_confirm"] is False
+    assert preview["legacy_link_count"] == 1
+    assert preview["blocked_reasons"]
+    with pytest.raises(ValueError, match="geblokkeerd"):
+        _confirm_correction(conn, preview)
+    assert conn.writes == []
+
+
+def test_lidl_correction_blocks_old_household_references():
+    conn = _old_lidl_fixture()
+    conn.household_refs = 2
+    preview = _preview_correction(conn, household_table="household_articles")
+    assert preview["can_confirm"] is False
+    assert preview["household_article_count"] == 2
+    assert conn.writes == []
+
+
+def test_lidl_correction_blocks_unowned_retailer_identity():
+    conn = _old_lidl_fixture()
+    conn.identities[0]["source"] = "third_party"
+    preview = _preview_correction(conn)
+    assert preview["can_confirm"] is False
+    assert "andere identiteitsbronnen" in " ".join(preview["blocked_reasons"])
+    assert conn.writes == []
+
+
+def test_lidl_correction_requires_exact_retailer_and_stored_evidence():
+    conn = _old_lidl_fixture()
+    conn.manual.clear()
+    with pytest.raises(ValueError, match="niet precies één"):
+        _preview_correction(conn)
+    conn = _old_lidl_fixture()
+    other_source = {**_lidl_source(), "retailer_code": "AH"}
+    with pytest.raises(ValueError, match="alleen voor Lidl"):
+        correction_service.preview_lidl_barcode_correction(
+            conn, source=other_source, receipt_item_id="receipt-table-line:r1",
+            new_gtin=_barcode("201234567890"),
+        )
+
+
+def test_lidl_correction_route_uses_server_permission_and_receipt_identity(monkeypatch):
+    conn = _old_lidl_fixture()
+    calls = []
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {
+        "ed2_manual_barcodes", "external_article_product_links",
+        "global_products", "product_identities", "auth_audit_log",
+    })
+    monkeypatch.setattr(catalog_routes, "_household_table", lambda: None)
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda permission: calls.append(permission) or SimpleNamespace(
+                            user_id="authorized-frontteam"))
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
+                        lambda _conn, receipt_id: _lidl_source()
+                        if receipt_id == "receipt-table-line:r1"
+                        else (_ for _ in ()).throw(ValueError("Bonartikel ontbreekt")))
+    body = catalog_routes.Ed2LidlBarcodeCorrectionPreviewRequest(
+        receipt_item_id="receipt-table-line:r1",
+        new_gtin=_barcode("201234567890"),
+    )
+    preview = catalog_routes.preview_ed2_lidl_barcode_correction(body)
+    assert preview["can_confirm"] is True and conn.writes == []
+    confirm = catalog_routes.Ed2LidlBarcodeCorrectionConfirmRequest(
+        receipt_item_id=body.receipt_item_id, new_gtin=body.new_gtin,
+        expected_old_gtin=preview["old_gtin"],
+        preview_fingerprint="0" * 64,
+    )
+    with pytest.raises(catalog_routes.HTTPException) as err:
+        catalog_routes.confirm_ed2_lidl_barcode_correction(confirm)
+    assert err.value.status_code == 409
+    assert conn.writes == []
+    assert calls == ["platform.external_products.link_existing"] * 2
