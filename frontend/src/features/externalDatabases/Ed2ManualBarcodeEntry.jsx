@@ -138,14 +138,19 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
       const productLabel = preview.new_product_will_be_created
         ? 'een nieuw Catalogusproduct'
         : 'het bestaande Catalogusproduct'
+      const oldProduct = preview.old_product_id
+        ? 'Oud Catalogusproduct: ' + (preview.old_product_name || 'Naam onbekend')
+          + ' (' + (preview.old_product_status === 'deleted' ? 'verwijderd' : 'bestaand') + '). '
+        : 'Er was nog geen oude Catalogusverwijzing. '
       showFeedback({
         variant: 'warning', title: 'Lidl-barcode corrigeren',
         message: 'Barcode ' + preview.old_gtin + ' vervangen door ' + preview.new_gtin + '?',
         detail: 'Voor ' + item.receipt_line_text + ' (' + (item.receipt_article_number || 'zonder bonartikelnummer')
-          + '). De nieuwe code koppelt aan ' + productLabel
-          + '. Oud Catalogusproduct blijft behouden (eventueel verwijderd). '
-          + 'Bestaande bonnen, huishoudartikelen en voorraad worden niet aangepast. '
-          + 'Eventuele oude identiteitsclaims worden alleen waar aantoonbaar veilig vervangen.',
+          + '). ' + oldProduct + 'De nieuwe code koppelt aan ' + productLabel
+          + '. Bestaande externe koppelingen: ' + preview.legacy_link_count
+          + '; huishoudartikelen op oud product: ' + preview.household_article_count
+          + '. De oorspronkelijke bonnen, oude Catalogusproducten en voorraad blijven behouden. '
+          + 'Alleen aantoonbaar eigen ED2-identiteitsclaims worden aangepast.',
         primaryActionLabel: 'Correctie bevestigen',
         secondaryActionLabel: 'Annuleren',
         dismissMode: 'blocked',

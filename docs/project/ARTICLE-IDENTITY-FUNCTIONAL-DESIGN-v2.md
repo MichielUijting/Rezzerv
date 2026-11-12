@@ -94,7 +94,7 @@ identitycontracten.
 ## 3. Sleutels, scheiding en invarianten
 
 - Het centrale Catalogusproduct is niet het huishoudartikel; voorraad
-  blijft verankerd aan het canonieke \`household_articles.id\` binnen het
+  blijft verankerd aan het canonieke `household_articles.id` binnen het
   eigen huishouden.
 - Een winkel/bonartikelidentiteit is de combinatie **winkelketen +
   kassabonomschrijving + bonartikelnummer**. Dezelfde omschrijving mag
@@ -133,10 +133,12 @@ risicoclassificatie bepaalt de verplichte exacte-kandidaat CI-gates.
 Geen merge zonder afzonderlijke expliciete PO-GO voor PR en head-SHA;
 geen deployment of release zonder afzonderlijke PO-GO.
 
-**Implementatiestatus 12 november 2026:** PR #676 bewaakt preventie
-van dubbele huishoudartikelen; PR #677 bevat fase 1-identiteitsfundament
-en de expliciete verwerking van bewaarde barcodes. Lidl-correctie en
-fasen 2–4 zijn nog niet opgeleverd.
+**Implementatiestatus (Draft, 12 november 2026):** PR #676 bewaakt
+preventie van dubbele huishoudartikelen; PR #677 bevat het fase
+1-identiteitsfundament, expliciete verwerking van bewaarde barcodes én
+de individuele Lidl-correctie met gevolgencontrole en audit.
+Fasen 2–4 en veilig historisch herstel van bestaande externe en
+huishoudkoppelingen zijn nog niet opgeleverd.
 
 
 ## Aanvullende PO-situatie: discutabele Lidl-artikelen verwijderd uit Catalogus
@@ -144,10 +146,10 @@ fasen 2–4 zijn nog niet opgeleverd.
 **PO-melding (12 november 2026):** de PO heeft de Lidl-artikelen met
 discutabele barcodes zelf uit de Catalogus verwijderd.
 
-De actuele Inhuis-verwijderroute \`POST /api/catalog/bulk-delete\`
-gebruikt **soft-delete** (\`global_products.status = 'deleted'\`).
-Daarmee is **niet** aangetoond dat oude \`product_identities\`,
-\`external_article_product_links\`, \`ed2_manual_barcodes\`,
+De actuele Inhuis-verwijderroute `POST /api/catalog/bulk-delete`
+gebruikt **soft-delete** (`global_products.status = 'deleted'`).
+Daarmee is **niet** aangetoond dat oude `product_identities`,
+`external_article_product_links`, `ed2_manual_barcodes`,
 huishoudartikelverwijzingen of de oude GTIN definitief afwezig zijn.
 De melding betreft een gebruikersactie; in deze PR is de lokale database
 niet uitgelezen en zijn de aantallen/verwijderde ID's niet geverifieerd.
@@ -185,3 +187,8 @@ daarvoor is het afzonderlijke gecontroleerde historische herstel volgens
 besluiten 19B/26A vereist. Ook soft-deleted Catalogusproducten worden
 niet gereactiveerd. Er is **geen** bronbon- of voorraadmutatie in
 de Lidl-correctiefase.
+
+Een nog **actief** oud Catalogusproduct blokkeert de individuele correctie:
+anders zou na het verleggen van de barcode een onbewezen actief product in
+de Catalogus blijven staan. De PO beoordeelt/verwijdert het oude
+Catalogusproduct eerst. Er is geen automatische Catalogusverwijdering.

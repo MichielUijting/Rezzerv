@@ -693,3 +693,14 @@ def test_lidl_correction_route_uses_server_permission_and_receipt_identity(monke
     assert err.value.status_code == 409
     assert conn.writes == []
     assert calls == ["platform.external_products.link_existing"] * 2
+
+
+
+def test_lidl_correction_blocks_active_old_catalog_product_to_avoid_orphan():
+    conn = _old_lidl_fixture()
+    conn.products[0]["status"] = "active"
+    preview = _preview_correction(conn)
+    assert preview["can_confirm"] is False
+    assert preview["old_product_status"] == "active"
+    assert "nog actief" in " ".join(preview["blocked_reasons"])
+    assert conn.writes == []

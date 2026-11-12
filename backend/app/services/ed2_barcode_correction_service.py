@@ -82,6 +82,13 @@ def _inspect_lidl_correction(
     blocks = []
     if old_id and len(old_product) != 1:
         blocks.append("Het oude Catalogusproduct ontbreekt; corrigeer de koppeling eerst.")
+    # An active old product would remain visible in Catalogus after moving
+    # the ED2 tuple. Never leave such a stale active product as a side effect.
+    if old_id and old_status.lower() == "active":
+        blocks.append(
+            "Het oude Catalogusproduct is nog actief. Beoordeel of verwijder "
+            "dit product eerst; automatische verwijdering is niet toegestaan."
+        )
     if old.get("barcode_scope") not in (None, "", old_scope):
         blocks.append("De opgeslagen barcode-scope stemt niet overeen met de oude code.")
 

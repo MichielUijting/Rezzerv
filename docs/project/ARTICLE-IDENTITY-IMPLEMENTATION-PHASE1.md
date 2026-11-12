@@ -122,7 +122,7 @@ ontwerpbesluiten 1–13 of van de bestaande canonieke identity-/securitycontract
 De PO meldt dat de artikelen met discutabele Lidl-barcodes uit Catalogus zijn
 verwijderd. De huidige Catalogusactie is een soft-delete. De bestaande
 product-ID, GTIN en identiteitsverwijzingen kunnen technisch nog bestaan.
-Om die reden blijft \`materialize_saved_ed2_barcode\` weigeren om een
+Om die reden blijft `materialize_saved_ed2_barcode` weigeren om een
 soft-deleted product of reeds globaal geclaimde restricted code stilzwijgend
 opnieuw als actief product te gebruiken. Gerichte tests leggen dit vast.
 
@@ -139,7 +139,7 @@ Catalogusproducten niet opnieuw aan te maken.
 ## Deelstap: bewaarde Lidl-barcode individueel corrigeren
 
 De Lidl-rij in **Artikelbeheer → Identificeren** met al opgeslagen
-\`manual_barcode\` toont **Nieuwe barcode → Gevolgen bekijken**.
+`manual_barcode` toont **Nieuwe barcode → Gevolgen bekijken**.
 Een wijziging gebeurt nooit via de gewone Opslaan-route.
 
 - Read-only preview herleidt de exacte bonartikelidentiteit opnieuw aan de
@@ -149,7 +149,7 @@ Een wijziging gebeurt nooit via de gewone Opslaan-route.
 - Externe bevestigde of wachtende Cataloguskoppelingen, andere
   identiteitsbronnen en huishoudartikelverwijzingen op het oude product
   blokkeren de correctie; niets wordt blind hergekoppeld.
-- Bevoegdheid: server-side \`platform.external_products.link_existing\`.
+- Bevoegdheid: server-side `platform.external_products.link_existing`.
   Dit vereist een actuele actieve geautoriseerde platformrol, waaronder
   Superuser of Frontteam. Browserrollen alleen zijn niet voldoende.
 - De uitdrukkelijke bevestiging bevat een fingerprint van de getoonde
@@ -163,6 +163,12 @@ Een wijziging gebeurt nooit via de gewone Opslaan-route.
 - De bestaande autorisatie-audit schrijft atomair actor, originele en nieuwe
   barcode, scope en Catalogusproduct-ID. Ontbrekende audit betekent dat ook
   de correctietransactie niet slaagt.
-- Backend regressie in \`backend/tests/test_ed2_saved_barcode_catalog.py\`;
-  browserregressie in de officiële \`playwright.identity.config.js\`-suite.
+- Backend regressie in `backend/tests/test_ed2_saved_barcode_catalog.py`;
+  browserregressie in de officiële `playwright.identity.config.js`-suite.
   De gedeelde barcode-CI voert deze tests blijvend uit.
+
+Tijdens de gevolgencontrole wordt de naam en de verwijderstatus van het oude
+Catalogusproduct getoond, evenals het aantal andere externe koppelingen en
+betrokken huishoudartikelen. Een nog actief oud Catalogusproduct blokkeert
+correctie totdat het afzonderlijk beoordeeld of verwijderd is. Dit voorkomt
+dat een nieuw product wordt aangemaakt terwijl het oude zichtbaar actief blijft.
