@@ -61,9 +61,28 @@ export default function CatalogPage() {
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
   const isPlatformSuperuser = Boolean(authContext?.is_platform_superuser)
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
-  const canReviewHistorical = canCurrentUserPerform('platform.external_products.link_existing', authContext)
+  const canReviewHistorical = authContext?.context_type === 'regular'
+    && canCurrentUserPerform('platform.external_products.link_existing', authContext)
     && isHouseholdAdminFromContext(authContext)
-    && String(authContext?.active_household_id || '') !== '0'
+    && Boolean(String(authContext?.active_household_id || '').trim())
+    && String(authContext?.active_household_id) !== '0'
+  // A Superuser has system household 0, never implicit rights to a private household.
+  // Keep the entry visible but show a clear, non-disclosing explanation instead.
+  const canShowHistoricalReviewAction = canReviewHistorical
+    || (authContext?.context_type === 'system' && isPlatformSuperuser)
+  function toggleHistoricalReview() {
+    if (!canReviewHistorical) {
+      showFeedback({
+        variant: 'warning',
+        dismissMode: 'ok-only',
+        title: 'Historische conflicten beoordelen',
+        message: 'Je werkt in Systeemhuishouden. De historische bonregels van een regulier huishouden zijn hier niet toegankelijk. Meld je aan met het reguliere account dat Beheerder is van het betreffende huishouden en bevoegd is voor Cataloguskoppelingen.',
+        testId: 'catalog-historical-system-household-notice',
+      })
+      return
+    }
+    setShowHistoricalReview(value => !value)
+  }
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
@@ -309,7 +328,7 @@ export default function CatalogPage() {
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
               {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
               {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
-              {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
+              {canShowHistoricalReviewAction ? <Button type="button" variant="secondary" onClick={toggleHistoricalReview}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
               {isPlatformSuperuser ? (
                 <Button
                   type="button"
