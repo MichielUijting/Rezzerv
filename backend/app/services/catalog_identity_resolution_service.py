@@ -11,7 +11,9 @@ from typing import Any
 from sqlalchemy import bindparam, text
 
 from app.services.barcode_identity_service import validate_barcode
-from app.services.external_article_product_link_service import normalize_external_link_article_code
+from app.services.external_article_product_link_service import (
+    normalize_external_link_article_code, normalize_external_link_receipt_text,
+)
 from app.services.catalog_retailer_identity_keys import (
     canonical_catalog_retailer, catalog_retailer_aliases,
 )
@@ -23,6 +25,7 @@ def resolve_catalog_identity(
     gtin: str | None = None,
     retailer_code: str | None = None,
     external_article_code: str | None = None,
+    receipt_text: str | None = None,
 ) -> dict[str, Any]:
     """Return a unique active product or a fail-closed non-match.
 
@@ -33,6 +36,7 @@ def resolve_catalog_identity(
     raw_gtin = str(gtin or "").strip()
     retailer = canonical_catalog_retailer(retailer_code)
     article_code = normalize_external_link_article_code(external_article_code)
+    receipt_label = normalize_external_link_receipt_text(receipt_text)
     candidates: dict[str, set[str]] = {}
     evidence: list[str] = []
 
@@ -67,6 +71,8 @@ def resolve_catalog_identity(
                 JOIN global_products gp ON gp.id = e.global_product_id
                 WHERE e.retailer_code IN :retailer_aliases
                   AND e.external_article_code = :code
+                  AND (:receipt_label = '' OR e.receipt_text_normalized = :receipt_label
+                       OR COALESCE(e.receipt_text_normalized, '') = '')
                   AND (
                         e.status = 'confirmed'
                         OR (
@@ -85,7 +91,8 @@ def resolve_catalog_identity(
                   )
                   AND LOWER(COALESCE(gp.status, 'active')) = 'active'
             """).bindparams(bindparam("retailer_aliases", expanding=True)),
-            {"retailer_aliases": catalog_retailer_aliases(retailer), "code": article_code},
+            {"retailer_aliases": catalog_retailer_aliases(retailer), "code": article_code,
+             "receipt_label": receipt_label},
         ).scalars().all()
         candidates["retailer_code"] = {str(value) for value in code_rows if value}
         evidence.append("retailer_code")
