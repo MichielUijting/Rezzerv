@@ -211,10 +211,23 @@ def preview_household_catalog_identity_backfill(
         if not report["limited"]:
             for article_id, reason in sorted(conflict_reasons.items()):
                 article = by_article[article_id]
+                related_ids = sorted({
+                    related_id
+                    for product_id in article["candidates"]
+                    for related_id in candidate_owners.get(product_id, set())
+                    if related_id != article_id
+                })
                 review_items.append({
                     "household_article_id": article_id,
                     "article_name": article["name"],
                     "reason": reason,
+                    "related_household_articles": [
+                        {
+                            "household_article_id": related_id,
+                            "article_name": by_article[related_id]["name"],
+                        }
+                        for related_id in related_ids
+                    ],
                     "current_product_ids": sorted(article["current"]),
                     "candidate_product_ids": sorted(article["candidates"]),
                     "source_count": article["sources"],
