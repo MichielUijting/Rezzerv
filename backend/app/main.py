@@ -5421,14 +5421,20 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
             conn,
             normalized_household_id,
             matched_household_article_id,
-            create_if_missing=True,
+            create_if_missing=False,
         )
         if resolved_household_article_id:
             matched_household_article_id = resolved_household_article_id
-        resolved_global_product_id = ensure_household_article_global_product_link(conn, matched_household_article_id, barcode)
-        if resolved_global_product_id and resolved_global_product_id != matched_global_product_id:
-            matched_global_product_id = resolved_global_product_id
-    elif matched_global_product_id:
+            resolved_global_product_id = ensure_household_article_global_product_link(
+                conn, matched_household_article_id, barcode
+            )
+            if resolved_global_product_id and resolved_global_product_id != matched_global_product_id:
+                matched_global_product_id = resolved_global_product_id
+        else:
+            # A deleted historical household ID is no longer a valid match.
+            # Never recreate it from the receipt text or leave a stale match.
+            matched_household_article_id = ''
+    if not matched_household_article_id and matched_global_product_id:
         # M2A: een catalogusmatch is een productsuggestie, geen automatische Mijn-artikelkeuze.
         # Alleen een bestaand huishoudartikel dat al expliciet aan dit global_product is gekoppeld
         # mag hier automatisch worden ingevuld.
