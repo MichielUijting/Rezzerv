@@ -33,15 +33,17 @@ const identity = {
   }],
 }
 
-async function mockCatalog(page, { canReview = true, failSave = false, ordinaryAdmin = false } = {}) {
+async function mockCatalog(page, { canReview = true, failSave = false, ordinaryAdmin = false, memberWithPlatformPermission = false } = {}) {
   let captured = null
   await page.route('**/api/session', route => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({
       user_id: 'test-owner', active_household_id: '1', context_type: 'regular',
       role: canReview ? 'owner' : 'viewer', display_role: canReview ? 'admin' : 'viewer',
-      permissions: { 'platform.external_products.link_existing': canReview,
-        'admin.access': canReview },
+      permissions: {
+        'platform.external_products.link_existing': (canReview && !ordinaryAdmin) || memberWithPlatformPermission,
+        'admin.access': canReview,
+      },
       is_platform_superuser: false,
       is_frontteam: canReview && !ordinaryAdmin,
     }),
@@ -131,10 +133,6 @@ async function mockSystemCatalog(page) {
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ total: 0, items: [] }),
   }))
-  await page.route('**/api/platform/frontteam-management', route => route.fulfill({
-    status: 200, contentType: 'application/json',
-    body: JSON.stringify({ frontteam_memberships: [] }),
-  }))
   await page.route('**/api/catalog/household-identity-conflicts', route => {
     householdReviewRequests += 1
     return route.fulfill({
@@ -164,13 +162,11 @@ for (const [name, width, height] of [
     await expect(page.getByTestId('catalog-conflict-count')).toContainText('0')
     expect(getReviewRequests()).toBe(1)
     await expect(page.getByTestId('catalog-conflicts-table')).toHaveCount(0)
-    const guidance = page.getByTestId('catalog-frontteam-review-guidance')
+    const guidance = page.getByTestId('catalog-household-manager-guidance')
     await expect(guidance).toContainText('regulier account')
-    await guidance.getByRole('button', { name: 'Naar Frontteambeheer' }).click()
-    await expect(page).toHaveURL(/\/superuser\?tab=frontteam$/)
-    await expect(page.getByTestId('superuser-control-tab-frontteam')).toHaveAttribute('aria-selected', 'true')
-    await expect(page.getByTestId('settings-frontteam-page')).toBeVisible()
-    await expect(page.getByTestId('frontteam-catalog-review-help')).toContainText('eigen huishouden')
+    await expect(guidance).toContainText('Beheerder')
+    await expect(guidance).toContainText('Frontteamrol is hiervoor niet nodig')
+    await expect(guidance.getByRole('button', { name: 'Naar Frontteambeheer' })).toHaveCount(0)
     expect(getReviewRequests()).toBe(1)
   })
 }
@@ -179,9 +175,27 @@ for (const [name, width, height] of [
   ['desktop', 1280, 800],
   ['mobiel', 390, 844],
 ]) {
-  test(`Gewone beheerder met technische koppelingpermissie ziet geen historische beoordeling op ${name}`, async ({ page }) => {
+  test(`Gewone beheerder zonder platformrol kan eigen historische conflicten op ${name} bevestigen`, async ({ page }) => {
     await page.setViewportSize({ width, height })
-    await mockCatalog(page, { ordinaryAdmin: true })
+    const getCaptured = await mockCatalog(page, { ordinaryAdmin: true })
+    await page.goto('/catalogus')
+    await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
+    await expect(page.getByTestId('catalog-conflict-count')).toContainText('2')
+    await page.getByTestId('catalog-conflicts-table')
+      .getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+    await page.getByTestId('catalog-conflict-sources-table')
+      .getByRole('button', { name: 'Barcode bepalen' }).first().click()
+    const dialog = page.getByRole('dialog', { name: 'Artikelbarcode bij bonartikel bevestigen' })
+    await dialog.getByLabel('Juiste Artikel-/barcode').fill('8712345678906')
+    await dialog.getByRole('button', { name: 'Barcode bevestigen' }).click()
+    await expect.poll(() => getCaptured()?.household_article_id).toBe('article-a')
+    expect(getCaptured()?.receipt_line_id).toBe('line-1')
+    expect(getCaptured()?.external_article_code).toBe('0012345')
+  })
+
+  test(`Gewoon lid met zelfs een platformpermissie ziet geen beoordeling op ${name}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await mockCatalog(page, { canReview: false, memberWithPlatformPermission: true })
     await page.goto('/catalogus')
     await expect(page.getByRole('button', { name: 'Historische conflicten beoordelen' })).toHaveCount(0)
   })
