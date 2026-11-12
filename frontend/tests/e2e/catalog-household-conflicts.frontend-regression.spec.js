@@ -222,7 +222,7 @@ test('Standaard DataTable filtert overzicht en bronregels zonder broncodes te wi
   await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
   const conflicts = page.getByTestId('catalog-conflicts-table')
   await expect(conflicts.locator('thead tr.rz-table-filters')).toHaveCount(1)
-  await expect(conflicts.locator('thead th')).toHaveCount(12)
+  await expect(conflicts.locator('thead th')).toHaveCount(10)
   await conflicts.getByRole('textbox', { name: 'Filter op Huishoudartikel' }).fill('Melk halfvol')
   await expect(conflicts.locator('tbody tr')).toHaveCount(1)
   await expect(conflicts.getByText('Melk uit andere boodschappen')).toHaveCount(0)
