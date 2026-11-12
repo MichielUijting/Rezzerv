@@ -6,13 +6,15 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** Product-level review; receipt text + receipt number, not bare code, is the PO key. */
-export default function CatalogRetailerCodesReview({ globalProductId, canEdit }) {
+export default function CatalogRetailerCodesReview({ globalProductId, primaryGtin, canEdit }) {
   const { showFeedback } = useAppFeedback()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [selection, setSelection] = useState(null)
   const [targetGtin, setTargetGtin] = useState('')
   const [saving, setSaving] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [newCode, setNewCode] = useState({ retailer_code: 'lidl', receipt_text: '', external_article_code: '' })
   const [refresh, setRefresh] = useState(0)
   const [page, setPage] = useState(1)
   const pageCount = Math.max(1, Math.ceil(rows.length / 10))
@@ -63,12 +65,39 @@ export default function CatalogRetailerCodesReview({ globalProductId, canEdit })
     }
   }
 
+  async function addReceiptCode() {
+    if (saving || !primaryGtin) return
+    setSaving(true)
+    try {
+      const response = await fetchJsonWithAuth(
+        `/api/catalog/${encodeURIComponent(globalProductId)}/retailer-codes/add`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...newCode, expected_gtin: primaryGtin }) },
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Winkelartikelnummer kon niet worden bevestigd.')
+      showFeedback({ variant: 'success', message: data?.changed
+        ? 'Bonartikelnummer gekoppeld aan de bestaande Catalogusbarcode.'
+        : 'Deze bonartikelcombinatie was al aan de juiste Catalogusbarcode gekoppeld.' })
+      setAdding(false)
+      setNewCode({ retailer_code: 'lidl', receipt_text: '', external_article_code: '' })
+      setRefresh(v => v + 1)
+    } catch (error) {
+      showFeedback({ variant: 'error', message: error?.message || 'Opslaan is niet bevestigd.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section aria-label="Winkelartikelcodes beoordelen" data-testid="catalog-retailer-code-review">
       <h3>Winkelartikelcodes</h3>
       <p>Een winkel mag meerdere bonartikelnummers voor dezelfde omschrijving gebruiken.
         De combinatie van winkel, kassabonomschrijving en bonartikelnummer hoort bij maximaal één Artikel-/barcode.
         Kies geen product op basis van alleen de naam.</p>
+      {canEdit ? <Button type="button" variant="secondary" onClick={() => setAdding(true)}
+        disabled={!primaryGtin || saving}>Bonartikelnummer koppelen</Button> : null}
+      {canEdit && !primaryGtin ? <p>Leg eerst een geldige Catalogusbarcode vast voordat je een bonartikelnummer toevoegt.</p> : null}
       {loading ? <p>Winkelartikelcodes laden…</p> : null}
       {!loading && rows.length === 0 ? <p>Geen actieve winkelartikelcodes vastgelegd voor dit Catalogusproduct.</p> : null}
       {rows.length ? <Table dataTestId="catalog-retailer-code-table" tableClassName="rz-catalog-detail-table">
@@ -85,6 +114,39 @@ export default function CatalogRetailerCodesReview({ globalProductId, canEdit })
           </tr>)}</tbody>
         </Table> : null}
       {rows.length > 10 ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
+      {adding ? <div className="rz-modal-backdrop">
+        <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Bonartikelnummer aan Catalogus koppelen">
+          <h3>Bonartikelnummer koppelen</h3>
+          <p>Inhuis controleert eerst of deze exacte combinatie op een bestaande kassabon voorkomt.
+            Er worden geen huishoudartikelen of voorraadregels aangepast.</p>
+          <label>Winkel
+            <select className="rz-input" value={newCode.retailer_code}
+              onChange={event => setNewCode(old => ({ ...old, retailer_code: event.target.value }))}>
+              <option value="lidl">Lidl</option>
+              <option value="ah">Albert Heijn</option>
+              <option value="jumbo">Jumbo</option>
+              <option value="plus">PLUS</option>
+              <option value="aldi">Aldi</option>
+              <option value="picnic">Picnic</option>
+            </select>
+          </label>
+          <label>Kassabonomschrijving
+            <input className="rz-input" value={newCode.receipt_text}
+              onChange={event => setNewCode(old => ({ ...old, receipt_text: event.target.value }))} />
+          </label>
+          <label>Bonartikelnummer
+            <input className="rz-input" value={newCode.external_article_code}
+              onChange={event => setNewCode(old => ({ ...old, external_article_code: event.target.value }))} />
+          </label>
+          <p>Artikel-/barcode: {primaryGtin}</p>
+          <div className="rz-modal-actions">
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => setAdding(false)}>Annuleren</Button>
+            <Button type="button" onClick={addReceiptCode} disabled={saving || !newCode.receipt_text.trim() || !newCode.external_article_code.trim()}>
+              {saving ? 'Controleren…' : 'Koppelen'}
+            </Button>
+          </div>
+        </div>
+      </div> : null}
       {selection ? <div className="rz-modal-backdrop">
         <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Winkelartikelcode beoordelen">
           <h3>Winkelartikelcode beoordelen</h3>
