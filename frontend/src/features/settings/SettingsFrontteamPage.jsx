@@ -176,7 +176,12 @@ export default function SettingsFrontteamPage() {
                     <Button type="submit" disabled={busy}>{busy ? 'Bezig...' : 'Toevoegen'}</Button>
                   </div>
                 </div>
-                <p className="rz-frontteam-help">Het eigen huishouden en de huishoudrol blijven ongewijzigd.</p>
+                <p className="rz-frontteam-help" data-testid="frontteam-catalog-review-help">
+                  Voor historische Catalogusconflicten: voeg een bestaand regulier account toe dat al lid is van
+                  het huishouden met de conflicten. Het eigen huishouden en de huishoudrol blijven ongewijzigd.
+                  Meld je daarna aan met dat reguliere Frontteamaccount en open Catalogus.
+                  Vanuit een Superuseraccount zijn de bonregels van andere huishoudens niet beschikbaar.
+                </p>
               </form>
 
               <DataTable
