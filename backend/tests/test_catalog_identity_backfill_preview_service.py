@@ -431,6 +431,10 @@ def test_household_conflict_review_lists_all_shared_candidates_read_only():
         conn.execute(text("INSERT INTO household_articles VALUES ('a3','h1',NULL)"))
         conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code1',FALSE)"))
         conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a3')"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN raw_label TEXT"))
+        conn.execute(text("UPDATE receipt_table_lines SET raw_label='Melk halfvol'"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN receipt_text_normalized TEXT"))
+        conn.execute(text("UPDATE external_article_product_links SET receipt_text_normalized='melk halfvol'"))
         report = preview_household_catalog_identity_backfill(
             conn, household_id="h1", include_conflicts=True,
         )
@@ -440,6 +444,7 @@ def test_household_conflict_review_lists_all_shared_candidates_read_only():
         assert all(item["reason"] == "meerdere_huishoudartikelen" for item in report["conflict_items"])
         assert all(item["candidate_product_ids"] == ["p1"] for item in report["conflict_items"])
         assert all(item["sources"][0]["external_article_code"] == "code1"
+                   and item["sources"][0]["receipt_text"] == "melk halfvol"
                    for item in report["conflict_items"])
         assert report["changes"] == "none"
         assert dict(conn.execute(text("SELECT id, global_product_id FROM household_articles")).all()) == {
