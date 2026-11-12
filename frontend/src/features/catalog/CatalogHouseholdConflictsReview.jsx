@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../ui/Button'
-import Table from '../../ui/Table'
-import Pagination from '../../ui/Pagination.jsx'
+import DataTable from '../../ui/DataTable.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
@@ -28,8 +27,6 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   // React StrictMode replays effect setup on mount; share the same in-flight
   // GET instead of making duplicate household-scoped requests.
   const inFlightReviewRef = useRef(null)
-  const [page, setPage] = useState(1)
-  const [sourcePage, setSourcePage] = useState(1)
   const [selectedArticle, setSelectedArticle] = useState(null)
   const [selectedSource, setSelectedSource] = useState(null)
   const [targetGtin, setTargetGtin] = useState('')
@@ -64,7 +61,6 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
             })
           }
           setData(payload)
-          setPage(1)
           setSelectedArticle(null)
         }
       })
@@ -79,13 +75,114 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   const products = useMemo(() => new Map(
     (Array.isArray(data?.products) ? data.products : []).map(product => [product.id, product])
   ), [data])
-  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
-  const visibleItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   function productName(id) {
     const product = products.get(id)
     return product ? `${product.name || 'Catalogusproduct'} (${product.primary_gtin || 'geen barcode'})` : 'Catalogusidentiteit niet beschikbaar'
   }
+
+  // Both review tables use the shared Inhuis DataTable with its standard
+  // filters, sorting, resizable columns, sticky headings and pagination.
+  const conflictColumns = useMemo(() => [
+    {
+      key: 'article_name', label: 'Huishoudartikel', width: 245,
+      sortable: true, filterable: true, filterPlaceholder: 'Zoek',
+      getValue: item => item.article_name || 'Huishoudartikel zonder naam',
+      renderCell: item => (
+        <span title={item.article_name || 'Huishoudartikel zonder naam'}>
+          {item.article_name || 'Huishoudartikel zonder naam'}
+        </span>
+      ),
+    },
+    {
+      key: 'reason', label: 'Reden', width: 300,
+      sortable: true, filterable: true,
+      getValue: item => reasonLabel(item.reason),
+      renderCell: item => <span title={reasonLabel(item.reason)}>{reasonLabel(item.reason)}</span>,
+    },
+    {
+      key: 'candidates', label: 'Cataloguskandidaten', width: 340,
+      sortable: true, filterable: true,
+      getValue: item => item.candidate_product_ids?.map(id => {
+        const product = products.get(id)
+        return product ? `${product.name || 'Catalogusproduct'} (${product.primary_gtin || 'geen barcode'})`
+          : 'Catalogusidentiteit niet beschikbaar'
+      }).join(' · ') || 'Niet eenduidig',
+      renderCell: item => {
+        const value = item.candidate_product_ids?.map(id => {
+          const product = products.get(id)
+          return product ? `${product.name || 'Catalogusproduct'} (${product.primary_gtin || 'geen barcode'})`
+            : 'Catalogusidentiteit niet beschikbaar'
+        }).join(' · ') || 'Niet eenduidig'
+        return <span title={value}>{value}</span>
+      },
+    },
+    {
+      key: 'source_count', label: 'Bonregels', width: 125, align: 'right',
+      sortable: true, filterable: true,
+      getValue: item => Number(item.source_count || 0),
+      renderCell: item => Number(item.source_count || 0),
+    },
+    {
+      key: 'action', label: 'Actie', width: 195,
+      renderCell: item => (
+        <Button type="button" variant="secondary" onClick={() => setSelectedArticle(item)}>
+          Bonregels beoordelen
+        </Button>
+      ),
+    },
+  ], [products])
+
+  const sourceColumns = useMemo(() => [
+    {
+      key: 'retailer_code', label: 'Winkel', width: 155,
+      sortable: true, filterable: true,
+      getValue: source => source.retailer_code || 'Onbekend',
+    },
+    {
+      key: 'receipt_text', label: 'Kassabonomschrijving', width: 300,
+      sortable: true, filterable: true, filterPlaceholder: 'Zoek',
+      getValue: source => source.receipt_text || 'Ontbreekt',
+      renderCell: source => <span title={source.receipt_text || 'Ontbreekt'}>{source.receipt_text || 'Ontbreekt'}</span>,
+    },
+    {
+      key: 'external_article_code', label: 'Bonartikelnummer', width: 190,
+      sortable: true, filterable: true,
+      getValue: source => source.external_article_code || 'Ontbreekt',
+    },
+    {
+      key: 'candidate_product_id', label: 'Catalogusherkenning', width: 325,
+      sortable: true, filterable: true,
+      getValue: source => {
+        const product = products.get(source.candidate_product_id)
+        return product
+          ? `${product.name || 'Catalogusproduct'} (${product.primary_gtin || 'geen barcode'})`
+          : 'Nog niet eenduidig'
+      },
+      renderCell: source => {
+        const product = products.get(source.candidate_product_id)
+        const value = product
+          ? `${product.name || 'Catalogusproduct'} (${product.primary_gtin || 'geen barcode'})`
+          : 'Nog niet eenduidig'
+        return <span title={value}>{value}</span>
+      },
+    },
+    {
+      key: 'receipt_count', label: 'Aantal bonregels', width: 150, align: 'right',
+      sortable: true, filterable: true,
+      getValue: source => Number(source.receipt_count || 0),
+      renderCell: source => Number(source.receipt_count || 0),
+    },
+    {
+      key: 'action', label: 'Actie', width: 175,
+      renderCell: source => source.retailer_code && source.receipt_text && source.external_article_code
+        ? <Button type="button" variant="secondary" onClick={() => {
+            setSelectedSource(source)
+            setTargetGtin('')
+          }}>Barcode bepalen</Button>
+        : 'Bonbron onvoldoende',
+    },
+  ], [products])
 
   async function confirmSource() {
     if (!selectedArticle || !selectedSource || saving || !targetGtin.trim()) return
@@ -155,56 +252,34 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
             ) : <p>Geen historische Catalogusconflicten aangetroffen in je actieve huishouden.</p>
           ) : null}
           {data.complete && items.length ? (
-            <Table dataTestId="catalog-conflicts-table" tableClassName="rz-catalog-detail-table">
-              <thead><tr>
-                <th>Huishoudartikel</th><th>Reden</th><th>Cataloguskandidaten</th>
-                <th>Bonregels</th><th>Actie</th>
-              </tr></thead>
-              <tbody>{visibleItems.map(item => (
-                <tr key={item.household_article_id}>
-                  <td>{item.article_name || 'Huishoudartikel zonder naam'}</td>
-                  <td>{reasonLabel(item.reason)}</td>
-                  <td>{item.candidate_product_ids?.map(productName).join(' · ') || 'Niet eenduidig'}</td>
-                  <td>{item.source_count}</td>
-                  <td><Button type="button" variant="secondary"
-                    onClick={() => { setSelectedArticle(item); setSourcePage(1) }}>
-                    Bonregels beoordelen
-                  </Button></td>
-                </tr>
-              ))}</tbody>
-            </Table>
-          ) : null}
-          {items.length > PAGE_SIZE ? (
-            <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
+            <DataTable
+              columns={conflictColumns}
+              data={items}
+              getRowKey={item => item.household_article_id}
+              dataTestId="catalog-conflicts-table"
+              pagination
+              pageSize={PAGE_SIZE}
+              defaultSort={{ key: 'article_name', direction: 'asc' }}
+              stickyHeader
+              stickyFilters
+            />
           ) : null}
           {data.complete && selectedArticle ? (
             <section aria-label="Oorspronkelijke bonregels" data-testid="catalog-conflict-sources">
               <h3>Bonregels van {selectedArticle.article_name || 'huishoudartikel'}</h3>
               <p>Huidige Cataloguskoppeling: {selectedArticle.current_product_ids?.map(productName).join(' · ') || 'Ontbreekt'}</p>
-              <Table dataTestId="catalog-conflict-sources-table" tableClassName="rz-catalog-detail-table">
-                <thead><tr><th>Winkel</th><th>Kassabonomschrijving</th><th>Bonartikelnummer</th>
-                  <th>Catalogusherkenning</th><th>Aantal bonregels</th><th>Actie</th></tr></thead>
-                <tbody>{selectedArticle.sources.slice((sourcePage - 1) * PAGE_SIZE, sourcePage * PAGE_SIZE).map(source => (
-                  <tr key={`${source.retailer_code}|${source.receipt_text}|${source.external_article_code}|${source.receipt_line_id}`}>
-                    <td>{source.retailer_code || 'Onbekend'}</td>
-                    <td>{source.receipt_text || 'Ontbreekt'}</td>
-                    <td>{source.external_article_code || 'Ontbreekt'}</td>
-                    <td>{source.candidate_product_id
-                      ? productName(source.candidate_product_id)
-                      : 'Nog niet eenduidig'}</td>
-                    <td>{source.receipt_count}</td>
-                    <td>{source.retailer_code && source.receipt_text && source.external_article_code
-                      ? <Button type="button" variant="secondary" onClick={() => {
-                          setSelectedSource(source)
-                          setTargetGtin('')
-                        }}>Barcode bepalen</Button>
-                      : 'Bonbron onvoldoende'}</td>
-                  </tr>
-                ))}</tbody>
-              </Table>
-              {selectedArticle.sources.length > PAGE_SIZE ? (
-                <Pagination page={sourcePage} pageCount={Math.ceil(selectedArticle.sources.length / PAGE_SIZE)} onPageChange={setSourcePage} />
-              ) : null}
+              <DataTable
+                key={selectedArticle.household_article_id}
+                columns={sourceColumns}
+                data={selectedArticle.sources || []}
+                getRowKey={source => `${source.retailer_code}|${source.receipt_text}|${source.external_article_code}|${source.receipt_line_id}`}
+                dataTestId="catalog-conflict-sources-table"
+                pagination
+                pageSize={PAGE_SIZE}
+                defaultSort={{ key: 'receipt_text', direction: 'asc' }}
+                stickyHeader
+                stickyFilters
+              />
             </section>
           ) : null}
         </>
