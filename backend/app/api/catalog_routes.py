@@ -806,7 +806,12 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         # contract. Neither OFF nor a GS1 classification is a prerequisite.
         try:
             with engine.begin() as conn:
-                source = resolve_external_article_identity(conn, receipt_item_id)
+                try:
+                    source = resolve_external_article_identity(conn, receipt_item_id)
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=404, detail="Bonartikel bestaat niet meer."
+                    ) from error
                 result = materialize_saved_ed2_barcode(
                     conn, retailer_code=source["retailer_code"],
                     receipt_text=source["receipt_text"],
