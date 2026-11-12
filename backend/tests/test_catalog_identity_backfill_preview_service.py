@@ -464,3 +464,65 @@ def test_truncated_household_conflict_review_never_advertises_source_choices():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_manual_conflict_confirmation_uses_real_postgresql_receipt_line_and_household(monkeypatch):
+    from contextlib import contextmanager
+    from app.api import catalog_household_identity_review_routes as review_routes
+
+    engine, conn = _fixture()
+    try:
+        conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT"))
+        conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN deleted_at TIMESTAMP"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN corrected_raw_label TEXT"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN normalized_label TEXT"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN raw_label TEXT"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN line_role TEXT DEFAULT 'product'"))
+        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN inventory_eligible INTEGER DEFAULT 1"))
+        conn.execute(text("ALTER TABLE external_article_product_links ADD COLUMN receipt_text_normalized TEXT"))
+        conn.execute(text("UPDATE external_article_product_links SET receipt_text_normalized='melk halfvol'"))
+        conn.execute(text("UPDATE receipt_table_lines SET raw_label='Melk halfvol'"))
+        class SameConnectionEngine:
+            @contextmanager
+            def begin(self):
+                yield conn
+        monkeypatch.setattr(review_routes, "engine", SameConnectionEngine())
+        monkeypatch.setattr(review_routes, "_authorized_review", lambda: ("actor", "h1"))
+        monkeypatch.setattr(review_routes, "resolve_catalog_identity",
+                            lambda _conn, **kwargs: {"status":"matched", "global_product_id":"p1"})
+        confirmations = []
+        def confirm(_conn, **kwargs):
+            confirmations.append(kwargs)
+            return {"status":"confirmed", "global_product_id":"p1", "changes":1}
+        monkeypatch.setattr(review_routes, "confirm_scanned_retailer_identity", confirm)
+        payload = dict(
+            household_article_id="a1", receipt_line_id="l1",
+            retailer_code="lidl", receipt_text="Melk halfvol",
+            external_article_code="code1", target_gtin="8712345678906",
+        )
+        result = review_routes.confirm_household_catalog_source(
+            review_routes.ConfirmConflictSourceRequest(**payload)
+        )
+        assert result["global_product_id"] == "p1"
+        assert result["household_article_changes"] == result["stock_changes"] == 0
+        assert confirmations[0]["receipt_text"] == "melk halfvol"
+        assert confirmations[0]["external_article_code"] == "code1"
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as error:
+            review_routes.confirm_household_catalog_source(
+                review_routes.ConfirmConflictSourceRequest(**{
+                    **payload, "household_article_id": "a2", "receipt_line_id": "l2",
+                })
+            )
+        assert error.value.status_code == 409
+        assert len(confirmations) == 1
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a1'"
+        )).scalar() is None
+        assert conn.execute(text(
+            "SELECT global_product_id FROM household_articles WHERE id='a2'"
+        )).scalar() is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
