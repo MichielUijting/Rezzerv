@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.services.barcode_identity_service import validate_barcode
 from app.services.external_article_product_link_service import (
@@ -64,15 +64,25 @@ def resolve_catalog_identity(
     if article_code:
         if not retailer:
             return {"status": "retailer_required", "global_product_id": None, "evidence": evidence}
+        # Isolated historical fixtures can contain the legacy link table
+        # without a receipt-description column. Code-only compatibility is
+        # permitted only when no receipt label is being requested.
+        columns = {col["name"] for col in inspect(conn).get_columns("external_article_product_links")}
+        if "receipt_text_normalized" not in columns and receipt_label:
+            return {"status": "not_found", "global_product_id": None, "evidence": evidence}
+        description_clause = (
+            "AND (:receipt_label = '' OR e.receipt_text_normalized = :receipt_label "
+            "OR COALESCE(e.receipt_text_normalized, '') = '')"
+            if "receipt_text_normalized" in columns else ""
+        )
         code_rows = conn.execute(
-            text("""
+            text(f"""
                 SELECT DISTINCT gp.id
                 FROM external_article_product_links e
                 JOIN global_products gp ON gp.id = e.global_product_id
                 WHERE e.retailer_code IN :retailer_aliases
                   AND e.external_article_code = :code
-                  AND (:receipt_label = '' OR e.receipt_text_normalized = :receipt_label
-                       OR COALESCE(e.receipt_text_normalized, '') = '')
+                  {description_clause}
                   AND (
                         e.status = 'confirmed'
                         OR (
