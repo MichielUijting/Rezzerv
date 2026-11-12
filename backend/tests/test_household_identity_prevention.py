@@ -277,3 +277,20 @@ def test_import_create_article_reuses_a_valid_existing_source_and_never_recreate
     assert "find_household_article_for_global_product(" in route
     assert "Het bronartikel bestaat niet meer" in route
     assert route.index("if stored_article_id:") < route.index("ensure_household_article(")
+
+
+def test_competing_catalog_link_does_not_overwrite_and_uses_shared_postgresql_lock():
+    def execute(sql, _values):
+        if "SELECT household_id, global_product_id FROM household_articles" in sql:
+            return Mapping({"household_id": "household-1", "global_product_id": None})
+        if "pg_advisory_xact_lock" in sql:
+            return Mapping()
+        if "FROM household_articles" in sql:
+            return Mapping({"id": "already-linked-article"})
+        raise AssertionError("Must not UPDATE when another article owns this product")
+    conn = FakeConn(execute, dialect="postgresql")
+    fn = production_function("set_household_article_global_product_id")
+    assert fn(conn, "article-new", "catalog-1") is None
+    locks = [params for sql, params in conn.statements if "pg_advisory_xact_lock" in sql]
+    assert locks == [{"key": "household_catalog:household-1:catalog-1"}]
+    assert not any("UPDATE household_articles" in sql for sql, _ in conn.statements)
