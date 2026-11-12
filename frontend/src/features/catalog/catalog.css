@@ -35,6 +35,14 @@
   max-width: 100%;
 }
 
+/* These review tables have a text column first, not a checkbox column.
+   Restore the canonical left alignment without touching shared table CSS. */
+.rz-catalog-historical-review .rz-data-table th:first-child,
+.rz-catalog-historical-review .rz-data-table td:first-child {
+  width: auto;
+  text-align: left;
+}
+
 .rz-catalog-header h2,
 .rz-catalog-detail-grid h2,
 .rz-catalog-detail-grid h3 {
