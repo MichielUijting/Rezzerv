@@ -230,3 +230,50 @@ def test_canonical_product_barcode_mismatch_rejected_before_insert():
     with pytest.raises(HTTPException) as error:
         fn(conn, "household-1", "catalog-1", barcode="8712345678901")
     assert error.value.status_code == 409
+
+
+@pytest.mark.parametrize("resolved_existing", [None, "canonical-article"])
+def test_stale_import_match_is_cleared_or_relinked_to_real_household_article(resolved_existing):
+    def execute(sql, values):
+        if "FROM purchase_import_lines" in sql:
+            return Mapping({
+                "id": "line1", "article_name_raw": "Broccoli",
+                "brand_raw": None, "external_article_code": "0082904",
+                "matched_household_article_id": "deleted-article",
+                "matched_global_product_id": "catalog-1",
+            })
+        return Mapping()
+    conn = FakeConn(execute)
+    def canonical_by_catalog(_conn, household, product):
+        assert household == "household-1"
+        assert product == "catalog-1"
+        return {"id": resolved_existing} if resolved_existing else None
+    fn = production_function(
+        "sync_purchase_import_line_product_links",
+        resolve_household_article_selection_to_id=lambda *_args, **kwargs: None,
+        ensure_household_article_global_product_link=lambda *_args:
+            (_ for _ in ()).throw(AssertionError("Deleted household IDs must not be used")),
+        find_household_article_for_global_product=canonical_by_catalog,
+    )
+    result = fn(conn, "line1", "household-1")
+    assert result["matched_household_article_id"] == resolved_existing
+    assert result["matched_global_product_id"] == "catalog-1"
+    updates = [params for statement, params in conn.statements
+               if "UPDATE purchase_import_lines" in statement]
+    assert len(updates) == 1
+    assert updates[0]["matched_household_article_id"] == resolved_existing
+    assert not any("INSERT INTO household_articles" in sql for sql, _ in conn.statements)
+
+
+def test_import_create_article_reuses_a_valid_existing_source_and_never_recreates_deleted_id():
+    source = MAIN.read_text(encoding="utf-8")
+    start = source.index('@app.post("/api/purchase-import-lines/{line_id}/create-article")')
+    stop = source.index("\n\n@app.post(", start + 1)
+    route = source[start:stop]
+    assert "pil.matched_household_article_id, pil.matched_global_product_id" in route
+    assert "resolve_household_article_selection_to_id(" in route
+    assert "create_if_missing=False" in route
+    assert 'if not article_option_id:' in route
+    assert "find_household_article_for_global_product(" in route
+    assert "Het bronartikel bestaat niet meer" in route
+    assert route.index("if stored_article_id:") < route.index("ensure_household_article(")
