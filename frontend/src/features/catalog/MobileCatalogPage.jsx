@@ -118,11 +118,14 @@ export default function MobileCatalogPage() {
     <div className="rz-screen rz-mobile-catalog-screen" data-testid="mobile-catalog-page">
       <MobileModuleHeader title="Catalogus" testId="mobile-catalog-header" />
       <main className="rz-mobile-catalog-content">
-        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
-        {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+        {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
+        {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
         {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
-        {showHistoricalReview && canReviewHistorical ? <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} /> : null}
-        <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
+        {showHistoricalReview && canReviewHistorical ? (
+          <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} />
+        ) : (
+          <>
+            <section className="rz-mobile-catalog-toolbar" aria-label="Catalogus zoeken en filteren">
           <label className="rz-mobile-catalog-search">
             <span className="rz-mobile-catalog-visually-hidden">Zoek</span>
             <input
@@ -200,6 +203,8 @@ export default function MobileCatalogPage() {
             <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} disabled={isLoading} />
           </div>
         ) : null}
+          </>
+        )
       </main>
     </div>
   )
