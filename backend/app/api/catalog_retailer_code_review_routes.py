@@ -84,10 +84,13 @@ def add_catalog_retailer_code(global_product_id: str, request: AddRetailerCodeRe
             WHERE rtl.external_article_code=:article_number
               AND COALESCE(rtl.is_deleted,FALSE)=FALSE
               AND rt.deleted_at IS NULL
+              AND rtl.line_role='product'
+              AND CAST(rtl.inventory_eligible AS INTEGER)=1
             LIMIT 2000
         """), {"article_number":number}).mappings().all()
         if not any(
-            _key(source["retailer"], source["receipt_text"], number)
+            source.get("retailer") and source.get("receipt_text")
+            and _key(source["retailer"], source["receipt_text"], number)
               == (retailer, description, number)
             for source in evidence
         ):
