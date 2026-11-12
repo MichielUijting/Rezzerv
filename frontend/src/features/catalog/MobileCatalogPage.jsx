@@ -27,17 +27,19 @@ export default function MobileCatalogPage() {
   const restored = location.state?.mobileCatalogTableState
   const authContext = readStoredAuthContext()
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
-  const canReviewHistorical = canCurrentUserPerform('platform.external_products.link_existing', authContext)
-    && (
-      (authContext?.context_type === 'system'
-        && authContext?.is_platform_superuser === true
-        && String(authContext?.active_household_id) === '0')
-      || (authContext?.context_type === 'regular'
-        && authContext?.is_frontteam === true
-        && isHouseholdAdminFromContext(authContext)
-        && Boolean(String(authContext?.active_household_id || '').trim())
-        && String(authContext?.active_household_id) !== '0')
-    )
+  // A household manager reviews only their own canonical regular household.
+  // Superusers retain system-household-0 review via their platform permission.
+  const canReviewHistorical = (
+    authContext?.context_type === 'regular'
+    && isHouseholdAdminFromContext(authContext)
+    && Boolean(String(authContext?.active_household_id || '').trim())
+    && String(authContext?.active_household_id) !== '0'
+  ) || (
+    authContext?.context_type === 'system'
+    && authContext?.is_platform_superuser === true
+    && String(authContext?.active_household_id) === '0'
+    && canCurrentUserPerform('platform.external_products.link_existing', authContext)
+  )
   const [showHistoricalReview, setShowHistoricalReview] = useState(false)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
