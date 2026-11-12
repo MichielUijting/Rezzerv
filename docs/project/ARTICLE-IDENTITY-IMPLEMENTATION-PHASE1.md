@@ -49,7 +49,7 @@ bevestiging realiseren, met de juiste scope en transactiezekerheid.
 4. Geen huishoud-/voorraadmutaties vanuit barcode-validatie en -lookup.
 5. Oude geldige, niet-restricted GTIN-lookup blijft compatibel.
 
-**Branchbeheer:** Draft tot de scoped implementatie binnen deze deelstap, 
+**Branchbeheer:** Draft tot de scoped implementatie binnen deze deelstap,
 normale/preflightchecks en versie-/risicogates gecontroleerd zijn. F7 exact
 op definitieve SHA indien L verplicht. Geen merge/deploy zonder aparte PO-GO.
 
