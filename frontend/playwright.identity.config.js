@@ -5,7 +5,10 @@ import { defineConfig, devices } from '@playwright/test'
 // backend HTTP tests and the isolated PostgreSQL chain suite.
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: '**/article-identity-confirmation.frontend-regression.spec.js',
+  testMatch: [
+    '**/article-identity-confirmation.frontend-regression.spec.js',
+    '**/catalog-retailer-code-review.frontend-regression.spec.js',
+  ],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   forbidOnly: Boolean(process.env.CI),
