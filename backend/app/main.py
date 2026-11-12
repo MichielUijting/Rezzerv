@@ -5024,10 +5024,9 @@ def find_global_product_match_for_receipt_line(
         by_external_identity = get_global_product_row_by_identity(
             conn,
             normalized_external_article_code,
-            identity_types=(
-                'external_article_number',
-                'store_sku',
-            ),
+            # A store SKU is scoped to its retailer; without one it must not
+            # be treated as an independent global product identity.
+            identity_types=('external_article_number',),
         )
         if by_external_identity:
             payload = dict(by_external_identity)
