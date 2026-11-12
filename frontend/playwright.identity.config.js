@@ -8,6 +8,7 @@ export default defineConfig({
   testMatch: [
     '**/article-identity-confirmation.frontend-regression.spec.js',
     '**/catalog-retailer-code-review.frontend-regression.spec.js',
+    '**/catalog-household-conflicts.frontend-regression.spec.js',
   ],
   timeout: 30_000,
   expect: { timeout: 10_000 },
