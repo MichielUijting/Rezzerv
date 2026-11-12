@@ -358,3 +358,21 @@ def test_retailer_receipt_code_only_links_exact_confirmed_description(receipt, s
     assert len(found) == (1 if expected else 0)
     if expected:
         assert result["match_method"] == "confirmed:retailer_receipt_text_code"
+
+def test_household_zero_browser_fixture_never_substitutes_inventory_id_for_household_article():
+    """The real PR253 fixture must seed canonical references before events."""
+    source = (MAIN.parent.parent / "tests" / "household_zero_regression_fixture.py").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("def _portable_ensure_regression_inventory_fixture(")
+    end = source.index("\\ndef _portable_cleanup_regression_inventory_state", start)
+    fixture = source[start:end]
+    assert "if not household_article_id:" in fixture
+    assert "(id, naam, aantal, household_id, household_article_id, space_id" in fixture
+    assert "(:id, :naam, 1, :household_id, :household_article_id, :space_id" in fixture
+    assert '"household_article_id": household_article_id' in fixture
+    assert "article_id=household_article_id," in fixture
+    assert "article_id=inventory_id," not in fixture
+    assert '"articleId": household_article_id,' in fixture
+    assert '"inventoryId": str(inventory_id),' in fixture
+
