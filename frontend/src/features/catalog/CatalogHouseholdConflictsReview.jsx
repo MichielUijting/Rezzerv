@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import DataTable from '../../ui/DataTable.jsx'
@@ -34,6 +34,16 @@ export default function CatalogHouseholdConflictsReview() {
   const [articlePageRows, setArticlePageRows] = useState([])
   const [checkedSourceIds, setCheckedSourceIds] = useState([])
   const [sourcePageRows, setSourcePageRows] = useState([])
+  const rememberArticlePageRows = useCallback(rows => {
+    setArticlePageRows(previous =>
+      previous.length === rows.length && previous.every((row, index) =>
+        row.household_article_id === rows[index].household_article_id) ? previous : rows)
+  }, [])
+  const rememberSourcePageRows = useCallback(rows => {
+    setSourcePageRows(previous =>
+      previous.length === rows.length && previous.every((row, index) =>
+        row.source_selection_key === rows[index].source_selection_key) ? previous : rows)
+  }, [])
   const [selectedSource, setSelectedSource] = useState(null)
   const [targetGtin, setTargetGtin] = useState('')
   const [saving, setSaving] = useState(false)
@@ -352,7 +362,7 @@ export default function CatalogHouseholdConflictsReview() {
                 columns={conflictColumns}
                 data={items}
                 getRowKey={item => item.household_article_id}
-                onPageRowsChange={setArticlePageRows}
+                onPageRowsChange={rememberArticlePageRows}
                 dataTestId="catalog-conflicts-table"
                 pagination
                 pageSize={PAGE_SIZE}
@@ -404,7 +414,7 @@ export default function CatalogHouseholdConflictsReview() {
                 columns={sourceColumns}
                 data={sourceRows}
                 getRowKey={source => source.source_selection_key}
-                onPageRowsChange={setSourcePageRows}
+                onPageRowsChange={rememberSourcePageRows}
                 dataTestId="catalog-conflict-sources-table"
                 pagination
                 pageSize={PAGE_SIZE}
