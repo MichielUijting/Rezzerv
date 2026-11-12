@@ -113,9 +113,15 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         if request.action=="confirm":
             if row["status"] != "confirmed":
                 raise HTTPException(409, "Classificatie-in-afwachting moet eerst via bestaande bevestiging worden afgerond")
-            # No identity mutation needed: confirmation is explicit, auditable
-            # evidence is already present on the saved link.
-            return {"status":"confirmed","changed":False,"global_product_id":global_product_id}
+            changed = conn.execute(text("""
+                UPDATE external_article_product_links
+                SET confirmed_by='catalog_retailer_code_review',
+                    confirmed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+                WHERE id=:id AND global_product_id=:product AND status='confirmed'
+            """), {"id":request.link_id,"product":global_product_id})
+            if changed.rowcount != 1:
+                raise HTTPException(409, "Bevestiging kon niet veilig worden opgeslagen")
+            return {"status":"confirmed","changed":True,"global_product_id":global_product_id}
         # No automatic reassignment of historical receipt, household or stock records.
         # Require confirmed active target GTIN, check-code ownership and source review.
         gtin = str(request.target_gtin or "").strip()
