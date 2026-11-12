@@ -8,10 +8,12 @@ import Pagination from '../../ui/Pagination.jsx'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import CatalogProductImage from './CatalogProductImage'
+import CatalogHouseholdConflictsReview from './CatalogHouseholdConflictsReview'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
   readStoredAuthContext,
+  isHouseholdAdminFromContext,
 } from '../../lib/authSession'
 import '../externalDatabases/externalDatabases.css'
 import './catalog.css'
@@ -59,6 +61,9 @@ export default function CatalogPage() {
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
   const isPlatformSuperuser = Boolean(authContext?.is_platform_superuser)
   const canReviewShopify = Boolean(authContext?.is_platform_superuser || authContext?.is_frontteam)
+  const canReviewHistorical = canCurrentUserPerform('platform.external_products.link_existing', authContext)
+    && isHouseholdAdminFromContext(authContext)
+    && String(authContext?.active_household_id || '') !== '0'
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
@@ -72,6 +77,7 @@ export default function CatalogPage() {
   const [page, setPage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showHistoricalReview, setShowHistoricalReview] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
@@ -303,6 +309,7 @@ export default function CatalogPage() {
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
               {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
               {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+              {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
               {isPlatformSuperuser ? (
                 <Button
                   type="button"
@@ -317,6 +324,8 @@ export default function CatalogPage() {
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
             </div>
+
+            {showHistoricalReview && canReviewHistorical ? <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} /> : null}
 
             <Table
               dataTestId="catalog-table"
