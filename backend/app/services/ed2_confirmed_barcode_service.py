@@ -48,7 +48,15 @@ def _owner(conn, *, barcode: str, retailer: str, label: str, code: str, scope: s
         global_rows = _rows(conn, """
             SELECT id FROM global_products WHERE primary_gtin = :barcode
         """, {"barcode": barcode})
-        if global_rows:
+        global_identity_rows = _rows(conn, """
+            SELECT global_product_id AS product_id
+            FROM product_identities
+            WHERE identity_type = 'gtin' AND identity_value = :barcode
+              AND global_product_id IS NOT NULL
+        """, {"barcode": barcode})
+        # Soft-delete only hides the old product. Its former worldwide GTIN
+        # claim can remain in either table, even when primary_gtin was cleared.
+        if global_rows or global_identity_rows:
             raise ValueError(
                 "Deze winkelinterne barcode is historisch als mondiale code opgeslagen. "
                 "Controleer eerst de bestaande Cataloguskoppeling."

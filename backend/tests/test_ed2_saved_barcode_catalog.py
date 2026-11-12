@@ -396,3 +396,22 @@ def test_soft_deleted_lidl_manual_link_is_not_silently_reactivated():
              barcode="2008234600001")
     assert not conn.writes
     assert conn.manual[0]["global_product_id"] == "deleted-lidl-product"
+
+
+
+def test_deleted_lidl_gtin_identity_without_primary_barcode_is_not_reused():
+    """A deleted product may still own a global GTIN identity row."""
+    conn = PGFixture()
+    conn.products.append({
+        "id": "deleted-lidl-identity", "status": "deleted",
+        "primary_gtin": None, "name": "Lidl artikel met oude barcode",
+    })
+    conn.identities.append({
+        "global_product_id": "deleted-lidl-identity",
+        "identity_type": "gtin", "identity_value": "2008234600001",
+    })
+    with pytest.raises(ValueError, match="historisch als mondiale code"):
+        save(conn, retailer="Lidl", label="Lidl artikel", number="723",
+             barcode="2008234600001")
+    assert conn.writes == []
+    assert len(conn.products) == 1
