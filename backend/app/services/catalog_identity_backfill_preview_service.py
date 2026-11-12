@@ -12,7 +12,7 @@ import hashlib
 import json
 from typing import Any
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 
@@ -26,14 +26,23 @@ def preview_household_catalog_identity_backfill(
     limit = max(1, min(int(limit), 10000))
     # The two canonical reference parts identify the exact receipt and line.
     # Never use textual article descriptions to identify historical purchases.
+    # Legacy and isolated fixture schemas may have no receipt description
+    # columns. Use them when available; preserve code-only compatibility
+    # otherwise. Never infer an article from a display name.
+    receipt_columns = {col["name"] for col in inspect(conn).get_columns("receipt_table_lines")}
+    label_parts = [
+        f"NULLIF(rtl.{column}, '')"
+        for column in ("corrected_raw_label", "normalized_label", "raw_label")
+        if column in receipt_columns
+    ]
+    receipt_label_sql = "COALESCE(" + ", ".join(label_parts) + ")" if label_parts else "NULL"
     rows = conn.execute(
-        text("""
+        text(f"""
             SELECT ha.id AS household_article_id,
                    ha.global_product_id AS current_product_id,
                    rtl.barcode AS gtin,
                    rtl.external_article_code AS retailer_article_code,
-                   COALESCE(NULLIF(rtl.corrected_raw_label, ''),
-                            NULLIF(rtl.normalized_label, ''), rtl.raw_label) AS receipt_text,
+                   {receipt_label_sql} AS receipt_text,
                    rt.store_name AS retailer_code
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
