@@ -137,3 +137,35 @@ geen deployment of release zonder afzonderlijke PO-GO.
 van dubbele huishoudartikelen; PR #677 bevat fase 1-identiteitsfundament
 en de expliciete verwerking van bewaarde barcodes. Lidl-correctie en
 fasen 2–4 zijn nog niet opgeleverd.
+
+
+## Aanvullende PO-situatie: discutabele Lidl-artikelen verwijderd uit Catalogus
+
+**PO-melding (12 november 2026):** de PO heeft de Lidl-artikelen met
+discutabele barcodes zelf uit de Catalogus verwijderd.
+
+De actuele Inhuis-verwijderroute \`POST /api/catalog/bulk-delete\`
+gebruikt **soft-delete** (\`global_products.status = 'deleted'\`).
+Daarmee is **niet** aangetoond dat oude \`product_identities\`,
+\`external_article_product_links\`, \`ed2_manual_barcodes\`,
+huishoudartikelverwijzingen of de oude GTIN definitief afwezig zijn.
+De melding betreft een gebruikersactie; in deze PR is de lokale database
+niet uitgelezen en zijn de aantallen/verwijderde ID's niet geverifieerd.
+
+Gevolgen voor het ontwerp:
+
+- Een soft-deleted product of diens historische barcodeclaim mag **nooit
+  automatisch opnieuw worden geactiveerd of hergebruikt**.
+- De bewaarde kassabon-/importbron blijft bestaan. Een onzekere
+  identificatie wordt zichtbaar ter beoordeling in Identificeren en
+  wordt niet stilzwijgend opnieuw een bewezen globale GTIN.
+- Een oude, nog bestaande handmatige barcodebevestiging met een andere
+  code wordt niet automatisch vervangen. Dit vereist de reeds ontworpen
+  individuele barcodecorrectie met gevolgencontrole, bevoegde bevestiging
+  en audit.
+- Er is geen reden om de door de PO al soft-deleted Catalogusproducten
+  opnieuw te creëren om de uitvoering van fase 1 te hervatten.
+- De expliciete bulkactie voor reeds opgeslagen barcodes blijft
+  **fail-closed** bij een verwijderde Catalogusidentiteit of nog bestaande
+  historische globale claim. Geen automatische databasecleanup,
+  migratie of reactivering zonder afzonderlijk veilig bewijs.

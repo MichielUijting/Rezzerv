@@ -115,3 +115,20 @@ onzichtbare schrijfactie bij een GET of een startup.
 
 Deze implementatienotitie is geen vervanging van de overige goedgekeurde
 ontwerpbesluiten 1–13 of van de bestaande canonieke identity-/securitycontracten.
+
+
+## Lidl-producten die door de PO uit Catalogus zijn verwijderd
+
+De PO meldt dat de artikelen met discutabele Lidl-barcodes uit Catalogus zijn
+verwijderd. De huidige Catalogusactie is een soft-delete. De bestaande
+product-ID, GTIN en identiteitsverwijzingen kunnen technisch nog bestaan.
+Om die reden blijft \`materialize_saved_ed2_barcode\` weigeren om een
+soft-deleted product of reeds globaal geclaimde restricted code stilzwijgend
+opnieuw als actief product te gebruiken. Gerichte tests leggen dit vast.
+
+Dit is **geen** bewijs dat de lokale oude referenties verdwenen zijn; er is
+geen lokale gebruikersdatabase uitgelezen. Een eventuele echte
+barcodecorrectie van een eerder bewaarde onjuiste Lidl-code blijft
+een expliciete, nog te implementeren stap in **Identificeren** met
+gevolgenoverzicht en audit. De PO hoeft de oude verwijderde
+Catalogusproducten niet opnieuw aan te maken.

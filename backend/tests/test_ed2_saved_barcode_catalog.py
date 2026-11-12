@@ -350,3 +350,49 @@ def test_historical_bulk_selection_bound_and_duplicates():
             catalog_routes.Ed2HistoricalBarcodeSelection(
                 receipt_item_id="same", gtin="8722800072026"),
         ])
+
+
+
+def test_soft_deleted_lidl_global_identity_is_not_resurrected():
+    """Deleting in Catalogus is soft-delete, not proof that GTIN is free."""
+    conn = PGFixture()
+    conn.products.append({
+        "id": "deleted-lidl-product", "status": "deleted",
+        "primary_gtin": "2008234600001", "name": "Lidl oud artikel",
+    })
+    with pytest.raises(ValueError, match="historisch als mondiale code"):
+        save(conn, retailer="Lidl", label="Lidl artikel", number="723",
+             barcode="2008234600001")
+    assert conn.writes == []
+    assert conn.products[0]["status"] == "deleted"
+
+
+def test_soft_deleted_global_gtin_stays_unavailable_for_reidentification():
+    conn = PGFixture()
+    conn.products.append({
+        "id": "deleted-global-product", "status": "deleted",
+        "primary_gtin": "8722800072026", "name": "Oud artikel",
+    })
+    with pytest.raises(ValueError, match="niet actief"):
+        save(conn, retailer="AH", label="Courgette", number="21003",
+             barcode="8722800072026")
+    assert not conn.writes
+
+
+def test_soft_deleted_lidl_manual_link_is_not_silently_reactivated():
+    conn = PGFixture()
+    conn.products.append({
+        "id": "deleted-lidl-product", "status": "deleted",
+        "primary_gtin": None, "name": "Oud Lidl artikel",
+    })
+    conn.manual.append({
+        "retailer_code": "lidl", "receipt_text_normalized": "lidl artikel",
+        "external_article_code": "723", "gtin": "2008234600001",
+        "barcode_scope": "restricted",
+        "global_product_id": "deleted-lidl-product",
+    })
+    with pytest.raises(ValueError, match="niet langer actief"):
+        save(conn, retailer="Lidl", label="Lidl artikel", number="723",
+             barcode="2008234600001")
+    assert not conn.writes
+    assert conn.manual[0]["global_product_id"] == "deleted-lidl-product"
