@@ -16,6 +16,9 @@ from app.api.catalog_shopify_review_routes import router as shopify_review_route
 from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
 from app.services.ed2_confirmed_barcode_service import materialize_saved_ed2_barcode
+from app.services.ed2_barcode_correction_service import (
+    preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
+)
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.external_article_confirmation_service import resolve_external_article_identity
@@ -99,6 +102,16 @@ class Ed2HistoricalBarcodesRequest(BaseModel):
         if any(not item for item in ids) or len(ids) != len(set(ids)):
             raise ValueError("Selecties moeten unieke, bestaande bonartikel-ID's bevatten.")
         return value
+
+
+class Ed2LidlBarcodeCorrectionPreviewRequest(BaseModel):
+    receipt_item_id: str
+    new_gtin: str
+
+
+class Ed2LidlBarcodeCorrectionConfirmRequest(Ed2LidlBarcodeCorrectionPreviewRequest):
+    expected_old_gtin: str
+    preview_fingerprint: str
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -800,6 +813,60 @@ def list_ed2_manual_barcodes():
             "FROM ed2_manual_barcodes ORDER BY retailer_code, receipt_text_normalized"
         )).mappings().all()
     return {"items": [dict(row) for row in rows]}
+
+
+
+@router.post("/ed2/manual-barcodes/lidl/preview-correction")
+def preview_ed2_lidl_barcode_correction(payload: Ed2LidlBarcodeCorrectionPreviewRequest):
+    """Read-only impact preview; never alter an old Lidl/household/receipt row."""
+    require_platform_permission_from_session("platform.external_products.link_existing")
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(
+                conn, str(payload.receipt_item_id or "").strip()
+            )
+            return preview_lidl_barcode_correction(
+                conn, source=source,
+                receipt_item_id=str(payload.receipt_item_id or "").strip(),
+                new_gtin=payload.new_gtin,
+                household_table=_household_table(),
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/manual-barcodes/lidl/confirm-correction")
+def confirm_ed2_lidl_barcode_correction(payload: Ed2LidlBarcodeCorrectionConfirmRequest):
+    """Explicit one-item correction; preview proof and all writes are atomic."""
+    actor = require_platform_permission_from_session(
+        "platform.external_products.link_existing"
+    )
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    if len(payload.preview_fingerprint) != 64 or any(
+        char not in "0123456789abcdef" for char in payload.preview_fingerprint
+    ):
+        raise HTTPException(status_code=422, detail="De gevolgencontrole ontbreekt.")
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(
+                conn, str(payload.receipt_item_id or "").strip()
+            )
+            return confirm_lidl_barcode_correction(
+                conn, source=source,
+                receipt_item_id=str(payload.receipt_item_id or "").strip(),
+                new_gtin=payload.new_gtin,
+                expected_old_gtin=payload.expected_old_gtin,
+                preview_fingerprint=payload.preview_fingerprint,
+                actor_user_id=actor.user_id,
+                household_table=_household_table(),
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/ed2/manual-barcodes/materialize-existing")
