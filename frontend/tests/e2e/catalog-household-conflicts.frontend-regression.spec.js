@@ -45,6 +45,13 @@ async function mockCatalog(page, { canReview = true, failSave = false } = {}) {
       is_platform_superuser: canReview,
     }),
   }))
+  // Regular household sessions must complete the real AuthGuard onboarding
+  // preflight. Without this mock the guard redirects to Login.
+  await page.route('**/api/onboarding', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ can_manage: true, initial_choice_required: false,
+      onboarding_status: 'completed' }),
+  }))
   await page.route('**/api/catalog?*', route => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ total: 0, items: [] }),
