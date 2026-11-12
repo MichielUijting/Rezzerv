@@ -87,7 +87,12 @@ export default function CatalogPage() {
   const [page, setPage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [showHistoricalReview, setShowHistoricalReview] = useState(false)
+  const showHistoricalReview = new URLSearchParams(location.search).get('historischeConflicten') === '1'
+  function openHistoricalReview() {
+    const query = new URLSearchParams(location.search)
+    query.set('historischeConflicten', '1')
+    navigate(`${location.pathname}?${query.toString()}`, { state: location.state })
+  }
   const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
@@ -323,7 +328,7 @@ export default function CatalogPage() {
                   {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
                 </>
               ) : null}
-              {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
+              {canReviewHistorical && !showHistoricalReview ? <Button type="button" variant="secondary" onClick={openHistoricalReview}>Historische conflicten beoordelen</Button> : null}
               {!showHistoricalReview && isPlatformSuperuser ? (
                 <Button
                   type="button"
@@ -340,7 +345,7 @@ export default function CatalogPage() {
             </div>
 
             {showHistoricalReview && canReviewHistorical ? (
-              <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} />
+              <CatalogHouseholdConflictsReview />
             ) : (
               <>
                 <Table
