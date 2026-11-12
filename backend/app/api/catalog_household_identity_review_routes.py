@@ -153,7 +153,7 @@ def confirm_household_catalog_source(request: ConfirmConflictSourceRequest):
         # Legacy code-only links have no proven description. Do not promote
         # them silently or reinterpret them as a complete receipt identity.
         legacy = conn.execute(text("""
-            SELECT id FROM external_article_product_links
+            SELECT 1 FROM external_article_product_links
             WHERE retailer_code IN :retailers
               AND external_article_code = :code
               AND COALESCE(receipt_text_normalized, '') = ''
