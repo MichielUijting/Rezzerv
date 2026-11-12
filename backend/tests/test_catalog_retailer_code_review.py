@@ -26,7 +26,7 @@ def test_receipt_description_and_article_number_are_both_required():
 def test_unknown_action_rejected_before_any_database_write(monkeypatch):
     denied = []
     monkeypatch.setattr(routes, "require_platform_permission_from_session",
-                        lambda permission: denied.append(permission))
+                        lambda permission: (denied.append(permission), SimpleNamespace(user_id="actor-test"))[1])
     with pytest.raises(HTTPException) as exc:
         routes.review_catalog_retailer_code("p1", routes.ReviewRequest(
             link_id="l1", expected_product_id="p1", retailer_code="lidl",
@@ -108,7 +108,8 @@ def request(action="confirm", gtin=None):
 
 @pytest.fixture(autouse=True)
 def allow_review(monkeypatch):
-    monkeypatch.setattr(routes,"require_platform_permission_from_session",lambda _permission: None)
+    monkeypatch.setattr(routes,"require_platform_permission_from_session",
+                        lambda _permission: SimpleNamespace(user_id="actor-test"))
 
 
 def test_other_product_for_same_receipt_triple_is_rejected_without_write(monkeypatch):
