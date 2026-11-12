@@ -31,7 +31,7 @@ def identity_conn():
              created_at TIMESTAMP, updated_at TIMESTAMP)"""))
         conn.execute(text("""INSERT INTO global_products VALUES
             ('p1','Lidl melk','8712345678906','active'),
-            ('p2','Lidl soep','8712345678906','active')"""))
+            ('p2','Lidl soep',NULL,'active')"""))
         conn.execute(text("""INSERT INTO external_article_product_links
             (id,retailer_code,receipt_text_normalized,external_article_code,global_product_id,status)
             VALUES
