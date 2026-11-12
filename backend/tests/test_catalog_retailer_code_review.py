@@ -73,7 +73,7 @@ class Conn:
             return Rows([{"id":"l1","global_product_id":"p1","status":"confirmed",
                           "retailer_code":"lidl","receipt_text_normalized":"kaas",
                           "external_article_code":"0082904"}])
-        if "FROM external_article_product_links WHERE retailer_code=:retailer AND receipt_text_normalized=:description" in sql:
+        if "FROM external_article_product_links WHERE retailer_code = ANY(:retailer_aliases) AND receipt_text_normalized=:description" in sql:
             items=[{"id":"l1","global_product_id":"p1"}]
             if self.conflict:
                 items.append({"id":"l2","global_product_id":"p2"})
@@ -82,7 +82,7 @@ class Conn:
             return Rows(["p1"])
         if "FROM global_products WHERE primary_gtin=:gtin" in sql:
             return Rows([{"id":"p2","name":"Kaas nieuw","primary_gtin":"8712345678901"}])
-        if "SELECT id FROM external_article_product_links WHERE retailer_code=:retailer" in sql:
+        if "SELECT id FROM external_article_product_links WHERE retailer_code = ANY(:retailer_aliases)" in sql:
             return Rows(["l1"])
         if "SELECT id FROM household_articles" in sql:
             return Rows([("h1",)] if self.household else [])
