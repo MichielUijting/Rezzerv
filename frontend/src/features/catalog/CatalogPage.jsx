@@ -316,11 +316,11 @@ export default function CatalogPage() {
             {!canUpdateGpc ? <p>Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</p> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
-              {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
-              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
-              {canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
+              {!showHistoricalReview && canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
+              {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/artikelclassificaties-toekennen')}>Artikelclassificaties toekennen</Button> : null}
+              {!showHistoricalReview && canReviewShopify ? <Button type="button" onClick={() => navigate('/catalogus/synoniemenanalyse')}>Synoniemenanalyse</Button> : null}
               {canReviewHistorical ? <Button type="button" variant="secondary" onClick={() => setShowHistoricalReview(value => !value)}>{showHistoricalReview ? 'Historische beoordeling sluiten' : 'Historische conflicten beoordelen'}</Button> : null}
-              {isPlatformSuperuser ? (
+              {!showHistoricalReview && isPlatformSuperuser ? (
                 <Button
                   type="button"
                   disabled={isDeleting || !selectedIds.length}
@@ -330,14 +330,16 @@ export default function CatalogPage() {
                   {isDeleting ? 'Verwijderen...' : 'Verwijderen'}
                 </Button>
               ) : null}
-              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button>
-              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
-              <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
+              {!showHistoricalReview ? <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button> : null}
+              {!showHistoricalReview ? <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button> : null}
+              {!showHistoricalReview ? <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span> : null}
             </div>
 
-            {showHistoricalReview && canReviewHistorical ? <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} /> : null}
-
-            <Table
+            {showHistoricalReview && canReviewHistorical ? (
+              <CatalogHouseholdConflictsReview onClose={() => setShowHistoricalReview(false)} />
+            ) : (
+              <>
+                <Table
               dataTestId="catalog-table"
               wrapperClassName="rz-catalog-table-wrapper"
               tableClassName="rz-catalog-table rz-data-table--sticky-header rz-data-table--sticky-filters"
@@ -412,6 +414,8 @@ export default function CatalogPage() {
               <Pagination page={currentPage} pageCount={pageCount} onPageChange={goToPage} disabled={isLoading} />
               <span className="rz-external-databases-muted">{total} artikelen</span>
             </div> : null}
+              </>
+            )
           </div>
         </ScreenCard>
       </div>
