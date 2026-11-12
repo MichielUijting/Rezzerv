@@ -2276,16 +2276,22 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
                 inventory_row = get_household_article_row_by_name(conn, household_id, inventory_name)
                 if inventory_row:
                     return inventory_row
-                if not normalized_name:
-                    normalized_name = inventory_name
-                elif normalize_household_article_name(normalized_name) != inventory_name:
-                    normalized_name = inventory_name
+        if create_if_missing:
+            # An explicitly supplied canonical or legacy inventory ID must
+            # never silently turn into a newly created name-based article.
+            raise HTTPException(
+                status_code=409,
+                detail="Het aangewezen huishoudartikel bestaat niet meer; controleer de bronkoppeling",
+            )
+        return None
 
     if normalized_name:
         row = get_household_article_row_by_name(conn, household_id, normalized_name)
         if row:
             return row
         if create_if_missing:
+            if normalized_article_id.startswith('live::'):
+                raise HTTPException(status_code=409, detail="Tijdelijke artikelverwijzing is verlopen")
             ensure_household_article(conn, household_id, normalized_name)
             row = get_household_article_row_by_name(conn, household_id, normalized_name)
             if row:
@@ -2320,8 +2326,8 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
     if normalized_article_id.startswith('live::') and not row:
         fallback_name = normalize_household_article_name(normalized_article_id.split('::', 1)[1])
         if fallback_name:
-            if create_if_missing:
-                ensure_household_article(conn, household_id, fallback_name)
+            # Live aliases are not durable household identities and cannot
+            # reconstruct a deleted row by name.
             return get_household_article_row_by_name(conn, household_id, fallback_name)
 
     return None
