@@ -15,6 +15,7 @@ from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
+from app.services.ed2_confirmed_barcode_service import materialize_saved_ed2_barcode
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.external_article_confirmation_service import resolve_external_article_identity
@@ -784,12 +785,12 @@ def list_ed2_manual_barcodes():
 
 @router.post("/ed2/manual-barcodes")
 def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
-    """Explicitly register a GTIN: verified OFF enriches; OFF absence stores only the code.
+    """Saved barcode is sufficient Catalogus identity evidence, without OFF.
 
-    The manual-only branch writes no global product, product identity, confirmed
-    link, receipt row, household article or inventory. It never invents a GPC.
+    The normal path saves an idempotent product link; an explicit Superuser
+    OFF metadata override remains separate. No receipts or stock are changed.
     """
-    require_platform_permission_from_session("platform.external_products.link_existing")
+    actor_session = require_platform_permission_from_session("platform.external_products.link_existing")
     if payload.import_off_product_override:
         if not payload.allow_off_mismatch or not resolve_current_server_session().is_platform_superuser:
             raise HTTPException(status_code=403, detail="Alleen de Superuser mag een OFF-afwijking volledig koppelen.")
@@ -800,6 +801,33 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         raise HTTPException(status_code=422, detail=message or "Ongeldige barcode")
     gtin = validation["normalized_value"]
     receipt_item_id = str(payload.receipt_item_id or "").strip()
+    if not payload.import_off_product_override:
+        # A saved barcode is already confirmed evidence under the current PO
+        # contract. Neither OFF nor a GS1 classification is a prerequisite.
+        if "ed2_confirmed_barcode_links" not in _tables():
+            raise HTTPException(status_code=503,
+                                detail="Nieuwe Cataloguskoppeling is nog niet beschikbaar.")
+        try:
+            with engine.begin() as conn:
+                source = resolve_external_article_identity(conn, receipt_item_id)
+                result = materialize_saved_ed2_barcode(
+                    conn, retailer_code=source["retailer_code"],
+                    receipt_text=source["receipt_text"],
+                    external_article_code=source["external_article_code"],
+                    barcode=gtin, confirmed_by=actor_session.user_id,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {
+            "saved": True, "source": "manual", "gtin": gtin,
+            "off_found": False, "off_unavailable": False,
+            "classification_pending": False, "photo_loaded": False,
+            "catalog_linked": True,
+            "catalog_product_created": result["catalog_product_created"],
+            "global_product_id": result["global_product_id"],
+            "barcode_scope": result["barcode_scope"], "stock_changes": 0,
+        }
+
     with engine.begin() as conn:
         identity = _ed2_normalized_source(conn, receipt_item_id)
         _ed2_require_unlinked(conn, identity)

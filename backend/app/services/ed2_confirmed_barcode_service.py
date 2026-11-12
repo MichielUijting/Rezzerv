@@ -1,8 +1,8 @@
-"""Explicit ED2 confirmation: trusted manual barcode -> central Catalogus identity.
+"""A saved ED2 barcode is confirmed identification, mapped to a Catalogus product.
 
-Separate global GTINs from retailer-scoped restricted codes. Only an authorized
-user's explicit confirmation creates identities; the old ED2 evidence table is
-never silently promoted. No receipt, household, stock or synonym writes.
+Separate global GTINs from retailer-scoped restricted codes. Saving in Identificeren is the confirmation; no second review and no OFF
+verification is required. Legacy evidence remains trusted while safe historical
+materialization is a separately controlled operation. No receipt, household, stock or synonym writes.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _rows(conn, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
 
 
-def _owner(conn, *, barcode: str, retailer: str, scope: str) -> tuple[str | None, bool]:
+def _owner(conn, *, barcode: str, retailer: str, label: str, code: str, scope: str) -> tuple[str | None, bool]:
     """Resolve a unique product owner, including old primary-GTIN identities."""
     if scope == "global_candidate":
         product_rows = _rows(conn, """
@@ -59,7 +59,7 @@ def _owner(conn, *, barcode: str, retailer: str, scope: str) -> tuple[str | None
             WHERE identity_type = 'retailer_barcode'
               AND identity_value = :identity_value
               AND global_product_id IS NOT NULL
-        """, {"identity_value": retailer + ":" + barcode})
+        """, {"identity_value": retailer + ":" + label + ":" + code + ":" + barcode})
         ids = {str(row["product_id"]) for row in identity_rows
                if row.get("product_id")}
     if len(ids) > 1:
@@ -80,7 +80,7 @@ def _owner(conn, *, barcode: str, retailer: str, scope: str) -> tuple[str | None
     return product_id, True
 
 
-def confirm_manual_ed2_barcode(
+def materialize_saved_ed2_barcode(
     conn, *, retailer_code: Any, receipt_text: Any,
     external_article_code: Any, barcode: Any, confirmed_by: Any,
 ) -> dict[str, Any]:
@@ -134,17 +134,20 @@ def confirm_manual_ed2_barcode(
         }
 
     # A historical barcode-only entry is an additional consistency check.
-    manual = _rows(conn, """
+    manual_stmt = text("""
         SELECT gtin FROM ed2_manual_barcodes
-        WHERE retailer_code = :retailer AND receipt_text_normalized = :label
+        WHERE retailer_code IN :aliases AND receipt_text_normalized = :label
           AND external_article_code = :code FOR UPDATE
-    """, params)
-    if manual and str(manual[0]["gtin"]) != value:
+    """).bindparams(bindparam("aliases", expanding=True))
+    manual = [dict(row) for row in conn.execute(manual_stmt, {
+        **params, "aliases": list(catalog_retailer_aliases(retailer)),
+    }).mappings().all()]
+    if any(str(row["gtin"]) != value for row in manual):
         raise ValueError(
             "Dit bonartikel heeft een andere opgeslagen barcode. "
             "Corrigeer die uitsluitend na een expliciete gevolgencontrole."
         )
-    product_id, known = _owner(conn, barcode=value, retailer=retailer, scope=scope)
+    product_id, known = _owner(conn, barcode=value, retailer=retailer, label=label, code=code, scope=scope)
 
     # Legacy confirmed and waiting identities may be superseded only by an
     # explicitly authorised correction, never as a side effect of confirming.
@@ -195,7 +198,7 @@ def confirm_manual_ed2_barcode(
         """), {"id": product_id, "gtin": value})
 
     identity_type = "gtin" if scope == "global_candidate" else "retailer_barcode"
-    identity_value = value if scope == "global_candidate" else retailer + ":" + value
+    identity_value = value if scope == "global_candidate" else retailer + ":" + label + ":" + code + ":" + value
     existing_ident = _rows(conn, """
         SELECT global_product_id AS product_id FROM product_identities
         WHERE identity_type = :type AND identity_value = :value
@@ -210,7 +213,7 @@ def confirm_manual_ed2_barcode(
                 identity_value, source, confidence_score, is_primary,
                 created_at, updated_at
             ) VALUES (
-                :id, '', :product_id, :type, :value, 'ed2_explicit_confirm',
+                :id, '', :product_id, :type, :value, 'ed2_saved_barcode',
                 1.0, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {

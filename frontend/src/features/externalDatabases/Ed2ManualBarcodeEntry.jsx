@@ -3,7 +3,7 @@ import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
-/** Manual ED2 barcode evidence is NOT a confirmed Catalogus / stock link. */
+/** Saving the barcode is confirmed Catalogus identification; OFF is optional. */
 export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = null }) {
   const { showFeedback } = useAppFeedback()
   const [barcode, setBarcode] = useState('')
@@ -119,13 +119,13 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
       }
       onSaved({
         status: 'success',
-        message: payload.off_found
-          ? 'Barcode en beschikbare productgegevens uit OFF opgeslagen in Catalogus'
-            + (payload.photo_loaded ? ', inclusief foto.' : '.')
-            + (payload.classification_pending ? ' Officiële GS1-classificatie ontbreekt nog.' : '')
-          : payload.off_unavailable
-            ? 'Barcode opgeslagen. OFF is tijdelijk niet bereikbaar; foto en productgegevens zijn nog niet opgehaald. Er is geen Cataloguskoppeling gemaakt.'
-            : 'Barcode handmatig opgeslagen. Niet gevonden in OFF; geen OFF-product, GS1-classificatie of Cataloguskoppeling aangemaakt.',
+        message: payload.catalog_linked
+          ? 'Barcode opgeslagen en gekoppeld aan '
+              + (payload.catalog_product_created ? 'een nieuw' : 'het bestaande')
+              + ' Catalogusproduct.'
+          : payload.off_found
+            ? 'Barcode en beschikbare OFF-gegevens opgeslagen in Catalogus.'
+            : 'Barcode opgeslagen.',
       })
     } catch (err) {
       if (err.status !== 401) {
@@ -151,7 +151,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   return (
     <section className="rz-external-manual-barcode" aria-label="Barcode koppelen of bewaren" data-testid="ed2-manual-barcode-entry">
       <h4>{canSave ? 'Barcode koppelen of bewaren' : 'Artikelidentiteit bevestigen'}</h4>
-      <p>Controleer en bevestig de barcode bij het gevonden Catalogusproduct. Staat dat product nog niet in de Catalogus? Bewaar dan eerst de barcode als aanwijzing; voorraad wordt niet aangepast.</p>
+      <p>Een opgeslagen barcode is voldoende identificatie. Inhuis koppelt aan een bestaand Catalogusproduct of maakt dit aan. OFF en classificatie zijn niet vereist. Lidl-codes blijven winkelgebonden tot je ze handmatig corrigeert.</p>
       <div className="rz-external-off-manual-form">
         <label className="rz-input-field">
           <span className="rz-label">Barcode (EAN/GTIN)</span>
@@ -167,7 +167,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
         </Button> : null}
         {canSave ? <Button type="button" variant="secondary" disabled={!validLength || saving || checkingCatalog}
           onClick={() => setConfirm(true)} data-testid="ed2-manual-barcode-save">
-          {saving ? 'Opslaan...' : 'Barcode bewaren'}
+          {saving ? 'Opslaan...' : 'Barcode opslaan in Catalogus'}
         </Button> : null}
       </div>
       {canSave && confirm ? <div className="rz-modal-backdrop">
@@ -175,7 +175,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
           aria-labelledby="ed2-manual-barcode-confirm">
           <p id="ed2-manual-barcode-confirm" className="rz-modal-text">
             Barcode <strong>{barcode.trim()}</strong> voor <strong>{item.receipt_line_text}</strong> opslaan?
-            Inhuis zoekt eerst bij OFF. Zonder OFF-match of bij tijdelijke OFF-storing blijft de barcode bewaard zonder productkoppeling.
+            Deze opslag bevestigt de productidentiteit en koppelt deze direct aan de Catalogus. Kassabonnen en voorraad blijven intact.
           </p>
           <div className="rz-modal-actions">
             <Button type="button" variant="secondary" onClick={() => setConfirm(false)}>Annuleren</Button>

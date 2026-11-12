@@ -52,3 +52,20 @@ bevestiging realiseren, met de juiste scope en transactiezekerheid.
 **Branchbeheer:** Draft tot de scoped implementatie binnen deze deelstap, 
 normale/preflightchecks en versie-/risicogates gecontroleerd zijn. F7 exact
 op definitieve SHA indien L verplicht. Geen merge/deploy zonder aparte PO-GO.
+
+## PO-correctie — opgeslagen barcode = vastgesteld bewijs
+
+Het bewaren van een barcode in **Identificeren** is reeds voldoende bewijs.
+Er komt **geen tweede bevestiging** en er is geen OFF-verificatie vereist.
+Na opslaan wordt een Catalogusproduct gezocht of aangemaakt, zonder verplichte
+classificatie en zonder bon-/voorraadmutaties. Deze regel vervangt de eerdere
+technische aanname dat handmatig bewaarde codes slechts voorlopige aanwijzingen
+waren.
+
+Restricted Lidl-codes zijn wel bevestigd voor die specifieke winkel- en
+bonartikelidentiteit, maar niet als wereldwijd unieke GTIN. De PO corrigeert
+de Lidl-code later zelf per artikel. Een wijziging die een bestaande koppeling
+vervangt krijgt een aparte bevoegde gevolgencontrole (besluiten 9A/12B/27B).
+Reeds opgeslagen historische rijen blijven betrouwbaar bewijs; hun veilige
+bulk-materialisatie volgt als afzonderlijk controleerbaar herstel, niet als
+onzichtbare schrijfactie bij een GET of een startup.
