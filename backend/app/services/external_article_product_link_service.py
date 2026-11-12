@@ -647,16 +647,32 @@ def save_external_article_product_link(
 
     _require_complete_global_product_link(conn, normalized_product_id)
 
-    conflict_conditions = []
-    if normalized_code:
-        conflict_conditions.append(
-            "(retailer_code = :retailer_code AND external_article_code = :external_article_code)"
+    # One retailer + receipt description + article number is one identity.
+    # A receipt description may legitimately have several distinct numbers.
+    # A new complete pair must never deactivate another number with the same
+    # receipt label. Legacy code-only records are handled separately.
+    if normalized_code and normalized_text:
+        conflict_where = (
+            "retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND external_article_code = :external_article_code"
         )
-    if normalized_text:
-        conflict_conditions.append(
-            "(retailer_code = :retailer_code AND receipt_text_normalized = :receipt_text_normalized)"
+    elif normalized_code:
+        conflict_where = (
+            "retailer_code = :retailer_code "
+            "AND external_article_code = :external_article_code "
+            "AND COALESCE(receipt_text_normalized, '') = ''"
         )
-    conflict_where = " OR ".join(conflict_conditions)
+    else:
+        conflict_where = (
+            "retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized "
+            "AND COALESCE(external_article_code, '') = ''"
+        )
+    if conn.dialect.name == "postgresql":
+        conn.execute(text(
+            "SELECT pg_advisory_xact_lock(hashtextextended(:identity_key, 672))"
+        ), {"identity_key": "|".join((normalized_retailer, normalized_text, normalized_code))})
 
     conn.execute(
         text(
