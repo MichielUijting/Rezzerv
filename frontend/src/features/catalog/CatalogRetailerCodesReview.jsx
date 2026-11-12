@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import Button from '../../ui/Button'
+import Table from '../../ui/Table'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
@@ -12,6 +14,9 @@ export default function CatalogRetailerCodesReview({ globalProductId, canEdit })
   const [targetGtin, setTargetGtin] = useState('')
   const [saving, setSaving] = useState(false)
   const [refresh, setRefresh] = useState(0)
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(rows.length / 10))
+  const pageRows = rows.slice((page - 1) * 10, page * 10)
 
   useEffect(() => {
     let alive = true
@@ -20,7 +25,7 @@ export default function CatalogRetailerCodesReview({ globalProductId, canEdit })
       .then(async response => {
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.detail || 'Winkelartikelcodes konden niet worden geladen.')
-        if (alive) setRows(Array.isArray(data.items) ? data.items : [])
+        if (alive) { setRows(Array.isArray(data.items) ? data.items : []); setPage(1) }
       })
       .catch(error => {
         if (alive) showFeedback({ variant: 'error', message: error?.message || 'Ophalen is mislukt.' })
@@ -66,19 +71,20 @@ export default function CatalogRetailerCodesReview({ globalProductId, canEdit })
         Kies geen product op basis van alleen de naam.</p>
       {loading ? <p>Winkelartikelcodes laden…</p> : null}
       {!loading && rows.length === 0 ? <p>Geen actieve winkelartikelcodes vastgelegd voor dit Catalogusproduct.</p> : null}
-      {rows.length ? <div className="rz-table-scroll">
-        <table className="rz-table" data-testid="catalog-retailer-code-table">
+      {rows.length ? <Table dataTestId="catalog-retailer-code-table" tableClassName="rz-catalog-detail-table">
           <thead><tr><th>Winkel</th><th>Kassabonomschrijving</th><th>Bonartikelnummer</th><th>Artikel-/barcode</th><th>Status</th>{canEdit ? <th>Actie</th> : null}</tr></thead>
-          <tbody>{rows.map(row => <tr key={row.id}>
+          <tbody>{pageRows.map(row => <tr key={row.id}>
             <td>{row.retailer_code}</td>
             <td>{row.receipt_text_normalized || 'Ontbreekt'}</td>
             <td>{row.external_article_code || 'Ontbreekt'}</td>
             <td>{row.primary_gtin || 'Geen barcode'}</td>
             <td>{row.status === 'confirmed' ? 'Gekoppeld' : 'Classificatie ontbreekt'}</td>
-            {canEdit ? <td><Button type="button" variant="secondary" onClick={() => { setSelection(row); setTargetGtin('') }}>Beoordelen</Button></td> : null}
+            {canEdit ? <td>{row.receipt_text_normalized && row.external_article_code
+              ? <Button type="button" variant="secondary" onClick={() => { setSelection(row); setTargetGtin('') }}>Beoordelen</Button>
+              : <span>Bronomschrijving en bonartikelnummer vereist</span>}</td> : null}
           </tr>)}</tbody>
-        </table>
-      </div> : null}
+        </Table> : null}
+      {rows.length > 10 ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
       {selection ? <div className="rz-modal-backdrop">
         <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Winkelartikelcode beoordelen">
           <h3>Winkelartikelcode beoordelen</h3>
