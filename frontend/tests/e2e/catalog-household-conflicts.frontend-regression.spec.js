@@ -80,6 +80,8 @@ test('Frontteambeheerder kan meerdere bonartikelnummers voor dezelfde omschrijvi
   await page.goto('/catalogus')
   await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
   await expect(page.getByTestId('catalog-conflict-count')).toContainText('2')
+  await expect(page.getByTestId('catalog-table')).toHaveCount(0)
+  await expect(page.getByTestId('catalog-conflicts-table').locator('thead tr.rz-table-filters')).toHaveCount(1)
   await page.getByTestId('catalog-conflicts-table').getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
   const evidence = page.getByTestId('catalog-conflict-sources-table')
   await expect(evidence.getByText('0012345')).toBeVisible()
@@ -200,3 +202,79 @@ for (const [name, width, height] of [
     await expect(page.getByRole('button', { name: 'Historische conflicten beoordelen' })).toHaveCount(0)
   })
 }
+
+
+test('Standaard DataTable filtert overzicht en bronregels zonder broncodes te wijzigen', async ({ page }) => {
+  await mockCatalog(page, { ordinaryAdmin: true })
+  await page.goto('/catalogus')
+  await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
+  const conflicts = page.getByTestId('catalog-conflicts-table')
+  await expect(conflicts.locator('thead tr.rz-table-filters')).toHaveCount(1)
+  await expect(conflicts.locator('thead th')).toHaveCount(10)
+  await conflicts.getByRole('textbox', { name: 'Filter op Huishoudartikel' }).fill('Melk halfvol')
+  await expect(conflicts.locator('tbody tr')).toHaveCount(1)
+  await expect(conflicts.getByText('Melk uit andere boodschappen')).toHaveCount(0)
+  await conflicts.getByRole('textbox', { name: 'Filter op Huishoudartikel' }).fill('')
+
+  await conflicts.getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+  const sources = page.getByTestId('catalog-conflict-sources-table')
+  await expect(sources.locator('thead tr.rz-table-filters')).toHaveCount(1)
+  await expect(sources.locator('thead th')).toHaveCount(12)
+  await sources.getByRole('textbox', { name: 'Filter op Bonartikelnummer' }).fill('0087654')
+  await expect(sources.locator('tbody tr')).toHaveCount(1)
+  await expect(sources.getByText('0087654')).toBeVisible()
+  await expect(sources.getByText('0012345')).toHaveCount(0)
+  await sources.getByRole('textbox', { name: 'Filter op Bonartikelnummer' }).fill('')
+  await expect(sources.locator('tbody tr')).toHaveCount(2)
+})
+
+test('Standaard DataTable pagineert tien conflicten en scrollbar staat onder de rijen', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 740 })
+  await mockCatalog(page, { ordinaryAdmin: true })
+  await page.route('**/api/catalog/household-identity-conflicts', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      ...identity,
+      conflict_count: 13,
+      items: Array.from({ length: 13 }, (_, index) => ({
+        ...identity.items[0],
+        household_article_id: `article-${String(index + 1).padStart(2, '0')}`,
+        article_name: `Huishoudartikel ${String(index + 1).padStart(2, '0')}`,
+      })),
+    }),
+  }))
+  await page.goto('/catalogus')
+  await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
+  const table = page.getByTestId('catalog-conflicts-table')
+  const shell = page.locator('.rz-data-table-shell').filter({ has: table })
+  await expect(table.locator('tbody tr')).toHaveCount(10)
+  await expect(shell.locator('nav[aria-label="Paginering"]')).toBeVisible()
+  const tableWrapper = shell.locator('.rz-table-wrapper')
+  const scroll = await tableWrapper.evaluate(element => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+    paddingBottom: getComputedStyle(element).paddingBottom,
+  }))
+  expect(scroll.scrollWidth).toBeGreaterThan(scroll.clientWidth)
+  expect(Number.parseFloat(scroll.paddingBottom)).toBeGreaterThanOrEqual(24)
+  await shell.getByRole('button', { name: '+' }).click()
+  await expect(table.locator('tbody tr')).toHaveCount(3)
+  await expect(table.getByText('Huishoudartikel 13')).toBeVisible()
+  await expect(page.getByTestId('catalog-table')).toHaveCount(0)
+})
+
+test('Mobiele conflictenlijst gebruikt DataTable zonder de achterliggende Cataloguslijst', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockCatalog(page, { ordinaryAdmin: true })
+  await page.goto('/catalogus')
+  await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
+  const table = page.getByTestId('catalog-conflicts-table')
+  await expect(table).toBeVisible()
+  await expect(table.locator('thead tr.rz-table-filters')).toHaveCount(1)
+  await expect(page.locator('.rz-mobile-catalog-toolbar')).toHaveCount(0)
+  await expect(page.locator('.rz-mobile-catalog-list')).toHaveCount(0)
+  await table.getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+  await expect(page.getByTestId('catalog-conflict-sources-table')).toBeVisible()
+  await page.getByRole('button', { name: 'Terug naar Catalogus' }).click()
+  await expect(page.locator('.rz-mobile-catalog-toolbar')).toBeVisible()
+})
