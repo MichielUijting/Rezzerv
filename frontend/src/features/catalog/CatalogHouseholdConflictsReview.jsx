@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import DataTable from '../../ui/DataTable.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -14,7 +15,9 @@ function reasonLabel(reason) {
 }
 
 /** The conflict list is from the current authorized household, never from a user-provided household ID. */
-export default function CatalogHouseholdConflictsReview({ onClose }) {
+export default function CatalogHouseholdConflictsReview() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const inSystemHousehold = context?.context_type === 'system'
@@ -27,7 +30,10 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   // React StrictMode replays effect setup on mount; share the same in-flight
   // GET instead of making duplicate household-scoped requests.
   const inFlightReviewRef = useRef(null)
-  const [selectedArticle, setSelectedArticle] = useState(null)
+  const [checkedArticleIds, setCheckedArticleIds] = useState([])
+  const [articlePageRows, setArticlePageRows] = useState([])
+  const [checkedSourceIds, setCheckedSourceIds] = useState([])
+  const [sourcePageRows, setSourcePageRows] = useState([])
   const [selectedSource, setSelectedSource] = useState(null)
   const [targetGtin, setTargetGtin] = useState('')
   const [saving, setSaving] = useState(false)
@@ -61,7 +67,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
             })
           }
           setData(payload)
-          setSelectedArticle(null)
+          setCheckedSourceIds([])
         }
       })
       .catch(error => {
@@ -75,6 +81,73 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   const products = useMemo(() => new Map(
     (Array.isArray(data?.products) ? data.products : []).map(product => [product.id, product])
   ), [data])
+
+  const reviewingIds = useMemo(
+    () => (new URLSearchParams(location.search).get('artikelen') || '').split(',').filter(Boolean),
+    [location.search],
+  )
+  const activeArticles = useMemo(
+    () => items.filter(item => reviewingIds.includes(item.household_article_id)),
+    [items, reviewingIds],
+  )
+  const sourceRows = useMemo(() => activeArticles.flatMap(article =>
+    (article.sources || []).map(source => ({
+      ...source,
+      household_article_id: article.household_article_id,
+      article_name: article.article_name,
+      source_selection_key: [article.household_article_id, source.receipt_line_id,
+        source.retailer_code, source.receipt_text, source.external_article_code].join('|'),
+    }))
+  ), [activeArticles])
+  const selectedSources = sourceRows.filter(source => checkedSourceIds.includes(source.source_selection_key))
+  const sourceArticle = activeArticles.find(article => article.household_article_id === selectedSource?.household_article_id)
+
+  function toggleArticle(id, checked) {
+    setCheckedArticleIds(previous => checked
+      ? [...new Set([...previous, id])]
+      : previous.filter(value => value !== id))
+  }
+
+  function toggleSource(id, checked) {
+    setCheckedSourceIds(previous => checked
+      ? [...new Set([...previous, id])]
+      : previous.filter(value => value !== id))
+  }
+
+  function selectArticlePage(checked) {
+    const ids = articlePageRows.map(item => item.household_article_id)
+    setCheckedArticleIds(previous => checked
+      ? [...new Set([...previous, ...ids])]
+      : previous.filter(id => !ids.includes(id)))
+  }
+
+  function selectSourcePage(checked) {
+    const ids = sourcePageRows.map(source => source.source_selection_key)
+    setCheckedSourceIds(previous => checked
+      ? [...new Set([...previous, ...ids])]
+      : previous.filter(id => !ids.includes(id)))
+  }
+
+  function startSourceReview() {
+    if (!checkedArticleIds.length) return
+    const params = new URLSearchParams(location.search)
+    params.set('artikelen', checkedArticleIds.join(','))
+    navigate(`${location.pathname}?${params.toString()}`, { state: location.state })
+    setCheckedSourceIds([])
+  }
+
+  function startBarcodeDecision() {
+    if (selectedSources.length !== 1) {
+      showFeedback({
+        variant: 'warning',
+        dismissMode: 'ok-only',
+        message: 'Selecteer precies één bonartikelcombinatie voor een barcodebesluit. Verschillende boncodes mogen niet automatisch dezelfde barcode krijgen.',
+      })
+      return
+    }
+    setSelectedSource(selectedSources[0])
+    setTargetGtin('')
+  }
 
   function productName(id) {
     const product = products.get(id)
