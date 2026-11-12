@@ -66,7 +66,10 @@ class FakeEngine:
 def authorized(monkeypatch):
     monkeypatch.setattr(
         routes, "require_platform_permission_from_session",
-        lambda permission: SimpleNamespace(user_id="actor-1"),
+        lambda permission: SimpleNamespace(
+            user_id="actor-1", active_household_id="1",
+            context_type="regular", is_frontteam=True, is_platform_superuser=False,
+        ),
     )
     monkeypatch.setattr(
         routes, "require_household_admin_from_session",
@@ -180,3 +183,82 @@ def test_success_only_confirms_complete_source_key(monkeypatch):
         "household": "1", "article": "article-1", "receipt_line": "receipt-1",
     }
     assert all(not sql.startswith(("UPDATE ", "DELETE ", "INSERT ")) for sql, _ in conn.queries)
+
+
+@pytest.mark.parametrize("session", [
+    dict(user_id="actor-1", active_household_id="1",
+         context_type="regular", is_frontteam=False, is_platform_superuser=False),
+    dict(user_id="actor-1", active_household_id="1",
+         context_type="regular", is_frontteam=False, is_platform_superuser=True),
+    dict(user_id="actor-1", active_household_id="1",
+         context_type="none", is_frontteam=False, is_platform_superuser=False),
+    dict(user_id="actor-1", active_household_id="1",
+         context_type="system", is_frontteam=False, is_platform_superuser=True),
+    dict(user_id="actor-1", active_household_id="0",
+         context_type="system", is_frontteam=False, is_platform_superuser=False),
+    dict(user_id="actor-1", active_household_id="0",
+         context_type="regular", is_frontteam=True, is_platform_superuser=False),
+])
+def test_other_roles_or_invalid_household_context_cannot_read_or_confirm(monkeypatch, session):
+    conn = FakeConn()
+    monkeypatch.setattr(routes, "engine", FakeEngine(conn))
+    monkeypatch.setattr(routes, "require_platform_permission_from_session",
+                        lambda _permission: SimpleNamespace(**session))
+    with pytest.raises(HTTPException) as list_error:
+        routes.list_household_catalog_identity_conflicts()
+    assert list_error.value.status_code == 403
+    with pytest.raises(HTTPException) as write_error:
+        routes.confirm_household_catalog_source(request())
+    assert write_error.value.status_code == 403
+    assert conn.queries == []
+
+
+def test_superuser_may_review_only_its_system_household_without_household_admin(monkeypatch):
+    conn = FakeConn(missing=True)
+    monkeypatch.setattr(routes, "engine", FakeEngine(conn))
+    monkeypatch.setattr(routes, "require_platform_permission_from_session",
+                        lambda _permission: SimpleNamespace(
+                            user_id="superuser", active_household_id="0",
+                            context_type="system", is_frontteam=False,
+                            is_platform_superuser=True,
+                        ))
+    def household_admin_not_allowed():
+        raise AssertionError("Superuser must not impersonate household admin")
+    monkeypatch.setattr(routes, "require_household_admin_from_session",
+                        household_admin_not_allowed)
+    scoped = []
+    def preview(_conn, **kwargs):
+        scoped.append(kwargs)
+        return {
+            "conflict": 0, "source_rows_examined": 0, "articles_examined": 0,
+            "conflict_list_complete": True, "conflict_items": [], "conflict_products": [],
+        }
+    monkeypatch.setattr(routes, "preview_household_catalog_identity_backfill", preview)
+    result = routes.list_household_catalog_identity_conflicts()
+    assert result["conflict_count"] == 0
+    assert scoped == [{"household_id": "0", "include_conflicts": True}]
+
+    with pytest.raises(HTTPException) as error:
+        routes.confirm_household_catalog_source(request())
+    assert error.value.status_code == 409
+    assert conn.queries[0][1]["household"] == "0"
+    assert conn.queries[0][1]["article"] == "article-1"
+    assert conn.queries[0][1]["receipt_line"] == "receipt-1"
+
+
+def test_frontteam_must_be_household_admin_and_match_session_household(monkeypatch):
+    conn = FakeConn()
+    monkeypatch.setattr(routes, "engine", FakeEngine(conn))
+    monkeypatch.setattr(routes, "require_household_admin_from_session",
+                        lambda: (_ for _ in ()).throw(HTTPException(403, "Geen huishoudrechten")))
+    with pytest.raises(HTTPException) as error:
+        routes.list_household_catalog_identity_conflicts()
+    assert error.value.status_code == 403
+    assert conn.queries == []
+
+    monkeypatch.setattr(routes, "require_household_admin_from_session",
+                        lambda: {"user_id": "actor-1", "active_household_id": "different"})
+    with pytest.raises(HTTPException) as error:
+        routes.list_household_catalog_identity_conflicts()
+    assert error.value.status_code == 403
+    assert conn.queries == []
