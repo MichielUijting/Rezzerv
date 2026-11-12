@@ -56,3 +56,9 @@ De functie **Catalogus → Historische conflicten beoordelen** berekent de actue
 - De server accepteert in deze routes geen vrij te kiezen `household_id`. De ingelogde actor is bepalend voor de audit-attributie. Onjuiste bron, dubbele identiteit, gewijzigde feiten of onzekere historische koppeling geeft een fout zonder gedeeltelijke wijziging.
 - De 21 eerder waargenomen conflicten zijn geen hardcoded programmalijst. Het scherm toont de actuele, uit brondata afgeleide conflictgroepen. Na bevestiging van een boncode kan een huishoudartikelconflict blijven bestaan, omdat geen enkel `household_article_id`, `inventory`, `receipt` of bestaande koppeling wordt herverdeeld.
 - Bestaande meervoudige huishoudartikelen met hetzelfde Catalogusproduct vereisen een afzonderlijk, expliciet te beoordelen behoud-/samenvoegbesluit. Bevestiging van een bonbarcode is **niet** toestemming voor een huishoudartikelmerge.
+
+### Zichtbaarheid in het Systeemhuishouden
+
+De functie blijft household-scoped en wordt nooit automatisch op een ander huishouden gericht. Een Superuser met `context_type=system` en huishouden `0` ziet in de platformbrede Catalogus wel de actie **Historische conflicten beoordelen**, maar krijgt bij aanklikken uitsluitend een centrale toelichtingsmelding met OK: een afzonderlijk regulier account met Beheerderrechten op het betrokken huishouden én de bestaande platformbevoegdheid voor Cataloguskoppelingen is nodig om historische bronregels in te zien of te bevestigen.
+
+Er volgt **geen** historische huishoudopvraag vanuit de systeemcontext. Dit implementeert geen ondersteuningstoegang, speciale householdwissel, impersonatie of superuserrechten op privédata. De UI mag deze backendisolatie nooit vervangen. Desktop en mobiel zijn gelijkwaardig afgedekt met negatieve Playwrighttests.
