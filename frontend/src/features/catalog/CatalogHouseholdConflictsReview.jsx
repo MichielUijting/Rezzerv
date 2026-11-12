@@ -21,6 +21,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
   const [page, setPage] = useState(1)
+  const [sourcePage, setSourcePage] = useState(1)
   const [selectedArticle, setSelectedArticle] = useState(null)
   const [selectedSource, setSelectedSource] = useState(null)
   const [targetGtin, setTargetGtin] = useState('')
@@ -106,7 +107,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
       <p>Dit overzicht gebruikt uitsluitend de oorspronkelijke bonregels van je actieve huishouden.
         Beoordeel per winkel, kassabonomschrijving en bonartikelnummer de juiste Artikel-/barcode.
         Meerdere bonartikelnummers bij dezelfde omschrijving zijn toegestaan.
-        Huishoudartikelen en voorraad worden nooit automatisch samengevoegd.</p>
+        Huishoudartikelen en voorraad worden nooit automatisch samengevoegd. Een conflict kan daarom na een juiste bronbevestiging nog apart beoordeeld moeten worden.</p>
       {loading ? <p>Historische bonregels controleren…</p> : null}
       {!loading && data ? (
         <>
@@ -128,7 +129,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
                   <td>{item.candidate_product_ids?.map(productName).join(' · ') || 'Niet eenduidig'}</td>
                   <td>{item.source_count}</td>
                   <td><Button type="button" variant="secondary"
-                    onClick={() => setSelectedArticle(item)}>
+                    onClick={() => { setSelectedArticle(item); setSourcePage(1) }}>
                     Bonregels beoordelen
                   </Button></td>
                 </tr>
@@ -145,7 +146,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
               <Table dataTestId="catalog-conflict-sources-table" tableClassName="rz-catalog-detail-table">
                 <thead><tr><th>Winkel</th><th>Kassabonomschrijving</th><th>Bonartikelnummer</th>
                   <th>Catalogusherkenning</th><th>Aantal bonregels</th><th>Actie</th></tr></thead>
-                <tbody>{selectedArticle.sources.map(source => (
+                <tbody>{selectedArticle.sources.slice((sourcePage - 1) * PAGE_SIZE, sourcePage * PAGE_SIZE).map(source => (
                   <tr key={`${source.retailer_code}|${source.receipt_text}|${source.external_article_code}|${source.receipt_line_id}`}>
                     <td>{source.retailer_code || 'Onbekend'}</td>
                     <td>{source.receipt_text || 'Ontbreekt'}</td>
@@ -163,6 +164,9 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
                   </tr>
                 ))}</tbody>
               </Table>
+              {selectedArticle.sources.length > PAGE_SIZE ? (
+                <Pagination page={sourcePage} pageCount={Math.ceil(selectedArticle.sources.length / PAGE_SIZE)} onPageChange={setSourcePage} />
+              ) : null}
             </section>
           ) : null}
         </>
