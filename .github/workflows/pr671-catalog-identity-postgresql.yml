@@ -12,6 +12,7 @@ on:
       - 'backend/app/api/barcode_routes.py'
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/api/catalog_retailer_code_review_routes.py'
+      - 'backend/app/api/catalog_household_identity_review_routes.py'
       - 'backend/app/main.py'
       - 'backend/app/services/almost_out_group_service.py'
       - 'backend/app/services/external_article_product_link_service.py'
@@ -22,6 +23,7 @@ on:
       - 'backend/tests/test_catalog_identity_route_security.py'
       - 'backend/tests/test_catalog_identity_chain_postgresql.py'
       - 'backend/tests/test_catalog_retailer_code_review.py'
+      - 'backend/tests/test_catalog_household_identity_review.py'
       - 'backend/tests/test_catalog_retailer_receipt_composite_identity.py'
       - 'backend/tests/test_receipt_to_unpack_retailer_code_contract.py'
       - 'frontend/src/features/externalDatabases/**'
@@ -36,6 +38,7 @@ on:
       - 'frontend/src/ui/AppFeedbackProvider.jsx'
       - 'frontend/tests/e2e/article-identity-confirmation.frontend-regression.spec.js'
       - 'frontend/tests/e2e/catalog-retailer-code-review.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/catalog-household-conflicts.frontend-regression.spec.js'
       - 'frontend/playwright.identity.config.js'
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
@@ -83,6 +86,7 @@ jobs:
             backend/tests/test_catalog_identity_route_security.py \
             backend/tests/test_catalog_identity_chain_postgresql.py \
             backend/tests/test_catalog_retailer_code_review.py \
+            backend/tests/test_catalog_household_identity_review.py \
             backend/tests/test_catalog_retailer_receipt_composite_identity.py
 
   articlebeheer-browser:
