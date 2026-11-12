@@ -79,3 +79,16 @@ def test_two_catalogus_products_for_one_complete_receipt_identity_fail_closed(id
                                      receipt_text="melk", external_article_code="001")
     assert match["status"] == "conflict"
     assert match["global_product_id"] is None
+
+
+def test_description_only_cannot_choose_between_different_catalogus_products(identity_conn):
+    conn = identity_conn
+    # A retailer may reuse the same receipt description with another number;
+    # without that number the Catalogus reader must not return a random owner.
+    conn.execute(text("""INSERT INTO external_article_product_links
+        (id, retailer_code, receipt_text_normalized, external_article_code,
+         global_product_id, status)
+        VALUES ('l4','lidl','melk','003','p2','confirmed')"""))
+    assert get_confirmed_external_article_product_link(
+        conn, retailer_code="Lidl", receipt_text="Melk", external_article_code=None
+    ) is None
