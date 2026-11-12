@@ -1,6 +1,7 @@
 # Inhuis — implementatie artikelidentificatie: fase 1, deelstap A
 
 **PO-doelontwerp:** 27 vastgestelde besluiten (12 november 2026).
+**Vastgesteld ontwerp:** [Functioneel ontwerp artikelidentificatie v2.0](ARTICLE-IDENTITY-FUNCTIONAL-DESIGN-v2.md).
 **TEST_LEVEL_PROVISIONAL: L** — barcode/productidentiteit in backend-runtime.
 
 ## Doel
