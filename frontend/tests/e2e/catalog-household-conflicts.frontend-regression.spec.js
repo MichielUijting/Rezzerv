@@ -14,6 +14,7 @@ const identity = {
     current_product_ids: [],
     candidate_product_ids: ['product-1'],
     source_count: 4,
+    related_household_articles: [{ household_article_id: 'article-b', article_name: 'Melk uit andere boodschappen' }],
     sources: [
       { receipt_line_id: 'line-1', retailer_code: 'lidl', receipt_text: 'melk halfvol',
         external_article_code: '0012345', receipt_count: 2,
@@ -27,6 +28,7 @@ const identity = {
     reason: 'meerdere_huishoudartikelen',
     current_product_ids: [], candidate_product_ids: ['product-1'],
     source_count: 3,
+    related_household_articles: [{ household_article_id: 'article-a', article_name: 'Melk halfvol' }],
     sources: [{ receipt_line_id: 'line-3', retailer_code: 'lidl',
       receipt_text: 'melk halfvol', external_article_code: '0012345',
       receipt_count: 3, identity_status: 'matched', candidate_product_id: 'product-1' }],
@@ -82,11 +84,13 @@ test('Frontteambeheerder kan meerdere bonartikelnummers voor dezelfde omschrijvi
   await expect(page.getByTestId('catalog-conflict-count')).toContainText('2')
   await expect(page.getByTestId('catalog-table')).toHaveCount(0)
   await expect(page.getByTestId('catalog-conflicts-table').locator('thead tr.rz-table-filters')).toHaveCount(1)
-  await page.getByTestId('catalog-conflicts-table').getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+  await page.getByTestId('catalog-conflicts-table').getByRole('checkbox', { name: 'Selecteer huishoudartikel Melk halfvol' }).check()
+  await page.getByRole('button', { name: 'Bonregels beoordelen (1)' }).click()
   const evidence = page.getByTestId('catalog-conflict-sources-table')
   await expect(evidence.getByText('0012345')).toBeVisible()
   await expect(evidence.getByText('0087654')).toBeVisible()
-  await evidence.getByRole('button', { name: 'Barcode bepalen' }).nth(1).click()
+  await evidence.getByRole('checkbox', { name: 'Selecteer bonartikelnummer 0087654' }).check()
+  await page.getByRole('button', { name: 'Barcode bepalen (1)' }).click()
   const dialog = page.getByRole('dialog', { name: 'Artikelbarcode bij bonartikel bevestigen' })
   await dialog.getByLabel('Juiste Artikel-/barcode').fill('8712345678906')
   await dialog.getByRole('button', { name: 'Barcode bevestigen' }).click()
@@ -103,8 +107,10 @@ test('Mobiel blijft een conflicterende bron veilig zichtbaar na HTTP 409', async
   await mockCatalog(page, { failSave: true })
   await page.goto('/catalogus')
   await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
-  await page.getByTestId('catalog-conflicts-table').getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
-  await page.getByTestId('catalog-conflict-sources-table').getByRole('button', { name: 'Barcode bepalen' }).first().click()
+  await page.getByTestId('catalog-conflicts-table').getByRole('checkbox', { name: 'Selecteer huishoudartikel Melk halfvol' }).check()
+  await page.getByRole('button', { name: 'Bonregels beoordelen (1)' }).click()
+  await page.getByTestId('catalog-conflict-sources-table').getByRole('checkbox', { name: 'Selecteer bonartikelnummer 0012345' }).check()
+  await page.getByRole('button', { name: 'Barcode bepalen (1)' }).click()
   const dialog = page.getByRole('dialog', { name: 'Artikelbarcode bij bonartikel bevestigen' })
   await dialog.getByLabel('Juiste Artikel-/barcode').fill('8712345678906')
   await dialog.getByRole('button', { name: 'Barcode bevestigen' }).click()
@@ -184,9 +190,11 @@ for (const [name, width, height] of [
     await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
     await expect(page.getByTestId('catalog-conflict-count')).toContainText('2')
     await page.getByTestId('catalog-conflicts-table')
-      .getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+      .getByRole('checkbox', { name: 'Selecteer huishoudartikel Melk halfvol' }).check()
+    await page.getByRole('button', { name: 'Bonregels beoordelen (1)' }).click()
     await page.getByTestId('catalog-conflict-sources-table')
-      .getByRole('button', { name: 'Barcode bepalen' }).first().click()
+      .getByRole('checkbox', { name: 'Selecteer bonartikelnummer 0012345' }).check()
+    await page.getByRole('button', { name: 'Barcode bepalen (1)' }).click()
     const dialog = page.getByRole('dialog', { name: 'Artikelbarcode bij bonartikel bevestigen' })
     await dialog.getByLabel('Juiste Artikel-/barcode').fill('8712345678906')
     await dialog.getByRole('button', { name: 'Barcode bevestigen' }).click()
@@ -210,16 +218,17 @@ test('Standaard DataTable filtert overzicht en bronregels zonder broncodes te wi
   await page.getByRole('button', { name: 'Historische conflicten beoordelen' }).click()
   const conflicts = page.getByTestId('catalog-conflicts-table')
   await expect(conflicts.locator('thead tr.rz-table-filters')).toHaveCount(1)
-  await expect(conflicts.locator('thead th')).toHaveCount(10)
+  await expect(conflicts.locator('thead th')).toHaveCount(12)
   await conflicts.getByRole('textbox', { name: 'Filter op Huishoudartikel' }).fill('Melk halfvol')
   await expect(conflicts.locator('tbody tr')).toHaveCount(1)
   await expect(conflicts.getByText('Melk uit andere boodschappen')).toHaveCount(0)
   await conflicts.getByRole('textbox', { name: 'Filter op Huishoudartikel' }).fill('')
 
-  await conflicts.getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+  await conflicts.getByRole('checkbox', { name: 'Selecteer huishoudartikel Melk halfvol' }).check()
+  await page.getByRole('button', { name: 'Bonregels beoordelen (1)' }).click()
   const sources = page.getByTestId('catalog-conflict-sources-table')
   await expect(sources.locator('thead tr.rz-table-filters')).toHaveCount(1)
-  await expect(sources.locator('thead th')).toHaveCount(12)
+  await expect(sources.locator('thead th')).toHaveCount(14)
   await sources.getByRole('textbox', { name: 'Filter op Bonartikelnummer' }).fill('0087654')
   await expect(sources.locator('tbody tr')).toHaveCount(1)
   await expect(sources.getByText('0087654')).toBeVisible()
@@ -249,7 +258,7 @@ test('Standaard DataTable pagineert tien conflicten en scrollbar staat onder de 
   const shell = page.locator('.rz-data-table-shell').filter({ has: table })
   await expect(table.locator('tbody tr')).toHaveCount(10)
   await expect(shell.locator('nav[aria-label="Paginering"]')).toBeVisible()
-  const firstColumn = await table.locator('thead tr.rz-table-header th').first().evaluate(element => ({
+  const firstColumn = await table.locator('thead tr.rz-table-header th').nth(1).evaluate(element => ({
     width: element.getBoundingClientRect().width,
     alignment: getComputedStyle(element).textAlign,
   }))
@@ -279,8 +288,13 @@ test('Mobiele conflictenlijst gebruikt DataTable zonder de achterliggende Catalo
   await expect(table.locator('thead tr.rz-table-filters')).toHaveCount(1)
   await expect(page.locator('.rz-mobile-catalog-toolbar')).toHaveCount(0)
   await expect(page.locator('.rz-mobile-catalog-list')).toHaveCount(0)
-  await table.getByRole('button', { name: 'Bonregels beoordelen' }).first().click()
+  await table.getByRole('checkbox', { name: 'Selecteer huishoudartikel Melk halfvol' }).check()
+  await page.getByRole('button', { name: 'Bonregels beoordelen (1)' }).click()
   await expect(page.getByTestId('catalog-conflict-sources-table')).toBeVisible()
-  await page.getByRole('button', { name: 'Terug naar Catalogus' }).click()
+  await expect(page.getByRole('button', { name: 'Terug naar Catalogus' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Historische beoordeling sluiten' })).toHaveCount(0)
+  await page.goBack()
+  await expect(page.getByTestId('catalog-conflicts-table')).toBeVisible()
+  await page.goBack()
   await expect(page.locator('.rz-mobile-catalog-toolbar')).toBeVisible()
 })
