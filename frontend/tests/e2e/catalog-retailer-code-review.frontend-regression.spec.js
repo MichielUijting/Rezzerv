@@ -80,3 +80,48 @@ test('Geweigerde correctie laat bestaande koppeling zichtbaar en toont centrale 
   await expect(page.getByText(/Er zijn huishoudartikelen gekoppeld/)).toBeVisible()
   await expect(page.getByTestId('catalog-retailer-code-table').getByText('0082904')).toBeVisible()
 })
+
+
+test('Bonartikelnummer koppelen vereist bevestiging en stuurt de exacte boncombinatie', async ({ page }) => {
+  const product='catalog-butter-add'
+  let saved=null
+  await page.route('**/api/session',route=>route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({
+      user_id:'editor',active_household_id:'0',context_type:'system',
+      role:'owner',is_platform_superuser:true,
+      permissions:{'platform.external_products.link_existing':true},
+    })
+  }))
+  await page.route('**/api/catalog/catalog-butter-add',route=>route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({
+      product:{id:product,name:'Roomboter Ongezouten',primary_gtin:'20487935'},
+      identities:[],household_articles:[],receipt_lines:[],
+    })
+  }))
+  await page.route('**/api/catalog/catalog-butter-add/gpc-brick',route=>route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({assignment:null,suggestion:null,suggestions:[]})
+  }))
+  await page.route('**/api/catalog/catalog-butter-add/retailer-codes',route=>route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({items:[]})
+  }))
+  await page.route('**/api/catalog/catalog-butter-add/retailer-codes/add',async route=>{
+    saved=route.request().postDataJSON()
+    await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify({status:'confirmed',changed:true})})
+  })
+  await page.goto('/catalogus/catalog-butter-add')
+  await page.getByRole('button',{name:'Bonartikelnummer koppelen'}).click()
+  const dialog=page.getByRole('dialog',{name:'Bonartikelnummer aan Catalogus koppelen'})
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('Kassabonomschrijving').fill('Roomboter ongezouten')
+  await dialog.getByLabel('Bonartikelnummer').fill('0095545')
+  await dialog.getByRole('button',{name:'Koppelen'}).click()
+  await expect.poll(()=>saved).toEqual({
+    retailer_code:'lidl',receipt_text:'Roomboter ongezouten',
+    external_article_code:'0095545',expected_gtin:'20487935'
+  })
+})
