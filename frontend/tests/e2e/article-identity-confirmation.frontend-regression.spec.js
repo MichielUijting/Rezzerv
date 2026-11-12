@@ -102,7 +102,7 @@ test('Lidl: individual correction previews, can cancel and writes only after con
     const path = new URL(route.request().url()).pathname
     if (path === '/api/session') return route.fulfill({ json: {
       user_id: 'frontteam-editor', active_household_id: '0', context_type: 'system',
-      role: 'member', is_platform_superuser: false,
+      role: 'member', is_platform_superuser: false, is_frontteam: true,
       permissions: { 'platform.external_products.link_existing': true },
     } })
     if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
@@ -184,7 +184,7 @@ test('Lidl: historical conflict preview never offers the confirmation action', a
     const path = new URL(route.request().url()).pathname
     if (path === '/api/session') return route.fulfill({ json: {
       user_id: 'frontteam-editor', active_household_id: '0', context_type: 'system',
-      role: 'member', is_platform_superuser: false,
+      role: 'member', is_platform_superuser: false, is_frontteam: true,
       permissions: { 'platform.external_products.link_existing': true },
     } })
     if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
