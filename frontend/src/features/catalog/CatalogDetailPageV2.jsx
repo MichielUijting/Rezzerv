@@ -364,7 +364,7 @@ export default function CatalogDetailPageV2() {
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
               </section>
 
-              {canReviewRetailerCodes ? <section className="rz-mobile-catalog-detail-card"><CatalogRetailerCodesReview globalProductId={globalProductId} canEdit /></section> : null}
+              {canReviewRetailerCodes ? <section className="rz-mobile-catalog-detail-card"><CatalogRetailerCodesReview globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit /></section> : null}
 
               <section className="rz-mobile-catalog-detail-card">
                 <h3>Identiteiten</h3>
@@ -494,7 +494,7 @@ export default function CatalogDetailPageV2() {
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
-              {canReviewRetailerCodes ? <section className="rz-catalog-detail-section"><CatalogRetailerCodesReview globalProductId={globalProductId} canEdit /></section> : null}
+              {canReviewRetailerCodes ? <section className="rz-catalog-detail-section"><CatalogRetailerCodesReview globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit /></section> : null}
 
               <section className="rz-catalog-detail-section">
                 <h3>Identiteiten</h3>
