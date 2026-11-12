@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import ScreenCard from '../../ui/ScreenCard.jsx'
 import SuperuserDashboardPage from './SuperuserDashboardPage.jsx'
@@ -10,7 +11,13 @@ import SuperuserAppearanceSection from './SuperuserAppearanceSection.jsx'
 const SUPERUSER_TABS = ['Beheercentrum', 'Frontteam', 'Weergave', 'Actieknoppen', 'Inlogscherm']
 
 export default function SuperuserControlPage() {
-  const [activeTab, setActiveTab] = useState('Beheercentrum')
+  const location = useLocation()
+  const requestedTab = new URLSearchParams(location.search).get('tab') === 'frontteam' ? 'Frontteam' : null
+  const [activeTab, setActiveTab] = useState(() => requestedTab || 'Beheercentrum')
+
+  useEffect(() => {
+    if (requestedTab) setActiveTab(requestedTab)
+  }, [requestedTab])
 
   return (
     <div data-testid="superuser-control-page">
