@@ -423,3 +423,44 @@ def test_selective_review_refuses_incomplete_review_and_new_owner():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+def test_household_conflict_review_lists_all_shared_candidates_read_only():
+    engine, conn = _fixture()
+    try:
+        conn.execute(text("INSERT INTO household_articles VALUES ('a3','h1',NULL)"))
+        conn.execute(text("INSERT INTO receipt_table_lines VALUES ('l3','r1',NULL,'code1',FALSE)"))
+        conn.execute(text("INSERT INTO purchase_import_lines VALUES ('b1','receipt-line:l3','a3')"))
+        report = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", include_conflicts=True,
+        )
+        assert report["conflict"] == 2, report
+        assert report["conflict_list_complete"] is True
+        assert {item["household_article_id"] for item in report["conflict_items"]} == {"a1", "a3"}
+        assert all(item["reason"] == "meerdere_huishoudartikelen" for item in report["conflict_items"])
+        assert all(item["candidate_product_ids"] == ["p1"] for item in report["conflict_items"])
+        assert all(item["sources"][0]["external_article_code"] == "code1"
+                   for item in report["conflict_items"])
+        assert report["changes"] == "none"
+        assert dict(conn.execute(text("SELECT id, global_product_id FROM household_articles")).all()) == {
+            "a1": None, "a2": None, "a3": None,
+        }
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_truncated_household_conflict_review_never_advertises_source_choices():
+    engine, conn = _fixture()
+    try:
+        report = preview_household_catalog_identity_backfill(
+            conn, household_id="h1", limit=1, include_conflicts=True,
+        )
+        assert report["conflict_list_complete"] is False
+        assert report["conflict_items"] == []
+        assert report["limited"] is True
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
