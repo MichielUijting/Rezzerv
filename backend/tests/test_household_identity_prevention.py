@@ -294,3 +294,29 @@ def test_competing_catalog_link_does_not_overwrite_and_uses_shared_postgresql_lo
     locks = [params for sql, params in conn.statements if "pg_advisory_xact_lock" in sql]
     assert locks == [{"key": "household_catalog:household-1:catalog-1"}]
     assert not any("UPDATE household_articles" in sql for sql, _ in conn.statements)
+
+
+@pytest.mark.parametrize("scanned,valid", [
+    ("8712345678906", True),
+    ("8712345678901", False),
+])
+def test_reusing_existing_catalog_identity_still_verifies_physical_gtin(scanned, valid):
+    def execute(sql, _values):
+        if "SELECT primary_gtin FROM global_products" in sql:
+            return Mapping({"primary_gtin": "8712345678906"})
+        raise AssertionError("No write is allowed when reusing an existing household ID")
+    conn = FakeConn(execute)
+    fn = production_function(
+        "ensure_household_article_for_global_product",
+        find_household_article_for_global_product=lambda *_: {
+            "id": "canonical-id", "barcode": "8712345678906",
+        },
+        normalize_barcode_value=_same_name,
+    )
+    if valid:
+        assert fn(conn, "household-1", "catalog-1", barcode=scanned) == "canonical-id"
+    else:
+        with pytest.raises(HTTPException) as error:
+            fn(conn, "household-1", "catalog-1", barcode=scanned)
+        assert error.value.status_code == 409
+    assert not any("UPDATE" in sql or "INSERT" in sql for sql, _ in conn.statements)
