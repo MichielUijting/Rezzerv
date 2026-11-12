@@ -320,3 +320,41 @@ def test_reusing_existing_catalog_identity_still_verifies_physical_gtin(scanned,
             fn(conn, "household-1", "catalog-1", barcode=scanned)
         assert error.value.status_code == 409
     assert not any("UPDATE" in sql or "INSERT" in sql for sql, _ in conn.statements)
+
+
+@pytest.mark.parametrize("receipt,stored,expected", [
+    ("aardappel iets kruimig", "aardappel iets kruimig", "catalog-1"),
+    ("rode bieten gekookt", "aardappel iets kruimig", None),
+    ("jonge bladsla", "", None),
+])
+def test_retailer_receipt_code_only_links_exact_confirmed_description(receipt, stored, expected):
+    found = []
+    def execute(sql, values):
+        found.append((sql, values))
+        if "FROM global_products" in sql:
+            return Mapping({
+                "id": "catalog-1", "primary_gtin": "20847586",
+                "name": "Aardappelen", "brand": None, "category": None,
+            })
+        raise AssertionError("Only a confirmed full receipt identity may fetch the product")
+    conn = FakeConn(execute)
+    calls = []
+    def confirmed(_conn, **kwargs):
+        calls.append(kwargs)
+        return {"global_product_id": "catalog-1", "receipt_text_normalized": stored}
+    fn = production_function(
+        "find_global_product_match_for_receipt_line",
+        normalize_barcode_value=_same_name,
+        get_confirmed_external_article_product_link=confirmed,
+        normalize_external_link_receipt_text=lambda value: _same_name(value).lower(),
+    )
+    result = fn(conn, None, receipt, external_article_code="0083242", retailer_code="lidl")
+    assert (result or {}).get("id") == expected
+    assert len(calls) == 1
+    assert calls[0] == {
+        "retailer_code": "lidl", "receipt_text": receipt,
+        "external_article_code": "0083242",
+    }
+    assert len(found) == (1 if expected else 0)
+    if expected:
+        assert result["match_method"] == "confirmed:retailer_receipt_text_code"
