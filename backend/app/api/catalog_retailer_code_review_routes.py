@@ -130,10 +130,37 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         target_id = str(target[0]["id"])
         if target_id == global_product_id:
             raise HTTPException(409, "De barcode hoort al bij dit Catalogusproduct")
-        if code_owners:
-            raise HTTPException(409, "Bevestigde winkelcode mag niet worden omgeleid zonder volledige broncontrole")
-        if row["status"] != "classification_pending":
-            raise HTTPException(409, "Bestaande bevestigde koppelingen mogen niet automatisch worden omgezet")
-        # A separate migration/review workflow is needed for changing confirmed
-        # global identities; fail closed rather than changing inventory semantics.
-        raise HTTPException(409, "Voor deze correctie is eerst een gecontroleerde bronmigratie nodig; er is niets gewijzigd")
+        # A single retailer+article number still drives existing receipt resolution.
+        # Correct only when exactly this one active code row exists; never risk
+        # creating a code-only ambiguity or silently changing other descriptions.
+        code_rows = conn.execute(text("""
+            SELECT id FROM external_article_product_links
+            WHERE retailer_code=:retailer AND external_article_code=:article
+              AND status IN ('confirmed','classification_pending')
+            FOR UPDATE
+        """), {"retailer":retailer,"article":article_number}).scalars().all()
+        if {str(v) for v in code_rows} != {str(request.link_id)}:
+            raise HTTPException(409, "Dezelfde winkelcode komt bij meerdere omschrijvingen voor; correctie vereist eerst een uitgebreidere herkenningsregel")
+        # The old product may already be bound to household stock. Never repoint
+        # a retailer identity that would contradict a linked household article.
+        existing_household = conn.execute(text("""
+            SELECT id FROM household_articles
+            WHERE global_product_id=:old_product LIMIT 1
+        """), {"old_product":global_product_id}).first()
+        if existing_household:
+            raise HTTPException(409, "Er zijn huishoudartikelen gekoppeld aan de huidige productidentiteit. Eerst afzonderlijk beoordelen; voorraad blijft behouden.")
+        if row["status"] != "confirmed":
+            raise HTTPException(409, "Een voorlopige koppeling moet via de bestaande bevestigingsprocedure worden afgerond.")
+        updated = conn.execute(text("""
+            UPDATE external_article_product_links SET
+                global_product_id=:target,
+                confirmed_by='catalog_retailer_code_review',
+                confirmed_at=CURRENT_TIMESTAMP,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=:id AND global_product_id=:expected
+              AND status='confirmed'
+        """), {"target":target_id,"id":request.link_id,"expected":global_product_id})
+        if updated.rowcount != 1:
+            raise HTTPException(409, "Koppeling is tussentijds gewijzigd; correctie geannuleerd.")
+        return {"status":"corrected","changed":True,
+                "previous_product_id":global_product_id,"global_product_id":target_id}
