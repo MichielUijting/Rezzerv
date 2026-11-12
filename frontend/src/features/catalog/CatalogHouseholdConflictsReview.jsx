@@ -223,7 +223,7 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
   }
 
   return (
-    <section aria-label="Historische Catalogusconflicten beoordelen" data-testid="catalog-historical-conflicts">
+    <section className="rz-catalog-historical-review" aria-label="Historische Catalogusconflicten beoordelen" data-testid="catalog-historical-conflicts">
       <div className="rz-external-databases-actions">
         <h3>Historische Catalogusconflicten</h3>
         <Button type="button" variant="secondary" onClick={onClose}>Terug naar Catalogus</Button>
