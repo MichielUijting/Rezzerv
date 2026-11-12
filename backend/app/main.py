@@ -15218,9 +15218,23 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
             )
             if option_id and option_id.startswith('article::'):
                 article_name = option_id.split('::', 1)[1]
-        article_id = ensure_household_article(conn, household_id, article_name)
+        # A proven Catalogus identity outranks a different text label: reuse
+        # the existing canonical household article instead of creating a second
+        # household article (and leaving it detached from the Catalogus ID).
+        if resolved_global_product_id and option_id:
+            article_id = str(option_id)
+            canonical_article = get_household_article_row_by_id(conn, household_id, article_id)
+            if not canonical_article:
+                raise HTTPException(status_code=409, detail="Het gekoppelde huishoudartikel is gewijzigd; probeer opnieuw")
+            article_name = normalize_household_article_name(canonical_article.get('naam')) or article_name
+        else:
+            article_id = ensure_household_article(conn, household_id, article_name)
         if resolved_global_product_id:
-            set_household_article_global_product_id(conn, article_id, resolved_global_product_id)
+            linked_product_id = set_household_article_global_product_id(
+                conn, article_id, resolved_global_product_id
+            )
+            if linked_product_id != resolved_global_product_id:
+                raise HTTPException(status_code=409, detail="De huishoudartikelkoppeling is niet eenduidig")
         barcode_linked_to_requested_article = False
         if payload.barcode:
             reassign_household_article_barcode(conn, household_id, article_name, payload.barcode)
