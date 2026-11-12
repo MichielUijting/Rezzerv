@@ -249,6 +249,12 @@ test('Standaard DataTable pagineert tien conflicten en scrollbar staat onder de 
   const shell = page.locator('.rz-data-table-shell').filter({ has: table })
   await expect(table.locator('tbody tr')).toHaveCount(10)
   await expect(shell.locator('nav[aria-label="Paginering"]')).toBeVisible()
+  const firstColumn = await table.locator('thead tr.rz-table-header th').first().evaluate(element => ({
+    width: element.getBoundingClientRect().width,
+    alignment: getComputedStyle(element).textAlign,
+  }))
+  expect(firstColumn.width).toBeGreaterThanOrEqual(180)
+  expect(firstColumn.alignment).toBe('left')
   const tableWrapper = shell.locator('.rz-table-wrapper')
   const scroll = await tableWrapper.evaluate(element => ({
     scrollWidth: element.scrollWidth,
