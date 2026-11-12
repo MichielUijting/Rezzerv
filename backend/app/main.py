@@ -1661,6 +1661,14 @@ def set_household_article_global_product_id(conn, household_article_id: str | No
     current_global_product_id = str(existing.get('global_product_id') or '').strip()
     if current_global_product_id == normalized_global_product_id:
         return normalized_global_product_id
+    # All automatic writers share the household + Catalogus identity lock,
+    # not only the barcode purchase path. This closes concurrent creation
+    # races without requiring a migration of historical duplicate records.
+    if getattr(getattr(conn, 'dialect', None), 'name', None) == 'postgresql':
+        conn.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {'key': f"household_catalog:{str(existing.get('household_id') or '')}:{normalized_global_product_id}"},
+        )
     conflict = conn.execute(text(
         """
         SELECT id
