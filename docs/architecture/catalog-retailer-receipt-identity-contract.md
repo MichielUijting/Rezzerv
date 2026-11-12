@@ -45,3 +45,14 @@ De eerste twee regels zijn toegestaan. De laatste regel is alleen toegestaan als
 5. Een onjuiste of ontbrekende kassabonbron blokkeert het handmatig toevoegen.
 6. Correctie met bestaande huishoudartikelverwijzingen of concurrente wijzigingen stopt zonder voorraad-/bonmutatie.
 7. Bevestigen vereist platformpermissie en legt de werkelijke beoordelende gebruiker vast.
+
+
+## Historische conflicten beoordelen in Catalogus
+
+De functie **Catalogus → Historische conflicten beoordelen** berekent de actuele conflictlijst voor uitsluitend het via de serversessie geautoriseerde huishouden. Zij gebruikt hetzelfde historische backfill-previewcontract en de exacte keten `purchase_import_lines → receipt_table_lines → household_articles`, nooit een koppeling op naamgelijkheid. Alleen een huishoudbeheerder met de bestaande platformpermissie `platform.external_products.link_existing` krijgt toegang.
+
+- **GET /api/catalog/household-identity-conflicts** is alleen-lezen en toont per conflicterend huishoudartikel de daadwerkelijke boncombinaties, herkenningsstatus en eventuele Cataloguskandidaten. Bij een afgekapt brononderzoek worden geen te beoordelen regels vrijgegeven.
+- **POST /api/catalog/household-identity-conflicts/confirm-source** hercontroleert onder één transactie de exacte bronregel binnen het geautoriseerde huishouden, de fysieke productregel, de ongewijzigde winkel/omschrijving/boncode, de checksum en unieke actieve eigenaar van de gekozen GTIN, eventuele originele bonbarcode, tegenstrijdige bestaande huishoudkoppeling en legacy-code-only-koppelingen. Daarna wordt uitsluitend de centrale winkelcodecombinatie bevestigd via de bestaande expliciete bevestigingsservice.
+- De server accepteert in deze routes geen vrij te kiezen `household_id`. De ingelogde actor is bepalend voor de audit-attributie. Onjuiste bron, dubbele identiteit, gewijzigde feiten of onzekere historische koppeling geeft een fout zonder gedeeltelijke wijziging.
+- De 21 eerder waargenomen conflicten zijn geen hardcoded programmalijst. Het scherm toont de actuele, uit brondata afgeleide conflictgroepen. Na bevestiging van een boncode kan een huishoudartikelconflict blijven bestaan, omdat geen enkel `household_article_id`, `inventory`, `receipt` of bestaande koppeling wordt herverdeeld.
+- Bestaande meervoudige huishoudartikelen met hetzelfde Catalogusproduct vereisen een afzonderlijk, expliciet te beoordelen behoud-/samenvoegbesluit. Bevestiging van een bonbarcode is **niet** toestemming voor een huishoudartikelmerge.
