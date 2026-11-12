@@ -21,7 +21,7 @@ from app.services.external_article_product_link_service import (
 router = APIRouter(prefix="/{global_product_id}/retailer-codes", tags=["catalog"])
 
 def _permission():
-    require_platform_permission_from_session("platform.external_products.link_existing")
+    return require_platform_permission_from_session("platform.external_products.link_existing")
 
 def _key(retailer, description, article_number):
     key = (
@@ -65,7 +65,10 @@ def list_catalog_retailer_codes(global_product_id: str):
 
 @router.post("/review")
 def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest):
-    _permission()
+    context = _permission()
+    actor = str(context.user_id or "").strip()
+    if not actor:
+        raise HTTPException(403, "Geen bevestigde gebruiker beschikbaar")
     if request.action not in ("confirm","correct"):
         raise HTTPException(422, "Kies Bevestigen of Corrigeren")
     retailer, description, article_number = _key(
@@ -115,10 +118,10 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
                 raise HTTPException(409, "Classificatie-in-afwachting moet eerst via bestaande bevestiging worden afgerond")
             changed = conn.execute(text("""
                 UPDATE external_article_product_links
-                SET confirmed_by='catalog_retailer_code_review',
+                SET confirmed_by=:actor,
                     confirmed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
                 WHERE id=:id AND global_product_id=:product AND status='confirmed'
-            """), {"id":request.link_id,"product":global_product_id})
+            """), {"id":request.link_id,"product":global_product_id,"actor":actor})
             if changed.rowcount != 1:
                 raise HTTPException(409, "Bevestiging kon niet veilig worden opgeslagen")
             return {"status":"confirmed","changed":True,"global_product_id":global_product_id}
@@ -160,12 +163,12 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         updated = conn.execute(text("""
             UPDATE external_article_product_links SET
                 global_product_id=:target,
-                confirmed_by='catalog_retailer_code_review',
+                confirmed_by=:actor,
                 confirmed_at=CURRENT_TIMESTAMP,
                 updated_at=CURRENT_TIMESTAMP
             WHERE id=:id AND global_product_id=:expected
               AND status='confirmed'
-        """), {"target":target_id,"id":request.link_id,"expected":global_product_id})
+        """), {"target":target_id,"id":request.link_id,"expected":global_product_id,"actor":actor})
         if updated.rowcount != 1:
             raise HTTPException(409, "Koppeling is tussentijds gewijzigd; correctie geannuleerd.")
         return {"status":"corrected","changed":True,
