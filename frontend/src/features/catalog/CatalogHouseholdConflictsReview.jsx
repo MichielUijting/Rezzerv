@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import Pagination from '../../ui/Pagination.jsx'
@@ -17,7 +16,6 @@ function reasonLabel(reason) {
 
 /** The conflict list is from the current authorized household, never from a user-provided household ID. */
 export default function CatalogHouseholdConflictsReview({ onClose }) {
-  const navigate = useNavigate()
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const inSystemHousehold = context?.context_type === 'system'
@@ -145,17 +143,14 @@ export default function CatalogHouseholdConflictsReview({ onClose }) {
           </p>
           {data.complete && !items.length ? (
             inSystemHousehold ? (
-              <section aria-label="Beoordelen in regulier huishouden" data-testid="catalog-frontteam-review-guidance">
-                <p>In Systeemhuishouden zijn geen conflicten gevonden. Dit zegt niets over conflicten in reguliere huishoudens.
-                  Je kunt vanuit dit Superuseraccount de bonregels van een regulier huishouden niet openen.</p>
-                <p>Om conflicten van een regulier huishouden te beoordelen, voeg je via Frontteambeheer
-                  een bestaand regulier account uit datzelfde huishouden toe aan het Frontteam.
-                  Meld je daarna met dat reguliere account aan en open Catalogus.
-                  Het account blijft bij het eigen huishouden; er worden geen gegevens overgezet.</p>
-                <Button type="button" variant="secondary" data-testid="catalog-open-frontteam-management"
-                  onClick={() => navigate('/superuser?tab=frontteam')}>
-                  Naar Frontteambeheer
-                </Button>
+              <section aria-label="Beoordelen in regulier huishouden" data-testid="catalog-household-manager-guidance">
+                <p>Er zijn geen historische conflicten in Systeemhuishouden. Dit zegt niets over
+                  conflicten in de andere huishoudens.</p>
+                <p>Wil je conflicten in een regulier huishouden beoordelen? Meld je aan met een
+                  regulier account dat Beheerder is van dat huishouden en open daar
+                  Catalogus → Historische conflicten beoordelen.
+                  Een Frontteamrol is hiervoor niet nodig. Het Superuseraccount
+                  krijgt geen toegang tot gegevens van andere huishoudens.</p>
               </section>
             ) : <p>Geen historische Catalogusconflicten aangetroffen in je actieve huishouden.</p>
           ) : null}
