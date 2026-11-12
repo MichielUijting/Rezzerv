@@ -5404,7 +5404,10 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
 
     matched_household_article_id = str(line.get('matched_household_article_id') or '').strip()
     matched_global_product_id = str(line.get('matched_global_product_id') or '').strip()
-    barcode = str(line.get('external_article_code') or '').strip() or None
+    external_article_code = str(line.get('external_article_code') or '').strip() or None
+    # The retailer's receipt article number is NOT a GTIN. In particular,
+    # 7/8-digit Lidl codes must not create a false barcode identity.
+    barcode = None
     article_name_hint = line.get('article_name_raw') or None
     brand = line.get('brand_raw') or None
 
@@ -5450,7 +5453,7 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
             matched_article_id=matched_household_article_id or None,
             create_global_product=True,
             create_household_article=False,
-            external_article_code=barcode,
+            external_article_code=external_article_code,
         )
         if resolved_links:
             matched_global_product_id = resolved_links.get('matched_global_product_id') or matched_global_product_id
