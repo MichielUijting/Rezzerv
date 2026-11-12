@@ -5038,53 +5038,11 @@ def find_global_product_match_for_receipt_line(
             payload['confidence_score'] = 0.95
             return payload
 
-    normalized_name = normalize_household_article_name(article_name)
-    normalized_brand = normalize_optional_text_field(brand)
-    if not normalized_name:
-        return None
-
-    params = {'name': normalized_name}
-    brand_clause = ''
-    if normalized_brand:
-        params['brand'] = normalized_brand
-        brand_clause = (
-            " AND lower(trim(COALESCE(brand, ''))) "
-            "= lower(trim(:brand))"
-        )
-
-    row = conn.execute(
-        text(
-            f"""
-            SELECT id, primary_gtin, name, brand, category,
-                   size_value, size_unit, source, status,
-                   created_at, updated_at
-            FROM global_products
-            WHERE lower(trim(name)) = lower(trim(:name)){brand_clause}
-            ORDER BY
-                CASE
-                    WHEN primary_gtin IS NOT NULL
-                     AND trim(primary_gtin) <> ''
-                    THEN 0 ELSE 1
-                END,
-                updated_at DESC,
-                id DESC
-            LIMIT 1
-            """
-        ),
-        params,
-    ).mappings().first()
-
-    if not row:
-        return None
-
-    payload = dict(row)
-    payload['match_method'] = (
-        'text:name_brand' if normalized_brand else 'text:name'
-    )
-    payload['confidence_score'] = (
-        0.8 if normalized_brand else 0.75
-    )
-    return payload
+    # A receipt description is presentation, not product identity.
+    # Returning a Catalogus product based on name (even with brand) may silently
+    # link unrelated produce and recreate deleted household duplicates.
+    # Keep missing GTIN/retailer identity unmatched for explicit review.
+    return None
 
 
 def find_household_article_for_global_product(conn, household_id: str, global_product_id: str | None):
