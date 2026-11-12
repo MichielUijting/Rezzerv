@@ -5521,6 +5521,19 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
         )
     existing = find_household_article_for_global_product(conn, normalized_household_id, normalized_global_product_id)
     if existing and existing.get('id'):
+        # Even reusing a canonical article requires a matching scanned GTIN.
+        # A foreign barcode must not silently inherit this Catalogus link.
+        if barcode:
+            product = conn.execute(
+                text("SELECT primary_gtin FROM global_products WHERE id = :id LIMIT 1"),
+                {'id': normalized_global_product_id},
+            ).mappings().first()
+            source_gtin = normalize_barcode_value(barcode)
+            catalog_gtin = normalize_barcode_value(product.get('primary_gtin')) if product and product.get('primary_gtin') else None
+            existing_gtin = normalize_barcode_value(existing.get('barcode')) if existing.get('barcode') else None
+            if (not catalog_gtin or source_gtin != catalog_gtin
+                    or (existing_gtin and source_gtin != existing_gtin)):
+                raise HTTPException(status_code=409, detail="Bonbarcode wijkt af van de bestaande Catalogusidentiteit")
         return str(existing.get('id'))
     product_row = conn.execute(
         text(
@@ -5564,6 +5577,9 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
     if not article_row:
         raise HTTPException(status_code=409, detail="Huishoudartikel bestaat niet meer")
     article_id = str(article_row.get('id'))
+    current_id = str(article_row.get('global_product_id') or '').strip()
+    if current_id and current_id != normalized_global_product_id:
+        raise HTTPException(status_code=409, detail="Huishoudartikel heeft intussen een andere Catalogusidentiteit")
     linked = set_household_article_global_product_id(conn, article_id, normalized_global_product_id)
     if linked != normalized_global_product_id:
         raise HTTPException(status_code=409, detail="Cataloguskoppeling is al aan een ander huishoudartikel toegewezen")
