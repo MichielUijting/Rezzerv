@@ -36,10 +36,13 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
     }
     setBarcode(String(scannedBarcode.value || '').trim())
     // A scan is not a write. Show the verified product before the user confirms.
-    if (item.receipt_article_number && item.id?.startsWith('receipt-table-line:')) {
-      void checkAndConfirmCatalog(String(scannedBarcode.value || '').trim())
-    } else if (canSave) {
+    // A scan is only input: storing the barcode itself proves identity.
+    // The older "confirm existing Catalogus link" route remains an explicit
+    // alternative, never the default scanner outcome for an unlinked item.
+    if (canSave) {
       setConfirm(true)
+    } else if (item.receipt_article_number && item.id?.startsWith('receipt-table-line:')) {
+      void checkAndConfirmCatalog(String(scannedBarcode.value || '').trim())
     } else {
       showFeedback({ variant: 'warning', title: 'Winkelartikelcode ontbreekt',
         message: 'Een winkelartikelcode is nodig om de gescande GTIN centraal te bevestigen.' })
@@ -67,7 +70,9 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
           || String(product.status || 'active').toLowerCase() !== 'active') {
         showFeedback({
           variant: 'warning', title: 'Nog geen bewezen Catalogusidentiteit',
-          message: 'Deze barcode verwijst nog niet naar precies één actief Catalogusproduct. Bewaar de barcode als aanwijzing of koppel eerst een gecontroleerd product uit OFF.',
+          message: canSave
+            ? 'Deze barcode is nog niet bekend in de Catalogus. Via Barcode opslaan in Catalogus bevestig je de identificatie; Inhuis maakt zo nodig een nieuw product aan.'
+            : 'Deze bestaande artikelkoppeling vraagt eerst om beoordeling. Er is niets gewijzigd.',
           testId: 'ed2-catalog-identity-not-found',
         })
         return
