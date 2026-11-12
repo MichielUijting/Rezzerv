@@ -15,10 +15,15 @@ from typing import Any
 from sqlalchemy import bindparam, inspect, text
 
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
+from app.services.external_article_product_link_service import (
+    normalize_external_link_article_code, normalize_external_link_receipt_text,
+)
 
 
 def preview_household_catalog_identity_backfill(
     conn, *, household_id: str, limit: int = 10000, include_candidates: bool = False,
+    include_conflicts: bool = False,
 ) -> dict[str, Any]:
     household = str(household_id or "").strip()
     if not household:
@@ -36,6 +41,15 @@ def preview_household_catalog_identity_backfill(
         if column in receipt_columns
     ]
     receipt_label_sql = "COALESCE(" + ", ".join(label_parts) + ")" if label_parts else "NULL"
+    # Only the authorized review view needs household names and exact source
+    # line IDs. Preserve the existing read-only preview contract by default.
+    extra_review_columns = ""
+    if include_conflicts:
+        article_columns = {col["name"] for col in inspect(conn).get_columns("household_articles")}
+        name_parts = [f"NULLIF(ha.{col}, '')" for col in ("custom_name", "naam")
+                      if col in article_columns]
+        name_sql = ("COALESCE(" + ", ".join(name_parts) + ")") if name_parts else "NULL"
+        extra_review_columns = f", rtl.id AS receipt_line_id, {name_sql} AS household_article_name"
     rows = conn.execute(
         text(f"""
             SELECT ha.id AS household_article_id,
@@ -43,7 +57,8 @@ def preview_household_catalog_identity_backfill(
                    rtl.barcode AS gtin,
                    rtl.external_article_code AS retailer_article_code,
                    {receipt_label_sql} AS receipt_text,
-                   rt.store_name AS retailer_code
+                   COALESCE(NULLIF(rt.store_chain, ''), rt.store_name) AS retailer_code
+                   {extra_review_columns}
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
             JOIN receipt_tables rt
@@ -66,11 +81,14 @@ def preview_household_catalog_identity_backfill(
         {"household_id": household, "limit": limit},
     ).mappings().all()
     by_article: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"candidates": set(), "current": set(), "unresolved": 0, "without_identity": 0, "sources": 0}
+        lambda: {"candidates": set(), "current": set(), "unresolved": 0, "without_identity": 0, "sources": 0,
+                 "source_map": {}, "name": ""}
     )
     for row in rows:
         article = by_article[str(row["household_article_id"])]
         article["sources"] += 1
+        if include_conflicts:
+            article["name"] = str(row.get("household_article_name") or "")
         current = str(row.get("current_product_id") or "").strip()
         if current:
             article["current"].add(current)
@@ -81,6 +99,22 @@ def preview_household_catalog_identity_backfill(
             external_article_code=row.get("retailer_article_code"),
             receipt_text=row.get("receipt_text"),
         )
+        if include_conflicts:
+            retailer = canonical_catalog_retailer(row.get("retailer_code"))
+            label = normalize_external_link_receipt_text(row.get("receipt_text"))
+            code = normalize_external_link_article_code(row.get("retailer_article_code"))
+            source_key = (retailer, label, code)
+            if source_key not in article["source_map"]:
+                article["source_map"][source_key] = {
+                    "receipt_line_id": str(row.get("receipt_line_id") or ""),
+                    "retailer_code": retailer,
+                    "receipt_text": label,
+                    "external_article_code": code,
+                    "receipt_count": 0,
+                    "identity_status": result["status"],
+                    "candidate_product_id": result.get("global_product_id") if result["status"] == "matched" else None,
+                }
+            article["source_map"][source_key]["receipt_count"] += 1
         if result["status"] == "matched":
             article["candidates"].add(result["global_product_id"])
         elif result["status"] == "no_identity":
@@ -122,11 +156,13 @@ def preview_household_catalog_identity_backfill(
         "changes": "none",
     }
     eligible_candidates: list[dict[str, str]] = []
+    conflict_reasons: dict[str, str] = {}
     for article_id, article in by_article.items():
         current = article["current"]
         candidates = article["candidates"]
         if len(current) > 1 or len(candidates) > 1 or (current and candidates and current != candidates):
             report["conflict"] += 1
+            conflict_reasons[article_id] = "tegenstrijdige_bronidentiteiten"
         elif current:
             report["already_linked"] += 1
         elif article["unresolved"] or (candidates and article["without_identity"]):
@@ -135,6 +171,8 @@ def preview_household_catalog_identity_backfill(
             target = next(iter(candidates))
             if target in occupied_products or len(candidate_owners[target]) > 1:
                 report["conflict"] += 1
+                conflict_reasons[article_id] = ("catalogusproduct_al_bezet" if target in occupied_products
+                                                else "meerdere_huishoudartikelen")
             else:
                 report["eligible"] += 1
                 eligible_candidates.append({"article_id": article_id, "global_product_id": target})
@@ -161,4 +199,42 @@ def preview_household_catalog_identity_backfill(
     ).hexdigest()
     if include_candidates:
         report["eligible_candidates"] = stable["candidates"]
+    if include_conflicts:
+        # An incomplete source scan cannot authorize any historical review.
+        # All rows, names and candidate products are read only and scoped to
+        # the household provided by the authenticated caller.
+        review_items = []
+        if not report["limited"]:
+            for article_id, reason in sorted(conflict_reasons.items()):
+                article = by_article[article_id]
+                review_items.append({
+                    "household_article_id": article_id,
+                    "article_name": article["name"],
+                    "reason": reason,
+                    "current_product_ids": sorted(article["current"]),
+                    "candidate_product_ids": sorted(article["candidates"]),
+                    "source_count": article["sources"],
+                    "sources": sorted(article["source_map"].values(), key=lambda source: (
+                        source["retailer_code"], source["receipt_text"],
+                        source["external_article_code"], source["receipt_line_id"],
+                    )),
+                })
+        product_ids = sorted({
+            product_id for item in review_items
+            for product_id in (item["current_product_ids"] + item["candidate_product_ids"])
+        })
+        product_rows = []
+        if product_ids:
+            product_rows = conn.execute(text("""
+                SELECT id, name, primary_gtin FROM global_products
+                WHERE id IN :ids AND LOWER(COALESCE(status, 'active')) = 'active'
+            """).bindparams(bindparam("ids", expanding=True)),
+                {"ids": product_ids}).mappings().all()
+        report["conflict_items"] = review_items
+        report["conflict_products"] = [
+            {"id": str(product["id"]), "name": str(product["name"] or ""),
+             "primary_gtin": str(product["primary_gtin"] or "")}
+            for product in product_rows
+        ]
+        report["conflict_list_complete"] = not report["limited"]
     return report
