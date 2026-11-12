@@ -131,6 +131,10 @@ async function mockSystemCatalog(page) {
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ total: 0, items: [] }),
   }))
+  await page.route('**/api/platform/frontteam-management', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ frontteam_memberships: [] }),
+  }))
   await page.route('**/api/catalog/household-identity-conflicts', route => {
     householdReviewRequests += 1
     return route.fulfill({
@@ -160,6 +164,14 @@ for (const [name, width, height] of [
     await expect(page.getByTestId('catalog-conflict-count')).toContainText('0')
     expect(getReviewRequests()).toBe(1)
     await expect(page.getByTestId('catalog-conflicts-table')).toHaveCount(0)
+    const guidance = page.getByTestId('catalog-frontteam-review-guidance')
+    await expect(guidance).toContainText('regulier account')
+    await guidance.getByRole('button', { name: 'Naar Frontteambeheer' }).click()
+    await expect(page).toHaveURL(/\/superuser\?tab=frontteam$/)
+    await expect(page.getByTestId('superuser-control-tab-frontteam')).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByTestId('settings-frontteam-page')).toBeVisible()
+    await expect(page.getByTestId('frontteam-catalog-review-help')).toContainText('eigen huishouden')
+    expect(getReviewRequests()).toBe(1)
   })
 }
 
