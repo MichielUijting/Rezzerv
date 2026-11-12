@@ -969,6 +969,27 @@ def get_confirmed_external_article_product_link(
         return _serialize_external_article_product_link(rows) if rows else None
 
     if normalized_text:
+        # A receipt description may have several article numbers. A caller
+        # without a number must not pick one Catalogus product at random when
+        # those source combinations refer to different product identities.
+        possible_owners = conn.execute(
+            text("""
+                SELECT DISTINCT link.global_product_id
+                FROM external_article_product_links link
+                JOIN global_products gp ON gp.id = link.global_product_id
+                WHERE link.retailer_code = :retailer_code
+                  AND link.receipt_text_normalized = :receipt_text_normalized
+                  AND link.status IN ('confirmed', 'classification_pending')
+                  AND LOWER(COALESCE(gp.status, 'active')) = 'active'
+                LIMIT 2
+            """),
+            {
+                "retailer_code": normalized_retailer,
+                "receipt_text_normalized": normalized_text,
+            },
+        ).scalars().all()
+        if len(possible_owners) != 1:
+            return None
         row = conn.execute(
             text(
                 """
