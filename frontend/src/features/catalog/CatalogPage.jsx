@@ -419,7 +419,7 @@ export default function CatalogPage() {
               <span className="rz-external-databases-muted">{total} artikelen</span>
             </div> : null}
               </>
-            )
+            )}
           </div>
         </ScreenCard>
       </div>
