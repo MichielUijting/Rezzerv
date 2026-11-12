@@ -104,6 +104,7 @@ from app.services.global_product_service import (
 )
 from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
+    normalize_external_link_receipt_text,
     reconcile_incomplete_confirmed_external_links,
 )
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
@@ -5009,52 +5010,41 @@ def find_global_product_match_for_receipt_line(
             payload['confidence_score'] = 1.0
             return payload
 
-    normalized_external_article_code = normalize_identity_lookup_value(
-        external_article_code
-    )
-
-    # Winkelartikelcodes zijn alleen uniek binnen de winkelketen.
-    retailer_identity = build_retailer_article_identity_value(
-        retailer_code,
-        normalized_external_article_code,
-    )
-    if retailer_identity:
-        by_retailer_identity = get_global_product_row_by_identity(
+    # For store receipt identifiers only the exact confirmed triple is safe:
+    # retailer + normalized receipt description + the store's article number.
+    # A store SKU is NOT a global barcode or a retailer-independent identity.
+    if retailer_code and external_article_code and article_name:
+        link = get_confirmed_external_article_product_link(
             conn,
-            retailer_identity,
-            identity_types=('retailer_article_number',),
+            retailer_code=retailer_code,
+            receipt_text=article_name,
+            external_article_code=external_article_code,
         )
-        if by_retailer_identity:
-            payload = dict(by_retailer_identity)
-            payload['match_method'] = (
-                'identity:retailer_article_number'
-            )
-            payload['confidence_score'] = 0.95
-            return payload
-
-    # Alleen expliciet universele externe artikelidentiteiten mogen
-    # zonder retailercontext worden hergebruikt.
-    if normalized_external_article_code:
-        by_external_identity = get_global_product_row_by_identity(
-            conn,
-            normalized_external_article_code,
-            # A store SKU is scoped to its retailer; without one it must not
-            # be treated as an independent global product identity.
-            identity_types=('external_article_number',),
+        expected_text = normalize_external_link_receipt_text(article_name)
+        recorded_text = normalize_external_link_receipt_text(
+            (link or {}).get('receipt_text_normalized')
         )
-        if by_external_identity:
-            payload = dict(by_external_identity)
-            identity_type = normalize_product_identity_type(
-                by_external_identity.get('identity_type')
-            )
-            payload['match_method'] = f'identity:{identity_type}'
-            payload['confidence_score'] = 0.95
-            return payload
+        product_id = str((link or {}).get('global_product_id') or '').strip()
+        if product_id and expected_text and recorded_text == expected_text:
+            row = conn.execute(
+                text("""
+                    SELECT id, primary_gtin, name, brand, category,
+                           size_value, size_unit, source, status,
+                           created_at, updated_at
+                    FROM global_products
+                    WHERE id = :id AND LOWER(COALESCE(status, 'active')) = 'active'
+                    LIMIT 1
+                """),
+                {'id': product_id},
+            ).mappings().first()
+            if row:
+                payload = dict(row)
+                payload['match_method'] = 'confirmed:retailer_receipt_text_code'
+                payload['confidence_score'] = 1.0
+                return payload
 
-    # A receipt description is presentation, not product identity.
-    # Returning a Catalogus product based on name (even with brand) may silently
-    # link unrelated produce and recreate deleted household duplicates.
-    # Keep missing GTIN/retailer identity unmatched for explicit review.
+    # No confirmed complete identity: a name or bare article code is only a
+    # review hint and must not create/attach a household Catalogus product.
     return None
 
 
