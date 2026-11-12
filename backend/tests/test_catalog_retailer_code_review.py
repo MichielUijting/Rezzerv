@@ -81,7 +81,7 @@ class Conn:
         if "SELECT DISTINCT global_product_id FROM external_article_product_links" in sql:
             return Rows(["p1"])
         if "FROM global_products WHERE primary_gtin=:gtin" in sql:
-            return Rows([{"id":"p2","name":"Kaas nieuw","primary_gtin":"8712345678901"}])
+            return Rows([{"id":"p2","name":"Kaas nieuw","primary_gtin":"8712345678906"}])
         if "SELECT id FROM external_article_product_links WHERE retailer_code = ANY(:retailer_aliases)" in sql:
             return Rows(["l1"])
         if "SELECT id FROM household_articles" in sql:
@@ -133,15 +133,24 @@ def test_existing_household_identity_blocks_remapping(monkeypatch):
     engine=Engine(household=True)
     monkeypatch.setattr(routes,"engine",engine)
     with pytest.raises(HTTPException) as exc:
-        routes.review_catalog_retailer_code("p1",request("correct","8712345678901"))
+        routes.review_catalog_retailer_code("p1",request("correct","8712345678906"))
     assert exc.value.status_code==409
+    assert engine.conn.writes==0
+
+
+def test_invalid_gtin_checksum_blocks_manual_correction_before_any_write(monkeypatch):
+    engine=Engine()
+    monkeypatch.setattr(routes,"engine",engine)
+    with pytest.raises(HTTPException) as exc:
+        routes.review_catalog_retailer_code("p1",request("correct","8712345678901"))
+    assert exc.value.status_code==422
     assert engine.conn.writes==0
 
 
 def test_exact_unoccupied_code_can_be_corrected(monkeypatch):
     engine=Engine()
     monkeypatch.setattr(routes,"engine",engine)
-    result=routes.review_catalog_retailer_code("p1",request("correct","8712345678901"))
+    result=routes.review_catalog_retailer_code("p1",request("correct","8712345678906"))
     assert result["status"]=="corrected"
     assert result["global_product_id"]=="p2"
     assert engine.conn.writes==1
