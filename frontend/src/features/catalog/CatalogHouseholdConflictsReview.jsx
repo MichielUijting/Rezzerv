@@ -158,6 +158,19 @@ export default function CatalogHouseholdConflictsReview() {
   // filters, sorting, resizable columns, sticky headings and pagination.
   const conflictColumns = useMemo(() => [
     {
+      key: 'select', label: 'Selecteren', width: 70,
+      renderFilter: ({ placement }) => placement === 'header' ? (
+        <input type="checkbox" aria-label="Alles: zichtbare huishoudartikelen"
+          checked={articlePageRows.length > 0 && articlePageRows.every(item => checkedArticleIds.includes(item.household_article_id))}
+          onChange={event => selectArticlePage(event.target.checked)} />
+      ) : null,
+      renderCell: item => (
+        <input type="checkbox" aria-label={`Selecteer huishoudartikel ${item.article_name || item.household_article_id}`}
+          checked={checkedArticleIds.includes(item.household_article_id)}
+          onChange={event => toggleArticle(item.household_article_id, event.target.checked)} />
+      ),
+    },
+    {
       key: 'article_name', label: 'Huishoudartikel', width: 245,
       sortable: true, filterable: true, filterPlaceholder: 'Zoek',
       getValue: item => item.article_name || 'Huishoudartikel zonder naam',
@@ -196,17 +209,27 @@ export default function CatalogHouseholdConflictsReview() {
       getValue: item => Number(item.source_count || 0),
       renderCell: item => Number(item.source_count || 0),
     },
-    {
-      key: 'action', label: 'Actie', width: 195,
-      renderCell: item => (
-        <Button type="button" variant="secondary" onClick={() => setSelectedArticle(item)}>
-          Bonregels beoordelen
-        </Button>
-      ),
-    },
-  ], [products])
+  ], [products, checkedArticleIds, articlePageRows])
 
   const sourceColumns = useMemo(() => [
+    {
+      key: 'select', label: 'Selecteren', width: 70,
+      renderFilter: ({ placement }) => placement === 'header' ? (
+        <input type="checkbox" aria-label="Alles: zichtbare bonregels"
+          checked={sourcePageRows.length > 0 && sourcePageRows.every(source => checkedSourceIds.includes(source.source_selection_key))}
+          onChange={event => selectSourcePage(event.target.checked)} />
+      ) : null,
+      renderCell: source => (
+        <input type="checkbox" aria-label={`Selecteer bonartikelnummer ${source.external_article_code || source.receipt_line_id}`}
+          checked={checkedSourceIds.includes(source.source_selection_key)}
+          onChange={event => toggleSource(source.source_selection_key, event.target.checked)} />
+      ),
+    },
+    {
+      key: 'article_name', label: 'Huishoudartikel', width: 210,
+      sortable: true, filterable: true,
+      getValue: source => source.article_name || 'Naam onbekend',
+    },
     {
       key: 'retailer_code', label: 'Winkel', width: 155,
       sortable: true, filterable: true,
@@ -246,26 +269,17 @@ export default function CatalogHouseholdConflictsReview() {
       getValue: source => Number(source.receipt_count || 0),
       renderCell: source => Number(source.receipt_count || 0),
     },
-    {
-      key: 'action', label: 'Actie', width: 175,
-      renderCell: source => source.retailer_code && source.receipt_text && source.external_article_code
-        ? <Button type="button" variant="secondary" onClick={() => {
-            setSelectedSource(source)
-            setTargetGtin('')
-          }}>Barcode bepalen</Button>
-        : 'Bonbron onvoldoende',
-    },
-  ], [products])
+  ], [products, checkedSourceIds, sourcePageRows])
 
   async function confirmSource() {
-    if (!selectedArticle || !selectedSource || saving || !targetGtin.trim()) return
+    if (!selectedSource || saving || !targetGtin.trim()) return
     setSaving(true)
     try {
       const response = await fetchJsonWithAuth(`${REVIEW_URL}/confirm-source`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          household_article_id: selectedArticle.household_article_id,
+          household_article_id: selectedSource.household_article_id,
           receipt_line_id: selectedSource.receipt_line_id,
           retailer_code: selectedSource.retailer_code,
           receipt_text: selectedSource.receipt_text,
@@ -281,11 +295,11 @@ export default function CatalogHouseholdConflictsReview() {
       showFeedback({
         variant: 'success',
         message: result.changed
-          ? 'De bonartikelcombinatie is bevestigd in Catalogus. Bestaande huishoudartikelen en voorraad zijn niet gewijzigd.'
-          : 'De bonartikelcombinatie was al bevestigd. Huishoudartikelen zijn niet samengevoegd.',
+          ? 'De bonartikelcombinatie is centraal bevestigd. Dit lost eventuele dubbele huishoudartikelen niet op; voorraad en bestaande artikelen zijn ongewijzigd.'
+          : 'De centrale boncode was al bevestigd. Het huishoudartikelconflict blijft afzonderlijk te beoordelen.',
       })
       setSelectedSource(null)
-      setSelectedArticle(null)
+      setCheckedSourceIds([])
       setTargetGtin('')
       setRefresh(value => value + 1)
     } catch (error) {
