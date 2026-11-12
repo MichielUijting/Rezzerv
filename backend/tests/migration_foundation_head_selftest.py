@@ -834,20 +834,31 @@ def _assert_article_classification_schema(connection) -> None:
 
 
 def _assert_ed2_manual_barcode_schema(connection) -> None:
-    """Migration-owned barcode evidence is separate from verified Catalogus identities."""
+    """Saved barcode evidence is authoritative, with optional Catalogus materialization."""
     inspector = inspect(connection)
     table = ED2_MANUAL_BARCODES_TABLE
     if not inspector.has_table(table):
         raise AssertionError("ED2 manual barcode evidence table missing")
     columns = {column["name"]: column for column in inspector.get_columns(table)}
-    expected = {
+    required = {
         "retailer_code", "receipt_text_normalized", "external_article_code",
         "gtin", "created_at", "updated_at",
     }
-    if set(columns) != expected:
-        raise AssertionError(f"ED2 barcode evidence column drift: {set(columns)!r}")
-    if any(column["nullable"] for column in columns.values()):
-        raise AssertionError("ED2 barcode evidence columns must be NOT NULL")
+    resolution = {"global_product_id", "barcode_scope", "confirmed_by", "confirmed_at"}
+    if set(columns) != required | resolution:
+        raise AssertionError(f"ED2 barcode identity column drift: {set(columns)!r}")
+    if any(columns[name]["nullable"] for name in required):
+        raise AssertionError("Saved barcode identity/source columns must be NOT NULL")
+    if any(not columns[name]["nullable"] for name in resolution):
+        raise AssertionError("Historical saved barcodes require nullable materialization fields")
+    if not isinstance(columns["global_product_id"]["type"], sa.Text):
+        raise AssertionError("Catalogus resolution identity must be TEXT")
+    if not isinstance(columns["barcode_scope"]["type"], sa.String):
+        raise AssertionError("Barcode scope must be a bounded string")
+    if not isinstance(columns["confirmed_by"]["type"], sa.Text):
+        raise AssertionError("Barcode actor must be TEXT")
+    if not isinstance(columns["confirmed_at"]["type"], sa.DateTime):
+        raise AssertionError("Barcode confirmation timestamp must be DATETIME")
     for name in ("retailer_code", "external_article_code", "gtin"):
         if not isinstance(columns[name]["type"], sa.String):
             raise AssertionError(f"ED2 barcode evidence type drift: {name}")
@@ -860,7 +871,7 @@ def _assert_ed2_manual_barcode_schema(connection) -> None:
     if primary_key != ("retailer_code", "receipt_text_normalized", "external_article_code"):
         raise AssertionError(f"ED2 identity primary key drift: {primary_key!r}")
     if inspector.get_foreign_keys(table):
-        raise AssertionError("ED2 manual barcode evidence must not own household/product foreign keys")
+        raise AssertionError("ED2 barcode evidence must not own cascading household/product foreign keys")
     if connection.dialect.name == "postgresql":
         has_guard = connection.execute(text("""
             SELECT 1 FROM pg_trigger t
