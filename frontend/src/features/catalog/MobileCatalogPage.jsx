@@ -204,7 +204,7 @@ export default function MobileCatalogPage() {
           </div>
         ) : null}
           </>
-        )
+        )}
       </main>
     </div>
   )
