@@ -145,3 +145,68 @@ def test_exact_unoccupied_code_can_be_corrected(monkeypatch):
     assert result["status"]=="corrected"
     assert result["global_product_id"]=="p2"
     assert engine.conn.writes==1
+
+
+class AddConn:
+    dialect=SimpleNamespace(name="postgresql")
+    def __init__(self, evidence=True, gtin="20487935"):
+        self.evidence=evidence
+        self.gtin=gtin
+        self.commands=[]
+    def execute(self, stmt, params=None):
+        sql=" ".join(str(stmt).split())
+        self.commands.append(sql)
+        if "SELECT id, primary_gtin FROM global_products" in sql:
+            return Rows([{"id":"p1","primary_gtin":self.gtin}])
+        if "FROM receipt_table_lines rtl" in sql:
+            if not self.evidence:
+                return Rows([])
+            return Rows([{"retailer":"Lidl","receipt_text":" Roomboter  Ongezouten "}])
+        if "COALESCE(receipt_text_normalized,'')=''" in sql:
+            return Rows([])
+        raise AssertionError("Unexpected SQL in add path: "+sql)
+
+class AddEngine:
+    def __init__(self, **kwargs): self.conn=AddConn(**kwargs)
+    @contextmanager
+    def begin(self): yield self.conn
+
+def add_request(number):
+    return routes.AddRetailerCodeRequest(
+        retailer_code="Lidl", receipt_text="Roomboter ongezouten",
+        external_article_code=number, expected_gtin="20487935"
+    )
+
+def test_one_receipt_description_may_add_multiple_distinct_numbers(monkeypatch):
+    calls=[]
+    engine=AddEngine()
+    monkeypatch.setattr(routes,"engine",engine)
+    def confirm(_conn, **kwargs):
+        calls.append(kwargs)
+        return {"global_product_id":"p1", "status":"confirmed", "changes":1}
+    monkeypatch.setattr(routes,"confirm_scanned_retailer_identity",confirm)
+    for number in ("0095545", "6609556"):
+        result=routes.add_catalog_retailer_code("p1", add_request(number))
+        assert result["external_article_code"] == number
+        assert result["changed"] is True
+    assert [call["external_article_code"] for call in calls] == ["0095545","6609556"]
+    assert all(call["receipt_text"]=="roomboter ongezouten" for call in calls)
+    assert not any("UPDATE household_articles" in sql for sql in engine.conn.commands)
+
+def test_unproven_receipt_description_cannot_add_catalog_identity(monkeypatch):
+    engine=AddEngine(evidence=False)
+    monkeypatch.setattr(routes,"engine",engine)
+    called=[]
+    monkeypatch.setattr(routes,"confirm_scanned_retailer_identity",lambda *a,**kw: called.append(1))
+    with pytest.raises(HTTPException) as err:
+        routes.add_catalog_retailer_code("p1",add_request("0095545"))
+    assert err.value.status_code==409
+    assert not called
+
+def test_stale_catalog_gtin_cannot_add_retailer_code(monkeypatch):
+    engine=AddEngine(gtin="8712345678906")
+    monkeypatch.setattr(routes,"engine",engine)
+    with pytest.raises(HTTPException) as err:
+        routes.add_catalog_retailer_code("p1",add_request("0095545"))
+    assert err.value.status_code==409
+    assert len(engine.conn.commands)==1
