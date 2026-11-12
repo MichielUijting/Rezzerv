@@ -23,21 +23,41 @@ blijft onderdeel van **Artikelbeheer → Identificeren**.
   retailer-gescopeerde opslagroute is gerealiseerd.
 - Gerichte unit-/SQLite-isolatietests voor de nieuwe herkenningsregels.
 
-## Expliciet nog NIET geleverd
+## Werkelijk geïmplementeerd in deze Draft-PR
 
-- Handmatig in Identificeren bevestigde barcodes zonder OFF automatisch als
-  Catalogusproduct materialiseren (besluiten 1A/3A/14A).
-- Opslag/lookup van beperkte retailer-scoped codes en eventuele historisch al
-  onjuist globaal gekoppelde nummers (22A); geen datamigratie in deze PR.
-- Automatische semantische synoniemen, hoeveelheidsfactoren of historische
-  heridentificatie (23A–26A).
-- Geen mutatie van bonnen, huishoudartikelen, voorraad, volumes of lokale data.
+- Het handmatig **opslaan** van een barcode in Identificeren is direct de
+  bevestiging van de artikelidentiteit. Dezelfde transactie koppelt deze
+  zonder OFF of classificatie aan een bestaand actief Catalogusproduct of
+  maakt er een nieuw aan. Een extra OFF-bevestiging is niet vereist.
+- Restricted-circulation/Lidl-codes zijn **uitsluitend bevestigd voor de
+  afzonderlijke combinatie winkelketen, bonomschrijving, bonartikelnummer en
+  opgeslagen code**; er ontstaat geen mondiale GTIN-identiteit.
+- Een eerder opgeslagen barcode heeft dezelfde bewijswaarde. Bevoegde
+  gebruikers selecteren maximaal 50 van die bestaande artikelen in
+  **Artikelbeheer → Identificeren** en gebruiken de actie
+  **Bewaarde barcodes koppelen**. De selectie krijgt eerst een bestaande
+  Inhuis-gevolgen-/bevestigingsoverlay.
+- Voor die bulkactie wordt ieder bonartikel opnieuw aan de centrale
+  bronidentiteit getoetst. De bewaarde barcode moet al bestaan en exact
+  overeenkomen, ook na de transactievergrendeling. Eén tegenstrijdigheid
+  draait de **gehele batch** terug; herhalen is idempotent.
+- De batch is bewust geen startupmigratie en geen onzichtbare GET-mutatie.
+  Hij verandert uitsluitend Catalogusidentiteiten en verwijzingsmetadata;
+  nooit bonnen, huishoudartikelen, voorraad of synoniemen.
 
-Dit is de **eerste technische deelstap**, geen claim dat het volledige nieuwe
-functionele ontwerp al is geïmplementeerd. De huidige bestaande functies voor
-handmatige ED2-barcodeopslag blijven vooralsnog afzonderlijk van de Catalogus;
-de vervolgstap moet het door de PO vastgestelde vertrouwen zonder externe OFF
-bevestiging realiseren, met de juiste scope en transactiezekerheid.
+## Nog niet geleverd in dit deeltraject
+
+- Correctie van een **andere, reeds opgeslagen Lidl-code** met een
+  afzonderlijk gevolgenoverzicht, expliciete bevestiging en auditregistratie.
+  De PO beoordeelt die codes per artikel in Identificeren; geen automatische
+  vervanging van het bestaande bewijs.
+- Resolutie van historisch al ten onrechte globaal geclaimde restricted codes.
+  Bestaande conflicten stoppen veilig; zij worden niet automatisch gemerged.
+- Semantische synoniemen, geverifieerde productfamilies en hoeveelheidsfactoren
+  (23A–25A), doorwerking in Voorraad/Bijna op (20A) en historisch herstel
+  van verwijzingen/afgeleide projecties met behoud van bronhistorie (26A).
+- Geen mutatie van bestaande ontvangst-/huishouden-/voorraadgegevens,
+  geen Docker- of volumeactie en geen automatische classificatie.
 
 ## Acceptatie
 
@@ -69,3 +89,28 @@ vervangt krijgt een aparte bevoegde gevolgencontrole (besluiten 9A/12B/27B).
 Reeds opgeslagen historische rijen blijven betrouwbaar bewijs; hun veilige
 bulk-materialisatie volgt als afzonderlijk controleerbaar herstel, niet als
 onzichtbare schrijfactie bij een GET of een startup.
+
+
+## Relevante bindende PO-besluiten (12 november 2026)
+
+- **14A en 22A:** Lidl/winkelinterne codes worden per winkel en specifieke
+  bonartikelidentiteit beoordeeld. De PO kan ze via **Identificeren**
+  individueel corrigeren; een geldige controlesom maakt geen mondiale GTIN.
+- **15A en 23A:** alleen expliciet beproefde productfamilie-/herkenningsregels
+  mogen automatische semantische relaties voorstellen.
+- **16B en 24A:** transitieve synoniemketens die verboden of tegenstrijdige
+  combinaties opleveren moeten vóór opslag geblokkeerd worden.
+- **17B en 25A:** hoeveelheids-/eenheidsfactoren zijn beperkt tot goedgekeurde
+  en geteste factoren; nooit onbegrensd op naam afleiden.
+- **18A en 27B:** centrale correcties vragen verhoogde server-side
+  bevoegdheid: platform-Superuser of een actief, expliciet geautoriseerd
+  Frontteamlid, met gevolgenoverzicht, bevestiging en registratie.
+- **19B en 26A:** historisch herstel corrigeert de relevante verwijzingen en
+  herberekent afgeleide resultaten, maar bewaart oorspronkelijke brongegevens.
+- **20A:** synoniemrelaties moeten in een latere, afzonderlijk geteste fase
+  doorwerken in Voorraad/Bijna op.
+- **21A:** niet aantoonbaar geïdentificeerde artikelen blijven zichtbaar
+  als **Nog identificeren** en worden niet stil gekoppeld.
+
+Deze implementatienotitie is geen vervanging van de overige goedgekeurde
+ontwerpbesluiten 1–13 of van de bestaande canonieke identity-/securitycontracten.
