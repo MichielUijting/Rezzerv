@@ -80,8 +80,8 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         if conn.dialect.name != "postgresql":
             raise HTTPException(503, "Beoordelen vereist PostgreSQL")
         # Serialize all edits affecting a retailer/code, including concurrent reviews.
-        conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 675))"),
-                     {"key":retailer+"|"+article_number})
+        conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 672))"),
+                     {"key":"|".join((retailer,description,article_number))})
         row = conn.execute(text("""
             SELECT id, global_product_id, status, retailer_code, receipt_text_normalized,
                    external_article_code
@@ -98,22 +98,16 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         triples = conn.execute(text("""
             SELECT id, global_product_id FROM external_article_product_links
             WHERE retailer_code = ANY(:retailer_aliases) AND receipt_text_normalized=:description
-              AND external_article_code=:article AND status='confirmed'
+              AND external_article_code=:article AND status IN ('confirmed','classification_pending')
             FOR UPDATE
         """), {"retailer_aliases":aliases,"description":description,"article":article_number}).mappings().all()
         if any(str(x["global_product_id"]) != global_product_id for x in triples):
             raise HTTPException(409, "Deze winkel, omschrijving en bonartikelnummer zijn al aan een ander product gekoppeld")
         if len(triples) > 1:
             raise HTTPException(409, "Meerdere bevestigde koppelingen voor dezelfde combinatie; eerst bronconflict onderzoeken")
-        # The existing resolver also searches by retailer+code without text. Until
-        # it understands the complete PO key, never create a code-only ambiguity.
-        code_owners = conn.execute(text("""
-            SELECT DISTINCT global_product_id FROM external_article_product_links
-            WHERE retailer_code = ANY(:retailer_aliases) AND external_article_code=:article
-              AND status='confirmed'
-        """), {"retailer_aliases":aliases,"article":article_number}).scalars().all()
-        if any(str(x)!=global_product_id for x in code_owners):
-            raise HTTPException(409, "Deze winkelcode heeft elders een andere bevestigde productidentiteit; eerst resolver aanpassen")
+        # Different descriptions may legitimately reuse a number. The
+        # updated resolver uses the complete key and fails closed when a
+        # legacy caller can provide only an ambiguous retailer/code.
         if request.action=="confirm":
             if row["status"] != "confirmed":
                 raise HTTPException(409, "Classificatie-in-afwachting moet eerst via bestaande bevestiging worden afgerond")
@@ -140,17 +134,8 @@ def review_catalog_retailer_code(global_product_id: str, request: ReviewRequest)
         target_id = str(target[0]["id"])
         if target_id == global_product_id:
             raise HTTPException(409, "De barcode hoort al bij dit Catalogusproduct")
-        # A single retailer+article number still drives existing receipt resolution.
-        # Correct only when exactly this one active code row exists; never risk
-        # creating a code-only ambiguity or silently changing other descriptions.
-        code_rows = conn.execute(text("""
-            SELECT id FROM external_article_product_links
-            WHERE retailer_code = ANY(:retailer_aliases) AND external_article_code=:article
-              AND status IN ('confirmed','classification_pending')
-            FOR UPDATE
-        """), {"retailer_aliases":aliases,"article":article_number}).scalars().all()
-        if {str(v) for v in code_rows} != {str(request.link_id)}:
-            raise HTTPException(409, "Dezelfde winkelcode komt bij meerdere omschrijvingen voor; correctie vereist eerst een uitgebreidere herkenningsregel")
+        # Correct this complete PO key only; other descriptions and codes
+        # are independent and must remain untouched.
         # The old product may already be bound to household stock. Never repoint
         # a retailer identity that would contradict a linked household article.
         existing_household = conn.execute(text("""
