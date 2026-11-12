@@ -41,8 +41,8 @@ def confirm_scanned_retailer_identity(
     # Lock the exact code so two concurrent confirmations cannot create
     # competing active identities for the same retailer.
     conn.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 671))"),
-        {"key": "identity:" + retailer + ":" + article_code + ":" + receipt_label},
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 672))"),
+        {"key": "|".join((retailer, receipt_label, article_code))},
     )
     gtin = checked["normalized_value"]
     gtin_match = resolve_catalog_identity(conn, gtin=gtin)
