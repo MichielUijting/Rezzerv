@@ -17835,7 +17835,9 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         line = conn.execute(
             text(
                 """
-                SELECT pil.id, pil.batch_id, pil.external_line_ref, pib.household_id
+                SELECT pil.id, pil.batch_id, pil.external_line_ref,
+                       pil.matched_household_article_id, pil.matched_global_product_id,
+                       pib.household_id
                 FROM purchase_import_lines pil
                 JOIN purchase_import_batches pib ON pib.id = pil.batch_id
                 WHERE pil.id = :id
@@ -17876,7 +17878,34 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
                     detail='Dit is geen voorraadgerechtigde productregel; de regel blijft alleen in Kassa.',
                 )
 
-        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name, consumable=infer_consumable_from_name(payload.article_name))
+        # A selected canonical household article wins over a display name.
+        # Do not regenerate a deleted source ID, and do not create a new name
+        # row if this household already has the identified Catalogus product.
+        household_id = str(line["household_id"])
+        stored_article_id = str(line.get("matched_household_article_id") or "").strip()
+        article_option_id = None
+        if stored_article_id:
+            article_option_id = resolve_household_article_selection_to_id(
+                conn, household_id, stored_article_id, create_if_missing=False
+            )
+            if not article_option_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Het bronartikel bestaat niet meer in dit huishouden; controleer de koppeling",
+                )
+        else:
+            product_id = str(line.get("matched_global_product_id") or "").strip()
+            if product_id:
+                existing = find_household_article_for_global_product(conn, household_id, product_id)
+                if existing and existing.get("id"):
+                    article_option_id = str(existing["id"])
+        if not article_option_id:
+            # Explicit user creation remains available when no canonical
+            # identity is known; name-only input is never a product proof.
+            article_option_id = ensure_household_article(
+                conn, household_id, payload.article_name,
+                consumable=infer_consumable_from_name(payload.article_name),
+            )
         conn.execute(
             text(
                 """
