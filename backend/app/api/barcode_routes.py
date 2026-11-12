@@ -83,7 +83,9 @@ def confirm_retailer_code_from_barcode(
         with engine.begin() as conn:
             source = conn.execute(text("""
                 SELECT COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer,
-                       rtl.external_article_code AS article_code
+                       rtl.external_article_code AS article_code,
+                       COALESCE(NULLIF(rtl.corrected_raw_label, ''),
+                                NULLIF(rtl.normalized_label, ''), rtl.raw_label) AS receipt_text
                 FROM receipt_table_lines rtl
                 JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
                 WHERE rtl.id = :line AND rt.household_id = :household
@@ -104,6 +106,7 @@ def confirm_retailer_code_from_barcode(
             confirmed = confirm_scanned_retailer_identity(
                 conn, retailer_code=retailer, external_article_code=code,
                 scanned_gtin=gtin, confirmed_by=actor,
+                receipt_text=source.get("receipt_text"),
             )
             # Historical repair is a separate savepoint: a verified central
             # identity must survive even when an old receipt is inconsistent.
