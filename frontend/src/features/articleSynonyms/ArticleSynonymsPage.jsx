@@ -10,7 +10,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import './synonymAnalysis.css'
 
 const API = '/api/external-databases/article-synonyms'
-const codeOf = (article) => article?.primary_gtin || article?.article_codes?.[0] || '—'
+const codeOf = (article) => article?.primary_gtin || article?.barcode_labels?.[0] || article?.article_codes?.[0] || '—'
 const order = { linked: 0, suggested: 1, other: 2 }
 const orderedPair = (left, right) => [left, right].sort()
 

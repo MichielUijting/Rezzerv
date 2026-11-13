@@ -57,3 +57,26 @@ Synoniemen-projectie die identificatiebron nog niet leest. Dat is geen
 bewijs van een ongeldige barcode. Aanpassing vergt een gecontroleerd
 identiteit/projectiecontract en aparte regressie; geen automatische
 herinterpretatie van winkelcodes als mondiale GTINs.
+
+
+## Aanvulling — bevestigde winkelbarcode in Synoniemen (13 november 2026)
+
+Identificeren bewaart expliciet bevestigde, winkelgebonden barcodes in
+ed2_manual_barcodes. Wanneer een bevestiging al naar een actief centraal
+Catalogusproduct verwijst, toont Artikel-synoniemen dit product voortaan
+via een read-only projectie. De minimale evidence is een bekende winkel,
+exacte bonidentiteit, geldige barcodecheck, overeenkomende barcode-scope,
+bevestigingsmetadata en een niet-conflicterende Catalogusverwijzing.
+Dezelfde bonidentiteit via meerdere winkelaliassen mag geen tegenstrijdige
+productclaim bevatten.
+
+De winkelbarcode is een apart barcode-label en geen globale GTIN en geen
+Bonartikelnummer; primary_gtin en product_identities worden niet herschreven.
+Een onzekere, nog niet gematerialiseerde, tegenstrijdige of soft-deleted
+Catalogusclaim blijft buiten de projectie en wordt niet gereactiveerd.
+Verschillende winkels met dezelfde beperkte barcode worden niet samengevoegd.
+Huishoudartikelen, kassabonnen, voorraad en synoniemen worden niet gemuteerd.
+
+Permanente PostgreSQL-tests borgen beide winkelcontexten, de
+Identificeren-Catalogus-Synoniemen-weergave, conflicterende metadata,
+onvolledige bevestiging, verwijderd product en oudere schema's.
