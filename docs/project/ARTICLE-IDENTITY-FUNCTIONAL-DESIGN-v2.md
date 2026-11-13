@@ -305,3 +305,16 @@ verpakkingsinhouden. Ontbrekende/afwijkende feiten blokkeren de groepsprojectie.
 De eigen voorraad, artikel-ID's, bronbonnen en gebeurtenissen worden nooit
 samengevoegd. De speciale éénstuksregel geldt alleen als de onafhankelijk
 geïdentificeerde verse-courgette-anker zelf aantoonbaar exact één stuk is.
+
+
+### Fase 3B — omrekenbare synoniemen bij afboeken
+Voorafgaand aan automatische afboeking op aankoop leest Inhuis de **bevestigde**
+Catalogusidentiteiten van alle betrokken huishoudartikelen en valideert per
+artikel de expliciete verpakkingsinhoud. De planningsberekening gebruikt één
+gemeenschappelijke exacte inhoudseenheid (gram/milliliter/stuk), in plaats van
+één verpakking gelijk aan één verpakking. Een aankoop van één liter kan
+twee oude halve liters afboeken; een halve-liter-aankoop verwijdert nooit
+een hele liter door afronding. Afboeken gebeurt uitsluitend in hele bestaande
+voorraadregels met bijbehorende household-ID en voorraadlocatie, binnen de
+bestaande bontransactie. Ontbrekende, onvergelijkbare, ongeldige of extreme
+factoren leiden niet tot een onbetrouwbare groepsafboeking.

@@ -27,7 +27,7 @@ def seed(conn, *, household="pg-h1", quantity_a=2, quantity_b=3, quantity_c=0):
     conn.execute(text("DELETE FROM household_articles"))
     conn.execute(text("DELETE FROM global_products"))
     conn.execute(text("""
-        INSERT INTO global_products (id,status) VALUES ('gp-a','active'),('gp-b','active'),('gp-c','active')
+        INSERT INTO global_products (id,status,size_value,size_unit) VALUES ('gp-a','active',1,'stuk'),('gp-b','active',1,'stuk'),('gp-c','active',1,'stuk')
     """))
     conn.execute(text("""
         INSERT INTO article_synonym_links VALUES ('gp-a','gp-b'),('gp-b','gp-c')
@@ -129,7 +129,7 @@ def main():
     engine = create_engine(os.environ["DATABASE_URL"], future=True)
     with engine.begin() as conn:
         conn.execute(text("""
-            CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY,status TEXT) ON COMMIT DROP
+            CREATE TEMP TABLE global_products (id TEXT PRIMARY KEY,status TEXT,size_value NUMERIC,size_unit TEXT) ON COMMIT DROP
         """))
         conn.execute(text("""
             CREATE TEMP TABLE household_articles (

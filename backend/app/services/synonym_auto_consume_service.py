@@ -16,6 +16,7 @@ from app.services.product_day_auto_consume_service import (
     _canonical_purchase_day,
 )
 from app.services.synonym_auto_consume_identity import confirmed_household_synonym_group
+from app.services.synonym_product_family_rules import normalized_package_quantity
 
 
 def _whole(value) -> int:
@@ -23,6 +24,42 @@ def _whole(value) -> int:
     if not number.is_finite() or number < 0 or number != number.to_integral_value():
         raise ValueError("Synoniemvoorraad heeft een ongeldig of gebroken aantal")
     return int(number)
+
+
+def _verified_household_package_factors(conn, household_id, article_ids):
+    """Return exact common-dimension package sizes, or fail closed.
+
+    A confirmed synonym edge proves product equivalence, not a numeric quantity
+    conversion. Pack sizes must be verified in Catalogus for each private
+    household member; missing/incompatible sizes cannot share deductions.
+    """
+    members = conn.execute(text("""
+        SELECT ha.id AS article_id, gp.size_value, gp.size_unit,
+               gp.status AS product_status
+        FROM household_articles ha
+        JOIN global_products gp ON gp.id = ha.global_product_id
+        WHERE ha.household_id = :household_id
+          AND ha.id = ANY(:article_ids)
+          AND COALESCE(ha.status, 'active') = 'active'
+    """), {"household_id": household_id, "article_ids": list(article_ids)}).mappings().all()
+    if len(members) != len(article_ids):
+        return None
+    sizes = {}
+    dimension = None
+    for member in members:
+        article_id = str(member["article_id"])
+        if article_id in sizes or str(member.get("product_status") or "").lower() != "active":
+            return None
+        size = normalized_package_quantity(member)
+        if size is None or (dimension is not None and size[0] != dimension):
+            return None
+        dimension = size[0]
+        sizes[article_id] = size[1]
+    if set(sizes) != set(article_ids):
+        return None
+    if max(sizes.values()) / min(sizes.values()) > Decimal("1000"):
+        return None
+    return dimension, sizes
 
 
 def plan_confirmed_synonym_deduction(
@@ -50,6 +87,10 @@ def plan_confirmed_synonym_deduction(
     group = confirmed_household_synonym_group(conn, household_id, purchased_article_id)
     if len(group) < 2 or purchased_article_id not in group:
         return None
+    verified = _verified_household_package_factors(conn, household_id, group)
+    if verified is None:
+        return None  # Never consume a differently sized package as one unit.
+    dimension, package_sizes = verified
 
     # Both article rows are locked in deterministic order before any group read.
     # The purchase route already owns the containing transaction.
@@ -146,59 +187,69 @@ def plan_confirmed_synonym_deduction(
         if any(key not in observed_locations for key in protected_by_location):
             return None
 
-    total_pre = sum(pre.values())
-    total_prior_purchases = sum(prior_purchased.values())
-    total_prior_deductions = sum(prior_deducted.values())
-    # Today's preceding receipts are added back/removed to recover the
-    # start-of-day baseline even when other shops sell different group members.
+    # Aggregate in one exact common content unit (g/ml/pieces), not in
+    # package counts: 2 x 500 ml must equal 1 x 1 l for deduction planning.
+    total_pre = sum((pre[aid] * package_sizes[aid] for aid in group), Decimal(0))
+    total_prior_purchases = sum((
+        prior_purchased[aid] * package_sizes[aid] for aid in group
+    ), Decimal(0))
+    total_prior_deductions = sum((
+        prior_deducted[aid] * package_sizes[aid] for aid in group
+    ), Decimal(0))
     start_stock = total_pre - total_prior_purchases + total_prior_deductions
     if start_stock < 0:
-        return None  # stock ledger cannot safely establish the baseline
-    cumulative = total_prior_purchases + _whole(purchased_quantity)
+        return None
+    cumulative = (total_prior_purchases +
+                  _whole(purchased_quantity) * package_sizes[purchased_article_id])
     if mode == AUTO_CONSUME_ALL_EXISTING:
         desired = start_stock
     else:
         desired = min(start_stock, cumulative)
-    requested = max(0, desired - total_prior_deductions)
+    requested_equivalent = max(Decimal(0), desired - total_prior_deductions)
+    old_stock_equivalent = sum((
+        position['available_old'] * package_sizes[article_id]
+        for article_id, positions in stock_rows.items() for position in positions
+    ), Decimal(0))
+    requested_equivalent = min(requested_equivalent, old_stock_equivalent)
 
-    # Plan from the *specific pre-purchase stock rows*, not just article totals.
-    # This protects previous same-day purchases even when the household keeps
-    # multiple stock locations or the new purchase joins an existing row.
-    requested = min(requested, sum(
-        pos['available_old'] for positions in stock_rows.values() for pos in positions
-    ))
     order = [article_id for article_id in group if article_id != purchased_article_id]
     order.append(purchased_article_id)
     allocations = []
-    remaining = requested
+    remaining = requested_equivalent
     for article_id in order:
-        for pos in stock_rows[article_id]:
-            quantity = min(remaining, pos['available_old'])
+        package = package_sizes[article_id]
+        for position in stock_rows[article_id]:
+            # Only whole packages can be deducted. Leave leftover capacity
+            # unconsumed instead of rounding up and deleting fresh stock.
+            quantity = min(position['available_old'], int(remaining // package))
             if not quantity:
                 continue
             allocations.append({
                 'article_id': article_id,
-                'article_name': next(row['naam'] for row in member_rows if row['id'] == article_id),
-                'inventory_id': str(pos['id']),
-                'pre_quantity': _whole(pos['aantal']),
-                'space_id': pos.get('space_id'),
-                'sublocation_id': pos.get('sublocation_id'),
+                'article_name': next(row['naam'] for row in member_rows
+                                     if row['id'] == article_id),
+                'inventory_id': str(position['id']),
+                'pre_quantity': _whole(position['aantal']),
+                'space_id': position.get('space_id'),
+                'sublocation_id': position.get('sublocation_id'),
                 'quantity': quantity,
             })
-            remaining -= quantity
-            if remaining == 0:
+            remaining -= quantity * package
+            if remaining <= 0:
                 break
-
+    requested = sum(item['quantity'] for item in allocations)
     return {
         'mode': mode,
         'members': tuple(group),
         'purchase_day': day,
         'requested_deduction_quantity': requested,
         'allocations': allocations,
-        'day_start_stock': start_stock,
-        'prior_day_purchased_quantity': total_prior_purchases,
-        'prior_day_auto_consumed_quantity': total_prior_deductions,
-        'cumulative_day_purchased_quantity': cumulative,
+        'day_start_stock': float(start_stock),
+        'prior_day_purchased_quantity': float(total_prior_purchases),
+        'prior_day_auto_consumed_quantity': float(total_prior_deductions),
+        'cumulative_day_purchased_quantity': float(cumulative),
+        'content_unit': dimension,
+        'requested_equivalent_content': float(requested_equivalent - remaining),
     }
 
 
