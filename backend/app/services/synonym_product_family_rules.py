@@ -77,3 +77,31 @@ def verified_package_ratio(left, right):
                          else f"{ratio.numerator}/{ratio.denominator}",
         "rule": "exact_catalog_package_units_v1",
     }
+
+
+def explicitly_prepared_courgette(product):
+    """Only known preparation evidence, not conjecture from a vague name."""
+    raw = " ".join((str(product.get("name") or ""), str(product.get("variant") or "")))
+    raw = unicodedata.normalize("NFKD", raw.lower())
+    raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
+    words = re.findall(r"[a-z0-9]+", raw)
+    if not any(w in _BASE or w.startswith("courgette") for w in words):
+        return False
+    markers = {"diepvries", "diepgevroren", "bevroren", "babyvoeding", "baby",
+               "maaltijdmix", "mix", "soep", "puree", "potje"}
+    infant_age = "maanden" in words and any(
+        w.isdigit() and 1 <= int(w) <= 36 for w in words
+    )
+    return bool(markers & set(words)) or infant_age or "courgettesoep" in words
+
+
+def proven_fresh_prepared_contrast(left, right):
+    """An explicit, demonstrated fresh-vs-prepared product difference."""
+    return bool((approved_family(left) and explicitly_prepared_courgette(right))
+                or (approved_family(right) and explicitly_prepared_courgette(left)))
+
+
+def curated_family_suggestion_safe(left, right):
+    """No text-only automatic proposal from a known family to a non-member."""
+    first, second = approved_family(left), approved_family(right)
+    return not (first or second) or bool(first and first == second)

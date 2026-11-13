@@ -134,6 +134,8 @@ export default function ArticleSynonymsPage({ embedded = false }) {
   const strongSuggestions = options.filter((item) =>
     item.status !== 'linked' && item.linkable && item.review_level === 'strong'
   )
+  const proposedCount = options.filter((item) => item.status === 'suggested').length
+  const otherCount = options.filter((item) => item.status === 'other').length
   function selectStrongSuggestions() {
     if (savingRef.current || loadingOptions) return
     // Explicit user action: only preselect; never commit a relation.
@@ -365,6 +367,14 @@ export default function ArticleSynonymsPage({ embedded = false }) {
           data-testid="article-synonyms-candidates">
           <div className="rz-synonym-side-heading">
             <h3>Te koppelen artikelen</h3>
+            {currentArticle && !loadingOptions ? <span
+              className="rz-synonym-status-summary"
+              data-testid="article-synonyms-suggestion-summary">
+              {proposedCount} voorstellen · {otherCount} overige artikelen
+              <span className="rz-synonym-status-explanation">
+                Overig is geen voorstel; gebruik het naamfilter om zelf te zoeken.
+              </span>
+            </span> : null}
           </div>
           <DataTable columns={rightColumns}
             data={currentArticle ? rightRows.map((item) => ({ ...item, code: codeOf(item) })) : []}

@@ -9,6 +9,7 @@ import re
 import unicodedata
 from app.services.synonym_product_family_rules import (
     normalized_package_quantity, shared_approved_family, verified_package_ratio,
+    proven_fresh_prepared_contrast,
 )
 
 
@@ -70,6 +71,8 @@ def proven_semantic_conflicts(left, right):
                 or _contains(text_r, a) and _contains(text_l, b)):
             warnings.append("Verschillende productsoorten")
             break
+    if proven_fresh_prepared_contrast(left, right):
+        warnings.append("Verse courgette is geen bereid, diepvries- of babyproduct")
     return list(dict.fromkeys(warnings))
 
 

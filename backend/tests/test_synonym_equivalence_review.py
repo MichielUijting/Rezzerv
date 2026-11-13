@@ -80,6 +80,17 @@ class SynonymEquivalenceReviewTest(unittest.TestCase):
                             ("1","gr"), ("1","")):
             self.assertIsNone(q(item("X", value, unit)))
 
+    def test_fresh_courgette_and_prepared_product_contrast(self):
+        from app.services.synonym_equivalence_review import proven_semantic_conflicts
+        for label in ("Olvarit 8+ Maanden Courgette", "Diepvries courgette",
+                      "Courgette babyvoeding", "Courgettesoep"):
+            with self.subTest(label=label):
+                reasons = proven_semantic_conflicts(item("AH Courgette"), item(label))
+                self.assertTrue(reasons)
+                self.assertIn("babyproduct", reasons[0])
+        self.assertEqual(proven_semantic_conflicts(
+            item("AH Courgette"), item("Biologische gele courgette")), [])
+
     def test_rational_package_factor_only_for_approved_family(self):
         from app.services.synonym_product_family_rules import verified_package_ratio as r
         a, b = item("Courgette", "250", "g"), item("Biologische courgette", "500", "g")

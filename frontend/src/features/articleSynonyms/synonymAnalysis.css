@@ -105,3 +105,12 @@
   .rz-synonym-actions-placeholder { display: none; }
   .rz-synonym-side > .rz-synonym-analysis-actions { min-height: 44px; height: auto; }
 }
+
+/* Present suggestions separately from remaining manually searchable products. */
+.rz-synonym-status-summary {
+  font-size: .75rem;
+  line-height: 1.2;
+  max-width: 100%;
+  color: var(--color-text-secondary, #52606b);
+}
+.rz-synonym-status-explanation { display: block; }

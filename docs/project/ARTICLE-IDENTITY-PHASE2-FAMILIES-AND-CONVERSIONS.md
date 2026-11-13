@@ -41,3 +41,19 @@ Nog open: uitbreiding met afzonderlijk geteste/goedgekeurde families en
 een gevolgenpreview op groepsniveau. De finale PR vereist risiconiveau L,
 preflight, correcte versie en exact-candidate F7. Merge en deployment
 vereisen afzonderlijke expliciete PO-GO.
+
+## PO-geconstateerde kandidaatfout: AH Courgette / Olvarit
+
+Hersteld: tekstovereenkomst kan een geteste verse productfamilie niet langer
+als automatisch voorstel aan babyvoeding/diepvries koppelen. Bekende
+semantische tegenstrijdigheden worden al in de voorstelgenerator
+geweigerd; de bestaande manuele browse blijft behouden. Het rechterpaneel
+toont nu het verschil tussen voorstellen en overige doorzoekbare
+Catalogusartikelen. Er wordt bij bekijken niets opgeslagen.
+
+Apart op te lossen: Identificeren kan een reeds bevestigde winkelgebonden
+barcode met een actief Catalogusproduct vastleggen terwijl de huidige
+Synoniemen-projectie die identificatiebron nog niet leest. Dat is geen
+bewijs van een ongeldige barcode. Aanpassing vergt een gecontroleerd
+identiteit/projectiecontract en aparte regressie; geen automatische
+herinterpretatie van winkelcodes als mondiale GTINs.

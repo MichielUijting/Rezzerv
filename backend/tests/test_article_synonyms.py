@@ -88,6 +88,37 @@ class MatchingTest(unittest.TestCase):
         self.assertIn('geen automatische voorraadafboeking', report['review_reason'])
         self.assertEqual(service.product_link_options([left, right], set(), 'a')[0]['review_level'], 'check')
 
+    def test_ah_courgette_and_olvarit_are_not_automatic_synonym_proposals(self):
+        fresh = product('a', 'AH Courgette', brick='vegetable')
+        baby = product('b', 'Olvarit 8+ Maanden Courgette', brick='vegetable')
+        green = product('c', 'Groene biologische courgette', brick='vegetable')
+        frozen = product('d', 'Diepvries courgette', brick='vegetable')
+        for item in (fresh, baby, green, frozen):
+            item.update(size_value='500', size_unit='g')
+        pairs = service.suggest_pairs([fresh, baby, green, frozen])
+        pair_ids = {frozenset((p['left']['id'], p['right']['id'])) for p in pairs}
+        self.assertIn(frozenset(('a', 'c')), pair_ids)
+        self.assertNotIn(frozenset(('a', 'b')), pair_ids)
+        self.assertNotIn(frozenset(('a', 'd')), pair_ids)
+        options = {p['id']: p for p in service.product_link_options(
+            [fresh, baby, green, frozen], set(), 'a')}
+        self.assertEqual(options['b']['status'], 'other')
+        self.assertEqual(options['d']['status'], 'other')
+        self.assertEqual(options['c']['status'], 'suggested')
+        self.assertEqual(options['c']['review_level'], 'strong')
+        self.assertEqual(options['b']['review_level'], 'check')
+        self.assertIn('babyproduct', options['b']['review_reason'])
+        self.assertTrue(options['b']['manual'])
+
+    def test_known_milk_fat_contrast_cannot_be_automatically_proposed(self):
+        products = [product('a', 'Halfvolle melk'), product('b', 'Volle melk'),
+                    product('c', 'Jumbo Halfvolle melk', retailer_code='jumbo')]
+        pairs = service.suggest_pairs(products)
+        ids = {frozenset((p['left']['id'], p['right']['id'])) for p in pairs}
+        self.assertIn(frozenset(('a', 'c')), ids)
+        self.assertNotIn(frozenset(('a', 'b')), ids)
+        self.assertNotIn(frozenset(('b', 'c')), ids)
+
     def test_quality_review_flags_suspect_existing_links_without_unlinking(self):
         left = product('a', 'Zaanse halfvolle mayo')
         right = product('b', 'AH Houdbare halfvolle melk', retailer_code='jumbo')

@@ -15,7 +15,8 @@ import unicodedata
 from sqlalchemy import inspect, text
 
 from app.services.gtin_validation_service import is_valid_gtin
-from app.services.synonym_equivalence_review import review_pair
+from app.services.synonym_equivalence_review import review_pair, proven_semantic_conflicts
+from app.services.synonym_product_family_rules import curated_family_suggestion_safe
 
 METHOD = 'word12-char35-tfidf-v1'
 MIN_SCORE = 0.20
@@ -203,6 +204,12 @@ def suggest_pairs(products, confirmed=(), *, include_name_only=False):
             right = products[j]
             a, b = sorted((left['id'], right['id']))
             if score < MIN_SCORE or (a, b) in confirmed:
+                continue
+            # Text similarity cannot bypass curated product-family boundaries
+            # or explicit physical/dietary contrasts.
+            if not curated_family_suggestion_safe(left, right):
+                continue
+            if proven_semantic_conflicts(left, right):
                 continue
             # Store provenance is presentation metadata, not a prerequisite
             # or exclusion criterion for product synonym suggestions.
