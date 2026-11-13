@@ -48,6 +48,46 @@ class MatchingTest(unittest.TestCase):
         self.assertEqual(options[0]['review_level'], 'strong')
         self.assertTrue(options[0]['linkable'])
 
+    def test_curated_fresh_courgette_variants_are_strong_suggestions_only(self):
+        left = product('a', 'Biologische groene courgette', brick='vegetable')
+        right = product('b', 'Gele courgette', brick='vegetable', retailer_code='jumbo')
+        for row in (left, right):
+            row.update(size_value='500', size_unit='g')
+        hint = review_pair(left, right)
+        self.assertEqual(hint['review_level'], 'strong')
+        self.assertIn('courgettefamilie', hint['review_reason'])
+        self.assertNotIn('linked', hint)
+        options = service.product_link_options([left, right], set(), 'a')
+        self.assertEqual(options[0]['review_level'], 'strong')
+        self.assertTrue(options[0]['linkable'])
+        self.assertEqual(options[0]['status'], 'suggested')
+
+    def test_unapproved_courgette_variants_do_not_become_strong(self):
+        left = product('a', 'Courgette', brick='vegetable')
+        left.update(size_value='500', size_unit='g')
+        for name in ('Diepvries courgette', 'Courgette babyvoeding',
+                     'Courgette maaltijdmix', 'Courgettesoep',
+                     'Voorgesneden courgette', 'Groene gele courgette',
+                     'Courgette 2 stuks'):
+            with self.subTest(name=name):
+                right = product('b', name, brick='vegetable')
+                right.update(size_value='500', size_unit='g')
+                self.assertNotEqual(review_pair(left, right)['review_level'], 'strong')
+        unknown = product('b', 'Gele courgette', brick='vegetable')
+        unknown.update(size_value='', size_unit='')
+        self.assertEqual(review_pair(left, unknown)['review_level'], 'possible')
+
+    def test_family_package_factor_is_explanatory_not_auto_consumption(self):
+        left = product('a', 'Courgette', brick='vegetable')
+        right = product('b', 'Biologische courgette', brick='vegetable')
+        left.update(size_value='500', size_unit='g')
+        right.update(size_value='1', size_unit='kg')
+        report = review_pair(left, right)
+        self.assertEqual(report['review_level'], 'check')
+        self.assertIn('1/2', report['review_reason'])
+        self.assertIn('geen automatische voorraadafboeking', report['review_reason'])
+        self.assertEqual(service.product_link_options([left, right], set(), 'a')[0]['review_level'], 'check')
+
     def test_quality_review_flags_suspect_existing_links_without_unlinking(self):
         left = product('a', 'Zaanse halfvolle mayo')
         right = product('b', 'AH Houdbare halfvolle melk', retailer_code='jumbo')

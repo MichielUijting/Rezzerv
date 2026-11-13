@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from decimal import Decimal, InvalidOperation
+from app.services.synonym_product_family_rules import (
+    normalized_package_quantity, shared_approved_family, verified_package_ratio,
+)
 
 
 CONTRASTS = (
@@ -48,18 +50,7 @@ def _specificity(value, choices):
 
 
 def _quantity(p):
-    try:
-        amount = Decimal(str(p.get("size_value") or ""))
-    except InvalidOperation:
-        return None
-    unit = _plain(p.get("size_unit"))
-    factors = {"kg": ("mass", 1000), "g": ("mass", 1),
-               "l": ("volume", 1000), "ml": ("volume", 1),
-               "stuk": ("count", 1), "stuks": ("count", 1)}
-    if amount <= 0 or unit not in factors:
-        return None
-    dimension, factor = factors[unit]
-    return dimension, amount * factor
+    return normalized_package_quantity(p)
 
 
 def proven_semantic_conflicts(left, right):
@@ -91,10 +82,21 @@ def review_pair(left, right):
         warnings.append("Inhoudseenheid verschilt")
     elif qa and qb and qa[1] != qb[1]:
         warnings.append("Verpakkingsinhoud verschilt")
+        ratio = verified_package_ratio(left, right)
+        if ratio:
+            warnings.append(
+                f"Exacte verpakkingseenheden: 1 linker verpakking = "
+                f"{ratio['left_to_right']} rechter verpakking; geen automatische voorraadafboeking"
+            )
     if warnings:
         return {"review_level": "check", "review_label": "Controleren",
                 "review_reason": "; ".join(dict.fromkeys(warnings))}
-    # A textual match without verified distinct product attributes is only a candidate.
+    # Curated families only improve a suggestion. Actual linking remains
+    # the existing explicit, independently authorized server transaction.
+    if qa and qb and qa == qb and shared_approved_family(left, right):
+        return {"review_level": "strong", "review_label": "Sterke kandidaat",
+                "review_reason": "Verse courgettefamilie en bekende gelijke inhoud; "
+                                 "controleer het gebruiksdoel voor handmatige bevestiging."}
     if name_l and name_l == name_r and qa and qb and qa == qb:
         return {"review_level": "strong", "review_label": "Sterke kandidaat",
                 "review_reason": "Zelfde artikelnaam en inhoud; controleer de overige productkenmerken."}
