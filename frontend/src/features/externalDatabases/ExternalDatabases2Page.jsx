@@ -36,6 +36,10 @@ const columns = [
       : row.article_code || (row.manual_barcode
         ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
         : '') },
+  { key: 'identity_status_label', label: 'Identificatie', width: 225,
+    sortable: true, filterable: true,
+    getSortValue: (row) => row.identity_status_label || 'Nog identificeren',
+    renderCell: (row) => row.identity_status_label || 'Nog identificeren' },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -54,7 +58,7 @@ const columns = [
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
-  ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
+  ['identity_status_label', 'Identificatie'], ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
 function csvCell(value) {
@@ -111,8 +115,17 @@ export default function ExternalDatabases2Page() {
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
-  const canMaterializeSaved = selectedRows.length > 0 && selectedRows.length <= 50
-    && selectedRows.every((row) =>
+  const recoverableRows = useMemo(() => items.filter((row) =>
+    row.identity_repairable === true &&
+    /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim())
+  ), [items])
+  // No manual bulk selection required for historically saved, safe candidates.
+  // Only the existing explicitly authorized POST may perform the repair.
+  const repairRows = selectedRows.length ? selectedRows : recoverableRows.slice(0, 50)
+  const canMaterializeSaved = selectedRows.length <= 50
+    && repairRows.length > 0 && repairRows.length <= 50
+    && repairRows.every((row) =>
+      row.identity_status !== 'review' &&
       /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim()))
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
@@ -187,14 +200,14 @@ export default function ExternalDatabases2Page() {
 
   function confirmMaterializeSaved() {
     if (!canMaterializeSaved || materializing || deleting || unlinking) return
-    const selections = selectedRows.map((row) => ({
+    const selections = repairRows.map((row) => ({
       receipt_item_id: row.id, gtin: String(row.manual_barcode).trim(),
     }))
     showFeedback({
       variant: 'warning',
       title: 'Bewaarde barcodes koppelen',
       message: selections.length + ' eerder opgeslagen barcode(s) aan de Catalogus koppelen?',
-      detail: 'Alleen bevestigde barcodes worden verwerkt. Er verandert niets aan kassabonnen, huishoudartikelen of voorraad. Bij één conflict wordt niets opgeslagen.',
+      detail: 'Uitsluitend eerder bewaarde barcodes worden verwerkt. Alle bestaande identiteiten worden opnieuw gecontroleerd. Bij één conflict wordt deze hele selectie teruggedraaid; bonnen, huishoudartikelen en voorraad blijven behouden.' + (selectedRows.length === 0 && recoverableRows.length > 50 ? ' Eerst worden maximaal 50 kandidaten verwerkt.' : ''),
       primaryActionLabel: 'Koppelen', secondaryActionLabel: 'Annuleren',
       testId: 'ed2-materialize-existing-confirm',
       onPrimaryAction: async () => {
@@ -414,8 +427,12 @@ export default function ExternalDatabases2Page() {
           <Button type="button" variant="secondary"
             disabled={!canMaterializeSaved || unlinking || deleting || materializing}
             onClick={confirmMaterializeSaved}>
-            {materializing ? 'Koppelen...' : 'Bewaarde barcodes koppelen'}
+            {materializing ? 'Herstellen...' : 'Bewaarde barcodes koppelen'}
           </Button>
+          {recoverableRows.length > 0 ? <span role="status">
+            {recoverableRows.length} bewaarde barcode(s) wachten op Catalogusherstel.
+            Zonder selectie worden maximaal 50 artikelen voorgesteld.
+          </span> : null}
           <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting || materializing}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"

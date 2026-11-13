@@ -1092,34 +1092,29 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
             "photo_loaded": bool(candidate.get("image_url")),
         }
 
-    # A completed OFF query with no exact GTIN match is NOT a verified OFF link.
-    # Preserve the user-entered barcode on a distinct platform-scoped identity.
-    # It is visible in ED2 but cannot become an operational receipt/stock match.
-    with engine.begin() as conn:
-        identity = _ed2_normalized_source(conn, receipt_item_id)
-        if conn.dialect.name == "postgresql":
-            conn.execute(text(
-                "SELECT pg_advisory_xact_lock(hashtext(:identity_key))"
-            ), {"identity_key": "|".join(identity.values())})
-        _ed2_require_unlinked(conn, identity)
-        previous = conn.execute(text(
-            "SELECT gtin FROM ed2_manual_barcodes "
-            "WHERE retailer_code = :retailer_code "
-            "AND receipt_text_normalized = :receipt_text_normalized "
-            "AND external_article_code = :external_article_code"
-        ), identity).scalar()
-        if previous and str(previous) != gtin:
-            raise HTTPException(status_code=409, detail="Dit bonartikel heeft intussen een andere barcode gekregen")
-        if not previous:
-            conn.execute(text(
-                "INSERT INTO ed2_manual_barcodes "
-                "(retailer_code, receipt_text_normalized, external_article_code, gtin, created_at, updated_at) "
-                "VALUES (:retailer_code, :receipt_text_normalized, :external_article_code, :gtin, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-            ), {**identity, "gtin": gtin})
-    return {"saved": True, "source": "manual", "gtin": gtin, "off_found": False,
-            "off_unavailable": off_unavailable,
-            "classification_pending": False, "photo_loaded": False}
+    # OFF is optional metadata, not identity authority. A user-entered saved
+    # barcode must *always* be materialised to Catalogus in the same atomic
+    # transaction; this exceptional route must not recreate legacy orphans.
+    # Existing historical/retailer conflicts remain fail-closed.
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(conn, receipt_item_id)
+            result = materialize_saved_ed2_barcode(
+                conn, retailer_code=source["retailer_code"],
+                receipt_text=source["receipt_text"],
+                external_article_code=source["external_article_code"],
+                barcode=gtin, confirmed_by=actor_session.user_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "saved": True, "source": "manual", "gtin": gtin, "off_found": False,
+        "off_unavailable": off_unavailable, "classification_pending": False,
+        "photo_loaded": False, "catalog_linked": True,
+        "catalog_product_created": result["catalog_product_created"],
+        "global_product_id": result["global_product_id"],
+        "barcode_scope": result["barcode_scope"], "stock_changes": 0,
+    }
 
 
 @router.put("/{global_product_id}/name")

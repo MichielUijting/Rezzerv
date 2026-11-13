@@ -27,6 +27,12 @@ class Rows:
     def first(self):
         return self.rows[0] if self.rows else None
 
+    def scalar(self):
+        if not self.rows:
+            return None
+        first = self.rows[0]
+        return next(iter(first.values())) if isinstance(first, dict) else first
+
 
 class PGFixture:
     dialect = SimpleNamespace(name="postgresql")
@@ -50,6 +56,18 @@ class PGFixture:
                          if x["retailer_code"] in p["aliases"]
                          and x["receipt_text_normalized"] == p["label"]
                          and x["external_article_code"] == p["code"]])
+        if sql.startswith("SELECT gtin FROM ed2_manual_barcodes"):
+            return Rows([{"gtin": row["gtin"]} for row in self.manual
+                         if row["retailer_code"] == p["retailer_code"]
+                         and row["receipt_text_normalized"] == p["receipt_text_normalized"]
+                         and row["external_article_code"] == p["external_article_code"]])
+        if sql.startswith("SELECT id FROM external_article_product_links"):
+            return Rows([{"id": index} for index, row in enumerate(self.legacy)
+                         if row["retailer_code"] == p["retailer_code"]
+                         and row["status"] in ("confirmed", "classification_pending")
+                         and (row["external_article_code"] == p.get("external_article_code")
+                              if p.get("external_article_code")
+                              else row["receipt_text_normalized"] == p.get("receipt_text_normalized"))])
         if sql.startswith("SELECT id AS product_id, status, primary_gtin FROM global_products"):
             return Rows([{"product_id": x["id"], **x} for x in self.products
                          if x["primary_gtin"] == p["barcode"]])
@@ -235,6 +253,83 @@ def test_normal_route_never_calls_off_or_second_confirmation(monkeypatch):
     assert result["saved"] is True and result["catalog_linked"] is True
     assert result["catalog_product_created"] is True
     assert len(conn.products) == 1 and len(conn.manual) == 1
+
+
+def test_off_override_without_match_cannot_create_orphan_saved_barcode(monkeypatch):
+    """Even the exceptional OFF path uses the same atomic Catalogus proof."""
+    conn = PGFixture()
+
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {
+        "ed2_manual_barcodes", "external_article_product_links",
+        "global_products", "product_identities",
+    })
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda _: SimpleNamespace(user_id="frontteam-1"))
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
+                        lambda _conn, _item: {
+                            "retailer_code": "Lidl", "receipt_text": "Courgette groen",
+                            "external_article_code": "0082346",
+                        })
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda *_a, **_k: {"results": []})
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:1", gtin="2008234600001",
+            allow_off_mismatch=True, import_off_product_override=True,
+        ))
+    assert result["saved"] and result["catalog_linked"]
+    assert result["barcode_scope"] == "restricted"
+    assert result["global_product_id"] == conn.manual[0]["global_product_id"]
+    assert result["catalog_product_created"]
+    assert conn.products[0]["primary_gtin"] is None
+    assert conn.writes == ["global_products", "product_identities", "ed2_manual_barcodes"]
+
+
+def test_off_override_conflict_rolls_back_without_partial_saved_claim(monkeypatch):
+    """Store-scoped barcode cannot claim a globally owned product."""
+    conn = PGFixture()
+    conn.products.append({
+        "id": "old-misclassified", "status": "active",
+        "primary_gtin": "2008234600001",
+    })
+
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {
+        "ed2_manual_barcodes", "external_article_product_links",
+        "global_products", "product_identities",
+    })
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda _: SimpleNamespace(user_id="frontteam-1"))
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
+                        lambda _conn, _item: {
+                            "retailer_code": "Lidl", "receipt_text": "Courgette groen",
+                            "external_article_code": "0082346",
+                        })
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda *_a, **_k: {"results": []})
+    with pytest.raises(catalog_routes.HTTPException) as error:
+        catalog_routes.save_ed2_manual_barcode(
+            catalog_routes.Ed2ManualBarcodeRequest(
+                receipt_item_id="receipt-table-line:1", gtin="2008234600001",
+                allow_off_mismatch=True, import_off_product_override=True,
+            ))
+    assert error.value.status_code == 409
+    assert conn.manual == [] and not conn.writes
 
 
 def test_historical_bulk_uses_existing_proof_without_off(monkeypatch):

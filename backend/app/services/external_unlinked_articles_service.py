@@ -22,6 +22,7 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.barcode_scope_service import classify_barcode_scope
 from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
@@ -63,6 +64,67 @@ def _manual_ed2_barcode_lookup(conn) -> dict[tuple[str, str, str], str]:
             codes[key] = code
     return codes
 
+
+
+
+def _saved_ed2_catalog_evidence(conn) -> dict[tuple[str, str, str], dict]:
+    """Read-only source evidence for each exact retailer+receipt+article code.
+
+    Saved evidence predates Catalogus materialisation. Neither an unchecked
+    GTIN nor a product name is enough to claim a central product. Aliased
+    retailer duplicates with different facts always require manual review.
+    """
+    inspector = inspect(conn)
+    if not inspector.has_table("ed2_manual_barcodes"):
+        return {}
+    get_columns = getattr(inspector, "get_columns", None)
+    if not callable(get_columns):
+        return {}
+    required = {"retailer_code", "receipt_text_normalized", "external_article_code",
+                "gtin", "barcode_scope", "global_product_id", "confirmed_by",
+                "confirmed_at"}
+    if not required.issubset({c["name"] for c in get_columns("ed2_manual_barcodes")}):
+        return {}
+    rows = conn.execute(text("""
+        SELECT m.retailer_code, m.receipt_text_normalized,
+               m.external_article_code, m.gtin, m.barcode_scope,
+               m.global_product_id, m.confirmed_by, m.confirmed_at,
+               gp.status AS catalog_status
+          FROM ed2_manual_barcodes m
+          LEFT JOIN global_products gp ON gp.id = m.global_product_id
+    """)).mappings()
+    states = {}
+    for row in rows:
+        key = _ed2_manual_barcode_identity(row["retailer_code"],
+                                          row["receipt_text_normalized"],
+                                          row["external_article_code"])
+        barcode = str(row["gtin"] or "").strip()
+        product_id = str(row["global_product_id"] or "").strip()
+        scope = str(row["barcode_scope"] or "").strip()
+        if not is_valid_gtin(barcode):
+            state = "review"
+        elif not product_id:
+            # Legacy "save" already was the PO's identification proof.
+            state = "saved_only"
+        elif (str(row["catalog_status"] or "").lower() != "active"
+              or not str(row["confirmed_by"] or "").strip()
+              or row["confirmed_at"] is None
+              or scope != classify_barcode_scope(barcode)["scope"]):
+            state = "review"
+        else:
+            state = "catalog_linked"
+        candidate = {
+            "state": state, "barcode": barcode,
+            "catalog_product_id": product_id if state == "catalog_linked" else "",
+        }
+        old = states.get(key)
+        if old is None:
+            states[key] = candidate
+        elif old != candidate:
+            # Remain fail-closed even if another alias repeats a valid row.
+            states[key] = {"state": "review", "barcode": "",
+                           "catalog_product_id": ""}
+    return states
 
 def _removed_ed2_keys(conn) -> set[tuple[str, str, str]]:
     """Hide confirmed removals from the platform overview, not from their receipts."""
@@ -234,6 +296,7 @@ def list_all_external_articles(*, conn=None) -> dict:
     resolved = 0
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         manual_barcodes = _manual_ed2_barcode_lookup(conn)
+        saved_evidence = _saved_ed2_catalog_evidence(conn)
         central_keys = _central_link_keys(conn)
         setup_done = perf_counter()
         removed_keys = _removed_ed2_keys(conn)
@@ -276,6 +339,21 @@ def list_all_external_articles(*, conn=None) -> dict:
                 pending_gtin = str((pending or {}).get("primary_gtin") or "")
                 article_code = pending_gtin if is_valid_gtin(pending_gtin) else ""
                 central_link = pending or {}
+            evidence = saved_evidence.get(_ed2_manual_barcode_identity(
+                source.get("retailer_code"), receipt_text, article_number,
+            ), {})
+            identity_status = evidence.get("state") or (
+                "catalog_linked" if status in ("linked", "classification_pending")
+                and central_link.get("global_product_id") else "not_identified"
+            )
+            if identity_status == "saved_only" and status != "unlinked":
+                identity_status = "catalog_linked"
+            identity_labels = {
+                "not_identified": "Nog identificeren",
+                "saved_only": "Barcode bewaard - Catalogus herstellen",
+                "catalog_linked": "Catalogus gekoppeld",
+                "review": "Identificatie controleren",
+            }
             seen.add(key)
             counts[status] += 1
             items.append({
@@ -305,6 +383,10 @@ def list_all_external_articles(*, conn=None) -> dict:
                     central_link.get("global_product_name") or ""
                 ),
                 "link_status": status,
+                "identity_status": identity_status,
+                "identity_status_label": identity_labels[identity_status],
+                "identity_repairable": identity_status == "saved_only",
+                "identity_catalog_product_id": evidence.get("catalog_product_id", ""),
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")
                 if status == "classification_pending" and str(central_link.get("confirmed_by") or "")

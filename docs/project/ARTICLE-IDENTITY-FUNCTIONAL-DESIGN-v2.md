@@ -192,3 +192,40 @@ Een nog **actief** oud Catalogusproduct blokkeert de individuele correctie:
 anders zou na het verleggen van de barcode een onbewezen actief product in
 de Catalogus blijven staan. De PO beoordeelt/verwijdert het oude
 Catalogusproduct eerst. Er is geen automatische Catalogusverwijdering.
+
+
+### Gerichte herstelstap — historische barcode-identiteit
+
+De gelezen historische barcode is op zichzelf het oorspronkelijke bewijs van
+de Identificeren-handeling. De Catalogusverwijzing en de GS1-classificatie zijn
+afzonderlijke statusvelden. De standaardtabel onderscheidt nu vier toestanden:
+Nog identificeren, Barcode bewaard - Catalogus herstellen, Catalogus
+gekoppeld, Identificatie controleren. De originele barcode blijft behouden.
+
+De bestaande bevoegdheidsbewaakte Catalogusherstelactie kan na zichtbare
+bevestiging maximaal vijftig aantoonbaar onopgeloste historische barcodes
+verwerken zonder handmatige rijselectie. De server leest opnieuw het
+bonartikel en de oorspronkelijke barcode en gebruikt de bestaande
+transactionele, idempotente Catalogus-identiteitservice; bij elk conflict
+volgt een volledige rollback. Alleen global_products, product_identities
+en de Catalogusverwijzing bij ed2_manual_barcodes mogen veranderen.
+Geen bon-, huishouden-, voorraad- of synoniemmutaties. GET/list/startup
+blijven volledig read-only.
+
+Beperkt geldige codes blijven per winkel gescheiden en worden niet als
+mondiale GTIN geclaimd. Ongeldige controlecijfers, verwijderde of
+tegenstrijdige bronclaims krijgen Identificatie controleren en mogen
+niet automatisch worden hersteld. De daadwerkelijke lokale databank is
+pas gewijzigd wanneer de PO de bestaande herstelactie bevestigt.
+
+
+### Structurele preventie: ook OFF-uitzondering atomair (13 november 2026)
+
+De bijzondere, bevoegde OFF-override met ontbrekende productgegevens
+mag niet langer alleen een rij in `ed2_manual_barcodes` opslaan zonder
+actieve `global_product_id`. Wanneer geen veilige OFF-koppeling ontstaat,
+wordt dezelfde canonieke, transactionele Barcode → Catalogus-service
+gebruikt als de gewone Identificeren-opslag. De status `saved=true` betekent
+pas succes als de Catalogusverwijzing in die transactie is bevestigd.
+Een historisch conflict blijft HTTP 409 zonder gedeeltelijke barcodeclaim;
+geen naam- of OFF-match wordt als mondiaal barcodebewijs gebruikt.

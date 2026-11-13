@@ -32,6 +32,7 @@ on:
       - 'frontend/src/lib/useBarcodeScanner.js'
       - 'frontend/src/ui/AppFeedbackProvider.jsx'
       - 'frontend/tests/e2e/article-identity-confirmation.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/ed2-catalog-return-manual-barcode.frontend-regression.spec.js'
       - 'frontend/playwright.identity.config.js'
       - 'frontend/package.json'
       - 'frontend/package-lock.json'

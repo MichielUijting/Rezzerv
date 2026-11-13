@@ -1771,3 +1771,17 @@ binnen de bestaande twee-tabellayout, verandert geen selectie of autorisatie,
 en gebruikt de bestaande centrale body-typografie
 `--font-size-ui-body` (14px) en secundaire tekstkleur.
 Er komt geen nieuwe kleur, nieuw interactiepatroon of derde tekstmaat.
+
+
+## Identificeren — aparte barcode- en Catalogusstatus
+
+De centrale DataTable voor Identificeren toont een extra standaardkolom
+**Identificatie**. De gegevensbron onderscheidt de status van een bewaarde
+barcode van een bevestigde Catalogusverwijzing, onafhankelijk van de
+bestaande GS1-/Kassa-status. De bestaande knop
+**Bewaarde barcodes koppelen** blijft centraal vormgegeven en geeft
+bij oude herstelbare records aan dat maximaal vijftig opgeslagen barcodes
+in een expliciet bevestigde handeling kunnen worden hersteld.
+Onbekende of conflicterende barcodegegevens krijgen
+**Identificatie controleren**. Er zijn geen nieuwe stijlelementen,
+kleuren, gewijzigde tabelcomponenten of feedbackpatronen.

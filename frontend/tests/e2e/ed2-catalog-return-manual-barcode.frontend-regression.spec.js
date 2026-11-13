@@ -166,7 +166,8 @@ test('Een bevestigde barcode koppelt zonder OFF-match aan Catalogus, onafhankeli
   const cells = table.locator('tbody tr').first().locator('td')
   await expect(cells.nth(4)).toHaveText('8718452504435')
   await expect(cells.nth(4).locator('span')).toHaveAttribute('title', /Handmatig ingevoerde barcode/)
-  await expect(cells.nth(5)).toHaveText('Niet gekoppeld')
+  await expect(cells.nth(5)).toHaveText('Nog identificeren')
+  await expect(cells.nth(6)).toHaveText('Niet gekoppeld')
   await expect(table.locator('thead')).toContainText('Art./Barcode')
 })
 
@@ -369,3 +370,50 @@ test('Jumbo Pindakaas: een door de server geweigerde kandidaat toont Melding en 
   await expect(page.getByRole('button', { name: 'Niet gekoppeld: 1' })).toBeVisible()
   expect(linkRequests).toBe(1)
 })
+
+
+test('Identificeren: historische bewaarde barcode toont aparte status en vraagt veilig herstel', async ({ page }) => {
+  const original = {
+    id: 'receipt-table-line:history', receipt_line_text: 'Courgette groen',
+    retailer_code: 'lidl', receipt_article_number: '0082346',
+    article_code: '', link_status: 'unlinked', manual_barcode: '2008234600001',
+    identity_status: 'saved_only',
+    identity_status_label: 'Barcode bewaard - Catalogus herstellen',
+    identity_repairable: true,
+  }
+  const rows = [original]
+  const manualRows = [{ receipt_item_id: original.id, gtin: original.manual_barcode }]
+  let confirms = 0
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/catalog/ed2/manual-barcodes/materialize-existing') {
+      confirms += 1
+      expect(route.request().postDataJSON().selections).toEqual([
+        { receipt_item_id: original.id, gtin: original.manual_barcode },
+      ])
+      rows[0] = { ...rows[0], identity_status: 'catalog_linked',
+        identity_status_label: 'Catalogus gekoppeld',
+        identity_repairable: false }
+      return route.fulfill({ json: { ok: true, processed: 1, catalog_links_created: 1,
+        already_confirmed: 0, catalog_products_created: 1 } })
+    }
+    return bootstrap(route, rows, manualRows, () => route.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
+  const table = page.getByTestId('external-databases-2-table')
+  await expect(table).toContainText('Barcode bewaard - Catalogus herstellen')
+  await expect(table).toContainText('Niet gekoppeld')
+  expect(confirms).toBe(0)
+  await page.getByRole('button', { name: 'Bewaarde barcodes koppelen' }).click()
+  // The central AppFeedbackProvider uses role=dialog for action prompts,
+  // unlike the older local alertdialog used by the barcode save flow.
+  const confirmation = page.getByTestId('ed2-materialize-existing-confirm')
+  await expect(confirmation).toHaveAttribute('role', 'dialog')
+  await expect(confirmation).toContainText('1 eerder opgeslagen barcode')
+  expect(confirms).toBe(0)
+  await confirmation.getByRole('button', { name: 'Koppelen' }).click()
+  await expect.poll(() => confirms).toBe(1)
+  await expect(table).toContainText('Catalogus gekoppeld')
+})
+
