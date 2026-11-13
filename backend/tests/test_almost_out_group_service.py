@@ -183,3 +183,52 @@ def test_confirmed_pair_projection_converts_inventory_without_mutating_members()
     assert projection['member_article_ids'] == ['a', 'b']
     assert [item['quantity'] for item in projection['inventory_rows']] == [1, 1]
     assert [item['original_quantity'] for item in projection['inventory_rows']] == [1, 2]
+
+
+def test_confirmed_three_member_fresh_courgette_group_requires_every_exact_package():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 1, 'stuk'), 'product_name': 'Courgette geel'},
+        {**_metadata('c', 'gp-c', 1, 'stuk'), 'product_name': 'Courgette Bio'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-c'},
+    ]
+    groups = load_groups(_SynonymConnection(metadata, links), 'hh',
+                         [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}], {})
+    assert len(groups) == 1
+    assert {m['id'] for m in groups[0]['members']} == {'a', 'b', 'c'}
+    assert groups[0]['key'][0] == 'confirmed_synonym'
+    assert groups[0]['factors'] == {'a': 1, 'b': 1, 'c': 1}
+
+
+def test_chain_missing_courgette_package_or_one_household_member_does_not_group():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', None, 'stuk'), 'product_name': 'Courgette geel'},
+        {**_metadata('c', 'gp-c', 1, 'stuk'), 'product_name': 'Courgette Bio'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-c'},
+    ]
+    articles = [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}]
+    assert len(load_groups(_SynonymConnection(metadata, links), 'hh', articles, {})) == 3
+    complete_metadata = [{**row, 'size_value': 1} for row in metadata]
+    assert len(load_groups(_SynonymConnection(complete_metadata[:2], links),
+                           'hh', articles[:2], {})) == 2
+
+
+def test_transitive_courgette_group_does_not_guess_incompatible_units():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 250, 'g'), 'product_name': 'Courgette geel'},
+        {**_metadata('c', 'gp-c', 1, 'stuk'), 'product_name': 'Courgette Bio'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-b', 'right_product_id': 'gp-c'},
+    ]
+    assert len(load_groups(_SynonymConnection(metadata, links), 'hh',
+                           [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}], {})) == 3

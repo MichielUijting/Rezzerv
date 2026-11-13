@@ -58,10 +58,14 @@ def grouping_key(row, settings=None):
 
 
 def confirmed_synonym_factors(conn, metadata):
-    """Only isolated, directly confirmed pairs with convertible package contents.
+    """Group complete confirmed synonym components with reliable package units.
 
-    A-B-C chains and multi-edge groups require a separately defined equivalence
-    policy; never infer transitivity from the pair table or a matching GPC code.
+    Previously only isolated A-B pairs could form a read-only Bijna op group.
+    For 3+ connected members a stronger policy now applies: the whole group
+    must be present, each product uniquely represented, every member in one
+    PO-approved fresh family, and ALL package contents exactly comparable.
+    A partial chain, missing package size or non-curated group stays separate.
+    No stock, history, household article or Catalogus record is changed.
     """
     by_product = {}
     for row in metadata:
@@ -86,26 +90,52 @@ def confirmed_synonym_factors(conn, metadata):
         neighbors.setdefault(left, set()).add(right)
         neighbors.setdefault(right, set()).add(left)
     factors = {}
-    for left in product_ids:
-        linked = neighbors.get(left, set())
-        if len(linked) != 1:
+    visited = set()
+    for start in product_ids:
+        if start in visited or start not in neighbors:
             continue
-        right = next(iter(linked))
-        if right not in by_product or left >= right or neighbors.get(right) != {left}:
+        component = set()
+        frontier = [start]
+        while frontier and len(component) <= 200:
+            current = frontier.pop()
+            if current in component:
+                continue
+            component.add(current)
+            frontier.extend(neighbors.get(current, set()) - component)
+        visited.update(component)
+        if not 2 <= len(component) <= 200:
             continue
-        first = by_product[left][0]
-        second = by_product[right][0]
-        first_size = content(first.get('size_value'), first.get('size_unit'))
-        second_size = content(second.get('size_value'), second.get('size_unit'))
-        if not first_size or not second_size or first_size[1] != second_size[1]:
+        # Never aggregate a partial component or two household articles that
+        # both claim the same central identity.
+        if any(pid not in by_product or len(by_product[pid]) != 1
+               for pid in component):
             continue
-        # Identical physical units are necessary but do not themselves prove
-        # equivalence; only the manually confirmed central link does.
-        key = ('confirmed_synonym', f'{left}:{right}', 'Bevestigde synoniemen', first_size[1])
-        factors[left] = (key, first_size[0])
-        factors[right] = (key, second_size[0])
-    return factors
+        entries = [by_product[pid][0] for pid in sorted(component)]
+        sizes = [content(row.get('size_value'), row.get('size_unit'))
+                 for row in entries]
+        if not all(sizes) or len({size[1] for size in sizes}) != 1:
+            continue
 
+        if len(component) > 2:
+            # The original two-member equivalence policy remains unchanged.
+            # A-B-C+ needs the explicit stronger family and conversion proof.
+            from app.services.synonym_product_family_rules import approved_family
+            families = {
+                approved_family({
+                    'name': row.get('product_name') or '',
+                    'variant': row.get('variant') or '',
+                })
+                for row in entries
+            }
+            if families != {'verse_courgette_v1'}:
+                continue
+
+        members = sorted(component)
+        key = ('confirmed_synonym', ':'.join(members),
+               'Bevestigde synoniemen', sizes[0][1])
+        for pid, package in zip(members, sizes):
+            factors[pid] = (key, package[0])
+    return factors
 
 def load_groups(conn, household_id, article_rows, settings_by_article):
     ids = [str(row['id']) for row in article_rows]
