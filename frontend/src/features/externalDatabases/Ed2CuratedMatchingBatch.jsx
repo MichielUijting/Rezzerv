@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /**
- * Explicit batch decision for server-curated, historically unresolved receipt
- * identities. List/get never write; POST re-evaluates the exact fingerprint
- * in a single PostgreSQL transaction. One review, not six manual dialogs.
+ * One deliberate automatic batch action for independently proven receipts.
+ * Opening, reading and filtering Identificeren never write; the authorized
+ * POST is initiated only by a click. The separate review flow still handles
+ * ambiguous cases without overwriting existing identities.
  */
 export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
   const { showFeedback } = useAppFeedback()
@@ -18,7 +19,6 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [autoSummary, setAutoSummary] = useState(null)
-  const automaticAttempted = useRef(false)
 
   async function request(url, options = {}) {
     const response = await fetchJsonWithAuth(url, options)
@@ -27,29 +27,37 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     return payload
   }
 
-  // Opening the Identificeren workspace initiates one server-authorized,
-  // idempotent pass for strictly proven matches; no GET or preview writes.
-  // All code-less, ambiguous and conflicting candidates remain reviewable.
-  useEffect(() => {
-    if (automaticAttempted.current) return
-    automaticAttempted.current = true
-    let mounted = true
-    request('/api/catalog/ed2/curated-matching-batch/auto', { method: 'POST' })
-      .then((summary) => {
-        if (!mounted) return
-        setAutoSummary(summary)
-        if (summary.linked > 0) {
-          showFeedback({ variant: 'success', title: 'Automatische herkenning',
-            message: `${summary.linked} artikelen automatisch herkend, ${summary.synonyms_created} synoniemrelaties.` })
-          onConfirmed?.()
-        }
+  // Deliberate matching action only: simply entering Identificeren,
+  // filtering or reading a proposal must never write central product data.
+  // One click still applies every independently proven eligible tuple in a
+  // single server-controlled pass; only conflicts need human review.
+  async function recognizeAndReview() {
+    if (saving || loading) return
+    setSaving(true)
+    setAutoSummary(null)
+    try {
+      const summary = await request('/api/catalog/ed2/curated-matching-batch/auto', {
+        method: 'POST',
       })
-      .catch(() => {
-        // An ordinary viewer has no permission to change central identities;
-        // the read-only table must stay usable without error overlays.
-      })
-    return () => { mounted = false }
-  }, [])
+      if (summary.ok !== true || summary.barcode_written !== false) {
+        throw new Error('De automatische herkenning is niet bevestigd.')
+      }
+      setAutoSummary(summary)
+      if (summary.linked > 0) {
+        showFeedback({ variant: 'success', title: 'Automatische herkenning',
+          message: `${summary.linked} artikelen herkend, ${summary.synonyms_created} synoniemrelaties.` })
+        onConfirmed?.()
+      }
+    } catch (error) {
+      showFeedback({ variant: 'error', title: 'Automatische herkenning niet uitgevoerd',
+        message: error.message || 'De artikelen blijven ongewijzigd.' })
+    } finally {
+      setSaving(false)
+    }
+    // An unsuccessful or partially successful automatic pass must not hide
+    // remaining exceptions. The review GET below never mutates product data.
+    await openReview()
+  }
 
   async function openReview() {
     setOpen(true)
@@ -134,8 +142,10 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     {autoSummary?.status === 'applied' && autoSummary.requires_review ? <p role="status">
       {autoSummary.unprocessed} artikel(en) vragen nog beoordeling. Bekende matches zijn automatisch verwerkt.
     </p> : null}
-    <Button type="button" variant="secondary" onClick={() => open ? setOpen(false) : openReview()}>
-      {open ? 'Matchingvoorstellen sluiten' : 'Courgettes gezamenlijk herkennen'}
+    <Button type="button" variant="secondary" disabled={saving || loading}
+      onClick={() => open ? setOpen(false) : recognizeAndReview()}>
+      {saving ? 'Automatisch herkennen...' : open
+        ? 'Matchingvoorstellen sluiten' : 'Courgettes automatisch herkennen'}
     </Button>
     {open ? <div className="rz-external-receipt-detail">
       <h3>Bekende verse courgettes gezamenlijk identificeren</h3>

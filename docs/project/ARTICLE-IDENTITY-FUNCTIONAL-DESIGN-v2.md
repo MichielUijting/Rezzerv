@@ -276,9 +276,13 @@ mondiale barcode en geen willekeurige naamgebaseerde koppeling op.
 
 
 ### Fase 2E — autonome toepassing van de bewezen familie (13 november 2026)
-De bevoegde Identificeren-werkruimte kan bij openen via een geautoriseerde
-POST direct de bewezen, strikt begrensde courgettefamilie toepassen. Dit is
-geen muterende GET en geen algemene naamgebaseerde barcodeherkenning.
+De bevoegde Identificeren-werkruimte biedt de expliciete actie
+**Courgettes automatisch herkennen**. Na één klik verwerkt de server zelf
+alle bewezen, strikt begrensde kandidaten; de gebruiker hoeft niet per
+artikel te bevestigen. Het openen, bladeren, filteren, zoeken en bekijken
+van voorstellen blijft volledig read-only. Er vertrekt **geen POST bij
+paginabezoek**. De automatische POST is uitsluitend een bewust gestarte
+verwerkingsactie, geen algemene naamgebaseerde barcodeherkenning.
 Automatisch vastleggen mag uitsluitend bij **precies één onafhankelijk bevestigd
 gewoon Catalogusanker**, één geteste verse-courgetteregel en een exacte, niet-lege
 bonartikelcode binnen de winkelcontext. De server valideert ook de oorspronkelijke
@@ -325,3 +329,14 @@ relaties tussen Catalogusproducten die in het betreffende huishouden niet
 voorkomen. Een schijnbaar veilige A–B-groep mag niet automatisch worden
 gebruikt als de indirecte C–D-schakel ontbreekt, verwijderd is of inhoudelijk
 niet verenigbaar blijkt. De graphberekening is begrensd en uitsluitend lezend.
+
+### Herstel regressie bij openen Identificeren (PR #682)
+De eerdere automatische mutatie in het React-paginamounteffect schond het
+bindende alleen-lezen contract voor de artikeloverzichtsroute. De veilige
+batchengine en backend-autorisatie blijven intact, maar de verwerking wordt
+nu alleen gestart na de expliciete actie **Courgettes automatisch herkennen**.
+Een geslaagde of gedeeltelijke batch toont daarna de nog te beoordelen
+uitzonderingen; een fout laat bestaande identiteiten ongemoeid. De
+regressietest verifieert **nul schrijfverzoeken** bij openen en filteren,
+en exact één verwerkingsverzoek na de genoemde gebruikersactie. De vier
+bestaande read-only Playwrightcontroles blijven ongewijzigd.
