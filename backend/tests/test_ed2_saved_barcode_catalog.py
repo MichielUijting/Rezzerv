@@ -27,6 +27,12 @@ class Rows:
     def first(self):
         return self.rows[0] if self.rows else None
 
+    def scalar(self):
+        if not self.rows:
+            return None
+        first = self.rows[0]
+        return next(iter(first.values())) if isinstance(first, dict) else first
+
 
 class PGFixture:
     dialect = SimpleNamespace(name="postgresql")
@@ -50,6 +56,18 @@ class PGFixture:
                          if x["retailer_code"] in p["aliases"]
                          and x["receipt_text_normalized"] == p["label"]
                          and x["external_article_code"] == p["code"]])
+        if sql.startswith("SELECT gtin FROM ed2_manual_barcodes"):
+            return Rows([{"gtin": row["gtin"]} for row in self.manual
+                         if row["retailer_code"] == p["retailer_code"]
+                         and row["receipt_text_normalized"] == p["receipt_text_normalized"]
+                         and row["external_article_code"] == p["external_article_code"]])
+        if sql.startswith("SELECT id FROM external_article_product_links"):
+            return Rows([{"id": index} for index, row in enumerate(self.legacy)
+                         if row["retailer_code"] == p["retailer_code"]
+                         and row["status"] in ("confirmed", "classification_pending")
+                         and (row["external_article_code"] == p.get("external_article_code")
+                              if p.get("external_article_code")
+                              else row["receipt_text_normalized"] == p.get("receipt_text_normalized"))])
         if sql.startswith("SELECT id AS product_id, status, primary_gtin FROM global_products"):
             return Rows([{"product_id": x["id"], **x} for x in self.products
                          if x["primary_gtin"] == p["barcode"]])

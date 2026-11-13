@@ -375,7 +375,7 @@ test('Identificeren: historische bewaarde barcode toont aparte status en vraagt 
   const original = {
     id: 'receipt-table-line:history', receipt_line_text: 'Courgette groen',
     retailer_code: 'lidl', receipt_article_number: '0082346',
-    article_code: '', link_status: 'unlinked', manual_barcode: '2008234600009',
+    article_code: '', link_status: 'unlinked', manual_barcode: '2008234600001',
     identity_status: 'saved_only',
     identity_status_label: 'Barcode bewaard - Catalogus herstellen',
     identity_repairable: true,

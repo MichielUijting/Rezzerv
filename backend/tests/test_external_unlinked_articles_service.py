@@ -309,10 +309,10 @@ def test_saved_catalog_status_independent_from_off_and_gpc(monkeypatch):
     monkeypatch.setattr(service, "project_central_link_truth", lambda conn, item: item)
     monkeypatch.setattr(service, "_saved_ed2_catalog_evidence", lambda conn: {
         ("lidl", "courgette groen", "0082346"): {
-            "state": "saved_only", "barcode": "2008234600009",
+            "state": "saved_only", "barcode": "2008234600001",
             "catalog_product_id": ""},
         ("lidl", "courgette geel", "0082293"): {
-            "state": "catalog_linked", "barcode": "2008234600009",
+            "state": "catalog_linked", "barcode": "2008234600001",
             "catalog_product_id": "catalog-yellow"},
     })
     products = {row["receipt_line_text"]: row
@@ -332,7 +332,7 @@ def test_saved_barcode_reader_is_read_only_and_flags_invalid_codes(monkeypatch):
          "barcode_scope": None, "global_product_id": None,
          "confirmed_by": None, "confirmed_at": None, "catalog_status": None},
         {"retailer_code": "Jumbo", "receipt_text_normalized": "courgette groen",
-         "external_article_code": "0082346", "gtin": "2008234600009",
+         "external_article_code": "0082346", "gtin": "2008234600001",
          "barcode_scope": "restricted", "global_product_id": "deleted-catalog",
          "confirmed_by": "actor", "confirmed_at": "2026-11-12",
          "catalog_status": "deleted"},
