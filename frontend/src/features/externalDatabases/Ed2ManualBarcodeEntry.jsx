@@ -211,18 +211,14 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
         body: JSON.stringify({ receipt_item_id: item.id, gtin: barcode.trim() }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok || payload.saved !== true) {
+      if (!response.ok || payload.saved !== true || payload.catalog_linked !== true) {
         throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Barcode opslaan is niet bevestigd.')
       }
       onSaved({
         status: 'success',
-        message: payload.catalog_linked
-          ? 'Barcode opgeslagen en gekoppeld aan '
-              + (payload.catalog_product_created ? 'een nieuw' : 'het bestaande')
-              + ' Catalogusproduct.'
-          : payload.off_found
-            ? 'Barcode en beschikbare OFF-gegevens opgeslagen in Catalogus.'
-            : 'Barcode opgeslagen.',
+        message: 'Barcode opgeslagen en gekoppeld aan '
+          + (payload.catalog_product_created ? 'een nieuw' : 'het bestaande')
+          + ' Catalogusproduct.',
       })
     } catch (err) {
       if (err.status !== 401) {
