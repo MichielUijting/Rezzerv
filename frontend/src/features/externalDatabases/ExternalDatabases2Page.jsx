@@ -122,7 +122,8 @@ export default function ExternalDatabases2Page() {
   // No manual bulk selection required for historically saved, safe candidates.
   // Only the existing explicitly authorized POST may perform the repair.
   const repairRows = selectedRows.length ? selectedRows : recoverableRows.slice(0, 50)
-  const canMaterializeSaved = repairRows.length > 0 && repairRows.length <= 50
+  const canMaterializeSaved = selectedRows.length <= 50
+    && repairRows.length > 0 && repairRows.length <= 50
     && repairRows.every((row) =>
       row.identity_status !== 'review' &&
       /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim()))
