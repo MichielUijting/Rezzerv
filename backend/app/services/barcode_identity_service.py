@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from app.services.barcode_scope_service import classify_barcode_scope
 from app.services.gpc_local_catalog_service import classify_gpc_product
 from app.services.off_search_service import lookup_off_product_by_gtin
 from app.services.product_inventory_group_store import (
@@ -93,6 +94,7 @@ def validate_barcode(value: Any, declared_type: str = "gtin") -> dict[str, Any]:
         "raw_value": raw_value,
         "normalized_value": normalized_value,
         "identity_type": "gtin",
+        "barcode_scope": classify_barcode_scope(normalized_value)["scope"] if digits_only and length_valid and check_digit_valid else "invalid",
         "gtin_format": GTIN_LENGTH_TO_FORMAT.get(len(normalized_value)),
         "valid": digits_only and length_valid and check_digit_valid,
         "validation": {"length_valid": length_valid, "check_digit_valid": check_digit_valid},
@@ -118,6 +120,21 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
             "identity": None,
             "product_type": None,
             "quality": None,
+            "mutated": False,
+        }
+
+    # A valid check digit does not prove that a code is globally unique.
+    # Restricted-circulation codes require a retailer-scoped, explicitly
+    # confirmed identity before any central product may be reused.
+    if classify_barcode_scope(gtin)["scope"] == "restricted":
+        return {
+            "gtin": gtin,
+            "valid": True,
+            "match_status": "scope_required",
+            "product": None,
+            "identity": None,
+            "product_type": None,
+            "quality": {"reason": "Winkelinterne barcode: beoordeling per winkelartikel vereist."},
             "mutated": False,
         }
 
@@ -234,7 +251,8 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
     identity_consistent = bool(item.get("has_matching_gtin_identity"))
     official_gpc_active = bool(item.get("has_active_official_gpc"))
     product_active = str(item.get("status") or "active").strip().lower() == "active"
-    complete = primary_consistent and identity_consistent and official_gpc_active and product_active
+    # GS1 GPC and CBS are optional classifications, not proof of identity.
+    complete = primary_consistent and identity_consistent and product_active
 
     return {
         "gtin": gtin,
@@ -1185,6 +1203,11 @@ def save_gtin_catalog_and_household_link(
     normalized_gtin = str(
         validation.get("normalized_value") or ""
     ).strip()
+    if classify_barcode_scope(normalized_gtin)["scope"] == "restricted":
+        raise BarcodeHouseholdArticleLinkError(
+            409,
+            "Deze winkelinterne barcode moet eerst per winkelartikel via Identificeren worden bevestigd.",
+        )
 
     normalized_household_id = str(
         household_id or ""

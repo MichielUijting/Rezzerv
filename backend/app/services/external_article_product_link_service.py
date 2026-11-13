@@ -19,7 +19,7 @@ import unicodedata
 import uuid
 from typing import Any, Mapping, Optional
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.gtin_validation_service import is_valid_gtin
@@ -896,6 +896,41 @@ def get_confirmed_external_article_product_link(
     normalized_text = normalize_external_link_receipt_text(receipt_text)
     if not normalized_retailer:
         return None
+
+    # Exact saved-barcode identity (retailer, receipt label, article code)
+    # outranks legacy code-only lookups; it is never matched by label alone.
+    if (normalized_text and inspect(conn).has_table("ed2_manual_barcodes")
+        and {"global_product_id", "barcode_scope"}.issubset({
+            col["name"] for col in inspect(conn).get_columns("ed2_manual_barcodes")
+        })):
+        from app.services.catalog_retailer_identity_keys import catalog_retailer_aliases
+        saved_stmt = text("""
+            SELECT s.global_product_id, s.gtin AS barcode_value,
+                   s.barcode_scope, s.confirmed_by, s.confirmed_at,
+                   gp.name AS global_product_name
+            FROM ed2_manual_barcodes s
+            JOIN global_products gp ON gp.id = s.global_product_id
+            WHERE s.retailer_code IN :aliases AND s.receipt_text_normalized = :label
+              AND s.external_article_code = :code
+              AND gp.status = 'active'
+            LIMIT 2
+        """).bindparams(bindparam("aliases", expanding=True))
+        saved = conn.execute(saved_stmt, {
+            "aliases": list(catalog_retailer_aliases(normalized_retailer)),
+            "label": normalized_text, "code": normalized_code,
+        }).mappings().all()
+        if len(saved) == 1:
+            current = saved[0]
+            return {
+                "global_product_id": current["global_product_id"],
+                "global_product_name": current["global_product_name"],
+                "primary_gtin": current["barcode_value"] if
+                    current["barcode_scope"] == "global_candidate" else "",
+                "retailer_code": normalized_retailer, "external_article_code": normalized_code,
+                "receipt_text_normalized": normalized_text, "status": "confirmed",
+                "confirmed_by": current["confirmed_by"], "confirmed_at": current["confirmed_at"],
+                "source_candidate_id": None,
+            }
 
     if normalized_code:
         # This is the shared operational Catalogus identity reader. A valid

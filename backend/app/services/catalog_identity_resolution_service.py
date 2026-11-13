@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import bindparam, text
 
 from app.services.barcode_identity_service import validate_barcode
+from app.services.barcode_scope_service import classify_barcode_scope
 from app.services.external_article_product_link_service import normalize_external_link_article_code
 from app.services.catalog_retailer_identity_keys import (
     canonical_catalog_retailer, catalog_retailer_aliases,
@@ -41,6 +42,10 @@ def resolve_catalog_identity(
         if not checked["valid"]:
             return {"status": "invalid_gtin", "global_product_id": None, "evidence": []}
         normalized_gtin = checked["normalized_value"]
+        if classify_barcode_scope(normalized_gtin)["scope"] == "restricted":
+            # A restricted code cannot authorize a global Catalogus lookup.
+            # The confirmed retailer-scoped identity is handled separately.
+            return {"status": "scope_required", "global_product_id": None, "evidence": []}
         gtin_rows = conn.execute(
             text("""
                 SELECT DISTINCT gp.id
