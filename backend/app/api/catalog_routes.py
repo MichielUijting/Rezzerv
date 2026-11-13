@@ -19,6 +19,9 @@ from app.services.ed2_confirmed_barcode_service import materialize_saved_ed2_bar
 from app.services.ed2_receipt_family_link_service import (
     family_options, confirm_courgette_receipt,
 )
+from app.services.curated_identity_batch_service import (
+    matching_batch_preview, confirm_matching_batch,
+)
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
@@ -105,6 +108,12 @@ class Ed2HistoricalBarcodesRequest(BaseModel):
         if any(not item for item in ids) or len(ids) != len(set(ids)):
             raise ValueError("Selecties moeten unieke, bestaande bonartikel-ID's bevatten.")
         return value
+
+
+class Ed2CuratedMatchingBatchConfirmation(BaseModel):
+    target_product_id: str
+    receipt_item_ids: list[str]
+    fingerprint: str
 
 
 class Ed2CourgetteFamilyConfirmation(BaseModel):
@@ -810,6 +819,38 @@ def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
+
+
+@router.get("/ed2/curated-matching-batch/preview")
+def preview_ed2_curated_matching_batch(
+    target_product_id: str | None = Query(default=None, max_length=200),
+):
+    """Curated central identity suggestions, never writes or invents barcodes."""
+    require_platform_permission_from_session("platform.external_products.view")
+    with engine.connect() as conn:
+        try:
+            return matching_batch_preview(conn, target_product_id=target_product_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/curated-matching-batch/confirm")
+def confirm_ed2_curated_matching_batch(payload: Ed2CuratedMatchingBatchConfirmation):
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not (actor.is_platform_superuser or actor.is_frontteam):
+        raise HTTPException(status_code=403, detail="Alleen bevoegde Superusers en Frontteamleden mogen centrale matches vastleggen.")
+    if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
+        raise HTTPException(status_code=422, detail="De vooraf beoordeelde matchinglijst ontbreekt.")
+    with engine.begin() as conn:
+        try:
+            return confirm_matching_batch(
+                conn, target_product_id=payload.target_product_id,
+                receipt_item_ids=payload.receipt_item_ids,
+                expected_fingerprint=payload.fingerprint,
+                actor_id=actor.user_id,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/ed2/courgette-family/options")

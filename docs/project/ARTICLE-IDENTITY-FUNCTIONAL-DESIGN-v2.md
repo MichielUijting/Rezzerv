@@ -252,3 +252,24 @@ Identificeren en Synoniemen leest uitsluitend bevestigde exacte records.
 Bij een volgende identieke bon hoeft de barcode niet opnieuw te worden
 ingevoerd. Niet-geteste producten (o.a. Olvarit, soep en diepvries) krijgen
 geen familiematch. Geen automatische massamatching op alleen een naam.
+
+
+### Fase 2D — centrale productmatching in één gecontroleerde batch
+De **identificatiebron** blijft de exacte winkel + kassabonomschrijving +
+bonartikelnummer, ook wanneer de bon geen barcode bevat. De eerder bevestigde
+AH-Catalogusidentiteit mag als zichtbare ankerkeuze gebruikt worden voor een
+beperkte, door de PO goedgekeurde familie van verse courgettes. In
+**Identificeren** verschijnt één read-only overzicht van nog niet herkende
+bonartikelen, hun bronwinkel en de voorgenomen relatie (hetzelfde gewone
+product of een afzonderlijke synoniemvariant). Bevoegde gebruikers kunnen
+meerdere voorgestelde, bewust aangevinkte matches in één transactie bevestigen.
+De server verifieert alle bron-ID's, het actuele Catalogusanker en de exacte
+vooraf beoordeelde fingerprint opnieuw; bij één conflict volgt rollback.
+Nieuwe en historische bonnetjes met dezelfde bevestigde winkelsleutel zien
+dezelfde identiteit zonder nieuwe gebruikershandeling. Er is nooit een
+fictieve GTIN en er is geen ongevraagde wijziging van huishouden of voorraad.
+
+Deze concrete familie is een eerste **bewezen productregel**; de voorziening
+mag bij uitbreiding uitsluitend andere expliciet goedgekeurde en geteste
+families ondersteunen. Een bontekst of classificatie alléén levert geen
+mondiale barcode en geen willekeurige naamgebaseerde koppeling op.
