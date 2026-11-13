@@ -84,7 +84,9 @@ class _SynonymConnection:
         if 'FROM household_articles' in sql:
             return _Rows(self.metadata)
         if 'FROM article_synonym_links' in sql:
-            return _Rows(self.links)
+            return _Rows([link for link in self.links
+                          if link['left_product_id'] in params['ids']
+                          or link['right_product_id'] in params['ids']])
         if 'FROM global_products' in sql:
             return _Rows([row for row in self.central
                           if row['global_product_id'] in params['ids']])
@@ -290,3 +292,32 @@ def test_inactive_catalog_member_cannot_join_a_confirmed_pair():
         {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
     ]), 'household-1', [{'id': 'a'}, {'id': 'b'}], {})
     assert len(groups) == 2
+
+
+def test_four_member_transitive_chain_is_checked_beyond_one_hop():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 1, 'stuk'), 'product_name': 'Courgette geel'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-b', 'right_product_id': 'gp-c'},
+        {'left_product_id': 'gp-c', 'right_product_id': 'gp-d'},
+    ]
+    central = [
+        {'global_product_id': 'gp-c', 'product_name': 'Courgette bio',
+         'variant': '', 'size_value': 1, 'size_unit': 'stuk',
+         'product_status': 'active'},
+        {'global_product_id': 'gp-d', 'product_name': 'Courgette groen',
+         'variant': '', 'size_value': 1, 'size_unit': 'stuk',
+         'product_status': 'active'},
+    ]
+    db = _SynonymConnection(metadata, links, central)
+    approved = load_groups(db, 'house-1', [{'id': 'a'}, {'id': 'b'}], {})
+    assert len(approved) == 1
+    assert approved[0]['key'][0] == 'confirmed_synonym'
+    assert any('gp-c' in params['ids'] for sql, params in db.calls
+               if 'FROM article_synonym_links' in sql)
+    db.central = central[:-1]  # A hidden fourth link may never be ignored.
+    assert len(load_groups(db, 'house-1',
+                           [{'id': 'a'}, {'id': 'b'}], {})) == 2

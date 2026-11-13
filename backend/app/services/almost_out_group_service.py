@@ -75,20 +75,35 @@ def confirmed_synonym_factors(conn, metadata):
     if len(by_product) < 2:
         return {}
     product_ids = sorted(by_product)
-    # Inspect all links touching a selected product, not just links whose other
-    # endpoint happens to be in this household. This prevents unsafe partial
-    # chains from being silently treated as independent pairs.
-    links = conn.execute(text("""
+    # Read the full transitive graph, including edges between *absent*
+    # Catalogus members. A single-hop query can miss A-B-C-D when only A/B
+    # are in this household, and would approve an incomplete unsafe group.
+    neighbors = {}
+    frontier = set(product_ids)
+    explored = set()
+    sql = text("""
         SELECT left_product_id, right_product_id
           FROM article_synonym_links
          WHERE left_product_id IN :ids OR right_product_id IN :ids
-    """).bindparams(bindparam('ids', expanding=True)), {'ids': product_ids}).mappings().all()
-    neighbors = {}
-    for link in links:
-        left = str(link['left_product_id'])
-        right = str(link['right_product_id'])
-        neighbors.setdefault(left, set()).add(right)
-        neighbors.setdefault(right, set()).add(left)
+    """).bindparams(bindparam('ids', expanding=True))
+    while frontier:
+        if len(explored) + len(frontier) > 2000:
+            return {}  # Bound corrupted or implausibly broad central graphs.
+        reached = frontier - explored
+        if not reached:
+            break
+        explored.update(reached)
+        new_frontier = set()
+        for link in conn.execute(sql, {'ids': sorted(reached)}).mappings().all():
+            left = str(link['left_product_id'])
+            right = str(link['right_product_id'])
+            neighbors.setdefault(left, set()).add(right)
+            neighbors.setdefault(right, set()).add(left)
+            if left not in explored:
+                new_frontier.add(left)
+            if right not in explored:
+                new_frontier.add(right)
+        frontier = new_frontier
     factors = {}
     visited = set()
     for start in product_ids:

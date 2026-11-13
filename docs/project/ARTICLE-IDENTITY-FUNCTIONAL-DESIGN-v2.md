@@ -318,3 +318,10 @@ een hele liter door afronding. Afboeken gebeurt uitsluitend in hele bestaande
 voorraadregels met bijbehorende household-ID en voorraadlocatie, binnen de
 bestaande bontransactie. Ontbrekende, onvergelijkbare, ongeldige of extreme
 factoren leiden niet tot een onbetrouwbare groepsafboeking.
+
+### Volledige transitieve controle
+De centrale groepsprojectie bezoekt alle bevestigde synoniemranden, ook
+relaties tussen Catalogusproducten die in het betreffende huishouden niet
+voorkomen. Een schijnbaar veilige A–B-groep mag niet automatisch worden
+gebruikt als de indirecte C–D-schakel ontbreekt, verwijderd is of inhoudelijk
+niet verenigbaar blijkt. De graphberekening is begrensd en uitsluitend lezend.
