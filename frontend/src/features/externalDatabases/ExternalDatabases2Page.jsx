@@ -476,7 +476,7 @@ export default function ExternalDatabases2Page() {
           : selectedItem ? <div key={selectedItem.id}>
             {selectedItem.identity_status === 'not_identified'
               && !selectedItem.manual_barcode && !selectedItem.article_code
-              && /\\bcourgette(?:s)?\\b/i.test(selectedItem.receipt_line_text || '')
+              && /\bcourgette(?:s)?\b/i.test(selectedItem.receipt_line_text || '')
               ? <Ed2CourgetteFamilyPanel item={selectedItem} onConfirmed={() => {
                 setSelectedItem(null)
                 setSelectedIds([])
