@@ -549,6 +549,94 @@ test('Synoniemenanalyse is beschermd tegen reguliere gebruikers', async ({ page 
 })
 
 
+test('Artikel-synoniemen: voorstel en overige artikelen zijn herkenbaar gescheiden', async ({ page }) => {
+  const articles = [{ id: 'a', name: 'AH Courgette', primary_gtin: '08719587325926', synonym_count: 0 }]
+  const options = [
+    { id: 'baby', name: 'Olvarit 8+ Maanden Courgette', primary_gtin: '05900852033483',
+      status: 'other', status_label: 'Overig', review_level: 'check',
+      review_label: 'Controleren', review_reason: 'Verse courgette is geen babyproduct',
+      linkable: true, manual: true, fingerprint: 'b'.repeat(64) },
+    { id: 'fresh', name: 'Groene biologische courgette', primary_gtin: '08718452513666',
+      status: 'suggested', status_label: 'Voorstel', review_level: 'strong',
+      review_label: 'Sterke kandidaat', review_reason: 'Verse courgettefamilie',
+      linkable: true, manual: false, score: .9, fingerprint: 'f'.repeat(64) },
+  ]
+  let writes = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'family-check', active_household_id: '0', context_type: 'system',
+      is_platform_superuser: true, role: 'admin', permissions: {
+        'platform.external_products.view': true, 'platform.external_products.link_existing': true },
+    } })
+    if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: articles } })
+    if (path.endsWith('/article-synonyms/analysis/a/options')) return route.fulfill({ json: { items: options } })
+    if (path.endsWith('/article-synonyms/link')) { writes += 1; return route.fulfill({ json: { linked: 1 } }) }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  await page.getByRole('checkbox', { name: /Selecteer links AH Courgette/ }).check()
+  const table = page.getByTestId('article-synonyms-table')
+  await expect(page.getByTestId('article-synonyms-suggestion-summary')).toContainText('1 voorstel')
+  await expect(page.getByTestId('article-synonyms-suggestion-summary')).toContainText('1 overige artikelen')
+  await expect(table.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-suggested/)
+  await expect(table.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-other/)
+  await expect(table.getByText('Olvarit 8+ Maanden Courgette')).toBeVisible()
+  await page.getByRole('button', { name: 'Sterke voorstellen selecteren' }).click()
+  await expect(table.getByRole('checkbox', { name: /Selecteer rechts Groene biologische courgette/ })).toBeChecked()
+  await expect(table.getByRole('checkbox', { name: /Selecteer rechts Olvarit 8\+ Maanden Courgette/ })).not.toBeChecked()
+  expect(writes).toBe(0)
+})
+
+test('Artikel-synoniemen toont bevestigde winkelbarcode zonder mondiale GTIN', async ({ page }) => {
+  const products = [
+    { id: 'lidl-scoped', name: 'Courgette groen', primary_gtin: '',
+      article_codes: [], barcode_labels: ['Lidl (winkelbarcode): 2008234600001'],
+      synonym_count: 0 },
+    { id: 'ah-global', name: 'AH Courgette', primary_gtin: '08719587325926',
+      article_codes: [], barcode_labels: [], synonym_count: 0 },
+  ]
+  const options = [
+    { ...products[1], status: 'other', status_label: 'Overig',
+      review_level: 'possible', review_label: 'Beoordelen',
+      linkable: true, manual: true, fingerprint: 'a'.repeat(64) },
+  ]
+  let writes = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-scoped-projection', active_household_id: '0',
+      context_type: 'system', is_platform_superuser: true, role: 'admin',
+      permissions: { 'platform.external_products.view': true,
+        'platform.external_products.link_existing': true },
+    } })
+    if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: products } })
+    if (path.endsWith('/article-synonyms/analysis/lidl-scoped/options')) {
+      return route.fulfill({ json: { items: options } })
+    }
+    if (path.endsWith('/article-synonyms/link') || path.endsWith('/article-synonyms/unlink')) {
+      writes += 1
+      return route.fulfill({ status: 500, json: {} })
+    }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  const left = page.getByTestId('article-synonyms-articles')
+  await expect(left).toContainText('Courgette groen')
+  await expect(left).toContainText('Lidl (winkelbarcode): 2008234600001')
+  await left.getByRole('checkbox', { name: /Selecteer links Courgette groen/ }).check()
+  const right = page.getByTestId('article-synonyms-table')
+  await expect(right).toContainText('AH Courgette')
+  await expect(right).toContainText('08719587325926')
+  expect(writes).toBe(0)
+})
+
 test('Artikel-synoniemen: Toegevoegd vanaf toont ook oudere Catalogusartikelen opnieuw', async ({ page }) => {
   const articles = [
     { id: 'older', name: 'Oud artikel', primary_gtin: '8712345678906', added_on: '2026-02-01', synonym_count: 0 },

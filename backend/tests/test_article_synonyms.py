@@ -48,6 +48,77 @@ class MatchingTest(unittest.TestCase):
         self.assertEqual(options[0]['review_level'], 'strong')
         self.assertTrue(options[0]['linkable'])
 
+    def test_curated_fresh_courgette_variants_are_strong_suggestions_only(self):
+        left = product('a', 'Biologische groene courgette', brick='vegetable')
+        right = product('b', 'Gele courgette', brick='vegetable', retailer_code='jumbo')
+        for row in (left, right):
+            row.update(size_value='500', size_unit='g')
+        hint = review_pair(left, right)
+        self.assertEqual(hint['review_level'], 'strong')
+        self.assertIn('courgettefamilie', hint['review_reason'])
+        self.assertNotIn('linked', hint)
+        options = service.product_link_options([left, right], set(), 'a')
+        self.assertEqual(options[0]['review_level'], 'strong')
+        self.assertTrue(options[0]['linkable'])
+        self.assertEqual(options[0]['status'], 'suggested')
+
+    def test_unapproved_courgette_variants_do_not_become_strong(self):
+        left = product('a', 'Courgette', brick='vegetable')
+        left.update(size_value='500', size_unit='g')
+        for name in ('Diepvries courgette', 'Courgette babyvoeding',
+                     'Courgette maaltijdmix', 'Courgettesoep',
+                     'Voorgesneden courgette', 'Groene gele courgette',
+                     'Courgette 2 stuks'):
+            with self.subTest(name=name):
+                right = product('b', name, brick='vegetable')
+                right.update(size_value='500', size_unit='g')
+                self.assertNotEqual(review_pair(left, right)['review_level'], 'strong')
+        unknown = product('b', 'Gele courgette', brick='vegetable')
+        unknown.update(size_value='', size_unit='')
+        self.assertEqual(review_pair(left, unknown)['review_level'], 'possible')
+
+    def test_family_package_factor_is_explanatory_not_auto_consumption(self):
+        left = product('a', 'Courgette', brick='vegetable')
+        right = product('b', 'Biologische courgette', brick='vegetable')
+        left.update(size_value='500', size_unit='g')
+        right.update(size_value='1', size_unit='kg')
+        report = review_pair(left, right)
+        self.assertEqual(report['review_level'], 'check')
+        self.assertIn('1/2', report['review_reason'])
+        self.assertIn('geen automatische voorraadafboeking', report['review_reason'])
+        self.assertEqual(service.product_link_options([left, right], set(), 'a')[0]['review_level'], 'check')
+
+    def test_ah_courgette_and_olvarit_are_not_automatic_synonym_proposals(self):
+        fresh = product('a', 'AH Courgette', brick='vegetable')
+        baby = product('b', 'Olvarit 8+ Maanden Courgette', brick='vegetable')
+        green = product('c', 'Groene biologische courgette', brick='vegetable')
+        frozen = product('d', 'Diepvries courgette', brick='vegetable')
+        for item in (fresh, baby, green, frozen):
+            item.update(size_value='500', size_unit='g')
+        pairs = service.suggest_pairs([fresh, baby, green, frozen])
+        pair_ids = {frozenset((p['left']['id'], p['right']['id'])) for p in pairs}
+        self.assertIn(frozenset(('a', 'c')), pair_ids)
+        self.assertNotIn(frozenset(('a', 'b')), pair_ids)
+        self.assertNotIn(frozenset(('a', 'd')), pair_ids)
+        options = {p['id']: p for p in service.product_link_options(
+            [fresh, baby, green, frozen], set(), 'a')}
+        self.assertEqual(options['b']['status'], 'other')
+        self.assertEqual(options['d']['status'], 'other')
+        self.assertEqual(options['c']['status'], 'suggested')
+        self.assertEqual(options['c']['review_level'], 'strong')
+        self.assertEqual(options['b']['review_level'], 'check')
+        self.assertIn('babyproduct', options['b']['review_reason'])
+        self.assertTrue(options['b']['manual'])
+
+    def test_known_milk_fat_contrast_cannot_be_automatically_proposed(self):
+        products = [product('a', 'Halfvolle melk'), product('b', 'Volle melk'),
+                    product('c', 'Jumbo Halfvolle melk', retailer_code='jumbo')]
+        pairs = service.suggest_pairs(products)
+        ids = {frozenset((p['left']['id'], p['right']['id'])) for p in pairs}
+        self.assertIn(frozenset(('a', 'c')), ids)
+        self.assertNotIn(frozenset(('a', 'b')), ids)
+        self.assertNotIn(frozenset(('b', 'c')), ids)
+
     def test_quality_review_flags_suspect_existing_links_without_unlinking(self):
         left = product('a', 'Zaanse halfvolle mayo')
         right = product('b', 'AH Houdbare halfvolle melk', retailer_code='jumbo')
@@ -336,6 +407,14 @@ class StoreTest(unittest.TestCase):
             """)
             conn.exec_driver_sql('CREATE TABLE external_article_product_links(global_product_id TEXT, retailer_code TEXT, external_article_code TEXT, status TEXT)')
             conn.exec_driver_sql('CREATE TABLE external_product_candidates(context_key TEXT, retailer_code TEXT, global_product_id TEXT, is_user_confirmed BOOLEAN, status TEXT, candidate_status TEXT)')
+            conn.exec_driver_sql("""
+                CREATE TABLE ed2_manual_barcodes (
+                    retailer_code TEXT, receipt_text_normalized TEXT,
+                    external_article_code TEXT, gtin TEXT, barcode_scope TEXT,
+                    global_product_id TEXT, confirmed_by TEXT,
+                    confirmed_at TIMESTAMPTZ
+                )
+            """)
             # Install the real PostgreSQL maintenance gate before the new catalog table.
             maintenance = migration_module('20261021_01_server_maintenance')
             module = migration_module('20261026_01_article_synonyms')
@@ -952,6 +1031,98 @@ class StoreTest(unittest.TestCase):
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('c','jumbo','123','confirmed')"))
             self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b','c'])
             conn.execute(text("UPDATE external_article_product_links SET status='inactive'"))
+            self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b'])
+
+    def test_lidl_saved_scoped_barcode_appears_as_active_catalog_product(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE global_products SET name='Courgette groen',
+                     source='ed2_retailer_barcode' WHERE id='c'
+            """))
+            conn.execute(text("""
+                INSERT INTO ed2_manual_barcodes VALUES
+                  ('Lidl','courgette groen','0082346','2008234600001',
+                   'restricted','c','frontteam-1',NOW())
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertIn('c', products)
+            self.assertEqual(products['c']['primary_gtin'], '')
+            self.assertEqual(products['c']['article_codes'], [])
+            self.assertEqual(products['c']['retailer_codes'], ['lidl'])
+            self.assertEqual(products['c']['barcode_labels'],
+                             ['Lidl (winkelbarcode): 2008234600001'])
+            analysis = service.build_synonym_analysis(list(products.values()), set(), [])
+            self.assertEqual(next(p for p in analysis['items'] if p['id'] == 'c')['barcode_labels'],
+                             products['c']['barcode_labels'])
+            options = service.product_link_options(list(products.values()), set(), 'a')
+            self.assertEqual(next(p for p in options if p['id'] == 'c')['barcode_labels'],
+                             products['c']['barcode_labels'])
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM ed2_manual_barcodes")).scalar_one(), 1)
+            self.assertEqual(conn.execute(text("SELECT primary_gtin FROM global_products WHERE id='c'")).scalar_one(), '')
+
+    def test_same_restricted_number_at_different_shops_stays_separate(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                  (id,name,brand,variant,primary_gtin,size_value,size_unit,status,source)
+                VALUES ('d','Courgette geel','','','',1,'stuk','active','ed2_retailer_barcode')
+            """))
+            conn.execute(text("""
+                INSERT INTO ed2_manual_barcodes VALUES
+                  ('Lidl','courgette groen','0082346','2008234600001',
+                   'restricted','c','actor',NOW()),
+                  ('Jumbo','courgette geel','0082346','2008234600001',
+                   'restricted','d','actor',NOW())
+            """))
+            rows = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(rows['c']['retailer_codes'], ['lidl'])
+            self.assertEqual(rows['d']['retailer_codes'], ['jumbo'])
+            self.assertNotEqual(rows['c']['barcode_labels'], rows['d']['barcode_labels'])
+            self.assertFalse(rows['c']['primary_gtin'])
+            self.assertFalse(rows['d']['primary_gtin'])
+            self.assertIsNone(service._manual_pair_conflict(rows['c'], rows['d']))
+
+    def test_invalid_pending_and_alias_conflicts_do_not_authorize_product(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO ed2_manual_barcodes VALUES
+                  ('Lidl','courgette','123','2008234600001','restricted','c',NULL,NOW()),
+                  ('Lidl','courgette','124','2008234600001','restricted','c','actor',NULL),
+                  ('Lidl','courgette','125','bad','restricted','c','actor',NOW()),
+                  ('Lidl','courgette','126','2008234600001','global_candidate','c','actor',NOW()),
+                  ('Unknown shop','courgette','127','2008234600001','restricted','c','actor',NOW())
+            """))
+            self.assertNotIn('c', {p['id'] for p in service.load_products(conn)})
+            conn.execute(text("""
+                INSERT INTO ed2_manual_barcodes VALUES
+                  ('Lidl','courgette','128','2008234600001','restricted','c','actor',NOW()),
+                  ('lidl-nederland-gmbh','courgette','128','2008234600001','restricted','b','actor',NOW())
+            """))
+            self.assertNotIn('c', {p['id'] for p in service.load_products(conn)})
+            self.assertEqual({p['id'] for p in service.load_products(conn)}, {'a','b'})
+
+    def test_soft_deleted_product_and_global_gtin_conflict_are_untouched(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO global_products
+                  (id,name,brand,variant,primary_gtin,size_value,size_unit,status,source)
+                VALUES ('d','Deleted courgette','','','',1,'stuk','deleted','ed2_retailer_barcode'),
+                       ('e','Active mixed','','','8719587325926',1,'stuk','active','catalog')
+            """))
+            conn.execute(text("""
+                INSERT INTO ed2_manual_barcodes VALUES
+                  ('Lidl','courgette','120','2008234600001','restricted','d','actor',NOW()),
+                  ('Lidl','mixed','121','2008234600001','restricted','e','actor',NOW())
+            """))
+            rows = {p['id']: p for p in service.load_products(conn)}
+            self.assertNotIn('d', rows)
+            self.assertIn('e', rows)
+            self.assertEqual(rows['e']['barcode_labels'], [])
+            self.assertEqual(conn.execute(text("SELECT status FROM global_products WHERE id='d'")).scalar_one(), 'deleted')
+
+    def test_legacy_optional_ed2_table_absence_is_safe(self):
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql('DROP TABLE ed2_manual_barcodes')
             self.assertEqual([p['id'] for p in service.load_products(conn)], ['a','b'])
 
     def test_catalog_image_and_confirmed_shop_are_projected(self):

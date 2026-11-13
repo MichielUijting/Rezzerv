@@ -15,7 +15,9 @@ import unicodedata
 from sqlalchemy import inspect, text
 
 from app.services.gtin_validation_service import is_valid_gtin
-from app.services.synonym_equivalence_review import review_pair
+from app.services.barcode_scope_service import classify_barcode_scope
+from app.services.synonym_equivalence_review import review_pair, proven_semantic_conflicts
+from app.services.synonym_product_family_rules import curated_family_suggestion_safe
 
 METHOD = 'word12-char35-tfidf-v1'
 MIN_SCORE = 0.20
@@ -102,6 +104,50 @@ def load_products(conn):
         retailers[row['global_product_id']].add(retailer)
         if str(row['external_article_code'] or '').strip():
             codes[row['global_product_id']].add(f"{retailer}: {row['external_article_code']}")
+    # Read explicitly confirmed ED2 barcodes mapped to a central product.
+    # Restricted barcode numbers are shop-scoped, not global GTINs and not
+    # receipt article numbers. This projection performs no writes.
+    stored_barcodes = defaultdict(set)
+    inspector = inspect(conn)
+    if inspector.has_table('ed2_manual_barcodes'):
+        fields = {col['name'] for col in inspector.get_columns('ed2_manual_barcodes')}
+        expected_fields = {
+            'retailer_code', 'receipt_text_normalized', 'external_article_code',
+            'gtin', 'barcode_scope', 'global_product_id', 'confirmed_by',
+            'confirmed_at',
+        }
+        if expected_fields <= fields:
+            context_claims = defaultdict(set)
+            evidence = []
+            for row in conn.execute(text("""
+                SELECT retailer_code, receipt_text_normalized,
+                       external_article_code, gtin, barcode_scope,
+                       global_product_id
+                  FROM ed2_manual_barcodes
+                 WHERE global_product_id IS NOT NULL
+                   AND TRIM(COALESCE(confirmed_by, '')) <> ''
+                   AND confirmed_at IS NOT NULL
+                   AND barcode_scope IN ('restricted', 'global_candidate')
+            """)).mappings():
+                shop = _retailer_code(row['retailer_code'])
+                pid = str(row['global_product_id'] or '').strip()
+                barcode = str(row['gtin'] or '').strip()
+                scope = row['barcode_scope']
+                context = (shop, str(row['receipt_text_normalized'] or '').strip(),
+                           str(row['external_article_code'] or '').strip())
+                if (shop not in RETAILER_NAMES or not pid or not context[1]
+                        or not barcode.isascii() or not barcode.isdigit()
+                        or not is_valid_gtin(barcode)
+                        or classify_barcode_scope(barcode)['scope'] != scope):
+                    continue
+                # A retailer alias cannot silently resolve conflicting
+                # receipt+code identities. Fail closed for the entire context.
+                context_claims[context].add((pid, barcode, scope))
+                evidence.append((context, pid, shop, barcode, scope))
+            for context, pid, shop, barcode, scope in evidence:
+                if len(context_claims[context]) == 1:
+                    stored_barcodes[pid].add((shop, barcode, scope))
+
     # Legacy ED2 also records user-approved Catalogus candidates directly.
     # Their receipt/shop context was confirmed at the time of linking, but
     # many predate the newer external_article_product_links table. Project
@@ -143,9 +189,23 @@ def load_products(conn):
         gtin = str(product.get('primary_gtin') or '').strip()
         valid_gtin = gtin.zfill(14) if gtin.isascii() and gtin.isdigit() and is_valid_gtin(gtin) else ''
         article_codes = sorted(codes[product['id']])
-        if not valid_gtin and not article_codes:
+        # Conflicting global claims are not proof for a stored retailer code.
+        # Never copy these codes to primary_gtin or article_codes.
+        saved = sorted(
+            (shop, code, scope) for shop, code, scope in stored_barcodes[product['id']]
+            if not (scope == 'restricted' and gtin)
+            and not (scope == 'global_candidate' and gtin and gtin != code)
+        )
+        barcode_labels = sorted({
+            f"{_store_name(shop)} (winkelbarcode): {code}"
+            if scope == 'restricted'
+            else f"{_store_name(shop)} (bevestigde barcode): {code}"
+            for shop, code, scope in saved
+        })
+        if not valid_gtin and not article_codes and not barcode_labels:
             continue
         known_retailers = set(retailers[product['id']])
+        known_retailers.update(shop for shop, _, _ in saved)
         # A catalog source is shop evidence only when it names an actual shop.
         source_retailer = _retailer_code(product.pop('source'))
         if not known_retailers and source_retailer in RETAILER_NAMES:
@@ -155,6 +215,7 @@ def load_products(conn):
         product.update(
             primary_gtin=valid_gtin,
             article_codes=article_codes,
+            barcode_labels=barcode_labels,
             retailer_code=retailer_code,
             retailer_codes=retailer_codes,
             store_name=' / '.join(_store_name(code) for code in retailer_codes) if retailer_codes else 'Niet vastgelegd',
@@ -203,6 +264,12 @@ def suggest_pairs(products, confirmed=(), *, include_name_only=False):
             right = products[j]
             a, b = sorted((left['id'], right['id']))
             if score < MIN_SCORE or (a, b) in confirmed:
+                continue
+            # Text similarity cannot bypass curated product-family boundaries
+            # or explicit physical/dietary contrasts.
+            if not curated_family_suggestion_safe(left, right):
+                continue
+            if proven_semantic_conflicts(left, right):
                 continue
             # Store provenance is presentation metadata, not a prerequisite
             # or exclusion criterion for product synonym suggestions.
@@ -282,6 +349,7 @@ def product_link_options(products, confirmed, product_id):
             'store': product.get('store_name') or 'Winkel onbekend',
             'primary_gtin': product.get('primary_gtin') or '',
             'article_codes': product.get('article_codes') or [],
+            'barcode_labels': product.get('barcode_labels') or [],
             'status': state,
             **review,
             'status_label': ('Al gekoppeld' if linked
@@ -531,7 +599,9 @@ def build_synonym_analysis(products, confirmed, suggestions, classifications=Non
             status = 'no_candidate'
         row = {
             'id': pid, 'name': product['name'], 'primary_gtin': product.get('primary_gtin') or '',
-            'article_codes': product.get('article_codes') or [], 'brand': product.get('brand') or '',
+            'article_codes': product.get('article_codes') or [],
+            'barcode_labels': product.get('barcode_labels') or [],
+            'brand': product.get('brand') or '',
             'variant': product.get('variant') or '',
             'size_value': product.get('size_value') or '',
             'size_unit': product.get('size_unit') or '',
