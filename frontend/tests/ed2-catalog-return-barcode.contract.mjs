@@ -101,7 +101,7 @@ assert.match(manual, /setBarcode\(String\(scannedBarcode.value/)
 // An unknown but valid scan must use the ordinary user-confirmed save route,
 // not require the obsolete pre-existing-product confirmation before saving.
 assert.match(manual, /if \(canSave\) \{\s*setConfirm\(true\)\s*\} else if \(item\.receipt_article_number/)
-assert.match(manual, /via Barcode opslaan in Catalogus bevestig je de identificatie/)
+assert.match(manual, /Via Barcode opslaan in Catalogus bevestig je de identificatie/)
 
 assert.match(manual, /setConfirm\(true\)/)
 assert.doesNotMatch(scan, /\/api\/(?:purchases|inventory|catalog)/)
