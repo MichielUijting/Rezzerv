@@ -105,36 +105,57 @@ def confirmed_synonym_factors(conn, metadata):
         visited.update(component)
         if not 2 <= len(component) <= 200:
             continue
-        # Never aggregate a partial component or two household articles that
-        # both claim the same central identity.
-        if any(pid not in by_product or len(by_product[pid]) != 1
-               for pid in component):
+        # A household need not have every confirmed global synonym variant.
+        # Verify missing central members instead of rejecting a partial
+        # household projection, but do not invent identities or package sizes.
+        represented = sorted(component & set(by_product))
+        if len(represented) < 2 or any(len(by_product[pid]) != 1 for pid in represented):
             continue
-        entries = [by_product[pid][0] for pid in sorted(component)]
+        entries = [by_product[pid][0] for pid in represented]
+        if any(str(row.get('product_status') or 'active').lower() != 'active'
+               for row in entries):
+            continue
+        all_members = list(entries)
+        missing = sorted(component - set(by_product))
+        if missing:
+            extras = conn.execute(text("""
+                SELECT id AS global_product_id, name AS product_name,
+                       variant, size_value, size_unit, status AS product_status
+                  FROM global_products WHERE id IN :ids
+            """).bindparams(bindparam('ids', expanding=True)),
+                {'ids': missing}).mappings().all()
+            if len(extras) != len(missing) or {
+                str(row['global_product_id']) for row in extras
+            } != set(missing):
+                continue
+            all_members.extend(extras)
+        if any(str(row.get('product_status') or 'active').lower() != 'active'
+               for row in all_members):
+            continue
         sizes = [content(row.get('size_value'), row.get('size_unit'))
-                 for row in entries]
+                 for row in all_members]
         if not all(sizes) or len({size[1] for size in sizes}) != 1:
             continue
-
+        # Ignore huge or unproven ratios. No implicit piece-to-weight factor.
+        quantities = [item[0] for item in sizes]
+        if max(quantities) / min(quantities) > 1000:
+            continue
         if len(component) > 2:
-            # The original two-member equivalence policy remains unchanged.
-            # A-B-C+ needs the explicit stronger family and conversion proof.
             from app.services.synonym_product_family_rules import approved_family
             families = {
                 approved_family({
                     'name': row.get('product_name') or '',
                     'variant': row.get('variant') or '',
-                })
-                for row in entries
+                }) for row in all_members
             }
             if families != {'verse_courgette_v1'}:
                 continue
-
-        members = sorted(component)
-        key = ('confirmed_synonym', ':'.join(members),
+        key = ('confirmed_synonym', ':'.join(sorted(component)),
                'Bevestigde synoniemen', sizes[0][1])
-        for pid, package in zip(members, sizes):
-            factors[pid] = (key, package[0])
+        for row in entries:
+            pid = str(row['global_product_id'])
+            item_size = content(row.get('size_value'), row.get('size_unit'))
+            factors[pid] = (key, item_size[0])
     return factors
 
 def load_groups(conn, household_id, article_rows, settings_by_article):
@@ -142,7 +163,7 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     if not ids:
         return []
     metadata = conn.execute(text('''
-        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gp.name AS product_name, gp.variant, gb.brick_code, cp.facts_json
+        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gp.name AS product_name, gp.variant, gp.status AS product_status, gb.brick_code, cp.facts_json
         FROM household_articles ha
         LEFT JOIN global_products gp ON gp.id = ha.global_product_id
         LEFT JOIN global_product_gpc_bricks gb ON gb.global_product_id = gp.id

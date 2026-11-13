@@ -294,3 +294,14 @@ mogelijke Catalogusankers en conflictgevallen worden nooit door naamselectie
 beslecht. Het bestaande gecontroleerde batchscherm blijft voor uitzonderingen
 beschikbaar. Gebruikers zonder centrale schrijfbevoegdheid veroorzaken geen
 mutatie.
+
+
+### Fase 3A — Bijna op bij een deels aanwezige synoniemgroep
+Een huishouden hoeft niet alle Catalogusvarianten uit een bevestigde groep te
+bezitten. De read-only projectie mag aanwezige huishoudartikelen samen nemen
+nadat **alle** centrale tussenleden van de bevestigde groep zijn gecontroleerd:
+actief Catalogusproduct, goedgekeurde familie en vergelijkbare bekende
+verpakkingsinhouden. Ontbrekende/afwijkende feiten blokkeren de groepsprojectie.
+De eigen voorraad, artikel-ID's, bronbonnen en gebeurtenissen worden nooit
+samengevoegd. De speciale éénstuksregel geldt alleen als de onafhankelijk
+geïdentificeerde verse-courgette-anker zelf aantoonbaar exact één stuk is.

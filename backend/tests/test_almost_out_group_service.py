@@ -72,9 +72,10 @@ class _Rows:
 
 
 class _SynonymConnection:
-    def __init__(self, metadata, links):
+    def __init__(self, metadata, links, central=None):
         self.metadata = metadata
         self.links = links
+        self.central = central or []
         self.calls = []
 
     def execute(self, statement, params):
@@ -84,6 +85,9 @@ class _SynonymConnection:
             return _Rows(self.metadata)
         if 'FROM article_synonym_links' in sql:
             return _Rows(self.links)
+        if 'FROM global_products' in sql:
+            return _Rows([row for row in self.central
+                          if row['global_product_id'] in params['ids']])
         raise AssertionError(f'Unexpected read: {sql}')
 
 
@@ -232,3 +236,57 @@ def test_transitive_courgette_group_does_not_guess_incompatible_units():
     ]
     assert len(load_groups(_SynonymConnection(metadata, links), 'hh',
                            [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}], {})) == 3
+
+
+def test_two_household_courgettes_can_use_safe_three_catalog_variant_chain():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 1, 'stuk'), 'product_name': 'Courgette geel'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-b', 'right_product_id': 'gp-c'},
+    ]
+    central = [{'global_product_id': 'gp-c', 'product_name': 'Courgette bio',
+                'variant': '', 'size_value': 1, 'size_unit': 'stuk',
+                'product_status': 'active'}]
+    db = _SynonymConnection(metadata, links, central)
+    groups = load_groups(db, 'household-1', [{'id': 'a'}, {'id': 'b'}], {})
+    assert len(groups) == 1
+    assert groups[0]['key'][0] == 'confirmed_synonym'
+    assert groups[0]['factors'] == {'a': 1, 'b': 1}
+    assert not any('INSERT ' in sql or 'UPDATE ' in sql
+                   for sql, _ in db.calls)
+
+
+@pytest.mark.parametrize('invalid', [
+    {'product_status': 'deleted'}, {'product_name': 'Diepvries courgette'},
+    {'size_value': None}, {'size_unit': 'kg'},
+])
+def test_missing_catalog_member_must_be_fully_proven(invalid):
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 1, 'stuk'), 'product_name': 'Courgette geel'},
+    ]
+    links = [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+        {'left_product_id': 'gp-b', 'right_product_id': 'gp-c'},
+    ]
+    third = {'global_product_id': 'gp-c', 'product_name': 'Courgette bio',
+             'variant': '', 'size_value': 1, 'size_unit': 'stuk',
+             'product_status': 'active', **invalid}
+    groups = load_groups(_SynonymConnection(metadata, links, [third]),
+                         'household-1', [{'id': 'a'}, {'id': 'b'}], {})
+    assert len(groups) == 2
+
+
+def test_inactive_catalog_member_cannot_join_a_confirmed_pair():
+    metadata = [
+        {**_metadata('a', 'gp-a', 1, 'stuk'), 'product_name': 'Courgette'},
+        {**_metadata('b', 'gp-b', 1, 'stuk'), 'product_name': 'Courgette geel',
+         'product_status': 'deleted'},
+    ]
+    groups = load_groups(_SynonymConnection(metadata, [
+        {'left_product_id': 'gp-a', 'right_product_id': 'gp-b'},
+    ]), 'household-1', [{'id': 'a'}, {'id': 'b'}], {})
+    assert len(groups) == 2
