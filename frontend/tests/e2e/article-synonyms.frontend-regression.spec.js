@@ -580,7 +580,7 @@ test('Artikel-synoniemen: voorstel en overige artikelen zijn herkenbaar gescheid
   await page.goto('/artikelsynoniemen')
   await page.getByRole('checkbox', { name: /Selecteer links AH Courgette/ }).check()
   const table = page.getByTestId('article-synonyms-table')
-  await expect(page.getByTestId('article-synonyms-suggestion-summary')).toContainText('1 voorstellen')
+  await expect(page.getByTestId('article-synonyms-suggestion-summary')).toContainText('1 voorstel')
   await expect(page.getByTestId('article-synonyms-suggestion-summary')).toContainText('1 overige artikelen')
   await expect(table.locator('tbody tr').first()).toHaveClass(/rz-synonym-relation-suggested/)
   await expect(table.locator('tbody tr').nth(1)).toHaveClass(/rz-synonym-relation-other/)
