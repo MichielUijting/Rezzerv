@@ -370,7 +370,7 @@ export default function ArticleSynonymsPage({ embedded = false }) {
             {currentArticle && !loadingOptions ? <span
               className="rz-synonym-status-summary"
               data-testid="article-synonyms-suggestion-summary">
-              {proposedCount} voorstellen · {otherCount} overige artikelen
+              {proposedCount} {proposedCount === 1 ? 'voorstel' : 'voorstellen'} · {otherCount} overige artikelen
               <span className="rz-synonym-status-explanation">
                 Overig is geen voorstel; gebruik het naamfilter om zelf te zoeken.
               </span>
