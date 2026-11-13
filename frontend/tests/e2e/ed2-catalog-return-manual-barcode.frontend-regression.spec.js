@@ -417,3 +417,72 @@ test('Identificeren: historische bewaarde barcode toont aparte status en vraagt 
   await expect(table).toContainText('Catalogus gekoppeld')
 })
 
+
+
+test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzonderlijk synoniem', async ({ page }) => {
+  const rows = [
+    { id: 'receipt-table-line:green', receipt_line_text: 'Courgette groen',
+      retailer_code: 'lidl', receipt_article_number: '0082346',
+      article_code: '', manual_barcode: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
+    { id: 'receipt-table-line:yellow', receipt_line_text: 'Courgette geel',
+      retailer_code: 'lidl', receipt_article_number: '0082293',
+      article_code: '', manual_barcode: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
+    { id: 'receipt-table-line:baby', receipt_line_text: 'Olvarit 8+ Maanden Courgette',
+      retailer_code: 'ah', receipt_article_number: '',
+      article_code: '', manual_barcode: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
+  ]
+  const saved = []
+  const posts = []
+  await page.route('**/api/**', (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/catalog/ed2/courgette-family/options') {
+      const isYellow = url.searchParams.get('receipt_item_id') === 'receipt-table-line:yellow'
+      return route.fulfill({ json: { family: 'verse_courgette_v1', options: [{
+        product_id: 'ah-courgette', product_name: 'AH Courgette',
+        mode: isYellow ? 'synonym_variant' : 'same_product',
+        mode_label: isYellow ? 'Afzonderlijke variant als synoniem' : 'Zelfde verse courgette',
+        fingerprint: (isYellow ? 'a' : 'b').repeat(64),
+      }] } })
+    }
+    if (url.pathname === '/api/catalog/ed2/courgette-family/confirm') {
+      const payload = route.request().postDataJSON()
+      posts.push(payload)
+      const row = rows.find((item) => item.id === payload.receipt_item_id)
+      if (row) {
+        row.identity_status = 'catalog_linked'
+        row.identity_status_label = 'Catalogus gekoppeld'
+      }
+      return route.fulfill({ json: { ok: true, barcode_written: false,
+        synonym_created: payload.match_mode === 'synonym_variant',
+      } })
+    }
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
+  const table = page.getByTestId('external-databases-2-table')
+  await table.locator('tbody tr', { hasText: 'Courgette groen' }).dblclick()
+  const family = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
+  await expect(family).toBeVisible()
+  expect(posts).toHaveLength(0)
+  await family.getByLabel('Bestaand Catalogusproduct').selectOption('b'.repeat(64))
+  await family.getByRole('button', { name: 'Bonartikel koppelen' }).click()
+  await expect(page.getByTestId('ed2-curated-family-confirm')).toContainText('Courgette groen')
+  expect(posts).toHaveLength(0)
+  await page.getByTestId('ed2-curated-family-confirm').getByRole('button', { name: 'Bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0].match_mode).toBe('same_product')
+
+  await table.locator('tbody tr', { hasText: 'Courgette geel' }).dblclick()
+  const yellow = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
+  await yellow.getByLabel('Bestaand Catalogusproduct').selectOption('a'.repeat(64))
+  await yellow.getByRole('button', { name: 'Variant als synoniem bevestigen' }).click()
+  await page.getByTestId('ed2-curated-family-confirm').getByRole('button', { name: 'Bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(2)
+  expect(posts[1].match_mode).toBe('synonym_variant')
+  await table.locator('tbody tr', { hasText: 'Olvarit' }).dblclick()
+  await expect(page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })).toHaveCount(0)
+})
