@@ -4987,28 +4987,28 @@ def find_global_product_match_for_receipt_line(
 ):
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
 
-    # Een universele barcode of GTIN heeft altijd voorrang.
+    # Use the phase-1 Catalogus identity authority. Raw receipt/retailer codes
+    # are never proof of a globally shared GTIN, including Lidl restricted codes.
     if normalized_barcode:
-        by_barcode = get_global_product_row_by_barcode(
-            conn,
-            normalized_barcode,
-        )
-        if by_barcode:
-            payload = dict(by_barcode)
-            payload['match_method'] = 'gtin:primary'
-            payload['confidence_score'] = 1.0
-            return payload
-
-        by_gtin_identity = get_global_product_row_by_identity(
-            conn,
-            normalized_barcode,
-            identity_types=('gtin',),
-        )
-        if by_gtin_identity:
-            payload = dict(by_gtin_identity)
-            payload['match_method'] = 'identity:gtin'
-            payload['confidence_score'] = 1.0
-            return payload
+        identity = resolve_catalog_identity(conn, gtin=normalized_barcode)
+        if identity.get('status') == 'matched' and identity.get('global_product_id'):
+            product_id = str(identity['global_product_id'])
+            row = conn.execute(
+                text("""
+                    SELECT id, primary_gtin, name, brand, category,
+                           size_value, size_unit, source, status,
+                           created_at, updated_at
+                    FROM global_products
+                    WHERE id = :id AND LOWER(COALESCE(status, 'active')) = 'active'
+                    LIMIT 1
+                """),
+                {'id': product_id},
+            ).mappings().first()
+            if row:
+                payload = dict(row)
+                payload['match_method'] = 'confirmed:global_gtin'
+                payload['confidence_score'] = 1.0
+                return payload
 
     # For store receipt identifiers only the exact confirmed triple is safe:
     # retailer + normalized receipt description + the store's article number.

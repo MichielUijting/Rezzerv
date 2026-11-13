@@ -95,6 +95,43 @@ def test_receipt_description_cannot_prove_catalogus_identity():
     assert all("store_sku" not in types for types in lookups)
 
 
+@pytest.mark.parametrize("status,expected", [
+    ("scope_required", None),
+    ("conflict", None),
+    ("not_found", None),
+    ("invalid_gtin", None),
+    ("matched", "catalog-validated"),
+])
+def test_receipt_barcode_requires_scope_aware_active_catalog_identity(status, expected):
+    """A Lidl/restricted or conflicting code may not bypass the phase-1 GTIN authority."""
+    recognized = []
+    queries = []
+
+    def lookup(_conn, *, gtin):
+        recognized.append(gtin)
+        return {"status": status, "global_product_id": "catalog-validated" if status == "matched" else None}
+
+    def execute(sql, params):
+        queries.append((sql, params))
+        assert "LOWER(COALESCE(status, 'active')) = 'active'" in sql
+        return Mapping({
+            "id": "catalog-validated", "primary_gtin": "8718452504435",
+            "name": "Catalogusartikel", "brand": None, "category": None,
+        })
+
+    fn = production_function(
+        "find_global_product_match_for_receipt_line",
+        normalize_barcode_value=_same_name,
+        resolve_catalog_identity=lookup,
+    )
+    result = fn(FakeConn(execute), "8718452504435", "Andere kassabonomschrijving")
+    assert recognized == ["8718452504435"]
+    assert (result or {}).get("id") == expected
+    assert len(queries) == (1 if expected else 0)
+    if expected:
+        assert result["match_method"] == "confirmed:global_gtin"
+
+
 def test_receipt_store_code_is_never_masqueraded_as_gtin_during_sync():
     identity_calls = []
     def execute(sql, values):
