@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/catalog_identity_resolution_service.py'
+      - 'backend/app/services/ed2_receipt_family_link_service.py'
+      - 'backend/alembic/versions/20261113_01_ed2_receipt_family_links.py'
       - 'backend/app/services/catalog_identity_backfill_preview_service.py'
       - 'backend/app/services/catalog_identity_backfill_apply_service.py'
       - 'backend/app/services/catalog_identity_confirmation_service.py'
@@ -15,6 +17,7 @@ on:
       - 'backend/app/services/external_article_product_link_service.py'
       - 'backend/app/services/external_article_ui_projection.py'
       - 'backend/app/services/external_unlinked_articles_service.py'
+      - 'backend/tests/test_ed2_receipt_family_links.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
       - 'backend/tests/test_catalog_identity_route_security.py'
@@ -74,6 +77,7 @@ jobs:
       - name: PostgreSQL exact identity and historical preview tests
         run: |
           python -m pytest -q \
+            backend/tests/test_ed2_receipt_family_links.py \
             backend/tests/test_catalog_identity_resolution_service.py \
             backend/tests/test_catalog_identity_backfill_preview_service.py \
             backend/tests/test_receipt_to_unpack_retailer_code_contract.py \

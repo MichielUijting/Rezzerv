@@ -16,6 +16,9 @@ from app.api.catalog_shopify_review_routes import router as shopify_review_route
 from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
 from app.services.ed2_confirmed_barcode_service import materialize_saved_ed2_barcode
+from app.services.ed2_receipt_family_link_service import (
+    family_options, confirm_courgette_receipt,
+)
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
@@ -102,6 +105,13 @@ class Ed2HistoricalBarcodesRequest(BaseModel):
         if any(not item for item in ids) or len(ids) != len(set(ids)):
             raise ValueError("Selecties moeten unieke, bestaande bonartikel-ID's bevatten.")
         return value
+
+
+class Ed2CourgetteFamilyConfirmation(BaseModel):
+    receipt_item_id: str
+    target_product_id: str
+    match_mode: str
+    fingerprint: str
 
 
 class Ed2LidlBarcodeCorrectionPreviewRequest(BaseModel):
@@ -800,6 +810,40 @@ def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
+
+
+@router.get("/ed2/courgette-family/options")
+def ed2_courgette_family_options(receipt_item_id: str = Query(..., min_length=1, max_length=200)):
+    require_platform_permission_from_session("platform.external_products.view")
+    with engine.connect() as conn:
+        try:
+            source = resolve_external_article_identity(conn, receipt_item_id)
+            return family_options(conn, source)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/courgette-family/confirm")
+def confirm_ed2_courgette_family(payload: Ed2CourgetteFamilyConfirmation):
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not (actor.is_platform_superuser or actor.is_frontteam):
+        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen centrale artikelidentiteiten bevestigen.")
+    if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
+        raise HTTPException(status_code=422, detail="De kandidaatgegevens zijn onjuist.")
+    if payload.match_mode not in {"same_product", "synonym_variant"}:
+        raise HTTPException(status_code=422, detail="Onbekende bevestigingswijze.")
+    with engine.begin() as conn:
+        try:
+            source = resolve_external_article_identity(conn, payload.receipt_item_id)
+            return confirm_courgette_receipt(
+                conn, source=source, receipt_item_id=payload.receipt_item_id,
+                target_product_id=payload.target_product_id,
+                match_mode=payload.match_mode,
+                expected_fingerprint=payload.fingerprint,
+                actor_id=actor.user_id,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/ed2/manual-barcodes")

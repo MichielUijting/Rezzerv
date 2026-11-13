@@ -126,6 +126,31 @@ def _saved_ed2_catalog_evidence(conn) -> dict[tuple[str, str, str], dict]:
                            "catalog_product_id": ""}
     return states
 
+def _confirmed_barcode_free_family_lookup(conn):
+    """One read-only projection of explicitly approved exact receipt tuples."""
+    if not inspect(conn).has_table("ed2_receipt_family_links"):
+        return {}
+    claims = {}
+    rows = conn.execute(text("""
+        SELECT f.retailer_code, f.receipt_text_normalized, f.external_article_code,
+               f.global_product_id, gp.name AS catalog_name
+        FROM ed2_receipt_family_links f
+        JOIN global_products gp ON gp.id = f.global_product_id AND gp.status='active'
+    """)).mappings()
+    for row in rows:
+        key = _ed2_manual_barcode_identity(
+            row["retailer_code"], row["receipt_text_normalized"],
+            row["external_article_code"],
+        )
+        claim = {"product_id": str(row["global_product_id"]),
+                 "product_name": str(row["catalog_name"])}
+        if key in claims and claims[key] != claim:
+            claims[key] = {"conflict": True}
+        else:
+            claims[key] = claim
+    return claims
+
+
 def _removed_ed2_keys(conn) -> set[tuple[str, str, str]]:
     """Hide confirmed removals from the platform overview, not from their receipts."""
     if not inspect(conn).has_table("ed2_removed_articles"):
@@ -297,6 +322,7 @@ def list_all_external_articles(*, conn=None) -> dict:
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         manual_barcodes = _manual_ed2_barcode_lookup(conn)
         saved_evidence = _saved_ed2_catalog_evidence(conn)
+        family_evidence = _confirmed_barcode_free_family_lookup(conn)
         central_keys = _central_link_keys(conn)
         setup_done = perf_counter()
         removed_keys = _removed_ed2_keys(conn)
@@ -342,10 +368,19 @@ def list_all_external_articles(*, conn=None) -> dict:
             evidence = saved_evidence.get(_ed2_manual_barcode_identity(
                 source.get("retailer_code"), receipt_text, article_number,
             ), {})
+            family = family_evidence.get(_ed2_manual_barcode_identity(
+                source.get("retailer_code"), receipt_text, article_number,
+            ), {})
             identity_status = evidence.get("state") or (
                 "catalog_linked" if status in ("linked", "classification_pending")
                 and central_link.get("global_product_id") else "not_identified"
             )
+            if family:
+                if family.get("conflict") or (identity_status == "catalog_linked"
+                    and family.get("product_id") != str(central_link.get("global_product_id") or evidence.get("catalog_product_id") or "")):
+                    identity_status = "review"
+                elif identity_status == "not_identified":
+                    identity_status = "catalog_linked"
             if identity_status == "saved_only" and status != "unlinked":
                 identity_status = "catalog_linked"
             identity_labels = {
@@ -380,13 +415,16 @@ def list_all_external_articles(*, conn=None) -> dict:
                     ), ""
                 ),
                 "catalog_product_name": str(
-                    central_link.get("global_product_name") or ""
+                    central_link.get("global_product_name") or family.get("product_name") or ""
                 ),
+                "barcode_free_catalog_link": bool(family.get("product_id")
+                                                   and identity_status == "catalog_linked"),
                 "link_status": status,
                 "identity_status": identity_status,
                 "identity_status_label": identity_labels[identity_status],
                 "identity_repairable": identity_status == "saved_only",
-                "identity_catalog_product_id": evidence.get("catalog_product_id", ""),
+                "identity_catalog_product_id": evidence.get("catalog_product_id")
+                    or (family.get("product_id") if identity_status == "catalog_linked" else "") or "",
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")
                 if status == "classification_pending" and str(central_link.get("confirmed_by") or "")

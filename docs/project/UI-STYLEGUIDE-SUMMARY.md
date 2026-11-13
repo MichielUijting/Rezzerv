@@ -1785,3 +1785,14 @@ in een expliciet bevestigde handeling kunnen worden hersteld.
 Onbekende of conflicterende barcodegegevens krijgen
 **Identificatie controleren**. Er zijn geen nieuwe stijlelementen,
 kleuren, gewijzigde tabelcomponenten of feedbackpatronen.
+
+
+## Artikelbeheer — expliciete barcodevrije courgettefamilie (13 november 2026)
+Dubbelklikken op een ongeïdentificeerd, barcodevrij bonartikel uit de geteste
+verse courgettefamilie toont een voorstel binnen het bestaande detailpaneel.
+De gebruiker kiest bewust het Catalogusproduct en bevestigt met de bestaande
+centrale Inhuis-feedbackdialoog. Een aparte gele of biologische variant
+wordt zichtbaar als **Variant als synoniem bevestigen**; de barcode wordt
+nooit uit een bonartikelnummer geconstrueerd. Identificeren toont de
+identificatiestatus en de onafhankelijke GS1-status afzonderlijk; er wordt
+geen nieuwe standaardtabel, kleurenset of meldingscomponent ingevoerd.

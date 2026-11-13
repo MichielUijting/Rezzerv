@@ -11,6 +11,7 @@ import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -60,6 +61,22 @@ const exportColumns = [
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
   ['identity_status_label', 'Identificatie'], ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
+
+function isCuratedFreshCourgetteLabel(value) {
+  // Presentation-only gate. The server recomputes the authoritative family.
+  // A substring match would wrongly show the workflow for Olvarit or soup.
+  const words = String(value || '').toLocaleLowerCase('nl')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .match(/[a-z0-9]+/g) || []
+  const base = new Set(['courgette', 'courgettes'])
+  const allowed = new Set([...base, 'bio', 'biologisch', 'biologische',
+    'groen', 'groene', 'geel', 'gele', 'ah', 'jumbo', 'lidl', 'albert', 'heijn'])
+  const colors = [words.some((word) => word === 'groen' || word === 'groene'),
+    words.some((word) => word === 'geel' || word === 'gele')]
+  return words.filter((word) => base.has(word)).length === 1
+    && words.every((word) => allowed.has(word))
+    && !colors.every(Boolean)
+}
 
 function csvCell(value) {
   const content = String(value ?? '')
@@ -377,6 +394,10 @@ export default function ExternalDatabases2Page() {
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
         </div>
+        <p className="rz-external-databases-muted">
+          Identificatie en GS1-classificatie zijn onafhankelijk.
+          Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
+        </p>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -468,7 +489,16 @@ export default function ExternalDatabases2Page() {
                 }} />
             </section>
           </div>
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
+          : selectedItem ? <div key={selectedItem.id}>
+            {selectedItem.identity_status === 'not_identified'
+              && !selectedItem.manual_barcode && !selectedItem.article_code
+              && isCuratedFreshCourgetteLabel(selectedItem.receipt_line_text)
+              ? <Ed2CourgetteFamilyPanel item={selectedItem} onConfirmed={() => {
+                setSelectedItem(null)
+                setSelectedIds([])
+                setRefreshVersion((value) => value + 1)
+              }} /> : null}
+            <OffCandidatePanel item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
@@ -477,7 +507,7 @@ export default function ExternalDatabases2Page() {
               // saving; the refreshed list determines whether a row remains visible.
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
-            }} /> : null}
+            }} /></div> : null}
         </div> : null}
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">
