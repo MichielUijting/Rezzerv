@@ -86,3 +86,111 @@ def test_confirmation_requires_explicit_current_option(monkeypatch):
             expected_fingerprint="0" * 64, actor_id="frontteam-user",
         )
     assert all("pg_advisory_xact_lock" in stmt for stmt in calls)
+
+
+def test_source_key_does_not_merge_retailers_or_codes():
+    other = {**SOURCE, "retailer_code": "Jumbo"}
+    blank = {**SOURCE, "external_article_code": ""}
+    assert family._parts(SOURCE) != family._parts(other)
+    assert family._parts(SOURCE) != family._parts(blank)
+    assert family._snapshot(SOURCE, BASE, "same_product") != family._snapshot(other, BASE, "same_product")
+
+
+def test_existing_manual_barcode_prevents_barcode_free_claim():
+    class Query:
+        def first(self): return ("2008234600001",)
+    class Conn:
+        def execute(self, statement, values):
+            assert "FROM ed2_manual_barcodes" in str(statement)
+            return Query()
+    with pytest.raises(ValueError, match="bewaarde barcode"):
+        family._guard_preexisting_claims(Conn(), SOURCE)
+
+
+def test_existing_conflicting_catalog_link_prevents_replacement():
+    class Query:
+        def __init__(self, rows): self.rows = rows
+        def first(self): return self.rows[0] if self.rows else None
+        def scalars(self): return self
+        def all(self): return self.rows
+    class Conn:
+        def execute(self, statement, values):
+            sql = str(statement)
+            if "ed2_manual_barcodes" in sql: return Query([])
+            if "external_article_product_links" in sql: return Query(["catalog-other"])
+            raise AssertionError(sql)
+    with pytest.raises(ValueError, match="andere Catalogusidentiteit"):
+        family._guard_preexisting_claims(Conn(), SOURCE)
+
+
+def test_confirm_same_product_is_explicit_and_idempotent(monkeypatch):
+    writes, audits = [], []
+    params = family._parts(SOURCE)
+    fingerprint = "a" * 64
+
+    class Query:
+        def __init__(self, rows=()): self.rows = list(rows)
+        def first(self): return self.rows[0] if self.rows else None
+
+    class Conn:
+        dialect = SimpleNamespace(name="postgresql")
+        def execute(self, statement, values=None):
+            sql = " ".join(str(statement).split())
+            if "pg_advisory_xact_lock" in sql: return Query()
+            if sql.startswith("SELECT global_product_id, match_mode FROM ed2_receipt_family_links"):
+                return Query([{"global_product_id": "catalog-ah",
+                               "match_mode": "same_product"}] if writes else [])
+            if sql.startswith("INSERT INTO ed2_receipt_family_links"):
+                writes.append(dict(values))
+                return Query()
+            raise AssertionError("Unexpected SQL: " + sql)
+
+    monkeypatch.setattr(family, "family_options", lambda _conn, _source: {
+        "options": [{"product_id": "catalog-ah", "mode": "same_product",
+                     "fingerprint": fingerprint}]})
+    monkeypatch.setattr(family, "_guard_preexisting_claims", lambda _conn, _source: None)
+    monkeypatch.setattr(family, "write_authorization_audit",
+                        lambda *a, **kw: audits.append(kw))
+    kwargs = dict(source=SOURCE, receipt_item_id="receipt-table-line:green",
+                  target_product_id="catalog-ah", match_mode="same_product",
+                  expected_fingerprint=fingerprint, actor_id="frontteam-authorized")
+    result = family.confirm_courgette_receipt(Conn(), **kwargs)
+    assert result["ok"] and not result["barcode_written"]
+    assert result["global_product_id"] == "catalog-ah"
+    assert writes == [{
+        "retailer": "lidl", "label": "courgette groen", "code": "0082346",
+        "product": "catalog-ah", "mode": "same_product", "actor": "frontteam-authorized",
+    }]
+    assert len(audits) == 1
+    assert audits[0]["actor_user_id"] == "frontteam-authorized"
+    duplicate = family.confirm_courgette_receipt(Conn(), **kwargs)
+    assert duplicate["already_confirmed"]
+    assert len(writes) == 1 and len(audits) == 1
+
+
+def test_repeated_yellow_confirmation_uses_direct_synonym_proof(monkeypatch):
+    fingerprint = "b" * 64
+    class Query:
+        def __init__(self, rows): self.rows = rows
+        def first(self): return self.rows[0] if self.rows else None
+    class Conn:
+        dialect = SimpleNamespace(name="postgresql")
+        def execute(self, statement, values=None):
+            sql = " ".join(str(statement).split())
+            if "pg_advisory_xact_lock" in sql: return Query([])
+            if sql.startswith("SELECT global_product_id, match_mode FROM ed2_receipt_family_links"):
+                return Query([{"global_product_id": "catalog-yellow",
+                               "match_mode": "synonym_variant"}])
+            if "FROM article_synonym_links" in sql: return Query([(1,)])
+            raise AssertionError("No mutation allowed on retry: " + sql)
+    monkeypatch.setattr(family, "family_options", lambda _conn, _source: {
+        "options": [{"product_id": "catalog-ah", "mode": "synonym_variant",
+                     "fingerprint": fingerprint}]})
+    result = family.confirm_courgette_receipt(
+        Conn(), source={**SOURCE, "receipt_text": "Courgette geel"},
+        receipt_item_id="receipt-table-line:yellow", target_product_id="catalog-ah",
+        match_mode="synonym_variant", expected_fingerprint=fingerprint,
+        actor_id="frontteam-authorized")
+    assert result["already_confirmed"]
+    assert result["global_product_id"] == "catalog-yellow"
+    assert not result["barcode_written"]

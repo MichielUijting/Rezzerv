@@ -152,13 +152,25 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
           AND external_article_code=:code FOR UPDATE
     """), {"retailer": retailer, "label": label, "code": code}).mappings().first()
     if existing:
-        # An older user confirmation wins; do not overwrite it on name match.
-        if (str(existing["global_product_id"]) == target_product_id
-                and existing["match_mode"] == "same_product"
-                and match_mode == "same_product"):
-            return {"ok": True, "already_confirmed": True,
-                    "global_product_id": target_product_id, "synonym_created": False,
-                    "barcode_written": False}
+        # Idempotent even for a confirmed distinct yellow variant: the original
+        # central target is proven by its direct synonym edge, never by name.
+        old_product = str(existing["global_product_id"])
+        if existing["match_mode"] == match_mode:
+            if match_mode == "same_product" and old_product == target_product_id:
+                return {"ok": True, "already_confirmed": True,
+                        "global_product_id": old_product, "synonym_created": False,
+                        "barcode_written": False}
+            if match_mode == "synonym_variant":
+                edge = conn.execute(text("""
+                    SELECT 1 FROM article_synonym_links
+                    WHERE left_product_id = :left AND right_product_id = :right
+                    LIMIT 1
+                """), {"left": min(old_product, target_product_id),
+                       "right": max(old_product, target_product_id)}).first()
+                if edge:
+                    return {"ok": True, "already_confirmed": True,
+                            "global_product_id": old_product, "synonym_created": False,
+                            "barcode_written": False}
         raise ValueError("Dit bonartikel heeft al een bevestigde Cataloguskoppeling.")
     _guard_preexisting_claims(conn, source)
     product_id = target_product_id
