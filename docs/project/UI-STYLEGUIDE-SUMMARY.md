@@ -1796,3 +1796,19 @@ wordt zichtbaar als **Variant als synoniem bevestigen**; de barcode wordt
 nooit uit een bonartikelnummer geconstrueerd. Identificeren toont de
 identificatiestatus en de onafhankelijke GS1-status afzonderlijk; er wordt
 geen nieuwe standaardtabel, kleurenset of meldingscomponent ingevoerd.
+
+
+## Artikelbeheer — productfamilie in één keer beoordelen (13 november 2026)
+Op het bestaande Identificeren-scherm krijgt een bevoegde gebruiker één extra
+**Courgettes gezamenlijk herkennen**-actie. Deze opent binnen dezelfde
+werkruimte een compact, alleen-lezen overzicht van de server-beoordeelde,
+nog niet geïdentificeerde artikelen. De bestaande Catalogusidentiteit wordt
+expliciet gekozen, met per regel een gewone checkbox en begrijpelijke
+omschrijving: **hetzelfde verse product** of **afzonderlijke synoniemvariant**.
+Bestaande conflicten blijven afzonderlijk zichtbaar en kunnen niet ongemerkt
+worden mee-geselecteerd. De selectie wordt met één standaard Inhuis-overlay
+voorgelegd en in één transactie bevestigd. Alle meldingen gebruiken de
+bestaande centrale feedbackvoorziening; er komen geen eigen modals,
+onzichtbare achtergrondupdates, een tweede navigatie of nieuwe tabellen
+met afwijkende pagination. Op mobiele schermen blijft de overzichtslijst
+lineair leesbaar; de bestaande standaardtabel blijft ongewijzigd.
