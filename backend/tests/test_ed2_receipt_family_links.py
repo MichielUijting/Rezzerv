@@ -275,3 +275,47 @@ def test_confirm_route_rejects_invalid_fingerprint_before_write(monkeypatch):
         catalog_routes.confirm_ed2_courgette_family(payload)
     assert error.value.status_code == 422
 
+
+
+@pytest.mark.parametrize("retailer,name,article_code,expected", [
+    ("Albert Heijn", "COURGETTE", "21003", "same_product"),
+    ("Albert Heijn", "COURGETTE", "", "same_product"),
+    ("Jumbo", "COURGETTE", "", "same_product"),
+    ("Lidl", "Courgette Bio", "0084544", "synonym_variant"),
+    ("Lidl", "Courgette geel", "0082293", "synonym_variant"),
+    ("Lidl", "Courgette groen", "0082346", "same_product"),
+    ("Lidl", "Courgette groen", "", "same_product"),
+])
+def test_seven_courgette_acceptance_rows_are_only_suggestions(
+        monkeypatch, retailer, name, article_code, expected):
+    """The PO's seven receipt cases: never fabricate or write an EAN."""
+    captured = []
+    monkeypatch.setattr(family, "load_products", lambda conn: [BASE])
+    source = {"retailer_code": retailer, "receipt_text": name,
+              "external_article_code": article_code}
+    class ReadOnly:
+        def execute(self, statement, params=None):
+            captured.append(str(statement))
+            raise AssertionError("A family suggestion may not write or query receipts")
+    result = family.family_options(ReadOnly(), source)
+    assert result["family"] == "verse_courgette_v1"
+    assert len(result["options"]) == 1
+    option = result["options"][0]
+    assert option["mode"] == expected
+    assert option["product_id"] == "catalog-ah"
+    assert option["barcode"] == BASE["primary_gtin"]
+    assert captured == []
+
+
+@pytest.mark.parametrize("receipt", [
+    "Olvarit 8+ Maanden Courgette",
+    "Diepvries courgette", "Courgettesoep", "Courgette maaltijdmix",
+])
+def test_olvarit_frozen_and_prepared_not_even_suggested(monkeypatch, receipt):
+    monkeypatch.setattr(family, "load_products", lambda conn: [BASE])
+    source = {"retailer_code": "Lidl", "receipt_text": receipt,
+              "external_article_code": ""}
+    result = family.family_options(SimpleNamespace(), source)
+    assert result["family"] is None
+    assert result["options"] == []
+
