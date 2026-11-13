@@ -288,3 +288,84 @@ def test_operational_reader_never_falls_back_to_name_for_unknown_store_code():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+
+def test_exact_approved_receipt_tuple_reuses_identity_without_barcode():
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            CREATE TEMP TABLE ed2_receipt_family_links (
+                retailer_code TEXT, receipt_text_normalized TEXT,
+                external_article_code TEXT, global_product_id TEXT,
+                confirmed_by TEXT
+            ) ON COMMIT DROP
+        """))
+        conn.execute(text("""
+            INSERT INTO ed2_receipt_family_links
+              VALUES ('lidl', 'courgette groen', '0082346', 'p1', 'superuser')
+        """))
+        match = resolve_catalog_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        )
+        assert match["status"] == "matched", match
+        assert match["global_product_id"] == "p1"
+        assert "confirmed_receipt_tuple" in match["evidence"]
+        assert resolve_catalog_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette geel",
+        )["status"] == "not_found"
+        assert resolve_catalog_identity(
+            conn, retailer_code="Jumbo", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        )["status"] == "not_found"
+        assert resolve_catalog_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+        )["status"] == "not_found"
+        assert resolve_catalog_identity(
+            conn, retailer_code="Lidl", external_article_code="",
+            receipt_text="Courgette groen",
+        )["status"] == "no_identity"
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()
+
+
+def test_confirmed_receipt_tuple_never_overrides_conflicting_gtin_or_code():
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            CREATE TEMP TABLE ed2_receipt_family_links (
+                retailer_code TEXT, receipt_text_normalized TEXT,
+                external_article_code TEXT, global_product_id TEXT,
+                confirmed_by TEXT
+            ) ON COMMIT DROP
+        """))
+        conn.execute(text("""
+            INSERT INTO ed2_receipt_family_links
+              VALUES ('lidl', 'courgette groen', '0082346', 'p2', 'superuser')
+        """))
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+              (global_product_id, retailer_code, external_article_code, status)
+            VALUES ('p1','lidl','0082346','confirmed')
+        """))
+        claim = resolve_catalog_identity(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        )
+        assert claim["status"] == "conflict"
+        assert claim["global_product_id"] is None
+        conn.execute(text("DELETE FROM external_article_product_links"))
+        claim = resolve_catalog_identity(
+            conn, gtin="8712345678906", retailer_code="Lidl",
+            external_article_code="0082346", receipt_text="Courgette groen",
+        )
+        assert claim["status"] == "conflict"
+        assert claim["global_product_id"] is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()

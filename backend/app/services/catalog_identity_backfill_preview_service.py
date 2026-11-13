@@ -32,7 +32,10 @@ def preview_household_catalog_identity_backfill(
                    ha.global_product_id AS current_product_id,
                    rtl.barcode AS gtin,
                    rtl.external_article_code AS retailer_article_code,
-                   rt.store_name AS retailer_code
+                   COALESCE(NULLIF(rtl.corrected_raw_label, ''),
+                            NULLIF(rtl.normalized_label, ''),
+                            NULLIF(rtl.raw_label, ''), '') AS receipt_text,
+                   COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
             JOIN receipt_tables rt
@@ -68,6 +71,7 @@ def preview_household_catalog_identity_backfill(
             gtin=row.get("gtin"),
             retailer_code=row.get("retailer_code"),
             external_article_code=row.get("retailer_article_code"),
+            receipt_text=row.get("receipt_text"),
         )
         if result["status"] == "matched":
             article["candidates"].add(result["global_product_id"])
