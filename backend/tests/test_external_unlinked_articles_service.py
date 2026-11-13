@@ -17,8 +17,12 @@ def article_sources(monkeypatch, names, receipts=(), manual_rows=()):
         sql = str(statement).strip()
         assert sql.upper().startswith('SELECT'), sql
         statements.append(sql)
+        # The production receipt query has source_gtin, even when no barcode
+        # is recorded. Keep this test double faithful to that SELECT contract.
+        receipt_rows = [{**row, 'source_gtin': row.get('source_gtin', '')}
+                        for row in receipts]
         rows = (list(manual_rows) if 'FROM ed2_manual_barcodes' in sql else
-                purchases if 'FROM purchase_import_lines' in sql else list(receipts))
+                purchases if 'FROM purchase_import_lines' in sql else receipt_rows)
         return SimpleNamespace(mappings=lambda: iter(rows))
 
     conn = SimpleNamespace(execute=execute)

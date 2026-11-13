@@ -166,7 +166,8 @@ test('Een bevestigde barcode koppelt zonder OFF-match aan Catalogus, onafhankeli
   const cells = table.locator('tbody tr').first().locator('td')
   await expect(cells.nth(4)).toHaveText('8718452504435')
   await expect(cells.nth(4).locator('span')).toHaveAttribute('title', /Handmatig ingevoerde barcode/)
-  await expect(cells.nth(5)).toHaveText('Niet gekoppeld')
+  await expect(cells.nth(5)).toHaveText('Nog identificeren')
+  await expect(cells.nth(6)).toHaveText('Niet gekoppeld')
   await expect(table.locator('thead')).toContainText('Art./Barcode')
 })
 
@@ -405,9 +406,13 @@ test('Identificeren: historische bewaarde barcode toont aparte status en vraagt 
   await expect(table).toContainText('Niet gekoppeld')
   expect(confirms).toBe(0)
   await page.getByRole('button', { name: 'Bewaarde barcodes koppelen' }).click()
-  await expect(page.getByRole('alertdialog')).toContainText('1 eerder opgeslagen barcode')
+  // The central AppFeedbackProvider uses role=dialog for action prompts,
+  // unlike the older local alertdialog used by the barcode save flow.
+  const confirmation = page.getByTestId('ed2-materialize-existing-confirm')
+  await expect(confirmation).toHaveAttribute('role', 'dialog')
+  await expect(confirmation).toContainText('1 eerder opgeslagen barcode')
   expect(confirms).toBe(0)
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Koppelen' }).click()
+  await confirmation.getByRole('button', { name: 'Koppelen' }).click()
   await expect.poll(() => confirms).toBe(1)
   await expect(table).toContainText('Catalogus gekoppeld')
 })
