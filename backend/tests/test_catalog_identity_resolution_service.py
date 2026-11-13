@@ -369,3 +369,55 @@ def test_confirmed_receipt_tuple_never_overrides_conflicting_gtin_or_code():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+
+def test_operational_reader_reuses_exact_barcode_free_receipt_without_fabricated_gtin():
+    from app.services.external_article_product_link_service import (
+        get_confirmed_external_article_product_link,
+    )
+    engine, conn = _conn()
+    try:
+        conn.execute(text("""
+            CREATE TEMP TABLE ed2_receipt_family_links (
+                retailer_code TEXT, receipt_text_normalized TEXT,
+                external_article_code TEXT, global_product_id TEXT,
+                confirmed_by TEXT, confirmed_at TIMESTAMP
+            ) ON COMMIT DROP
+        """))
+        conn.execute(text("""
+            INSERT INTO ed2_receipt_family_links
+              VALUES ('lidl', 'courgette groen', '0082346', 'p1',
+                      'frontteam-authorized', CURRENT_TIMESTAMP)
+        """))
+        result = get_confirmed_external_article_product_link(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        )
+        assert result and result["global_product_id"] == "p1"
+        assert result["source"] == "confirmed_receipt_tuple"
+        assert result["primary_gtin"] == ""
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette geel",
+        ) is None
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="Jumbo", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        ) is None
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+        ) is None
+        conn.execute(text("""
+            INSERT INTO external_article_product_links
+              (global_product_id, retailer_code, external_article_code, status)
+            VALUES ('p2', 'lidl', '0082346', 'confirmed')
+        """))
+        assert get_confirmed_external_article_product_link(
+            conn, retailer_code="Lidl", external_article_code="0082346",
+            receipt_text="Courgette groen",
+        ) is None
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()

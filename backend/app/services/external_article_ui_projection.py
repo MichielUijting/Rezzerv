@@ -125,6 +125,9 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         central_link
         and _text(central_link.get("confirmed_by")) == "external_databases_generic_link"
     )
+    exact_receipt_link = bool(
+        central_link and central_link.get("source") == "confirmed_receipt_tuple"
+    )
     if central_link:
         candidate_product_id = _text(central_link.get("global_product_id"))
         central_product_details = _central_product_details(conn, candidate_product_id)
@@ -132,7 +135,7 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         # Receipt names/brand spelling are mutable display data, not grounds
         # to hide an already confirmed Catalogus identity. Preserve the old
         # text-compatibility guard only for legacy text-only matches.
-        if not generic_central_link and not external_article_code:
+        if not (generic_central_link or exact_receipt_link) and not external_article_code:
             identity_check = external_product_identity_compatibility(
                 retailer_code=retailer_code,
                 receipt_text=receipt_text,
@@ -223,7 +226,9 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row["central_global_product_name"] = central_product_name
     next_row["is_linked_to_catalog"] = active
     next_row["is_existing_link_for_receipt_item"] = active
-    next_row["central_link_mode"] = "generic" if generic_central_link and active else ("exact" if active else "")
+    next_row["central_link_mode"] = ("receipt_exact" if exact_receipt_link and active
+                                     else "generic" if generic_central_link and active
+                                     else "exact" if active else "")
     next_row["is_generic_catalog_link"] = bool(generic_central_link and active)
     next_row["central_link_identity_rejected"] = bool(identity_rejection)
     next_row["central_link_identity_rejection_reason"] = _text(
@@ -259,7 +264,9 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         )
         central_product_name = _text(details.get("global_product_name")) or central_product_name
         central_product_brand = _text(details.get("global_product_brand"))
-        central_gtin = _text(details.get("primary_gtin"))
+        # Target GTIN is NOT a barcode claim for this separate source receipt.
+        # A Lidl receipt without a scanned barcode must never display AH's GTIN.
+        central_gtin = ("" if exact_receipt_link else _text(details.get("primary_gtin")))
         product_type_id = _text(details.get("product_type_id"))
         gpc_brick_code = _text(details.get("gpc_brick_code"))
         gpc_brick_name = _text(details.get("gpc_brick_name"))
