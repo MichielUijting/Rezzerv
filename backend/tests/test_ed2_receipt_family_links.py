@@ -130,6 +130,7 @@ def test_confirm_same_product_is_explicit_and_idempotent(monkeypatch):
 
     class Query:
         def __init__(self, rows=()): self.rows = list(rows)
+        def mappings(self): return self
         def first(self): return self.rows[0] if self.rows else None
 
     class Conn:
@@ -172,6 +173,7 @@ def test_repeated_yellow_confirmation_uses_direct_synonym_proof(monkeypatch):
     fingerprint = "b" * 64
     class Query:
         def __init__(self, rows): self.rows = rows
+        def mappings(self): return self
         def first(self): return self.rows[0] if self.rows else None
     class Conn:
         dialect = SimpleNamespace(name="postgresql")
@@ -318,4 +320,3 @@ def test_olvarit_frozen_and_prepared_not_even_suggested(monkeypatch, receipt):
     result = family.family_options(SimpleNamespace(), source)
     assert result["family"] is None
     assert result["options"] == []
-
