@@ -11,6 +11,7 @@ import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -377,6 +378,10 @@ export default function ExternalDatabases2Page() {
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
         </div>
+        <p className="rz-external-databases-muted">
+          Identificatie en GS1-classificatie zijn onafhankelijk.
+          Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
+        </p>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -468,7 +473,16 @@ export default function ExternalDatabases2Page() {
                 }} />
             </section>
           </div>
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
+          : selectedItem ? <div key={selectedItem.id}>
+            {selectedItem.identity_status === 'not_identified'
+              && !selectedItem.manual_barcode && !selectedItem.article_code
+              && /\\bcourgette(?:s)?\\b/i.test(selectedItem.receipt_line_text || '')
+              ? <Ed2CourgetteFamilyPanel item={selectedItem} onConfirmed={() => {
+                setSelectedItem(null)
+                setSelectedIds([])
+                setRefreshVersion((value) => value + 1)
+              }} /> : null}
+            <OffCandidatePanel item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
@@ -477,7 +491,7 @@ export default function ExternalDatabases2Page() {
               // saving; the refreshed list determines whether a row remains visible.
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
-            }} /> : null}
+            }} /></div> : null}
         </div> : null}
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">
