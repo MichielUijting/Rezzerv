@@ -328,7 +328,7 @@ def test_saved_catalog_status_independent_from_off_and_gpc(monkeypatch):
 def test_saved_barcode_reader_is_read_only_and_flags_invalid_codes(monkeypatch):
     evidence = [
         {"retailer_code": "Lidl", "receipt_text_normalized": "courgette groen",
-         "external_article_code": "0082346", "gtin": "2008234600001",
+         "external_article_code": "0082346", "gtin": "2008234600002",
          "barcode_scope": None, "global_product_id": None,
          "confirmed_by": None, "confirmed_at": None, "catalog_status": None},
         {"retailer_code": "Jumbo", "receipt_text_normalized": "courgette groen",

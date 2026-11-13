@@ -217,3 +217,15 @@ mondiale GTIN geclaimd. Ongeldige controlecijfers, verwijderde of
 tegenstrijdige bronclaims krijgen Identificatie controleren en mogen
 niet automatisch worden hersteld. De daadwerkelijke lokale databank is
 pas gewijzigd wanneer de PO de bestaande herstelactie bevestigt.
+
+
+### Structurele preventie: ook OFF-uitzondering atomair (13 november 2026)
+
+De bijzondere, bevoegde OFF-override met ontbrekende productgegevens
+mag niet langer alleen een rij in `ed2_manual_barcodes` opslaan zonder
+actieve `global_product_id`. Wanneer geen veilige OFF-koppeling ontstaat,
+wordt dezelfde canonieke, transactionele Barcode → Catalogus-service
+gebruikt als de gewone Identificeren-opslag. De status `saved=true` betekent
+pas succes als de Catalogusverwijzing in die transactie is bevestigd.
+Een historisch conflict blijft HTTP 409 zonder gedeeltelijke barcodeclaim;
+geen naam- of OFF-match wordt als mondiaal barcodebewijs gebruikt.
