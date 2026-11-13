@@ -190,7 +190,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
             Zelf zoeken in OFF
           </Button>
           <Ed2BarcodeScanner key={item.id} receiptItemId={item.id}
-            disabled={item.link_status === 'linked'}
+            disabled={item.link_status === 'linked' && !item.manual_barcode}
             onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} />
         </div>
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />

@@ -15,6 +15,10 @@ from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
 from app.db import engine
 from app.services.barcode_identity_service import validate_barcode
+from app.services.ed2_confirmed_barcode_service import materialize_saved_ed2_barcode
+from app.services.ed2_barcode_correction_service import (
+    preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
+)
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.external_article_confirmation_service import resolve_external_article_identity
@@ -79,6 +83,35 @@ class Ed2ManualBarcodeRequest(BaseModel):
     allow_off_mismatch: bool = False
     # Exclusive to Superuser barcode import: attach the full OFF product after explicit review.
     import_off_product_override: bool = False
+
+
+class Ed2HistoricalBarcodeSelection(BaseModel):
+    receipt_item_id: str
+    gtin: str
+
+
+class Ed2HistoricalBarcodesRequest(BaseModel):
+    selections: list[Ed2HistoricalBarcodeSelection]
+
+    @field_validator("selections")
+    @classmethod
+    def validate_selections(cls, value: list[Ed2HistoricalBarcodeSelection]):
+        if not 1 <= len(value) <= 50:
+            raise ValueError("Selecteer 1 tot en met 50 reeds opgeslagen barcodes.")
+        ids = [str(item.receipt_item_id or "").strip() for item in value]
+        if any(not item for item in ids) or len(ids) != len(set(ids)):
+            raise ValueError("Selecties moeten unieke, bestaande bonartikel-ID's bevatten.")
+        return value
+
+
+class Ed2LidlBarcodeCorrectionPreviewRequest(BaseModel):
+    receipt_item_id: str
+    new_gtin: str
+
+
+class Ed2LidlBarcodeCorrectionConfirmRequest(Ed2LidlBarcodeCorrectionPreviewRequest):
+    expected_old_gtin: str
+    preview_fingerprint: str
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -782,14 +815,139 @@ def list_ed2_manual_barcodes():
     return {"items": [dict(row) for row in rows]}
 
 
+
+@router.post("/ed2/manual-barcodes/lidl/preview-correction")
+def preview_ed2_lidl_barcode_correction(payload: Ed2LidlBarcodeCorrectionPreviewRequest):
+    """Read-only impact preview; never alter an old Lidl/household/receipt row."""
+    require_platform_permission_from_session("platform.external_products.link_existing")
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(
+                conn, str(payload.receipt_item_id or "").strip()
+            )
+            return preview_lidl_barcode_correction(
+                conn, source=source,
+                receipt_item_id=str(payload.receipt_item_id or "").strip(),
+                new_gtin=payload.new_gtin,
+                household_table=_household_table(),
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/manual-barcodes/lidl/confirm-correction")
+def confirm_ed2_lidl_barcode_correction(payload: Ed2LidlBarcodeCorrectionConfirmRequest):
+    """Explicit one-item correction; preview proof and all writes are atomic."""
+    actor = require_platform_permission_from_session(
+        "platform.external_products.link_existing"
+    )
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    if len(payload.preview_fingerprint) != 64 or any(
+        char not in "0123456789abcdef" for char in payload.preview_fingerprint
+    ):
+        raise HTTPException(status_code=422, detail="De gevolgencontrole ontbreekt.")
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(
+                conn, str(payload.receipt_item_id or "").strip()
+            )
+            return confirm_lidl_barcode_correction(
+                conn, source=source,
+                receipt_item_id=str(payload.receipt_item_id or "").strip(),
+                new_gtin=payload.new_gtin,
+                expected_old_gtin=payload.expected_old_gtin,
+                preview_fingerprint=payload.preview_fingerprint,
+                actor_user_id=actor.user_id,
+                household_table=_household_table(),
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/manual-barcodes/materialize-existing")
+def materialize_existing_ed2_manual_barcodes(payload: Ed2HistoricalBarcodesRequest):
+    """Explicit, all-or-nothing Catalogus resolution of previously saved barcodes.
+
+    Every selected receipt identity is resolved server-side and must already
+    have exactly the selected stored GTIN. No OFF, receipt, household, stock
+    or synonym writes; any missing/changed/conflicting evidence rolls back
+    the entire batch. This endpoint is never called on list/GET or startup.
+    """
+    actor = require_platform_permission_from_session(
+        "platform.external_products.link_existing"
+    )
+    _ed2_barcode_tables_ready()
+    if "product_identities" not in _tables():
+        raise HTTPException(status_code=503, detail="Catalogus-identiteitstabel ontbreekt.")
+    # Stable order for concurrent, overlapping bulk requests.
+    selections = sorted(payload.selections, key=lambda item: item.receipt_item_id)
+    results = []
+    seen_sources = set()
+    try:
+        with engine.begin() as conn:
+            for selection in selections:
+                try:
+                    source = resolve_external_article_identity(
+                        conn, str(selection.receipt_item_id).strip()
+                    )
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Een geselecteerd bonartikel bestaat niet meer."
+                    ) from error
+                # Resolve canonical tuple server-side; a second receipt row
+                # for the same article cannot silently count as new evidence.
+                source_key = (
+                    normalize_external_link_retailer_code(source["retailer_code"]),
+                    normalize_external_link_receipt_text(source["receipt_text"]),
+                    normalize_external_link_article_code(source["external_article_code"]),
+                )
+                if source_key in seen_sources:
+                    raise ValueError(
+                        "De selectie bevat dezelfde winkelartikelidentiteit meerdere keren."
+                    )
+                seen_sources.add(source_key)
+                results.append(materialize_saved_ed2_barcode(
+                    conn,
+                    retailer_code=source["retailer_code"],
+                    receipt_text=source["receipt_text"],
+                    external_article_code=source["external_article_code"],
+                    barcode=selection.gtin,
+                    confirmed_by=actor.user_id,
+                    require_existing=True,
+                ))
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "ok": True,
+        "processed": len(results),
+        "catalog_links_created": sum(
+            result["status"] == "confirmed" for result in results
+        ),
+        "already_confirmed": sum(
+            result["status"] == "already_confirmed" for result in results
+        ),
+        "catalog_products_created": sum(
+            bool(result["catalog_product_created"]) for result in results
+        ),
+        "household_changes": 0,
+        "stock_changes": 0,
+    }
+
+
 @router.post("/ed2/manual-barcodes")
 def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
-    """Explicitly register a GTIN: verified OFF enriches; OFF absence stores only the code.
+    """Saved barcode is sufficient Catalogus identity evidence, without OFF.
 
-    The manual-only branch writes no global product, product identity, confirmed
-    link, receipt row, household article or inventory. It never invents a GPC.
+    The normal path saves an idempotent product link; an explicit Superuser
+    OFF metadata override remains separate. No receipts or stock are changed.
     """
-    require_platform_permission_from_session("platform.external_products.link_existing")
+    actor_session = require_platform_permission_from_session("platform.external_products.link_existing")
     if payload.import_off_product_override:
         if not payload.allow_off_mismatch or not resolve_current_server_session().is_platform_superuser:
             raise HTTPException(status_code=403, detail="Alleen de Superuser mag een OFF-afwijking volledig koppelen.")
@@ -800,6 +958,35 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
         raise HTTPException(status_code=422, detail=message or "Ongeldige barcode")
     gtin = validation["normalized_value"]
     receipt_item_id = str(payload.receipt_item_id or "").strip()
+    if not payload.import_off_product_override:
+        # A saved barcode is already confirmed evidence under the current PO
+        # contract. Neither OFF nor a GS1 classification is a prerequisite.
+        try:
+            with engine.begin() as conn:
+                try:
+                    source = resolve_external_article_identity(conn, receipt_item_id)
+                except ValueError as error:
+                    raise HTTPException(
+                        status_code=404, detail="Bonartikel bestaat niet meer."
+                    ) from error
+                result = materialize_saved_ed2_barcode(
+                    conn, retailer_code=source["retailer_code"],
+                    receipt_text=source["receipt_text"],
+                    external_article_code=source["external_article_code"],
+                    barcode=gtin, confirmed_by=actor_session.user_id,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {
+            "saved": True, "source": "manual", "gtin": gtin,
+            "off_found": False, "off_unavailable": False,
+            "classification_pending": False, "photo_loaded": False,
+            "catalog_linked": True,
+            "catalog_product_created": result["catalog_product_created"],
+            "global_product_id": result["global_product_id"],
+            "barcode_scope": result["barcode_scope"], "stock_changes": 0,
+        }
+
     with engine.begin() as conn:
         identity = _ed2_normalized_source(conn, receipt_item_id)
         _ed2_require_unlinked(conn, identity)

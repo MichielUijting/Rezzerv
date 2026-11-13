@@ -86,6 +86,7 @@ export default function ExternalDatabases2Page() {
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [materializing, setMaterializing] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
@@ -110,6 +111,9 @@ export default function ExternalDatabases2Page() {
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
+  const canMaterializeSaved = selectedRows.length > 0 && selectedRows.length <= 50
+    && selectedRows.every((row) =>
+      /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim()))
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
 
@@ -179,6 +183,54 @@ export default function ExternalDatabases2Page() {
       setUnlinking(false)
       setRefreshVersion((value) => value + 1)
     }
+  }
+
+  function confirmMaterializeSaved() {
+    if (!canMaterializeSaved || materializing || deleting || unlinking) return
+    const selections = selectedRows.map((row) => ({
+      receipt_item_id: row.id, gtin: String(row.manual_barcode).trim(),
+    }))
+    showFeedback({
+      variant: 'warning',
+      title: 'Bewaarde barcodes koppelen',
+      message: selections.length + ' eerder opgeslagen barcode(s) aan de Catalogus koppelen?',
+      detail: 'Alleen bevestigde barcodes worden verwerkt. Er verandert niets aan kassabonnen, huishoudartikelen of voorraad. Bij één conflict wordt niets opgeslagen.',
+      primaryActionLabel: 'Koppelen', secondaryActionLabel: 'Annuleren',
+      testId: 'ed2-materialize-existing-confirm',
+      onPrimaryAction: async () => {
+        setMaterializing(true)
+        try {
+          const response = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes/materialize-existing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selections }),
+          })
+          const result = await response.json().catch(() => ({}))
+          if (!response.ok || result.ok !== true || result.processed !== selections.length) {
+            throw new Error(typeof result.detail === 'string' ? result.detail
+              : 'De bestaande barcodes konden niet volledig worden gekoppeld.')
+          }
+          setSelectedIds([])
+          setSelectedItem(null)
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'success', title: 'Catalogus bijgewerkt',
+            message: result.catalog_links_created + ' barcode(s) gekoppeld; '
+              + result.already_confirmed + ' waren al gekoppeld. '
+              + result.catalog_products_created + ' nieuw(e) Catalogusproduct(en).',
+          })
+          return false
+        } catch (error) {
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'error', title: 'Niet gekoppeld',
+            message: error.message || 'Er is een conflict; er is niets gewijzigd.',
+          })
+          return false
+        } finally {
+          setMaterializing(false)
+        }
+      },
+    })
   }
 
   function confirmDeleteSelected() {
@@ -359,7 +411,12 @@ export default function ExternalDatabases2Page() {
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
             onClick={() => navigate('/externe-databases-2/importeren',
               { state: { ed2TableState: returnState } })}>Importeren</Button> : null}
-          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting}
+          <Button type="button" variant="secondary"
+            disabled={!canMaterializeSaved || unlinking || deleting || materializing}
+            onClick={confirmMaterializeSaved}>
+            {materializing ? 'Koppelen...' : 'Bewaarde barcodes koppelen'}
+          </Button>
+          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting || materializing}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
             disabled={!selectedRows.length || selectedRows.length > 100 || unlinking || deleting}
