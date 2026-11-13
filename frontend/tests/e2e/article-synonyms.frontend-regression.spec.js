@@ -591,6 +591,52 @@ test('Artikel-synoniemen: voorstel en overige artikelen zijn herkenbaar gescheid
   expect(writes).toBe(0)
 })
 
+test('Artikel-synoniemen toont bevestigde winkelbarcode zonder mondiale GTIN', async ({ page }) => {
+  const products = [
+    { id: 'lidl-scoped', name: 'Courgette groen', primary_gtin: '',
+      article_codes: [], barcode_labels: ['Lidl (winkelbarcode): 2008234600001'],
+      synonym_count: 0 },
+    { id: 'ah-global', name: 'AH Courgette', primary_gtin: '08719587325926',
+      article_codes: [], barcode_labels: [], synonym_count: 0 },
+  ]
+  const options = [
+    { ...products[1], status: 'other', status_label: 'Overig',
+      review_level: 'possible', review_label: 'Beoordelen',
+      linkable: true, manual: true, fingerprint: 'a'.repeat(64) },
+  ]
+  let writes = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: 'synonym-scoped-projection', active_household_id: '0',
+      context_type: 'system', is_platform_superuser: true, role: 'admin',
+      permissions: { 'platform.external_products.view': true,
+        'platform.external_products.link_existing': true },
+    } })
+    if (path.endsWith('/article-synonyms/analysis')) return route.fulfill({ json: { items: products } })
+    if (path.endsWith('/article-synonyms/analysis/lidl-scoped/options')) {
+      return route.fulfill({ json: { items: options } })
+    }
+    if (path.endsWith('/article-synonyms/link') || path.endsWith('/article-synonyms/unlink')) {
+      writes += 1
+      return route.fulfill({ status: 500, json: {} })
+    }
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/artikelsynoniemen')
+  const left = page.getByTestId('article-synonyms-articles')
+  await expect(left).toContainText('Courgette groen')
+  await expect(left).toContainText('Lidl (winkelbarcode): 2008234600001')
+  await left.getByRole('checkbox', { name: /Selecteer links Courgette groen/ }).check()
+  const right = page.getByTestId('article-synonyms-table')
+  await expect(right).toContainText('AH Courgette')
+  await expect(right).toContainText('08719587325926')
+  expect(writes).toBe(0)
+})
+
 test('Artikel-synoniemen: Toegevoegd vanaf toont ook oudere Catalogusartikelen opnieuw', async ({ page }) => {
   const articles = [
     { id: 'older', name: 'Oud artikel', primary_gtin: '8712345678906', added_on: '2026-02-01', synonym_count: 0 },
