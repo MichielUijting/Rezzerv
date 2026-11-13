@@ -12,7 +12,7 @@ import hashlib
 import json
 from typing import Any
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
 
@@ -24,18 +24,35 @@ def preview_household_catalog_identity_backfill(
     if not household:
         raise ValueError("household_id is required")
     limit = max(1, min(int(limit), 10000))
+    # Source schemas can expose different approved receipt-label columns. The
+    # receipt text is only eligible as PROOF when an explicit exact
+    # (retailer, normalized label, article code) confirmation exists.
+    # In old isolated/legacy schemas with no text column, do not invent one:
+    # retain the original code/GTIN evidence path unchanged.
+    inspector = inspect(conn)
+    receipt_columns = {column["name"] for column in inspector.get_columns("receipt_table_lines")}
+    store_columns = {column["name"] for column in inspector.get_columns("receipt_tables")}
+    label_candidates = [
+        f"NULLIF(rtl.{column}, '')"
+        for column in ("corrected_raw_label", "normalized_label", "raw_label")
+        if column in receipt_columns
+    ]
+    label_sql = f"COALESCE({', '.join(label_candidates)}, '')" if label_candidates else "CAST('' AS TEXT)"
+    retailer_sql = (
+        "COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '')"
+        if "store_chain" in store_columns
+        else "COALESCE(rt.store_name, '')"
+    )
     # The two canonical reference parts identify the exact receipt and line.
-    # Never use textual article descriptions to identify historical purchases.
+    # This remains strictly read-only with no household data modifications.
     rows = conn.execute(
-        text("""
+        text(f"""
             SELECT ha.id AS household_article_id,
                    ha.global_product_id AS current_product_id,
                    rtl.barcode AS gtin,
                    rtl.external_article_code AS retailer_article_code,
-                   COALESCE(NULLIF(rtl.corrected_raw_label, ''),
-                            NULLIF(rtl.normalized_label, ''),
-                            NULLIF(rtl.raw_label, ''), '') AS receipt_text,
-                   COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code
+                   {label_sql} AS receipt_text,
+                   {retailer_sql} AS retailer_code
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
             JOIN receipt_tables rt
