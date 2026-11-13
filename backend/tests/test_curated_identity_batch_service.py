@@ -137,3 +137,90 @@ def test_partial_or_duplicate_or_outdated_selection_is_rejected(monkeypatch):
             batch.confirm_matching_batch(conn, target_product_id=ROOT["id"],
                 receipt_item_ids=ids, expected_fingerprint=plan["fingerprint"],
                 actor_id="superuser")
+
+
+
+def test_unauthorized_batch_cannot_open_mutating_transaction(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+
+    monkeypatch.setattr(catalog_routes,
+        "require_platform_permission_from_session",
+        lambda permission: SimpleNamespace(user_id="ordinary",
+            is_platform_superuser=False, is_frontteam=False))
+
+    class Engine:
+        def begin(self):
+            raise AssertionError("Authorization must be checked before opening a transaction")
+
+    monkeypatch.setattr(catalog_routes, "engine", Engine())
+    request = catalog_routes.Ed2CuratedMatchingBatchConfirmation(
+        target_product_id=ROOT["id"],
+        receipt_item_ids=["receipt-table-line:lidl"],
+        fingerprint="e" * 64,
+    )
+    with pytest.raises(HTTPException) as err:
+        catalog_routes.confirm_ed2_curated_matching_batch(request)
+    assert err.value.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["superuser", "frontteam"])
+def test_authorized_batch_verifies_fingerprint_inside_transaction(monkeypatch, role):
+    from contextlib import contextmanager
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+
+    monkeypatch.setattr(catalog_routes,
+        "require_platform_permission_from_session",
+        lambda permission: SimpleNamespace(user_id="authorized",
+            is_platform_superuser=role == "superuser",
+            is_frontteam=role == "frontteam"))
+    events = []
+    @contextmanager
+    def begin():
+        events.append("begin")
+        try:
+            yield SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+        except BaseException:
+            events.append("rollback")
+            raise
+        else:
+            events.append("commit")
+
+    monkeypatch.setattr(catalog_routes, "engine", SimpleNamespace(begin=begin))
+    def deliberate_stale(*_args, **_kwargs):
+        raise ValueError("De voorbeeldlijst is gewijzigd.")
+
+    monkeypatch.setattr(catalog_routes, "confirm_matching_batch", deliberate_stale)
+    request = catalog_routes.Ed2CuratedMatchingBatchConfirmation(
+        target_product_id=ROOT["id"],
+        receipt_item_ids=["receipt-table-line:lidl"],
+        fingerprint="e" * 64,
+    )
+    with pytest.raises(HTTPException) as err:
+        catalog_routes.confirm_ed2_curated_matching_batch(request)
+    assert err.value.status_code == 409
+    assert events == ["begin", "rollback"]
+
+
+def test_public_batch_preview_is_read_only_and_authorized(monkeypatch):
+    from contextlib import contextmanager
+    from app.api import catalog_routes
+    calls = []
+    def permission(code):
+        calls.append(code)
+    monkeypatch.setattr(catalog_routes,
+        "require_platform_permission_from_session", permission)
+    @contextmanager
+    def connect():
+        calls.append("open_read_only")
+        yield SimpleNamespace()
+        calls.append("close_read_only")
+    monkeypatch.setattr(catalog_routes, "engine",
+                        SimpleNamespace(connect=connect))
+    monkeypatch.setattr(catalog_routes, "matching_batch_preview",
+                        lambda conn, **kwargs: {"items": [], "targets": []})
+    output = catalog_routes.preview_ed2_curated_matching_batch()
+    assert output["items"] == []
+    assert calls == ["platform.external_products.view",
+                     "open_read_only", "close_read_only"]
