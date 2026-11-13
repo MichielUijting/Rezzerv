@@ -132,6 +132,47 @@ def test_receipt_barcode_requires_scope_aware_active_catalog_identity(status, ex
         assert result["match_method"] == "confirmed:global_gtin"
 
 
+def test_lidl_restricted_barcode_never_auto_creates_global_catalog_product():
+    from app.services.barcode_scope_service import classify_barcode_scope
+    fn = production_function(
+        "lookup_product_catalog_by_barcode",
+        normalize_barcode_value=_same_name,
+        classify_barcode_scope=classify_barcode_scope,
+    )
+    # No database reader/creator may be used for a restricted Lidl code.
+    result = fn(object(), "2008234600001", product_name_hint="Lidl product")
+    assert result["lookup_status"] == "scope_required"
+    assert result["global_product_id"] is None
+    assert result["barcode"] == "2008234600001"
+
+    purchase = (MAIN.read_text(encoding="utf-8").split('@app.post("/api/purchases/barcode")', 1)[1]
+                .split("@app.", 1)[0])
+    assert "if classify_barcode_scope(payload.barcode)['scope'] != 'restricted':" in purchase
+    assert purchase.index("if classify_barcode_scope(payload.barcode)['scope'] != 'restricted':") < purchase.index(
+        "upsert_product_identity(conn, article_id, 'gtin', payload.barcode"
+    )
+
+
+def test_restricted_household_barcode_does_not_claim_global_identity():
+    from app.services.barcode_scope_service import classify_barcode_scope
+    calls = []
+
+    def execute(sql, params):
+        calls.append(sql)
+        if "FROM household_articles" in sql:
+            return Mapping({"id": "household-article-1", "global_product_id": None,
+                            "barcode": "2008234600001", "naam": "Lidl product"})
+        raise AssertionError("Restricted code must never query or create a central product")
+
+    fn = production_function(
+        "ensure_household_article_global_product_link",
+        normalize_barcode_value=_same_name,
+        classify_barcode_scope=classify_barcode_scope,
+    )
+    assert fn(FakeConn(execute), "household-article-1", "2008234600001") is None
+    assert len(calls) == 1
+
+
 def test_receipt_store_code_is_never_masqueraded_as_gtin_during_sync():
     identity_calls = []
     def execute(sql, values):

@@ -108,6 +108,7 @@ from app.services.external_article_product_link_service import (
     reconcile_incomplete_confirmed_external_links,
 )
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+from app.services.barcode_scope_service import classify_barcode_scope
 from app.services.authorization_foundation_service import assert_last_household_admin_remains
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
@@ -1716,6 +1717,10 @@ def ensure_household_article_global_product_link(conn, household_article_id: str
         normalized_barcode = normalize_barcode_value(barcode or article_row.get('barcode')) if (barcode or article_row.get('barcode')) else None
     except Exception:
         normalized_barcode = None
+    # Restricted Lidl/retailer barcodes remain household-local until explicitly
+    # identified in the retailer-scoped Catalogus workflow.
+    if normalized_barcode and classify_barcode_scope(normalized_barcode)['scope'] == 'restricted':
+        return None
     existing_global_product_id = str(article_row.get('global_product_id') or '').strip()
     if existing_global_product_id and not normalized_barcode:
         return existing_global_product_id
@@ -5800,6 +5805,9 @@ def lookup_product_catalog_by_barcode(conn, barcode: str | None, force_refresh: 
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
     if not normalized_barcode:
         return {'barcode': None, 'global_product_id': None, 'lookup_status': 'skipped', 'product': None, 'enrichment': None}
+    if classify_barcode_scope(normalized_barcode)['scope'] == 'restricted':
+        return {'barcode': normalized_barcode, 'global_product_id': None,
+                'lookup_status': 'scope_required', 'product': None, 'enrichment': None}
     global_product_row = get_global_product_row_by_barcode(conn, normalized_barcode)
     global_product_id = str(global_product_row.get('id')) if global_product_row and global_product_row.get('id') else ensure_global_product_record(conn, normalized_barcode, product_name_hint, source='barcode_scan')
     enrichment = get_latest_global_product_enrichment(conn, global_product_id)
@@ -15259,11 +15267,14 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
         barcode_linked_to_requested_article = False
         if payload.barcode:
             reassign_household_article_barcode(conn, household_id, article_name, payload.barcode)
-            try:
-                upsert_product_identity(conn, article_id, 'gtin', payload.barcode, 'barcode_scan', confidence_score=1.0, is_primary=True)
-            except HTTPException:
-                pass
-            ensure_household_article_global_product_link(conn, article_id, payload.barcode)
+            # A restricted barcode may identify a local household article, but
+            # may not create a global GTIN/product_identity before PO review.
+            if classify_barcode_scope(payload.barcode)['scope'] != 'restricted':
+                try:
+                    upsert_product_identity(conn, article_id, 'gtin', payload.barcode, 'barcode_scan', confidence_score=1.0, is_primary=True)
+                except HTTPException:
+                    pass
+                ensure_household_article_global_product_link(conn, article_id, payload.barcode)
             barcode_linked_to_requested_article = True
 
         space_id, sublocation_id = resolve_space_and_sublocation_ids(
