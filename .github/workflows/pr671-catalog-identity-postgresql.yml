@@ -19,6 +19,8 @@ on:
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
       - 'backend/tests/test_catalog_identity_route_security.py'
       - 'backend/tests/test_catalog_identity_chain_postgresql.py'
+      - 'backend/tests/test_barcode_purchase_household_article_reuse_contract.py'
+      - 'backend/tests/test_household_identity_prevention.py'
       - 'backend/tests/test_receipt_to_unpack_retailer_code_contract.py'
       - 'frontend/src/features/externalDatabases/**'
       - 'frontend/src/features/barcodes/**'
@@ -75,7 +77,9 @@ jobs:
             backend/tests/test_catalog_identity_backfill_preview_service.py \
             backend/tests/test_receipt_to_unpack_retailer_code_contract.py \
             backend/tests/test_catalog_identity_route_security.py \
-            backend/tests/test_catalog_identity_chain_postgresql.py
+            backend/tests/test_catalog_identity_chain_postgresql.py \
+            backend/tests/test_barcode_purchase_household_article_reuse_contract.py \
+            backend/tests/test_household_identity_prevention.py
 
   articlebeheer-browser:
     name: Articlebeheer barcode confirmation browser regression

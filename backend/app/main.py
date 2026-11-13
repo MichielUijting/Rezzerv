@@ -104,9 +104,11 @@ from app.services.global_product_service import (
 )
 from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
+    normalize_external_link_receipt_text,
     reconcile_incomplete_confirmed_external_links,
 )
 from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+from app.services.barcode_scope_service import classify_barcode_scope
 from app.services.authorization_foundation_service import assert_last_household_admin_remains
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
@@ -1661,6 +1663,14 @@ def set_household_article_global_product_id(conn, household_article_id: str | No
     current_global_product_id = str(existing.get('global_product_id') or '').strip()
     if current_global_product_id == normalized_global_product_id:
         return normalized_global_product_id
+    # All automatic writers share the household + Catalogus identity lock,
+    # not only the barcode purchase path. This closes concurrent creation
+    # races without requiring a migration of historical duplicate records.
+    if getattr(getattr(conn, 'dialect', None), 'name', None) == 'postgresql':
+        conn.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {'key': f"household_catalog:{str(existing.get('household_id') or '')}:{normalized_global_product_id}"},
+        )
     conflict = conn.execute(text(
         """
         SELECT id
@@ -1707,6 +1717,10 @@ def ensure_household_article_global_product_link(conn, household_article_id: str
         normalized_barcode = normalize_barcode_value(barcode or article_row.get('barcode')) if (barcode or article_row.get('barcode')) else None
     except Exception:
         normalized_barcode = None
+    # Restricted Lidl/retailer barcodes remain household-local until explicitly
+    # identified in the retailer-scoped Catalogus workflow.
+    if normalized_barcode and classify_barcode_scope(normalized_barcode)['scope'] == 'restricted':
+        return None
     existing_global_product_id = str(article_row.get('global_product_id') or '').strip()
     if existing_global_product_id and not normalized_barcode:
         return existing_global_product_id
@@ -2276,16 +2290,22 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
                 inventory_row = get_household_article_row_by_name(conn, household_id, inventory_name)
                 if inventory_row:
                     return inventory_row
-                if not normalized_name:
-                    normalized_name = inventory_name
-                elif normalize_household_article_name(normalized_name) != inventory_name:
-                    normalized_name = inventory_name
+        if create_if_missing:
+            # An explicitly supplied canonical or legacy inventory ID must
+            # never silently turn into a newly created name-based article.
+            raise HTTPException(
+                status_code=409,
+                detail="Het aangewezen huishoudartikel bestaat niet meer; controleer de bronkoppeling",
+            )
+        return None
 
     if normalized_name:
         row = get_household_article_row_by_name(conn, household_id, normalized_name)
         if row:
             return row
         if create_if_missing:
+            if normalized_article_id.startswith('live::'):
+                raise HTTPException(status_code=409, detail="Tijdelijke artikelverwijzing is verlopen")
             ensure_household_article(conn, household_id, normalized_name)
             row = get_household_article_row_by_name(conn, household_id, normalized_name)
             if row:
@@ -2320,8 +2340,8 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
     if normalized_article_id.startswith('live::') and not row:
         fallback_name = normalize_household_article_name(normalized_article_id.split('::', 1)[1])
         if fallback_name:
-            if create_if_missing:
-                ensure_household_article(conn, household_id, fallback_name)
+            # Live aliases are not durable household identities and cannot
+            # reconstruct a deleted row by name.
             return get_household_article_row_by_name(conn, household_id, fallback_name)
 
     return None
@@ -4972,119 +4992,65 @@ def find_global_product_match_for_receipt_line(
 ):
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
 
-    # Een universele barcode of GTIN heeft altijd voorrang.
+    # Use the phase-1 Catalogus identity authority. Raw receipt/retailer codes
+    # are never proof of a globally shared GTIN, including Lidl restricted codes.
     if normalized_barcode:
-        by_barcode = get_global_product_row_by_barcode(
+        identity = resolve_catalog_identity(conn, gtin=normalized_barcode)
+        if identity.get('status') == 'matched' and identity.get('global_product_id'):
+            product_id = str(identity['global_product_id'])
+            row = conn.execute(
+                text("""
+                    SELECT id, primary_gtin, name, brand, category,
+                           size_value, size_unit, source, status,
+                           created_at, updated_at
+                    FROM global_products
+                    WHERE id = :id AND LOWER(COALESCE(status, 'active')) = 'active'
+                    LIMIT 1
+                """),
+                {'id': product_id},
+            ).mappings().first()
+            if row:
+                payload = dict(row)
+                payload['match_method'] = 'confirmed:global_gtin'
+                payload['confidence_score'] = 1.0
+                return payload
+
+    # For store receipt identifiers only the exact confirmed triple is safe:
+    # retailer + normalized receipt description + the store's article number.
+    # A store SKU is NOT a global barcode or a retailer-independent identity.
+    if retailer_code and external_article_code and article_name:
+        link = get_confirmed_external_article_product_link(
             conn,
-            normalized_barcode,
+            retailer_code=retailer_code,
+            receipt_text=article_name,
+            external_article_code=external_article_code,
         )
-        if by_barcode:
-            payload = dict(by_barcode)
-            payload['match_method'] = 'gtin:primary'
-            payload['confidence_score'] = 1.0
-            return payload
-
-        by_gtin_identity = get_global_product_row_by_identity(
-            conn,
-            normalized_barcode,
-            identity_types=('gtin',),
+        expected_text = normalize_external_link_receipt_text(article_name)
+        recorded_text = normalize_external_link_receipt_text(
+            (link or {}).get('receipt_text_normalized')
         )
-        if by_gtin_identity:
-            payload = dict(by_gtin_identity)
-            payload['match_method'] = 'identity:gtin'
-            payload['confidence_score'] = 1.0
-            return payload
+        product_id = str((link or {}).get('global_product_id') or '').strip()
+        if product_id and expected_text and recorded_text == expected_text:
+            row = conn.execute(
+                text("""
+                    SELECT id, primary_gtin, name, brand, category,
+                           size_value, size_unit, source, status,
+                           created_at, updated_at
+                    FROM global_products
+                    WHERE id = :id AND LOWER(COALESCE(status, 'active')) = 'active'
+                    LIMIT 1
+                """),
+                {'id': product_id},
+            ).mappings().first()
+            if row:
+                payload = dict(row)
+                payload['match_method'] = 'confirmed:retailer_receipt_text_code'
+                payload['confidence_score'] = 1.0
+                return payload
 
-    normalized_external_article_code = normalize_identity_lookup_value(
-        external_article_code
-    )
-
-    # Winkelartikelcodes zijn alleen uniek binnen de winkelketen.
-    retailer_identity = build_retailer_article_identity_value(
-        retailer_code,
-        normalized_external_article_code,
-    )
-    if retailer_identity:
-        by_retailer_identity = get_global_product_row_by_identity(
-            conn,
-            retailer_identity,
-            identity_types=('retailer_article_number',),
-        )
-        if by_retailer_identity:
-            payload = dict(by_retailer_identity)
-            payload['match_method'] = (
-                'identity:retailer_article_number'
-            )
-            payload['confidence_score'] = 0.95
-            return payload
-
-    # Alleen expliciet universele externe artikelidentiteiten mogen
-    # zonder retailercontext worden hergebruikt.
-    if normalized_external_article_code:
-        by_external_identity = get_global_product_row_by_identity(
-            conn,
-            normalized_external_article_code,
-            identity_types=(
-                'external_article_number',
-                'store_sku',
-            ),
-        )
-        if by_external_identity:
-            payload = dict(by_external_identity)
-            identity_type = normalize_product_identity_type(
-                by_external_identity.get('identity_type')
-            )
-            payload['match_method'] = f'identity:{identity_type}'
-            payload['confidence_score'] = 0.95
-            return payload
-
-    normalized_name = normalize_household_article_name(article_name)
-    normalized_brand = normalize_optional_text_field(brand)
-    if not normalized_name:
-        return None
-
-    params = {'name': normalized_name}
-    brand_clause = ''
-    if normalized_brand:
-        params['brand'] = normalized_brand
-        brand_clause = (
-            " AND lower(trim(COALESCE(brand, ''))) "
-            "= lower(trim(:brand))"
-        )
-
-    row = conn.execute(
-        text(
-            f"""
-            SELECT id, primary_gtin, name, brand, category,
-                   size_value, size_unit, source, status,
-                   created_at, updated_at
-            FROM global_products
-            WHERE lower(trim(name)) = lower(trim(:name)){brand_clause}
-            ORDER BY
-                CASE
-                    WHEN primary_gtin IS NOT NULL
-                     AND trim(primary_gtin) <> ''
-                    THEN 0 ELSE 1
-                END,
-                updated_at DESC,
-                id DESC
-            LIMIT 1
-            """
-        ),
-        params,
-    ).mappings().first()
-
-    if not row:
-        return None
-
-    payload = dict(row)
-    payload['match_method'] = (
-        'text:name_brand' if normalized_brand else 'text:name'
-    )
-    payload['confidence_score'] = (
-        0.8 if normalized_brand else 0.75
-    )
-    return payload
+    # No confirmed complete identity: a name or bare article code is only a
+    # review hint and must not create/attach a household Catalogus product.
+    return None
 
 
 def find_household_article_for_global_product(conn, household_id: str, global_product_id: str | None):
@@ -5446,7 +5412,10 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
 
     matched_household_article_id = str(line.get('matched_household_article_id') or '').strip()
     matched_global_product_id = str(line.get('matched_global_product_id') or '').strip()
-    barcode = str(line.get('external_article_code') or '').strip() or None
+    external_article_code = str(line.get('external_article_code') or '').strip() or None
+    # The retailer's receipt article number is NOT a GTIN. In particular,
+    # 7/8-digit Lidl codes must not create a false barcode identity.
+    barcode = None
     article_name_hint = line.get('article_name_raw') or None
     brand = line.get('brand_raw') or None
 
@@ -5455,14 +5424,20 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
             conn,
             normalized_household_id,
             matched_household_article_id,
-            create_if_missing=True,
+            create_if_missing=False,
         )
         if resolved_household_article_id:
             matched_household_article_id = resolved_household_article_id
-        resolved_global_product_id = ensure_household_article_global_product_link(conn, matched_household_article_id, barcode)
-        if resolved_global_product_id and resolved_global_product_id != matched_global_product_id:
-            matched_global_product_id = resolved_global_product_id
-    elif matched_global_product_id:
+            resolved_global_product_id = ensure_household_article_global_product_link(
+                conn, matched_household_article_id, barcode
+            )
+            if resolved_global_product_id and resolved_global_product_id != matched_global_product_id:
+                matched_global_product_id = resolved_global_product_id
+        else:
+            # A deleted historical household ID is no longer a valid match.
+            # Never recreate it from the receipt text or leave a stale match.
+            matched_household_article_id = ''
+    if not matched_household_article_id and matched_global_product_id:
         # M2A: een catalogusmatch is een productsuggestie, geen automatische Mijn-artikelkeuze.
         # Alleen een bestaand huishoudartikel dat al expliciet aan dit global_product is gekoppeld
         # mag hier automatisch worden ingevuld.
@@ -5492,7 +5467,7 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
             matched_article_id=matched_household_article_id or None,
             create_global_product=True,
             create_household_article=False,
-            external_article_code=barcode,
+            external_article_code=external_article_code,
         )
         if resolved_links:
             matched_global_product_id = resolved_links.get('matched_global_product_id') or matched_global_product_id
@@ -5530,8 +5505,30 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
     normalized_global_product_id = str(global_product_id or '').strip()
     if not normalized_household_id or not normalized_global_product_id:
         return None
+
+    # Serialize automatic creation for this exact household + Catalogus identity.
+    # The existing database may still have historical duplicates, so a global
+    # unique index cannot safely be assumed before an explicit migration.
+    if getattr(getattr(conn, 'dialect', None), 'name', None) == 'postgresql':
+        conn.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {'key': f'household_catalog:{normalized_household_id}:{normalized_global_product_id}'},
+        )
     existing = find_household_article_for_global_product(conn, normalized_household_id, normalized_global_product_id)
     if existing and existing.get('id'):
+        # Even reusing a canonical article requires a matching scanned GTIN.
+        # A foreign barcode must not silently inherit this Catalogus link.
+        if barcode:
+            product = conn.execute(
+                text("SELECT primary_gtin FROM global_products WHERE id = :id LIMIT 1"),
+                {'id': normalized_global_product_id},
+            ).mappings().first()
+            source_gtin = normalize_barcode_value(barcode)
+            catalog_gtin = normalize_barcode_value(product.get('primary_gtin')) if product and product.get('primary_gtin') else None
+            existing_gtin = normalize_barcode_value(existing.get('barcode')) if existing.get('barcode') else None
+            if (not catalog_gtin or source_gtin != catalog_gtin
+                    or (existing_gtin and source_gtin != existing_gtin)):
+                raise HTTPException(status_code=409, detail="Bonbarcode wijkt af van de bestaande Catalogusidentiteit")
         return str(existing.get('id'))
     product_row = conn.execute(
         text(
@@ -5550,36 +5547,59 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
     product_name = normalize_household_article_name(product_row.get('name')) or fallback_name
     if not product_name:
         product_name = f"Product {normalized_global_product_id[:8]}"
-    option_id = ensure_household_article(conn, normalized_household_id, product_name, consumable=infer_consumable_from_name(product_name))
-    article_row = get_household_article_row_by_name(conn, normalized_household_id, product_name)
-    if article_row and article_row.get('id'):
-        article_id = str(article_row.get('id'))
-        set_household_article_global_product_id(conn, article_id, normalized_global_product_id)
-        resolved_gtin = product_row.get('primary_gtin')
-        normalized_barcode = normalize_barcode_value(barcode) if barcode else (normalize_barcode_value(resolved_gtin) if resolved_gtin else None)
-        conn.execute(
-            text(
-                """
-                UPDATE household_articles
-                SET barcode = COALESCE(:barcode, barcode),
-                    brand_or_maker = COALESCE(brand_or_maker, :brand),
-                    category = COALESCE(category, :category),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """
-            ),
-            {
-                'id': article_id,
-                'barcode': normalized_barcode,
-                'brand': normalize_optional_text_field(brand) or product_row.get('brand'),
-                'category': product_row.get('category'),
-            },
-        )
-        if normalized_barcode:
-            upsert_product_identity(conn, article_id, 'gtin', normalized_barcode, 'receipt', confidence_score=1.0, is_primary=True)
-            ensure_household_article_global_product_link(conn, article_id, normalized_barcode)
-    return option_id
 
+    requested_gtin = normalize_barcode_value(barcode) if barcode else None
+    product_gtin = normalize_barcode_value(product_row.get('primary_gtin')) if product_row.get('primary_gtin') else None
+    if requested_gtin and product_gtin and requested_gtin != product_gtin:
+        raise HTTPException(status_code=409, detail="Bonbarcode komt niet overeen met het Catalogusproduct")
+    normalized_barcode = requested_gtin or product_gtin
+
+    # A matching article name is not proof that it is the same product.
+    # Never overwrite a different Catalogus link or barcode based on text.
+    name_row = get_household_article_row_by_name(conn, normalized_household_id, product_name)
+    if name_row:
+        old_product = str(name_row.get('global_product_id') or '').strip()
+        old_barcode = normalize_barcode_value(name_row.get('barcode')) if name_row.get('barcode') else None
+        if old_product and old_product != normalized_global_product_id:
+            raise HTTPException(status_code=409, detail="Artikelnaam hoort al bij een ander Catalogusproduct")
+        if old_barcode and normalized_barcode and old_barcode != normalized_barcode:
+            raise HTTPException(status_code=409, detail="Artikel heeft al een andere barcode")
+
+    option_id = ensure_household_article(
+        conn, normalized_household_id, product_name, consumable=infer_consumable_from_name(product_name)
+    )
+    article_row = get_household_article_row_by_id(conn, normalized_household_id, option_id)
+    if not article_row:
+        raise HTTPException(status_code=409, detail="Huishoudartikel bestaat niet meer")
+    article_id = str(article_row.get('id'))
+    current_id = str(article_row.get('global_product_id') or '').strip()
+    if current_id and current_id != normalized_global_product_id:
+        raise HTTPException(status_code=409, detail="Huishoudartikel heeft intussen een andere Catalogusidentiteit")
+    linked = set_household_article_global_product_id(conn, article_id, normalized_global_product_id)
+    if linked != normalized_global_product_id:
+        raise HTTPException(status_code=409, detail="Cataloguskoppeling is al aan een ander huishoudartikel toegewezen")
+    conn.execute(
+        text(
+            """
+            UPDATE household_articles
+            SET barcode = COALESCE(barcode, :barcode),
+                brand_or_maker = COALESCE(brand_or_maker, :brand),
+                category = COALESCE(category, :category),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            """
+        ),
+        {
+            'id': article_id,
+            'barcode': normalized_barcode,
+            'brand': normalize_optional_text_field(brand) or product_row.get('brand'),
+            'category': product_row.get('category'),
+        },
+    )
+    if normalized_barcode:
+        upsert_product_identity(conn, article_id, 'gtin', normalized_barcode, 'receipt', confidence_score=1.0, is_primary=True)
+        ensure_household_article_global_product_link(conn, article_id, normalized_barcode)
+    return article_id
 
 def get_latest_global_product_enrichment(conn, global_product_id: str | None):
     if not global_product_id:
@@ -5785,6 +5805,9 @@ def lookup_product_catalog_by_barcode(conn, barcode: str | None, force_refresh: 
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
     if not normalized_barcode:
         return {'barcode': None, 'global_product_id': None, 'lookup_status': 'skipped', 'product': None, 'enrichment': None}
+    if classify_barcode_scope(normalized_barcode)['scope'] == 'restricted':
+        return {'barcode': normalized_barcode, 'global_product_id': None,
+                'lookup_status': 'scope_required', 'product': None, 'enrichment': None}
     global_product_row = get_global_product_row_by_barcode(conn, normalized_barcode)
     global_product_id = str(global_product_row.get('id')) if global_product_row and global_product_row.get('id') else ensure_global_product_record(conn, normalized_barcode, product_name_hint, source='barcode_scan')
     enrichment = get_latest_global_product_enrichment(conn, global_product_id)
@@ -8307,6 +8330,12 @@ def resolve_or_create_inventory_household_article(
         ).scalar()
         if existing_id:
             return str(existing_id)
+        # Do not silently reconstruct a deleted or cross-household canonical
+        # article by its display name. The caller must resolve the source link.
+        raise HTTPException(
+            status_code=409,
+            detail="Het gekozen huishoudartikel bestaat niet meer in dit huishouden; controleer de bronkoppeling",
+        )
 
     matches = conn.execute(
         text(
@@ -15218,17 +15247,34 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
             )
             if option_id and option_id.startswith('article::'):
                 article_name = option_id.split('::', 1)[1]
-        article_id = ensure_household_article(conn, household_id, article_name)
+        # A proven Catalogus identity outranks a different text label: reuse
+        # the existing canonical household article instead of creating a second
+        # household article (and leaving it detached from the Catalogus ID).
+        if resolved_global_product_id and option_id:
+            article_id = str(option_id)
+            canonical_article = get_household_article_row_by_id(conn, household_id, article_id)
+            if not canonical_article:
+                raise HTTPException(status_code=409, detail="Het gekoppelde huishoudartikel is gewijzigd; probeer opnieuw")
+            article_name = normalize_household_article_name(canonical_article.get('naam')) or article_name
+        else:
+            article_id = ensure_household_article(conn, household_id, article_name)
         if resolved_global_product_id:
-            set_household_article_global_product_id(conn, article_id, resolved_global_product_id)
+            linked_product_id = set_household_article_global_product_id(
+                conn, article_id, resolved_global_product_id
+            )
+            if linked_product_id != resolved_global_product_id:
+                raise HTTPException(status_code=409, detail="De huishoudartikelkoppeling is niet eenduidig")
         barcode_linked_to_requested_article = False
         if payload.barcode:
             reassign_household_article_barcode(conn, household_id, article_name, payload.barcode)
-            try:
-                upsert_product_identity(conn, article_id, 'gtin', payload.barcode, 'barcode_scan', confidence_score=1.0, is_primary=True)
-            except HTTPException:
-                pass
-            ensure_household_article_global_product_link(conn, article_id, payload.barcode)
+            # A restricted barcode may identify a local household article, but
+            # may not create a global GTIN/product_identity before PO review.
+            if classify_barcode_scope(payload.barcode)['scope'] != 'restricted':
+                try:
+                    upsert_product_identity(conn, article_id, 'gtin', payload.barcode, 'barcode_scan', confidence_score=1.0, is_primary=True)
+                except HTTPException:
+                    pass
+                ensure_household_article_global_product_link(conn, article_id, payload.barcode)
             barcode_linked_to_requested_article = True
 
         space_id, sublocation_id = resolve_space_and_sublocation_ids(
@@ -17826,7 +17872,9 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         line = conn.execute(
             text(
                 """
-                SELECT pil.id, pil.batch_id, pil.external_line_ref, pib.household_id
+                SELECT pil.id, pil.batch_id, pil.external_line_ref,
+                       pil.matched_household_article_id, pil.matched_global_product_id,
+                       pib.household_id
                 FROM purchase_import_lines pil
                 JOIN purchase_import_batches pib ON pib.id = pil.batch_id
                 WHERE pil.id = :id
@@ -17867,7 +17915,34 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
                     detail='Dit is geen voorraadgerechtigde productregel; de regel blijft alleen in Kassa.',
                 )
 
-        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name, consumable=infer_consumable_from_name(payload.article_name))
+        # A selected canonical household article wins over a display name.
+        # Do not regenerate a deleted source ID, and do not create a new name
+        # row if this household already has the identified Catalogus product.
+        household_id = str(line["household_id"])
+        stored_article_id = str(line.get("matched_household_article_id") or "").strip()
+        article_option_id = None
+        if stored_article_id:
+            article_option_id = resolve_household_article_selection_to_id(
+                conn, household_id, stored_article_id, create_if_missing=False
+            )
+            if not article_option_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Het bronartikel bestaat niet meer in dit huishouden; controleer de koppeling",
+                )
+        else:
+            product_id = str(line.get("matched_global_product_id") or "").strip()
+            if product_id:
+                existing = find_household_article_for_global_product(conn, household_id, product_id)
+                if existing and existing.get("id"):
+                    article_option_id = str(existing["id"])
+        if not article_option_id:
+            # Explicit user creation remains available when no canonical
+            # identity is known; name-only input is never a product proof.
+            article_option_id = ensure_household_article(
+                conn, household_id, payload.article_name,
+                consumable=infer_consumable_from_name(payload.article_name),
+            )
         conn.execute(
             text(
                 """
