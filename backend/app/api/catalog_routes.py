@@ -22,6 +22,9 @@ from app.services.ed2_receipt_family_link_service import (
 from app.services.curated_identity_batch_service import (
     matching_batch_preview, confirm_matching_batch,
 )
+from app.services.automatic_curated_identity_matching_service import (
+    automatically_match_curated_receipts,
+)
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
@@ -819,6 +822,19 @@ def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
+
+
+@router.post("/ed2/curated-matching-batch/auto")
+def auto_ed2_curated_matching_batch():
+    """Auto-apply only unambiguous, independently sourced approved family matches."""
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not (actor.is_platform_superuser or actor.is_frontteam):
+        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen automatisch centrale productmatches vastleggen.")
+    with engine.begin() as conn:
+        try:
+            return automatically_match_curated_receipts(conn, actor_id=actor.user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/ed2/curated-matching-batch/preview")

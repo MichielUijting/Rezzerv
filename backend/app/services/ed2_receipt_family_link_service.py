@@ -127,7 +127,7 @@ def _guard_preexisting_claims(conn, source):
 
 
 def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_id,
-                             match_mode, expected_fingerprint, actor_id):
+                             match_mode, expected_fingerprint, actor_id, automatic=False):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Bevestiging van centrale bonartikelen vereist PostgreSQL.")
     if not actor_id:
@@ -222,7 +222,8 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
         old_value=None,
         new_value={"global_product_id": product_id, "mode": match_mode,
                    "synonym_reference": target_product_id if synonym_created else None},
-        reason="explicit_curated_courgette_confirmation",
+        reason=("automatic_approved_courgette_family_v1" if automatic
+                else "explicit_curated_courgette_confirmation"),
     )
     return {"ok": True, "already_confirmed": False, "global_product_id": product_id,
             "synonym_created": synonym_created, "barcode_written": False,

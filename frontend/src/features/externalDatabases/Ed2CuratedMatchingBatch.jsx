@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -17,6 +17,8 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
   const [selected, setSelected] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [autoSummary, setAutoSummary] = useState(null)
+  const automaticAttempted = useRef(false)
 
   async function request(url, options = {}) {
     const response = await fetchJsonWithAuth(url, options)
@@ -24,6 +26,30 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     if (!response.ok) throw new Error(payload.detail || 'Matching kan niet worden beoordeeld.')
     return payload
   }
+
+  // Opening the Identificeren workspace initiates one server-authorized,
+  // idempotent pass for strictly proven matches; no GET or preview writes.
+  // All code-less, ambiguous and conflicting candidates remain reviewable.
+  useEffect(() => {
+    if (automaticAttempted.current) return
+    automaticAttempted.current = true
+    let mounted = true
+    request('/api/catalog/ed2/curated-matching-batch/auto', { method: 'POST' })
+      .then((summary) => {
+        if (!mounted) return
+        setAutoSummary(summary)
+        if (summary.linked > 0) {
+          showFeedback({ variant: 'success', title: 'Automatische herkenning',
+            message: `${summary.linked} artikelen automatisch herkend, ${summary.synonyms_created} synoniemrelaties.` })
+          onConfirmed?.()
+        }
+      })
+      .catch(() => {
+        // An ordinary viewer has no permission to change central identities;
+        // the read-only table must stay usable without error overlays.
+      })
+    return () => { mounted = false }
+  }, [])
 
   async function openReview() {
     setOpen(true)
@@ -102,6 +128,12 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
 
   return <section aria-label="Gecontroleerde matching van productfamilies"
     className="rz-external-curated-matching">
+    {autoSummary?.status === 'anchor_review_required' ? <p role="status">
+      Automatische matching is gepauzeerd: kies eerst het juiste Catalogusanker.
+    </p> : null}
+    {autoSummary?.status === 'applied' && autoSummary.requires_review ? <p role="status">
+      {autoSummary.unprocessed} artikel(en) vragen nog beoordeling. Bekende matches zijn automatisch verwerkt.
+    </p> : null}
     <Button type="button" variant="secondary" onClick={() => open ? setOpen(false) : openReview()}>
       {open ? 'Matchingvoorstellen sluiten' : 'Courgettes gezamenlijk herkennen'}
     </Button>

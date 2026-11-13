@@ -273,3 +273,24 @@ Deze concrete familie is een eerste **bewezen productregel**; de voorziening
 mag bij uitbreiding uitsluitend andere expliciet goedgekeurde en geteste
 families ondersteunen. Een bontekst of classificatie alléén levert geen
 mondiale barcode en geen willekeurige naamgebaseerde koppeling op.
+
+
+### Fase 2E — autonome toepassing van de bewezen familie (13 november 2026)
+De bevoegde Identificeren-werkruimte kan bij openen via een geautoriseerde
+POST direct de bewezen, strikt begrensde courgettefamilie toepassen. Dit is
+geen muterende GET en geen algemene naamgebaseerde barcodeherkenning.
+Automatisch vastleggen mag uitsluitend bij **precies één onafhankelijk bevestigd
+gewoon Catalogusanker**, één geteste verse-courgetteregel en een exacte, niet-lege
+bonartikelcode binnen de winkelcontext. De server valideert ook de oorspronkelijke
+bronidentiteit, bestaande claims, actieve Catalogusstatus, synoniemgroep en
+transactie opnieuw. Afwijkingen blijven zichtbaar voor handmatige beoordeling.
+Elke centrale mutatie krijgt een actor en een herkenbare automatische auditreden.
+
+Een bonomschrijving zonder artikelnummer is onvoldoende voor een **nieuwe**
+wereldwijde artikelclaim. Reeds bevestigde exacte bonidentiteiten worden wel
+zonder herhaalde handeling hergebruikt. De ene automatische pass verwerkt
+maximaal vijftig kandidaten en laat resterende kandidaten staan. Verschillende
+mogelijke Catalogusankers en conflictgevallen worden nooit door naamselectie
+beslecht. Het bestaande gecontroleerde batchscherm blijft voor uitzonderingen
+beschikbaar. Gebruikers zonder centrale schrijfbevoegdheid veroorzaken geen
+mutatie.
