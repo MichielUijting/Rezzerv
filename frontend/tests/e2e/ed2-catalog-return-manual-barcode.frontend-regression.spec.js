@@ -515,6 +515,7 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
       ? 'Afzonderlijk Catalogusproduct als synoniem' : 'Zelfde verse courgette',
   }))
   const posts = []
+  const autoRequests = []
   let previews = 0
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url())
@@ -527,6 +528,15 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
         items: url.searchParams.get('target_product_id') ? receiptItems : [],
         blocked: [], fingerprint: url.searchParams.get('target_product_id')
           ? 'e'.repeat(64) : null,
+      } })
+    }
+    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/auto') {
+      autoRequests.push(route.request().method())
+      // Two independently proven ordinary catalog anchors require an explicit
+      // exception review. Never write the six unresolved receipt identities.
+      return route.fulfill({ json: {
+        ok: true, status: 'anchor_review_required', linked: 0,
+        synonyms_created: 0, barcode_written: false, requires_review: true,
       } })
     }
     if (url.pathname === '/api/catalog/ed2/curated-matching-batch/confirm') {
@@ -549,7 +559,9 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   await page.getByTestId('classification-work-monitor')
     .getByRole('button', { name: 'Identificeren' }).click()
   const batch = page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' })
-  await batch.getByRole('button', { name: 'Courgettes gezamenlijk herkennen' }).click()
+  await batch.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
+  await expect(batch).toContainText('Automatische matching is gepauzeerd:')
+  expect(autoRequests).toEqual(['POST'])
   await batch.getByLabel('Bestaand, geïdentificeerd Catalogusproduct').selectOption('gp-ah')
   await expect(batch).toContainText('6 voorgesteld')
   await expect(batch.getByRole('checkbox')).toHaveCount(6)
