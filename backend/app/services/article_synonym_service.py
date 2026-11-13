@@ -389,6 +389,22 @@ def confirm_pairs(conn, selections, actor_id, decisions=()):
         if key not in existing:
             to_insert[key] = proposal
     choice_report = apply_choices(conn, reviews, decisions, actor_id)
+    if to_insert:
+        # A confirmation can join two groups: recheck EVERY indirect member
+        # after explicit classification choices. All mutations roll back on 409.
+        from app.services.synonym_group_safety import prospective_group_conflict
+        current_products = {p['id']: p for p in load_products(conn)}
+        conflict = prospective_group_conflict(
+            current_products, existing, to_insert, _manual_pair_conflict,
+        )
+        if conflict:
+            left_name = current_products.get(conflict['left_id'], {}).get('name') or conflict['left_id']
+            right_name = current_products.get(conflict['right_id'], {}).get('name') or conflict['right_id']
+            raise HTTPException(
+                409,
+                f"Synoniemgroep niet veilig: {left_name} en {right_name}: "
+                f"{conflict['detail']} Controleer de bestaande relaties en productgegevens.",
+            )
     for (left, right), proposal in to_insert.items():
         conn.execute(text('''
             INSERT INTO article_synonym_links

@@ -1075,6 +1075,56 @@ class StoreTest(unittest.TestCase):
             """)).scalar_one()
             self.assertEqual(method, 'manual_catalog_review_v1')
 
+    def test_transitive_conflict_rejects_second_link_without_erasing_first(self):
+        # A and C contradict each other in milk fat; intermediary B is unknown.
+        # Direct edges A-B and B-C look individually safe.
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE global_products SET name='Melk' WHERE id='b'"))
+            conn.execute(text("""
+                UPDATE global_products SET name='Volle melk',
+                       primary_gtin='8719587325933' WHERE id='c'
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            self.assertEqual(set(products), {'a', 'b', 'c'})
+            first = dict(left_product_id='a', right_product_id='b',
+                         fingerprint=service._fingerprint(products['a'], products['b']),
+                         manual=True)
+            self.assertEqual(service.confirm_pairs(conn, [first], 'actor')['linked'], 1)
+            products = {p['id']: p for p in service.load_products(conn)}
+            second = dict(left_product_id='b', right_product_id='c',
+                          fingerprint=service._fingerprint(products['b'], products['c']),
+                          manual=True)
+            with self.assertRaises(HTTPException) as refused:
+                with conn.begin_nested():
+                    service.confirm_pairs(conn, [second], 'actor')
+            self.assertEqual(refused.exception.status_code, 409)
+            self.assertIn('Halfvolle melk', str(refused.exception.detail))
+            self.assertIn('Volle melk', str(refused.exception.detail))
+            self.assertEqual(service.confirmed_pairs(conn), {('a', 'b')})
+            self.assertEqual(conn.execute(text("""
+                SELECT COUNT(*) FROM article_synonym_links
+            """)).scalar_one(), 1)
+
+    def test_transitive_bulk_conflict_is_atomic_in_postgresql(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE global_products SET name='Melk' WHERE id='b'"))
+            conn.execute(text("""
+                UPDATE global_products SET name='Volle melk',
+                       primary_gtin='8719587325933' WHERE id='c'
+            """))
+            products = {p['id']: p for p in service.load_products(conn)}
+            bulk = [
+                dict(left_product_id=left, right_product_id=right,
+                     fingerprint=service._fingerprint(products[left], products[right]),
+                     manual=True)
+                for left, right in [('a', 'b'), ('b', 'c')]
+            ]
+            with self.assertRaises(HTTPException) as refused:
+                with conn.begin_nested():
+                    service.confirm_pairs(conn, bulk, 'actor')
+            self.assertEqual(refused.exception.status_code, 409)
+            self.assertEqual(service.confirmed_pairs(conn), set())
+
     def test_unlink_removes_only_selected_direct_synonym_and_keeps_products(self):
         with self.engine.begin() as conn:
             selection = self.selection(conn)
