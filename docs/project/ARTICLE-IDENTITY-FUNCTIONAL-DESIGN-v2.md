@@ -229,3 +229,26 @@ gebruikt als de gewone Identificeren-opslag. De status `saved=true` betekent
 pas succes als de Catalogusverwijzing in die transactie is bevestigd.
 Een historisch conflict blijft HTTP 409 zonder gedeeltelijke barcodeclaim;
 geen naam- of OFF-match wordt als mondiaal barcodebewijs gebruikt.
+
+
+### Fase 2C — bevestigde barcodevrije verse courgettes (13 november 2026)
+In Artikelbeheer > Identificeren kan een operator met expliciete centrale
+koppelbevoegdheid de geteste verse courgettefamilie beoordelen en een exacte
+winkel + genormaliseerde bontekst + bonartikelnummer bevestigen zonder een
+barcode te construeren. Een naam creëert uitsluitend read-only voorstellen.
+Bij een gewone/groene courgette mag een bestaand, apart geïdentificeerd
+Catalogusproduct worden gekozen. Bij gele/biologische courgette wordt na
+expliciete keuze een eigen barcodevrij Catalogusproduct vastgelegd en kan
+uitsluitend de bestaande beveiligde synoniemtransactionele groepscontrole het
+product met de gekozen gewone courgette verbinden. Onzekere of al bevestigde
+tegenstrijdige claims blokkeren de transactie. Bewaarde echte barcodes hebben
+voorrang.
+
+De aparte tabel ed2_receipt_family_links bevat de definitief bevestigde
+bonartikelidentiteit met actor en datum. GS1/CBS en de operationele
+Kassa/Voorraad-verwerking blijven gescheiden: deze stap leidt geen
+huishoudartikel, voorraadafboeking of bronbonmutatie af. De projectie in
+Identificeren en Synoniemen leest uitsluitend bevestigde exacte records.
+Bij een volgende identieke bon hoeft de barcode niet opnieuw te worden
+ingevoerd. Niet-geteste producten (o.a. Olvarit, soep en diepvries) krijgen
+geen familiematch. Geen automatische massamatching op alleen een naam.

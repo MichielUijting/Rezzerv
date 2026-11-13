@@ -104,6 +104,22 @@ def load_products(conn):
         retailers[row['global_product_id']].add(retailer)
         if str(row['external_article_code'] or '').strip():
             codes[row['global_product_id']].add(f"{retailer}: {row['external_article_code']}")
+    # Barcode-free receipt identity must have been explicitly confirmed by a
+    # platform operator: never infer retailer/article codes from product text.
+    if inspect(conn).has_table('ed2_receipt_family_links'):
+        for row in conn.execute(text("""
+            SELECT f.global_product_id, f.retailer_code, f.external_article_code
+            FROM ed2_receipt_family_links f
+            JOIN global_products gp ON gp.id=f.global_product_id
+            WHERE gp.status='active' AND TRIM(f.confirmed_by) <> ''
+        """)).mappings():
+            retailer = _retailer_code(row['retailer_code'])
+            if retailer not in RETAILER_NAMES:
+                continue
+            pid = str(row['global_product_id'])
+            retailers[pid].add(retailer)
+            if str(row['external_article_code'] or '').strip():
+                codes[pid].add(f"{retailer}: {row['external_article_code']}")
     # Read explicitly confirmed ED2 barcodes mapped to a central product.
     # Restricted barcode numbers are shop-scoped, not global GTINs and not
     # receipt article numbers. This projection performs no writes.
@@ -202,7 +218,7 @@ def load_products(conn):
             else f"{_store_name(shop)} (bevestigde barcode): {code}"
             for shop, code, scope in saved
         })
-        if not valid_gtin and not article_codes and not barcode_labels:
+        if not valid_gtin and not article_codes and not barcode_labels and not retailers[product['id']]:
             continue
         known_retailers = set(retailers[product['id']])
         known_retailers.update(shop for shop, _, _ in saved)
