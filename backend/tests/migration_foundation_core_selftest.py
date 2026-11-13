@@ -284,6 +284,9 @@ def _strip_migration_extensions(schema: str) -> str:
         # PR614 adds this table after the frozen SQLite baseline. Its table
         # and indexes must not be compared with baseline-owned objects.
         | {"retailer_import_queue"}
+        # PR681 adds a separate, Alembic-owned exact receipt identity table.
+        # Its schema is checked separately, never added to the frozen baseline.
+        | {"ed2_receipt_family_links"}
         # PR642 adds a separate, version-pinned CBS classification authority.
         # These new reference/decision/audit tables are not part of the
         # immutable pre-Alembic SQLite baseline.
