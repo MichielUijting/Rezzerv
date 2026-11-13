@@ -1752,3 +1752,22 @@ niet-gekoppelde kandidaten voorselecteren. De bestaande knoppen
 **Koppelen**/**Ontkoppelen**, beveiligde overlays en expliciete
 bevestigingsmomenten blijven ongewijzigd. De actiebalk mag op smalle schermen
 afbreken zonder een rij of de horizontale scrollbar te overlappen.
+
+
+## Artikel-synoniemen — voorstel tegenover overige artikelen (13 november 2026)
+
+De rechtertabel behoudt de drie bestaande contractuele volgordegroepen:
+**Al gekoppeld**, **Voorstel** en **Overig**. Het delen van een woord in
+de productnaam is onvoldoende om een door de expliciet geteste productfamilie
+uitgesloten combinatie toch als automatisch voorstel te tonen.
+Verse courgette en babyvoeding, diepvriesproducten of maaltijdmixen zijn
+daarom geen automatisch synoniemvoorstel. Overige Catalogusartikelen blijven
+handmatig doorzoekbaar, zoals eerder vastgesteld; hun aanwezigheid in de
+tabel betekent niet dat Inhuis ze als equivalent aanbeveelt.
+
+Boven de rechtertabel staat een compacte, niet-interactieve toelichting met
+het aantal **voorstellen** en **overige artikelen**. De toelichting staat
+binnen de bestaande twee-tabellayout, verandert geen selectie of autorisatie,
+en gebruikt de bestaande centrale body-typografie
+`--font-size-ui-body` (14px) en secundaire tekstkleur.
+Er komt geen nieuwe kleur, nieuw interactiepatroon of derde tekstmaat.

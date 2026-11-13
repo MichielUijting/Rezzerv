@@ -108,7 +108,7 @@
 
 /* Present suggestions separately from remaining manually searchable products. */
 .rz-synonym-status-summary {
-  font-size: .75rem;
+  font-size: var(--font-size-ui-body, 14px);
   line-height: 1.2;
   max-width: 100%;
   color: var(--color-text-secondary, #52606b);
