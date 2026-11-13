@@ -62,24 +62,30 @@ def _quantity(p):
     return dimension, amount * factor
 
 
-def review_pair(left, right):
-    """Return conservative display-only signals, never an automatic link decision."""
+def proven_semantic_conflicts(left, right):
+    """Only explicit incompatible product traits; unknown values do not prove equality."""
     name_l, name_r = _catalog_name(left.get("name")), _catalog_name(right.get("name"))
-    # Include known variants, but do not interpret brand/store as a product property.
     text_l = _plain(" ".join((name_l, str(left.get("variant") or ""))))
     text_r = _plain(" ".join((name_r, str(right.get("variant") or ""))))
     warnings = []
     for label, alternatives in CONTRASTS:
         a, b = _specificity(text_l, alternatives), _specificity(text_r, alternatives)
-        # Multiple alternatives in one item are ambiguous, not a proved contradiction.
         if len(a) == 1 and len(b) == 1 and a != b:
             warnings.append("Verschil in " + label)
-    # Only flag an actual incompatible food type, not shared fragments ('noten'/'kruidnoten').
-    for group in (("mayonaise", "melk"), ("mayo", "melk"), ("kwark", "yoghurt"), ("kwark", "yogurt"), ("noten", "kruidnoten")):
-        if any(_contains(text_l, a) and _contains(text_r, b)
-               or _contains(text_r, a) and _contains(text_l, b) for a in (group[0],) for b in (group[1],)):
+    for a, b in (("mayonaise", "melk"), ("mayo", "melk"),
+                 ("kwark", "yoghurt"), ("kwark", "yogurt"),
+                 ("noten", "kruidnoten")):
+        if (_contains(text_l, a) and _contains(text_r, b)
+                or _contains(text_r, a) and _contains(text_l, b)):
             warnings.append("Verschillende productsoorten")
             break
+    return list(dict.fromkeys(warnings))
+
+
+def review_pair(left, right):
+    """Return conservative display-only signals, never an automatic link decision."""
+    name_l, name_r = _catalog_name(left.get("name")), _catalog_name(right.get("name"))
+    warnings = proven_semantic_conflicts(left, right)
     qa, qb = _quantity(left), _quantity(right)
     if qa and qb and qa[0] != qb[0]:
         warnings.append("Inhoudseenheid verschilt")
