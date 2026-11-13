@@ -194,3 +194,84 @@ def test_repeated_yellow_confirmation_uses_direct_synonym_proof(monkeypatch):
     assert result["already_confirmed"]
     assert result["global_product_id"] == "catalog-yellow"
     assert not result["barcode_written"]
+
+
+def test_confirm_route_rejects_operator_without_platform_authorization(monkeypatch):
+    from app.api import catalog_routes
+    from fastapi import HTTPException
+    payload = catalog_routes.Ed2CourgetteFamilyConfirmation(
+        receipt_item_id="receipt-table-line:green",
+        target_product_id="catalog-ah", match_mode="same_product",
+        fingerprint="a" * 64,
+    )
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda permission: SimpleNamespace(
+                            user_id="unprivileged", is_platform_superuser=False,
+                            is_frontteam=False))
+    class NoWriteEngine:
+        def begin(self):
+            raise AssertionError("Database write transaction must not start")
+    monkeypatch.setattr(catalog_routes, "engine", NoWriteEngine())
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.confirm_ed2_courgette_family(payload)
+    assert error.value.status_code == 403
+
+
+def test_confirm_route_rechecks_source_server_side_not_browser_claim(monkeypatch):
+    from app.api import catalog_routes
+
+    payload = catalog_routes.Ed2CourgetteFamilyConfirmation(
+        receipt_item_id="receipt-table-line:green",
+        target_product_id="catalog-ah", match_mode="same_product",
+        fingerprint="a" * 64,
+    )
+    class ManagedTransaction:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(catalog_routes, "engine", SimpleNamespace(
+        begin=lambda: ManagedTransaction()))
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda permission: SimpleNamespace(
+                            user_id="frontteam-allowed", is_platform_superuser=False,
+                            is_frontteam=True))
+    sources = []
+    def source_resolver(conn, item_id):
+        sources.append(item_id)
+        return SOURCE
+    monkeypatch.setattr(catalog_routes, "resolve_external_article_identity", source_resolver)
+    recorded = []
+    def confirmation(conn, **kwargs):
+        recorded.append(kwargs)
+        return {"ok": True, "global_product_id": "catalog-ah",
+                "barcode_written": False, "synonym_created": False}
+    monkeypatch.setattr(catalog_routes, "confirm_courgette_receipt", confirmation)
+    outcome = catalog_routes.confirm_ed2_courgette_family(payload)
+    assert outcome["ok"] and outcome["barcode_written"] is False
+    assert sources == [payload.receipt_item_id]
+    assert recorded[0]["source"] == SOURCE
+    assert recorded[0]["actor_id"] == "frontteam-allowed"
+    assert recorded[0]["expected_fingerprint"] == payload.fingerprint
+
+
+def test_confirm_route_rejects_invalid_fingerprint_before_write(monkeypatch):
+    from app.api import catalog_routes
+    from fastapi import HTTPException
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda permission: SimpleNamespace(
+                            user_id="superuser", is_platform_superuser=True,
+                            is_frontteam=False))
+    class NoWriteEngine:
+        def begin(self):
+            raise AssertionError("Unexpected DB write")
+    monkeypatch.setattr(catalog_routes, "engine", NoWriteEngine())
+    payload = catalog_routes.Ed2CourgetteFamilyConfirmation(
+        receipt_item_id="receipt-table-line:green", target_product_id="catalog-ah",
+        match_mode="same_product", fingerprint="not-a-sha256",
+    )
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.confirm_ed2_courgette_family(payload)
+    assert error.value.status_code == 422
+
