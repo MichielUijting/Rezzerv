@@ -270,3 +270,19 @@ table.rz-table{
   margin: 0;
   vertical-align: middle;
 }
+
+/* Standard table scrollports keep horizontal bars below all data rows;
+   paging/actions must remain outside the scrollable viewport. */
+.rz-data-table-shell > .rz-data-table-controls {
+  position: relative;
+  clear: both;
+  margin-top: 20px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+.rz-table-wrapper + .rz-pagination,
+.rz-table-wrapper + .rz-external-databases-pagination {
+  position: relative;
+  clear: both;
+  margin-top: 24px;
+}

@@ -273,7 +273,7 @@ export default function AlmostOutPage() {
     <AppShell title="Bijna op" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="almost-out-page">
         <ScreenCard>
-          <Table tableClassName="rz-stock-table" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
+          <Table tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
               <colgroup>
                 <col style={{ width: `${tableWidths.select}px` }} />
                 <col style={{ width: `${tableWidths.huishoudnaam}px` }} />
