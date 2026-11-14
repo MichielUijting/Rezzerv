@@ -174,21 +174,39 @@ def test_authorization_denies_ordinary_users_before_database_transaction(monkeyp
     assert exc.value.status_code == 403
 
 
-def test_frontteam_can_run_one_authorized_transaction(monkeypatch):
+def test_only_superuser_can_run_central_matching(monkeypatch):
     from app.api import catalog_routes
+    from fastapi import HTTPException
     events = []
+    class NoTransaction:
+        def begin(self):
+            pytest.fail("Frontteam must never reach a matching write transaction")
     monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
                         lambda *_: SimpleNamespace(user_id="frontteam",
                             is_platform_superuser=False, is_frontteam=True))
+    monkeypatch.setattr(catalog_routes, "engine", NoTransaction())
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.auto_ed2_proven_exact_names()
+    assert error.value.status_code == 403
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.confirm_ed2_manual_receipt_match(
+            catalog_routes.Ed2ManualReceiptMatchRequest(
+                source_receipt_item_id="receipt-table-line:a",
+                target_receipt_item_id="receipt-table-line:b"))
+    assert error.value.status_code == 403
+
     @contextmanager
     def begin():
         events.append("begin")
         yield FakeConn()
         events.append("commit")
     monkeypatch.setattr(catalog_routes, "engine", SimpleNamespace(begin=begin))
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda *_: SimpleNamespace(user_id="superuser",
+                            is_platform_superuser=True, is_frontteam=False))
     monkeypatch.setattr(catalog_routes, "automatically_match_proven_exact_names",
                         lambda conn, *, actor_id: {"ok": True, "actor": actor_id})
-    assert catalog_routes.auto_ed2_proven_exact_names()["actor"] == "frontteam"
+    assert catalog_routes.auto_ed2_proven_exact_names()["actor"] == "superuser"
     assert events == ["begin", "commit"]
 
 
@@ -683,3 +701,80 @@ def test_review_reason_is_limited_to_unidentified_rows_across_retailers():
     assert list(reasons) == [entries[2]["id"]]
     assert "verschillende bevestigde Catalogusproducten" in reasons[entries[2]["id"]]
     assert service._candidate_plan(entries)[0] == []
+
+
+
+def test_manual_two_table_match_uses_only_explicit_proven_catalog_product(monkeypatch):
+    source = row("ah", "AH HV MELK", "11943")
+    right = row("ah", "AH HV MELK", "569053", "milk-a", "catalog_linked",
+                article_code="8718907056274")
+    another = row("ah", "AH HV MELK", "92154", "milk-b", "catalog_linked",
+                  article_code="8710400058519")
+    rows = [source, right, another]
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": rows})
+    def identity(conn, receipt_item_id):
+        article = next(item for item in rows if item["id"] == receipt_item_id)
+        return {"retailer_code": article["retailer_code"],
+                "receipt_text": article["receipt_line_text"],
+                "external_article_code": article["receipt_article_number"]}
+    monkeypatch.setattr(service, "resolve_external_article_identity", identity)
+    writes = []
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kw: writes.append(kw) or True)
+    result = service.manually_match_confirmed_receipt(
+        FakeConn(), source_receipt_item_id=source["id"],
+        target_receipt_item_id=right["id"], actor_id="platform-superuser")
+    assert result == {"ok": True, "linked": 1, "barcode_written": False,
+                      "catalog_product_id": "milk-a"}
+    assert len(writes) == 1
+    assert writes[0]["source_key"] == ("ah", "ah hv melk", "11943")
+    assert writes[0]["product_id"] == "milk-a"
+    assert writes[0]["witness"]["receipt_article_number"] == "569053"
+    assert writes[0]["audit_action"] == "catalog.ed2.manual_receipt_match.confirmed"
+    assert writes[0]["audit_reason"] == "explicit_superuser_two_table_match_v1"
+
+    # A different proven execution is an alternative, never an arbitrary choice.
+    assert right["identity_catalog_product_id"] != another["identity_catalog_product_id"]
+
+
+@pytest.mark.parametrize("state,extras", [
+    ("saved_only", {"manual_barcode": "8718907056274"}),
+    ("review", {}),
+    ("catalog_linked", {"identity_catalog_product_id": "old"}),
+    ("not_identified", {"manual_barcode": "8718907056274"}),
+])
+def test_manual_match_rejects_sources_with_other_claims(monkeypatch, state, extras):
+    source = row("ah", "AH HV MELK", "11943", status=state, **extras)
+    right = row("ah", "AH HV MELK", "569053", "milk", "catalog_linked")
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": [source, right]})
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kw: pytest.fail("Forbidden to write"))
+    with pytest.raises(ValueError, match="niet meer ongeïdentificeerd"):
+        service.manually_match_confirmed_receipt(
+            FakeConn(), source_receipt_item_id=source["id"],
+            target_receipt_item_id=right["id"], actor_id="superuser")
+
+
+def test_manual_match_blocks_changed_receipt_identity_and_uncertain_target(monkeypatch):
+    left = row("jumbo", "Melk", "12")
+    right = row("lidl", "Melk", "45", "milk", "catalog_linked")
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": [left, right]})
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kw: pytest.fail("Must not write"))
+    monkeypatch.setattr(service, "resolve_external_article_identity",
+                        lambda conn, rid: {"retailer_code": "jumbo",
+                                           "receipt_text": "Andere bontekst",
+                                           "external_article_code": "12"})
+    with pytest.raises(ValueError, match="veranderd"):
+        service.manually_match_confirmed_receipt(
+            FakeConn(), source_receipt_item_id=left["id"],
+            target_receipt_item_id=right["id"], actor_id="superuser")
+    right["identity_catalog_product_id"] = "another-milk"
+    right["catalog_product_id"] = "milk"
+    with pytest.raises(ValueError, match="niet eenduidig"):
+        service.manually_match_confirmed_receipt(
+            FakeConn(), source_receipt_item_id=left["id"],
+            target_receipt_item_id=right["id"], actor_id="superuser")

@@ -50,7 +50,9 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true })
       .fill('Courgette')
     await expect(table.locator('tbody tr')).toHaveCount(1)
-    expect(writes).toEqual([]) // Route entry, table and filters remain read-only.
+    expect(writes).toEqual([]) // Identificeren remains read-only.
+    await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
+    await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
     await page.getByRole('button', { name: 'Bonnamen matchen' }).click()
     await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' }))
       .toBeVisible()

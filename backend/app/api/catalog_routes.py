@@ -27,6 +27,7 @@ from app.services.automatic_curated_identity_matching_service import (
 )
 from app.services.proven_exact_receipt_name_service import (
     automatically_match_proven_exact_names, confirm_bonnaam_alias,
+    manually_match_confirmed_receipt,
 )
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
@@ -832,13 +833,32 @@ class Ed2BonnaamAliasConfirmation(BaseModel):
     target_name: str = Field(min_length=1, max_length=200)
 
 
+class Ed2ManualReceiptMatchRequest(BaseModel):
+    source_receipt_item_id: str = Field(min_length=1, max_length=200)
+    target_receipt_item_id: str = Field(min_length=1, max_length=200)
+
+
 def _require_authorized_bonnaam_actor():
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
+    if not actor.is_platform_superuser:
         raise HTTPException(status_code=403, detail=(
-            "Alleen bevoegde Superusers en Frontteamleden mogen centrale "
-            "bonnamen matchen en bonnaamrelaties bevestigen."))
+            "Matchen is uitsluitend beschikbaar voor platform-Superusers."))
     return actor
+
+
+@router.post("/ed2/manual-receipt-match/confirm")
+def confirm_ed2_manual_receipt_match(payload: Ed2ManualReceiptMatchRequest):
+    """Explicit Superuser selection of a source and a proven target receipt."""
+    actor = _require_authorized_bonnaam_actor()
+    with engine.begin() as conn:
+        try:
+            return manually_match_confirmed_receipt(
+                conn, source_receipt_item_id=payload.source_receipt_item_id,
+                target_receipt_item_id=payload.target_receipt_item_id,
+                actor_id=actor.user_id,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/ed2/bonnamen-matchen/auto")
@@ -891,8 +911,8 @@ def auto_ed2_proven_exact_names():
     This does not create barcodes, household articles or synonym edges.
     """
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen bevoegde Superusers en Frontteamleden mogen bewezen bonnamen koppelen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen bonnamen matchen.")
     with engine.begin() as conn:
         try:
             return automatically_match_proven_exact_names(conn, actor_id=actor.user_id)
@@ -904,8 +924,8 @@ def auto_ed2_proven_exact_names():
 def auto_ed2_curated_matching_batch():
     """Auto-apply only unambiguous, independently sourced approved family matches."""
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen automatisch centrale productmatches vastleggen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale productmatches vastleggen.")
     with engine.begin() as conn:
         try:
             return automatically_match_curated_receipts(conn, actor_id=actor.user_id)
@@ -918,7 +938,7 @@ def preview_ed2_curated_matching_batch(
     target_product_id: str | None = Query(default=None, max_length=200),
 ):
     """Curated central identity suggestions, never writes or invents barcodes."""
-    require_platform_permission_from_session("platform.external_products.view")
+    _require_authorized_bonnaam_actor()
     with engine.connect() as conn:
         try:
             return matching_batch_preview(conn, target_product_id=target_product_id)
@@ -929,8 +949,8 @@ def preview_ed2_curated_matching_batch(
 @router.post("/ed2/curated-matching-batch/confirm")
 def confirm_ed2_curated_matching_batch(payload: Ed2CuratedMatchingBatchConfirmation):
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen bevoegde Superusers en Frontteamleden mogen centrale matches vastleggen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale matches vastleggen.")
     if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
         raise HTTPException(status_code=422, detail="De vooraf beoordeelde matchinglijst ontbreekt.")
     with engine.begin() as conn:
@@ -959,8 +979,8 @@ def ed2_courgette_family_options(receipt_item_id: str = Query(..., min_length=1,
 @router.post("/ed2/courgette-family/confirm")
 def confirm_ed2_courgette_family(payload: Ed2CourgetteFamilyConfirmation):
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen centrale artikelidentiteiten bevestigen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale matches bevestigen.")
     if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
         raise HTTPException(status_code=422, detail="De kandidaatgegevens zijn onjuist.")
     if payload.match_mode not in {"same_product", "synonym_variant"}:

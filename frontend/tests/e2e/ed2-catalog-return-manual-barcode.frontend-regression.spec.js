@@ -462,9 +462,9 @@ test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzo
     return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
   })
   await page.goto('/externe-databases-2')
-  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
-  const table = page.getByTestId('external-databases-2-table')
-  await table.locator('tbody tr', { hasText: 'Courgette groen' }).dblclick()
+  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
+  const table = page.getByTestId('ed2-match-left-table')
+  await table.locator('tbody tr', { hasText: 'Courgette groen' }).click()
   const family = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
   await expect(family).toBeVisible()
   expect(posts).toHaveLength(0)
@@ -476,14 +476,14 @@ test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzo
   await expect.poll(() => posts.length).toBe(1)
   expect(posts[0].match_mode).toBe('same_product')
 
-  await table.locator('tbody tr', { hasText: 'Courgette geel' }).dblclick()
+  await table.locator('tbody tr', { hasText: 'Courgette geel' }).click()
   const yellow = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
   await yellow.getByLabel('Bestaand Catalogusproduct').selectOption('a'.repeat(64))
   await yellow.getByRole('button', { name: 'Variant als synoniem bevestigen' }).click()
   await page.getByTestId('ed2-curated-family-confirm').getByRole('button', { name: 'Bevestigen' }).click()
   await expect.poll(() => posts.length).toBe(2)
   expect(posts[1].match_mode).toBe('synonym_variant')
-  await table.locator('tbody tr', { hasText: 'Olvarit' }).dblclick()
+  await table.locator('tbody tr', { hasText: 'Olvarit' }).click()
   await expect(page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })).toHaveCount(0)
 })
 
@@ -557,7 +557,8 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
-    .getByRole('button', { name: 'Identificeren' }).click()
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
   const batch = page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' })
   await batch.getByRole('button', { name: 'Bonnamen matchen' }).click()
   await expect(batch).toContainText('Niet alle productfamilies hebben één bewezen anker.')
@@ -577,12 +578,12 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   expect(posts[0].fingerprint).toBe('e'.repeat(64))
   expect(posts[0].receipt_item_ids).toHaveLength(6)
   expect(posts[0].receipt_item_ids).not.toContain('receipt-table-line:ah-linked')
-  await expect(page.getByTestId('external-databases-2-table')).toContainText('Catalogus gekoppeld')
+  await expect(page.getByTestId('ed2-match-left-table')).not.toContainText('Courgette groen')
   expect(previews).toBeGreaterThanOrEqual(2)
 })
 
 
-test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik koppelen', async ({ page }) => {
+test('Matchen: bewezen bonnamen van alle winkels alleen na expliciete klik koppelen', async ({ page }) => {
   const rows = [
     { id: 'receipt-table-line:milk-code', receipt_line_text: 'HALFVOLLE MELK',
       retailer_code: 'ah', receipt_article_number: '101', identity_status: 'catalog_linked',
@@ -609,15 +610,16 @@ test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
-    .getByRole('button', { name: 'Identificeren' }).click()
-  const table = page.getByTestId('external-databases-2-table')
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
+  const table = page.getByTestId('ed2-match-left-table')
   await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('melk')
-  await expect(table).toContainText('Nog identificeren')
+  await expect(table).toContainText('HALFVOLLE MELK')
   expect(writes).toEqual([])
   await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' }))
     .toContainText('1 bonartikel(en) gematched')
-  await expect(table).not.toContainText('Nog identificeren')
+  await expect(table).not.toContainText('HALFVOLLE MELK')
   expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
 })
 
@@ -655,7 +657,8 @@ test('Bonnamen matchen is één knop; HV Melk alias geldt voor alle winkels', as
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
-    .getByRole('button', { name: 'Identificeren' }).click()
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
   const section = page.getByTestId('ed2-bonnaam-alias-form')
   await expect(page.getByRole('button', { name: 'Courgettes automatisch herkennen' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Bewezen bonnamen herkennen' })).toHaveCount(0)
@@ -669,8 +672,8 @@ test('Bonnamen matchen is één knop; HV Melk alias geldt voor alle winkels', as
     .getByRole('button', { name: 'Synoniem bevestigen' }).click()
   await expect.poll(() => posts.length).toBe(1)
   expect(posts[0]).toEqual({ alias_name: 'HV Melk', target_name: 'Halfvolle melk' })
-  await expect(page.getByTestId('external-databases-2-table'))
-    .not.toContainText('Nog identificeren')
+  await expect(page.getByTestId('ed2-match-left-table'))
+    .not.toContainText('HV Melk')
 })
 
 
@@ -699,7 +702,8 @@ test('Bonnamen matchen: serverfout opent geen onterecht matchingvoorstel', async
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
-    .getByRole('button', { name: 'Identificeren' }).click()
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
   await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
   await expect(page.getByText(/Matching kan niet worden beoordeeld \(HTTP 500\)/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' })).toHaveCount(0)
@@ -745,4 +749,57 @@ test('AH HV MELK: geblokkeerde varianten hebben per bonartikel een blijvende uit
   await expect(table.locator('.rz-ed2-match-review-reason').first())
     .toHaveAttribute('title', /verschillende bevestigde Catalogusproducten/)
   expect(writes).toEqual([])
+})
+
+
+test('Superuser matcht een ongeïdentificeerd melkartikel via twee identieke tabellen', async ({ page }) => {
+  const rows = [
+    { id: 'receipt-table-line:unknown', receipt_line_text: 'AH HV MELK',
+      retailer_code: 'ah', receipt_article_number: '11943',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren',
+      link_status: 'unlinked' },
+    { id: 'receipt-table-line:proven', receipt_line_text: 'AH HV MELK',
+      retailer_code: 'ah', receipt_article_number: '569053',
+      article_code: '8718907056274', catalog_product_id: 'catalog-milk',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+  ]
+  const posts = []
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/catalog/ed2/manual-receipt-match/confirm') {
+      posts.push(route.request().postDataJSON())
+      rows[0].identity_status = 'catalog_linked'
+      rows[0].identity_status_label = 'Catalogus gekoppeld'
+      rows[0].catalog_product_id = 'catalog-milk'
+      return route.fulfill({ json: { ok: true, linked: 1, barcode_written: false,
+        catalog_product_id: 'catalog-milk' } })
+    }
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  const nav = page.getByTestId('classification-work-monitor')
+  await expect(nav.getByRole('button', { name: 'Matchen' })).toBeVisible()
+  await nav.getByRole('button', { name: 'Identificeren' }).click()
+  await expect(page.getByTestId('ed2-bonnaam-alias-form')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bonnamen matchen' })).toHaveCount(0)
+  await nav.getByRole('button', { name: 'Matchen' }).click()
+  const left = page.getByTestId('ed2-match-left-table')
+  const right = page.getByTestId('ed2-match-right-table')
+  await expect(left.locator('thead')).toContainText('Bonartikelnummer')
+  await expect(right.locator('thead')).toContainText('Bonartikelnummer')
+  await expect(left).toContainText('11943')
+  await expect(right).toContainText('569053')
+  expect(posts).toHaveLength(0)
+  await left.getByRole('checkbox', { name: /Selecteer links AH HV MELK/ }).check()
+  await right.getByRole('checkbox', { name: /Selecteer rechts AH HV MELK/ }).check()
+  await page.getByRole('button', { name: 'Bonartikel matchen' }).click()
+  const overlay = page.getByTestId('ed2-manual-match-confirm')
+  await expect(overlay).toBeVisible()
+  expect(posts).toHaveLength(0)
+  await overlay.getByRole('button', { name: 'Match bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0]).toEqual({ source_receipt_item_id: 'receipt-table-line:unknown',
+    target_receipt_item_id: 'receipt-table-line:proven' })
+  await expect(left).not.toContainText('11943')
 })

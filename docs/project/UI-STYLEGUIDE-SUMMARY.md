@@ -1826,3 +1826,13 @@ standaardtooltip. Het is een blijvende artikelbeoordelingsstatus en
 geen aparte succes-/foutmelding; geen nieuwe tabel, statusfilter,
 knoppen of modal. Verschillende barcodes binnen éénzelfde bevestigde
 Catalogus-ID veroorzaken deze waarschuwing niet.
+
+
+**Artikelbeheer > Matchen (14 november 2026).** Het exclusief voor
+platform-Superusers beschikbare Matchen-werkgebied volgt de twee zelfstandige,
+gelijke standaard DataTables van Synoniemen. Links kies je één nog te matchen
+bonartikel en rechts één eerder bevestigd bonartikel; beide tabellen delen
+dezelfde kolommen, filters, paginering en selectorbediening. De actie onder
+de rechter tabel bevestigt alleen een gekozen paar. Automatische bonnaamregels
+en familiematching staan in een afzonderlijk uitklapbaar gedeelte. Andere
+Artikelbeheer-werkgebieden tonen geen centrale matchacties.

@@ -350,7 +350,9 @@ def _ensure_active_product(conn, product_id):
     """), {"product_id": product_id}).first() is not None
 
 
-def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id):
+def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id,
+                              audit_action="catalog.ed2.proven_receipt_name.confirmed",
+                              audit_reason="automatic_confirmed_receipt_name_v2"):
     """Store one exact retailer+name+number tuple under the central write lock.
 
     Receipt item numbers are NOT GTINs. A different number is no reason to
@@ -425,7 +427,7 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
     })
     write_authorization_audit(
         conn, actor_user_id=actor_id, actor_type="platform_user",
-        action="catalog.ed2.proven_receipt_name.confirmed",
+        action=audit_action,
         object_type="ed2_receipt_family_link",
         object_id="|".join(source_key),
         old_value=None,
@@ -436,9 +438,78 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
             "witness_article_number": witness["receipt_article_number"],
             "witness_confirmed_barcode": witness.get("confirmed_barcode") or "",
         },
-        reason="automatic_confirmed_receipt_name_v2",
+        reason=audit_reason,
     )
     return True
+
+
+def manually_match_confirmed_receipt(
+    conn, *, source_receipt_item_id: str, target_receipt_item_id: str,
+    actor_id: str,
+) -> dict:
+    """Superuser chooses a receipt and an independently confirmed receipt.
+
+    Link only the exact source tuple to the confirmed Catalogusproduct.
+    No GTIN, product, name alias, receipt, household or inventory mutation.
+    """
+    if conn.dialect.name != "postgresql":
+        raise ValueError("Handmatige centrale matches vereisen PostgreSQL.")
+    if not actor_id:
+        raise ValueError("Een geautoriseerde Superuser ontbreekt.")
+    if (not source_receipt_item_id or not target_receipt_item_id or
+            source_receipt_item_id == target_receipt_item_id):
+        raise ValueError("Kies twee verschillende bonartikelen.")
+
+    rows = list_all_external_articles(conn=conn)["items"]
+    sources = [row for row in rows if row.get("id") == source_receipt_item_id]
+    targets = [row for row in rows if row.get("id") == target_receipt_item_id]
+    if len(sources) != 1 or len(targets) != 1:
+        raise ValueError("Een gekozen bonartikel bestaat niet meer. Vernieuw Matchen.")
+    source, target = sources[0], targets[0]
+    if (source.get("identity_status") != "not_identified"
+            or source.get("manual_barcode") or source.get("article_code")
+            or source.get("identity_catalog_product_id")
+            or source.get("catalog_product_id")):
+        raise ValueError("Het linker bonartikel is niet meer ongeïdentificeerd.")
+    if target.get("identity_status") != "catalog_linked":
+        raise ValueError("Het rechter bonartikel heeft geen bevestigde Catalogusidentiteit.")
+    explicit = str(target.get("identity_catalog_product_id") or "").strip()
+    central = str(target.get("catalog_product_id") or "").strip()
+    if (not (explicit or central) or (explicit and central and explicit != central)
+            or (target.get("manual_barcode") and target.get("article_code")
+                and target["manual_barcode"] != target["article_code"])):
+        raise ValueError("De rechter Catalogusidentiteit is niet eenduidig.")
+    product_id = explicit or central
+    confirmed_barcode = _confirmed_catalog_barcode(target)
+    if not (str(target.get("receipt_article_number") or "").strip() or confirmed_barcode):
+        raise ValueError("Het rechter artikel mist onafhankelijk bevestigd codebewijs.")
+    for row in (source, target):
+        actual = resolve_external_article_identity(conn, str(row["id"]))
+        from_overview = _key(row.get("retailer_code"), row.get("receipt_line_text"),
+                             row.get("receipt_article_number"))
+        from_source = _key(actual.get("retailer_code"), actual.get("receipt_text"),
+                           actual.get("external_article_code"))
+        if not from_overview or from_overview != from_source:
+            raise ValueError("De bonartikelidentiteit is veranderd. Vernieuw Matchen.")
+    source_key = _key(source["retailer_code"], source["receipt_line_text"],
+                      source["receipt_article_number"])
+    if source_key == _key(target["retailer_code"], target["receipt_line_text"],
+                           target["receipt_article_number"]):
+        raise ValueError("Een bonartikel kan niet met zichzelf worden gematcht.")
+    witness = {
+        "retailer": canonical_catalog_retailer(target["retailer_code"]),
+        "receipt_article_number": normalize_external_link_article_code(
+            target.get("receipt_article_number")),
+        "confirmed_barcode": confirmed_barcode,
+    }
+    linked = _persist_exact_name_match(
+        conn, source_key=source_key, product_id=product_id,
+        witness=witness, actor_id=actor_id,
+        audit_action="catalog.ed2.manual_receipt_match.confirmed",
+        audit_reason="explicit_superuser_two_table_match_v1",
+    )
+    return {"ok": True, "linked": int(linked), "barcode_written": False,
+            "catalog_product_id": product_id}
 
 
 def automatically_match_proven_exact_names(conn, *, actor_id):

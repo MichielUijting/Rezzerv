@@ -472,3 +472,26 @@ inclusief productnamen of bestaande barcodes waar bekend, bijvoorbeeld:
 **Niet automatisch gematcht: verschillende uitvoeringen — kies het juiste
 product.** Deze reden wordt read-only berekend bij het overzicht en
 verandert de huidige matcher- of opslagbeslissing niet.
+
+
+### Fase 2H — afzonderlijk Superuser-werkgebied Matchen (14 november 2026)
+
+Artikelbeheer heeft een eigen knop **Matchen**, uitsluitend voor platform-Superusers.
+De bestaande werkgebieden **Identificeren**, **Classificeren** en **Synoniemen**
+bevatten geen centrale matchacties meer. Matchen gebruikt twee onafhankelijke,
+identiek opgebouwde standaardtabellen (zelfde kolommen, filters, paginering).
+Links kiest de Superuser één nog te identificeren bonartikel; rechts één
+bonartikel met een bewezen centrale Catalogusidentiteit.
+
+Een expliciete bevestiging koppelt uitsluitend de exacte combinatie
+winkelketen + originele bonnaam + bonartikelnummer van links aan het bewezen
+Catalogusproduct rechts. De backend herleest beide identiteiten, verifieert
+de bestaande Catalogus-ID en onafhankelijke bewijsbron en weigert bestaande,
+veranderde of tegenstrijdige claims. Er worden geen GTINs verzonnen of
+overgeschreven en er zijn geen wijzigingen in bonbronnen, huishoudartikelen,
+voorraad of product-product-synoniemen.
+
+Gecontroleerde automatische matching, de centrale bonnaamregels en de
+goedgekeurde courgettefamiliebeoordeling zijn voortaan in Matchen te vinden.
+De centrale matchbevestigingen controleren ook server-side expliciet op
+platform-Superuser; Frontteamleden hebben voor deze acties geen toegang.
