@@ -42,6 +42,55 @@ def _key(store, label, number):
     return retailer, name, code
 
 
+# Receipt names are compared store-neutrally ONLY for this explicitly
+# authorized central matching route. The original name and store+number
+# tuple remain untouched in all persisted identity records.
+#
+# Only remove an actual retailer's own name at the BEGINNING or END of
+# its receipt line. Do not remove arbitrary interior words or another
+# retailer's name (e.g. an AH-labelled brand sold at Lidl).
+_RETAILER_LABEL_MARKERS = {
+    "ah": (("albert", "heijn"), ("ah",)),
+    "jumbo": (("jumbo",),),
+    "lidl": (("lidl",),),
+    "aldi": (("aldi",),),
+    "plus": (("plus",),),
+    "picnic": (("picnic",),),
+    "dirk": (("dirk",),),
+    "hoogvliet": (("hoogvliet",),),
+    "vomar": (("vomar",),),
+    "dekamarkt": (("dekamarkt",),),
+    "spar": (("spar",),),
+    "coop": (("coop",),),
+    "boni": (("boni",),),
+    "nettorama": (("nettorama",),),
+}
+
+
+def _matching_name(retailer, receipt_name):
+    """Remove ONLY the receipt's own retailer name at either outer edge.
+
+    This is a transient evidence-comparison key, never a barcode, Catalogus
+    ID, receipt source, or stored retailer/name/number identity.
+    """
+    words = normalize_external_link_receipt_text(receipt_name).split()
+    markers = _RETAILER_LABEL_MARKERS.get(canonical_catalog_retailer(retailer), ())
+    while words:
+        for marker in markers:
+            length = len(marker)
+            if len(words) <= length:
+                continue  # Do not reduce a name to nothing.
+            if tuple(words[:length]) == marker:
+                words = words[length:]
+                break
+            if tuple(words[-length:]) == marker:
+                words = words[:-length]
+                break
+        else:
+            break
+    return " ".join(words)
+
+
 def _confirmed_catalog_barcode(row):
     """One verified barcode for this receipt identity, never inferred by name.
 
@@ -76,7 +125,8 @@ def _proven_name_targets(rows):
                    row.get("receipt_article_number"))
         if not key:
             continue
-        _, name, code = key
+        retailer, original_name, code = key
+        name = _matching_name(retailer, original_name)
         status = str(row.get("identity_status") or "")
         if status in {"saved_only", "review"}:
             disputed.add(name)
@@ -136,11 +186,12 @@ def _candidate_plan(rows, aliases=None):
             blocked += 1
             continue
         seen.add(key)
-        if key[1] in disputed:
+        comparable_name = _matching_name(key[0], key[1])
+        if comparable_name in disputed:
             blocked += 1
             continue
-        proof = proofs.get(key[1])
-        alias = aliases.get(key[1])
+        proof = proofs.get(comparable_name)
+        alias = aliases.get(comparable_name)
         if alias:
             target = proofs.get(alias["target_name"])
             # An explicit alias is not an override of old central claims.
@@ -158,7 +209,7 @@ def _candidate_plan(rows, aliases=None):
             "source_key": key,
             "product_id": proof["product_id"],
             "witness": proof["witness"],
-            "proof_name": alias["target_name"] if alias else key[1],
+            "proof_name": alias["target_name"] if alias else comparable_name,
         })
     candidates.sort(key=lambda c: c["source_key"])
     return candidates, blocked, without_proof
