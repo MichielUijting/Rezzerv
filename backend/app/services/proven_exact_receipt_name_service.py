@@ -1,12 +1,13 @@
-"""Safely reuse independently confirmed code-bearing receipt identity by exact name.
+"""Safely reuse independently confirmed receipt identity by exact name.
 
 This is central product identity, NOT a synonym link or a household article
 identity. No product, GTIN, receipt source, inventory or household is created
 or modified. Automatic writes are initiated only by the explicit authorized
 POST, never while opening or filtering Artikelbeheer.
 
-A normalized label may be reused only if at least one *coded*, independently
-confirmed receipt proves exactly ONE still-active central Catalogus product
+A normalized label may be reused when an independently confirmed retailer
+article number OR a verified Catalogus-linked GTIN proves exactly ONE active
+central Catalogus product
 across ALL retailers. Any conflicting or disputed evidence fails closed.
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_receipt_text,
 )
 from app.services.external_unlinked_articles_service import list_all_external_articles
+from app.services.gtin_validation_service import is_valid_gtin
 
 MAX_EXACT_NAME_BATCH = 50
 
@@ -40,13 +42,33 @@ def _key(store, label, number):
     return retailer, name, code
 
 
+def _confirmed_catalog_barcode(row):
+    """One verified barcode for this receipt identity, never inferred by name.
+
+    A merely saved (not Catalogus-confirmed) barcode is insufficient.
+    Barcode-free family links do not inherit the central product's GTIN.
+    """
+    if (str(row.get("identity_status") or "") != "catalog_linked" or
+            row.get("barcode_free_catalog_link")):
+        return ""
+    saved = str(row.get("manual_barcode") or "").strip()
+    linked = str(row.get("article_code") or "").strip()
+    if saved and linked and saved != linked:
+        return ""  # Existing conflict guard rejects inconsistent source.
+    for barcode in (saved, linked):
+        if barcode and is_valid_gtin(barcode):
+            return barcode
+    return ""
+
+
 def _proven_name_targets(rows):
-    """Map each exact bonnaam to one independently proven, coded Catalogus-ID.
+    """Map each exact bonnaam to one independently proven Catalogus-ID.
 
     Different article numbers (even in the same retailer) are intentionally
-    allowed. Previously confirmed *other* identities, review claims and saved
-    barcodes block the entire name, even across shops. A name alone does not
-    create an initial product identity.
+    allowed. A code-free receipt with a verified Catalogus-linked GTIN
+    can also independently prove its product. Saved-only barcodes, disputed
+    and competing identity claims still block the complete name group.
+    A name alone never creates a product identity.
     """
     ids, witnesses, disputed = {}, {}, set()
     for row in rows:
@@ -73,15 +95,18 @@ def _proven_name_targets(rows):
             continue
         product_id = explicit or central
         ids.setdefault(name, set()).add(product_id)
-        if code:
+        confirmed_barcode = _confirmed_catalog_barcode(row)
+        if code or confirmed_barcode:
             witnesses.setdefault(name, []).append({
                 "retailer": key[0], "receipt_article_number": code,
+                "confirmed_barcode": confirmed_barcode,
                 "product_id": product_id,
             })
     return {
         name: {"product_id": next(iter(product_ids)),
                "witness": sorted(witnesses[name], key=lambda w: (
-                   w["retailer"], w["receipt_article_number"]))[0]}
+                   not bool(w["receipt_article_number"]), w["retailer"],
+                   w["receipt_article_number"], w["confirmed_barcode"]))[0]}
         for name, product_ids in ids.items()
         if len(product_ids) == 1 and name not in disputed
         and witnesses.get(name)
@@ -157,7 +182,7 @@ def confirm_bonnaam_alias(conn, *, alias_name, target_name, actor_id):
     """Confirm ONE globally applicable name alias, never overwrite old proof.
 
     The authorized operator explicitly declares the naming equivalence. The
-    target must already have exactly one independently confirmed CODED receipt
+    target must already have exactly one independently confirmed receipt number or verified barcode
     product. Any conflicting source/product evidence requires manual review.
     """
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
@@ -174,7 +199,7 @@ def confirm_bonnaam_alias(conn, *, alias_name, target_name, actor_id):
     proofs, disputed = _proven_name_targets(rows)
     confirmed = proofs.get(target)
     if not confirmed or target in disputed:
-        raise ValueError("De doelbonnaam heeft geen unieke bevestigde bron met winkelartikelnummer.")
+        raise ValueError("De doelbonnaam heeft geen unieke bevestigde bron met winkelartikelnummer of Catalogusbarcode.")
     product_id = confirmed["product_id"]
     if not _ensure_active_product(conn, product_id):
         raise ValueError("Het bewezen Catalogusproduct is niet actief.")
@@ -302,6 +327,7 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
             "receipt_article_number": code,
             "witness_store": witness["retailer"],
             "witness_article_number": witness["receipt_article_number"],
+            "witness_confirmed_barcode": witness.get("confirmed_barcode") or "",
         },
         reason="automatic_confirmed_receipt_name_v2",
     )
