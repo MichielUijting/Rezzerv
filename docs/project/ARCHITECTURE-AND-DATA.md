@@ -112,3 +112,22 @@ Een expliciete huismerkmarker in de bontekst is onderdeel van de **exacte** iden
 Databasemigraties worden gefaseerd uitgevoerd. Per release geldt één hoofddoel met expliciete basisversie, doelversie, schemawijziging, backfill, compatibiliteit, herstelpad en regressietestscope.
 
 Voor de SQLite → PostgreSQL-transitie geldt dat historische productie-SQLite niet als fictieve Alembic-revision wordt gestampt. Historische data wordt eerst tegen een verse canonical SQLite op de actuele Alembic-head geadopteerd/herbouwd en daarna naar een verse PostgreSQL-target geïmporteerd en strikt gevalideerd.
+
+
+### Centrale bonnamen: PO-uitbreiding 14 november 2026
+
+Platformbrede exacte bonnaamherkenning mag, na een bewuste bevoegde
+Bonnamen matchen-actie, op basis van een onafhankelijk bewezen
+Catalogusproduct dezelfde genormaliseerde bonnaam hergebruiken bij
+verschillende winkelartikelnummers en verschillende winkels.
+De oorspronkelijke winkel+bonnaam+nummer-combinatie wordt per stuk
+opgeslagen en krijgt een auditregistratie. Alle afwijkende
+productclaims blijven blokkeren.
+
+Bovendien kan een expliciet bevestigde gerichte bonnaamalias
+zoals HV Melk → Halfvolle melk centraal worden opgeslagen, mits
+de doelbonnaam een unieke bewezen Catalogusbestemming heeft.
+Deze aanwijzing geldt voor alle bonregels met diezelfde aliasnaam,
+ongeacht winkel en nummer, maar leidt niet tot samenvoegen van
+verschillende Catalogusproducten of product-product-synoniemen.
+Huishoudartikelen, bonnen en voorraad worden niet gemuteerd.

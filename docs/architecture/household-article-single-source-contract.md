@@ -96,3 +96,23 @@ mondiale GTIN of synoniem tussen aparte Catalogusproducten. Deze actie voert
 nooit zelfstandig een huishoudkoppeling, voorraadafboeking, bonmutatie of
 historisch herstel uit; daarvoor blijven de eigen harde sleutel- en
 bewijsvereisten gelden.
+
+
+### Uitzondering op automatische identificatie van centrale bonnamen (14 november 2026)
+
+De PO heeft uitdrukkelijk bepaald dat **exact gelijke bonnamen** met
+**verschillende winkelartikelnummers** aan hetzelfde bestaande
+Catalogusproduct mogen worden gekoppeld, binnen één winkel en over
+verschillende winkels heen. Dit is alleen toegestaan via de bevoegde
+centrale bonnaamroute en alleen als het oorspronkelijke product onafhankelijk
+is bewezen en alle bestaande centrale claims eenduidig blijven.
+
+Een door een bevoegde gebruiker bevestigde naamalias, bijvoorbeeld
+HV Melk → Halfvolle melk, wordt platformbreed éénmaal vastgelegd en
+geldt voor alle bonartikelen met die exacte aliasnaam. De alias
+verandert geen oorspronkelijke bronbon, GTIN, Catalogusproduct,
+product-product-synoniem, historisch huishoudartikel of voorraad.
+Bestaande andere productclaims of bewaarde barcodes blokkeren
+automatische verwerking. De harde regel dat het functionele
+household_article_id de huishoudidentiteit is, blijft zonder uitzondering
+bestaan.

@@ -373,3 +373,40 @@ en geteste productregels, momenteel courgettes.
 De algemene platformbrede identificatie verandert nooit direct de
 huishoudartikel-ID of historische voorraadafboeking: daarvoor blijft het aparte
 bewijsgestuurde huishoudreconciliatiecontract vereist.
+
+
+### Fase 2G — algemene bonnamen, verschillende nummers en expliciete naamrelaties (14 november 2026)
+
+Het nieuwe PO-besluit breidt de exacte bonnaamherkenning uit tot **alle
+bonartikelen**, ook als het bonartikelnummer verschilt. Dit geldt zowel
+**binnen dezelfde winkel** als **tussen verschillende winkels**. Ten minste
+één werkelijk bevestigde, genummerde bron met de exacte genormaliseerde
+bonnaam moet één actief Catalogusproduct bewijzen. Bestaande andere
+Catalogusclaims, betwiste identificaties en opgeslagen barcodes blokkeren
+automatische verwerking; de naam is geen reden om brongegevens te wijzigen
+of een winkelartikelnummer tot mondiale GTIN te promoveren.
+
+De twee vorige automatische knoppen zijn vervangen door precies één knop:
+**Bonnamen matchen**. Deze voert de algemene bewezen exact-naamherkenning en
+de bestaande courgettefamilieregels in één bevoegde actie uit. De
+familievoorziening voor afzonderlijke courgettevarianten blijft begrensd
+tot geteste, goedgekeurde gevallen. Algemene exacte naamherkenning maakt
+nooit automatisch een Catalogusproduct of product-product-synoniem aan.
+
+Daarnaast kan een bevoegde gebruiker een **bonnaamsynoniem** expliciet
+vastleggen, zoals **HV Melk → Halfvolle melk**. Na een aparte bevestiging
+wordt de gerichte, genormaliseerde alias centraal bewaard. De naamregel
+geldt vervolgens bij alle winkels en bij alle verschillende
+winkelartikelnummers met exact de aliasnaam. Er moet voor de doelnaam
+één onafhankelijk bevestigde Catalogusbestemming bestaan. Als de bronnaam
+reeds naar een ander product verwijst of de doelnaam conflicteert, wordt
+de regel niet opgeslagen of toegepast. Naamalias is uitdrukkelijk **geen**
+product-product-synoniem en maakt geen extra barcode of product aan.
+
+De database legt de naamregels vast in ed2_receipt_name_aliases. De per-bon
+bevestigde identiteit blijft opgeslagen met retailer, genormaliseerde
+bonnaam en het **originele winkelartikelnummer** in
+ed2_receipt_family_links. Mutaties vereisen platform-Superuser of
+geautoriseerd Frontteamlid, actorregistratie, herlezing van bronbewijs
+en transactionele conflictafhandeling. Geen write bij paginabezoek,
+filteren of zoeken. Geen bronbon-, huishoud- of voorraadwijziging.

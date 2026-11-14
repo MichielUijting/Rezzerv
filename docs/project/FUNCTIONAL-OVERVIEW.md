@@ -498,3 +498,26 @@ synoniemen, huishoudartikelen of voorraadevents. Een aparte familieregel blijft
 nodig voordat verschillende productnamen of productvarianten als synoniemen
 worden geautomatiseerd. De actie is read-only totdat een bevoegde gebruiker
 daadwerkelijk op de knop klikt.
+
+
+### Artikelbeheer — één knop Bonnamen matchen (14 november 2026)
+
+**Bonnamen matchen** combineert de eerder afzonderlijke knoppen voor
+algemene bewezen naamherkenning en courgettes. Identieke genormaliseerde
+kassabonnamen mogen aan een bewezen bestaand Catalogusproduct worden
+gekoppeld, óók als bonartikelcodes anders zijn binnen dezelfde winkel
+of tussen verschillende winkels. De combinatie van winkel, bonnaam
+en werkelijk winkelartikelnummer blijft de unieke opslagidentiteit;
+een nummer is geen GTIN. Bestaande conflicten worden nooit overschreven.
+
+De bevoegde gebruiker kan aanvullend een centraal, gericht
+**bonnaamsynoniem** bevestigen, bijvoorbeeld HV Melk → Halfvolle melk.
+Deze regel is geldig voor alle bestaande en toekomstige bonartikelen
+met exact dezelfde aliasnaam en alle bijbehorende winkels en nummers,
+zolang de doelidentiteit eenduidig bewezen blijft. Bestaande andere
+productidentiteiten en handmatige barcodes zijn beschermd. De naamalias
+is niet hetzelfde als een synoniemrelatie tussen twee Catalogusproducten.
+Voor echte productvarianten gelden de afzonderlijke goedgekeurde
+familie-/synoniemregels. De invoer, bevestiging en uitvoering gebruiken
+bestaande autorisatie, transactionele opslag, audit en overlaymelding;
+zoeken en openen blijven alleen-lezen.
