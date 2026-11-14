@@ -441,6 +441,15 @@ def list_all_external_articles(*, conn=None) -> dict:
                     "external_databases_off_brand_override",
                 } and status != "unlinked" else "",
             })
+    # A stable read-only explanation on each affected article. Keep the
+    # normal overview path authoritative and avoid a second database scan.
+    from app.services.proven_exact_receipt_name_service import (
+        confirmed_product_variant_review_reasons,
+    )
+    review_reasons = confirmed_product_variant_review_reasons(items)
+    for item in items:
+        item["automatic_match_review_reason"] = review_reasons.get(str(item["id"]), "")
+
     elapsed_ms = (perf_counter() - started) * 1000
     if elapsed_ms >= 250:
         logging.getLogger("uvicorn.error").info(

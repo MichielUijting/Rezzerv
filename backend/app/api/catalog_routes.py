@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
@@ -24,6 +24,10 @@ from app.services.curated_identity_batch_service import (
 )
 from app.services.automatic_curated_identity_matching_service import (
     automatically_match_curated_receipts,
+)
+from app.services.proven_exact_receipt_name_service import (
+    automatically_match_proven_exact_names, confirm_bonnaam_alias,
+    manually_match_confirmed_receipt,
 )
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
@@ -824,12 +828,104 @@ def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
 
 
+class Ed2BonnaamAliasConfirmation(BaseModel):
+    alias_name: str = Field(min_length=1, max_length=200)
+    target_name: str = Field(min_length=1, max_length=200)
+
+
+class Ed2ManualReceiptMatchRequest(BaseModel):
+    source_receipt_item_id: str = Field(min_length=1, max_length=200)
+    target_receipt_item_id: str = Field(min_length=1, max_length=200)
+
+
+def _require_authorized_bonnaam_actor():
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail=(
+            "Matchen is uitsluitend beschikbaar voor platform-Superusers."))
+    return actor
+
+
+@router.post("/ed2/manual-receipt-match/confirm")
+def confirm_ed2_manual_receipt_match(payload: Ed2ManualReceiptMatchRequest):
+    """Explicit Superuser selection of a source and a proven target receipt."""
+    actor = _require_authorized_bonnaam_actor()
+    with engine.begin() as conn:
+        try:
+            return manually_match_confirmed_receipt(
+                conn, source_receipt_item_id=payload.source_receipt_item_id,
+                target_receipt_item_id=payload.target_receipt_item_id,
+                actor_id=actor.user_id,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/bonnamen-matchen/auto")
+def auto_ed2_bonnamen_matchen():
+    """One explicit click runs curated family and generic confirmed-name logic."""
+    actor = _require_authorized_bonnaam_actor()
+    with engine.begin() as conn:
+        try:
+            family = automatically_match_curated_receipts(conn, actor_id=actor.user_id)
+            general = automatically_match_proven_exact_names(conn, actor_id=actor.user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+    count = int(family.get("linked") or 0) + int(general.get("linked") or 0)
+    synonyms = int(family.get("synonyms_created") or 0)
+    return {
+        "ok": True,
+        "status": ("applied" if count else family.get("status", "applied")),
+        "linked": count,
+        "linked_from_exact_names": int(general.get("linked") or 0),
+        "linked_from_families": int(family.get("linked") or 0),
+        "synonyms_created": synonyms, "barcode_written": False,
+        "blocked": int(general.get("blocked") or 0) + int(family.get("blocked") or 0),
+        "requires_review": bool(family.get("requires_review") or general.get("requires_review")),
+        "limit_reached": bool(family.get("limit_reached") or general.get("limit_reached")),
+    }
+
+
+@router.post("/ed2/bonnaam-synoniem/confirm")
+def confirm_ed2_bonnaam_synoniem(payload: Ed2BonnaamAliasConfirmation):
+    """Explicit global bonnaam equivalence plus automatic application to all rows."""
+    actor = _require_authorized_bonnaam_actor()
+    with engine.begin() as conn:
+        try:
+            alias = confirm_bonnaam_alias(
+                conn, alias_name=payload.alias_name,
+                target_name=payload.target_name, actor_id=actor.user_id,
+            )
+            summary = automatically_match_proven_exact_names(
+                conn, actor_id=actor.user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"ok": True, "alias": alias, "match_result": summary}
+
+
+@router.post("/ed2/proven-exact-names/auto")
+def auto_ed2_proven_exact_names():
+    """Reuse one independently confirmed coded receipt name across ALL products.
+
+    Only an explicit operator action writes centrally; never on page read.
+    This does not create barcodes, household articles or synonym edges.
+    """
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen bonnamen matchen.")
+    with engine.begin() as conn:
+        try:
+            return automatically_match_proven_exact_names(conn, actor_id=actor.user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 @router.post("/ed2/curated-matching-batch/auto")
 def auto_ed2_curated_matching_batch():
     """Auto-apply only unambiguous, independently sourced approved family matches."""
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen automatisch centrale productmatches vastleggen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale productmatches vastleggen.")
     with engine.begin() as conn:
         try:
             return automatically_match_curated_receipts(conn, actor_id=actor.user_id)
@@ -842,7 +938,7 @@ def preview_ed2_curated_matching_batch(
     target_product_id: str | None = Query(default=None, max_length=200),
 ):
     """Curated central identity suggestions, never writes or invents barcodes."""
-    require_platform_permission_from_session("platform.external_products.view")
+    _require_authorized_bonnaam_actor()
     with engine.connect() as conn:
         try:
             return matching_batch_preview(conn, target_product_id=target_product_id)
@@ -853,8 +949,8 @@ def preview_ed2_curated_matching_batch(
 @router.post("/ed2/curated-matching-batch/confirm")
 def confirm_ed2_curated_matching_batch(payload: Ed2CuratedMatchingBatchConfirmation):
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen bevoegde Superusers en Frontteamleden mogen centrale matches vastleggen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale matches vastleggen.")
     if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
         raise HTTPException(status_code=422, detail="De vooraf beoordeelde matchinglijst ontbreekt.")
     with engine.begin() as conn:
@@ -883,8 +979,8 @@ def ed2_courgette_family_options(receipt_item_id: str = Query(..., min_length=1,
 @router.post("/ed2/courgette-family/confirm")
 def confirm_ed2_courgette_family(payload: Ed2CourgetteFamilyConfirmation):
     actor = require_platform_permission_from_session("platform.external_products.link_existing")
-    if not (actor.is_platform_superuser or actor.is_frontteam):
-        raise HTTPException(status_code=403, detail="Alleen geautoriseerde Superusers en Frontteamleden mogen centrale artikelidentiteiten bevestigen.")
+    if not actor.is_platform_superuser:
+        raise HTTPException(status_code=403, detail="Alleen Superusers mogen centrale matches bevestigen.")
     if not re.fullmatch(r"[0-9a-f]{64}", payload.fingerprint):
         raise HTTPException(status_code=422, detail="De kandidaatgegevens zijn onjuist.")
     if payload.match_mode not in {"same_product", "synonym_variant"}:

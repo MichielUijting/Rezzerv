@@ -1812,3 +1812,41 @@ bestaande centrale feedbackvoorziening; er komen geen eigen modals,
 onzichtbare achtergrondupdates, een tweede navigatie of nieuwe tabellen
 met afwijkende pagination. Op mobiele schermen blijft de overzichtslijst
 lineair leesbaar; de bestaande standaardtabel blijft ongewijzigd.
+
+
+### Artikelbeheer Identificeren — beoordelingsreden bij meerdere uitvoeringen (14 november 2026)
+
+De standaardkolom **Identificatie** behoudt de primaire status
+**Nog identificeren**. Alleen wanneer de server meerdere afzonderlijke
+**bevestigde Catalogusproducten** met dezelfde winkelneutrale bonnaam
+vindt, verschijnt onder die status een ingetogen bruine
+**Niet automatisch gematcht**-regel met de concrete reden. Waar
+beschikbaar staan de productnamen en barcodes in de regel en
+standaardtooltip. Het is een blijvende artikelbeoordelingsstatus en
+geen aparte succes-/foutmelding; geen nieuwe tabel, statusfilter,
+knoppen of modal. Verschillende barcodes binnen éénzelfde bevestigde
+Catalogus-ID veroorzaken deze waarschuwing niet.
+
+
+**Artikelbeheer > Matchen (14 november 2026).** Het exclusief voor
+platform-Superusers beschikbare Matchen-werkgebied volgt de twee zelfstandige,
+gelijke standaard DataTables van Synoniemen. Links kies je één nog te matchen
+bonartikel en rechts één eerder bevestigd bonartikel; beide tabellen delen
+dezelfde kolommen, filters, paginering en selectorbediening. De actie onder
+de rechter tabel bevestigt alleen een gekozen paar. Automatische bonnaamregels
+en familiematching staan in een afzonderlijk uitklapbaar gedeelte. Andere
+Artikelbeheer-werkgebieden tonen geen centrale matchacties.
+
+
+**Matchen bij toegang — 14 november 2026:** De Superuser-functie
+Artikelbeheer → Matchen voert bij het openen eerst de geautoriseerde
+automatische matching uit en toont daarvoor de **centrale, niet-tijdelijke
+Melding-voortgangsoverlay**. Bij een nog onbekend aantal batches wordt een
+indeterminate/native voortgangsindicator gebruikt; een fictief percentage
+is verboden. Tijdens deze controle zijn de twee handmatige tabellen niet
+beschikbaar. Alleen na geslaagde volledige controle verschijnt links de
+werkvoorraad met **handmatig te matchen** artikelen (meerdere bewezen
+Catalogusuitvoeringen); andere niet-geïdentificeerde artikelen horen uitsluitend
+bij Identificeren. Een fout geeft de bestaande centrale blokkerende Melding
+met OK en een afzonderlijke optie om de automatische controle opnieuw te doen.
+Dit is geen autorisatie-uitzondering voor andere onderdelen van Artikelbeheer.

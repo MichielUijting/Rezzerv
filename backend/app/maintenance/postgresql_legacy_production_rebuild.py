@@ -25,7 +25,7 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 111  # Previous 110 canonical tables + explicit ED2 receipt-identity authority.
+EXPECTED_APPLICATION_TABLES = 112  # Existing 111 canonical tables + PO-confirmed receipt-name aliases.
 REQUIRED_CBS_TABLES = frozenset({
     "cbs_ecoicop_categories",
     "global_product_cbs_classifications",

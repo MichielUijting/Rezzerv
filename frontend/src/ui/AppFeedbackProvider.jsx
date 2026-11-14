@@ -483,6 +483,10 @@ function AppFeedbackDialog({
           </div>
         ) : null}
 
+        {variant === 'progress' && progress === null ? (
+          <progress aria-label="Voortgang van verwerking" style={{ width: '100%', accentColor: 'var(--color-ui-primary)' }} />
+        ) : null}
+
         {variant === 'progress' && progress !== null ? (
           <div style={{ display: 'grid', gap: '6px' }}>
             <div style={{ height: '8px', borderRadius: '999px', background: '#E4E7EC', overflow: 'hidden' }}>
