@@ -189,7 +189,7 @@ export default function ArticleRelationshipOverview() {
       <p>Zoek hierboven een artikel. Je ziet daarna alle bewezen matches en
         bevestigde synoniemen als een grafisch netwerk.</p>
     </div> : null}
-    {!loading && !error && graph ? <>
+    {!loading && !error && graph && <>
       <div className="rz-rel-filter-row" aria-label="Relaties filteren">
         {[
           ['all', 'Alles'], ['matches', 'Matches'],
