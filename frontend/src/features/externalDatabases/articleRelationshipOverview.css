@@ -40,7 +40,10 @@
 .rz-rel-catalog-main > div:last-child { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .rz-rel-catalog-main strong { font-size: .92rem; }
 .rz-rel-catalog-main span { font-size: .8rem; color: #4b5f64; }
-.rz-rel-synonyms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(225px, 100%), 1fr)); gap: 18px; width: 100%; margin-top: 0; }
+.rz-rel-synonyms { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(225px, 100%), 1fr)); gap: 18px; width: 100%; padding-top: 25px; margin-top: 0; }
+.rz-rel-synonyms::before { content: ''; position: absolute; top: 0; left: 50%; height: 25px; border-left: 2px dashed var(--rz-rel-teal); }
+.rz-rel-synonyms::after { content: ''; position: absolute; top: 25px; left: 6%; right: 6%; border-top: 2px dashed var(--rz-rel-teal); }
+.rz-rel-synonyms:has(> :only-child)::after { display: none; }
 .rz-rel-synonym-branch { display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .rz-rel-synonym-stem { height: 32px; border-left: 2px dashed var(--rz-rel-teal); }
 .rz-rel-synonym-branch > .rz-rel-catalog { margin-top: 10px; }
