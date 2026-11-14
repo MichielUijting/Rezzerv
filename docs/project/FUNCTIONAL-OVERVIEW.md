@@ -483,3 +483,28 @@ prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
 Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
 vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
 gedeelde productidentiteit blijft niet koppelbaar.
+
+
+### Artikelbeheer — grafisch Overzicht van bevestigde relaties (14 november 2026)
+Binnen Artikelbeheer is **Overzicht** een vierde werkgebied naast Identificeren,
+Classificeren en Synoniemen. Bovenaan selecteert de bevoegde platformgebruiker
+één bestaand Catalogusartikel via een zoekveld (maximaal vijf suggesties).
+De read-only grafiek toont een centrale Cataloguskaart, met groen verbonden
+bonartikelkaarten voor **bewezen matches** en gestreepte blauwgroene lijnen
+naar rechtstreeks **bevestigde synoniemproducten**. Onder iedere synoniemkaart
+staan de eigen daadwerkelijk bevestigde bonartikelen. Er zijn filters
+**Alles**, **Matches**, **Synoniemen** en **Nog te beoordelen**, plus een
+korte legenda en tellingen per geselecteerd product. Bij veel relaties
+kan de gebruiker alle kaarten uitklappen. De kaarten stapelen responsief
+op mobiel zonder tweede tabel of afwijkende navigatie.
+
+De grafiek leest uitsluitend bestaande bevoegdheidsbewaakte GET-routes,
+en projecteert uitsluitend een identiteit met status `catalog_linked` en
+één niet-tegenstrijdige canonieke Catalogus-ID als **Match**. Synoniemlijnen
+komen uitsluitend van daadwerkelijk bevestigde directe Catalogusparen.
+Identieke losse bonnamen zonder bevestigd bewijs mogen alleen in het
+**Nog te beoordelen**-vak verschijnen, expliciet zonder match- of synoniemlijn.
+Geen nieuwe GTIN, naamkoppeling, Catalogusrecord, huishouden- of voorraadmutatie.
+De aparte automatische herkenningslogica van PR #683 is geen afhankelijkheid:
+nieuwe bewezen matches verschijnen vanzelf wanneer zij door de bestaande
+Catalogusprojectie worden teruggegeven.
