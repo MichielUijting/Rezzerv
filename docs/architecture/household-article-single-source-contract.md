@@ -116,3 +116,9 @@ Bestaande andere productclaims of bewaarde barcodes blokkeren
 automatische verwerking. De harde regel dat het functionele
 household_article_id de huishoudidentiteit is, blijft zonder uitzondering
 bestaan.
+
+**Bevestigde GTIN zonder winkelartikelnummer als centrale bewijsbron:**
+Uitsluitend bij de bevoegde centrale bonnaammatching mag een reeds bevestigde
+Catalogusidentiteit met geldige barcode en zonder winkelnummer onafhankelijke
+bewijsbron zijn voor exact gelijknamige bonregels. Dit wijzigt geen
+`household_article_id`, kassabon, voorraad of historische winkelcode.

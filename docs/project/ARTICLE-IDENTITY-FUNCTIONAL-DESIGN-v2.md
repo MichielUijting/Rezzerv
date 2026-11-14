@@ -410,3 +410,24 @@ ed2_receipt_family_links. Mutaties vereisen platform-Superuser of
 geautoriseerd Frontteamlid, actorregistratie, herlezing van bronbewijs
 en transactionele conflictafhandeling. Geen write bij paginabezoek,
 filteren of zoeken. Geen bronbon-, huishoud- of voorraadwijziging.
+
+
+### PO-correctie — bevestigd GTIN-bewijs zonder winkelartikelnummer (14 november 2026)
+
+De eerdere eis dat een bewijsbron zelf een **winkelartikelnummer** moet hebben
+vervalt voor de algemene knop **Bonnamen matchen** wanneer die bron reeds met een
+**geldige GTIN/barcode definitief aan een Catalogusproduct is bevestigd**.
+Een bonartikel met identieke genormaliseerde bonnaam en een ander of ontbrekend
+winkelartikelnummer mag dan hetzelfde actieve Catalogusproduct erven, mits
+alle overige bevestigde productidentiteiten voor die naam eenduidig zijn.
+
+Voorbeeld: **Lidl Aardappel zoet** zonder winkelartikelnummer, met reeds
+bevestigde barcode **4056489846932**, vormt onafhankelijk bewijs voor Lidl
+**Aardappel zoet** met winkelartikelnummer **0080755**. Dit geldt ook
+tussen verschillende winkelketens. De oorspronkelijke winkelcode wordt
+niet tot GTIN gepromoveerd en het Catalogusproduct wordt niet gedupliceerd.
+Een slechts opgeslagen, niet-bevestigde barcode, ongeldige GTIN of uitsluitend
+een naamafgeleid barcodevrij productfamilieverband is onvoldoende bewijs.
+Bestaande afwijkende productclaims en historische barcodeconflicten blijven
+fail-closed. Het betreft uitsluitend een centrale bonartikelidentificatie,
+geen huishoudartikel- of voorraadmutatie.

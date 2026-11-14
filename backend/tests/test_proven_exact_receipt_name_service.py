@@ -394,3 +394,125 @@ def test_changed_proof_across_two_batch_snapshots_blocks_every_write(monkeypatch
     assert result["linked"] == 0
     assert result["blocked"] >= 1
     assert scans["count"] == 2
+
+
+
+def test_lidl_aardappel_zoet_confirmed_gtin_without_shop_number_proves_0080755():
+    """PO reproduction: the code-free linked GTIN is independent product proof."""
+    items = [
+        row("lidl", "Aardappel zoet", "", "sweet-potato",
+            "catalog_linked", article_code="4056489846932"),
+        row("lidl", "Aardappel zoet", "0080755"),
+    ]
+    matches, blocked, no_proof = service._candidate_plan(items)
+    assert len(matches) == 1
+    assert matches[0]["source_key"] == ("lidl", "aardappel zoet", "0080755")
+    assert matches[0]["product_id"] == "sweet-potato"
+    assert matches[0]["witness"]["receipt_article_number"] == ""
+    assert matches[0]["witness"]["confirmed_barcode"] == "4056489846932"
+    assert blocked == no_proof == 0
+
+
+def test_confirmed_codefree_barcode_can_prove_same_name_at_other_stores():
+    items = [
+        row("lidl", "Aardappel zoet", "", "sweet-potato",
+            "catalog_linked", article_code="4056489846932"),
+        row("ah", "Aardappel zoet", "9911"),
+        row("jumbo", "Aardappel zoet", ""),
+        row("lidl", "Aardappel zoet", "0080755"),
+    ]
+    matches, blocked, no_proof = service._candidate_plan(items)
+    assert {(m["source_key"][0], m["source_key"][2], m["product_id"])
+            for m in matches} == {
+        ("ah", "9911", "sweet-potato"),
+        ("jumbo", "", "sweet-potato"),
+        ("lidl", "0080755", "sweet-potato"),
+    }
+    assert blocked == no_proof == 0
+
+
+def test_saved_only_barcode_or_unverified_gtin_is_not_an_independent_witness():
+    pending = row("lidl", "Aardappel zoet", "0080755")
+    merely_saved = row("lidl", "Aardappel zoet", "",
+                       status="saved_only", manual_barcode="4056489846932")
+    candidates, blocked, _ = service._candidate_plan([merely_saved, pending])
+    assert candidates == [] and blocked == 1
+
+    for extras in (
+        {"article_code": "4056489846932", "barcode_free_catalog_link": True},
+        {"article_code": "1234567890123"},  # wrong GTIN check digit
+        {},
+    ):
+        linked = row("lidl", "Aardappel zoet", "", "sweet-potato",
+                     "catalog_linked", **extras)
+        matches, _, missing = service._candidate_plan([linked, pending])
+        assert matches == [] and missing == 1
+
+
+def test_confirmed_manual_barcode_without_shop_number_is_valid_proof():
+    items = [
+        row("lidl", "Aardappel zoet", "", "sweet-potato",
+            "catalog_linked", manual_barcode="4056489846932"),
+        row("lidl", "Aardappel zoet", "0080755"),
+    ]
+    matches, blocked, _ = service._candidate_plan(items)
+    assert len(matches) == 1 and blocked == 0
+    assert matches[0]["witness"]["confirmed_barcode"] == "4056489846932"
+
+
+def test_conflicting_catalog_or_barcode_claim_still_blocks_aardappel_zoet():
+    items = [
+        row("lidl", "Aardappel zoet", "", "sweet-potato",
+            "catalog_linked", article_code="4056489846932"),
+        row("ah", "Aardappel zoet", "22", "other", "catalog_linked"),
+        row("lidl", "Aardappel zoet", "0080755"),
+    ]
+    matches, blocked, _ = service._candidate_plan(items)
+    assert matches == [] and blocked == 1
+
+    items.pop(1)
+    items[0]["manual_barcode"] = "8712345678906"
+    matches, blocked, _ = service._candidate_plan(items)
+    assert matches == [] and blocked == 1
+
+
+def test_confirmed_gtin_anchor_is_used_in_real_batch_flow(monkeypatch):
+    items = [
+        row("lidl", "Aardappel zoet", "", "sweet-potato",
+            "catalog_linked", article_code="4056489846932"),
+        row("lidl", "Aardappel zoet", "0080755"),
+    ]
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": items})
+    monkeypatch.setattr(service, "resolve_external_article_identity",
+                        lambda conn, receipt_id: {
+                            "retailer_code": "lidl",
+                            "receipt_text": "Aardappel zoet",
+                            "external_article_code": "0080755",
+                        })
+    stored = []
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kwargs: stored.append(kwargs) or True)
+    response = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="frontteam")
+    assert response["linked"] == 1
+    assert response["linked_without_article_number"] == 0
+    assert response["barcode_written"] is False
+    assert response["synonyms_created"] == 0
+    assert stored[0]["source_key"] == ("lidl", "aardappel zoet", "0080755")
+    assert stored[0]["product_id"] == "sweet-potato"
+    assert stored[0]["witness"]["confirmed_barcode"] == "4056489846932"
+
+
+def test_bonnaam_alias_can_use_catalog_linked_barcode_only_anchor():
+    items = [
+        row("lidl", "Halfvolle melk", "", "milk",
+            "catalog_linked", article_code="8712345678906"),
+        row("jumbo", "HV Melk", "0077"),
+    ]
+    aliases = {"hv melk": {"target_name": "halfvolle melk", "product_id": "milk"}}
+    matches, blocked, missing = service._candidate_plan(items, aliases)
+    assert len(matches) == 1
+    assert matches[0]["product_id"] == "milk"
+    assert matches[0]["witness"]["confirmed_barcode"] == "8712345678906"
+    assert blocked == missing == 0

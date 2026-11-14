@@ -521,3 +521,9 @@ Voor echte productvarianten gelden de afzonderlijke goedgekeurde
 familie-/synoniemregels. De invoer, bevestiging en uitvoering gebruiken
 bestaande autorisatie, transactionele opslag, audit en overlaymelding;
 zoeken en openen blijven alleen-lezen.
+
+**Bevestigde barcode zonder winkelartikelnummer (PO-correctie 14 november 2026):**
+Een reeds aan één Catalogusproduct gekoppeld bonartikel met geldige barcode
+mag als bewijsbron dienen voor exact gelijknamige bonartikelen met andere of
+ontbrekende winkelartikelnummers. Een losse opgeslagen barcode zonder
+bevestigde Catalogusidentiteit is niet voldoende; productconflicten blokkeren.
