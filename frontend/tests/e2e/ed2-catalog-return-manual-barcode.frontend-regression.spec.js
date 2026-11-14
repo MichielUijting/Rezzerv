@@ -667,6 +667,16 @@ test('Overzicht: echte Catalogusmatches, directe synoniemen en onbewezen namen b
   await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(1)
   await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(1)
   await expect(overview.locator('.rz-rel-stat--matches')).toContainText('1')
+
+  // Choosing an unrelated independently identified product may never
+  // reuse the prior courgette graph or fabricate synonym edges.
+  await search.fill('Groentesoep')
+  await overview.locator('.rz-rel-search-options button', { hasText: 'Groentesoep' }).click()
+  await expect(overview.locator('.rz-rel-hub')).toContainText('Groentesoep')
+  await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(0)
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(0)
+  await expect(overview.locator('.rz-rel-stat--matches')).toContainText('0')
+  await expect(overview.locator('.rz-rel-stat--synonyms')).toContainText('0')
   expect(writes).toEqual([])
 })
 
