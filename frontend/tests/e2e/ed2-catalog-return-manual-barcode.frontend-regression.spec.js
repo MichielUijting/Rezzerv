@@ -706,3 +706,43 @@ test('Bonnamen matchen: serverfout opent geen onterecht matchingvoorstel', async
   expect(previewRequests).toBe(0)
   expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
 })
+
+
+
+test('AH HV MELK: geblokkeerde varianten hebben per bonartikel een blijvende uitleg', async ({ page }) => {
+  const rows = [
+    { id: 'ah-milk-569053', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '569053', article_code: '8718907056274',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+    { id: 'ah-milk-92154', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '92154', article_code: '8710400058519',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+    { id: 'ah-milk-no-code', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked',
+      automatic_match_review_reason: 'Niet automatisch gematcht: deze bonnaam hoort bij 2 verschillende bevestigde Catalogusproducten of uitvoeringen: houdbare melk (barcode 8718907056274); halfvolle melk 1,5 liter (barcode 8710400058519). Kies het juiste product; Inhuis kiest geen willekeurige barcode.' },
+    { id: 'ah-milk-11943', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '11943', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked',
+      automatic_match_review_reason: 'Niet automatisch gematcht: verschillende bevestigde Catalogusproducten of uitvoeringen. Kies het juiste product; Inhuis kiest geen willekeurige barcode.' },
+  ]
+  const writes = []
+  await page.route('**/api/**', (route) => {
+    if (route.request().method() !== 'GET') writes.push(route.request().url())
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren', exact: true }).click()
+  const table = page.getByTestId('external-databases-2-table')
+  await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('HV MELK')
+  await expect(table.locator('.rz-ed2-match-review-reason')).toHaveCount(2)
+  await expect(table).toContainText('geen willekeurige barcode')
+  await expect(table).toContainText('8710400058519')
+  await expect(table).toContainText('8718907056274')
+  await expect(table.locator('.rz-ed2-match-review-reason').first())
+    .toHaveAttribute('title', /verschillende bevestigde Catalogusproducten/)
+  expect(writes).toEqual([])
+})

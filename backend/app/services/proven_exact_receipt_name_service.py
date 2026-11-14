@@ -164,6 +164,62 @@ def _proven_name_targets(rows):
                    if len(product_ids) > 1}
 
 
+
+def confirmed_product_variant_review_reasons(rows):
+    """Explain multiple distinct confirmed Catalogus identities per neutral name.
+
+    Several barcodes attached to ONE Catalogusproduct are not a conflict.
+    This is read-only presentation data, never an identity or write decision.
+    """
+    products_by_name = {}
+    for row in rows:
+        if row.get("identity_status") != "catalog_linked":
+            continue
+        key = _key(row.get("retailer_code"), row.get("receipt_line_text"),
+                   row.get("receipt_article_number"))
+        if not key:
+            continue
+        explicit = str(row.get("identity_catalog_product_id") or "").strip()
+        central = str(row.get("catalog_product_id") or "").strip()
+        if (explicit and central and explicit != central) or not (explicit or central):
+            continue
+        product = explicit or central
+        name = _matching_name(key[0], key[1])
+        barcode = _confirmed_catalog_barcode(row)
+        product_name = str(row.get("catalog_product_name") or "").strip()
+        label = product_name or "Catalogusproduct"
+        if barcode:
+            label += " (barcode " + barcode + ")"
+        products_by_name.setdefault(name, {}).setdefault(product, set()).add(label)
+
+    reasons_by_name = {}
+    for name, products in products_by_name.items():
+        if len(products) < 2:
+            continue
+        examples = sorted(sorted(labels)[0] for labels in products.values())
+        details = "; ".join(examples[:3])
+        if len(examples) > 3:
+            details += "; en " + str(len(examples) - 3) + " andere"
+        reasons_by_name[name] = (
+            "Niet automatisch gematcht: deze bonnaam hoort bij "
+            + str(len(products)) + " verschillende bevestigde "
+            "Catalogusproducten of uitvoeringen"
+            + (": " + details if details else "")
+            + ". Kies het juiste product; Inhuis kiest geen willekeurige barcode."
+        )
+    result = {}
+    for row in rows:
+        if row.get("identity_status") != "not_identified":
+            continue
+        key = _key(row.get("retailer_code"), row.get("receipt_line_text"),
+                   row.get("receipt_article_number"))
+        if not key:
+            continue
+        reason = reasons_by_name.get(_matching_name(key[0], key[1]))
+        if reason:
+            result[str(row.get("id") or "")] = reason
+    return result
+
 def _candidate_plan(rows, aliases=None):
     """All unresolved shop+label+number tuples may reuse a unique proven ID.
 

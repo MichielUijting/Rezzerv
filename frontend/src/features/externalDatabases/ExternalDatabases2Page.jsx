@@ -41,7 +41,16 @@ const columns = [
   { key: 'identity_status_label', label: 'Identificatie', width: 225,
     sortable: true, filterable: true,
     getSortValue: (row) => row.identity_status_label || 'Nog identificeren',
-    renderCell: (row) => row.identity_status_label || 'Nog identificeren' },
+    renderCell: (row) => <span>
+      <span>{row.identity_status_label || 'Nog identificeren'}</span>
+      {row.automatic_match_review_reason ? <span
+        className="rz-ed2-match-review-reason"
+        role="note"
+        title={row.automatic_match_review_reason}>
+        <span aria-hidden="true">⚠</span>{' '}
+        {row.automatic_match_review_reason}
+      </span> : null}
+    </span> },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,

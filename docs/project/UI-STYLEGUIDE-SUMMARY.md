@@ -1812,3 +1812,17 @@ bestaande centrale feedbackvoorziening; er komen geen eigen modals,
 onzichtbare achtergrondupdates, een tweede navigatie of nieuwe tabellen
 met afwijkende pagination. Op mobiele schermen blijft de overzichtslijst
 lineair leesbaar; de bestaande standaardtabel blijft ongewijzigd.
+
+
+### Artikelbeheer Identificeren — beoordelingsreden bij meerdere uitvoeringen (14 november 2026)
+
+De standaardkolom **Identificatie** behoudt de primaire status
+**Nog identificeren**. Alleen wanneer de server meerdere afzonderlijke
+**bevestigde Catalogusproducten** met dezelfde winkelneutrale bonnaam
+vindt, verschijnt onder die status een ingetogen bruine
+**Niet automatisch gematcht**-regel met de concrete reden. Waar
+beschikbaar staan de productnamen en barcodes in de regel en
+standaardtooltip. Het is een blijvende artikelbeoordelingsstatus en
+geen aparte succes-/foutmelding; geen nieuwe tabel, statusfilter,
+knoppen of modal. Verschillende barcodes binnen éénzelfde bevestigde
+Catalogus-ID veroorzaken deze waarschuwing niet.

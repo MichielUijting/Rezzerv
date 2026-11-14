@@ -539,3 +539,14 @@ Catalogusproduct-ID blijft verplicht; bij verschillende bevestigde
 producten of bewaarde/onbevestigde barcodes wordt niet automatisch
 gematcht. De uitzonderlijke naamvergelijking is niet van toepassing op
 huishoudartikelidentiteit of automatische voorraadmutaties.
+
+
+**Varianten met dezelfde bonnaam (PO-besluit 14 november 2026):**
+Als bevestigde bonartikelen met dezelfde winkelneutrale naam naar twee
+of meer **verschillende Catalogusproducten** verwijzen, worden andere
+bonartikelen met die naam niet willekeurig gekoppeld. De bestaande
+kolom **Identificatie** toont dan onder **Nog identificeren** de
+concrete reden en, waar beschikbaar, de verschillende productnamen en
+barcodes. Zijn er verschillende barcodes maar één en hetzelfde
+bevestigde Catalogusproduct, dan is dat géén productconflict en mag de
+bestaande matchinglogica dat product hergebruiken.

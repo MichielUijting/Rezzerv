@@ -456,3 +456,19 @@ zolang de specifieke barcode nog niet veilig gekoppeld is. De eerdere
 regels voor bevestigde winkelcode- of GTIN-bewijsbronnen, idempotentie,
 autorisatie en audit blijven van kracht. Dit besluit maakt geen GTIN of
 huishoudartikel op basis van uitsluitend een naam.
+
+
+### PO-besluit — barcodekeuze bij gelijknamige artikelen (14 november 2026)
+
+Wanneer alle bestaande, onbetwiste bevestigde barcode-identiteiten onder
+een winkelneutrale bonnaam naar **hetzelfde Catalogusproduct** wijzen, mag
+Inhuis dit bewezen Catalogusproduct automatisch hergebruiken. Er wordt
+nooit een willekeurige GTIN naar een bonregel gekopieerd. Wanneer de
+naam daarentegen naar **verschillende bevestigde Catalogusproducten** of
+productuitvoeringen verwijst, kiest Inhuis geen willekeurige barcode.
+Bij ieder betrokken **ongeïdentificeerd** bonartikel toont de bestaande
+kolom **Identificatie** dan een blijvende, concrete beoordelingsreden
+inclusief productnamen of bestaande barcodes waar bekend, bijvoorbeeld:
+**Niet automatisch gematcht: verschillende uitvoeringen — kies het juiste
+product.** Deze reden wordt read-only berekend bij het overzicht en
+verandert de huidige matcher- of opslagbeslissing niet.

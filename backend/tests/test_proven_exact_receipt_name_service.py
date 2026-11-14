@@ -629,3 +629,57 @@ def test_store_marker_does_not_mask_conflicting_product_destinations():
     ]
     matches, blocked, missing = service._candidate_plan(items)
     assert matches == [] and blocked == 1 and missing == 0
+
+
+
+def test_milk_variants_have_article_specific_reason_not_random_barcode():
+    entries = [
+        row("ah", "AH HV MELK", "569053", "milk-1l", "catalog_linked",
+            article_code="8718907056274",
+            catalog_product_name="Houdbare halfvolle melk 1 liter"),
+        row("ah", "AH HV MELK", "92154", "milk-1-5l", "catalog_linked",
+            article_code="8710400058519",
+            catalog_product_name="Halfvolle melk 1,5 liter"),
+        row("ah", "AH HV MELK", "", status="not_identified"),
+        row("ah", "AH HV MELK", "11943", status="not_identified"),
+        row("ah", "AH BIO MELK", "560338", status="not_identified"),
+    ]
+    reasons = service.confirmed_product_variant_review_reasons(entries)
+    assert set(reasons) == {entries[2]["id"], entries[3]["id"]}
+    explanation = reasons[entries[2]["id"]]
+    assert "verschillende bevestigde Catalogusproducten" in explanation
+    assert "8718907056274" in explanation
+    assert "8710400058519" in explanation
+    assert "1 liter" in explanation and "1,5 liter" in explanation
+    assert "geen willekeurige barcode" in explanation
+    assert service._candidate_plan(entries)[0] == []
+
+
+def test_multiple_confirmed_gtins_one_catalog_product_are_not_a_variant_conflict():
+    entries = [
+        row("ah", "AH ELSTAR", "518022", "elstar", "catalog_linked",
+            article_code="8718265121195"),
+        row("ah", "AH ELSTAR", "706911", "elstar", "catalog_linked",
+            article_code="8718906836846"),
+        row("jumbo", "ELSTAR JUMBO", "442", status="not_identified"),
+    ]
+    assert service.confirmed_product_variant_review_reasons(entries) == {}
+    candidates, blocked, missing = service._candidate_plan(entries)
+    assert len(candidates) == 1 and candidates[0]["product_id"] == "elstar"
+    assert blocked == missing == 0
+
+
+def test_review_reason_is_limited_to_unidentified_rows_across_retailers():
+    entries = [
+        row("ah", "AH KIPFILET", "595589", "chicken-a", "catalog_linked",
+            article_code="8718907456487"),
+        row("jumbo", "KIPFILET JUMBO", "49900", "chicken-b", "catalog_linked",
+            article_code="8718907852555"),
+        row("lidl", "Kipfilet", "123", status="not_identified"),
+        row("lidl", "Kipfilet", "124", status="saved_only",
+            manual_barcode="8718907111111"),
+    ]
+    reasons = service.confirmed_product_variant_review_reasons(entries)
+    assert list(reasons) == [entries[2]["id"]]
+    assert "verschillende bevestigde Catalogusproducten" in reasons[entries[2]["id"]]
+    assert service._candidate_plan(entries)[0] == []
