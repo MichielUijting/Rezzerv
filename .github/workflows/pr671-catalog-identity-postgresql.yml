@@ -23,6 +23,7 @@ on:
       - 'backend/tests/test_ed2_receipt_family_links.py'
       - 'backend/tests/test_automatic_curated_identity_matching_service.py'
       - 'backend/tests/test_proven_exact_receipt_name_service.py'
+      - 'backend/tests/test_proven_exact_receipt_name_postgresql.py'
       - 'backend/tests/test_curated_identity_batch_service.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
@@ -86,6 +87,7 @@ jobs:
             backend/tests/test_ed2_receipt_family_links.py \
             backend/tests/test_automatic_curated_identity_matching_service.py \
             backend/tests/test_proven_exact_receipt_name_service.py \
+            backend/tests/test_proven_exact_receipt_name_postgresql.py \
             backend/tests/test_curated_identity_batch_service.py \
             backend/tests/test_catalog_identity_resolution_service.py \
             backend/tests/test_catalog_identity_backfill_preview_service.py \

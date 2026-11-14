@@ -34,7 +34,7 @@ export default function Ed2ProvenExactNameMatching({ onConfirmed }) {
         variant: 'success',
         title: 'Bewezen bonnamen gecontroleerd',
         message: summary.linked > 0
-          ? `\${summary.linked} bonartikel(en) zonder winkelartikelnummer gekoppeld aan bestaande Catalogusproducten.`
+          ? `${summary.linked} bonartikel(en) zonder winkelartikelnummer gekoppeld aan bestaande Catalogusproducten.`
           : 'Geen nieuwe veilige matches gevonden; bestaande gegevens blijven behouden.',
       })
       if (summary.linked > 0) onConfirmed?.()

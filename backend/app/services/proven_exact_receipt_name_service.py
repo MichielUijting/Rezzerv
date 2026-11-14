@@ -243,5 +243,6 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
         "without_proof": no_proof,
         "unprocessed": max(0, len(candidates) - linked) + ambiguous + no_proof,
         "limit_reached": len(candidates) > MAX_EXACT_NAME_BATCH,
-        "requires_review": bool(conflicts or ambiguous or no_proof),
+        "requires_review": bool(conflicts or ambiguous or no_proof or
+                                len(candidates) > MAX_EXACT_NAME_BATCH),
     }
