@@ -566,3 +566,27 @@ kandidaten blijven bonartikelen onder **Identificeren**, zonder fictieve match.
 Het eerdere "geen POST bij openen" is voor deze afzonderlijke, geautoriseerde
 Matchen-functie door de PO herzien; alle andere Artikelbeheer-tabbladen blijven
 bij openen, zoeken en filteren read-only.
+
+### Artikelbeheer — grafisch Overzicht van bevestigde relaties (14 november 2026)
+Binnen Artikelbeheer is **Overzicht** een vijfde werkgebied naast Identificeren,
+Matchen, Classificeren en Synoniemen. Bovenaan selecteert de bevoegde platformgebruiker
+één bestaand Catalogusartikel via een zoekveld (maximaal vijf suggesties).
+De read-only grafiek toont een centrale Cataloguskaart, met groen verbonden
+bonartikelkaarten voor **bewezen matches** en gestreepte blauwgroene lijnen
+naar rechtstreeks **bevestigde synoniemproducten**. Onder iedere synoniemkaart
+staan de eigen daadwerkelijk bevestigde bonartikelen. Er zijn filters
+**Alles**, **Matches**, **Synoniemen** en **Nog te beoordelen**, plus een
+korte legenda en tellingen per geselecteerd product. Bij veel relaties
+kan de gebruiker alle kaarten uitklappen. De kaarten stapelen responsief
+op mobiel zonder tweede tabel of afwijkende navigatie.
+
+De grafiek leest uitsluitend bestaande bevoegdheidsbewaakte GET-routes,
+en projecteert uitsluitend een identiteit met status `catalog_linked` en
+één niet-tegenstrijdige canonieke Catalogus-ID als **Match**. Synoniemlijnen
+komen uitsluitend van daadwerkelijk bevestigde directe Catalogusparen.
+Identieke losse bonnamen zonder bevestigd bewijs mogen alleen in het
+**Nog te beoordelen**-vak verschijnen, expliciet zonder match- of synoniemlijn.
+Geen nieuwe GTIN, naamkoppeling, Catalogusrecord, huishouden- of voorraadmutatie.
+De inmiddels gemergede automatische herkenning van Matchen bevestigt waar
+mogelijk productidentiteiten. Die worden vervolgens uitsluitend read-only
+in het grafische Overzicht weergegeven.
