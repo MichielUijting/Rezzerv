@@ -79,3 +79,20 @@ Bestaande actieve voorraadregels zonder geldig `household_article_id`, met een v
 - Directe aankoop registreert het bedrag maar maakt geen voorraadpositie.
 - Twee huishoudartikelen met dezelfde naam in verschillende huishoudens blijven volledig geïsoleerd.
 - Herladen en F5 veranderen de gekozen artikelidentiteit niet.
+
+
+## Platformbrede codevrije bonnaamherkenning is geen huishoudidentiteit
+
+De beperking op automatische **winkelcodeherkenning** en de onafhankelijke
+identiteit van `household_articles.id` blijven volledig van kracht.
+Een uitzonderlijke **platformbrede** bronidentificatie kan na een expliciete
+bevoegde actie een bonregel zonder winkelartikelnummer aan een reeds bestaand
+centraal Catalogusproduct verbinden, uitsluitend wanneer minimaal één andere
+bevestigde, genummerde bonregel met **exact dezelfde genormaliseerde bonnaam**
+die ene Catalogusproduct-ID onafhankelijk bewijst en er nergens
+tegenstrijdig identiteitsbewijs voor die naam bestaat. De naam geldt slechts
+als stabiele alias van de bewezen centrale identiteit en maakt geen nieuwe
+mondiale GTIN of synoniem tussen aparte Catalogusproducten. Deze actie voert
+nooit zelfstandig een huishoudkoppeling, voorraadafboeking, bonmutatie of
+historisch herstel uit; daarvoor blijven de eigen harde sleutel- en
+bewijsvereisten gelden.

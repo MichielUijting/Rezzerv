@@ -25,6 +25,9 @@ from app.services.curated_identity_batch_service import (
 from app.services.automatic_curated_identity_matching_service import (
     automatically_match_curated_receipts,
 )
+from app.services.proven_exact_receipt_name_service import (
+    automatically_match_proven_exact_names,
+)
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
@@ -822,6 +825,23 @@ def _ed2_require_unlinked(conn, identity: dict[str, str]) -> None:
     ), identity).first()
     if collision:
         raise HTTPException(status_code=409, detail="Dit bonartikel heeft al een Cataloguskoppeling of wacht op classificatie")
+
+
+@router.post("/ed2/proven-exact-names/auto")
+def auto_ed2_proven_exact_names():
+    """Reuse one independently confirmed coded receipt name across ALL products.
+
+    Only an explicit operator action writes centrally; never on page read.
+    This does not create barcodes, household articles or synonym edges.
+    """
+    actor = require_platform_permission_from_session("platform.external_products.link_existing")
+    if not (actor.is_platform_superuser or actor.is_frontteam):
+        raise HTTPException(status_code=403, detail="Alleen bevoegde Superusers en Frontteamleden mogen bewezen bonnamen koppelen.")
+    with engine.begin() as conn:
+        try:
+            return automatically_match_proven_exact_names(conn, actor_id=actor.user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/ed2/curated-matching-batch/auto")

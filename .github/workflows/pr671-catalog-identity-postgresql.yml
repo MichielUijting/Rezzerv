@@ -6,6 +6,7 @@ on:
       - 'backend/app/services/catalog_identity_resolution_service.py'
       - 'backend/app/services/ed2_receipt_family_link_service.py'
       - 'backend/app/services/automatic_curated_identity_matching_service.py'
+      - 'backend/app/services/proven_exact_receipt_name_service.py'
       - 'backend/app/services/curated_identity_batch_service.py'
       - 'backend/alembic/versions/20261113_01_ed2_receipt_family_links.py'
       - 'backend/app/services/catalog_identity_backfill_preview_service.py'
@@ -21,6 +22,7 @@ on:
       - 'backend/app/services/external_unlinked_articles_service.py'
       - 'backend/tests/test_ed2_receipt_family_links.py'
       - 'backend/tests/test_automatic_curated_identity_matching_service.py'
+      - 'backend/tests/test_proven_exact_receipt_name_service.py'
       - 'backend/tests/test_curated_identity_batch_service.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
@@ -83,6 +85,7 @@ jobs:
           python -m pytest -q \
             backend/tests/test_ed2_receipt_family_links.py \
             backend/tests/test_automatic_curated_identity_matching_service.py \
+            backend/tests/test_proven_exact_receipt_name_service.py \
             backend/tests/test_curated_identity_batch_service.py \
             backend/tests/test_catalog_identity_resolution_service.py \
             backend/tests/test_catalog_identity_backfill_preview_service.py \

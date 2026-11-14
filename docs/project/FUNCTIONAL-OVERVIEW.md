@@ -483,3 +483,18 @@ prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
 Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
 vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
 gedeelde productidentiteit blijft niet koppelbaar.
+
+
+**Algemene exacte bonnaamherkenning zonder bonartikelnummer (14 november 2026):**
+Artikelbeheer → Identificeren bevat de bevoegde actie
+**Bewezen bonnamen herkennen**, onafhankelijk van de productcategorie.
+Het eerste bewijs is een bevestigde bonregel mét winkelartikelnummer en
+één actieve Catalogusproduct-ID. Een identieke genormaliseerde omschrijving
+zonder nummer mag die identiteit alleen platformbreed erven als alle
+bekende bevestigde en niet-betwiste coded bronnen naar hetzelfde product wijzen.
+Conflicten, bewaarde onduidelijke barcodes en ongekende artikelen blijven
+zichtbaar voor beoordeling. Dit maakt geen Catalogusproducten, barcodes,
+synoniemen, huishoudartikelen of voorraadevents. Een aparte familieregel blijft
+nodig voordat verschillende productnamen of productvarianten als synoniemen
+worden geautomatiseerd. De actie is read-only totdat een bevoegde gebruiker
+daadwerkelijk op de knop klikt.

@@ -580,3 +580,42 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   await expect(page.getByTestId('external-databases-2-table')).toContainText('Catalogus gekoppeld')
   expect(previews).toBeGreaterThanOrEqual(2)
 })
+
+
+test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik koppelen', async ({ page }) => {
+  const rows = [
+    { id: 'receipt-table-line:milk-code', receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'ah', receipt_article_number: '101', identity_status: 'catalog_linked',
+      identity_status_label: 'Catalogus gekoppeld', link_status: 'linked' },
+    { id: 'receipt-table-line:milk-no-code', receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'plus', receipt_article_number: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
+  ]
+  const writes = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') writes.push(path)
+    if (path === '/api/catalog/ed2/proven-exact-names/auto') {
+      rows[1].identity_status = 'catalog_linked'
+      rows[1].identity_status_label = 'Catalogus gekoppeld'
+      return route.fulfill({ json: {
+        ok: true, status: 'applied', linked: 1,
+        blocked: 0, synonyms_created: 0, barcode_written: false,
+        limit_reached: false,
+      } })
+    }
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  const table = page.getByTestId('external-databases-2-table')
+  await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('melk')
+  await expect(table).toContainText('Nog identificeren')
+  expect(writes).toEqual([])
+  await page.getByRole('button', { name: 'Bewezen bonnamen herkennen', exact: true }).click()
+  await expect(page.getByTestId('ed2-proven-exact-name-matching'))
+    .toContainText('1 artikel(en) aan een bestaand Catalogusproduct gekoppeld.')
+  await expect(table).not.toContainText('Nog identificeren')
+  expect(writes).toEqual(['/api/catalog/ed2/proven-exact-names/auto'])
+})
