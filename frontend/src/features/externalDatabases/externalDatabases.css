@@ -646,3 +646,8 @@
 .rz-barcode-import-heading h2 { margin: 0; }
 .rz-barcode-import-page > .rz-input-field { max-width: min(560px, 100%); }
 .rz-barcode-import-page .rz-external-ed2-bulk-actions { justify-content: flex-end; }
+
+/* A per-article review reason; not an in-screen action notification. */
+.rz-ed2-match-review-reason { display: block; max-width: 370px; margin-top: 3px;
+  font-size: .78rem; color: #805300; line-height: 1.3;
+  overflow-wrap: anywhere; }

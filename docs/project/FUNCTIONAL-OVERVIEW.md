@@ -483,3 +483,70 @@ prevaleren. Annuleren laat de synoniemrelatie en classificaties onveranderd.
 Bevestigen verwerkt de keuze uitsluitend na actuele servercontrole en de
 vereiste schrijfbevoegdheid, inclusief CBS-versiehistorie en herkomst;
 gedeelde productidentiteit blijft niet koppelbaar.
+
+
+**Algemene exacte bonnaamherkenning zonder bonartikelnummer (14 november 2026):**
+Artikelbeheer → Identificeren bevat de bevoegde actie
+**Bewezen bonnamen herkennen**, onafhankelijk van de productcategorie.
+Het eerste bewijs is een bevestigde bonregel mét winkelartikelnummer en
+één actieve Catalogusproduct-ID. Een identieke genormaliseerde omschrijving
+zonder nummer mag die identiteit alleen platformbreed erven als alle
+bekende bevestigde en niet-betwiste coded bronnen naar hetzelfde product wijzen.
+Conflicten, bewaarde onduidelijke barcodes en ongekende artikelen blijven
+zichtbaar voor beoordeling. Dit maakt geen Catalogusproducten, barcodes,
+synoniemen, huishoudartikelen of voorraadevents. Een aparte familieregel blijft
+nodig voordat verschillende productnamen of productvarianten als synoniemen
+worden geautomatiseerd. De actie is read-only totdat een bevoegde gebruiker
+daadwerkelijk op de knop klikt.
+
+
+### Artikelbeheer — één knop Bonnamen matchen (14 november 2026)
+
+**Bonnamen matchen** combineert de eerder afzonderlijke knoppen voor
+algemene bewezen naamherkenning en courgettes. Identieke genormaliseerde
+kassabonnamen mogen aan een bewezen bestaand Catalogusproduct worden
+gekoppeld, óók als bonartikelcodes anders zijn binnen dezelfde winkel
+of tussen verschillende winkels. De combinatie van winkel, bonnaam
+en werkelijk winkelartikelnummer blijft de unieke opslagidentiteit;
+een nummer is geen GTIN. Bestaande conflicten worden nooit overschreven.
+
+De bevoegde gebruiker kan aanvullend een centraal, gericht
+**bonnaamsynoniem** bevestigen, bijvoorbeeld HV Melk → Halfvolle melk.
+Deze regel is geldig voor alle bestaande en toekomstige bonartikelen
+met exact dezelfde aliasnaam en alle bijbehorende winkels en nummers,
+zolang de doelidentiteit eenduidig bewezen blijft. Bestaande andere
+productidentiteiten en handmatige barcodes zijn beschermd. De naamalias
+is niet hetzelfde als een synoniemrelatie tussen twee Catalogusproducten.
+Voor echte productvarianten gelden de afzonderlijke goedgekeurde
+familie-/synoniemregels. De invoer, bevestiging en uitvoering gebruiken
+bestaande autorisatie, transactionele opslag, audit en overlaymelding;
+zoeken en openen blijven alleen-lezen.
+
+**Bevestigde barcode zonder winkelartikelnummer (PO-correctie 14 november 2026):**
+Een reeds aan één Catalogusproduct gekoppeld bonartikel met geldige barcode
+mag als bewijsbron dienen voor exact gelijknamige bonartikelen met andere of
+ontbrekende winkelartikelnummers. Een losse opgeslagen barcode zonder
+bevestigde Catalogusidentiteit is niet voldoende; productconflicten blokkeren.
+
+
+**Winkelneutrale bonnaamvergelijking (PO-besluit 14 november 2026):**
+Voor de centrale actie **Bonnamen matchen** geldt bijvoorbeeld
+`AH ELSTAR` = `ELSTAR JUMBO` = `ELSTAR` als vergelijkingsnaam.
+Alleen een echt winkelvoorvoegsel of -achtervoegsel van de
+**betrokken winkel** wordt tijdelijk genegeerd. Bronbonnen, originele
+winkelnummers en barcodes blijven onaangetast. Een onbetwiste bewezen
+Catalogusproduct-ID blijft verplicht; bij verschillende bevestigde
+producten of bewaarde/onbevestigde barcodes wordt niet automatisch
+gematcht. De uitzonderlijke naamvergelijking is niet van toepassing op
+huishoudartikelidentiteit of automatische voorraadmutaties.
+
+
+**Varianten met dezelfde bonnaam (PO-besluit 14 november 2026):**
+Als bevestigde bonartikelen met dezelfde winkelneutrale naam naar twee
+of meer **verschillende Catalogusproducten** verwijzen, worden andere
+bonartikelen met die naam niet willekeurig gekoppeld. De bestaande
+kolom **Identificatie** toont dan onder **Nog identificeren** de
+concrete reden en, waar beschikbaar, de verschillende productnamen en
+barcodes. Zijn er verschillende barcodes maar één en hetzelfde
+bevestigde Catalogusproduct, dan is dat géén productconflict en mag de
+bestaande matchinglogica dat product hergebruiken.

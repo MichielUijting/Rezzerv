@@ -164,8 +164,7 @@ def test_unauthorized_batch_cannot_open_mutating_transaction(monkeypatch):
     assert err.value.status_code == 403
 
 
-@pytest.mark.parametrize("role", ["superuser", "frontteam"])
-def test_authorized_batch_verifies_fingerprint_inside_transaction(monkeypatch, role):
+def test_superuser_batch_verifies_fingerprint_inside_transaction(monkeypatch):
     from contextlib import contextmanager
     from fastapi import HTTPException
     from app.api import catalog_routes
@@ -173,8 +172,8 @@ def test_authorized_batch_verifies_fingerprint_inside_transaction(monkeypatch, r
     monkeypatch.setattr(catalog_routes,
         "require_platform_permission_from_session",
         lambda permission: SimpleNamespace(user_id="authorized",
-            is_platform_superuser=role == "superuser",
-            is_frontteam=role == "frontteam"))
+            is_platform_superuser=True,
+            is_frontteam=False))
     events = []
     @contextmanager
     def begin():
@@ -203,12 +202,35 @@ def test_authorized_batch_verifies_fingerprint_inside_transaction(monkeypatch, r
     assert events == ["begin", "rollback"]
 
 
+def test_frontteam_batch_confirmation_denied_before_transaction(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+    monkeypatch.setattr(
+        catalog_routes, "require_platform_permission_from_session",
+        lambda *_: SimpleNamespace(user_id="frontteam",
+                                   is_platform_superuser=False, is_frontteam=True))
+    class NoTransaction:
+        def begin(self):
+            pytest.fail("Frontteam may not confirm a central match")
+    monkeypatch.setattr(catalog_routes, "engine", NoTransaction())
+    payload = catalog_routes.Ed2CuratedMatchingBatchConfirmation(
+        target_product_id=ROOT["id"],
+        receipt_item_ids=["receipt-table-line:lidl"],
+        fingerprint="e" * 64,
+    )
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.confirm_ed2_curated_matching_batch(payload)
+    assert error.value.status_code == 403
+
+
 def test_public_batch_preview_is_read_only_and_authorized(monkeypatch):
     from contextlib import contextmanager
     from app.api import catalog_routes
     calls = []
     def permission(code):
         calls.append(code)
+        return SimpleNamespace(user_id="superuser", is_platform_superuser=True,
+                               is_frontteam=False)
     monkeypatch.setattr(catalog_routes,
         "require_platform_permission_from_session", permission)
     @contextmanager
@@ -222,5 +244,21 @@ def test_public_batch_preview_is_read_only_and_authorized(monkeypatch):
                         lambda conn, **kwargs: {"items": [], "targets": []})
     output = catalog_routes.preview_ed2_curated_matching_batch()
     assert output["items"] == []
-    assert calls == ["platform.external_products.view",
+    assert calls == ["platform.external_products.link_existing",
                      "open_read_only", "close_read_only"]
+
+
+def test_frontteam_preview_denied_before_database_read(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+    monkeypatch.setattr(
+        catalog_routes, "require_platform_permission_from_session",
+        lambda *_: SimpleNamespace(user_id="frontteam",
+                                   is_platform_superuser=False, is_frontteam=True))
+    class NoConnection:
+        def connect(self):
+            pytest.fail("Frontteam may not open Superuser matching preview")
+    monkeypatch.setattr(catalog_routes, "engine", NoConnection())
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.preview_ed2_curated_matching_batch()
+    assert error.value.status_code == 403

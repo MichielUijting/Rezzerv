@@ -340,3 +340,158 @@ uitzonderingen; een fout laat bestaande identiteiten ongemoeid. De
 regressietest verifieert **nul schrijfverzoeken** bij openen en filteren,
 en exact één verwerkingsverzoek na de genoemde gebruikersactie. De vier
 bestaande read-only Playwrightcontroles blijven ongewijzigd.
+\n### PO-besluit 14 november 2026 — exact gelijke bonnaam zonder winkelartikelnummer\nEen bonregel zonder winkelartikelnummer mag bij de expliciete automatische\nherkenningsactie worden gekoppeld aan het **reeds bewezen** Catalogusproduct\nvan een andere bonregel met exact dezelfde **genormaliseerde bonomschrijving**,\nmits die andere bonregel een niet-lege winkelartikelcode heeft, een bevestigde\ncentrale Catalogusidentiteit draagt en alle aldus bewezen bronnen naar\n**precies eenzelfde actief product** verwijzen. De actuele uitbreiding past dit\nalleen toe binnen de reeds goedgekeurde en geteste verse-courgettefamilie.\nHet mag ook een identieke omschrijving van een andere winkelketen zijn.\n\nHet resultaat is hergebruik van dezelfde productidentiteit (de bonomschrijving\nis dus functioneel een alias/synoniem), **niet** een nieuwe barcode, een\nextra Catalogusproduct of een product-product-synoniemrand. Een bewezen gele\nof biologische variant blijft een eigen product met zijn bestaande bevestigde\nsynoniemrelatie. Vergelijkbare maar niet exact gelijke namen, tegenstrijdige\ncodebewijzen of onzekere/stale claims worden niet automatisch gekoppeld.\nDe server leest bewijzen opnieuw in de schrijftransactie; autorisatie en\naudit zijn verplicht. Buiten deze vertrouwde productfamilie is de naam\nop zichzelf nog steeds geen automatische identiteit of huishoudkoppeling.\nGET, openen en filteren blijven volledig read-only.\n
+
+### Fase 2F — algemene exacte bonnaam zonder winkelartikelnummer (14 november 2026)
+
+**Nieuw uitdrukkelijk PO-besluit:** de bewezen matchingregel voor een **exact gelijke**
+genormaliseerde bonomschrijving wordt hergebruikt voor **alle productsoorten**
+en alle platformbreed betrouwbaar herkende winkelketens, zonder een productfamilie
+zoals courgettes als voorwaarde. Een afzonderlijke, bevestigde bonregel met
+**niet-leeg winkelartikelnummer** is vereist als onafhankelijke bron van één
+actief Catalogusproduct. Alle bestaande bevestigde bronidentiteiten met dezelfde
+exacte naam moeten diezelfde actieve Catalogus-ID bewijzen; een afwijkende
+productbestemming, bewaarde onduidelijke barcode of betwiste identiteitsstatus
+blokkeert de complete naamgroep. Naamovereenkomst zónder zo'n onafhankelijke
+codebron blijft uitsluitend een niet-mutatief voorstel.
+
+De actie **Bewezen bonnamen herkennen** is een bewuste bevoegde POST binnen
+Artikelbeheer → Identificeren, naast de aparte geteste
+**Courgettes automatisch herkennen**-actie. Tot maximaal 50 unieke
+bonidentiteiten zonder artikelnummer worden met actuele bronrevalidatie,
+PostgreSQL-transacties, afzonderlijke savepoints en autorisatie-audit verbonden
+aan het **bestaande** Catalogusproduct. Er wordt géén nieuwe GTIN, product,
+product-product-synoniemrelatie, kassabon-, huishoudartikel- of voorraadmutatie
+gemaakt. Een identieke bonnaam is in deze situatie een alias van dezelfde
+bewezen productidentiteit, **niet** bewijs dat twee aparte producten synoniem
+zijn. Bestaande geïdentificeerde codevrije bonregels blijven idempotent.
+Verschillende of vergelijkbare namen, verpakkingsteksten en varianten blijven
+afzonderlijk. Productfamilie-extrapolatie, bijzondere varianten en automatische
+**synoniemvorming** blijven volgens 6B/10B/15A/23A beperkt tot goedgekeurde
+en geteste productregels, momenteel courgettes.
+
+De algemene platformbrede identificatie verandert nooit direct de
+huishoudartikel-ID of historische voorraadafboeking: daarvoor blijft het aparte
+bewijsgestuurde huishoudreconciliatiecontract vereist.
+
+
+### Fase 2G — algemene bonnamen, verschillende nummers en expliciete naamrelaties (14 november 2026)
+
+Het nieuwe PO-besluit breidt de exacte bonnaamherkenning uit tot **alle
+bonartikelen**, ook als het bonartikelnummer verschilt. Dit geldt zowel
+**binnen dezelfde winkel** als **tussen verschillende winkels**. Ten minste
+één werkelijk bevestigde, genummerde bron met de exacte genormaliseerde
+bonnaam moet één actief Catalogusproduct bewijzen. Bestaande andere
+Catalogusclaims, betwiste identificaties en opgeslagen barcodes blokkeren
+automatische verwerking; de naam is geen reden om brongegevens te wijzigen
+of een winkelartikelnummer tot mondiale GTIN te promoveren.
+
+De twee vorige automatische knoppen zijn vervangen door precies één knop:
+**Bonnamen matchen**. Deze voert de algemene bewezen exact-naamherkenning en
+de bestaande courgettefamilieregels in één bevoegde actie uit. De
+familievoorziening voor afzonderlijke courgettevarianten blijft begrensd
+tot geteste, goedgekeurde gevallen. Algemene exacte naamherkenning maakt
+nooit automatisch een Catalogusproduct of product-product-synoniem aan.
+
+Daarnaast kan een bevoegde gebruiker een **bonnaamsynoniem** expliciet
+vastleggen, zoals **HV Melk → Halfvolle melk**. Na een aparte bevestiging
+wordt de gerichte, genormaliseerde alias centraal bewaard. De naamregel
+geldt vervolgens bij alle winkels en bij alle verschillende
+winkelartikelnummers met exact de aliasnaam. Er moet voor de doelnaam
+één onafhankelijk bevestigde Catalogusbestemming bestaan. Als de bronnaam
+reeds naar een ander product verwijst of de doelnaam conflicteert, wordt
+de regel niet opgeslagen of toegepast. Naamalias is uitdrukkelijk **geen**
+product-product-synoniem en maakt geen extra barcode of product aan.
+
+De database legt de naamregels vast in ed2_receipt_name_aliases. De per-bon
+bevestigde identiteit blijft opgeslagen met retailer, genormaliseerde
+bonnaam en het **originele winkelartikelnummer** in
+ed2_receipt_family_links. Mutaties vereisen platform-Superuser of
+geautoriseerd Frontteamlid, actorregistratie, herlezing van bronbewijs
+en transactionele conflictafhandeling. Geen write bij paginabezoek,
+filteren of zoeken. Geen bronbon-, huishoud- of voorraadwijziging.
+
+
+### PO-correctie — bevestigd GTIN-bewijs zonder winkelartikelnummer (14 november 2026)
+
+De eerdere eis dat een bewijsbron zelf een **winkelartikelnummer** moet hebben
+vervalt voor de algemene knop **Bonnamen matchen** wanneer die bron reeds met een
+**geldige GTIN/barcode definitief aan een Catalogusproduct is bevestigd**.
+Een bonartikel met identieke genormaliseerde bonnaam en een ander of ontbrekend
+winkelartikelnummer mag dan hetzelfde actieve Catalogusproduct erven, mits
+alle overige bevestigde productidentiteiten voor die naam eenduidig zijn.
+
+Voorbeeld: **Lidl Aardappel zoet** zonder winkelartikelnummer, met reeds
+bevestigde barcode **4056489846932**, vormt onafhankelijk bewijs voor Lidl
+**Aardappel zoet** met winkelartikelnummer **0080755**. Dit geldt ook
+tussen verschillende winkelketens. De oorspronkelijke winkelcode wordt
+niet tot GTIN gepromoveerd en het Catalogusproduct wordt niet gedupliceerd.
+Een slechts opgeslagen, niet-bevestigde barcode, ongeldige GTIN of uitsluitend
+een naamafgeleid barcodevrij productfamilieverband is onvoldoende bewijs.
+Bestaande afwijkende productclaims en historische barcodeconflicten blijven
+fail-closed. Het betreft uitsluitend een centrale bonartikelidentificatie,
+geen huishoudartikel- of voorraadmutatie.
+
+
+### PO-uitbreiding — winkelnaam negeren bij exacte centrale bonnaamvergelijking (14 november 2026)
+
+**Bonnamen matchen** vergelijkt bonnamen voortaan winkelneutraal: uitsluitend
+een herkenbare naam van **de werkelijk betrokken winkelketen**, aan het
+**begin of einde** van de bonnaam, wordt voor de vergelijking weggelaten.
+Voorbeelden: `AH ELSTAR` = `ELSTAR JUMBO` = `ELSTAR`;
+`AH AVOCADO` = `AVOCADO`, en `LIDL BASILICUM` = `BASILICUM`.
+De oorspronkelijke bronbontekst en de combinatie van winkel, bonnaam en
+winkelartikelnummer worden **niet** veranderd. Middenin een artikelnaam wordt
+geen tekst verwijderd. Een winkelnaam van een andere winkel wordt niet als
+decoratie weggelaten, omdat dit ook een betekenisvolle merknaam kan zijn.
+
+**Belangrijke veiligheidsgrens:** de neutrale naam blijft een
+vergelijkingssleutel, geen zelfstandig productbewijs. Er moet precies één
+onbetwiste onafhankelijke Catalogusbestemming zijn. Bij twee verschillende
+bewezen producten onder dezelfde neutrale naam, bijvoorbeeld AH HV MELK
+of AH KIPFILET met verschillende Catalogusidentiteiten, worden
+onbekende kandidaten voor menselijke beoordeling geblokkeerd. Ook een
+`Barcode bewaard - Catalogus herstellen`-claim blokkeert die naamgroep
+zolang de specifieke barcode nog niet veilig gekoppeld is. De eerdere
+regels voor bevestigde winkelcode- of GTIN-bewijsbronnen, idempotentie,
+autorisatie en audit blijven van kracht. Dit besluit maakt geen GTIN of
+huishoudartikel op basis van uitsluitend een naam.
+
+
+### PO-besluit — barcodekeuze bij gelijknamige artikelen (14 november 2026)
+
+Wanneer alle bestaande, onbetwiste bevestigde barcode-identiteiten onder
+een winkelneutrale bonnaam naar **hetzelfde Catalogusproduct** wijzen, mag
+Inhuis dit bewezen Catalogusproduct automatisch hergebruiken. Er wordt
+nooit een willekeurige GTIN naar een bonregel gekopieerd. Wanneer de
+naam daarentegen naar **verschillende bevestigde Catalogusproducten** of
+productuitvoeringen verwijst, kiest Inhuis geen willekeurige barcode.
+Bij ieder betrokken **ongeïdentificeerd** bonartikel toont de bestaande
+kolom **Identificatie** dan een blijvende, concrete beoordelingsreden
+inclusief productnamen of bestaande barcodes waar bekend, bijvoorbeeld:
+**Niet automatisch gematcht: verschillende uitvoeringen — kies het juiste
+product.** Deze reden wordt read-only berekend bij het overzicht en
+verandert de huidige matcher- of opslagbeslissing niet.
+
+
+### Fase 2H — afzonderlijk Superuser-werkgebied Matchen (14 november 2026)
+
+Artikelbeheer heeft een eigen knop **Matchen**, uitsluitend voor platform-Superusers.
+De bestaande werkgebieden **Identificeren**, **Classificeren** en **Synoniemen**
+bevatten geen centrale matchacties meer. Matchen gebruikt twee onafhankelijke,
+identiek opgebouwde standaardtabellen (zelfde kolommen, filters, paginering).
+Links kiest de Superuser één nog te identificeren bonartikel; rechts één
+bonartikel met een bewezen centrale Catalogusidentiteit.
+
+Een expliciete bevestiging koppelt uitsluitend de exacte combinatie
+winkelketen + originele bonnaam + bonartikelnummer van links aan het bewezen
+Catalogusproduct rechts. De backend herleest beide identiteiten, verifieert
+de bestaande Catalogus-ID en onafhankelijke bewijsbron en weigert bestaande,
+veranderde of tegenstrijdige claims. Er worden geen GTINs verzonnen of
+overgeschreven en er zijn geen wijzigingen in bonbronnen, huishoudartikelen,
+voorraad of product-product-synoniemen.
+
+Gecontroleerde automatische matching, de centrale bonnaamregels en de
+goedgekeurde courgettefamiliebeoordeling zijn voortaan in Matchen te vinden.
+De centrale matchbevestigingen controleren ook server-side expliciet op
+platform-Superuser; Frontteamleden hebben voor deze acties geen toegang.

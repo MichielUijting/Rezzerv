@@ -79,3 +79,46 @@ Bestaande actieve voorraadregels zonder geldig `household_article_id`, met een v
 - Directe aankoop registreert het bedrag maar maakt geen voorraadpositie.
 - Twee huishoudartikelen met dezelfde naam in verschillende huishoudens blijven volledig geïsoleerd.
 - Herladen en F5 veranderen de gekozen artikelidentiteit niet.
+
+
+## Platformbrede codevrije bonnaamherkenning is geen huishoudidentiteit
+
+De beperking op automatische **winkelcodeherkenning** en de onafhankelijke
+identiteit van `household_articles.id` blijven volledig van kracht.
+Een uitzonderlijke **platformbrede** bronidentificatie kan na een expliciete
+bevoegde actie een bonregel zonder winkelartikelnummer aan een reeds bestaand
+centraal Catalogusproduct verbinden, uitsluitend wanneer minimaal één andere
+bevestigde, genummerde bonregel met **exact dezelfde genormaliseerde bonnaam**
+die ene Catalogusproduct-ID onafhankelijk bewijst en er nergens
+tegenstrijdig identiteitsbewijs voor die naam bestaat. De naam geldt slechts
+als stabiele alias van de bewezen centrale identiteit en maakt geen nieuwe
+mondiale GTIN of synoniem tussen aparte Catalogusproducten. Deze actie voert
+nooit zelfstandig een huishoudkoppeling, voorraadafboeking, bonmutatie of
+historisch herstel uit; daarvoor blijven de eigen harde sleutel- en
+bewijsvereisten gelden.
+
+
+### Uitzondering op automatische identificatie van centrale bonnamen (14 november 2026)
+
+De PO heeft uitdrukkelijk bepaald dat **exact gelijke bonnamen** met
+**verschillende winkelartikelnummers** aan hetzelfde bestaande
+Catalogusproduct mogen worden gekoppeld, binnen één winkel en over
+verschillende winkels heen. Dit is alleen toegestaan via de bevoegde
+centrale bonnaamroute en alleen als het oorspronkelijke product onafhankelijk
+is bewezen en alle bestaande centrale claims eenduidig blijven.
+
+Een door een bevoegde gebruiker bevestigde naamalias, bijvoorbeeld
+HV Melk → Halfvolle melk, wordt platformbreed éénmaal vastgelegd en
+geldt voor alle bonartikelen met die exacte aliasnaam. De alias
+verandert geen oorspronkelijke bronbon, GTIN, Catalogusproduct,
+product-product-synoniem, historisch huishoudartikel of voorraad.
+Bestaande andere productclaims of bewaarde barcodes blokkeren
+automatische verwerking. De harde regel dat het functionele
+household_article_id de huishoudidentiteit is, blijft zonder uitzondering
+bestaan.
+
+**Bevestigde GTIN zonder winkelartikelnummer als centrale bewijsbron:**
+Uitsluitend bij de bevoegde centrale bonnaammatching mag een reeds bevestigde
+Catalogusidentiteit met geldige barcode en zonder winkelnummer onafhankelijke
+bewijsbron zijn voor exact gelijknamige bonregels. Dit wijzigt geen
+`household_article_id`, kassabon, voorraad of historische winkelcode.

@@ -11,8 +11,7 @@ import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
-import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
-import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
+import Ed2MatchPage from './Ed2MatchPage'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -41,7 +40,16 @@ const columns = [
   { key: 'identity_status_label', label: 'Identificatie', width: 225,
     sortable: true, filterable: true,
     getSortValue: (row) => row.identity_status_label || 'Nog identificeren',
-    renderCell: (row) => row.identity_status_label || 'Nog identificeren' },
+    renderCell: (row) => <span>
+      <span>{row.identity_status_label || 'Nog identificeren'}</span>
+      {row.automatic_match_review_reason ? <span
+        className="rz-ed2-match-review-reason"
+        role="note"
+        title={row.automatic_match_review_reason}>
+        <span aria-hidden="true">⚠</span>{' '}
+        {row.automatic_match_review_reason}
+      </span> : null}
+    </span> },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -62,22 +70,6 @@ const exportColumns = [
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
   ['identity_status_label', 'Identificatie'], ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
-
-function isCuratedFreshCourgetteLabel(value) {
-  // Presentation-only gate. The server recomputes the authoritative family.
-  // A substring match would wrongly show the workflow for Olvarit or soup.
-  const words = String(value || '').toLocaleLowerCase('nl')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .match(/[a-z0-9]+/g) || []
-  const base = new Set(['courgette', 'courgettes'])
-  const allowed = new Set([...base, 'bio', 'biologisch', 'biologische',
-    'groen', 'groene', 'geel', 'gele', 'ah', 'jumbo', 'lidl', 'albert', 'heijn'])
-  const colors = [words.some((word) => word === 'groen' || word === 'groene'),
-    words.some((word) => word === 'geel' || word === 'gele')]
-  return words.filter((word) => base.has(word)).length === 1
-    && words.every((word) => allowed.has(word))
-    && !colors.every(Boolean)
-}
 
 function csvCell(value) {
   const content = String(value ?? '')
@@ -381,7 +373,9 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Artikelbeheer</h2>
-        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
+        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea}
+          isPlatformSuperuser={isPlatformSuperuser} />
+        {activeArea === 'matching' && isPlatformSuperuser ? <Ed2MatchPage /> : null}
         {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
         {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
@@ -399,11 +393,6 @@ export default function ExternalDatabases2Page() {
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
-        <Ed2CuratedMatchingBatch onConfirmed={() => {
-          setSelectedItem(null)
-          setSelectedIds([])
-          setRefreshVersion((value) => value + 1)
-        }} />
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -496,14 +485,6 @@ export default function ExternalDatabases2Page() {
             </section>
           </div>
           : selectedItem ? <div key={selectedItem.id}>
-            {selectedItem.identity_status === 'not_identified'
-              && !selectedItem.manual_barcode && !selectedItem.article_code
-              && isCuratedFreshCourgetteLabel(selectedItem.receipt_line_text)
-              ? <Ed2CourgetteFamilyPanel item={selectedItem} onConfirmed={() => {
-                setSelectedItem(null)
-                setSelectedIds([])
-                setRefreshVersion((value) => value + 1)
-              }} /> : null}
             <OffCandidatePanel item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)

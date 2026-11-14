@@ -462,9 +462,9 @@ test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzo
     return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
   })
   await page.goto('/externe-databases-2')
-  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
-  const table = page.getByTestId('external-databases-2-table')
-  await table.locator('tbody tr', { hasText: 'Courgette groen' }).dblclick()
+  await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
+  const table = page.getByTestId('ed2-match-left-table')
+  await table.locator('tbody tr', { hasText: 'Courgette groen' }).click()
   const family = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
   await expect(family).toBeVisible()
   expect(posts).toHaveLength(0)
@@ -476,14 +476,14 @@ test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzo
   await expect.poll(() => posts.length).toBe(1)
   expect(posts[0].match_mode).toBe('same_product')
 
-  await table.locator('tbody tr', { hasText: 'Courgette geel' }).dblclick()
+  await table.locator('tbody tr', { hasText: 'Courgette geel' }).click()
   const yellow = page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })
   await yellow.getByLabel('Bestaand Catalogusproduct').selectOption('a'.repeat(64))
   await yellow.getByRole('button', { name: 'Variant als synoniem bevestigen' }).click()
   await page.getByTestId('ed2-curated-family-confirm').getByRole('button', { name: 'Bevestigen' }).click()
   await expect.poll(() => posts.length).toBe(2)
   expect(posts[1].match_mode).toBe('synonym_variant')
-  await table.locator('tbody tr', { hasText: 'Olvarit' }).dblclick()
+  await table.locator('tbody tr', { hasText: 'Olvarit' }).click()
   await expect(page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })).toHaveCount(0)
 })
 
@@ -530,7 +530,7 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
           ? 'e'.repeat(64) : null,
       } })
     }
-    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/auto') {
+    if (url.pathname === '/api/catalog/ed2/bonnamen-matchen/auto') {
       autoRequests.push(route.request().method())
       // Two independently proven ordinary catalog anchors require an explicit
       // exception review. Never write the six unresolved receipt identities.
@@ -557,10 +557,11 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
-    .getByRole('button', { name: 'Identificeren' }).click()
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
   const batch = page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' })
-  await batch.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
-  await expect(batch).toContainText('Automatische matching is gepauzeerd:')
+  await batch.getByRole('button', { name: 'Bonnamen matchen' }).click()
+  await expect(batch).toContainText('Niet alle productfamilies hebben één bewezen anker.')
   expect(autoRequests).toEqual(['POST'])
   await batch.getByLabel('Bestaand, geïdentificeerd Catalogusproduct').selectOption('gp-ah')
   await expect(batch).toContainText('6 voorgesteld')
@@ -577,6 +578,230 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   expect(posts[0].fingerprint).toBe('e'.repeat(64))
   expect(posts[0].receipt_item_ids).toHaveLength(6)
   expect(posts[0].receipt_item_ids).not.toContain('receipt-table-line:ah-linked')
-  await expect(page.getByTestId('external-databases-2-table')).toContainText('Catalogus gekoppeld')
+  await expect(page.getByTestId('ed2-match-left-table')).not.toContainText('Courgette groen')
   expect(previews).toBeGreaterThanOrEqual(2)
+})
+
+
+test('Matchen: bewezen bonnamen van alle winkels alleen na expliciete klik koppelen', async ({ page }) => {
+  const rows = [
+    { id: 'receipt-table-line:milk-code', receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'ah', receipt_article_number: '101', identity_status: 'catalog_linked',
+      identity_status_label: 'Catalogus gekoppeld', link_status: 'linked' },
+    { id: 'receipt-table-line:milk-no-code', receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'plus', receipt_article_number: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
+  ]
+  const writes = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') writes.push(path)
+    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
+      rows[1].identity_status = 'catalog_linked'
+      rows[1].identity_status_label = 'Catalogus gekoppeld'
+      return route.fulfill({ json: {
+        ok: true, status: 'applied', linked: 1,
+        linked_from_exact_names: 1, linked_from_families: 0,
+        blocked: 0, synonyms_created: 0, barcode_written: false,
+        limit_reached: false,
+      } })
+    }
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
+  const table = page.getByTestId('ed2-match-left-table')
+  const rightTable = page.getByTestId('ed2-match-right-table')
+  await expect(rightTable.getByRole('textbox', { name: 'Filter op Artikel', exact: true })).toBeVisible()
+  await table.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('melk')
+  await expect(table).toContainText('HALFVOLLE MELK')
+  expect(writes).toEqual([])
+  await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' }))
+    .toContainText('1 bonartikel(en) gematched')
+  await expect(table).not.toContainText('HALFVOLLE MELK')
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
+})
+
+
+
+test('Bonnamen matchen is één knop; HV Melk alias geldt voor alle winkels', async ({ page }) => {
+  const posts = []
+  const items = [
+    { id: 'receipt-table-line:milk', receipt_line_text: 'Halfvolle melk',
+      retailer_code: 'ah', receipt_article_number: '21003', link_status: 'linked',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld' },
+    { id: 'receipt-table-line:hv1', receipt_line_text: 'HV Melk',
+      retailer_code: 'jumbo', receipt_article_number: '400', link_status: 'unlinked',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren' },
+    { id: 'receipt-table-line:hv2', receipt_line_text: 'HV Melk',
+      retailer_code: 'lidl', receipt_article_number: '900', link_status: 'unlinked',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren' },
+  ]
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/catalog/ed2/bonnaam-synoniem/confirm') {
+      posts.push(route.request().postDataJSON())
+      items.slice(1).forEach((x) => {
+        x.identity_status = 'catalog_linked'
+        x.identity_status_label = 'Catalogus gekoppeld'
+      })
+      return route.fulfill({ json: {
+        ok: true, alias: { ok: true, alias_name: 'hv melk',
+          target_name: 'halfvolle melk' },
+        match_result: { ok: true, linked: 2, synonyms_created: 0,
+          barcode_written: false },
+      } })
+    }
+    return bootstrap(route, items, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
+  const section = page.getByTestId('ed2-bonnaam-alias-form')
+  await expect(page.getByRole('button', { name: 'Courgettes automatisch herkennen' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bewezen bonnamen herkennen' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bonnamen matchen' })).toHaveCount(1)
+  await section.getByLabel('Naam op de bon').fill('HV Melk')
+  await section.getByLabel('Is hetzelfde als bonnaam').fill('Halfvolle melk')
+  await section.getByRole('button', { name: 'Bonnaamsynoniem vastleggen' }).click()
+  await expect(page.getByTestId('ed2-bonnaam-alias-confirm')).toBeVisible()
+  expect(posts).toHaveLength(0)
+  await page.getByTestId('ed2-bonnaam-alias-confirm')
+    .getByRole('button', { name: 'Synoniem bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0]).toEqual({ alias_name: 'HV Melk', target_name: 'Halfvolle melk' })
+  await expect(page.getByTestId('ed2-match-left-table'))
+    .not.toContainText('HV Melk')
+})
+
+
+test('Bonnamen matchen: serverfout opent geen onterecht matchingvoorstel', async ({ page }) => {
+  const writes = []
+  let previewRequests = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') writes.push(path)
+    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
+      return route.fulfill({
+        status: 500, contentType: 'text/plain',
+        body: 'Internal Server Error',
+      })
+    }
+    if (path === '/api/catalog/ed2/curated-matching-batch/preview') {
+      previewRequests += 1
+      return route.fulfill({ json: { targets: [] } })
+    }
+    return bootstrap(route, [{
+      id: 'receipt-table-line:failure-repro',
+      receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'ah', receipt_article_number: '21003',
+      link_status: 'unlinked',
+    }], [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Matchen' }).click()
+  await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
+  await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
+  await expect(page.getByText(/Matching kan niet worden beoordeeld \(HTTP 500\)/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' })).toHaveCount(0)
+  expect(previewRequests).toBe(0)
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
+})
+
+
+
+test('AH HV MELK: geblokkeerde varianten hebben per bonartikel een blijvende uitleg', async ({ page }) => {
+  const rows = [
+    { id: 'ah-milk-569053', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '569053', article_code: '8718907056274',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+    { id: 'ah-milk-92154', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '92154', article_code: '8710400058519',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+    { id: 'ah-milk-no-code', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked',
+      automatic_match_review_reason: 'Niet automatisch gematcht: deze bonnaam hoort bij 2 verschillende bevestigde Catalogusproducten of uitvoeringen: houdbare melk (barcode 8718907056274); halfvolle melk 1,5 liter (barcode 8710400058519). Kies het juiste product; Inhuis kiest geen willekeurige barcode.' },
+    { id: 'ah-milk-11943', retailer_code: 'ah', receipt_line_text: 'AH HV MELK',
+      receipt_article_number: '11943', identity_status: 'not_identified',
+      identity_status_label: 'Nog identificeren', link_status: 'unlinked',
+      automatic_match_review_reason: 'Niet automatisch gematcht: verschillende bevestigde Catalogusproducten of uitvoeringen. Kies het juiste product; Inhuis kiest geen willekeurige barcode.' },
+  ]
+  const writes = []
+  await page.route('**/api/**', (route) => {
+    if (route.request().method() !== 'GET') writes.push(route.request().url())
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren', exact: true }).click()
+  const table = page.getByTestId('external-databases-2-table')
+  await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('HV MELK')
+  await expect(table.locator('.rz-ed2-match-review-reason')).toHaveCount(2)
+  await expect(table).toContainText('geen willekeurige barcode')
+  await expect(table).toContainText('8710400058519')
+  await expect(table).toContainText('8718907056274')
+  await expect(table.locator('.rz-ed2-match-review-reason').first())
+    .toHaveAttribute('title', /verschillende bevestigde Catalogusproducten/)
+  expect(writes).toEqual([])
+})
+
+
+test('Superuser matcht een ongeïdentificeerd melkartikel via twee identieke tabellen', async ({ page }) => {
+  const rows = [
+    { id: 'receipt-table-line:unknown', receipt_line_text: 'AH HV MELK',
+      retailer_code: 'ah', receipt_article_number: '11943',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren',
+      link_status: 'unlinked' },
+    { id: 'receipt-table-line:proven', receipt_line_text: 'AH HV MELK',
+      retailer_code: 'ah', receipt_article_number: '569053',
+      article_code: '8718907056274', catalog_product_id: 'catalog-milk',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+      link_status: 'linked' },
+  ]
+  const posts = []
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/catalog/ed2/manual-receipt-match/confirm') {
+      posts.push(route.request().postDataJSON())
+      rows[0].identity_status = 'catalog_linked'
+      rows[0].identity_status_label = 'Catalogus gekoppeld'
+      rows[0].catalog_product_id = 'catalog-milk'
+      return route.fulfill({ json: { ok: true, linked: 1, barcode_written: false,
+        catalog_product_id: 'catalog-milk' } })
+    }
+    return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  const nav = page.getByTestId('classification-work-monitor')
+  await expect(nav.getByRole('button', { name: 'Matchen' })).toBeVisible()
+  await nav.getByRole('button', { name: 'Identificeren' }).click()
+  await expect(page.getByTestId('ed2-bonnaam-alias-form')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bonnamen matchen' })).toHaveCount(0)
+  await nav.getByRole('button', { name: 'Matchen' }).click()
+  const left = page.getByTestId('ed2-match-left-table')
+  const right = page.getByTestId('ed2-match-right-table')
+  await expect(left.locator('thead')).toContainText('Bonartikelnummer')
+  await expect(right.locator('thead')).toContainText('Bonartikelnummer')
+  await expect(left).toContainText('11943')
+  await expect(right).toContainText('569053')
+  expect(posts).toHaveLength(0)
+  await left.getByRole('checkbox', { name: /Selecteer links AH HV MELK/ }).check()
+  await right.getByRole('checkbox', { name: /Selecteer rechts AH HV MELK/ }).check()
+  await page.getByRole('button', { name: 'Bonartikel matchen' }).click()
+  const overlay = page.getByTestId('ed2-manual-match-confirm')
+  await expect(overlay).toBeVisible()
+  expect(posts).toHaveLength(0)
+  await overlay.getByRole('button', { name: 'Match bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0]).toEqual({ source_receipt_item_id: 'receipt-table-line:unknown',
+    target_receipt_item_id: 'receipt-table-line:proven' })
+  await expect(left).not.toContainText('11943')
 })
