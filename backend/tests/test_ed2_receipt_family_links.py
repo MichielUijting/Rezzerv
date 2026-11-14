@@ -237,8 +237,8 @@ def test_confirm_route_rechecks_source_server_side_not_browser_claim(monkeypatch
         begin=lambda: ManagedTransaction()))
     monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
                         lambda permission: SimpleNamespace(
-                            user_id="frontteam-allowed", is_platform_superuser=False,
-                            is_frontteam=True))
+                            user_id="superuser-allowed", is_platform_superuser=True,
+                            is_frontteam=False))
     sources = []
     def source_resolver(conn, item_id):
         sources.append(item_id)
@@ -254,7 +254,7 @@ def test_confirm_route_rechecks_source_server_side_not_browser_claim(monkeypatch
     assert outcome["ok"] and outcome["barcode_written"] is False
     assert sources == [payload.receipt_item_id]
     assert recorded[0]["source"] == SOURCE
-    assert recorded[0]["actor_id"] == "frontteam-allowed"
+    assert recorded[0]["actor_id"] == "superuser-allowed"
     assert recorded[0]["expected_fingerprint"] == payload.fingerprint
 
 

@@ -9,9 +9,9 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
-  test('Identificeren blijft read-only tot expliciete automatische matchingactie', async ({ page }) => {
+  test('Identificeren blijft read-only en Matchen controleert automatisch bij toegang', async ({ page }) => {
     const writes = []
-    const autoPath = '/api/catalog/ed2/curated-matching-batch/auto'
+    const autoPath = '/api/catalog/ed2/bonnamen-matchen/auto'
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
       if (route.request().method() !== 'GET') writes.push(path)
@@ -50,12 +50,10 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true })
       .fill('Courgette')
     await expect(table.locator('tbody tr')).toHaveCount(1)
-    expect(writes).toEqual([]) // Route entry, table and filters remain read-only.
-    await page.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
-    await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' }))
-      .toBeVisible()
-    await expect(page.getByText('Automatische matching is gepauzeerd:'))
-      .toBeVisible()
+    expect(writes).toEqual([]) // Identificeren remains read-only.
+    await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
+    await expect(page.getByTestId('ed2-match-left-table')).toBeVisible()
+    await expect(page.getByTestId('ed2-match-left-table')).not.toContainText('Courgette groen')
     expect(writes).toEqual([autoPath])
   })
 

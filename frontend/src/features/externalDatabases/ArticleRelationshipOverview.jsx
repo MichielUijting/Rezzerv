@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import CatalogProductImage from '../catalog/CatalogProductImage'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { buildArticleRelationshipGraph } from './articleRelationshipModel'
 import './articleRelationshipOverview.css'
 
@@ -65,6 +66,7 @@ function SynonymBranch({ entry }) {
 }
 
 export default function ArticleRelationshipOverview() {
+  const { showFeedback } = useAppFeedback()
   const [products, setProducts] = useState([])
   const [receipts, setReceipts] = useState([])
   const [options, setOptions] = useState([])
@@ -90,10 +92,14 @@ export default function ArticleRelationshipOverview() {
       if (controller.signal.aborted) return
       setProducts(Array.isArray(catalog.items) ? catalog.items : [])
       setReceipts(Array.isArray(overview.items) ? overview.items : [])
-    }).catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+    }).catch((err) => { if (!controller.signal.aborted) {
+      setError(err.message)
+      showFeedback({ variant: 'error', title: 'Relatieoverzicht',
+        message: err.message || 'De artikelrelaties konden niet worden geladen.' })
+    } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [reloadCount])
+  }, [reloadCount, showFeedback])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -104,10 +110,14 @@ export default function ArticleRelationshipOverview() {
       .then((result) => {
         if (!controller.signal.aborted) setOptions(Array.isArray(result.items) ? result.items : [])
       })
-      .catch((err) => { if (!controller.signal.aborted) setError(err.message) })
+      .catch((err) => { if (!controller.signal.aborted) {
+        setError(err.message)
+        showFeedback({ variant: 'error', title: 'Relatieoverzicht',
+          message: err.message || 'De synoniemrelaties konden niet worden geladen.' })
+      } })
       .finally(() => { if (!controller.signal.aborted) setLoadingLinks(false) })
     return () => controller.abort()
-  }, [selectedId, reloadCount])
+  }, [selectedId, reloadCount, showFeedback])
 
   const suggestions = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase('nl')
@@ -123,6 +133,7 @@ export default function ArticleRelationshipOverview() {
 
   function selectArticle(product) {
     setSelectedId(String(product.id))
+    setOptions([]) // Never display a previous article's synonym proof for this selection.
     setSearch(product.name + (product.primary_gtin ? ' — ' + product.primary_gtin : ''))
     setSearchOpen(false)
     setActiveFilter('all')
@@ -179,10 +190,9 @@ export default function ArticleRelationshipOverview() {
         disabled={loading || loadingLinks}>Verversen</Button>
     </div>
 
-    {error ? <div className="rz-rel-error" role="alert">{error}
-      <Button type="button" variant="secondary" onClick={() => setReloadCount((count) => count + 1)}>
-        Opnieuw proberen
-      </Button></div> : null}
+    {!loading && error ? <div className="rz-rel-empty">
+      <p>Kies Verversen om de artikelrelaties opnieuw op te halen.</p>
+    </div> : null}
     {loading ? <p role="status">Relaties laden...</p> : null}
     {!loading && !error && !graph ? <div className="rz-rel-empty">
       <strong>Kies een Catalogusartikel</strong>

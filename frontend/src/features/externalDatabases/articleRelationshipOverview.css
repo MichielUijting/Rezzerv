@@ -5,10 +5,10 @@
 .rz-rel-search-bar > label { flex-basis: 100%; font-size: .9rem; }
 .rz-rel-search-wrap { position: relative; flex: 1 1 300px; max-width: 600px; }
 .rz-rel-search-wrap input { width: 100%; min-height: 40px; background: #fff; border: 1px solid #699ea4; border-radius: 7px; padding: 8px 10px; color: #1c3336; }
-.rz-rel-search-wrap input:focus-visible { outline: 2px solid var(--color-ui-primary, #005f6a); outline-offset: 1px; }
+.rz-rel-search-wrap input:focus-visible { outline: 2px solid var(--color-ui-primary); outline-offset: 1px; }
 .rz-rel-search-options { position: absolute; inset: calc(100% + 3px) 0 auto 0; background: #fff; border: 1px solid #adc6c9; border-radius: 8px; box-shadow: 0 8px 18px #1238; z-index: 20; padding: 4px; display: grid; gap: 3px; max-height: 260px; overflow: auto; }
-.rz-rel-search-option.rz-btn { display: block; width: 100%; text-align: left; white-space: normal; color: #163c42; background: #fff; border: 0; border-radius: 5px; padding: 8px 10px; }
-.rz-rel-search-option.rz-btn:hover, .rz-rel-search-option.rz-btn:focus-visible { background: #e7f3ee; }
+.rz-rel-search-option { display: block; width: 100%; text-align: left; white-space: normal; color: #163c42; background: #fff; border: 0; border-radius: 5px; padding: 8px 10px; }
+.rz-rel-search-option:hover, .rz-rel-search-option:focus-visible { background: #e7f3ee; }
 .rz-rel-error { border: 1px solid #bd5f55; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .rz-rel-empty { border: 1px dashed #9cbabd; border-radius: 12px; background: #f3faf7; padding: 40px 20px; text-align: center; }
 .rz-rel-empty p { margin-bottom: 0; }
@@ -19,7 +19,7 @@
 .rz-rel-match-branches { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; justify-content: center; }
 .rz-rel-match-branch { flex: 0 1 188px; min-width: 150px; display: flex; flex-direction: column; align-items: center; }
 .rz-rel-receipt { width: 100%; box-sizing: border-box; display: flex; gap: 8px; align-items: flex-start; background: #fff; border: 1px solid #75abb0; border-radius: 9px; padding: 10px; box-shadow: 0 2px 5px #16372c15; min-width: 0; }
-.rz-rel-receipt-icon { font-size: 1.2rem; color: #005f6a; line-height: 1; }
+.rz-rel-receipt-icon { font-size: 1.2rem; color: var(--color-ui-primary); line-height: 1; }
 .rz-rel-receipt-body { min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .rz-rel-receipt-body small { font-size: .73rem; color: #597077; }
 .rz-rel-receipt-body strong { font-size: .88rem; font-weight: 600; }
@@ -35,7 +35,7 @@
 .rz-rel-catalog { box-sizing: border-box; width: 100%; border: 1px solid #73aeb0; border-radius: 10px; background: #fff; box-shadow: 0 3px 8px #16372c1a; min-width: 0; overflow: hidden; }
 .rz-rel-catalog--root { border: 2px solid #007b80; }
 .rz-rel-catalog-heading { padding: 7px 10px; background: #d7f2e7; color: #00545d; display: flex; align-items: center; gap: 6px; font-size: .8rem; }
-.rz-rel-catalog--root .rz-rel-catalog-heading { background: #005f6a; color: #fff; }
+.rz-rel-catalog--root .rz-rel-catalog-heading { background: var(--color-ui-primary); color: #fff; }
 .rz-rel-catalog-main { display: flex; gap: 10px; align-items: center; padding: 10px; }
 .rz-rel-catalog-main > div:last-child { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .rz-rel-catalog-main strong { font-size: .92rem; }
