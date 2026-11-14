@@ -58,3 +58,4 @@ export default function Ed2ProvenExactNameMatching({ onConfirmed }) {
       {result.limit_reached ? ' Er zijn nog kandidaten voor een volgende batch.' : ''}
     </p> : null}
   </section>
+}
