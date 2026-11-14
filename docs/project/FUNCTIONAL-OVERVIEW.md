@@ -527,3 +527,15 @@ Een reeds aan één Catalogusproduct gekoppeld bonartikel met geldige barcode
 mag als bewijsbron dienen voor exact gelijknamige bonartikelen met andere of
 ontbrekende winkelartikelnummers. Een losse opgeslagen barcode zonder
 bevestigde Catalogusidentiteit is niet voldoende; productconflicten blokkeren.
+
+
+**Winkelneutrale bonnaamvergelijking (PO-besluit 14 november 2026):**
+Voor de centrale actie **Bonnamen matchen** geldt bijvoorbeeld
+`AH ELSTAR` = `ELSTAR JUMBO` = `ELSTAR` als vergelijkingsnaam.
+Alleen een echt winkelvoorvoegsel of -achtervoegsel van de
+**betrokken winkel** wordt tijdelijk genegeerd. Bronbonnen, originele
+winkelnummers en barcodes blijven onaangetast. Een onbetwiste bewezen
+Catalogusproduct-ID blijft verplicht; bij verschillende bevestigde
+producten of bewaarde/onbevestigde barcodes wordt niet automatisch
+gematcht. De uitzonderlijke naamvergelijking is niet van toepassing op
+huishoudartikelidentiteit of automatische voorraadmutaties.

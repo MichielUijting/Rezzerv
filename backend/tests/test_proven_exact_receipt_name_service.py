@@ -516,3 +516,116 @@ def test_bonnaam_alias_can_use_catalog_linked_barcode_only_anchor():
     assert matches[0]["product_id"] == "milk"
     assert matches[0]["witness"]["confirmed_barcode"] == "8712345678906"
     assert blocked == missing == 0
+
+
+
+def test_store_prefix_and_suffix_removed_only_during_comparison():
+    assert service._matching_name("ah", "AH ELSTAR") == "elstar"
+    assert service._matching_name("jumbo", "ELSTAR JUMBO") == "elstar"
+    assert service._matching_name("albert-heijn", "Albert Heijn Elstar") == "elstar"
+    assert service._matching_name("ah", "ELSTAR AH") == "elstar"
+    assert service._matching_name("lidl", "Lidl Avocado") == "avocado"
+    assert service._matching_name("aldi", "Basilicum Aldi") == "basilicum"
+    assert service._matching_name("ah", "AH") == "ah"
+    # Another store's name might be a real label/brand on this receipt.
+    assert service._matching_name("lidl", "AH Elstar") == "ah elstar"
+    # Do not strip arbitrary interior tokens or meaningful descriptive words.
+    assert service._matching_name("ah", "ELSTAR AH EXTRA") == "elstar ah extra"
+    assert service._matching_name("ah", "AH KIPFILET GEMARINEERD") == "kipfilet gemarineerd"
+
+
+def test_ah_elstar_matches_jumbo_elstar_without_rewriting_receipt_identity():
+    items = [
+        row("ah", "AH ELSTAR", "706911", "elstar", "catalog_linked",
+            article_code="8718906836846"),
+        row("jumbo", "ELSTAR JUMBO", "2345"),
+        row("lidl", "Elstar", "00731"),
+        row("lidl", "Elstar rood", "0123"),
+    ]
+    matches, blocked, missing = service._candidate_plan(items)
+    assert [(m["source_key"], m["product_id"], m["proof_name"])
+            for m in matches] == [
+        (("jumbo", "elstar jumbo", "2345"), "elstar", "elstar"),
+        (("lidl", "elstar", "00731"), "elstar", "elstar"),
+    ]
+    assert blocked == 0 and missing == 1
+    assert all(m["witness"]["retailer"] == "ah" for m in matches)
+
+
+def test_ah_avocado_proof_matches_lidl_avocado_without_shop_number_guessing():
+    items = [
+        row("ah", "AH AVOCADO", "597702", "avocado", "catalog_linked",
+            article_code="8710400417330"),
+        row("ah", "AVOCADO", "571118", "avocado", "catalog_linked",
+            article_code="8710400417330"),
+        row("lidl", "Avocado", "0080616"),
+    ]
+    matches, blocked, no_proof = service._candidate_plan(items)
+    assert len(matches) == 1
+    assert matches[0]["source_key"] == ("lidl", "avocado", "0080616")
+    assert matches[0]["product_id"] == "avocado"
+    assert blocked == no_proof == 0
+
+
+def test_ah_hv_melk_and_kipfilet_keep_different_product_gtins_separate():
+    items = [
+        row("ah", "AH HV MELK", "569053", "milk-a", "catalog_linked",
+            article_code="8718907056274"),
+        row("ah", "AH HV MELK", "92154", "milk-b", "catalog_linked",
+            article_code="8710400058519"),
+        row("ah", "AH HV MELK", "11943"),
+        row("jumbo", "HV MELK JUMBO", "101"),
+        row("ah", "AH KIPFILET", "595589", "chicken-a", "catalog_linked",
+            article_code="8718907456487"),
+        row("ah", "AH KIPFILET", "49900", "chicken-b", "catalog_linked",
+            article_code="8718907852555"),
+        row("ah", "AH KIPFILET", "805391"),
+    ]
+    matches, blocked, missing = service._candidate_plan(items)
+    assert matches == [] and blocked == 3 and missing == 0
+
+
+def test_ah_elstar_and_wasmiddel_saved_barcode_still_require_review():
+    items = [
+        row("ah", "AH ELSTAR", "706911", "elstar", "catalog_linked",
+            article_code="8718906836846"),
+        row("ah", "AH ELSTAR", "518022", status="saved_only",
+            manual_barcode="8718265121195"),
+        row("jumbo", "ELSTAR JUMBO", "55"),
+        row("ah", "AH WASMIDDEL", "11116", "detergent", "catalog_linked",
+            article_code="8718907930239"),
+        row("ah", "AH WASMIDDEL", "11118", status="saved_only",
+            manual_barcode="8718452775927"),
+        row("ah", "AH WASMIDDEL", ""),
+    ]
+    matches, blocked, missing = service._candidate_plan(items)
+    assert matches == [] and blocked == 2 and missing == 0
+
+
+def test_confirmed_name_alias_applies_to_prefixed_and_suffixed_receipts():
+    items = [
+        row("ah", "AH HALFVOLLE MELK", "21003", "milk",
+            "catalog_linked", article_code="8712345678906"),
+        row("ah", "AH HV MELK", "11943"),
+        row("jumbo", "HV MELK JUMBO", "0077"),
+        row("plus", "HV MELK", "909"),
+    ]
+    aliases = {"hv melk": {"target_name": "halfvolle melk", "product_id": "milk"}}
+    candidates, blocked, without_proof = service._candidate_plan(items, aliases)
+    assert {(item["source_key"][0], item["source_key"][2])
+            for item in candidates} == {
+        ("ah", "11943"), ("jumbo", "0077"), ("plus", "909")
+    }
+    assert all(item["product_id"] == "milk" for item in candidates)
+    assert blocked == without_proof == 0
+
+
+def test_store_marker_does_not_mask_conflicting_product_destinations():
+    # Both labels become "elstar", but the existing Catalogus IDs disagree.
+    items = [
+        row("ah", "AH ELSTAR", "706911", "elstar-a", "catalog_linked"),
+        row("jumbo", "ELSTAR JUMBO", "999", "elstar-b", "catalog_linked"),
+        row("lidl", "ELSTAR", "888"),
+    ]
+    matches, blocked, missing = service._candidate_plan(items)
+    assert matches == [] and blocked == 1 and missing == 0

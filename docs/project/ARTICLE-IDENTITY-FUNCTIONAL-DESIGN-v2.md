@@ -431,3 +431,28 @@ een naamafgeleid barcodevrij productfamilieverband is onvoldoende bewijs.
 Bestaande afwijkende productclaims en historische barcodeconflicten blijven
 fail-closed. Het betreft uitsluitend een centrale bonartikelidentificatie,
 geen huishoudartikel- of voorraadmutatie.
+
+
+### PO-uitbreiding — winkelnaam negeren bij exacte centrale bonnaamvergelijking (14 november 2026)
+
+**Bonnamen matchen** vergelijkt bonnamen voortaan winkelneutraal: uitsluitend
+een herkenbare naam van **de werkelijk betrokken winkelketen**, aan het
+**begin of einde** van de bonnaam, wordt voor de vergelijking weggelaten.
+Voorbeelden: `AH ELSTAR` = `ELSTAR JUMBO` = `ELSTAR`;
+`AH AVOCADO` = `AVOCADO`, en `LIDL BASILICUM` = `BASILICUM`.
+De oorspronkelijke bronbontekst en de combinatie van winkel, bonnaam en
+winkelartikelnummer worden **niet** veranderd. Middenin een artikelnaam wordt
+geen tekst verwijderd. Een winkelnaam van een andere winkel wordt niet als
+decoratie weggelaten, omdat dit ook een betekenisvolle merknaam kan zijn.
+
+**Belangrijke veiligheidsgrens:** de neutrale naam blijft een
+vergelijkingssleutel, geen zelfstandig productbewijs. Er moet precies één
+onbetwiste onafhankelijke Catalogusbestemming zijn. Bij twee verschillende
+bewezen producten onder dezelfde neutrale naam, bijvoorbeeld AH HV MELK
+of AH KIPFILET met verschillende Catalogusidentiteiten, worden
+onbekende kandidaten voor menselijke beoordeling geblokkeerd. Ook een
+`Barcode bewaard - Catalogus herstellen`-claim blokkeert die naamgroep
+zolang de specifieke barcode nog niet veilig gekoppeld is. De eerdere
+regels voor bevestigde winkelcode- of GTIN-bewijsbronnen, idempotentie,
+autorisatie en audit blijven van kracht. Dit besluit maakt geen GTIN of
+huishoudartikel op basis van uitsluitend een naam.
