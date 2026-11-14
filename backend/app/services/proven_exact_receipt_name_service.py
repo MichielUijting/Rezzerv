@@ -11,7 +11,6 @@ across ALL retailers. Any conflicting or disputed evidence fails closed.
 """
 from __future__ import annotations
 
-from contextlib import suppress
 import re
 
 from fastapi import HTTPException
@@ -42,17 +41,18 @@ def _key(store, label, number):
 
 
 def _proven_name_targets(rows):
-    """Return (proofs, disputed), requiring a real coded receipt for each name.
+    """Map each exact bonnaam to one independently proven, coded Catalogus-ID.
 
-    The overview is the existing central identity authority. Names and shop
-    text alone are never evidence. Distinct known product IDs, pending saved
-    barcodes or disputed claims close the entire name, even across retailers.
+    Different article numbers (even in the same retailer) are intentionally
+    allowed. Previously confirmed *other* identities, review claims and saved
+    barcodes block the entire name, even across shops. A name alone does not
+    create an initial product identity.
     """
     ids, witnesses, disputed = {}, {}, set()
     for row in rows:
         key = _key(row.get("retailer_code"), row.get("receipt_line_text"),
                    row.get("receipt_article_number"))
-        if not key or not key[2]:
+        if not key:
             continue
         _, name, code = key
         status = str(row.get("identity_status") or "")
@@ -73,30 +73,37 @@ def _proven_name_targets(rows):
             continue
         product_id = explicit or central
         ids.setdefault(name, set()).add(product_id)
-        witnesses.setdefault(name, []).append({
-            "retailer": key[0], "receipt_article_number": code,
-            "product_id": product_id,
-        })
+        if code:
+            witnesses.setdefault(name, []).append({
+                "retailer": key[0], "receipt_article_number": code,
+                "product_id": product_id,
+            })
     return {
         name: {"product_id": next(iter(product_ids)),
                "witness": sorted(witnesses[name], key=lambda w: (
                    w["retailer"], w["receipt_article_number"]))[0]}
         for name, product_ids in ids.items()
         if len(product_ids) == 1 and name not in disputed
+        and witnesses.get(name)
     }, disputed | {name for name, product_ids in ids.items()
                    if len(product_ids) > 1}
 
 
-def _candidate_plan(rows):
+def _candidate_plan(rows, aliases=None):
+    """All unresolved shop+label+number tuples may reuse a unique proven ID.
+
+    A PO-approved alias is directed from one exact receipt name to another
+    exact name, and can only apply if that target still has the original
+    unique independently proven coded identity. No transitive alias guessing.
+    """
     proofs, disputed = _proven_name_targets(rows)
+    aliases = aliases or {}
     candidates, blocked, without_proof = [], 0, 0
     seen = set()
     for row in rows:
         key = _key(row.get("retailer_code"), row.get("receipt_line_text"),
                    row.get("receipt_article_number"))
-        if not key or key[2] or key in seen:
-            continue
-        if row.get("identity_status") != "not_identified":
+        if not key or key in seen or row.get("identity_status") != "not_identified":
             continue
         if (row.get("article_code") or row.get("manual_barcode") or
                 row.get("identity_catalog_product_id") or
@@ -108,6 +115,16 @@ def _candidate_plan(rows):
             blocked += 1
             continue
         proof = proofs.get(key[1])
+        alias = aliases.get(key[1])
+        if alias:
+            target = proofs.get(alias["target_name"])
+            # An explicit alias is not an override of old central claims.
+            if (alias["target_name"] in disputed or not target or
+                    target["product_id"] != str(alias["product_id"]) or
+                    (proof and proof["product_id"] != target["product_id"])):
+                blocked += 1
+                continue
+            proof = target
         if not proof:
             without_proof += 1
             continue
@@ -116,9 +133,82 @@ def _candidate_plan(rows):
             "source_key": key,
             "product_id": proof["product_id"],
             "witness": proof["witness"],
+            "proof_name": alias["target_name"] if alias else key[1],
         })
     candidates.sort(key=lambda c: c["source_key"])
     return candidates, blocked, without_proof
+
+
+def load_confirmed_bonnaam_aliases(conn):
+    """Persisted central PO-reviewed receipt-name equivalences, no GET writes."""
+    return {
+        str(row["alias_name_normalized"]): {
+            "target_name": str(row["target_name_normalized"]),
+            "product_id": str(row["global_product_id"]),
+        }
+        for row in conn.execute(text("""
+            SELECT alias_name_normalized, target_name_normalized, global_product_id
+              FROM ed2_receipt_name_aliases
+        """)).mappings()
+    }
+
+
+def confirm_bonnaam_alias(conn, *, alias_name, target_name, actor_id):
+    """Confirm ONE globally applicable name alias, never overwrite old proof.
+
+    The authorized operator explicitly declares the naming equivalence. The
+    target must already have exactly one independently confirmed CODED receipt
+    product. Any conflicting source/product evidence requires manual review.
+    """
+    if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
+        raise ValueError("Het vastleggen van bonnaamsynoniemen vereist PostgreSQL.")
+    if not actor_id:
+        raise ValueError("Een geautoriseerde bevestiger ontbreekt.")
+    alias = normalize_external_link_receipt_text(alias_name)
+    target = normalize_external_link_receipt_text(target_name)
+    if (not alias or not target or alias == target or
+            len(alias) > 200 or len(target) > 200):
+        raise ValueError("Kies twee verschillende volledige bonnamen.")
+    conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
+    rows = list_all_external_articles(conn=conn)["items"]
+    proofs, disputed = _proven_name_targets(rows)
+    confirmed = proofs.get(target)
+    if not confirmed or target in disputed:
+        raise ValueError("De doelbonnaam heeft geen unieke bevestigde bron met winkelartikelnummer.")
+    product_id = confirmed["product_id"]
+    if not _ensure_active_product(conn, product_id):
+        raise ValueError("Het bewezen Catalogusproduct is niet actief.")
+    source_proof = proofs.get(alias)
+    if alias in disputed or (source_proof and source_proof["product_id"] != product_id):
+        raise ValueError("De gekozen bonnaam heeft al een tegenstrijdige productidentiteit.")
+    aliases = load_confirmed_bonnaam_aliases(conn)
+    if target in aliases:
+        raise ValueError("De doelbonnaam is zelf een alias: kies een bewezen originele bonnaam.")
+    existing = aliases.get(alias)
+    if existing:
+        if existing == {"target_name": target, "product_id": product_id}:
+            return {"ok": True, "already_confirmed": True,
+                    "alias_name": alias, "target_name": target,
+                    "catalog_product_id": product_id}
+        raise ValueError("Deze bonnaam heeft al een andere bevestigde synoniemrelatie.")
+    conn.execute(text("""
+        INSERT INTO ed2_receipt_name_aliases
+          (alias_name_normalized, target_name_normalized, global_product_id,
+           confirmed_by, confirmed_at)
+        VALUES (:alias, :target, :product, :actor, CURRENT_TIMESTAMP)
+    """), {"alias": alias, "target": target,
+           "product": product_id, "actor": actor_id})
+    write_authorization_audit(
+        conn, actor_user_id=actor_id, actor_type="platform_user",
+        action="catalog.ed2.receipt_name_alias.confirmed",
+        object_type="ed2_receipt_name_alias", object_id=alias,
+        old_value=None,
+        new_value={"target_name": target, "global_product_id": product_id},
+        reason="explicit_authorized_global_receipt_name_alias_v1",
+    )
+    return {"ok": True, "already_confirmed": False,
+            "alias_name": alias, "target_name": target,
+            "catalog_product_id": product_id}
 
 
 def _ensure_active_product(conn, product_id):
@@ -129,10 +219,13 @@ def _ensure_active_product(conn, product_id):
 
 
 def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id):
-    """One idempotent, guarded central tuple insert inside the caller's savepoint."""
+    """Store one exact retailer+name+number tuple under the central write lock.
+
+    Receipt item numbers are NOT GTINs. A different number is no reason to
+    reject an independently proven name, but existing claims on that exact
+    tuple or its store-bound number are never overwritten.
+    """
     retailer, name, code = source_key
-    if code:
-        raise ValueError("Deze route verwerkt uitsluitend bonartikelen zonder winkelartikelnummer.")
     if not _ensure_active_product(conn, product_id):
         raise ValueError("Het bewezen Catalogusproduct is niet meer actief.")
     conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 677))"), {
@@ -141,8 +234,8 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
     existing = conn.execute(text("""
         SELECT global_product_id, match_mode FROM ed2_receipt_family_links
         WHERE retailer_code=:retailer AND receipt_text_normalized=:name
-          AND external_article_code='' FOR UPDATE
-    """), {"retailer": retailer, "name": name}).mappings().first()
+          AND external_article_code=:code FOR UPDATE
+    """), {"retailer": retailer, "name": name, "code": code}).mappings().first()
     if existing:
         if (str(existing["global_product_id"]) == product_id
                 and existing["match_mode"] == "same_product"):
@@ -150,50 +243,67 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
         raise ValueError("Het bonartikel heeft al een andere bevestigde Catalogusidentiteit.")
 
     aliases = list(catalog_retailer_aliases(retailer))
+    # Store-code collisions and historically saved barcodes always override
+    # name-derived suggestions. Never promote a retailer number into a GTIN.
     saved = conn.execute(text("""
         SELECT 1 FROM ed2_manual_barcodes
-        WHERE retailer_code IN :aliases AND receipt_text_normalized=:name
-          AND COALESCE(TRIM(external_article_code), '')=''
+        WHERE retailer_code IN :aliases
+          AND (receipt_text_normalized=:name AND
+                COALESCE(TRIM(external_article_code), '')=:code
+               OR (:has_code AND external_article_code=:code))
         LIMIT 1
     """).bindparams(bindparam("aliases", expanding=True)), {
-        "aliases": aliases, "name": name,
+        "aliases": aliases, "name": name, "code": code,
+        "has_code": bool(code),
     }).first()
     if saved:
         raise ValueError("Het bonartikel heeft al een bewaarde barcode.")
     central = conn.execute(text("""
         SELECT 1 FROM external_article_product_links
-        WHERE retailer_code IN :aliases AND receipt_text_normalized=:name
-          AND COALESCE(TRIM(external_article_code), '')=''
+        WHERE retailer_code IN :aliases
           AND status IN ('confirmed', 'classification_pending')
+          AND (receipt_text_normalized=:name AND
+                COALESCE(TRIM(external_article_code), '')=:code
+               OR (:has_code AND external_article_code=:code))
         LIMIT 1
     """).bindparams(bindparam("aliases", expanding=True)), {
-        "aliases": aliases, "name": name,
+        "aliases": aliases, "name": name, "code": code,
+        "has_code": bool(code),
     }).first()
     if central:
         raise ValueError("Het bonartikel heeft al een bestaande of wachtende koppeling.")
+    if code:
+        conflicting_number = conn.execute(text("""
+            SELECT 1 FROM ed2_receipt_family_links
+            WHERE retailer_code=:retailer AND external_article_code=:code
+              AND global_product_id<>:product LIMIT 1
+        """), {"retailer": retailer, "code": code, "product": product_id}).first()
+        if conflicting_number:
+            raise ValueError("Dit winkelartikelnummer verwijst al naar een ander product.")
 
     conn.execute(text("""
         INSERT INTO ed2_receipt_family_links
           (retailer_code, receipt_text_normalized, external_article_code,
            global_product_id, match_mode, confirmed_by, confirmed_at)
-        VALUES (:retailer, :name, '', :product, 'same_product', :actor,
+        VALUES (:retailer, :name, :code, :product, 'same_product', :actor,
                 CURRENT_TIMESTAMP)
     """), {
-        "retailer": retailer, "name": name,
+        "retailer": retailer, "name": name, "code": code,
         "product": product_id, "actor": actor_id,
     })
     write_authorization_audit(
         conn, actor_user_id=actor_id, actor_type="platform_user",
-        action="catalog.ed2.exact_name_without_code.confirmed",
+        action="catalog.ed2.proven_receipt_name.confirmed",
         object_type="ed2_receipt_family_link",
         object_id="|".join(source_key),
         old_value=None,
         new_value={
-            "global_product_id": product_id, "match_mode": "same_product",
+            "global_product_id": product_id, "mode": "same_product",
+            "receipt_article_number": code,
             "witness_store": witness["retailer"],
             "witness_article_number": witness["receipt_article_number"],
         },
-        reason="automatic_unique_confirmed_coded_receipt_name_v1",
+        reason="automatic_confirmed_receipt_name_v2",
     )
     return True
 
@@ -207,7 +317,8 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
     # Uses the same global central-identity write lock as curated-family writes.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
     candidates, ambiguous, no_proof = _candidate_plan(
-        list_all_external_articles(conn=conn)["items"])
+        list_all_external_articles(conn=conn)["items"],
+        load_confirmed_bonnaam_aliases(conn))
     linked, conflicts = 0, 0
     for candidate in candidates[:MAX_EXACT_NAME_BATCH]:
         try:
@@ -219,7 +330,8 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
                 # Other authorities can update coded proof. Rebuild the full
                 # central projection in this savepoint just before the write.
                 current, _, _ = _candidate_plan(
-                    list_all_external_articles(conn=conn)["items"])
+                    list_all_external_articles(conn=conn)["items"],
+                    load_confirmed_bonnaam_aliases(conn))
                 verified = next((row for row in current
                     if row["source_key"] == candidate["source_key"]
                     and row["receipt_item_id"] == candidate["receipt_item_id"]), None)
@@ -237,7 +349,11 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
             conflicts += 1
     return {
         "ok": True, "status": "applied",
-        "linked": linked, "linked_without_article_number": linked,
+        "linked": linked,
+        "linked_without_article_number": sum(
+            1 for item in candidates[:MAX_EXACT_NAME_BATCH]
+            if item["source_key"][2] == ""
+        ) if linked == len(candidates[:MAX_EXACT_NAME_BATCH]) else None,
         "synonyms_created": 0, "barcode_written": False,
         "blocked": ambiguous + conflicts,
         "without_proof": no_proof,
