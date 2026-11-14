@@ -139,8 +139,10 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     {autoSummary?.status === 'anchor_review_required' ? <p role="status">
       Automatische matching is gepauzeerd: kies eerst het juiste Catalogusanker.
     </p> : null}
-    {autoSummary?.status === 'applied' && autoSummary.requires_review ? <p role="status">
-      {autoSummary.unprocessed} artikel(en) vragen nog beoordeling. Bekende matches zijn automatisch verwerkt.
+    {autoSummary?.status === 'applied' ? <p role="status">
+      {autoSummary.linked} artikel(en) automatisch herkend, waarvan{' '}
+      {autoSummary.linked_without_article_number || 0} zonder winkelartikelnummer.
+      {' '}{autoSummary.unprocessed} artikel(en) vragen nog beoordeling.
     </p> : null}
     <Button type="button" variant="secondary" disabled={saving || loading}
       onClick={() => open ? setOpen(false) : recognizeAndReview()}>
