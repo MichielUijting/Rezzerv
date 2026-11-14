@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { buildArticleRelationshipGraph } from '../../src/features/externalDatabases/articleRelationshipModel.js'
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -579,4 +580,141 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   expect(posts[0].receipt_item_ids).not.toContain('receipt-table-line:ah-linked')
   await expect(page.getByTestId('external-databases-2-table')).toContainText('Catalogus gekoppeld')
   expect(previews).toBeGreaterThanOrEqual(2)
+})
+
+
+const relationshipProducts = [
+  { id: 'root', name: 'AH Courgette', primary_gtin: '8722800072026',
+    article_codes: ['ah:21003'], image_url: '' },
+  { id: 'yellow', name: 'Courgette geel', primary_gtin: '', image_url: '' },
+  { id: 'bio', name: 'Courgette Bio', primary_gtin: '', image_url: '' },
+  { id: 'other', name: 'Groentesoep', primary_gtin: '8712340000013', image_url: '' },
+]
+const receiptMatch = (id, name, retailer, number, productId) => ({
+  id, receipt_line_text: name, retailer_code: retailer,
+  receipt_article_number: number,
+  identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+  identity_catalog_product_id: productId, catalog_product_id: '',
+})
+const relationshipReceipts = [
+  receiptMatch('ah-code', 'COURGETTE', 'ah', '21003', 'root'),
+  receiptMatch('ah-no-code', 'COURGETTE', 'ah', '', 'root'),
+  receiptMatch('jumbo-no-code', 'COURGETTE', 'jumbo', '', 'root'),
+  receiptMatch('lidl-green', 'Courgette groen', 'lidl', '0082346', 'root'),
+  receiptMatch('lidl-green-no-code', 'Courgette groen', 'lidl', '', 'root'),
+  receiptMatch('lidl-yellow', 'Courgette geel', 'lidl', '0082293', 'yellow'),
+  receiptMatch('lidl-bio', 'Courgette Bio', 'lidl', '0084544', 'bio'),
+  { id: 'unconfirmed', receipt_line_text: 'COURGETTE', retailer_code: 'aldi',
+    receipt_article_number: '', identity_status: 'not_identified' },
+  { id: 'unrelated', receipt_line_text: 'Olvarit Courgette', retailer_code: 'ah',
+    receipt_article_number: '', identity_status: 'not_identified' },
+  { id: 'conflict', receipt_line_text: 'Courgette groen', retailer_code: 'plus',
+    receipt_article_number: '99', identity_status: 'catalog_linked',
+    identity_catalog_product_id: 'root', catalog_product_id: 'other' },
+]
+
+test('Overzicht: echte Catalogusmatches, directe synoniemen en onbewezen namen blijven gescheiden', async ({ page }) => {
+  const writes = []
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') writes.push(path)
+    if (path === '/api/external-databases/article-synonyms/analysis') {
+      return route.fulfill({ json: { items: relationshipProducts } })
+    }
+    if (path === '/api/external-databases/article-synonyms/analysis/root/options') {
+      return route.fulfill({ json: { items: [
+        { id: 'yellow', status: 'linked' }, { id: 'bio', status: 'linked' },
+        { id: 'other', status: 'suggested' },
+      ] } })
+    }
+    if (path === '/api/external-databases/article-synonyms/analysis/yellow/options') {
+      return route.fulfill({ json: { items: [
+        { id: 'root', status: 'linked' }, { id: 'bio', status: 'other' },
+      ] } })
+    }
+    return bootstrap(route, relationshipReceipts, [], (request) =>
+      request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  const monitor = page.getByTestId('classification-work-monitor')
+  await monitor.getByRole('button', { name: 'Overzicht', exact: true }).click()
+  const overview = page.getByTestId('article-relationship-overview')
+  await expect(overview).toBeVisible()
+  await expect(overview.getByText('Kies een Catalogusartikel', { exact: true })).toBeVisible()
+  const search = overview.getByRole('searchbox', { name: 'Catalogusartikel zoeken' })
+  await search.fill('Courgette')
+  await expect(overview.locator('.rz-rel-search-options button')).toHaveCount(3)
+  await overview.locator('.rz-rel-search-options button', { hasText: 'AH Courgette' }).click()
+  await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(5)
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(2)
+  await expect(overview.locator('.rz-rel-variant-match')).toHaveCount(2)
+  await expect(overview.locator('.rz-rel-stat--matches')).toContainText('5')
+  await expect(overview.locator('.rz-rel-stat--synonyms')).toContainText('2')
+  await expect(overview.locator('.rz-rel-stat--pending')).toContainText('1')
+  await expect(overview).not.toContainText('Groentesoep')
+  await expect(overview).not.toContainText('Olvarit Courgette')
+  await expect(overview.locator('.rz-rel-pending')).toContainText('COURGETTE')
+  await expect(overview.locator('.rz-rel-pending')).toContainText('geen bewijs', { ignoreCase: true })
+  expect(writes).toEqual([])
+
+  await overview.getByRole('button', { name: 'Matches', exact: true }).click()
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(0)
+  await overview.getByRole('button', { name: 'Synoniemen', exact: true }).click()
+  await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(0)
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(2)
+  await search.fill('geel')
+  await overview.locator('.rz-rel-search-options button', { hasText: 'Courgette geel' }).click()
+  await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(1)
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(1)
+  await expect(overview.locator('.rz-rel-stat--matches')).toContainText('1')
+
+  // Choosing an unrelated independently identified product may never
+  // reuse the prior courgette graph or fabricate synonym edges.
+  await search.fill('Groentesoep')
+  await overview.locator('.rz-rel-search-options button', { hasText: 'Groentesoep' }).click()
+  await expect(overview.locator('.rz-rel-hub')).toContainText('Groentesoep')
+  await expect(overview.locator('.rz-rel-match-branch')).toHaveCount(0)
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(0)
+  await expect(overview.locator('.rz-rel-stat--matches')).toContainText('0')
+  await expect(overview.locator('.rz-rel-stat--synonyms')).toContainText('0')
+  expect(writes).toEqual([])
+})
+
+test('Overzicht: mobiel blijft een leesbaar kaartennetwerk, geen tabel', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/external-databases/article-synonyms/analysis') {
+      return route.fulfill({ json: { items: relationshipProducts } })
+    }
+    if (path === '/api/external-databases/article-synonyms/analysis/root/options') {
+      return route.fulfill({ json: { items: [{ id: 'yellow', status: 'linked' }] } })
+    }
+    return bootstrap(route, relationshipReceipts, [], (request) =>
+      request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Overzicht', exact: true }).click()
+  const overview = page.getByTestId('article-relationship-overview')
+  await overview.getByRole('searchbox', { name: 'Catalogusartikel zoeken' }).fill('AH Courgette')
+  await overview.locator('.rz-rel-search-options button', { hasText: 'AH Courgette' }).click()
+  await expect(overview.locator('.rz-rel-synonym-branch')).toHaveCount(1)
+  await expect(overview.locator('.rz-rel-hub')).toContainText('AH Courgette')
+  await expect(overview.locator('table')).toHaveCount(0)
+  const columns = await overview.locator('.rz-rel-layout').evaluate((el) =>
+    getComputedStyle(el).gridTemplateColumns)
+  expect(columns.split(' ').length).toBe(1)
+})
+
+test('Overzicht-projectie: onzekere, conflicterende en voorgestelde identiteiten zijn geen matches', () => {
+  const graph = buildArticleRelationshipGraph(relationshipProducts, relationshipReceipts,
+    [{ id: 'yellow', status: 'linked' }, { id: 'other', status: 'suggested' }], 'root')
+  expect(graph.rootReceipts).toHaveLength(5)
+  expect(graph.synonyms.map((item) => item.product.id)).toEqual(['yellow'])
+  expect(graph.synonyms[0].receipts).toHaveLength(1)
+  expect(graph.pending.map((item) => item.id)).toEqual(['unconfirmed'])
+  expect(graph.rootReceipts.map((item) => item.id)).not.toContain('conflict')
+  expect(buildArticleRelationshipGraph(relationshipProducts, relationshipReceipts,
+    [], 'missing-product')).toBeNull()
 })

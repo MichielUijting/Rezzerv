@@ -16,6 +16,7 @@ import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
+import ArticleRelationshipOverview from './ArticleRelationshipOverview'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -384,6 +385,7 @@ export default function ExternalDatabases2Page() {
         <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
         {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
         {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
+        {activeArea === "overview" ? <ArticleRelationshipOverview /> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button

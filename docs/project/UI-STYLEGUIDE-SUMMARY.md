@@ -1812,3 +1812,32 @@ bestaande centrale feedbackvoorziening; er komen geen eigen modals,
 onzichtbare achtergrondupdates, een tweede navigatie of nieuwe tabellen
 met afwijkende pagination. Op mobiele schermen blijft de overzichtslijst
 lineair leesbaar; de bestaande standaardtabel blijft ongewijzigd.
+
+
+## Artikelbeheer: grafisch Overzicht van Catalogusrelaties — 14 november 2026
+
+Op expliciet PO-verzoek bevat Artikelbeheer naast **Identificeren**,
+**Classificeren** en **Synoniemen** een vierde knop **Overzicht**. De gebruiker
+kiest bovenaan een Catalogusartikel via een zoekveld met maximaal vijf
+artikelvoorstellen. Het gekozen artikel staat als centrale Cataloguskaart
+in een visuele relatiekaart, met waar beschikbaar de echte Catalogusfoto.
+
+- **Groene, doorgetrokken verbindingen** met label **Match** betekenen dat
+  een bonartikel een bevestigde Catalogusidentiteit deelt met de kaart.
+- **Blauwgroene, gestreepte verbindingen** met label **Synoniem** verbinden
+  uitsluitend twee apart bevestigde Catalogusproducten. Hun eigen
+  bonartikelmatches staan direct bij die synoniemkaart.
+- Een zijpaneel bevat de voor de selectie geldende aantallen, legenda en
+  uitsluitend onbevestigde **Nog te beoordelen**-bonnamen. Een overeenkomst
+  op naam geeft nooit een groene match of een synoniemlijn.
+- De filterknoppen **Alles**, **Matches**, **Synoniemen** en **Nog te beoordelen**
+  wijzigen alleen de weergave; bij veel kaarten is **Alle relaties tonen**
+  beschikbaar. Alle bediening is alleen-lezen.
+- Op mobiele viewport worden de knooppunten onder elkaar weergegeven binnen
+  de bestaande centrale app-chrome; er komt geen tweede tabel, horizontale
+  schermscroll of schermspecifieke header.
+
+Gebruik bestaande centrale `AppShell`, `ScreenCard`, `Button` en de
+`CatalogProductImage`-component. Knoplabels behouden normaal lettergewicht.
+Het kleurgebruik sluit aan bij de primaire Inhuis-token (standaard
+`#005F6A`); er ontstaat geen afzonderlijke appbrede styleguidevariant.
