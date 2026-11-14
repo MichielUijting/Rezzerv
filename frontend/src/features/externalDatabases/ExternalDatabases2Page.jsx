@@ -9,9 +9,13 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
+import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import Ed2MatchPage from './Ed2MatchPage'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
+import ArticleRelationshipOverview from './ArticleRelationshipOverview'
 import './externalDatabases.css'
 
 const RETAILERS = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', lidl: 'Lidl', jumbo: 'Jumbo', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
@@ -34,6 +38,19 @@ const columns = [
       : row.article_code || (row.manual_barcode
         ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
         : '') },
+  { key: 'identity_status_label', label: 'Identificatie', width: 225,
+    sortable: true, filterable: true,
+    getSortValue: (row) => row.identity_status_label || 'Nog identificeren',
+    renderCell: (row) => <span>
+      <span>{row.identity_status_label || 'Nog identificeren'}</span>
+      {row.automatic_match_review_reason ? <span
+        className="rz-ed2-match-review-reason"
+        role="note"
+        title={row.automatic_match_review_reason}>
+        <span aria-hidden="true">⚠</span>{' '}
+        {row.automatic_match_review_reason}
+      </span> : null}
+    </span> },
   { key: 'link_status', label: 'GS1-class.', width: 210, sortable: true, filterable: true,
     filterLabel: 'Filter op GS1-class.',
     getSortValue: (row) => STATUSES[row.link_status] || STATUSES.unlinked,
@@ -52,7 +69,7 @@ const columns = [
 const exportColumns = [
   ['receipt_line_text', 'Artikel'], ['retailer', 'Winkelketen'],
   ['receipt_article_number', 'Bonartikelnummer'], ['article_code', 'Art./Barcode'],
-  ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
+  ['identity_status_label', 'Identificatie'], ['link_status', 'GS1-class.'], ['quantity_label', 'Omvang / gewicht'],
 ]
 
 function csvCell(value) {
@@ -77,12 +94,14 @@ export default function ExternalDatabases2Page() {
   const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [materializing, setMaterializing] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
@@ -107,6 +126,18 @@ export default function ExternalDatabases2Page() {
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
+  const recoverableRows = useMemo(() => items.filter((row) =>
+    row.identity_repairable === true &&
+    /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim())
+  ), [items])
+  // No manual bulk selection required for historically saved, safe candidates.
+  // Only the existing explicitly authorized POST may perform the repair.
+  const repairRows = selectedRows.length ? selectedRows : recoverableRows.slice(0, 50)
+  const canMaterializeSaved = selectedRows.length <= 50
+    && repairRows.length > 0 && repairRows.length <= 50
+    && repairRows.every((row) =>
+      row.identity_status !== 'review' &&
+      /^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(row.manual_barcode || '').trim()))
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
 
@@ -176,6 +207,54 @@ export default function ExternalDatabases2Page() {
       setUnlinking(false)
       setRefreshVersion((value) => value + 1)
     }
+  }
+
+  function confirmMaterializeSaved() {
+    if (!canMaterializeSaved || materializing || deleting || unlinking) return
+    const selections = repairRows.map((row) => ({
+      receipt_item_id: row.id, gtin: String(row.manual_barcode).trim(),
+    }))
+    showFeedback({
+      variant: 'warning',
+      title: 'Bewaarde barcodes koppelen',
+      message: selections.length + ' eerder opgeslagen barcode(s) aan de Catalogus koppelen?',
+      detail: 'Uitsluitend eerder bewaarde barcodes worden verwerkt. Alle bestaande identiteiten worden opnieuw gecontroleerd. Bij één conflict wordt deze hele selectie teruggedraaid; bonnen, huishoudartikelen en voorraad blijven behouden.' + (selectedRows.length === 0 && recoverableRows.length > 50 ? ' Eerst worden maximaal 50 kandidaten verwerkt.' : ''),
+      primaryActionLabel: 'Koppelen', secondaryActionLabel: 'Annuleren',
+      testId: 'ed2-materialize-existing-confirm',
+      onPrimaryAction: async () => {
+        setMaterializing(true)
+        try {
+          const response = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes/materialize-existing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selections }),
+          })
+          const result = await response.json().catch(() => ({}))
+          if (!response.ok || result.ok !== true || result.processed !== selections.length) {
+            throw new Error(typeof result.detail === 'string' ? result.detail
+              : 'De bestaande barcodes konden niet volledig worden gekoppeld.')
+          }
+          setSelectedIds([])
+          setSelectedItem(null)
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'success', title: 'Catalogus bijgewerkt',
+            message: result.catalog_links_created + ' barcode(s) gekoppeld; '
+              + result.already_confirmed + ' waren al gekoppeld. '
+              + result.catalog_products_created + ' nieuw(e) Catalogusproduct(en).',
+          })
+          return false
+        } catch (error) {
+          setRefreshVersion((value) => value + 1)
+          showFeedback({
+            variant: 'error', title: 'Niet gekoppeld',
+            message: error.message || 'Er is een conflict; er is niets gewijzigd.',
+          })
+          return false
+        } finally {
+          setMaterializing(false)
+        }
+      },
+    })
   }
 
   function confirmDeleteSelected() {
@@ -249,7 +328,7 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     if (!offLinkOutcome?.message) return undefined
-    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : 'error', message: offLinkOutcome.message })
+    showFeedback({ variant: offLinkOutcome.status === 'success' ? 'success' : (offLinkOutcome.status === 'warning' ? 'warning' : 'error'), message: offLinkOutcome.message })
     const timeout = window.setTimeout(() => setOffLinkOutcome(null), 4000)
     return () => window.clearTimeout(timeout)
   }, [offLinkOutcome, showFeedback])
@@ -295,9 +374,12 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Artikelbeheer</h2>
-        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea} />
+        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea}
+          isPlatformSuperuser={isPlatformSuperuser} />
+        {activeArea === 'matching' && isPlatformSuperuser ? <Ed2MatchPage /> : null}
         {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
         {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
+        {activeArea === "overview" ? <ArticleRelationshipOverview /> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
           {Object.entries(STATUSES).map(([status, label]) => <Button
@@ -309,6 +391,10 @@ export default function ExternalDatabases2Page() {
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
           >{label}: {counts[status] || 0}</Button>)}
         </div>
+        <p className="rz-external-databases-muted">
+          Identificatie en GS1-classificatie zijn onafhankelijk.
+          Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
+        </p>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -356,7 +442,16 @@ export default function ExternalDatabases2Page() {
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
             onClick={() => navigate('/externe-databases-2/importeren',
               { state: { ed2TableState: returnState } })}>Importeren</Button> : null}
-          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting}
+          <Button type="button" variant="secondary"
+            disabled={!canMaterializeSaved || unlinking || deleting || materializing}
+            onClick={confirmMaterializeSaved}>
+            {materializing ? 'Herstellen...' : 'Bewaarde barcodes koppelen'}
+          </Button>
+          {recoverableRows.length > 0 ? <span role="status">
+            {recoverableRows.length} bewaarde barcode(s) wachten op Catalogusherstel.
+            Zonder selectie worden maximaal 50 artikelen voorgesteld.
+          </span> : null}
+          <Button type="button" variant="secondary" disabled={!canUnlink || unlinking || deleting || materializing}
             onClick={() => setConfirmUnlink(true)}>{unlinking ? 'Ontkoppelen...' : 'Ontkoppelen'}</Button>
           {isPlatformSuperuser ? <Button type="button" variant="secondary"
             disabled={!selectedRows.length || selectedRows.length > 100 || unlinking || deleting}
@@ -368,16 +463,31 @@ export default function ExternalDatabases2Page() {
         </p> : null}
         {selectedItem?.link_status === 'classification_pending'
           && selectedItem.pending_global_product_id && selectedItem.off_link_id
-          ? <Ed2GpcClassificationPanel key={selectedItem.id} item={selectedItem}
-            onClassified={(message) => {
-              setSelectedItem(null)
-              setSelectedIds([])
-              setActiveStatusCounter('')
-              setFilters((previous) => ({ ...previous, link_status: '' }))
-              setOffLinkOutcome({ status: 'success', message })
-              setRefreshVersion((value) => value + 1)
-            }} />
-          : selectedItem ? <OffCandidatePanel key={selectedItem.id} item={selectedItem} returnState={returnState}
+          ? <div key={selectedItem.id}>
+            <Ed2GpcClassificationPanel item={selectedItem}
+              onClassified={(message) => {
+                setSelectedItem(null)
+                setSelectedIds([])
+                setActiveStatusCounter('')
+                setFilters((previous) => ({ ...previous, link_status: '' }))
+                setOffLinkOutcome({ status: 'success', message })
+                setRefreshVersion((value) => value + 1)
+              }} />
+            <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
+              <Ed2BarcodeScanner receiptItemId={selectedItem.id}
+                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} />
+              <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
+                onSaved={(outcome) => {
+                  setSelectedItem(null)
+                  setSelectedIds([])
+                  setPendingScannedBarcode(null)
+                  setOffLinkOutcome(outcome)
+                  setRefreshVersion((value) => value + 1)
+                }} />
+            </section>
+          </div>
+          : selectedItem ? <div key={selectedItem.id}>
+            <OffCandidatePanel item={selectedItem} returnState={returnState}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
@@ -386,7 +496,7 @@ export default function ExternalDatabases2Page() {
               // saving; the refreshed list determines whether a row remains visible.
               // Re-read canonical ED2 statuses; never infer successful linkage from a preview.
               setRefreshVersion((value) => value + 1)
-            }} /> : null}
+            }} /></div> : null}
         </div> : null}
         {confirmUnlink ? <div className="rz-modal-backdrop">
           <div className="rz-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="ed2-unlink-confirm">

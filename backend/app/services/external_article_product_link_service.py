@@ -19,7 +19,7 @@ import unicodedata
 import uuid
 from typing import Any, Mapping, Optional
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, inspect, text
 
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.gtin_validation_service import is_valid_gtin
@@ -897,33 +897,125 @@ def get_confirmed_external_article_product_link(
     if not normalized_retailer:
         return None
 
+    # Exact saved-barcode identity (retailer, receipt label, article code)
+    # outranks legacy code-only lookups; it is never matched by label alone.
+    if (normalized_text and inspect(conn).has_table("ed2_manual_barcodes")
+        and {"global_product_id", "barcode_scope"}.issubset({
+            col["name"] for col in inspect(conn).get_columns("ed2_manual_barcodes")
+        })):
+        from app.services.catalog_retailer_identity_keys import catalog_retailer_aliases
+        saved_stmt = text("""
+            SELECT s.global_product_id, s.gtin AS barcode_value,
+                   s.barcode_scope, s.confirmed_by, s.confirmed_at,
+                   gp.name AS global_product_name
+            FROM ed2_manual_barcodes s
+            JOIN global_products gp ON gp.id = s.global_product_id
+            WHERE s.retailer_code IN :aliases AND s.receipt_text_normalized = :label
+              AND s.external_article_code = :code
+              AND gp.status = 'active'
+            LIMIT 2
+        """).bindparams(bindparam("aliases", expanding=True))
+        saved = conn.execute(saved_stmt, {
+            "aliases": list(catalog_retailer_aliases(normalized_retailer)),
+            "label": normalized_text, "code": normalized_code,
+        }).mappings().all()
+        if len(saved) == 1:
+            current = saved[0]
+            return {
+                "global_product_id": current["global_product_id"],
+                "global_product_name": current["global_product_name"],
+                "primary_gtin": current["barcode_value"] if
+                    current["barcode_scope"] == "global_candidate" else "",
+                "retailer_code": normalized_retailer, "external_article_code": normalized_code,
+                "receipt_text_normalized": normalized_text, "status": "confirmed",
+                "confirmed_by": current["confirmed_by"], "confirmed_at": current["confirmed_at"],
+                "source_candidate_id": None,
+            }
+
+    # Strong, explicitly confirmed barcode-free tuple has identity authority
+    # independent of GS1. Never infer the store barcode from the target
+    # product's primary GTIN. A contradictory code-only or GTIN claim is
+    # rejected by the central resolver before projection.
+    if normalized_text and inspect(conn).has_table("ed2_receipt_family_links"):
+        from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+        from app.services.catalog_retailer_identity_keys import catalog_retailer_aliases
+        exact = resolve_catalog_identity(
+            conn, retailer_code=normalized_retailer,
+            external_article_code=normalized_code, receipt_text=normalized_text,
+        )
+        if exact["status"] == "conflict":
+            return None
+        if (exact["status"] == "matched"
+                and "confirmed_receipt_tuple" in exact["evidence"]):
+            matches = conn.execute(text("""
+                SELECT f.global_product_id, f.confirmed_by, f.confirmed_at,
+                       gp.name AS global_product_name
+                FROM ed2_receipt_family_links f
+                JOIN global_products gp ON gp.id=f.global_product_id
+                WHERE f.retailer_code IN :aliases
+                  AND f.receipt_text_normalized=:label
+                  AND f.external_article_code=:code
+                  AND f.global_product_id=:product
+                  AND TRIM(f.confirmed_by) <> ''
+                  AND LOWER(COALESCE(gp.status, 'active'))='active'
+                LIMIT 2
+            """).bindparams(bindparam("aliases", expanding=True)), {
+                "aliases": catalog_retailer_aliases(normalized_retailer),
+                "label": normalized_text, "code": normalized_code,
+                "product": exact["global_product_id"],
+            }).mappings().all()
+            if len(matches) != 1:
+                return None
+            match = matches[0]
+            return {
+                "global_product_id": str(match["global_product_id"]),
+                "global_product_name": match["global_product_name"],
+                "primary_gtin": "",
+                "retailer_code": normalized_retailer,
+                "external_article_code": normalized_code,
+                "receipt_text_normalized": normalized_text,
+                "status": "confirmed",
+                "source": "confirmed_receipt_tuple",
+                "confirmed_by": match["confirmed_by"],
+                "confirmed_at": match["confirmed_at"],
+                "source_candidate_id": None,
+            }
+
     if normalized_code:
-        row = conn.execute(
-            text(
-                """
+        # This is the shared operational Catalogus identity reader. A valid
+        # retailer/article-code identity is independent from GS1/CBS
+        # classification. Never fall back to a receipt-text match when the
+        # actual article code has no unique, proven owner.
+        from app.services.catalog_identity_resolution_service import resolve_catalog_identity
+        from app.services.catalog_retailer_identity_keys import catalog_retailer_aliases
+
+        identity = resolve_catalog_identity(
+            conn, retailer_code=normalized_retailer,
+            external_article_code=normalized_code,
+        )
+        if identity["status"] != "matched":
+            return None
+        rows = conn.execute(
+            text("""
                 SELECT link.*, gp.name AS global_product_name
                 FROM external_article_product_links link
                 JOIN global_products gp ON gp.id = link.global_product_id
-                WHERE link.retailer_code = :retailer_code
+                WHERE link.retailer_code IN :retailer_aliases
                   AND link.external_article_code = :external_article_code
+                  AND link.global_product_id = :global_product_id
                   AND link.status IN ('confirmed', 'classification_pending')
-                  AND lower(COALESCE(gp.status, 'active')) = 'active'
+                  AND LOWER(COALESCE(gp.status, 'active')) = 'active'
                 ORDER BY CASE WHEN link.status = 'confirmed' THEN 0 ELSE 1 END,
                          link.confirmed_at DESC, link.id DESC
                 LIMIT 1
-                """
-            ),
+            """).bindparams(bindparam("retailer_aliases", expanding=True)),
             {
-                "retailer_code": normalized_retailer,
+                "retailer_aliases": catalog_retailer_aliases(normalized_retailer),
                 "external_article_code": normalized_code,
+                "global_product_id": identity["global_product_id"],
             },
         ).mappings().first()
-        if row:
-            serialized = _serialize_external_article_product_link(row)
-            if serialized and _complete_global_product_link_data(
-                conn, serialized.get("global_product_id") or ""
-            ).get("complete"):
-                return serialized
+        return _serialize_external_article_product_link(rows) if rows else None
 
     if normalized_text:
         row = conn.execute(

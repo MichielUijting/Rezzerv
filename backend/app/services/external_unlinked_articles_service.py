@@ -22,12 +22,13 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import _m2c2h5_purchase_import_placeholder
 from app.services.external_receipt_item_projection import _receipt_table_line_placeholder
 from app.services.gtin_validation_service import is_valid_gtin
+from app.services.barcode_scope_service import classify_barcode_scope
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
 
 def _overview_retailer_code(value):
-    code = normalize_external_link_retailer_code(value)
-    return 'ah' if code in {'ah', 'albert-heijn', 'albert-heijn-digitaal'} else code
+    return canonical_catalog_retailer(value)
 
 
 def _ed2_manual_barcode_identity(retailer_code, receipt_text, article_code):
@@ -62,6 +63,92 @@ def _manual_ed2_barcode_lookup(conn) -> dict[tuple[str, str, str], str]:
         if is_valid_gtin(code):
             codes[key] = code
     return codes
+
+
+
+
+def _saved_ed2_catalog_evidence(conn) -> dict[tuple[str, str, str], dict]:
+    """Read-only source evidence for each exact retailer+receipt+article code.
+
+    Saved evidence predates Catalogus materialisation. Neither an unchecked
+    GTIN nor a product name is enough to claim a central product. Aliased
+    retailer duplicates with different facts always require manual review.
+    """
+    inspector = inspect(conn)
+    if not inspector.has_table("ed2_manual_barcodes"):
+        return {}
+    get_columns = getattr(inspector, "get_columns", None)
+    if not callable(get_columns):
+        return {}
+    required = {"retailer_code", "receipt_text_normalized", "external_article_code",
+                "gtin", "barcode_scope", "global_product_id", "confirmed_by",
+                "confirmed_at"}
+    if not required.issubset({c["name"] for c in get_columns("ed2_manual_barcodes")}):
+        return {}
+    rows = conn.execute(text("""
+        SELECT m.retailer_code, m.receipt_text_normalized,
+               m.external_article_code, m.gtin, m.barcode_scope,
+               m.global_product_id, m.confirmed_by, m.confirmed_at,
+               gp.status AS catalog_status
+          FROM ed2_manual_barcodes m
+          LEFT JOIN global_products gp ON gp.id = m.global_product_id
+    """)).mappings()
+    states = {}
+    for row in rows:
+        key = _ed2_manual_barcode_identity(row["retailer_code"],
+                                          row["receipt_text_normalized"],
+                                          row["external_article_code"])
+        barcode = str(row["gtin"] or "").strip()
+        product_id = str(row["global_product_id"] or "").strip()
+        scope = str(row["barcode_scope"] or "").strip()
+        if not is_valid_gtin(barcode):
+            state = "review"
+        elif not product_id:
+            # Legacy "save" already was the PO's identification proof.
+            state = "saved_only"
+        elif (str(row["catalog_status"] or "").lower() != "active"
+              or not str(row["confirmed_by"] or "").strip()
+              or row["confirmed_at"] is None
+              or scope != classify_barcode_scope(barcode)["scope"]):
+            state = "review"
+        else:
+            state = "catalog_linked"
+        candidate = {
+            "state": state, "barcode": barcode,
+            "catalog_product_id": product_id if state == "catalog_linked" else "",
+        }
+        old = states.get(key)
+        if old is None:
+            states[key] = candidate
+        elif old != candidate:
+            # Remain fail-closed even if another alias repeats a valid row.
+            states[key] = {"state": "review", "barcode": "",
+                           "catalog_product_id": ""}
+    return states
+
+def _confirmed_barcode_free_family_lookup(conn):
+    """One read-only projection of explicitly approved exact receipt tuples."""
+    if not inspect(conn).has_table("ed2_receipt_family_links"):
+        return {}
+    claims = {}
+    rows = conn.execute(text("""
+        SELECT f.retailer_code, f.receipt_text_normalized, f.external_article_code,
+               f.global_product_id, gp.name AS catalog_name
+        FROM ed2_receipt_family_links f
+        JOIN global_products gp ON gp.id = f.global_product_id AND gp.status='active'
+    """)).mappings()
+    for row in rows:
+        key = _ed2_manual_barcode_identity(
+            row["retailer_code"], row["receipt_text_normalized"],
+            row["external_article_code"],
+        )
+        claim = {"product_id": str(row["global_product_id"]),
+                 "product_name": str(row["catalog_name"])}
+        if key in claims and claims[key] != claim:
+            claims[key] = {"conflict": True}
+        else:
+            claims[key] = claim
+    return claims
 
 
 def _removed_ed2_keys(conn) -> set[tuple[str, str, str]]:
@@ -122,8 +209,7 @@ def _requires_central_resolution(source, keys) -> bool:
     for candidate in source.get("candidates") or ():
         if isinstance(candidate, dict):
             possible_gtins.extend(candidate.get(field) for field in (
-                "gtin", "ean", "barcode", "code", "external_source_product_code",
-                "candidate_source_product_code", "source_product_code",
+                "gtin", "ean", "barcode",
             ))
     return any(
         is_valid_gtin("".join(character for character in str(value or "")
@@ -147,6 +233,8 @@ def _source_articles(conn):
     for row in purchases:
         item = _m2c2h5_purchase_import_placeholder(dict(row))
         item["external_article_code"] = row["external_article_code"]
+        # The source projection does not establish a GTIN from a store code.
+        item["gtin"] = ""
         yield item
 
     # Receipt-derived Uitpakken/import rows are copies, not another source of
@@ -158,6 +246,7 @@ def _source_articles(conn):
                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer_code,
                COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(rtl.raw_label, ''), '') AS receipt_line_text,
                rtl.external_article_code AS retailer_article_number,
+               rtl.barcode AS source_gtin,
                TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(rtl.unit, '')) AS quantity_label
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
@@ -171,6 +260,9 @@ def _source_articles(conn):
     for row in receipts:
         item = _receipt_table_line_placeholder(dict(row))
         item["external_article_code"] = row["retailer_article_number"]
+        # The legacy placeholder fills gtin from retailer_article_number.
+        # Use ONLY the canonical barcode field as GTIN evidence.
+        item["gtin"] = str(row["source_gtin"] or "")
         yield item
 
 
@@ -229,6 +321,8 @@ def list_all_external_articles(*, conn=None) -> dict:
     resolved = 0
     with (engine.connect() if conn is None else nullcontext(conn)) as conn:
         manual_barcodes = _manual_ed2_barcode_lookup(conn)
+        saved_evidence = _saved_ed2_catalog_evidence(conn)
+        family_evidence = _confirmed_barcode_free_family_lookup(conn)
         central_keys = _central_link_keys(conn)
         setup_done = perf_counter()
         removed_keys = _removed_ed2_keys(conn)
@@ -251,10 +345,15 @@ def list_all_external_articles(*, conn=None) -> dict:
                 skipped += 1
                 projected = {}
             if projected.get("central_link_active") is True:
-                status = "linked"
+                central_link = projected.get("central_external_article_product_link") or {}
+                # Identity can be proven while the independent GS1/CBS
+                # classification is still pending. Do not report this as
+                # classified merely because its retailer code now resolves.
+                status = ("classification_pending"
+                          if central_link.get("status") == "classification_pending"
+                          else "linked")
                 linked_gtin = str(projected.get("linked_gtin") or "")
                 article_code = linked_gtin if is_valid_gtin(linked_gtin) else ""
-                central_link = projected.get("central_external_article_product_link") or {}
             else:
                 pending = get_pending_classification_external_article_link(
                     conn,
@@ -266,6 +365,30 @@ def list_all_external_articles(*, conn=None) -> dict:
                 pending_gtin = str((pending or {}).get("primary_gtin") or "")
                 article_code = pending_gtin if is_valid_gtin(pending_gtin) else ""
                 central_link = pending or {}
+            evidence = saved_evidence.get(_ed2_manual_barcode_identity(
+                source.get("retailer_code"), receipt_text, article_number,
+            ), {})
+            family = family_evidence.get(_ed2_manual_barcode_identity(
+                source.get("retailer_code"), receipt_text, article_number,
+            ), {})
+            identity_status = evidence.get("state") or (
+                "catalog_linked" if status in ("linked", "classification_pending")
+                and central_link.get("global_product_id") else "not_identified"
+            )
+            if family:
+                if family.get("conflict") or (identity_status == "catalog_linked"
+                    and family.get("product_id") != str(central_link.get("global_product_id") or evidence.get("catalog_product_id") or "")):
+                    identity_status = "review"
+                elif identity_status == "not_identified":
+                    identity_status = "catalog_linked"
+            if identity_status == "saved_only" and status != "unlinked":
+                identity_status = "catalog_linked"
+            identity_labels = {
+                "not_identified": "Nog identificeren",
+                "saved_only": "Barcode bewaard - Catalogus herstellen",
+                "catalog_linked": "Catalogus gekoppeld",
+                "review": "Identificatie controleren",
+            }
             seen.add(key)
             counts[status] += 1
             items.append({
@@ -292,9 +415,16 @@ def list_all_external_articles(*, conn=None) -> dict:
                     ), ""
                 ),
                 "catalog_product_name": str(
-                    central_link.get("global_product_name") or ""
+                    central_link.get("global_product_name") or family.get("product_name") or ""
                 ),
+                "barcode_free_catalog_link": bool(family.get("product_id")
+                                                   and identity_status == "catalog_linked"),
                 "link_status": status,
+                "identity_status": identity_status,
+                "identity_status_label": identity_labels[identity_status],
+                "identity_repairable": identity_status == "saved_only",
+                "identity_catalog_product_id": evidence.get("catalog_product_id")
+                    or (family.get("product_id") if identity_status == "catalog_linked" else "") or "",
                 "is_generic_catalog_link": bool(projected.get("is_generic_catalog_link")),
                 "pending_global_product_id": str(central_link.get("global_product_id") or "")
                 if status == "classification_pending" and str(central_link.get("confirmed_by") or "")
@@ -311,6 +441,15 @@ def list_all_external_articles(*, conn=None) -> dict:
                     "external_databases_off_brand_override",
                 } and status != "unlinked" else "",
             })
+    # A stable read-only explanation on each affected article. Keep the
+    # normal overview path authoritative and avoid a second database scan.
+    from app.services.proven_exact_receipt_name_service import (
+        confirmed_product_variant_review_reasons,
+    )
+    review_reasons = confirmed_product_variant_review_reasons(items)
+    for item in items:
+        item["automatic_match_review_reason"] = review_reasons.get(str(item["id"]), "")
+
     elapsed_ms = (perf_counter() - started) * 1000
     if elapsed_ms >= 250:
         logging.getLogger("uvicorn.error").info(

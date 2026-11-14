@@ -570,9 +570,15 @@ def run_contract() -> None:
             external_article_code="sku-123", global_product_id="product-no-gpc",
         )
         _assert(same["id"] == waiting["id"], "De pending-koppeling is niet idempotent")
-        _assert(find_global_external_article_product_link(
+        verified_pending = find_global_external_article_product_link(
             conn, retailer_code="lidl", external_article_code="sku-123",
-        ) is None, "Kassa kreeg een incomplete pending-koppeling")
+        )
+        _assert(
+            verified_pending is not None
+            and verified_pending["global_product_id"] == "product-no-gpc"
+            and verified_pending["status"] == "classification_pending",
+            "Een bevestigde GTIN-identiteit mag niet door ontbrekende GS1-classificatie worden geblokkeerd",
+        )
         _assert(get_pending_classification_external_article_link(
             conn, retailer_code="lidl", receipt_text="Artikel zonder GPC",
             external_article_code="sku-123",

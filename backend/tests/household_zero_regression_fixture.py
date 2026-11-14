@@ -164,20 +164,24 @@ def _portable_ensure_regression_inventory_fixture(household_id: str) -> dict:
             else ""
         )
 
+        if not household_article_id:
+            raise RuntimeError("Regressieartikel heeft geen geldige huishoudartikel-ID")
+
         inventory_id = uuid.uuid4().hex
         conn.execute(
             text(
                 """
                 INSERT INTO inventory
-                    (id, naam, aantal, household_id, space_id, sublocation_id, status, updated_at)
+                    (id, naam, aantal, household_id, household_article_id, space_id, sublocation_id, status, updated_at)
                 VALUES
-                    (:id, :naam, 1, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
+                    (:id, :naam, 1, :household_id, :household_article_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
                 """
             ),
             {
                 "id": inventory_id,
                 "naam": main.REGRESSION_FIXTURE_ARTICLE_NAME,
                 "household_id": normalized_household_id,
+                "household_article_id": household_article_id,
                 "space_id": space_id,
                 "sublocation_id": sublocation_id,
             },
@@ -185,7 +189,7 @@ def _portable_ensure_regression_inventory_fixture(household_id: str) -> dict:
         main.create_inventory_event(
             conn,
             household_id=normalized_household_id,
-            article_id=inventory_id,
+            article_id=household_article_id,
             article_name=main.REGRESSION_FIXTURE_ARTICLE_NAME,
             resolved_location={
                 "location_id": sublocation_id or space_id,
@@ -209,8 +213,8 @@ def _portable_ensure_regression_inventory_fixture(household_id: str) -> dict:
         )
 
     payload = {
-        "articleId": household_article_id or str(inventory_id),
-        "householdArticleId": household_article_id or None,
+        "articleId": household_article_id,
+        "householdArticleId": household_article_id,
         "inventoryId": str(inventory_id),
         "articleOptionId": ensured_article_option_id,
         "articleName": main.REGRESSION_FIXTURE_ARTICLE_NAME,

@@ -17,8 +17,12 @@ def article_sources(monkeypatch, names, receipts=(), manual_rows=()):
         sql = str(statement).strip()
         assert sql.upper().startswith('SELECT'), sql
         statements.append(sql)
+        # The production receipt query has source_gtin, even when no barcode
+        # is recorded. Keep this test double faithful to that SELECT contract.
+        receipt_rows = [{**row, 'source_gtin': row.get('source_gtin', '')}
+                        for row in receipts]
         rows = (list(manual_rows) if 'FROM ed2_manual_barcodes' in sql else
-                purchases if 'FROM purchase_import_lines' in sql else list(receipts))
+                purchases if 'FROM purchase_import_lines' in sql else receipt_rows)
         return SimpleNamespace(mappings=lambda: iter(rows))
 
     conn = SimpleNamespace(execute=execute)
@@ -300,3 +304,58 @@ def test_central_link_prefetch_reads_only_active_identifiers(monkeypatch):
     assert result == ({('ah', '123')}, {('ah', 'melk 1 l'), ('jumbo', 'cacao')})
     assert len(seen) == 1
     assert "status IN ('confirmed', 'classification_pending')" in seen[0]
+
+
+def test_saved_catalog_status_independent_from_off_and_gpc(monkeypatch):
+    """An old barcode is confirmed evidence but not automatically a Catalogus link."""
+    article_sources(monkeypatch, [('Courgette groen', '0082346'),
+                                 ('Courgette geel', '0082293')])
+    monkeypatch.setattr(service, "project_central_link_truth", lambda conn, item: item)
+    monkeypatch.setattr(service, "_saved_ed2_catalog_evidence", lambda conn: {
+        ("lidl", "courgette groen", "0082346"): {
+            "state": "saved_only", "barcode": "2008234600001",
+            "catalog_product_id": ""},
+        ("lidl", "courgette geel", "0082293"): {
+            "state": "catalog_linked", "barcode": "2008234600001",
+            "catalog_product_id": "catalog-yellow"},
+    })
+    products = {row["receipt_line_text"]: row
+                for row in service.list_all_external_articles()["items"]}
+    assert products["Courgette groen"]["identity_status"] == "saved_only"
+    assert products["Courgette groen"]["identity_repairable"]
+    assert products["Courgette groen"]["link_status"] == "unlinked"
+    assert products["Courgette geel"]["identity_status"] == "catalog_linked"
+    assert not products["Courgette geel"]["identity_repairable"]
+    assert products["Courgette geel"]["link_status"] == "unlinked"
+
+
+def test_saved_barcode_reader_is_read_only_and_flags_invalid_codes(monkeypatch):
+    evidence = [
+        {"retailer_code": "Lidl", "receipt_text_normalized": "courgette groen",
+         "external_article_code": "0082346", "gtin": "2008234600002",
+         "barcode_scope": None, "global_product_id": None,
+         "confirmed_by": None, "confirmed_at": None, "catalog_status": None},
+        {"retailer_code": "Jumbo", "receipt_text_normalized": "courgette groen",
+         "external_article_code": "0082346", "gtin": "2008234600001",
+         "barcode_scope": "restricted", "global_product_id": "deleted-catalog",
+         "confirmed_by": "actor", "confirmed_at": "2026-11-12",
+         "catalog_status": "deleted"},
+    ]
+    seen = []
+    def execute(sql):
+        assert str(sql).strip().upper().startswith("SELECT")
+        seen.append(str(sql))
+        return SimpleNamespace(mappings=lambda: iter(evidence))
+    inspector = SimpleNamespace(
+        has_table=lambda _: True,
+        get_columns=lambda _: [{"name": key} for key in (
+            "retailer_code", "receipt_text_normalized", "external_article_code",
+            "gtin", "barcode_scope", "global_product_id", "confirmed_by",
+            "confirmed_at")],
+    )
+    monkeypatch.setattr(service, "inspect", lambda _: inspector)
+    states = service._saved_ed2_catalog_evidence(SimpleNamespace(execute=execute))
+    assert states[("lidl", "courgette groen", "0082346")]["state"] == "review"
+    assert states[("jumbo", "courgette groen", "0082346")]["state"] == "review"
+    assert len(seen) == 1
+

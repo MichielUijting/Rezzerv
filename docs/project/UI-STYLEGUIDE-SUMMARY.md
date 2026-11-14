@@ -1754,6 +1754,131 @@ bevestigingsmomenten blijven ongewijzigd. De actiebalk mag op smalle schermen
 afbreken zonder een rij of de horizontale scrollbar te overlappen.
 
 
+## Artikel-synoniemen — voorstel tegenover overige artikelen (13 november 2026)
+
+De rechtertabel behoudt de drie bestaande contractuele volgordegroepen:
+**Al gekoppeld**, **Voorstel** en **Overig**. Het delen van een woord in
+de productnaam is onvoldoende om een door de expliciet geteste productfamilie
+uitgesloten combinatie toch als automatisch voorstel te tonen.
+Verse courgette en babyvoeding, diepvriesproducten of maaltijdmixen zijn
+daarom geen automatisch synoniemvoorstel. Overige Catalogusartikelen blijven
+handmatig doorzoekbaar, zoals eerder vastgesteld; hun aanwezigheid in de
+tabel betekent niet dat Inhuis ze als equivalent aanbeveelt.
+
+Boven de rechtertabel staat een compacte, niet-interactieve toelichting met
+het aantal **voorstellen** en **overige artikelen**. De toelichting staat
+binnen de bestaande twee-tabellayout, verandert geen selectie of autorisatie,
+en gebruikt de bestaande centrale body-typografie
+`--font-size-ui-body` (14px) en secundaire tekstkleur.
+Er komt geen nieuwe kleur, nieuw interactiepatroon of derde tekstmaat.
+
+
+## Identificeren — aparte barcode- en Catalogusstatus
+
+De centrale DataTable voor Identificeren toont een extra standaardkolom
+**Identificatie**. De gegevensbron onderscheidt de status van een bewaarde
+barcode van een bevestigde Catalogusverwijzing, onafhankelijk van de
+bestaande GS1-/Kassa-status. De bestaande knop
+**Bewaarde barcodes koppelen** blijft centraal vormgegeven en geeft
+bij oude herstelbare records aan dat maximaal vijftig opgeslagen barcodes
+in een expliciet bevestigde handeling kunnen worden hersteld.
+Onbekende of conflicterende barcodegegevens krijgen
+**Identificatie controleren**. Er zijn geen nieuwe stijlelementen,
+kleuren, gewijzigde tabelcomponenten of feedbackpatronen.
+
+
+## Artikelbeheer — expliciete barcodevrije courgettefamilie (13 november 2026)
+Dubbelklikken op een ongeïdentificeerd, barcodevrij bonartikel uit de geteste
+verse courgettefamilie toont een voorstel binnen het bestaande detailpaneel.
+De gebruiker kiest bewust het Catalogusproduct en bevestigt met de bestaande
+centrale Inhuis-feedbackdialoog. Een aparte gele of biologische variant
+wordt zichtbaar als **Variant als synoniem bevestigen**; de barcode wordt
+nooit uit een bonartikelnummer geconstrueerd. Identificeren toont de
+identificatiestatus en de onafhankelijke GS1-status afzonderlijk; er wordt
+geen nieuwe standaardtabel, kleurenset of meldingscomponent ingevoerd.
+
+
+## Artikelbeheer — productfamilie in één keer beoordelen (13 november 2026)
+Op het bestaande Identificeren-scherm krijgt een bevoegde gebruiker één extra
+**Courgettes gezamenlijk herkennen**-actie. Deze opent binnen dezelfde
+werkruimte een compact, alleen-lezen overzicht van de server-beoordeelde,
+nog niet geïdentificeerde artikelen. De bestaande Catalogusidentiteit wordt
+expliciet gekozen, met per regel een gewone checkbox en begrijpelijke
+omschrijving: **hetzelfde verse product** of **afzonderlijke synoniemvariant**.
+Bestaande conflicten blijven afzonderlijk zichtbaar en kunnen niet ongemerkt
+worden mee-geselecteerd. De selectie wordt met één standaard Inhuis-overlay
+voorgelegd en in één transactie bevestigd. Alle meldingen gebruiken de
+bestaande centrale feedbackvoorziening; er komen geen eigen modals,
+onzichtbare achtergrondupdates, een tweede navigatie of nieuwe tabellen
+met afwijkende pagination. Op mobiele schermen blijft de overzichtslijst
+lineair leesbaar; de bestaande standaardtabel blijft ongewijzigd.
+
+
+### Artikelbeheer Identificeren — beoordelingsreden bij meerdere uitvoeringen (14 november 2026)
+
+De standaardkolom **Identificatie** behoudt de primaire status
+**Nog identificeren**. Alleen wanneer de server meerdere afzonderlijke
+**bevestigde Catalogusproducten** met dezelfde winkelneutrale bonnaam
+vindt, verschijnt onder die status een ingetogen bruine
+**Niet automatisch gematcht**-regel met de concrete reden. Waar
+beschikbaar staan de productnamen en barcodes in de regel en
+standaardtooltip. Het is een blijvende artikelbeoordelingsstatus en
+geen aparte succes-/foutmelding; geen nieuwe tabel, statusfilter,
+knoppen of modal. Verschillende barcodes binnen éénzelfde bevestigde
+Catalogus-ID veroorzaken deze waarschuwing niet.
+
+
+**Artikelbeheer > Matchen (14 november 2026).** Het exclusief voor
+platform-Superusers beschikbare Matchen-werkgebied volgt de twee zelfstandige,
+gelijke standaard DataTables van Synoniemen. Links kies je één nog te matchen
+bonartikel en rechts één eerder bevestigd bonartikel; beide tabellen delen
+dezelfde kolommen, filters, paginering en selectorbediening. De actie onder
+de rechter tabel bevestigt alleen een gekozen paar. Automatische bonnaamregels
+en familiematching staan in een afzonderlijk uitklapbaar gedeelte. Andere
+Artikelbeheer-werkgebieden tonen geen centrale matchacties.
+
+
+**Matchen bij toegang — 14 november 2026:** De Superuser-functie
+Artikelbeheer → Matchen voert bij het openen eerst de geautoriseerde
+automatische matching uit en toont daarvoor de **centrale, niet-tijdelijke
+Melding-voortgangsoverlay**. Bij een nog onbekend aantal batches wordt een
+indeterminate/native voortgangsindicator gebruikt; een fictief percentage
+is verboden. Tijdens deze controle zijn de twee handmatige tabellen niet
+beschikbaar. Alleen na geslaagde volledige controle verschijnt links de
+werkvoorraad met **handmatig te matchen** artikelen (meerdere bewezen
+Catalogusuitvoeringen); andere niet-geïdentificeerde artikelen horen uitsluitend
+bij Identificeren. Een fout geeft de bestaande centrale blokkerende Melding
+met OK en een afzonderlijke optie om de automatische controle opnieuw te doen.
+Dit is geen autorisatie-uitzondering voor andere onderdelen van Artikelbeheer.
+
+## Artikelbeheer: grafisch Overzicht van Catalogusrelaties — 14 november 2026
+
+Op expliciet PO-verzoek bevat Artikelbeheer naast **Identificeren**, **Matchen**,
+**Classificeren** en **Synoniemen** een vijfde knop **Overzicht**. De gebruiker
+kiest bovenaan een Catalogusartikel via een zoekveld met maximaal vijf
+artikelvoorstellen. Het gekozen artikel staat als centrale Cataloguskaart
+in een visuele relatiekaart, met waar beschikbaar de echte Catalogusfoto.
+
+- **Groene, doorgetrokken verbindingen** met label **Match** betekenen dat
+  een bonartikel een bevestigde Catalogusidentiteit deelt met de kaart.
+- **Blauwgroene, gestreepte verbindingen** met label **Synoniem** verbinden
+  uitsluitend twee apart bevestigde Catalogusproducten. Hun eigen
+  bonartikelmatches staan direct bij die synoniemkaart.
+- Een zijpaneel bevat de voor de selectie geldende aantallen, legenda en
+  uitsluitend onbevestigde **Nog te beoordelen**-bonnamen. Een overeenkomst
+  op naam geeft nooit een groene match of een synoniemlijn.
+- De filterknoppen **Alles**, **Matches**, **Synoniemen** en **Nog te beoordelen**
+  wijzigen alleen de weergave; bij veel kaarten is **Alle relaties tonen**
+  beschikbaar. Alle bediening is alleen-lezen.
+- Op mobiele viewport worden de knooppunten onder elkaar weergegeven binnen
+  de bestaande centrale app-chrome; er komt geen tweede tabel, horizontale
+  schermscroll of schermspecifieke header.
+
+Gebruik bestaande centrale `AppShell`, `ScreenCard`, `Button` en de
+`CatalogProductImage`-component. Knoplabels behouden normaal lettergewicht.
+Het kleurgebruik sluit aan bij de primaire Inhuis-token (standaard
+`#005F6A`); er ontstaat geen afzonderlijke appbrede styleguidevariant.
+
 ### Standaardtabel: paginering onder horizontale scrollbar — 10 november 2026
 
 De pagineringsknoppen moeten onder de complete tabelrand en eventuele

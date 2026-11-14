@@ -211,6 +211,30 @@ def validate_runtime_schema_authority(config: Config) -> str:
             "Runtime-database staat niet op de canonical Alembic-head: "
             f"expected={expected}; actual={actual}"
         )
+    if engine.dialect.name == "postgresql":
+        # Alembic may report the expected head while a critical domain table
+        # was removed outside migrations. Do not report the runtime as healthy.
+        with engine.connect() as conn:
+            missing = conn.execute(text("""
+                SELECT to_regclass('retailer_import_queue') IS NULL
+            """)).scalar_one()
+            if missing:
+                raise RuntimeError(
+                    "Runtime-schema mist retailer_import_queue ondanks de "
+                    "Alembic-head; gecontroleerde schemareparatie vereist"
+                )
+            barrier = conn.execute(text("""
+                SELECT pg_get_triggerdef(t.oid)
+                FROM pg_trigger t
+                WHERE t.tgrelid = to_regclass('retailer_import_queue')
+                  AND t.tgname = 'inhuis_maintenance_write_gate'
+                  AND NOT t.tgisinternal
+            """)).scalar_one_or_none()
+            if not barrier or "inhuis_maintenance_write_barrier" not in barrier:
+                raise RuntimeError(
+                    "Runtime-schema mist de retailer-importwachtrij "
+                    "onderhoudsbeveiliging"
+                )
     return actual
 
 

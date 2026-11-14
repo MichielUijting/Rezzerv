@@ -62,6 +62,15 @@ Namen zijn presentatie. Alleen `household_article_id` bepaalt welk huishoudartik
 
 Bestaande actieve voorraadregels zonder geldig `household_article_id`, met een verkeerd huishouden of met een tijdelijke alias moeten via een expliciete migratie worden hersteld of geblokkeerd. Nieuwe naamgebaseerde fallback- of synchronisatiecode is niet toegestaan.
 
+## Structurele preventie van nieuwe huishoudartikelvervuiling
+
+- Bij een **bewezen** Catalogus-/GTIN-identiteit wordt binnen het actieve huishouden het reeds gekoppelde `household_article_id` hergebruikt. Een afwijkende zichtbare naam maakt geen tweede huishoudartikel aan.
+- Een kassabonomschrijving is geen bewezen centrale productidentiteit. Een retailergebonden bonartikelnummer is **geen** GTIN, en een niet-gescopeerde winkel-SKU mag niet als universele barcode worden gebruikt. Automatische winkelcodeherkenning vraagt een bestaande, expliciet bevestigde combinatie van **winkelketen + genormaliseerde kassabonomschrijving + bonartikelnummer**. Ook hetzelfde bonartikelnummer bij een ándere omschrijving mag niet automatisch een bestaande Cataloguskoppeling erven. Ontbreekt dit bewijs, dan blijft de bron ongekoppeld; een gebruiker kan de bestaande expliciete artikelkeuze of -aanmaak gebruiken.
+- Een verwijzing naar een inmiddels verwijderd `household_article_id` of tijdelijke `live::`-alias mag nooit stilzwijgend via een naam opnieuw worden aangemaakt. Een bronregel mag de oude verwijzing verliezen, of uitsluitend een aantoonbaar bestaand canoniek huishoudartikel uit hetzelfde huishouden terugvinden.
+- Automatische toekenning van een `global_product_id` aan een huishoudartikel dat aantoonbaar een andere productidentiteit of barcode heeft, wordt niet geforceerd. Een bronconflict wordt afgewezen zonder bestaande artikel-, bon- of voorraadgegevens te herschrijven.
+- PostgreSQL-aankooptransacties serialiseren het koppelen/aanmaken van één specifieke combinatie `household_id + global_product_id`. Een blind database-unique-constraint over bestaande vervuilde historische records is niet toegestaan zonder aparte, objectief gevalideerde migratie.
+- Deze preventie verwijdert of herstelt **geen** bestaande historische bonnen of huishoudartikelen. Het beschermt de write-path; eerdere inconsistente koppelingen vereisen afzonderlijk databeheer.
+
 ## Verplichte regressies
 
 - Uitpakken kiest Appel en slaat het echte `household_article_id` van Appel op.
@@ -70,3 +79,46 @@ Bestaande actieve voorraadregels zonder geldig `household_article_id`, met een v
 - Directe aankoop registreert het bedrag maar maakt geen voorraadpositie.
 - Twee huishoudartikelen met dezelfde naam in verschillende huishoudens blijven volledig geïsoleerd.
 - Herladen en F5 veranderen de gekozen artikelidentiteit niet.
+
+
+## Platformbrede codevrije bonnaamherkenning is geen huishoudidentiteit
+
+De beperking op automatische **winkelcodeherkenning** en de onafhankelijke
+identiteit van `household_articles.id` blijven volledig van kracht.
+Een uitzonderlijke **platformbrede** bronidentificatie kan na een expliciete
+bevoegde actie een bonregel zonder winkelartikelnummer aan een reeds bestaand
+centraal Catalogusproduct verbinden, uitsluitend wanneer minimaal één andere
+bevestigde, genummerde bonregel met **exact dezelfde genormaliseerde bonnaam**
+die ene Catalogusproduct-ID onafhankelijk bewijst en er nergens
+tegenstrijdig identiteitsbewijs voor die naam bestaat. De naam geldt slechts
+als stabiele alias van de bewezen centrale identiteit en maakt geen nieuwe
+mondiale GTIN of synoniem tussen aparte Catalogusproducten. Deze actie voert
+nooit zelfstandig een huishoudkoppeling, voorraadafboeking, bonmutatie of
+historisch herstel uit; daarvoor blijven de eigen harde sleutel- en
+bewijsvereisten gelden.
+
+
+### Uitzondering op automatische identificatie van centrale bonnamen (14 november 2026)
+
+De PO heeft uitdrukkelijk bepaald dat **exact gelijke bonnamen** met
+**verschillende winkelartikelnummers** aan hetzelfde bestaande
+Catalogusproduct mogen worden gekoppeld, binnen één winkel en over
+verschillende winkels heen. Dit is alleen toegestaan via de bevoegde
+centrale bonnaamroute en alleen als het oorspronkelijke product onafhankelijk
+is bewezen en alle bestaande centrale claims eenduidig blijven.
+
+Een door een bevoegde gebruiker bevestigde naamalias, bijvoorbeeld
+HV Melk → Halfvolle melk, wordt platformbreed éénmaal vastgelegd en
+geldt voor alle bonartikelen met die exacte aliasnaam. De alias
+verandert geen oorspronkelijke bronbon, GTIN, Catalogusproduct,
+product-product-synoniem, historisch huishoudartikel of voorraad.
+Bestaande andere productclaims of bewaarde barcodes blokkeren
+automatische verwerking. De harde regel dat het functionele
+household_article_id de huishoudidentiteit is, blijft zonder uitzondering
+bestaan.
+
+**Bevestigde GTIN zonder winkelartikelnummer als centrale bewijsbron:**
+Uitsluitend bij de bevoegde centrale bonnaammatching mag een reeds bevestigde
+Catalogusidentiteit met geldige barcode en zonder winkelnummer onafhankelijke
+bewijsbron zijn voor exact gelijknamige bonregels. Dit wijzigt geen
+`household_article_id`, kassabon, voorraad of historische winkelcode.

@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from decimal import Decimal, InvalidOperation
+from app.services.synonym_product_family_rules import (
+    normalized_package_quantity, shared_approved_family, verified_package_ratio,
+    proven_fresh_prepared_contrast,
+)
 
 
 CONTRASTS = (
@@ -48,47 +51,55 @@ def _specificity(value, choices):
 
 
 def _quantity(p):
-    try:
-        amount = Decimal(str(p.get("size_value") or ""))
-    except InvalidOperation:
-        return None
-    unit = _plain(p.get("size_unit"))
-    factors = {"kg": ("mass", 1000), "g": ("mass", 1),
-               "l": ("volume", 1000), "ml": ("volume", 1),
-               "stuk": ("count", 1), "stuks": ("count", 1)}
-    if amount <= 0 or unit not in factors:
-        return None
-    dimension, factor = factors[unit]
-    return dimension, amount * factor
+    return normalized_package_quantity(p)
 
 
-def review_pair(left, right):
-    """Return conservative display-only signals, never an automatic link decision."""
+def proven_semantic_conflicts(left, right):
+    """Only explicit incompatible product traits; unknown values do not prove equality."""
     name_l, name_r = _catalog_name(left.get("name")), _catalog_name(right.get("name"))
-    # Include known variants, but do not interpret brand/store as a product property.
     text_l = _plain(" ".join((name_l, str(left.get("variant") or ""))))
     text_r = _plain(" ".join((name_r, str(right.get("variant") or ""))))
     warnings = []
     for label, alternatives in CONTRASTS:
         a, b = _specificity(text_l, alternatives), _specificity(text_r, alternatives)
-        # Multiple alternatives in one item are ambiguous, not a proved contradiction.
         if len(a) == 1 and len(b) == 1 and a != b:
             warnings.append("Verschil in " + label)
-    # Only flag an actual incompatible food type, not shared fragments ('noten'/'kruidnoten').
-    for group in (("mayonaise", "melk"), ("mayo", "melk"), ("kwark", "yoghurt"), ("kwark", "yogurt"), ("noten", "kruidnoten")):
-        if any(_contains(text_l, a) and _contains(text_r, b)
-               or _contains(text_r, a) and _contains(text_l, b) for a in (group[0],) for b in (group[1],)):
+    for a, b in (("mayonaise", "melk"), ("mayo", "melk"),
+                 ("kwark", "yoghurt"), ("kwark", "yogurt"),
+                 ("noten", "kruidnoten")):
+        if (_contains(text_l, a) and _contains(text_r, b)
+                or _contains(text_r, a) and _contains(text_l, b)):
             warnings.append("Verschillende productsoorten")
             break
+    if proven_fresh_prepared_contrast(left, right):
+        warnings.append("Verse courgette is geen bereid, diepvries- of babyproduct")
+    return list(dict.fromkeys(warnings))
+
+
+def review_pair(left, right):
+    """Return conservative display-only signals, never an automatic link decision."""
+    name_l, name_r = _catalog_name(left.get("name")), _catalog_name(right.get("name"))
+    warnings = proven_semantic_conflicts(left, right)
     qa, qb = _quantity(left), _quantity(right)
     if qa and qb and qa[0] != qb[0]:
         warnings.append("Inhoudseenheid verschilt")
     elif qa and qb and qa[1] != qb[1]:
         warnings.append("Verpakkingsinhoud verschilt")
+        ratio = verified_package_ratio(left, right)
+        if ratio:
+            warnings.append(
+                f"Exacte verpakkingseenheden: 1 linker verpakking = "
+                f"{ratio['left_to_right']} rechter verpakking; geen automatische voorraadafboeking"
+            )
     if warnings:
         return {"review_level": "check", "review_label": "Controleren",
                 "review_reason": "; ".join(dict.fromkeys(warnings))}
-    # A textual match without verified distinct product attributes is only a candidate.
+    # Curated families only improve a suggestion. Actual linking remains
+    # the existing explicit, independently authorized server transaction.
+    if qa and qb and qa == qb and shared_approved_family(left, right):
+        return {"review_level": "strong", "review_label": "Sterke kandidaat",
+                "review_reason": "Verse courgettefamilie en bekende gelijke inhoud; "
+                                 "controleer het gebruiksdoel voor handmatige bevestiging."}
     if name_l and name_l == name_r and qa and qb and qa == qb:
         return {"review_level": "strong", "review_label": "Sterke kandidaat",
                 "review_reason": "Zelfde artikelnaam en inhoud; controleer de overige productkenmerken."}

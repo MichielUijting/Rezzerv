@@ -1,4 +1,4 @@
-"""No stock, receipt, or household mutation for manual ED2 GTIN evidence."""
+"""Saved barcode is authoritative identification with no receipt/stock writes."""
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -93,7 +93,7 @@ def guard(monkeypatch):
         "ed2_manual_barcodes", "external_article_product_links", "global_products",
     })
     monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
-                        lambda key: permissions.append(key))
+                        lambda key: (permissions.append(key), SimpleNamespace(user_id="frontteam-1"))[1])
     monkeypatch.setattr(catalog_routes, "resolve_external_article_identity",
                         lambda conn, receipt_item_id: source if receipt_item_id == "receipt-table-line:r1"
                         else (_ for _ in ()).throw(ValueError("not found")))
@@ -108,6 +108,22 @@ def guard(monkeypatch):
 
     monkeypatch.setattr(catalog_routes, "search_off_candidates", search)
     monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", link)
+    def materialize(conn, *, retailer_code, receipt_text, external_article_code,
+                    barcode, confirmed_by):
+        assert confirmed_by == "frontteam-1"
+        key = ("jumbo", "melk", "123")
+        if conn.active:
+            raise ValueError("Tegenstrijdige bestaande Cataloguskoppeling")
+        existing = conn.manual.get(key)
+        if existing and existing != barcode:
+            raise ValueError("Dit bonartikel heeft een andere opgeslagen barcode")
+        conn.manual[key] = barcode
+        return {
+            "status": "already_confirmed" if existing else "confirmed",
+            "barcode_scope": "global_candidate", "catalog_product_created": not existing,
+            "global_product_id": "product-1",
+        }
+    monkeypatch.setattr(catalog_routes, "materialize_saved_ed2_barcode", materialize)
     return engine.conn, permissions, search_calls, linked, monkeypatch
 
 
@@ -119,185 +135,112 @@ def save(code):
     )
 
 
-def test_unknown_off_barcode_records_only_standalone_evidence(guard):
+def test_saved_barcode_is_confirmed_catalog_identity_without_off(guard):
     conn, permissions, search_calls, linked, _ = guard
     before_household = [dict(x) for x in conn.household_articles]
     before_receipt = [dict(x) for x in conn.receipt_lines]
     before_events = [dict(x) for x in conn.inventory_events]
-    gtin = valid_gtin()
-    result = save(gtin)
-    assert result == {"saved": True, "source": "manual", "gtin": gtin,
-                      "off_found": False, "off_unavailable": False,
-                      "classification_pending": False, "photo_loaded": False}
+    code = valid_gtin()
+    result = save(code)
+    assert result["saved"] is True
+    assert result["catalog_linked"] is True
+    assert result["catalog_product_created"] is True
+    assert result["global_product_id"] == "product-1"
     assert permissions == ["platform.external_products.link_existing"]
-    assert search_calls == [{"receipt_item_id": "receipt-table-line:r1",
-                             "mode": "manual", "gtin": gtin, "limit": 1}]
-    assert conn.manual == {("jumbo", "melk", "123"): gtin}
-    assert not linked
+    assert not search_calls and not linked
+    assert conn.manual == {("jumbo", "melk", "123"): code}
     assert conn.household_articles == before_household
     assert conn.receipt_lines == before_receipt
     assert conn.inventory_events == before_events
-    assert len([x for x in conn.sql_log if x.startswith("INSERT")]) == 1
-    assert save(gtin)["saved"] is True
-    assert len([x for x in conn.sql_log if x.startswith("INSERT")]) == 1
+    assert save(code)["catalog_product_created"] is False
 
 
-def test_off_result_reuses_signed_proof_not_browser_metadata(guard):
-    conn, _, search_calls, linked, monkeypatch = guard
-    code = valid_gtin()
-    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
-        "results": [{"gtin": code, "selection_proof": "server-signed",
-                     "identity_compatible": True, "image_url": "https://example.test/image.jpg"}],
-    })
-    result = save(code)
-    assert result["saved"] is True
-    assert result["off_found"] is True
-    assert result["photo_loaded"] is True
-    assert result["classification_pending"] is True
-    assert linked == [{"receipt_item_id": "receipt-table-line:r1",
-                       "gtin": code, "selection_proof": "server-signed"}]
-    assert conn.manual == {}
-    assert not search_calls
-
-
-@pytest.mark.parametrize("error_case", ["bad_checksum", "collision", "active_link", "off_conflict"])
-def test_conflict_and_invalid_input_never_write_manual_barcode(guard, error_case):
-    conn, _, _, linked, monkeypatch = guard
+@pytest.mark.parametrize("error_case", ["bad_checksum", "collision", "active_link"])
+def test_invalid_or_conflicting_saved_barcode_never_changes_data(guard, error_case):
+    conn, _, _, linked, _ = guard
     code = valid_gtin()
     if error_case == "bad_checksum":
-        with pytest.raises(HTTPException) as err:
-            save(code[:-1] + str((int(code[-1]) + 1) % 10))
-        assert err.value.status_code == 422
+        code = code[:-1] + str((int(code[-1]) + 1) % 10)
+    elif error_case == "collision":
+        conn.manual[("jumbo", "melk", "123")] = valid_gtin("871234567891")
     else:
-        if error_case == "collision":
-            conn.manual[("jumbo", "melk", "123")] = valid_gtin("871234567891")
-        elif error_case == "active_link":
-            conn.active = True
-        else:
-            monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
-                "results": [{"identity_compatible": False, "selection_proof": "proof"}],
-            })
-        with pytest.raises(HTTPException) as err:
-            save(code)
-        assert err.value.status_code == 409
-    assert not linked
-    if error_case != "collision":
-        assert conn.manual == {}
-
-
-def test_permission_is_required_before_any_database_access(guard, monkeypatch):
-    conn, permissions, _, _, _ = guard
-
-    def deny(permission):
-        assert permission == "platform.external_products.link_existing"
-        raise HTTPException(status_code=403, detail="denied")
-
-    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", deny)
-    with pytest.raises(HTTPException) as error:
-        save(valid_gtin())
-    assert error.value.status_code == 403
-    assert not conn.sql_log
-
-
-def test_unknown_source_is_not_registered(guard):
-    conn, _, _, _, _ = guard
-    with pytest.raises(HTTPException) as error:
-        catalog_routes.save_ed2_manual_barcode(catalog_routes.Ed2ManualBarcodeRequest(
-            receipt_item_id="receipt-table-line:not-exists", gtin=valid_gtin(),
-        ))
-    assert error.value.status_code == 404
-    assert conn.manual == {}
-
-def test_off_unavailable_preserves_barcode_only_without_claiming_off_match(guard):
-    conn, _, _, linked, monkeypatch = guard
-    from app.services.off_search_service import OffUnavailableError
-    code = valid_gtin()
-    monkeypatch.setattr(catalog_routes, "search_off_candidates",
-                        lambda payload: (_ for _ in ()).throw(
-                            OffUnavailableError("Open Food Facts is tijdelijk niet bereikbaar. Probeer opnieuw.")
-                        ))
-    result = save(code)
-    assert result["saved"] is True
-    assert result["off_found"] is False
-    assert result["off_unavailable"] is True
-    assert result["source"] == "manual"
-    assert conn.manual == {("jumbo", "melk", "123"): code}
-    assert not linked
-    assert conn.inventory_events == [{"id": "e1"}]
-    assert conn.household_articles == [{"id": "h1", "stock": 4}]
-
-
-def test_non_outage_off_search_error_must_not_save(guard, monkeypatch):
-    conn, _, _, linked, _ = guard
-    from app.services.off_search_service import OffSearchError
-    monkeypatch.setattr(catalog_routes, "search_off_candidates",
-                        lambda payload: (_ for _ in ()).throw(
-                            OffSearchError("Bonartikel niet gevonden")
-                        ))
-    with pytest.raises(HTTPException) as error:
-        save(valid_gtin())
-    assert error.value.status_code == 422
-    assert conn.manual == {}
-    assert not linked
-
-
-def test_retry_after_outage_enriches_existing_barcode_when_off_recovers(guard, monkeypatch):
-    conn, _, _, linked, _ = guard
-    from app.services.off_search_service import OffUnavailableError
-    code = valid_gtin()
-    monkeypatch.setattr(catalog_routes, "search_off_candidates",
-                        lambda payload: (_ for _ in ()).throw(
-                            OffUnavailableError("OFF unavailable")
-                        ))
-    assert save(code)["off_unavailable"] is True
-    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
-        "results": [{"gtin": code, "selection_proof": "server-proof",
-                     "identity_compatible": True, "image_url": "https://example.test/photo.jpg"}],
-    })
-    assert save(code)["off_found"] is True
-    assert linked and linked[0]["selection_proof"] == "server-proof"
-
-
-def test_explicit_off_mismatch_override_saves_only_manual_barcode(guard, monkeypatch):
-    conn, _, _, linked, _ = guard
-    code = valid_gtin()
-    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
-        "results": [{"gtin": code, "identity_compatible": False,
-                     "selection_proof": "must-not-be-used", "image_url": "https://example.test/other.jpg"}],
-    })
-    result = catalog_routes.save_ed2_manual_barcode(
-        catalog_routes.Ed2ManualBarcodeRequest(
-            receipt_item_id="receipt-table-line:r1", gtin=code, allow_off_mismatch=True,
-        )
-    )
-    assert result["saved"] is True and result["source"] == "manual"
-    assert not result["off_found"] and not result["photo_loaded"]
-    assert not linked
-    assert conn.manual == {("jumbo", "melk", "123"): code}
-    assert conn.household_articles == [{"id": "h1", "stock": 4}]
-    assert conn.receipt_lines == [{"id": "r1", "label": "Melk"}]
-
-
-def test_mismatch_returns_off_product_name_and_exact_barcode(guard, monkeypatch):
-    conn, _, _, linked, _ = guard
-    code = valid_gtin()
-    monkeypatch.setattr(catalog_routes, "search_off_candidates", lambda payload: {
-        "results": [{"gtin": code, "product_name": "Ander merk Amsterdamse uien",
-                     "brand": "Voorbeeldmerk", "quantity": "320 g",
-                     "identity_compatible": False,
-                     "identity_conflict_message": "Huismerk wijkt af",
-                     "selection_proof": "unused"}],
-    })
+        conn.active = True
+    old = dict(conn.manual)
     with pytest.raises(HTTPException) as exc:
         save(code)
-    assert exc.value.status_code == 409
-    detail = exc.value.detail
-    assert detail["code"] == "off_identity_mismatch"
-    assert detail["product_name"] == "Ander merk Amsterdamse uien"
-    assert detail["gtin"] == code
-    assert detail["quantity"] == "320 g"
-    assert detail["conflict_reason"] == "Huismerk wijkt af"
-    assert conn.manual == {}
+    assert exc.value.status_code == (422 if error_case == "bad_checksum" else 409)
+    assert conn.manual == old
+    assert not linked
+
+
+def test_permission_required_before_catalog_mutation(guard, monkeypatch):
+    conn, _, _, _, _ = guard
+    def deny(key):
+        assert key == "platform.external_products.link_existing"
+        raise HTTPException(status_code=403, detail="denied")
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", deny)
+    with pytest.raises(HTTPException) as err:
+        save(valid_gtin())
+    assert err.value.status_code == 403
+    assert not conn.manual and not conn.sql_log
+
+
+def test_unknown_receipt_source_is_not_saved(guard):
+    conn, _, _, _, _ = guard
+    with pytest.raises(HTTPException) as err:
+        catalog_routes.save_ed2_manual_barcode(catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:not-exists",
+            gtin=valid_gtin(),
+        ))
+    assert err.value.status_code == 404
+    assert not conn.manual
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "search_error", "mismatch"])
+def test_off_outages_errors_and_mismatches_never_block_saved_identity(guard, monkeypatch, failure):
+    conn, _, search_calls, linked, _ = guard
+    from app.services.off_search_service import OffUnavailableError, OffSearchError
+    def off(_payload):
+        if failure == "unavailable":
+            raise OffUnavailableError("OFF is offline")
+        if failure == "search_error":
+            raise OffSearchError("OFF search error")
+        return {"results": [{"gtin": valid_gtin(), "identity_compatible": False}]}
+    monkeypatch.setattr(catalog_routes, "search_off_candidates", off)
+    result = save(valid_gtin())
+    assert result["saved"] and result["catalog_linked"]
+    assert not search_calls and not linked
+    assert conn.manual == {("jumbo", "melk", "123"): valid_gtin()}
+
+
+def test_repeated_manual_save_stays_idempotent_even_when_off_changes(guard, monkeypatch):
+    conn, _, search_calls, linked, _ = guard
+    code = valid_gtin()
+    assert save(code)["catalog_product_created"] is True
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: (_ for _ in ()).throw(
+                            AssertionError("OFF is not an identification authority")
+                        ))
+    assert save(code)["catalog_product_created"] is False
+    assert conn.manual == {("jumbo", "melk", "123"): code}
+    assert not search_calls and not linked
+
+
+def test_user_saved_gtin_outweighs_incompatible_off_metadata(guard, monkeypatch):
+    conn, _, _, linked, _ = guard
+    monkeypatch.setattr(catalog_routes, "search_off_candidates",
+                        lambda payload: {"results": [{
+                            "identity_compatible": False,
+                            "product_name": "Ander product",
+                        }]})
+    result = catalog_routes.save_ed2_manual_barcode(
+        catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1",
+            gtin=valid_gtin(), allow_off_mismatch=True,
+        ),
+    )
+    assert result["saved"] and result["catalog_linked"]
+    assert conn.manual == {("jumbo", "melk", "123"): valid_gtin()}
     assert not linked
 
 
@@ -357,8 +300,13 @@ def test_receipt_bound_off_proof_mismatch_shows_override_without_saving(guard, m
     def reject_proof(payload):
         raise ValueError("Dit zoekresultaat hoort niet bij het geselecteerde bonartikel.")
     monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", reject_proof)
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
     with pytest.raises(HTTPException) as exc:
-        save(gtin)
+        catalog_routes.save_ed2_manual_barcode(catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=gtin,
+            allow_off_mismatch=True, import_off_product_override=True,
+        ))
     assert exc.value.status_code == 409
     assert exc.value.detail["code"] == "off_identity_mismatch"
     assert exc.value.detail["gtin"] == gtin
@@ -402,8 +350,13 @@ def test_unrelated_invalid_off_proof_still_fails_closed(guard, monkeypatch):
     def invalid_proof(payload):
         raise ValueError("Het zoekresultaat is verlopen. Zoek opnieuw in OFF.")
     monkeypatch.setattr(catalog_routes, "confirm_selected_off_catalog_product", invalid_proof)
+    monkeypatch.setattr(catalog_routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(is_platform_superuser=True))
     with pytest.raises(HTTPException) as exc:
-        save(gtin)
+        catalog_routes.save_ed2_manual_barcode(catalog_routes.Ed2ManualBarcodeRequest(
+            receipt_item_id="receipt-table-line:r1", gtin=gtin,
+            allow_off_mismatch=True, import_off_product_override=True,
+        ))
     assert exc.value.status_code == 409
     assert isinstance(exc.value.detail, str)
     assert "verlopen" in exc.value.detail

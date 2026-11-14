@@ -33,6 +33,7 @@ INVENTORY_QUANTITY_CONTRACT_TABLES = ("inventory", "inventory_events")
 ARTICLE_SYNONYM_LINKS_TABLE = "article_synonym_links"
 ED2_MANUAL_BARCODES_TABLE = "ed2_manual_barcodes"
 ED2_REMOVED_ARTICLES_TABLE = "ed2_removed_articles"
+ED2_RECEIPT_NAME_ALIASES_TABLE = "ed2_receipt_name_aliases"
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
@@ -52,6 +53,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     ARTICLE_SYNONYM_LINKS_TABLE,
     ED2_MANUAL_BARCODES_TABLE,
     ED2_REMOVED_ARTICLES_TABLE,
+    ED2_RECEIPT_NAME_ALIASES_TABLE,
     "article_classification_sync_events",  # Migration-owned audit, not immutable baseline.
     # Post-baseline classification tables are checked for schema authority below.
     "global_product_shopify_classifications",
@@ -834,20 +836,31 @@ def _assert_article_classification_schema(connection) -> None:
 
 
 def _assert_ed2_manual_barcode_schema(connection) -> None:
-    """Migration-owned barcode evidence is separate from verified Catalogus identities."""
+    """Saved barcode evidence is authoritative, with optional Catalogus materialization."""
     inspector = inspect(connection)
     table = ED2_MANUAL_BARCODES_TABLE
     if not inspector.has_table(table):
         raise AssertionError("ED2 manual barcode evidence table missing")
     columns = {column["name"]: column for column in inspector.get_columns(table)}
-    expected = {
+    required = {
         "retailer_code", "receipt_text_normalized", "external_article_code",
         "gtin", "created_at", "updated_at",
     }
-    if set(columns) != expected:
-        raise AssertionError(f"ED2 barcode evidence column drift: {set(columns)!r}")
-    if any(column["nullable"] for column in columns.values()):
-        raise AssertionError("ED2 barcode evidence columns must be NOT NULL")
+    resolution = {"global_product_id", "barcode_scope", "confirmed_by", "confirmed_at"}
+    if set(columns) != required | resolution:
+        raise AssertionError(f"ED2 barcode identity column drift: {set(columns)!r}")
+    if any(columns[name]["nullable"] for name in required):
+        raise AssertionError("Saved barcode identity/source columns must be NOT NULL")
+    if any(not columns[name]["nullable"] for name in resolution):
+        raise AssertionError("Historical saved barcodes require nullable materialization fields")
+    if not isinstance(columns["global_product_id"]["type"], sa.Text):
+        raise AssertionError("Catalogus resolution identity must be TEXT")
+    if not isinstance(columns["barcode_scope"]["type"], sa.String):
+        raise AssertionError("Barcode scope must be a bounded string")
+    if not isinstance(columns["confirmed_by"]["type"], sa.Text):
+        raise AssertionError("Barcode actor must be TEXT")
+    if not isinstance(columns["confirmed_at"]["type"], sa.DateTime):
+        raise AssertionError("Barcode confirmation timestamp must be DATETIME")
     for name in ("retailer_code", "external_article_code", "gtin"):
         if not isinstance(columns[name]["type"], sa.String):
             raise AssertionError(f"ED2 barcode evidence type drift: {name}")
@@ -860,7 +873,7 @@ def _assert_ed2_manual_barcode_schema(connection) -> None:
     if primary_key != ("retailer_code", "receipt_text_normalized", "external_article_code"):
         raise AssertionError(f"ED2 identity primary key drift: {primary_key!r}")
     if inspector.get_foreign_keys(table):
-        raise AssertionError("ED2 manual barcode evidence must not own household/product foreign keys")
+        raise AssertionError("ED2 barcode evidence must not own cascading household/product foreign keys")
     if connection.dialect.name == "postgresql":
         has_guard = connection.execute(text("""
             SELECT 1 FROM pg_trigger t
@@ -989,6 +1002,46 @@ def _assert_article_classification_sync_audit_schema(connection) -> None:
     print("ARTICLE_CLASSIFICATION_SYNC_AUDIT_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_ed2_receipt_name_alias_schema(connection) -> None:
+    """User-confirmed central bonnaam aliases stay unique and write-guarded."""
+    inspector = inspect(connection)
+    table = ED2_RECEIPT_NAME_ALIASES_TABLE
+    if not inspector.has_table(table):
+        raise AssertionError("Confirmed receipt-name alias registry missing")
+    columns = {item["name"]: item for item in inspector.get_columns(table)}
+    expected = {
+        "alias_name_normalized", "target_name_normalized",
+        "global_product_id", "confirmed_by", "confirmed_at",
+    }
+    if set(columns) != expected or any(item["nullable"] for item in columns.values()):
+        raise AssertionError(f"Receipt-name alias schema drift: {columns!r}")
+    if tuple(inspector.get_pk_constraint(table).get("constrained_columns") or ()) != (
+        "alias_name_normalized",
+    ):
+        raise AssertionError("Receipt-name aliases require a globally unique alias key")
+    fks = inspector.get_foreign_keys(table)
+    if (len(fks) != 1 or fks[0].get("constrained_columns") != ["global_product_id"]
+            or fks[0].get("referred_table") != "global_products"
+            or fks[0].get("referred_columns") != ["id"]
+            or fks[0].get("options", {}).get("ondelete") != "RESTRICT"):
+        raise AssertionError(f"Receipt-name alias product authority drift: {fks!r}")
+    idx = {entry["name"]: entry for entry in inspector.get_indexes(table)}
+    if (tuple(idx.get("idx_ed2_receipt_name_alias_product", {}).get("column_names") or ())
+            != ("global_product_id",)):
+        raise AssertionError("Receipt-name alias product index missing")
+    if connection.dialect.name == "postgresql":
+        guard = connection.execute(text("""
+            SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname=current_schema() AND c.relname=:table
+              AND t.tgname='inhuis_maintenance_write_gate'
+              AND NOT t.tgisinternal
+        """), {"table": table}).first()
+        if not guard:
+            raise AssertionError("Confirmed receipt-name aliases must have maintenance guard")
+    print("ED2_RECEIPT_NAME_ALIASES_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -1015,6 +1068,7 @@ def main() -> None:
             _assert_article_synonym_schema(connection)
             _assert_ed2_manual_barcode_schema(connection)
             _assert_ed2_removed_articles_schema(connection)
+            _assert_ed2_receipt_name_alias_schema(connection)
             _assert_article_classification_schema(connection)
             _assert_article_classification_sync_audit_schema(connection)
             _assert_maintenance_schema(connection)
