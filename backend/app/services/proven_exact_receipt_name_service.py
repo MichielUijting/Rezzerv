@@ -319,7 +319,7 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
     candidates, ambiguous, no_proof = _candidate_plan(
         list_all_external_articles(conn=conn)["items"],
         load_confirmed_bonnaam_aliases(conn))
-    linked, conflicts = 0, 0
+    linked, conflicts, codefree_linked = 0, 0, 0
     for candidate in candidates[:MAX_EXACT_NAME_BATCH]:
         try:
             with conn.begin_nested():
@@ -345,15 +345,13 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
                     witness=candidate["witness"], actor_id=actor_id,
                 ):
                     linked += 1
+                    if not candidate['source_key'][2]:
+                        codefree_linked += 1
         except (ValueError, HTTPException, IntegrityError):
             conflicts += 1
     return {
         "ok": True, "status": "applied",
-        "linked": linked,
-        "linked_without_article_number": sum(
-            1 for item in candidates[:MAX_EXACT_NAME_BATCH]
-            if item["source_key"][2] == ""
-        ) if linked == len(candidates[:MAX_EXACT_NAME_BATCH]) else None,
+        "linked": linked, "linked_without_article_number": codefree_linked,
         "synonyms_created": 0, "barcode_written": False,
         "blocked": ambiguous + conflicts,
         "without_proof": no_proof,

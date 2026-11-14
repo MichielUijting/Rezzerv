@@ -86,8 +86,8 @@ def test_exact_name_write_has_no_gtin_synonym_or_household_side_effects():
         audit = conn.execute(text("""
             SELECT action, reason, new_value FROM auth_audit_log
         """)).mappings().one()
-        assert audit["action"] == "catalog.ed2.exact_name_without_code.confirmed"
-        assert audit["reason"] == "automatic_unique_confirmed_coded_receipt_name_v1"
+        assert audit["action"] == "catalog.ed2.proven_receipt_name.confirmed"
+        assert audit["reason"] == "automatic_confirmed_receipt_name_v2"
         assert '"witness_article_number": "21003"' in audit["new_value"]
         assert before == conn.execute(text(
             "SELECT id, name, primary_gtin FROM global_products ORDER BY id")).all()

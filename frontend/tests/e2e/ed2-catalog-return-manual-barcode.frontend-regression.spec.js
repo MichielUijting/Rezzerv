@@ -530,7 +530,7 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
           ? 'e'.repeat(64) : null,
       } })
     }
-    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/auto') {
+    if (url.pathname === '/api/catalog/ed2/bonnamen-matchen/auto') {
       autoRequests.push(route.request().method())
       // Two independently proven ordinary catalog anchors require an explicit
       // exception review. Never write the six unresolved receipt identities.
@@ -559,8 +559,8 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
   await page.getByTestId('classification-work-monitor')
     .getByRole('button', { name: 'Identificeren' }).click()
   const batch = page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' })
-  await batch.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
-  await expect(batch).toContainText('Automatische matching is gepauzeerd:')
+  await batch.getByRole('button', { name: 'Bonnamen matchen' }).click()
+  await expect(batch).toContainText('Niet alle productfamilies hebben één bewezen anker.')
   expect(autoRequests).toEqual(['POST'])
   await batch.getByLabel('Bestaand, geïdentificeerd Catalogusproduct').selectOption('gp-ah')
   await expect(batch).toContainText('6 voorgesteld')
@@ -595,11 +595,12 @@ test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     if (route.request().method() !== 'GET') writes.push(path)
-    if (path === '/api/catalog/ed2/proven-exact-names/auto') {
+    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
       rows[1].identity_status = 'catalog_linked'
       rows[1].identity_status_label = 'Catalogus gekoppeld'
       return route.fulfill({ json: {
         ok: true, status: 'applied', linked: 1,
+        linked_from_exact_names: 1, linked_from_families: 0,
         blocked: 0, synonyms_created: 0, barcode_written: false,
         limit_reached: false,
       } })
@@ -613,9 +614,9 @@ test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik
   await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true }).fill('melk')
   await expect(table).toContainText('Nog identificeren')
   expect(writes).toEqual([])
-  await page.getByRole('button', { name: 'Bewezen bonnamen herkennen', exact: true }).click()
-  await expect(page.getByTestId('ed2-proven-exact-name-matching'))
-    .toContainText('1 artikel(en) aan een bestaand Catalogusproduct gekoppeld.')
+  await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' }))
+    .toContainText('1 bonartikel(en) gematched')
   await expect(table).not.toContainText('Nog identificeren')
-  expect(writes).toEqual(['/api/catalog/ed2/proven-exact-names/auto'])
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
 })

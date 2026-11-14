@@ -7,6 +7,7 @@ on:
       - 'backend/app/services/ed2_receipt_family_link_service.py'
       - 'backend/app/services/automatic_curated_identity_matching_service.py'
       - 'backend/app/services/proven_exact_receipt_name_service.py'
+      - 'backend/alembic/versions/20261114_01_receipt_name_aliases.py'
       - 'backend/app/services/curated_identity_batch_service.py'
       - 'backend/alembic/versions/20261113_01_ed2_receipt_family_links.py'
       - 'backend/app/services/catalog_identity_backfill_preview_service.py'

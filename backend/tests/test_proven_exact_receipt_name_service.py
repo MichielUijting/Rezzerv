@@ -7,6 +7,11 @@ import pytest
 from app.services import proven_exact_receipt_name_service as service
 
 
+@pytest.fixture(autouse=True)
+def default_no_confirmed_aliases(monkeypatch):
+    monkeypatch.setattr(service, 'load_confirmed_bonnaam_aliases', lambda conn: {})
+
+
 def row(shop, name, code="", product="", status="not_identified", **extras):
     return {
         "id": f"receipt-table-line:{shop}-{name}-{code or 'empty'}",
