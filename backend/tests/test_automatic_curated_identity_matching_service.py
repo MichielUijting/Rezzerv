@@ -109,13 +109,13 @@ def test_post_refuses_nonprivileged_users_before_transaction(monkeypatch):
     assert error.value.status_code == 403
 
 
-def test_post_authorizes_frontteam_and_uses_transaction(monkeypatch):
+def test_post_authorizes_superuser_and_uses_transaction(monkeypatch):
     from app.api import catalog_routes
     events = []
     monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
                         lambda *_: SimpleNamespace(
-                            user_id="frontteam-1", is_platform_superuser=False,
-                            is_frontteam=True))
+                            user_id="superuser-1", is_platform_superuser=True,
+                            is_frontteam=False))
     @contextmanager
     def begin():
         events.append("begin")
@@ -124,9 +124,26 @@ def test_post_authorizes_frontteam_and_uses_transaction(monkeypatch):
     monkeypatch.setattr(catalog_routes, "engine", SimpleNamespace(begin=begin))
     monkeypatch.setattr(catalog_routes, "automatically_match_curated_receipts",
                         lambda conn, *, actor_id: {"ok": True, "actor": actor_id})
-    assert catalog_routes.auto_ed2_curated_matching_batch()["actor"] == "frontteam-1"
+    assert catalog_routes.auto_ed2_curated_matching_batch()["actor"] == "superuser-1"
     assert events == ["begin", "commit"]
 
+
+
+def test_post_denies_frontteam_before_write_transaction(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+    monkeypatch.setattr(
+        catalog_routes, "require_platform_permission_from_session",
+        lambda *_: SimpleNamespace(
+            user_id="frontteam-1", is_platform_superuser=False, is_frontteam=True),
+    )
+    class NoTransaction:
+        def begin(self):
+            pytest.fail("Frontteam may not open Matchen write transaction")
+    monkeypatch.setattr(catalog_routes, "engine", NoTransaction())
+    with pytest.raises(HTTPException) as error:
+        catalog_routes.auto_ed2_curated_matching_batch()
+    assert error.value.status_code == 403
 
 # New PO rule: a code-free EXACT receipt name may reuse a unique already
 # confirmed code-bearing receipt identity. Never assume a merely similar name
