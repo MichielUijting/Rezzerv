@@ -795,4 +795,3 @@ def test_manual_review_requires_two_independently_selectable_catalog_identities(
     # actionable manual choice.
     entries[1]["receipt_article_number"] = "92154"
     assert service.confirmed_product_variant_review_reasons(entries)[entries[2]["id"]]
-
