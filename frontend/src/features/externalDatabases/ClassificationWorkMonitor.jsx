@@ -4,6 +4,7 @@ const AREAS = [
   { key: 'identity', title: 'Identificeren' },
   { key: 'classify', title: 'Classificeren' },
   { key: 'synonyms', title: 'Synoniemen' },
+  { key: 'overview', title: 'Overzicht' },
 ]
 
 export default function ClassificationWorkMonitor({ activeArea, onAreaChange }) {
