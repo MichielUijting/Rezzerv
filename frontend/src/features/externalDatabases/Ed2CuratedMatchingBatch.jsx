@@ -25,7 +25,10 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
   async function request(url, options = {}) {
     const response = await fetchJsonWithAuth(url, options)
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.detail || 'Matching kan niet worden beoordeeld.')
+    if (!response.ok) {
+      const explanation = typeof payload.detail === 'string' ? payload.detail : ''
+      throw new Error(explanation || `Matching kan niet worden beoordeeld (HTTP ${response.status}). Probeer niet opnieuw voordat de fout is onderzocht.`)
+    }
     return payload
   }
 
@@ -37,6 +40,7 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     if (saving || loading) return
     setSaving(true)
     setAutoSummary(null)
+    let succeeded = false
     try {
       const summary = await request('/api/catalog/ed2/bonnamen-matchen/auto', {
         method: 'POST',
@@ -45,6 +49,7 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
         throw new Error('De automatische herkenning is niet bevestigd.')
       }
       setAutoSummary(summary)
+      succeeded = true
       showFeedback({ variant: 'success', title: 'Bonnamen gematched',
         message: `${summary.linked} artikelen gematched, ${summary.synonyms_created} synoniemrelaties aangemaakt.` })
       if (summary.linked > 0) onConfirmed?.()
@@ -54,9 +59,11 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
     } finally {
       setSaving(false)
     }
-    // An unsuccessful or partially successful automatic pass must not hide
-    // remaining exceptions. The review GET below never mutates product data.
-    await openReview()
+    // A failed POST may have completed server-side even when the browser
+    // sees a 5xx/timeout. Do not claim a rollback or open a misleading review.
+    // The user must first inspect the actual backend result and can refresh
+    // the read-only table before taking another deliberate action.
+    if (succeeded) await openReview()
   }
 
   function confirmAlias() {

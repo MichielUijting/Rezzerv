@@ -59,7 +59,11 @@ def test_disputed_source_prevents_automatic_name_inheritance(status, extra):
             row("lidl", "Melk", "456", status=status, **extra),
             row("jumbo", "Melk")]
     candidates, blocked, _ = service._candidate_plan(rows)
-    assert not candidates and blocked == 1
+    assert not candidates
+    # The saved barcode itself is blocked, as is the unrelated article that
+    # would otherwise inherit the disputed name. Never reduce safety to
+    # satisfy the historical one-blocked assertion.
+    assert blocked == (2 if extra.get("manual_barcode") else 1)
 
 
 def test_conflicting_catalog_proof_cannot_be_used_as_source():

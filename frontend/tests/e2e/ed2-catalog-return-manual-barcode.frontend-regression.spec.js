@@ -672,3 +672,37 @@ test('Bonnamen matchen is één knop; HV Melk alias geldt voor alle winkels', as
   await expect(page.getByTestId('external-databases-2-table'))
     .not.toContainText('Nog identificeren')
 })
+
+
+test('Bonnamen matchen: serverfout opent geen onterecht matchingvoorstel', async ({ page }) => {
+  const writes = []
+  let previewRequests = 0
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') writes.push(path)
+    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
+      return route.fulfill({
+        status: 500, contentType: 'text/plain',
+        body: 'Internal Server Error',
+      })
+    }
+    if (path === '/api/catalog/ed2/curated-matching-batch/preview') {
+      previewRequests += 1
+      return route.fulfill({ json: { targets: [] } })
+    }
+    return bootstrap(route, [{
+      id: 'receipt-table-line:failure-repro',
+      receipt_line_text: 'HALFVOLLE MELK',
+      retailer_code: 'ah', receipt_article_number: '21003',
+      link_status: 'unlinked',
+    }], [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  await page.getByRole('button', { name: 'Bonnamen matchen', exact: true }).click()
+  await expect(page.getByText(/Matching kan niet worden beoordeeld \(HTTP 500\)/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' })).toHaveCount(0)
+  expect(previewRequests).toBe(0)
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
+})
