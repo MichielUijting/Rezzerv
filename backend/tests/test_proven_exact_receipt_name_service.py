@@ -337,3 +337,60 @@ def test_unified_alias_routes_deny_nonprivileged_user_before_db(monkeypatch):
             api.Ed2BonnaamAliasConfirmation(alias_name="HV Melk",
                                              target_name="Halfvolle melk"))
     assert error.value.status_code == 403
+
+
+def test_large_batch_refreshes_full_overview_only_twice(monkeypatch):
+    # Regression for the 14-Nov local diagnostic: the old 50-candidate
+    # implementation performed 51 full ED2 projections, each 15-17 seconds.
+    sources = [row("ah", "Halfvolle melk", "100", "milk", "catalog_linked")]
+    sources.extend(
+        row("jumbo", "Halfvolle melk", str(number))
+        for number in range(50)
+    )
+    observations = {"full_scans": 0, "confirmed": 0}
+    def projected(*, conn):
+        observations["full_scans"] += 1
+        return {"items": sources}
+    monkeypatch.setattr(service, "list_all_external_articles", projected)
+    monkeypatch.setattr(service, "resolve_external_article_identity",
+                        lambda conn, receipt_id: {
+                            "retailer_code": "jumbo", "receipt_text": "Halfvolle melk",
+                            "external_article_code": receipt_id.rsplit("-", 1)[-1],
+                        })
+    def persisted(conn, **kwargs):
+        observations["confirmed"] += 1
+        return True
+    monkeypatch.setattr(service, "_persist_exact_name_match", persisted)
+    result = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="frontteam")
+    assert result["linked"] == 50
+    assert observations["confirmed"] == 50
+    assert observations["full_scans"] == 2
+    assert result["limit_reached"] is False
+
+
+def test_changed_proof_across_two_batch_snapshots_blocks_every_write(monkeypatch):
+    sources = [row("ah", "Boter", "123", "butter", "catalog_linked"),
+               row("jumbo", "Boter", "987")]
+    views = [
+        sources,
+        [row("ah", "Boter", "123", "different", "catalog_linked"),
+         row("jumbo", "Boter", "987")],
+    ]
+    scans = {"count": 0}
+    def projected(*, conn):
+        scans["count"] += 1
+        return {"items": views[min(scans["count"] - 1, 1)]}
+    monkeypatch.setattr(service, "list_all_external_articles", projected)
+    monkeypatch.setattr(service, "resolve_external_article_identity",
+                        lambda conn, item: {
+                            "retailer_code": "jumbo", "receipt_text": "Boter",
+                            "external_article_code": "987",
+                        })
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda *args, **kwargs: pytest.fail("A changed proof must never write"))
+    result = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="frontteam")
+    assert result["linked"] == 0
+    assert result["blocked"] >= 1
+    assert scans["count"] == 2

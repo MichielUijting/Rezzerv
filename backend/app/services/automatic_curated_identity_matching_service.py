@@ -122,7 +122,12 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
     code_free = [row for row in plan["items"] if not row.get("receipt_article_number")
                  and row["mode"] in {"same_product", "synonym_variant"}]
     if code_free and linked < MAX_BATCH:
+        # Both name projections are evaluated before processing any
+        # code-free row. Never repeat the expensive full ED2 overview for
+        # every receipt candidate. Source identity and the existing
+        # conflict guards remain checked inside the write savepoint.
         names = _independently_proven_exact_names(conn)
+        refreshed_names = _independently_proven_exact_names(conn)
         for row in code_free[:MAX_BATCH - min(len(eligible), MAX_BATCH)]:
             label = row["source_key"][1]
             product = names.get(label)
@@ -135,10 +140,9 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
                     source = resolve_external_article_identity(conn, row["receipt_item_id"])
                     if list(_parts(source)) != row["source_key"]:
                         raise ValueError("De bronidentiteit is gewijzigd.")
-                    # Re-evaluate evidence inside the write savepoint, rather
-                    # than trusting a name match computed before other writes.
-                    refreshed = _independently_proven_exact_names(conn)
-                    current = refreshed.get(label)
+                    # A second full read before the batch verified the
+                    # independently proven destination without per-item scans.
+                    current = refreshed_names.get(label)
                     if not current or str(current["id"]) != str(product["id"]):
                         raise ValueError("De bewezen naamkoppeling is gewijzigd.")
                     if _matching_target(_family_variant(label), current) != "same_product":

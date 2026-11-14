@@ -276,3 +276,47 @@ def test_code_free_variant_uses_proven_existing_variant_not_duplicate_product(mo
     assert output["synonyms_created"] == 0
     assert calls[0]["target_product_id"] == "yellow-product"
     assert calls[0]["match_mode"] == "same_product"
+
+
+
+def test_curated_codefree_batch_rechecks_proof_only_twice(monkeypatch):
+    # Multiple identical code-free source identities share the expensive
+    # global view, but every write still validates its actual receipt ID.
+    from app.services import automatic_curated_identity_matching_service as auto
+    from app.services.external_article_product_link_service import (
+        normalize_external_link_receipt_text,
+    )
+    root = {"id": "main", "name": "AH Courgette", "primary_gtin": "8722800072026"}
+    view = [{"retailer_code": "ah", "receipt_line_text": "COURGETTE",
+             "receipt_article_number": "21003", "identity_status": "catalog_linked",
+             "identity_catalog_product_id": "main"}]
+    calls = {"overview": 0}
+    def list_view(*, conn):
+        calls["overview"] += 1
+        return {"items": view}
+    monkeypatch.setattr(auto, "list_all_external_articles", list_view)
+    monkeypatch.setattr(auto, "load_products", lambda conn: [root])
+    monkeypatch.setattr(auto, "matching_batch_preview",
+                        lambda conn, target_product_id=None: (
+                            {"targets": [{"product_id": "main"}]}
+                            if target_product_id is None else {
+                                "items": [
+                                    {"receipt_item_id": f"receipt-table-line:{i}",
+                                     "receipt_article_number": "",
+                                     "source_key": ["jumbo",
+                                      normalize_external_link_receipt_text("COURGETTE"), ""],
+                                     "mode": "same_product"}
+                                    for i in range(3)
+                                ],
+                                "blocked": [],
+                            }))
+    monkeypatch.setattr(auto, "resolve_external_article_identity",
+                        lambda conn, id: {"retailer_code": "jumbo",
+                                          "receipt_text": "COURGETTE",
+                                          "external_article_code": ""})
+    monkeypatch.setattr(auto, "confirm_courgette_receipt",
+                        lambda conn, **kwargs: {"already_confirmed": False,
+                                                "synonym_created": False})
+    result = auto.automatically_match_curated_receipts(_Connection(), actor_id="frontteam")
+    assert result["linked"] == 3
+    assert calls["overview"] == 2

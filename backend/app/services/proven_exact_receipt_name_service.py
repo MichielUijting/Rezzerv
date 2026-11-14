@@ -316,36 +316,48 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
         raise ValueError("Een geautoriseerde gebruiker ontbreekt.")
     # Uses the same global central-identity write lock as curated-family writes.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
+    # The complete ED2 projection is expensive: real local diagnostics
+    # observed 15-17 seconds for 1,175 unique receipt identities. Never
+    # rebuild it once for EACH candidate (previously up to 51 scans).
+    # Instead collect the proof once and re-check the entire projection ONCE
+    # before the first write under the same serialized batch transaction.
+    # Per-row raw identity and exact-tuple database guards still run inside
+    # independent savepoints and block stale or conflicting records.
     candidates, ambiguous, no_proof = _candidate_plan(
         list_all_external_articles(conn=conn)["items"],
         load_confirmed_bonnaam_aliases(conn))
+    selected = candidates[:MAX_EXACT_NAME_BATCH]
+    verified_by_key = {}
+    if selected:
+        refreshed, _, _ = _candidate_plan(
+            list_all_external_articles(conn=conn)["items"],
+            load_confirmed_bonnaam_aliases(conn))
+        verified_by_key = {
+            (row["source_key"], row["receipt_item_id"]): row
+            for row in refreshed
+        }
     linked, conflicts, codefree_linked = 0, 0, 0
-    for candidate in candidates[:MAX_EXACT_NAME_BATCH]:
+    for candidate in selected:
         try:
+            current = verified_by_key.get(
+                (candidate["source_key"], candidate["receipt_item_id"]))
+            if (not current or
+                    current["product_id"] != candidate["product_id"] or
+                    current["witness"] != candidate["witness"] or
+                    current["proof_name"] != candidate["proof_name"]):
+                raise ValueError("De unieke bewijsbron is veranderd.")
             with conn.begin_nested():
                 source = resolve_external_article_identity(conn, candidate["receipt_item_id"])
                 if _key(source.get("retailer_code"), source.get("receipt_text"),
                         source.get("external_article_code")) != candidate["source_key"]:
                     raise ValueError("De bonartikelbron is gewijzigd.")
-                # Other authorities can update coded proof. Rebuild the full
-                # central projection in this savepoint just before the write.
-                current, _, _ = _candidate_plan(
-                    list_all_external_articles(conn=conn)["items"],
-                    load_confirmed_bonnaam_aliases(conn))
-                verified = next((row for row in current
-                    if row["source_key"] == candidate["source_key"]
-                    and row["receipt_item_id"] == candidate["receipt_item_id"]), None)
-                if (not verified or
-                        verified["product_id"] != candidate["product_id"] or
-                        verified["witness"] != candidate["witness"]):
-                    raise ValueError("De unieke bewijsbron is veranderd.")
                 if _persist_exact_name_match(
                     conn, source_key=candidate["source_key"],
                     product_id=candidate["product_id"],
                     witness=candidate["witness"], actor_id=actor_id,
                 ):
                     linked += 1
-                    if not candidate['source_key'][2]:
+                    if not candidate["source_key"][2]:
                         codefree_linked += 1
         except (ValueError, HTTPException, IntegrityError):
             conflicts += 1
