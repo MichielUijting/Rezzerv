@@ -87,6 +87,9 @@ class CentralCatalogProjectionConnection:
                     'source_rank': 2,
                 })
             return Result(rows=rows)
+        if 'FROM ed2_receipt_family_links family_link' in sql:
+            assert "family_link.match_mode = 'same_product'" in sql
+            return Result(rows=[])
         if 'FROM external_article_product_links link' in sql:
             rows = [{
                 'retailer_code': 'albert-heijn',
@@ -589,6 +592,54 @@ def test_inventory_inline_household_name_does_not_rename_inventory_identity():
     assert state['custom_name'] == 'Nieuwe huishoudnaam'
     assert result['row']['artikel'] == '7 Granen Ontbijt'
     assert result['row']['household_article_name'] == 'Nieuwe huishoudnaam'
+
+
+
+class Ed2ConfirmedPhotoConnection(CentralCatalogProjectionConnection):
+    def __init__(self, *, claim='global-product-a', legacy_claim=False):
+        super().__init__()
+        self.claim = claim
+        self.legacy_claim = legacy_claim
+        self.query_count = 0
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM external_article_product_links link' in sql:
+            return super().execute(statement, params) if self.legacy_claim else Result(rows=[])
+        if 'FROM ed2_receipt_family_links family_link' in sql:
+            self.query_count += 1
+            assert "family_link.match_mode = 'same_product'" in sql
+            assert 'COALESCE(TRIM(family_link.external_article_code)' in sql
+            return Result(rows=[{
+                'retailer_code': 'ah', 'receipt_text_normalized': 'bio dadeltjes',
+                'external_article_code': '', 'global_product_id': self.claim,
+                'image_url': 'https://images.example.test/ed2-confirmed.jpg',
+            }])
+        return super().execute(statement, params)
+
+
+def test_ed2_codefree_confirmed_receipt_photo_follows_exact_record():
+    conn = Ed2ConfirmedPhotoConnection()
+    rows = [{
+        'id': ARTICLE_ID, 'household_id': 'household-a',
+        'naam': 'Bio dadeltjes', 'barcode': '', 'global_product_id': None,
+        'image_url': '',
+    }]
+    actual = resolve_household_catalog_images(conn, lambda q: q, rows)
+    assert actual == {ARTICLE_ID: 'https://images.example.test/ed2-confirmed.jpg'}
+    assert conn.query_count == 1
+
+
+def test_ed2_receipt_photo_disagrees_with_existing_catalog_claim_fails_closed():
+    conn = Ed2ConfirmedPhotoConnection(claim='product-other', legacy_claim=True)
+    rows = [{
+        'id': ARTICLE_ID, 'household_id': 'household-a',
+        'naam': 'Bio dadeltjes', 'barcode': '',
+        'global_product_id': None, 'image_url': '',
+    }]
+    # A separately confirmed external Catalogus link disagrees with ED2 proof.
+    # The read-only photo projection must not choose either product.
+    assert resolve_household_catalog_images(conn, lambda q: q, rows) == {}
 
 
 def run_contract() -> None:

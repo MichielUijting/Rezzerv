@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from sqlalchemy import text
 
+from app.services.catalog_retailer_identity_keys import canonical_catalog_retailer
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code,
     normalize_external_link_receipt_text,
@@ -303,6 +304,51 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
             if receipt_text:
                 links_by_text.setdefault((retailer, receipt_text), dict(link))
 
+    # PR #683 stores independently confirmed code-free and numbered receipts
+    # in ed2_receipt_family_links, not in the older external links table.
+    # Use the EXACT persisted retailer/name/number tuple. Never identify an
+    # article by a vague name match, GS1 category or synonym suggestion.
+    ed2_proofs: dict[tuple[str, str, str], dict[str, str]] = {}
+    for batch_start in range(0, len(unique_identities), batch_size):
+        batch = unique_identities[batch_start:batch_start + batch_size]
+        clauses = []
+        proof_params: dict[str, str] = {}
+        for index, (retailer, article_code, receipt_text) in enumerate(batch):
+            suffix = f'{batch_start}_{index}'
+            proof_params[f'proof_retailer_{suffix}'] = canonical_catalog_retailer(retailer)
+            proof_params[f'proof_code_{suffix}'] = article_code
+            proof_params[f'proof_name_{suffix}'] = receipt_text
+            clauses.append(
+                '(family_link.retailer_code = :proof_retailer_' + suffix
+                + ' AND family_link.receipt_text_normalized = :proof_name_' + suffix
+                + " AND COALESCE(TRIM(family_link.external_article_code), '')"
+                + ' = :proof_code_' + suffix + ')'
+            )
+        if not clauses:
+            continue
+        proof_rows = conn.execute(text(f'''
+            SELECT family_link.retailer_code, family_link.receipt_text_normalized,
+                   family_link.external_article_code, family_link.global_product_id,
+                   COALESCE(gp.image_url, '') AS image_url
+            FROM ed2_receipt_family_links family_link
+            JOIN global_products gp ON gp.id = family_link.global_product_id
+            WHERE family_link.match_mode = 'same_product'
+              AND lower(COALESCE(gp.status, 'active')) = 'active'
+              AND ({' OR '.join(clauses)})
+            ORDER BY family_link.global_product_id
+        '''), proof_params).mappings().all()
+        for proof in proof_rows:
+            proof_key = (
+                canonical_catalog_retailer(proof.get('retailer_code')),
+                normalize_external_link_article_code(proof.get('external_article_code')),
+                normalize_external_link_receipt_text(proof.get('receipt_text_normalized')),
+            )
+            product_id = str(proof.get('global_product_id') or '').strip()
+            if product_id:
+                ed2_proofs.setdefault(proof_key, {})[product_id] = (
+                    str(proof.get('image_url') or '').strip()
+                )
+
     images_by_article: dict[str, str] = {}
     for article_id, sources in sources_by_article.items():
         products: dict[str, str] = {}
@@ -317,6 +363,11 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
             product_id = str(link.get('global_product_id') or '').strip()
             if product_id:
                 products[product_id] = str(link.get('image_url') or '').strip()
+        for source in sources:
+            proof_key = (canonical_catalog_retailer(source['retailer']),
+                         source['article_code'], source['receipt_text'])
+            for product_id, image_url in ed2_proofs.get(proof_key, {}).items():
+                products[product_id] = image_url
         if len(products) > 1 and ambiguous_articles is not None:
             ambiguous_articles.add(article_id)
         if len(products) == 1:
