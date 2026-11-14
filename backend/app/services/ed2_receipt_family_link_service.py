@@ -8,6 +8,7 @@ No fabricated GTIN, no barcode overwrites, no household or receipt updates.
 from __future__ import annotations
 
 from hashlib import sha256
+from decimal import Decimal
 import json
 import uuid
 
@@ -20,7 +21,7 @@ from app.services.catalog_retailer_identity_keys import (
 from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_receipt_text,
 )
-from app.services.synonym_product_family_rules import approved_family
+from app.services.synonym_product_family_rules import approved_family, normalized_package_quantity
 from app.services.article_synonym_service import (
     load_products, confirmed_pairs, confirm_pairs, _fingerprint,
 )
@@ -127,7 +128,7 @@ def _guard_preexisting_claims(conn, source):
 
 
 def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_id,
-                             match_mode, expected_fingerprint, actor_id):
+                             match_mode, expected_fingerprint, actor_id, automatic=False):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Bevestiging van centrale bonartikelen vereist PostgreSQL.")
     if not actor_id:
@@ -186,15 +187,26 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
         if other:
             raise ValueError("Deze variant bestaat al in de Catalogus. Selecteer dat artikel afzonderlijk.")
         product_id = str(uuid.uuid4())
+        # An independently identified one-piece anchor is the only approved
+        # package-size inference for an unlabeled fresh courgette variant.
+        anchor = next((p for p in load_products(conn)
+                       if p["id"] == target_product_id), None)
+        size = normalized_package_quantity(anchor) if anchor else None
+        one_piece = size == ("count", Decimal("1"))
         conn.execute(text("""
             INSERT INTO global_products (
                 id, primary_gtin, name, brand, variant, category,
                 size_value, size_unit, product_fingerprint, source, status,
                 created_at, updated_at
             ) VALUES (:id, NULL, :name, NULL, NULL, NULL,
-                      NULL, NULL, NULL, 'ed2_receipt_family_confirmed',
+                      :size_value, :size_unit, NULL,
+                      'ed2_receipt_family_confirmed',
                       'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """), {"id": product_id, "name": source_name})
+        """), {
+            "id": product_id, "name": source_name,
+            "size_value": 1 if one_piece else None,
+            "size_unit": "stuk" if one_piece else None,
+        })
     conn.execute(text("""
         INSERT INTO ed2_receipt_family_links
             (retailer_code, receipt_text_normalized, external_article_code,
@@ -222,7 +234,8 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
         old_value=None,
         new_value={"global_product_id": product_id, "mode": match_mode,
                    "synonym_reference": target_product_id if synonym_created else None},
-        reason="explicit_curated_courgette_confirmation",
+        reason=("automatic_approved_courgette_family_v1" if automatic
+                else "explicit_curated_courgette_confirmation"),
     )
     return {"ok": True, "already_confirmed": False, "global_product_id": product_id,
             "synonym_created": synonym_created, "barcode_written": False,

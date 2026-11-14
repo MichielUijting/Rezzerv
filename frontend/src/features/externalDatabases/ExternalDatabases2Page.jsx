@@ -12,6 +12,7 @@ import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
+import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -398,6 +399,11 @@ export default function ExternalDatabases2Page() {
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
+        <Ed2CuratedMatchingBatch onConfirmed={() => {
+          setSelectedItem(null)
+          setSelectedIds([])
+          setRefreshVersion((value) => value + 1)
+        }} />
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>

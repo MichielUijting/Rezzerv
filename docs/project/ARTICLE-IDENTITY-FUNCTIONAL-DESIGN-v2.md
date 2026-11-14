@@ -252,3 +252,91 @@ Identificeren en Synoniemen leest uitsluitend bevestigde exacte records.
 Bij een volgende identieke bon hoeft de barcode niet opnieuw te worden
 ingevoerd. Niet-geteste producten (o.a. Olvarit, soep en diepvries) krijgen
 geen familiematch. Geen automatische massamatching op alleen een naam.
+
+
+### Fase 2D — centrale productmatching in één gecontroleerde batch
+De **identificatiebron** blijft de exacte winkel + kassabonomschrijving +
+bonartikelnummer, ook wanneer de bon geen barcode bevat. De eerder bevestigde
+AH-Catalogusidentiteit mag als zichtbare ankerkeuze gebruikt worden voor een
+beperkte, door de PO goedgekeurde familie van verse courgettes. In
+**Identificeren** verschijnt één read-only overzicht van nog niet herkende
+bonartikelen, hun bronwinkel en de voorgenomen relatie (hetzelfde gewone
+product of een afzonderlijke synoniemvariant). Bevoegde gebruikers kunnen
+meerdere voorgestelde, bewust aangevinkte matches in één transactie bevestigen.
+De server verifieert alle bron-ID's, het actuele Catalogusanker en de exacte
+vooraf beoordeelde fingerprint opnieuw; bij één conflict volgt rollback.
+Nieuwe en historische bonnetjes met dezelfde bevestigde winkelsleutel zien
+dezelfde identiteit zonder nieuwe gebruikershandeling. Er is nooit een
+fictieve GTIN en er is geen ongevraagde wijziging van huishouden of voorraad.
+
+Deze concrete familie is een eerste **bewezen productregel**; de voorziening
+mag bij uitbreiding uitsluitend andere expliciet goedgekeurde en geteste
+families ondersteunen. Een bontekst of classificatie alléén levert geen
+mondiale barcode en geen willekeurige naamgebaseerde koppeling op.
+
+
+### Fase 2E — autonome toepassing van de bewezen familie (13 november 2026)
+De bevoegde Identificeren-werkruimte biedt de expliciete actie
+**Courgettes automatisch herkennen**. Na één klik verwerkt de server zelf
+alle bewezen, strikt begrensde kandidaten; de gebruiker hoeft niet per
+artikel te bevestigen. Het openen, bladeren, filteren, zoeken en bekijken
+van voorstellen blijft volledig read-only. Er vertrekt **geen POST bij
+paginabezoek**. De automatische POST is uitsluitend een bewust gestarte
+verwerkingsactie, geen algemene naamgebaseerde barcodeherkenning.
+Automatisch vastleggen mag uitsluitend bij **precies één onafhankelijk bevestigd
+gewoon Catalogusanker**, één geteste verse-courgetteregel en een exacte, niet-lege
+bonartikelcode binnen de winkelcontext. De server valideert ook de oorspronkelijke
+bronidentiteit, bestaande claims, actieve Catalogusstatus, synoniemgroep en
+transactie opnieuw. Afwijkingen blijven zichtbaar voor handmatige beoordeling.
+Elke centrale mutatie krijgt een actor en een herkenbare automatische auditreden.
+
+Een bonomschrijving zonder artikelnummer is onvoldoende voor een **nieuwe**
+wereldwijde artikelclaim. Reeds bevestigde exacte bonidentiteiten worden wel
+zonder herhaalde handeling hergebruikt. De ene automatische pass verwerkt
+maximaal vijftig kandidaten en laat resterende kandidaten staan. Verschillende
+mogelijke Catalogusankers en conflictgevallen worden nooit door naamselectie
+beslecht. Het bestaande gecontroleerde batchscherm blijft voor uitzonderingen
+beschikbaar. Gebruikers zonder centrale schrijfbevoegdheid veroorzaken geen
+mutatie.
+
+
+### Fase 3A — Bijna op bij een deels aanwezige synoniemgroep
+Een huishouden hoeft niet alle Catalogusvarianten uit een bevestigde groep te
+bezitten. De read-only projectie mag aanwezige huishoudartikelen samen nemen
+nadat **alle** centrale tussenleden van de bevestigde groep zijn gecontroleerd:
+actief Catalogusproduct, goedgekeurde familie en vergelijkbare bekende
+verpakkingsinhouden. Ontbrekende/afwijkende feiten blokkeren de groepsprojectie.
+De eigen voorraad, artikel-ID's, bronbonnen en gebeurtenissen worden nooit
+samengevoegd. De speciale éénstuksregel geldt alleen als de onafhankelijk
+geïdentificeerde verse-courgette-anker zelf aantoonbaar exact één stuk is.
+
+
+### Fase 3B — omrekenbare synoniemen bij afboeken
+Voorafgaand aan automatische afboeking op aankoop leest Inhuis de **bevestigde**
+Catalogusidentiteiten van alle betrokken huishoudartikelen en valideert per
+artikel de expliciete verpakkingsinhoud. De planningsberekening gebruikt één
+gemeenschappelijke exacte inhoudseenheid (gram/milliliter/stuk), in plaats van
+één verpakking gelijk aan één verpakking. Een aankoop van één liter kan
+twee oude halve liters afboeken; een halve-liter-aankoop verwijdert nooit
+een hele liter door afronding. Afboeken gebeurt uitsluitend in hele bestaande
+voorraadregels met bijbehorende household-ID en voorraadlocatie, binnen de
+bestaande bontransactie. Ontbrekende, onvergelijkbare, ongeldige of extreme
+factoren leiden niet tot een onbetrouwbare groepsafboeking.
+
+### Volledige transitieve controle
+De centrale groepsprojectie bezoekt alle bevestigde synoniemranden, ook
+relaties tussen Catalogusproducten die in het betreffende huishouden niet
+voorkomen. Een schijnbaar veilige A–B-groep mag niet automatisch worden
+gebruikt als de indirecte C–D-schakel ontbreekt, verwijderd is of inhoudelijk
+niet verenigbaar blijkt. De graphberekening is begrensd en uitsluitend lezend.
+
+### Herstel regressie bij openen Identificeren (PR #682)
+De eerdere automatische mutatie in het React-paginamounteffect schond het
+bindende alleen-lezen contract voor de artikeloverzichtsroute. De veilige
+batchengine en backend-autorisatie blijven intact, maar de verwerking wordt
+nu alleen gestart na de expliciete actie **Courgettes automatisch herkennen**.
+Een geslaagde of gedeeltelijke batch toont daarna de nog te beoordelen
+uitzonderingen; een fout laat bestaande identiteiten ongemoeid. De
+regressietest verifieert **nul schrijfverzoeken** bij openen en filteren,
+en exact één verwerkingsverzoek na de genoemde gebruikersactie. De vier
+bestaande read-only Playwrightcontroles blijven ongewijzigd.

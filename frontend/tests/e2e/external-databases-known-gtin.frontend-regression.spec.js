@@ -9,6 +9,56 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
+  test('Identificeren blijft read-only tot expliciete automatische matchingactie', async ({ page }) => {
+    const writes = []
+    const autoPath = '/api/catalog/ed2/curated-matching-batch/auto'
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (route.request().method() !== 'GET') writes.push(path)
+      if (path === '/api/session') return route.fulfill({ json: {
+        user_id: 'ed2-automatic-test', active_household_id: '0',
+        context_type: 'system', role: 'owner', is_platform_superuser: true,
+        permissions: { 'platform.system_household.access': true },
+      } })
+      if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+      if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+      if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+      if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+      if (path === '/api/external-databases/articles-overview') {
+        return route.fulfill({ json: { items: [{
+          id: 'receipt-table-line:courgette', receipt_line_text: 'Courgette groen',
+          retailer_code: 'lidl', receipt_article_number: '0082346',
+          link_status: 'unlinked',
+        }], counts: { unlinked: 1, classification_pending: 0, linked: 0 } } })
+      }
+      if (path === autoPath) {
+        return route.fulfill({ json: {
+          ok: true, status: 'anchor_review_required', linked: 0,
+          synonyms_created: 0, barcode_written: false, requires_review: true,
+        } })
+      }
+      if (path === '/api/catalog/ed2/curated-matching-batch/preview') {
+        return route.fulfill({ json: { targets: [], items: [], blocked: [] } })
+      }
+      return route.fulfill({ json: {} })
+    })
+    await page.goto('/externe-databases-2')
+    await page.getByTestId('classification-work-monitor')
+      .getByRole('button', { name: 'Identificeren' }).click()
+    const table = page.getByTestId('external-databases-2-table')
+    await expect(table).toContainText('Courgette groen')
+    await page.getByRole('textbox', { name: 'Filter op Artikel', exact: true })
+      .fill('Courgette')
+    await expect(table.locator('tbody tr')).toHaveCount(1)
+    expect(writes).toEqual([]) // Route entry, table and filters remain read-only.
+    await page.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
+    await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' }))
+      .toBeVisible()
+    await expect(page.getByText('Automatische matching is gepauzeerd:'))
+      .toBeVisible()
+    expect(writes).toEqual([autoPath])
+  })
+
   test('tellers en kolom Art./Barcode filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {
     const rows = [
       { id: 'receipt-table-line:ed2-empty', receipt_line_text: 'Melk zonder code', retailer_code: 'jumbo',

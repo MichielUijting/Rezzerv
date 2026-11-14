@@ -29,7 +29,7 @@ class _Result:
 class _Conn:
     def __init__(self, *, pre_a=2, pre_b=3, pre_c=0, purchases_a=0, purchases_b=0,
                  purchases_c=0, deducted_a=0, deducted_b=0, deducted_c=0,
-                 future=None, direct=False):
+                 future=None, direct=False, sizes=None):
         self.rows = {
             "a": [] if pre_a == 0 else [dict(id="inv-a", aantal=pre_a, space_id="loc-a", sublocation_id=None)],
             "b": [] if pre_b == 0 else [dict(id="inv-b", aantal=pre_b, space_id="loc-b", sublocation_id=None)],
@@ -41,10 +41,17 @@ class _Conn:
         self.direct = direct
         self.queries = []
         self.fail_write = False
+        self.sizes = sizes or {'a': (1, 'stuk'), 'b': (1, 'stuk'), 'c': (1, 'stuk')}
 
     def execute(self, stmt, params):
         sql = str(stmt)
         self.queries.append((sql, dict(params)))
+        if "SELECT ha.id AS article_id" in sql:
+            return _Result([
+                {'article_id': article_id, 'size_value': self.sizes[article_id][0],
+                 'size_unit': self.sizes[article_id][1], 'product_status': 'active'}
+                for article_id in params['article_ids']
+            ])
         if "default_inventory_handling" in sql:
             article_id = params["article_id"]
             return _Result([{
@@ -320,3 +327,32 @@ def test_three_member_group_conflicting_override_fails_closed(monkeypatch):
         effective_mode_for_article=lambda article_id, name:
             "none" if article_id == "c" else "consume_purchased_quantity",
     ) is None
+
+
+def test_exact_package_ratio_deducts_two_half_litres_for_one_litre(monkeypatch):
+    conn = _Conn(pre_a=2, pre_b=3, sizes={
+        'a': (1, 'l'), 'b': (500, 'ml'), 'c': (1, 'l'),
+    })
+    plan = _plan(monkeypatch, conn, bought=1)
+    assert plan['requested_deduction_quantity'] == 2
+    assert plan['requested_equivalent_content'] == 1000
+    assert plan['content_unit'] == 'volume'
+    assert [(p['article_id'], p['quantity']) for p in plan['allocations']] == [('b', 2)]
+
+
+def test_no_fractional_package_is_deleted_or_rounded_up(monkeypatch):
+    conn = _Conn(pre_a=1, pre_b=0, sizes={
+        'a': (1, 'l'), 'b': (500, 'ml'), 'c': (1, 'l'),
+    })
+    plan = _plan(monkeypatch, conn, new='b', bought=1)
+    assert plan['requested_deduction_quantity'] == 0
+    assert plan['allocations'] == []
+
+
+def test_missing_or_incompatible_package_size_skips_synonym_deduction(monkeypatch):
+    for sizes in (
+        {'a': (1, 'l'), 'b': (1, 'stuk'), 'c': (1, 'l')},
+        {'a': (None, 'l'), 'b': (500, 'ml'), 'c': (1, 'l')},
+        {'a': (1, 'l'), 'b': (0, 'ml'), 'c': (1, 'l')},
+    ):
+        assert _plan(monkeypatch, _Conn(sizes=sizes), bought=1) is None

@@ -58,10 +58,14 @@ def grouping_key(row, settings=None):
 
 
 def confirmed_synonym_factors(conn, metadata):
-    """Only isolated, directly confirmed pairs with convertible package contents.
+    """Group complete confirmed synonym components with reliable package units.
 
-    A-B-C chains and multi-edge groups require a separately defined equivalence
-    policy; never infer transitivity from the pair table or a matching GPC code.
+    Previously only isolated A-B pairs could form a read-only Bijna op group.
+    For 3+ connected members a stronger policy now applies: the whole group
+    must be present, each product uniquely represented, every member in one
+    PO-approved fresh family, and ALL package contents exactly comparable.
+    A partial chain, missing package size or non-curated group stays separate.
+    No stock, history, household article or Catalogus record is changed.
     """
     by_product = {}
     for row in metadata:
@@ -71,48 +75,110 @@ def confirmed_synonym_factors(conn, metadata):
     if len(by_product) < 2:
         return {}
     product_ids = sorted(by_product)
-    # Inspect all links touching a selected product, not just links whose other
-    # endpoint happens to be in this household. This prevents unsafe partial
-    # chains from being silently treated as independent pairs.
-    links = conn.execute(text("""
+    # Read the full transitive graph, including edges between *absent*
+    # Catalogus members. A single-hop query can miss A-B-C-D when only A/B
+    # are in this household, and would approve an incomplete unsafe group.
+    neighbors = {}
+    frontier = set(product_ids)
+    explored = set()
+    sql = text("""
         SELECT left_product_id, right_product_id
           FROM article_synonym_links
          WHERE left_product_id IN :ids OR right_product_id IN :ids
-    """).bindparams(bindparam('ids', expanding=True)), {'ids': product_ids}).mappings().all()
-    neighbors = {}
-    for link in links:
-        left = str(link['left_product_id'])
-        right = str(link['right_product_id'])
-        neighbors.setdefault(left, set()).add(right)
-        neighbors.setdefault(right, set()).add(left)
+    """).bindparams(bindparam('ids', expanding=True))
+    while frontier:
+        if len(explored) + len(frontier) > 2000:
+            return {}  # Bound corrupted or implausibly broad central graphs.
+        reached = frontier - explored
+        if not reached:
+            break
+        explored.update(reached)
+        new_frontier = set()
+        for link in conn.execute(sql, {'ids': sorted(reached)}).mappings().all():
+            left = str(link['left_product_id'])
+            right = str(link['right_product_id'])
+            neighbors.setdefault(left, set()).add(right)
+            neighbors.setdefault(right, set()).add(left)
+            if left not in explored:
+                new_frontier.add(left)
+            if right not in explored:
+                new_frontier.add(right)
+        frontier = new_frontier
     factors = {}
-    for left in product_ids:
-        linked = neighbors.get(left, set())
-        if len(linked) != 1:
+    visited = set()
+    for start in product_ids:
+        if start in visited or start not in neighbors:
             continue
-        right = next(iter(linked))
-        if right not in by_product or left >= right or neighbors.get(right) != {left}:
+        component = set()
+        frontier = [start]
+        while frontier and len(component) <= 200:
+            current = frontier.pop()
+            if current in component:
+                continue
+            component.add(current)
+            frontier.extend(neighbors.get(current, set()) - component)
+        visited.update(component)
+        if not 2 <= len(component) <= 200:
             continue
-        first = by_product[left][0]
-        second = by_product[right][0]
-        first_size = content(first.get('size_value'), first.get('size_unit'))
-        second_size = content(second.get('size_value'), second.get('size_unit'))
-        if not first_size or not second_size or first_size[1] != second_size[1]:
+        # A household need not have every confirmed global synonym variant.
+        # Verify missing central members instead of rejecting a partial
+        # household projection, but do not invent identities or package sizes.
+        represented = sorted(component & set(by_product))
+        if len(represented) < 2 or any(len(by_product[pid]) != 1 for pid in represented):
             continue
-        # Identical physical units are necessary but do not themselves prove
-        # equivalence; only the manually confirmed central link does.
-        key = ('confirmed_synonym', f'{left}:{right}', 'Bevestigde synoniemen', first_size[1])
-        factors[left] = (key, first_size[0])
-        factors[right] = (key, second_size[0])
+        entries = [by_product[pid][0] for pid in represented]
+        if any(str(row.get('product_status') or 'active').lower() != 'active'
+               for row in entries):
+            continue
+        all_members = list(entries)
+        missing = sorted(component - set(by_product))
+        if missing:
+            extras = conn.execute(text("""
+                SELECT id AS global_product_id, name AS product_name,
+                       variant, size_value, size_unit, status AS product_status
+                  FROM global_products WHERE id IN :ids
+            """).bindparams(bindparam('ids', expanding=True)),
+                {'ids': missing}).mappings().all()
+            if len(extras) != len(missing) or {
+                str(row['global_product_id']) for row in extras
+            } != set(missing):
+                continue
+            all_members.extend(extras)
+        if any(str(row.get('product_status') or 'active').lower() != 'active'
+               for row in all_members):
+            continue
+        sizes = [content(row.get('size_value'), row.get('size_unit'))
+                 for row in all_members]
+        if not all(sizes) or len({size[1] for size in sizes}) != 1:
+            continue
+        # Ignore huge or unproven ratios. No implicit piece-to-weight factor.
+        quantities = [item[0] for item in sizes]
+        if max(quantities) / min(quantities) > 1000:
+            continue
+        if len(component) > 2:
+            from app.services.synonym_product_family_rules import approved_family
+            families = {
+                approved_family({
+                    'name': row.get('product_name') or '',
+                    'variant': row.get('variant') or '',
+                }) for row in all_members
+            }
+            if families != {'verse_courgette_v1'}:
+                continue
+        key = ('confirmed_synonym', ':'.join(sorted(component)),
+               'Bevestigde synoniemen', sizes[0][1])
+        for row in entries:
+            pid = str(row['global_product_id'])
+            item_size = content(row.get('size_value'), row.get('size_unit'))
+            factors[pid] = (key, item_size[0])
     return factors
-
 
 def load_groups(conn, household_id, article_rows, settings_by_article):
     ids = [str(row['id']) for row in article_rows]
     if not ids:
         return []
     metadata = conn.execute(text('''
-        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gp.name AS product_name, gp.variant, gb.brick_code, cp.facts_json
+        SELECT ha.id, ha.global_product_id, gp.size_value, gp.size_unit, gp.name AS product_name, gp.variant, gp.status AS product_status, gb.brick_code, cp.facts_json
         FROM household_articles ha
         LEFT JOIN global_products gp ON gp.id = ha.global_product_id
         LEFT JOIN global_product_gpc_bricks gb ON gb.global_product_id = gp.id

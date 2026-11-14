@@ -486,3 +486,97 @@ test('Courgette-identificatie zonder barcode vraagt bevestiging, geel wordt afzo
   await table.locator('tbody tr', { hasText: 'Olvarit' }).dblclick()
   await expect(page.getByRole('region', { name: 'Courgettefamilie koppelen zonder barcode' })).toHaveCount(0)
 })
+
+
+test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode', async ({ page }) => {
+  const articles = [
+    ['ah-linked','COURGETTE','ah','21003','catalog_linked'],
+    ['ah','COURGETTE','ah','','not_identified'],
+    ['jumbo','COURGETTE','jumbo','','not_identified'],
+    ['green-code','Courgette groen','lidl','0082346','not_identified'],
+    ['green','Courgette groen','lidl','','not_identified'],
+    ['yellow','Courgette geel','lidl','0082293','not_identified'],
+    ['bio','Courgette Bio','lidl','0084544','not_identified'],
+  ].map(([id,name,shop,code,status]) => ({
+    id: 'receipt-table-line:' + id, receipt_line_text: name,
+    retailer_code: shop, receipt_article_number: code,
+    article_code: status === 'catalog_linked' ? '8722800072026' : '',
+    identity_status: status, identity_status_label: status === 'catalog_linked'
+      ? 'Catalogus gekoppeld' : 'Nog identificeren', link_status: status === 'catalog_linked'
+      ? 'linked' : 'unlinked',
+  }))
+  const selectedRows = articles.filter((item) => item.identity_status === 'not_identified')
+  const receiptItems = selectedRows.map((item) => ({
+    receipt_item_id: item.id, receipt_line_text: item.receipt_line_text,
+    receipt_article_number: item.receipt_article_number,
+    retailer: item.retailer_code,
+    mode: /geel|bio/i.test(item.receipt_line_text) ? 'synonym_variant' : 'same_product',
+    mode_label: /geel|bio/i.test(item.receipt_line_text)
+      ? 'Afzonderlijk Catalogusproduct als synoniem' : 'Zelfde verse courgette',
+  }))
+  const posts = []
+  const autoRequests = []
+  let previews = 0
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/preview') {
+      previews += 1
+      return route.fulfill({ json: {
+        family: 'verse_courgette_v1',
+        targets: [{ product_id: 'gp-ah', product_name: 'AH Courgette',
+          barcode: '8722800072026' }],
+        items: url.searchParams.get('target_product_id') ? receiptItems : [],
+        blocked: [], fingerprint: url.searchParams.get('target_product_id')
+          ? 'e'.repeat(64) : null,
+      } })
+    }
+    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/auto') {
+      autoRequests.push(route.request().method())
+      // Two independently proven ordinary catalog anchors require an explicit
+      // exception review. Never write the six unresolved receipt identities.
+      return route.fulfill({ json: {
+        ok: true, status: 'anchor_review_required', linked: 0,
+        synonyms_created: 0, barcode_written: false, requires_review: true,
+      } })
+    }
+    if (url.pathname === '/api/catalog/ed2/curated-matching-batch/confirm') {
+      const payload = route.request().postDataJSON()
+      posts.push(payload)
+      for (const item of articles) {
+        if (payload.receipt_item_ids.includes(item.id)) {
+          item.identity_status = 'catalog_linked'
+          item.identity_status_label = 'Catalogus gekoppeld'
+        }
+      }
+      return route.fulfill({ json: {
+        ok: true, linked: payload.receipt_item_ids.length,
+        synonyms_created: 2, barcode_written: false,
+      } })
+    }
+    return bootstrap(route, articles, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  const batch = page.getByRole('region', { name: 'Gecontroleerde matching van productfamilies' })
+  await batch.getByRole('button', { name: 'Courgettes automatisch herkennen' }).click()
+  await expect(batch).toContainText('Automatische matching is gepauzeerd:')
+  expect(autoRequests).toEqual(['POST'])
+  await batch.getByLabel('Bestaand, geïdentificeerd Catalogusproduct').selectOption('gp-ah')
+  await expect(batch).toContainText('6 voorgesteld')
+  await expect(batch.getByRole('checkbox')).toHaveCount(6)
+  await expect(batch.getByRole('checkbox', { checked: true })).toHaveCount(6)
+  expect(posts).toHaveLength(0)
+  await batch.getByRole('button', { name: '6 matches in één keer bevestigen' }).click()
+  const dialog = page.getByTestId('ed2-curated-batch-confirm')
+  await expect(dialog).toContainText('6 geselecteerde bonartikelen')
+  expect(posts).toHaveLength(0)
+  await dialog.getByRole('button', { name: 'Alles bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0].target_product_id).toBe('gp-ah')
+  expect(posts[0].fingerprint).toBe('e'.repeat(64))
+  expect(posts[0].receipt_item_ids).toHaveLength(6)
+  expect(posts[0].receipt_item_ids).not.toContain('receipt-table-line:ah-linked')
+  await expect(page.getByTestId('external-databases-2-table')).toContainText('Catalogus gekoppeld')
+  expect(previews).toBeGreaterThanOrEqual(2)
+})
