@@ -183,9 +183,16 @@ def confirmed_product_variant_review_reasons(rows):
         central = str(row.get("catalog_product_id") or "").strip()
         if (explicit and central and explicit != central) or not (explicit or central):
             continue
+        # Mirror the witness requirements of the manual confirmation route:
+        # only genuinely selectable confirmed receipt identities count.
+        if (row.get("article_code") and row.get("manual_barcode")
+                and str(row["article_code"]) != str(row["manual_barcode"])):
+            continue
+        barcode = _confirmed_catalog_barcode(row)
+        if not (key[2] or barcode):
+            continue
         product = explicit or central
         name = _matching_name(key[0], key[1])
-        barcode = _confirmed_catalog_barcode(row)
         product_name = str(row.get("catalog_product_name") or "").strip()
         label = product_name or "Catalogusproduct"
         if barcode:

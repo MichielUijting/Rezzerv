@@ -9,7 +9,7 @@ test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
-  test('Identificeren blijft read-only tot expliciete automatische matchingactie', async ({ page }) => {
+  test('Identificeren blijft read-only en Matchen controleert automatisch bij toegang', async ({ page }) => {
     const writes = []
     const autoPath = '/api/catalog/ed2/bonnamen-matchen/auto'
     await page.route('**/api/**', async (route) => {
@@ -52,12 +52,8 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await expect(table.locator('tbody tr')).toHaveCount(1)
     expect(writes).toEqual([]) // Identificeren remains read-only.
     await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
-    await page.getByText('Automatisch matchen en bonnaamregels', { exact: true }).click()
-    await page.getByRole('button', { name: 'Bonnamen matchen' }).click()
-    await expect(page.getByRole('button', { name: 'Matchingvoorstellen sluiten' }))
-      .toBeVisible()
-    await expect(page.getByText('Niet alle productfamilies hebben één bewezen anker.', { exact: false }))
-      .toBeVisible()
+    await expect(page.getByTestId('ed2-match-left-table')).toBeVisible()
+    await expect(page.getByTestId('ed2-match-left-table')).not.toContainText('Courgette groen')
     expect(writes).toEqual([autoPath])
   })
 

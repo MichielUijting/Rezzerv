@@ -9,7 +9,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
  * POST is initiated only by a click. The separate review flow still handles
  * ambiguous cases without overwriting existing identities.
  */
-export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
+export default function Ed2CuratedMatchingBatch({ onConfirmed, autoOnEntryMode = false }) {
   const { showFeedback } = useAppFeedback()
   const [open, setOpen] = useState(false)
   const [targets, setTargets] = useState([])
@@ -188,9 +188,9 @@ export default function Ed2CuratedMatchingBatch({ onConfirmed }) {
       {' '}{autoSummary.blocked || 0} conflict(en) overgeslagen.
     </p> : null}
     <Button type="button" variant="secondary" disabled={saving || loading}
-      onClick={() => open ? setOpen(false) : recognizeAndReview()}>
-      {saving ? 'Automatisch herkennen...' : open
-        ? 'Matchingvoorstellen sluiten' : 'Bonnamen matchen'}
+      onClick={() => open ? setOpen(false) : autoOnEntryMode ? openReview() : recognizeAndReview()}>
+      {saving ? 'Voorstellen verwerken...' : open
+        ? 'Matchingvoorstellen sluiten' : autoOnEntryMode ? 'Familie-uitzonderingen beoordelen' : 'Bonnamen matchen'}
     </Button>
     <div className="rz-external-receipt-detail" data-testid="ed2-bonnaam-alias-form">
       <h3>Een bonnaamsynoniem vastleggen</h3>

@@ -778,3 +778,21 @@ def test_manual_match_blocks_changed_receipt_identity_and_uncertain_target(monke
         service.manually_match_confirmed_receipt(
             FakeConn(), source_receipt_item_id=left["id"],
             target_receipt_item_id=right["id"], actor_id="superuser")
+
+
+
+def test_manual_review_requires_two_independently_selectable_catalog_identities():
+    # A code-free, barcode-free historic projection is not a confirmed
+    # selectable receipt and must not inflate the human matching queue.
+    entries = [
+        row("ah", "AH HV MELK", "569053", "milk-a", "catalog_linked",
+            article_code="8718907056274"),
+        row("ah", "AH HV MELK", "", "milk-b", "catalog_linked"),
+        row("ah", "AH HV MELK", "11943", status="not_identified"),
+    ]
+    assert service.confirmed_product_variant_review_reasons(entries) == {}
+    # A separate proven receipt for the second Catalogusproduct creates an
+    # actionable manual choice.
+    entries[1]["receipt_article_number"] = "92154"
+    assert service.confirmed_product_variant_review_reasons(entries)[entries[2]["id"]]
+

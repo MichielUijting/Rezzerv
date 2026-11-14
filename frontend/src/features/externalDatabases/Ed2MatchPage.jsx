@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
@@ -7,6 +7,8 @@ import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
 import '../articleSynonyms/synonymAnalysis.css'
 
+const AUTO_PROGRESS_KEY = 'ed2-match-entry-progress'
+const MAX_AUTO_PASSES = 100 // Fail closed instead of looping forever on stale claims.
 const RETAILERS = {
   ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', jumbo: 'Jumbo',
   lidl: 'Lidl', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic',
@@ -46,39 +48,140 @@ function confirmedTarget(item) {
     && !(item.article_code && item.manual_barcode && item.article_code !== item.manual_barcode)
 }
 
+function needsManualMatching(item) {
+  // The backend assigns a review reason only if multiple distinct confirmed
+  // Catalogus identities exist for this retailer-neutral receipt name.
+  // A generic unrecognized article is not a manual matching proposal.
+  return item.identity_status === 'not_identified'
+    && !item.article_code && !item.manual_barcode
+    && !item.identity_catalog_product_id && !item.catalog_product_id
+    && Boolean(String(item.automatic_match_review_reason || '').trim())
+}
+
 export default function Ed2MatchPage() {
-  const { showFeedback } = useAppFeedback()
+  const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
+  const mountedRef = useRef(false)
+  const inFlightRef = useRef(false)
   const [items, setItems] = useState([])
   const [leftId, setLeftId] = useState('')
   const [rightId, setRightId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [autoPhase, setAutoPhase] = useState('checking')
+  const [autoResult, setAutoResult] = useState({ linked: 0, passes: 0 })
 
   const reload = useCallback(async () => {
+    const response = await fetchJsonWithAuth('/api/external-databases/articles-overview')
+    if (!response.ok) throw new Error('Het actuele bonartikeloverzicht kon niet worden opgehaald.')
+    const payload = await response.json()
+    if (!Array.isArray(payload.items)) {
+      throw new Error('Inhuis heeft geen geldig bonartikeloverzicht teruggegeven.')
+    }
+    if (mountedRef.current) setItems(payload.items.map(displayRow))
+  }, [])
+
+  const runAutomaticCheck = useCallback(async () => {
+    if (!isSuperuser || !mountedRef.current || inFlightRef.current) return false
+    inFlightRef.current = true
     setLoading(true)
+    setAutoPhase('checking')
+    setItems([])
+    setLeftId('')
+    setRightId('')
+    let linked = 0
+    let passes = 0
     try {
-      const response = await fetchJsonWithAuth('/api/external-databases/articles-overview')
-      if (!response.ok) throw new Error('Bonartikelen konden niet worden opgehaald.')
-      const payload = await response.json()
-      setItems((payload.items || []).map(displayRow))
+      for (passes = 1; passes <= MAX_AUTO_PASSES; passes += 1) {
+        if (!mountedRef.current) return false
+        showFeedback({
+          key: AUTO_PROGRESS_KEY, dedupeMs: 0, variant: 'progress',
+          title: 'Automatische artikelmatching controleren',
+          message: 'Controle ' + passes + ' wordt uitgevoerd. '
+            + linked + ' bonartikel(en) automatisch gekoppeld.',
+          detail: 'Inhuis verwerkt alleen onafhankelijk bewezen matches. Meerdere uitvoeringen blijven voor handmatige beoordeling staan.',
+          testId: 'ed2-auto-match-progress', dismissMode: 'blocked',
+        })
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/auto', {
+          method: 'POST',
+        })
+        const summary = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(typeof summary.detail === 'string' ? summary.detail
+            : 'Automatisch matchen is mislukt (HTTP ' + response.status + ').')
+        }
+        if (summary.ok !== true || summary.barcode_written !== false) {
+          throw new Error('De matchingcontrole gaf geen betrouwbaar resultaat.')
+        }
+        const batchLinked = Number(summary.linked)
+        if (!Number.isSafeInteger(batchLinked) || batchLinked < 0) {
+          throw new Error('Het aantal gekoppelde artikelen is niet geldig.')
+        }
+        linked += batchLinked
+        if (!mountedRef.current) return false
+        if (!batchLinked && summary.limit_reached) {
+          throw new Error('Automatische matching kan de resterende batch niet verwerken. '
+            + 'Er is geen verdere voortgang; de handmatige lijst blijft geblokkeerd.')
+        }
+        // A final zero-write pass proves that newly confirmed receipts do not
+        // unlock any further eligible matches. A limited batch must continue.
+        if (!batchLinked && !summary.limit_reached) break
+      }
+      if (passes > MAX_AUTO_PASSES) {
+        throw new Error('De maximale hoeveelheid automatische controles is bereikt. '
+          + 'De handmatige lijst blijft gesloten totdat de controle is afgerond.')
+      }
+      if (!mountedRef.current) return false
+      showFeedback({
+        key: AUTO_PROGRESS_KEY, dedupeMs: 0, variant: 'progress',
+        title: 'Automatische artikelmatching controleren',
+        message: 'Automatisch matchen afgerond. De handmatig te matchen artikelen worden geladen.',
+        testId: 'ed2-auto-match-progress', dismissMode: 'blocked',
+      })
+      await reload()
+      if (!mountedRef.current) return false
+      setAutoResult({ linked, passes })
+      setAutoPhase('ready')
+      dismissFeedbackIfKey(AUTO_PROGRESS_KEY)
+      return true
     } catch (error) {
-      showFeedback({ variant: 'error', title: 'Matchen',
-        message: error.message || 'De bonartikelen konden niet worden geladen.' })
-    } finally { setLoading(false) }
-  }, [showFeedback])
+      if (mountedRef.current) {
+        setAutoPhase('error')
+        setItems([])
+        showFeedback({
+          key: 'ed2-match-entry-error', variant: 'error',
+          title: 'Automatische matching niet afgerond',
+          message: (error.message || 'De controle is mislukt.')
+            + ' De handmatige matchinglijst blijft gesloten. '
+            + 'Eerdere voltooide batches kunnen al zijn opgeslagen; opnieuw controleren is veilig.',
+        })
+      }
+      return false
+    } finally {
+      inFlightRef.current = false
+      if (mountedRef.current) setLoading(false)
+    }
+  }, [isSuperuser, showFeedback, dismissFeedbackIfKey, reload])
 
-  useEffect(() => { if (isSuperuser) reload() }, [isSuperuser, reload])
+  useEffect(() => {
+    if (!isSuperuser) return undefined
+    mountedRef.current = true
+    // Delay one task to avoid duplicate POSTs in React StrictMode effect replay.
+    const task = window.setTimeout(() => { void runAutomaticCheck() }, 0)
+    return () => {
+      mountedRef.current = false
+      window.clearTimeout(task)
+      dismissFeedbackIfKey(AUTO_PROGRESS_KEY)
+    }
+  }, [isSuperuser, runAutomaticCheck, dismissFeedbackIfKey])
 
-  const leftRows = useMemo(() => items.filter((item) =>
-    item.identity_status === 'not_identified'
-      || (!item.identity_status && !item.catalog_product_id && !item.article_code)), [items])
+  const leftRows = useMemo(() => items.filter(needsManualMatching), [items])
   const rightRows = useMemo(() => items.filter(confirmedTarget), [items])
   const left = leftRows.find((item) => item.id === leftId)
   const right = rightRows.find((item) => item.id === rightId)
 
   function matchSelected() {
-    if (!left || !right || saving || loading) return
+    if (!left || !right || saving || loading || autoPhase !== 'ready') return
     showFeedback({
       variant: 'warning', title: 'Bonartikelen matchen?',
       message: left.receipt_line_text + ' (' + left.retailer + ') koppelen aan hetzelfde Catalogusproduct als '
@@ -100,11 +203,12 @@ export default function Ed2MatchPage() {
             throw new Error(typeof payload.detail === 'string' ? payload.detail
               : 'De match is niet bevestigd.')
           }
-          setLeftId('')
-          setRightId('')
-          await reload()
-          showFeedback({ variant: 'success', title: 'Bonartikel gematcht',
-            message: 'De bestaande Catalogusidentiteit is gekoppeld. Er is geen barcode overgenomen.' })
+          // A new human-confirmed product can unlock further automatic proofs.
+          const ready = await runAutomaticCheck()
+          if (ready && mountedRef.current) {
+            showFeedback({ variant: 'success', title: 'Bonartikel gematcht',
+              message: 'De Catalogusidentiteit is gekoppeld en de automatische controle is bijgewerkt. Er is geen barcode overgenomen.' })
+          }
         } catch (error) {
           showFeedback({ variant: 'error', title: 'Matching niet verwerkt',
             message: error.message || 'Controleer de actuele gegevens.' })
@@ -115,7 +219,7 @@ export default function Ed2MatchPage() {
   }
 
   function selectCell(item, selectedId, setSelectedId) {
-    if (saving || loading) return
+    if (saving || loading || autoPhase !== 'ready') return
     setSelectedId(item.id === selectedId ? '' : item.id)
   }
 
@@ -124,8 +228,8 @@ export default function Ed2MatchPage() {
       pageSize={10} wrapperClassName="rz-synonym-analysis-table-wrapper"
       dataTestId={'ed2-match-' + side + '-table'}
       paginationActions={<span className="rz-synonym-pagination-spacer" aria-hidden="true" />}
-      emptyMessage={loading ? 'Artikelen laden...' : side === 'left'
-        ? 'Geen nog te identificeren bonartikelen.' : 'Geen bewezen Catalogusartikelen beschikbaar.'}
+      emptyMessage={side === 'left' ? 'Geen handmatig te matchen artikelen.'
+        : 'Geen bewezen Catalogusartikelen beschikbaar.'}
       renderRow={(item) => <tr key={item.id} tabIndex={0}
         className="rz-synonym-analysis-main-row" aria-selected={chosen === item.id}
         onClick={() => selectCell(item, chosen, setChosen)}
@@ -156,40 +260,41 @@ export default function Ed2MatchPage() {
 
   return <section aria-label="Bonartikelen matchen" data-testid="ed2-match-workspace">
     <h2>Matchen</h2>
-    <p>Kies links een nog te identificeren bonartikel en rechts een al bevestigd bonartikel.
-      Beide tabellen hebben dezelfde kolommen, filters en paginering.
-      De koppeling gebruikt het bewezen Catalogusproduct van de rechterregel.</p>
-    <div className="rz-synonym-side-by-side">
-      <section className="rz-synonym-side" aria-label="Bonartikelen links">
-        <div className="rz-synonym-side-heading"><h3>Artikel kiezen</h3>
-          <span>{leftRows.length} te beoordelen</span></div>
-        {articleTable(leftRows, leftId, setLeftId, 'left')}
-        <div className="rz-synonym-actions-placeholder" aria-hidden="true" />
-      </section>
-      <section className="rz-synonym-side" aria-label="Bonartikelen rechts">
-        <div className="rz-synonym-side-heading"><h3>Te koppelen artikelen</h3>
-          <span>{rightRows.length} bewezen</span></div>
-        {articleTable(rightRows, rightId, setRightId, 'right')}
-        <div className="rz-synonym-analysis-actions">
-          <Button disabled={!left || !right || saving || loading} onClick={matchSelected}>
-            {saving ? 'Matchen...' : 'Bonartikel matchen'}
-          </Button>
-        </div>
-      </section>
-    </div>
-    {left && !left.article_code && !left.manual_barcode && curatedCourgette(left.receipt_line_text)
-      ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => {
-        setLeftId('')
-        setRightId('')
-        reload()
-      }} /> : null}
-    <details className="rz-match-tools">
-      <summary>Automatisch matchen en bonnaamregels</summary>
-      <Ed2CuratedMatchingBatch onConfirmed={() => {
-        setLeftId('')
-        setRightId('')
-        reload()
-      }} />
-    </details>
+    <p>Inhuis matcht bij het openen eerst alle veilig automatisch herkenbare bonartikelen.
+      Daarna staan links alleen artikelen met verschillende bevestigde Catalogusuitvoeringen,
+      waarvoor je handmatig het juiste artikel rechts kunt kiezen.</p>
+    {autoPhase === 'error' ? <Button onClick={() => { void runAutomaticCheck() }}>
+      Automatische controle opnieuw uitvoeren
+    </Button> : null}
+    {autoPhase === 'ready' ? <>
+      <div className="rz-synonym-side-by-side">
+        <section className="rz-synonym-side" aria-label="Bonartikelen links">
+          <div className="rz-synonym-side-heading"><h3>Handmatig matchen</h3>
+            <span>{leftRows.length} handmatig te matchen</span></div>
+          {articleTable(leftRows, leftId, setLeftId, 'left')}
+          <div className="rz-synonym-actions-placeholder" aria-hidden="true" />
+        </section>
+        <section className="rz-synonym-side" aria-label="Bonartikelen rechts">
+          <div className="rz-synonym-side-heading"><h3>Te koppelen artikelen</h3>
+            <span>{rightRows.length} bewezen</span></div>
+          {articleTable(rightRows, rightId, setRightId, 'right')}
+          <div className="rz-synonym-analysis-actions">
+            <Button disabled={!left || !right || saving || loading} onClick={matchSelected}>
+              {saving ? 'Matchen...' : 'Bonartikel matchen'}
+            </Button>
+          </div>
+        </section>
+      </div>
+      <p data-testid="ed2-auto-match-summary">
+        Bij het openen automatisch gematcht: {autoResult.linked}.
+        Artikelen zonder geschikte bewezen match blijven onder Identificeren beschikbaar.
+      </p>
+      {left && !left.article_code && !left.manual_barcode && curatedCourgette(left.receipt_line_text)
+        ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => { void runAutomaticCheck() }} /> : null}
+      <details className="rz-match-tools">
+        <summary>Bonnaamregels en familie-uitzonderingen</summary>
+        <Ed2CuratedMatchingBatch autoOnEntryMode onConfirmed={() => { void runAutomaticCheck() }} />
+      </details>
+    </> : null}
   </section>
 }

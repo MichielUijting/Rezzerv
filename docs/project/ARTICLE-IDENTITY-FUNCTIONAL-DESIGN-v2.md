@@ -495,3 +495,45 @@ Gecontroleerde automatische matching, de centrale bonnaamregels en de
 goedgekeurde courgettefamiliebeoordeling zijn voortaan in Matchen te vinden.
 De centrale matchbevestigingen controleren ook server-side expliciet op
 platform-Superuser; Frontteamleden hebben voor deze acties geen toegang.
+
+
+### Fase 2I — automatisch bij toegang, uitsluitend handmatig te matchen uitzonderingen (14 november 2026)
+
+Nieuw PO-besluit, ter vervanging van het eerdere verbod op een automatische
+POST **bij openen van het afzonderlijke Superuser-werkgebied Matchen**.
+De andere onderdelen (Identificeren, Classificeren, Synoniemen) blijven bij
+navigeren en filteren read-only. Een geautoriseerde platform-Superuser die
+Matchen opent, start automatisch de bestaande centrale, gecontroleerde
+matchingservice, zonder extra klik. De bestaande limiet van 50 per backendbatch
+wordt gerespecteerd; de frontend voert opeenvolgende idempotente batches uit
+tot een definitieve nulresultaatcontrole bewijst dat er niets automatisch
+matchbaars meer rest. Een bovengrens of uitblijvende voortgang blokkeert
+fail-closed de handmatige tabel. Alleen het bereiken van een eindtoestand
+activeert de handmatige werkruimte.
+
+Tijdens deze controle staat de bestaande centrale Melding-overlay in
+voortgangsmodus met een **onbepaalde indicator**: er wordt geen ongefundeerd
+percentage getoond. Wel worden het batchnummer en het daadwerkelijk bereikte
+aantal gekoppelde bonartikelen gemeld. Een serverfout toont de blokkerende
+centrale foutmelding; nooit een voortijdig succes. Een nieuwe poging blijft
+mogelijk; eerder bevestigde matches worden niet opnieuw als nieuwe identiteit
+geschreven. Wegnavigeren sluit uitsluitend de bijbehorende voortgangsoverlay;
+er worden geen onbeperkte nieuwe batches na verlaten gestart.
+
+Na het automatische werk bevat de **linkertabel** alleen nog bonartikelen met
+status 'not_identified', zonder eigen barcode- of Catalogusclaim waarbij
+de bestaande backend-readprojectie **minimaal twee onderling verschillende
+zelfstandig bewezen Catalogusuitvoeringen** bij dezelfde winkelneutrale
+bonnaam aantreft. Alleen deze rijen vereisen de expliciete productkeuze.
+De rechtertabel behoudt de bewezen Catalogusbronnen om het juiste exemplaar
+te kunnen aanwijzen. De bron-ID, winkel, originele naam en bonartikelnummer
+blijven ongewijzigd. Artikelregels zonder voldoende productbewijs horen
+in Identificeren thuis; zij worden niet als "handmatig te matchen" geteld.
+Een handmatige bevestiging kan nieuwe automatisch bewijsbare relaties
+opleveren; daarom wordt direct daarna de automatische controle opnieuw
+doorlopen voordat de handmatige werkvoorraad wordt ververst.
+
+De oudere familiebatch-/bonnaamregelvoorzieningen blijven bereikbaar in een
+uitklapbaar onderdeel; de redundante handmatige knop voor het starten van de
+automatische bonnaamherkenning verdwijnt daar. Audit, seriële PostgreSQL-lock,
+autorisatie en bestaande conflict-/GTIN-beveiliging blijven van kracht.

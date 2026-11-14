@@ -550,3 +550,19 @@ concrete reden en, waar beschikbaar, de verschillende productnamen en
 barcodes. Zijn er verschillende barcodes maar één en hetzelfde
 bevestigde Catalogusproduct, dan is dat géén productconflict en mag de
 bestaande matchinglogica dat product hergebruiken.
+
+
+### Matchen alleen voor resterende handmatige productkeuzes — PO-besluit 14 november 2026
+
+De afzonderlijke, uitsluitend voor Superusers toegankelijke knop **Matchen**
+controleert bij binnenkomst automatisch alle met bestaand onafhankelijk bewijs
+te matchen bonartikelen. Bij meerdere batches blijft de centrale
+voortgangsindicator zichtbaar totdat een laatste nulresultaatcontrole volgt.
+De werkruimte is bij een fout niet te gebruiken en kan opnieuw controleren.
+**De linkertabel telt uitsluitend de na voltooiing overgebleven handmatig
+matchbare bronartikelen met ten minste twee zelfstandig bewezen verschillende
+Catalogusidentiteiten voor dezelfde vergelijkbare bonnaam.** Zonder zulke
+kandidaten blijven bonartikelen onder **Identificeren**, zonder fictieve match.
+Het eerdere "geen POST bij openen" is voor deze afzonderlijke, geautoriseerde
+Matchen-functie door de PO herzien; alle andere Artikelbeheer-tabbladen blijven
+bij openen, zoeken en filteren read-only.
