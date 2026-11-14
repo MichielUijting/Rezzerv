@@ -620,3 +620,55 @@ test('Identificeren: bewezen bonnamen van alle winkels alleen na expliciete klik
   await expect(table).not.toContainText('Nog identificeren')
   expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
 })
+
+
+
+test('Bonnamen matchen is één knop; HV Melk alias geldt voor alle winkels', async ({ page }) => {
+  const posts = []
+  const items = [
+    { id: 'receipt-table-line:milk', receipt_line_text: 'Halfvolle melk',
+      retailer_code: 'ah', receipt_article_number: '21003', link_status: 'linked',
+      identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld' },
+    { id: 'receipt-table-line:hv1', receipt_line_text: 'HV Melk',
+      retailer_code: 'jumbo', receipt_article_number: '400', link_status: 'unlinked',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren' },
+    { id: 'receipt-table-line:hv2', receipt_line_text: 'HV Melk',
+      retailer_code: 'lidl', receipt_article_number: '900', link_status: 'unlinked',
+      identity_status: 'not_identified', identity_status_label: 'Nog identificeren' },
+  ]
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/catalog/ed2/bonnaam-synoniem/confirm') {
+      posts.push(route.request().postDataJSON())
+      items.slice(1).forEach((x) => {
+        x.identity_status = 'catalog_linked'
+        x.identity_status_label = 'Catalogus gekoppeld'
+      })
+      return route.fulfill({ json: {
+        ok: true, alias: { ok: true, alias_name: 'hv melk',
+          target_name: 'halfvolle melk' },
+        match_result: { ok: true, linked: 2, synonyms_created: 0,
+          barcode_written: false },
+      } })
+    }
+    return bootstrap(route, items, [], (request) => request.fulfill({ json: {} }))
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  const section = page.getByTestId('ed2-bonnaam-alias-form')
+  await expect(page.getByRole('button', { name: 'Courgettes automatisch herkennen' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bewezen bonnamen herkennen' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bonnamen matchen' })).toHaveCount(1)
+  await section.getByLabel('Naam op de bon').fill('HV Melk')
+  await section.getByLabel('Is hetzelfde als bonnaam').fill('Halfvolle melk')
+  await section.getByRole('button', { name: 'Bonnaamsynoniem vastleggen' }).click()
+  await expect(page.getByTestId('ed2-bonnaam-alias-confirm')).toBeVisible()
+  expect(posts).toHaveLength(0)
+  await page.getByTestId('ed2-bonnaam-alias-confirm')
+    .getByRole('button', { name: 'Synoniem bevestigen' }).click()
+  await expect.poll(() => posts.length).toBe(1)
+  expect(posts[0]).toEqual({ alias_name: 'HV Melk', target_name: 'Halfvolle melk' })
+  await expect(page.getByTestId('external-databases-2-table'))
+    .not.toContainText('Nog identificeren')
+})

@@ -124,3 +124,77 @@ def test_exact_name_write_has_no_gtin_synonym_or_household_side_effects():
         conn.rollback()
         conn.close()
         engine.dispose()
+
+
+
+def test_confirmed_bonnaam_alias_persists_once_and_matches_all_store_codes(monkeypatch):
+    from app.services import proven_exact_receipt_name_service as service
+    engine, conn = _isolated_connection()
+    try:
+        conn.execute(text("""
+            CREATE TEMP TABLE global_products (
+                id TEXT PRIMARY KEY, status TEXT NOT NULL, name TEXT, primary_gtin TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TEMP TABLE ed2_receipt_name_aliases (
+                alias_name_normalized TEXT PRIMARY KEY,
+                target_name_normalized TEXT NOT NULL, global_product_id TEXT NOT NULL,
+                confirmed_by TEXT NOT NULL, confirmed_at TIMESTAMP NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TEMP TABLE auth_audit_log (
+                id TEXT, actor_user_id TEXT, actor_type TEXT, household_id TEXT,
+                support_session_id TEXT, action TEXT, object_type TEXT,
+                object_id TEXT, old_value TEXT, new_value TEXT, reason TEXT,
+                ticket_reference TEXT, created_at TEXT
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO global_products VALUES
+            ('milk', 'active', 'Halfvolle melk', '8712345678906')
+        """))
+        coded = [{
+            "id": "receipt-table-line:ah-coded",
+            "retailer_code": "ah", "receipt_line_text": "Halfvolle melk",
+            "receipt_article_number": "21003",
+            "identity_status": "catalog_linked",
+            "identity_catalog_product_id": "milk",
+        }]
+        monkeypatch.setattr(service, "list_all_external_articles",
+                            lambda *, conn: {"items": coded})
+        saved = service.confirm_bonnaam_alias(
+            conn, alias_name="HV Melk", target_name="Halfvolle melk",
+            actor_id="frontteam")
+        assert saved["already_confirmed"] is False
+        assert service.confirm_bonnaam_alias(
+            conn, alias_name="HV melk", target_name="HALFVOLLE MELK",
+            actor_id="frontteam")["already_confirmed"] is True
+        assert conn.execute(text(
+            "SELECT count(*) FROM ed2_receipt_name_aliases")).scalar_one() == 1
+        assert conn.execute(text(
+            "SELECT count(*) FROM auth_audit_log")).scalar_one() == 1
+        aliases = service.load_confirmed_bonnaam_aliases(conn)
+        assert aliases == {"hv melk": {
+            "target_name": "halfvolle melk", "product_id": "milk"}}
+        records = coded + [
+            {"id": "receipt-table-line:j1", "retailer_code": "jumbo",
+             "receipt_line_text": "HV Melk", "receipt_article_number": "124",
+             "identity_status": "not_identified"},
+            {"id": "receipt-table-line:l1", "retailer_code": "lidl",
+             "receipt_line_text": "HV MELK", "receipt_article_number": "944",
+             "identity_status": "not_identified"},
+            {"id": "receipt-table-line:a1", "retailer_code": "aldi",
+             "receipt_line_text": "HV Melk", "receipt_article_number": "",
+             "identity_status": "not_identified"},
+        ]
+        matches, blocked, missing = service._candidate_plan(records, aliases)
+        assert [(x["source_key"][0], x["source_key"][2])
+                for x in matches] == [("aldi", ""), ("jumbo", "124"), ("lidl", "944")]
+        assert blocked == missing == 0
+        assert conn.execute(text("SELECT count(*) FROM global_products")).scalar_one() == 1
+    finally:
+        conn.rollback()
+        conn.close()
+        engine.dispose()

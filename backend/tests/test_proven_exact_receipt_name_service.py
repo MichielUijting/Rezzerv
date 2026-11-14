@@ -186,3 +186,150 @@ def test_frontteam_can_run_one_authorized_transaction(monkeypatch):
                         lambda conn, *, actor_id: {"ok": True, "actor": actor_id})
     assert catalog_routes.auto_ed2_proven_exact_names()["actor"] == "frontteam"
     assert events == ["begin", "commit"]
+
+
+
+def test_identical_names_different_article_numbers_and_shops_all_match():
+    items = [
+        row("ah", "HALFVOLLE MELK", "101", "milk", "catalog_linked"),
+        row("ah", "HALFVOLLE MELK", "456"),
+        row("jumbo", "HALFVOLLE MELK", "789"),
+        row("plus", "HALFVOLLE MELK", ""),
+        row("lidl", "HALFVOLLE MELK 2 L", "222"),
+    ]
+    matches, blocked, no_proof = service._candidate_plan(items)
+    assert {(m["source_key"][0], m["source_key"][2], m["product_id"])
+            for m in matches} == {
+                ("ah", "456", "milk"), ("jumbo", "789", "milk"),
+                ("plus", "", "milk"),
+            }
+    assert blocked == 0 and no_proof == 1
+
+
+def test_hv_melk_confirmed_alias_targets_every_store_and_code(monkeypatch):
+    items = [
+        row("ah", "Halfvolle melk", "101", "milk", "catalog_linked"),
+        row("ah", "HV Melk", "900"),
+        row("jumbo", "HV Melk", "987"),
+        row("lidl", "HV Melk", ""),
+    ]
+    aliases = {"hv melk": {"target_name": "halfvolle melk", "product_id": "milk"}}
+    matches, blocked, no_proof = service._candidate_plan(items, aliases)
+    assert {(m["source_key"][0], m["source_key"][2])
+            for m in matches} == {("ah", "900"), ("jumbo", "987"), ("lidl", "")}
+    assert all(m["product_id"] == "milk" and
+               m["proof_name"] == "halfvolle melk" for m in matches)
+    assert blocked == no_proof == 0
+    monkeypatch.setattr(service, "load_confirmed_bonnaam_aliases",
+                        lambda conn: aliases)
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": items})
+    def source_lookup(conn, rid):
+        name, code = ("HV Melk", rid.split("-")[-1])
+        return {"retailer_code": rid.split(":")[-1].split("-")[0],
+                "receipt_text": name,
+                "external_article_code": "" if code == "empty" else code}
+    monkeypatch.setattr(service, "resolve_external_article_identity", source_lookup)
+    stored = []
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kw: stored.append(kw) or True)
+    result = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="frontteam")
+    assert result["linked"] == 3
+    assert result["linked_without_article_number"] == 1
+    assert {m["source_key"][2] for m in stored} == {"900", "987", ""}
+
+
+def test_same_name_two_proven_different_code_destinations_stays_blocked():
+    items = [
+        row("ah", "Melk", "100", "product-a", "catalog_linked"),
+        row("ah", "Melk", "200", "product-b", "catalog_linked"),
+        row("jumbo", "Melk", "300"),
+    ]
+    assert service._candidate_plan(items)[0] == []
+    assert service._candidate_plan(items)[1] == 1
+
+
+def test_alias_never_overwrites_conflicting_preconfirmed_source():
+    items = [
+        row("ah", "HALFVOLLE MELK", "123", "milk", "catalog_linked"),
+        row("lidl", "HV Melk", "55", "other", "catalog_linked"),
+        row("jumbo", "HV Melk", "77"),
+    ]
+    aliases = {"hv melk": {"target_name": "halfvolle melk", "product_id": "milk"}}
+    assert service._candidate_plan(items, aliases)[0] == []
+    assert service._candidate_plan(items, aliases)[1] == 1
+
+
+def test_alias_confirmation_requires_proven_name_and_blocks_conflicts(monkeypatch):
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": [row("jumbo", "HV Melk")]})
+    with pytest.raises(ValueError, match="geen unieke"):
+        service.confirm_bonnaam_alias(FakeConn(), alias_name="HV Melk",
+                                     target_name="Halfvolle melk", actor_id="frontteam")
+    records = [
+        row("ah", "Halfvolle melk", "12", "milk", "catalog_linked"),
+        row("lidl", "HV Melk", "88", "other", "catalog_linked"),
+    ]
+    monkeypatch.setattr(service, "list_all_external_articles",
+                        lambda *, conn: {"items": records})
+    monkeypatch.setattr(service, "_ensure_active_product",
+                        lambda conn, product_id: True)
+    with pytest.raises(ValueError, match="tegenstrijdige"):
+        service.confirm_bonnaam_alias(FakeConn(), alias_name="HV Melk",
+                                     target_name="Halfvolle melk", actor_id="frontteam")
+    records.pop()
+    monkeypatch.setattr(service, "load_confirmed_bonnaam_aliases",
+                        lambda conn: {"halfvolle melk": {
+                            "target_name": "verse melk", "product_id": "milk"}})
+    with pytest.raises(ValueError, match="zelf een alias"):
+        service.confirm_bonnaam_alias(FakeConn(), alias_name="HV Melk",
+                                     target_name="Halfvolle melk", actor_id="frontteam")
+
+
+def test_unified_bonnamen_matchen_combines_both_authorities(monkeypatch):
+    from app.api import catalog_routes as api
+    events = []
+    monkeypatch.setattr(api, "_require_authorized_bonnaam_actor",
+                        lambda: SimpleNamespace(user_id="frontteam"))
+    @contextmanager
+    def transaction():
+        events.append("begin")
+        yield FakeConn()
+        events.append("commit")
+    monkeypatch.setattr(api, "engine", SimpleNamespace(begin=transaction))
+    monkeypatch.setattr(api, "automatically_match_curated_receipts",
+                        lambda conn, *, actor_id: {
+                            "ok": True, "status": "applied", "linked": 2,
+                            "synonyms_created": 1, "blocked": 0})
+    monkeypatch.setattr(api, "automatically_match_proven_exact_names",
+                        lambda conn, *, actor_id: {
+                            "ok": True, "linked": 3, "blocked": 1})
+    response = api.auto_ed2_bonnamen_matchen()
+    assert events == ["begin", "commit"]
+    assert response["linked"] == 5
+    assert response["linked_from_exact_names"] == 3
+    assert response["linked_from_families"] == 2
+    assert response["synonyms_created"] == 1
+    assert response["blocked"] == 1
+    assert response["barcode_written"] is False
+
+
+def test_unified_alias_routes_deny_nonprivileged_user_before_db(monkeypatch):
+    from app.api import catalog_routes as api
+    from fastapi import HTTPException
+    monkeypatch.setattr(api, "require_platform_permission_from_session",
+                        lambda *_: SimpleNamespace(user_id="regular",
+                            is_platform_superuser=False, is_frontteam=False))
+    class NeverConnect:
+        def begin(self):
+            pytest.fail("Ordinary user may not start central identity transaction")
+    monkeypatch.setattr(api, "engine", NeverConnect())
+    with pytest.raises(HTTPException) as error:
+        api.auto_ed2_bonnamen_matchen()
+    assert error.value.status_code == 403
+    with pytest.raises(HTTPException) as error:
+        api.confirm_ed2_bonnaam_synoniem(
+            api.Ed2BonnaamAliasConfirmation(alias_name="HV Melk",
+                                             target_name="Halfvolle melk"))
+    assert error.value.status_code == 403
