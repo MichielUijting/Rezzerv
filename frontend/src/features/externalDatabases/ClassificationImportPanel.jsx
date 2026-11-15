@@ -19,7 +19,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   const canView = Boolean((session?.is_platform_superuser || session?.is_frontteam)
     && canCurrentUserPerform('platform.external_products.view', session))
   const canConfirm = canCurrentUserPerform('platform.external_products.link_existing', session)
-  const canGpc = canCurrentUserPerform('gpc.update', session)
+  const canGpc = canCurrentUserPerform('platform.gpc.update', session)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [selection, setSelection] = useState({})

@@ -159,7 +159,7 @@ def confirm_catalog_classification_import(payload: ClassificationImportConfirmat
     actor = _actor("platform.external_products.link_existing")
     if any(item.system == "gpc" for item in payload.decisions):
         # Keep the GS1 authority at least as strict as the existing manual GS1 editor.
-        require_platform_permission_from_session("gpc.update")
+        require_platform_permission_from_session("platform.gpc.update")
     try:
         with engine.begin() as conn:
             return confirm_import(

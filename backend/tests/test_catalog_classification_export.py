@@ -45,6 +45,7 @@ def export_database():
             "CREATE TABLE global_product_cbs_classifications (global_product_id TEXT PRIMARY KEY, cbs_code TEXT, reference_version TEXT, version INTEGER, is_active BOOLEAN, confirmation_source TEXT, confirmed_by TEXT DEFAULT '', confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "CREATE TABLE cbs_ecoicop_categories (cbs_code TEXT, reference_version TEXT, name_nl TEXT, parent_code TEXT, level INTEGER, valid_from DATE, source_url TEXT, PRIMARY KEY(cbs_code, reference_version))",
             "CREATE TABLE global_product_cbs_history (id TEXT PRIMARY KEY, global_product_id TEXT, cbs_code TEXT, reference_version TEXT, version INTEGER, action TEXT, confirmed_by TEXT, confirmation_source TEXT)",
+            "CREATE TABLE auth_audit_log (id TEXT PRIMARY KEY, actor_user_id TEXT, actor_type TEXT, household_id TEXT, support_session_id TEXT, action TEXT, object_type TEXT, object_id TEXT, old_value TEXT, new_value TEXT, reason TEXT, ticket_reference TEXT, created_at TEXT)",
             "CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, status TEXT)",
             "CREATE TABLE ed2_receipt_family_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, match_mode TEXT, confirmed_by TEXT)",
             "CREATE TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)",
@@ -214,6 +215,7 @@ def test_classification_import_preview_and_atomic_authorized_approval(export_dat
         assert conn.execute(text("SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id = 'p3'")).scalar_one() == "10000001"
         assert conn.execute(text("SELECT cbs_code FROM global_product_cbs_classifications WHERE global_product_id = 'p3'")).scalar_one() == "011420"
         assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_history")).scalar_one() == 1
+        assert conn.execute(text("SELECT COUNT(*) FROM auth_audit_log WHERE actor_user_id = 'user-1'")).scalar_one() == 1
 
 
 def test_classification_import_csv_and_excel_share_columns():

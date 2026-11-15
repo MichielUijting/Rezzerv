@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from app.services.catalog_classification_export_service import build_catalog_classification_export
 from app.services.cbs_classification_service import confirm_cbs_batch
+from app.services.authorization_foundation_service import write_authorization_audit
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_UNCOMPRESSED = 25 * 1024 * 1024
@@ -246,6 +247,17 @@ def confirm_import(conn, decisions, *, actor_id: str):
     for pid in sorted({d["product_id"] for d in decisions}):
         if not conn.execute(text("SELECT id FROM global_products WHERE id = :id AND status <> 'deleted' FOR UPDATE"), {"id": pid}).first():
             raise ImportContractError("Catalogusartikel ontbreekt; niets verwerkt.")
+    # Lock existing assignment rows before calculating the canonical snapshot.
+    # The conditional upsert below also rejects a racing first insertion.
+    for pid in sorted({d["product_id"] for d in decisions}):
+        conn.execute(text(
+            "SELECT global_product_id FROM global_product_gpc_bricks "
+            "WHERE global_product_id = :id FOR UPDATE"
+        ), {"id": pid}).first()
+        conn.execute(text(
+            "SELECT global_product_id FROM global_product_cbs_classifications "
+            "WHERE global_product_id = :id FOR UPDATE"
+        ), {"id": pid}).first()
     live = current_products(conn)
     gs_ref = _official_gpc(conn, {d["code"] for d in decisions if d["system"] == "gpc"})
     cb_ref = _official_cbs(conn, {d["code"] for d in decisions if d["system"] == "cbs"})
@@ -283,7 +295,8 @@ def confirm_import(conn, decisions, *, actor_id: str):
             })
     # All writes are in the caller's transaction; CBS service writes audit history.
     for d in gs_updates:
-        conn.execute(text("""
+        old_code = str(live[d["product_id"]].get("gpc_brick_code") or "")
+        changed = conn.execute(text("""
             INSERT INTO global_product_gpc_bricks
                 (global_product_id, brick_code, assignment_source, confidence, updated_at)
             VALUES (:id, :code, 'explicit_classification_import', 1.0, CURRENT_TIMESTAMP)
@@ -292,7 +305,18 @@ def confirm_import(conn, decisions, *, actor_id: str):
                 assignment_source = excluded.assignment_source,
                 confidence = excluded.confidence,
                 updated_at = CURRENT_TIMESTAMP
-        """), {"id": d["product_id"], "code": d["code"]})
+            WHERE global_product_gpc_bricks.brick_code = :previous
+        """), {"id": d["product_id"], "code": d["code"], "previous": old_code})
+        if changed.rowcount != 1:
+            raise ImportContractError("GS1-classificatie is tussentijds gewijzigd; niets verwerkt.")
+        write_authorization_audit(
+            conn, actor_user_id=actor_id, actor_type="platform",
+            action="catalog_classification_import_confirm",
+            object_type="global_product_gpc_brick", object_id=d["product_id"],
+            old_value={"brick_code": old_code},
+            new_value={"brick_code": d["code"]},
+            reason="Explicitly approved classification import",
+        )
     if cb_decisions:
         confirm_cbs_batch(conn, cb_decisions, actor_id=actor_id)
     return {"updated_gpc": len(gs_updates), "updated_cbs": len(cb_decisions),

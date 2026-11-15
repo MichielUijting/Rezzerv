@@ -39,7 +39,7 @@ De centrale Melding-overlay vraagt een laatste bevestiging vóór het schrijven.
 - Beveiliging: ingelogde bevoegde gebruiker, bestaande
   `platform.external_products.view` voor preview,
   `platform.external_products.link_existing` voor bevestiging en aanvullend
-  `gpc.update` wanneer de batch GS1 schrijft; backend bepaalt identiteit.
+  `platform.gpc.update` wanneer de batch GS1 schrijft; backend bepaalt identiteit.
 - Geen onbewezen automatisch koppelen op naam of synoniemen.
 - Per bevestigde batch maximaal 100 unieke (product-ID, systeem)-keuzes,
   validatie van de actuele productnaam, snapshot, bestaande code, officiële
