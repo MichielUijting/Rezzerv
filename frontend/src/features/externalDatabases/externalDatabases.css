@@ -50,6 +50,8 @@
 }
 
 .rz-external-ed2-counters button.rz-button-secondary {
+  /* Counter labels must contrast against the light inactive button surface. */
+  background: #ffffff;
   color: var(--color-ui-primary) !important;
   border: 1px solid var(--color-ui-primary);
 }

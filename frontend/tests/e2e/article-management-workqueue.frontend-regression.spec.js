@@ -67,7 +67,12 @@ for (const width of [390, 1280]) {
     expect(requests.some((req) => req.path === '/api/cbs-classifications/workqueue')).toBe(false)
     await page.getByRole('button', { name: 'Werkvoorraad' }).click()
     await expect(page.getByTestId('article-workqueue-table')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Handmatig matchen: 1' })).toBeVisible()
+    const matchingFilter = page.getByRole('button', { name: 'Handmatig matchen: 1' })
+    await expect(matchingFilter).toBeVisible()
+    // Prevent dark-on-dark labels: the global secondary button default has a
+    // dark background, while Artikelbeheer's counters request dark text.
+    await expect(matchingFilter).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(matchingFilter).toHaveCSS('color', 'rgb(0, 95, 106)')
     await expect(page.getByRole('button', { name: 'Catalogus herstellen: 1' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Identificeren: 1' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Classificeren: 2' })).toBeVisible()
