@@ -7,9 +7,10 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = null }) {
   const { showFeedback } = useAppFeedback()
   const lastConflictPrompted = useRef('')
-  const mayResolveConflict = Boolean(readStoredAuthContext()?.is_platform_superuser
-    && item.article_code && item.manual_barcode
+  const hasBarcodeConflict = Boolean(item.article_code && item.manual_barcode
     && String(item.article_code) !== String(item.manual_barcode))
+  const mayResolveConflict = hasBarcodeConflict
+    && Boolean(readStoredAuthContext()?.is_platform_superuser)
   const [barcode, setBarcode] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -345,6 +346,15 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
         Deze codes zijn niet gelijk; bevestig eerst de juiste identiteit.</p>
       <Button type="button" onClick={showBarcodeConflictOptions}
         data-testid="ed2-barcode-conflict-open">Barcode corrigeren</Button>
+    </section>
+  )
+
+  if (hasBarcodeConflict) return (
+    <section className="rz-external-manual-barcode" data-testid="ed2-barcode-conflict-readonly">
+      <h4>Barcodeconflict</h4>
+      <p>Catalogusbarcode: <strong>{item.article_code}</strong>.
+        Handmatig opgeslagen barcode: <strong>{item.manual_barcode}</strong>.
+        Alleen een platform-Superuser mag dit conflict na gevolgencontrole corrigeren.</p>
     </section>
   )
 
