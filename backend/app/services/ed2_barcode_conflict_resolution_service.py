@@ -121,6 +121,13 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
               AND rt.deleted_at IS NULL
             LIMIT 101
         """), {"code": code}).mappings().all()
+        if len(other_receipt_names) >= 101:
+            # A bounded, unordered sample is not sufficient evidence that the
+            # retailer-code link is exclusive to this receipt description.
+            blocks.append(
+                "Er zijn te veel verschillende kassabonbronnen voor deze "
+                "winkelartikelcode; de gedeelde koppeling moet apart worden onderzocht."
+            )
         if any(
             canonical_catalog_retailer(row["retailer"]) == retailer
             and normalize_external_link_receipt_text(row["bonnaam"]) != label
@@ -149,8 +156,15 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
                 blocks.append("De opgeslagen barcode-scope is niet consistent.")
         try:
             if selected_gtin and scope in ("global_candidate", "restricted"):
-                _owner(conn, barcode=selected_gtin, retailer=retailer,
-                       label=label, code=code, scope=scope)
+                owner, _ = _owner(conn, barcode=selected_gtin, retailer=retailer,
+                                  label=label, code=code, scope=scope)
+                if mode == "keep_manual" and manual.get("global_product_id") and (
+                    str(owner or "") != str(manual["global_product_id"])
+                ):
+                    blocks.append(
+                        "De bewaarde barcode behoort volgens de Catalogusidentiteiten "
+                        "niet aantoonbaar bij hetzelfde product als de handmatige koppeling."
+                    )
         except ValueError as error:
             blocks.append(str(error))
     snapshot = {
