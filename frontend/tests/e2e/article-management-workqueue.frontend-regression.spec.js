@@ -26,7 +26,8 @@ function mountMockBackend(page, { frontteam = false, invalidClassPage = false } 
       user_id: 'queue-test-user', active_household_id: frontteam ? 'family-1' : '0',
       context_type: frontteam ? 'regular' : 'system', role: 'admin',
       is_platform_superuser: !frontteam, is_frontteam: frontteam,
-      permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true },
+      permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true,
+        'gpc.update': !frontteam },
     } })
     if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
     if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
