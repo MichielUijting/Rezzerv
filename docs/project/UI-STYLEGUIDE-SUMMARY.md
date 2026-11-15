@@ -1899,3 +1899,25 @@ De vijf bestaande inhoudelijke werkgebieden **Identificeren, Matchen, Classifice
 De Werkvoorraad wordt pas na expliciete selectie geladen en hergebruikt uitsluitend bestaande, bevoegdheidsbewaakte read-only gegevensbronnen. Binnen de bestaande centrale \`DataTable\` staan taaksoort, artikel, winkel, bonartikelnummer, barcode, concrete reden en een actie naar het juiste bestaande werkgebied. De afzonderlijke taaksoortknoppen tonen alleen volledig verifieerbare tellers; per GS1/CBS-systeem kan hetzelfde Catalogusproduct twee verschillende classificatietaken hebben. Een onbeschikbare projectie geeft een fout zonder fictieve nul of een gedeeltelijke eindteller. De bestaande server-bevoegdheidsgecontroleerde synoniemanalyse levert per Catalogusproduct een afzonderlijke beoordeeltaak wanneer minstens één niet-bevestigd synoniemvoorstel bestaat. Deze teller betreft dus **artikelen met een synoniemvoorstel**, niet het aantal bewezen equivalenties. Bij fout of onvolledigheid worden helemaal geen fictieve aantallen getoond.
 
 Een geselecteerde rij krijgt de bestaande standaardselectiestijl; de actieknop eronder navigeert naar het betreffende werkgebied en brengt waar mogelijk de bron-/Catalogusselectie mee. Alleen de Superuser krijgt uitvoerbare Matchen-taken; Frontteamgebruikers krijgen de overige taken naar bestaande serverbevoegdheden. Het scherm gebruikt \`AppShell\`, \`ScreenCard\`, \`Button\`, \`DataTable\`, gewone responsieve paginering en bestaande primaire kleur-/feedbacktokens. Er is geen aparte kaart-, tabel-, modal- of overlayvariant toegevoegd.
+
+
+### Artikelbeheer: Superuser-overlay voor conflicterende barcodes — 15 november 2026
+
+Bij een bonartikel met twee verschillende bestaande barcodeclaims opent bij
+selectie voor de platform-Superuser de bestaande centrale Inhuis-Melding als
+blokkerende overlay, met de Catalogusbarcode en handmatig opgeslagen barcode.
+Een standaard keuzelijst biedt **Catalogus behouden**, **Handmatig behouden**
+of **Andere echte barcode invoeren**. De bestaande centrale overlay gebruikt
+hierbij een contextgebonden keuzelijst-placeholder in plaats van de tekst van
+een classificatiedialoog. Na **Gevolgen bekijken** volgt een tweede centrale
+overlay voor expliciete definitieve bevestiging; annuleren schrijft niets.
+
+De opslagcontrole is aan één exacte combinatie van winkelketen, genormaliseerde
+bonnaam en bonartikelnummer gebonden. Een gedeelde, onduidelijke of tussentijds
+gewijzigde koppeling levert een blokkerende melding met reden op. De bestaande
+Catalogusproducten, oorspronkelijke kassabonnen, huishoudartikelen en voorraad
+worden niet automatisch gewijzigd of verwijderd. Frontteam ziet bij een conflict
+uitsluitend uitleg, niet de oude ongeschikte koppelingknop en niet de
+Superuser-correctieactie. Bestaande `Button`-, formulier- en Melding-componenten
+worden hergebruikt; geen nieuwe kleur, schermafmetingen, componentstijl of
+extra in-screen feedbackpatroon.
