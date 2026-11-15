@@ -25,6 +25,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
+  const hasBarcodeConflict = Boolean(item.article_code && item.manual_barcode
+    && String(item.article_code) !== String(item.manual_barcode))
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -41,6 +43,14 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => () => verificationRef.current?.abort(), [])
 
   useEffect(() => {
+    if (hasBarcodeConflict) {
+      // The only safe action until resolution is the central Superuser
+      // conflict overlay, not a legacy OFF or household-bound write flow.
+      setResults([])
+      setError('')
+      setLoading(false)
+      return undefined
+    }
     const controller = new AbortController()
     let active = true
     setLoading(true)
@@ -71,10 +81,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
     search()
     return () => { active = false; controller.abort() }
-  }, [item, attempt])
+  }, [item, attempt, hasBarcodeConflict])
 
   async function selectCandidate(candidate) {
-    if (verifying || linking) return
+    if (verifying || linking || hasBarcodeConflict) return
     setLinkError('')
     if (item.link_status && item.link_status !== 'unlinked') {
       setLinkError('Dit artikel is al gekoppeld of wacht op classificatie. Controleer eerst de bestaande koppeling.')
@@ -179,6 +189,13 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
       setLinking(false)
     }
   }
+
+  if (hasBarcodeConflict) return (
+    <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
+      data-testid="ed2-barcode-conflict-panel">
+      <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
+    </section>
+  )
 
   return (
     <section className="rz-external-receipt-detail" aria-labelledby="off-candidate-heading" data-testid="external-databases-2-off-panel" aria-busy={loading || verifying || linking}>
