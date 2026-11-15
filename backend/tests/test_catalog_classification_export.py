@@ -4,54 +4,75 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
+from uuid import uuid4
+
+import pytest
+from sqlalchemy.engine import make_url
 from types import SimpleNamespace
 from zipfile import ZipFile
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.pool import StaticPool
 
 from app.api import cbs_classification_routes as routes
 from app.services.catalog_classification_export_service import build_catalog_classification_export
 
 
-def _db():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
-                           poolclass=StaticPool)
-    statements = [
-        "CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, category TEXT, primary_gtin TEXT, size_value TEXT, size_unit TEXT, source TEXT, status TEXT)",
-        "CREATE TABLE global_product_gpc_bricks (global_product_id TEXT PRIMARY KEY, brick_code TEXT, assignment_source TEXT)",
-        "CREATE TABLE gpc_product_groups (gpc_brick_code TEXT PRIMARY KEY, gpc_brick_name TEXT, gpc_class_name TEXT, gpc_family_name TEXT, language_code TEXT, active BOOLEAN, source_version TEXT)",
-        "CREATE TABLE global_product_cbs_classifications (global_product_id TEXT PRIMARY KEY, cbs_code TEXT, reference_version TEXT, version INTEGER, is_active BOOLEAN, confirmation_source TEXT)",
-        "CREATE TABLE cbs_ecoicop_categories (cbs_code TEXT, reference_version TEXT, name_nl TEXT, parent_code TEXT, level INTEGER, source_url TEXT, PRIMARY KEY(cbs_code, reference_version))",
-        "CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, status TEXT)",
-        "CREATE TABLE ed2_receipt_family_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, match_mode TEXT, confirmed_by TEXT)",
-        "CREATE TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)",
-    ]
-    with engine.begin() as conn:
-        for statement in statements:
-            conn.execute(text(statement))
-        conn.execute(text("""
-            INSERT INTO global_products VALUES
-            ('p1','AH Halfvolle melk','=BRAND','pak','melk','08719587106174','1','l','off','active'),
-            ('p2','Andere melk','Jumbo','halfvol','melk','8719587106174','1','l','off','active'),
-            ('p3','Nog te classificeren','','','','',NULL,NULL,'manual','inactive'),
-            ('gone','Verwijderd','','','','',NULL,NULL,'manual','deleted')
-        """))
-        conn.execute(text("INSERT INTO global_product_gpc_bricks VALUES ('p1','10000001','manual')"))
-        conn.execute(text("INSERT INTO gpc_product_groups VALUES ('10000001','Drinkmelk','Zuivel','Zuivel','nl',1,'2026-05')"))
-        conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p1','011420','2026',2,1,'manual')"))
-        conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p2','011410','2026',1,0,'manual')"))
-        conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011420','2026','Halfvolle en magere melk',NULL,4,'cbs.nl')"))
-        conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011410','2026','Volle melk',NULL,4,'cbs.nl')"))
-        conn.execute(text("INSERT INTO external_article_product_links VALUES ('p1','ah','AH HV MELK','38856','confirmed')"))
-        conn.execute(text("INSERT INTO external_article_product_links VALUES ('p2','jumbo','GEEN BEWIJS','200','classification_pending')"))
-        conn.execute(text("INSERT INTO external_article_product_links VALUES ('gone','ah','GEDELETED','1','confirmed')"))
-        conn.execute(text("INSERT INTO ed2_receipt_family_links VALUES ('p2','lidl','WALDK HALF','','same_product','superuser')"))
-        conn.execute(text("INSERT INTO ed2_receipt_family_links VALUES ('p2','lidl','NEP','','same_product','')"))
-        conn.execute(text("INSERT INTO article_synonym_links VALUES ('p1','p2')"))
-    return engine
+@pytest.fixture
+def export_database():
+    """Disposable PostgreSQL schema in an explicitly isolated *_cbs_test DB."""
+    url = os.environ.get("INHUIS_CBS_TEST_DATABASE_URL", "")
+    if not url:
+        pytest.skip("A separate isolated PostgreSQL CBS test database is required")
+    parsed = make_url(url)
+    if parsed.get_backend_name() != "postgresql" or not (parsed.database or "").endswith("_cbs_test"):
+        raise RuntimeError("Refuse any non-isolated or non-PostgreSQL database")
+    owner = create_engine(url)
+    schema = "catalog_export_" + uuid4().hex
+    with owner.begin() as conn:
+        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        statements = [
+            "CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, category TEXT, primary_gtin TEXT, size_value TEXT, size_unit TEXT, source TEXT, status TEXT)",
+            "CREATE TABLE global_product_gpc_bricks (global_product_id TEXT PRIMARY KEY, brick_code TEXT, assignment_source TEXT)",
+            "CREATE TABLE gpc_product_groups (gpc_brick_code TEXT PRIMARY KEY, gpc_brick_name TEXT, gpc_class_name TEXT, gpc_family_name TEXT, language_code TEXT, active BOOLEAN, source_version TEXT)",
+            "CREATE TABLE global_product_cbs_classifications (global_product_id TEXT PRIMARY KEY, cbs_code TEXT, reference_version TEXT, version INTEGER, is_active BOOLEAN, confirmation_source TEXT)",
+            "CREATE TABLE cbs_ecoicop_categories (cbs_code TEXT, reference_version TEXT, name_nl TEXT, parent_code TEXT, level INTEGER, source_url TEXT, PRIMARY KEY(cbs_code, reference_version))",
+            "CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, status TEXT)",
+            "CREATE TABLE ed2_receipt_family_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, match_mode TEXT, confirmed_by TEXT)",
+            "CREATE TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)",
+        ]
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(text(statement))
+            conn.execute(text("""
+                INSERT INTO global_products VALUES
+                ('p1','AH Halfvolle melk','=BRAND','pak','melk','08719587106174','1','l','off','active'),
+                ('p2','Andere melk','Jumbo','halfvol','melk','8719587106174','1','l','off','active'),
+                ('p3','Nog te classificeren','','','','',NULL,NULL,'manual','inactive'),
+                ('gone','Verwijderd','','','','',NULL,NULL,'manual','deleted')
+            """))
+            conn.execute(text("INSERT INTO global_product_gpc_bricks VALUES ('p1','10000001','manual')"))
+            conn.execute(text("INSERT INTO gpc_product_groups VALUES ('10000001','Drinkmelk','Zuivel','Zuivel','nl',TRUE,'2026-05')"))
+            conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p1','011420','2026',2,TRUE,'manual')"))
+            conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p2','011410','2026',1,FALSE,'manual')"))
+            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011420','2026','Halfvolle en magere melk',NULL,4,'cbs.nl')"))
+            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011410','2026','Volle melk',NULL,4,'cbs.nl')"))
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('p1','ah','AH HV MELK','38856','confirmed')"))
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('p2','jumbo','GEEN BEWIJS','200','classification_pending')"))
+            conn.execute(text("INSERT INTO external_article_product_links VALUES ('gone','ah','GEDELETED','1','confirmed')"))
+            conn.execute(text("INSERT INTO ed2_receipt_family_links VALUES ('p2','lidl','WALDK HALF','','same_product','superuser')"))
+            conn.execute(text("INSERT INTO ed2_receipt_family_links VALUES ('p2','lidl','NEP','','same_product','')"))
+            conn.execute(text("INSERT INTO article_synonym_links VALUES ('p1','p2')"))
+        yield engine
+    finally:
+        engine.dispose()
+        with owner.begin() as conn:
+            conn.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
+        owner.dispose()
 
 
 def _csv(archive, name):
@@ -59,8 +80,8 @@ def _csv(archive, name):
     return list(csv.DictReader(io.StringIO(contents), delimiter=";"))
 
 
-def test_snapshot_includes_every_non_deleted_product_and_only_confirmed_links():
-    engine = _db()
+def test_snapshot_includes_every_non_deleted_product_and_only_confirmed_links(export_database):
+    engine = export_database
     sql = []
     @event.listens_for(engine, "before_cursor_execute")
     def capture(conn, cursor, statement, params, context, many):
@@ -103,8 +124,8 @@ def test_snapshot_includes_every_non_deleted_product_and_only_confirmed_links():
         engine.dispose()
 
 
-def test_export_api_enforces_canonical_role_and_permission(monkeypatch):
-    engine = _db()
+def test_export_api_enforces_canonical_role_and_permission(monkeypatch, export_database):
+    engine = export_database
     monkeypatch.setattr(routes, "engine", engine)
     app = FastAPI()
     app.include_router(routes.router)
