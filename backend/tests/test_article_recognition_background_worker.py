@@ -50,6 +50,8 @@ def test_system_actor_cannot_be_injected_as_a_superuser():
     with pytest.raises(ValueError):
         validate_recognition_actor("", "system_service")
     with pytest.raises(ValueError):
+        validate_recognition_actor(None, "platform_user")
+    with pytest.raises(ValueError):
         validate_recognition_actor("real-user-id", "unknown")
 
 
