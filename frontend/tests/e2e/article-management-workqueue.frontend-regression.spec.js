@@ -33,6 +33,18 @@ function mountMockBackend(page, { frontteam = false, invalidClassPage = false } 
     if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
       items: sources, total: sources.length, counts: { unlinked: 3, classification_pending: 0, linked: 1 },
     } })
+    if (path === '/api/external-databases/article-synonyms/analysis') {
+      return route.fulfill({ json: { summary: { candidate_pairs: 1 },
+        items: [
+          { id: 'catalog-milk', name: 'Halfvolle melk', pending: [
+            { id: 'catalog-other', name: 'Volle melk' },
+          ] },
+          { id: 'catalog-other', name: 'Volle melk', pending: [
+            { id: 'catalog-milk', name: 'Halfvolle melk' },
+          ] },
+        ],
+      } })
+    }
     if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
       product_count_scope: 'global', task_count_scope: 'page',
       total: invalidClassPage ? 2 : 1, items: [{
@@ -59,6 +71,7 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('button', { name: 'Catalogus herstellen: 1' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Identificeren: 1' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Classificeren: 2' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Synoniemen: 2' })).toBeVisible()
     await expect(page.getByTestId('article-workqueue-table')).toContainText('AH HV MELK')
     await expect(page.getByTestId('article-workqueue-table')).toContainText('TOMPOUCEN')
     await expect(page.getByTestId('article-workqueue-table')).toContainText('Halfvolle melk')
@@ -88,7 +101,7 @@ test('Frontteam ziet geen Superuser-matchtaak of Matchen-knop', async ({ page })
   await expect(page.getByTestId('article-workqueue-table')).toBeVisible()
   await expect(page.getByRole('button', { name: /Handmatig matchen/ })).toHaveCount(0)
   await expect(page.getByTestId('article-workqueue-table')).not.toContainText('AH HV MELK')
-  await expect(page.getByRole('button', { name: 'Naar Synoniemen' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Synoniemen: 2' })).toBeVisible()
   expect(requests.filter((req) => req.method === 'POST')).toEqual([])
 })
 
