@@ -26,7 +26,7 @@ const tasks = [
 ]
 const admin = projectArticleWorkQueue(source, products, tasks, { isSuperuser: true })
 assert.deepEqual(admin.counts, {
-  review: 1, matching: 1, repair: 1, identify: 2, classify: 2,
+  review: 1, matching: 1, repair: 1, identify: 2, synonyms: 0, classify: 2,
 })
 assert.equal(admin.tasks.length, 7)
 assert.equal(admin.tasks.find((task) => task.key === 'receipt:a1').area, 'matching')
@@ -44,7 +44,7 @@ const conflict = projectArticleWorkQueue([
     manual_barcode: '8712345678901', article_code: '8712345678902' },
 ], [], [])
 assert.deepEqual(conflict.counts, {
-  review: 2, matching: 0, repair: 0, identify: 0, classify: 0,
+  review: 2, matching: 0, repair: 0, identify: 0, synonyms: 0, classify: 0,
 })
 assert.throws(() => projectArticleWorkQueue([
   { id: 'unproven', retailer_code: 'ah', receipt_line_text: 'MELK',
@@ -72,5 +72,31 @@ for (const [receipts, classes, classification, expected] of [
 ]) {
   assert.throws(() => projectArticleWorkQueue(receipts, classes, classification), expected)
 }
+
+const withSynonyms = projectArticleWorkQueue(source, products, tasks, {
+  isSuperuser: true, synonymAnalysis: {
+    summary: { candidate_pairs: 1 },
+    items: [
+      { id: 'product-1', name: 'Melk', primary_gtin: '8712345678901',
+        pending: [{ id: 'product-2', name: 'Melk groen' }] },
+      { id: 'product-2', name: 'Melk groen', pending: [{ id: 'product-1', name: 'Melk' }] },
+    ],
+  },
+})
+assert.equal(withSynonyms.counts.synonyms, 2)
+assert.equal(withSynonyms.tasks.filter(task => task.type === 'synonyms').length, 2)
+assert.equal(withSynonyms.tasks.find(task => task.key === 'synonyms:product-1').area, 'synonyms')
+const withoutSynonymWriteRight = projectArticleWorkQueue(source, products, tasks, {
+  synonymAnalysis: {
+    summary: { candidate_pairs: 1 },
+    items: [{ id: 'product-1', name: 'Melk',
+      pending: [{ id: 'product-2', name: 'Melk groen' }] }],
+  },
+  canManageSynonyms: false,
+})
+assert.equal(withoutSynonymWriteRight.counts.synonyms, 0)
+assert.throws(() => projectArticleWorkQueue(source, products, tasks, {
+  synonymAnalysis: { summary: { candidate_pairs: 1 }, items: [] },
+}), /ontbreken/)
 
 console.log('ARTICLE_MANAGEMENT_WORKQUEUE_MODEL_GREEN')
