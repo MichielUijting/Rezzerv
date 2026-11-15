@@ -391,8 +391,15 @@ test('WALDK HALF: equivalent GTIN-13 and leading-zero GTIN-14 never create a fal
   await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toHaveCount(0)
   await expect(page.getByTestId('ed2-barcode-conflict-open')).toHaveCount(0)
   await expect(page.getByTestId('ed2-barcode-conflict-readonly')).toHaveCount(0)
-  await expect(page.getByTestId('ed2-equivalent-gtin-info')).toBeVisible()
+  await expect(page.getByTestId('ed2-equivalent-gtin-info')).toHaveCount(0)
   await expect(page.getByTestId('ed2-catalog-identity-check')).toHaveCount(0)
+  await expect(page.getByTestId('ed2-barcode-conflict-panel')).toHaveCount(0)
+  await expect(page.getByTestId('external-databases-2-off-panel')).toHaveCount(0)
+  const codeCell = page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'WALDK HALF' }).locator('td').nth(4)
+  await expect(codeCell).toHaveText('8719587106174')
+  await expect(codeCell).not.toContainText('Handmatig:')
+  await expect(page.getByTestId('app-feedback-warning-overlay')).toHaveCount(0)
   expect(writes).toHaveLength(0)
   expect(previews).toHaveLength(0)
 })
@@ -422,7 +429,38 @@ test('GTINs equivalent but product owners differ: report Catalogus identity, nev
     catalogOwner: 'catalog-product', manualOwner: 'other-product',
   })
   await expect(page.getByTestId('ed2-equivalent-gtin-owner-review')).toBeVisible()
+  const barcodeCell = page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'WALDK HALF' }).locator('td').nth(4)
+  await expect(barcodeCell).toContainText('Handmatig: 08719587106174')
   await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toHaveCount(0)
+  expect(writes).toHaveLength(0)
+  expect(previews).toHaveLength(0)
+})
+
+test('WALDK HALF: a valid leading-zero GTIN-14 is displayed as GTIN-13 without changing storage', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page, {
+    receiptName: 'WALDK HALF', articleNumber: '45653',
+    catalogBarcode: '08719587106174', manualBarcode: '',
+    catalogOwner: 'milk-product', manualOwner: '',
+  })
+  const barcodeCell = page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'WALDK HALF' }).locator('td').nth(4)
+  await expect(barcodeCell).toHaveText('8719587106174')
+  await expect(page.getByTestId('ed2-equivalent-gtin-info')).toHaveCount(0)
+  await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toHaveCount(0)
+  expect(writes).toHaveLength(0)
+  expect(previews).toHaveLength(0)
+})
+
+test('A different barcode is still a conflict, not silently normalized', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page, {
+    receiptName: 'WALDK HALF', articleNumber: '45653',
+    catalogBarcode: '8719587106174', manualBarcode: '08719587106175',
+  })
+  await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toBeVisible()
+  const barcodeCell = page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'WALDK HALF' }).locator('td').nth(4)
+  await expect(barcodeCell).toContainText('Handmatig: 08719587106175')
   expect(writes).toHaveLength(0)
   expect(previews).toHaveLength(0)
 })

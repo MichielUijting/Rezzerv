@@ -20,6 +20,16 @@ export function equivalentCatalogGtin(left, right) {
   return Boolean(one) && one === canonicalComparableGtin(right)
 }
 
+/** For display only: GTIN-14 with one leading zero is the same valid GTIN-13.
+ * Keep source evidence and stored identities untouched.
+ */
+export function displayEd2Gtin(value) {
+  const original = String(value ?? '').trim()
+  if (!canonicalComparableGtin(original)) return original
+  return original.length === 14 && original.startsWith('0')
+    ? original.slice(1) : original
+}
+
 export function ed2BarcodeIdentityState(item) {
   const catalogBarcode = String(item?.article_code || '').trim()
   const manualBarcode = String(item?.manual_barcode || '').trim()

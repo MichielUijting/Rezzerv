@@ -360,15 +360,9 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
     </section>
   )
 
-  if (identity.equivalent) return (
-    <section className="rz-external-manual-barcode" data-testid="ed2-equivalent-gtin-info">
-      <h4>Dezelfde barcode in twee notaties</h4>
-      <p>De Catalogusbarcode <strong>{item.article_code}</strong> en de handmatig
-        opgeslagen barcode <strong>{item.manual_barcode}</strong> hebben
-        dezelfde geldige GTIN-identiteit. Een barcodecorrectie is niet nodig.
-        De gegevens zijn niet gewijzigd.</p>
-    </section>
-  )
+  // Valid GTIN-13/GTIN-14 variants with the same product owner are already
+  // one identity. No informational overlay, action, or write is necessary.
+  if (identity.equivalent) return null
 
   if (hasBarcodeConflict) return (
     <section className="rz-external-manual-barcode" data-testid="ed2-barcode-conflict-readonly">

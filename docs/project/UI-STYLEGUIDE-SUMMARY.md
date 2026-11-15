@@ -1922,6 +1922,17 @@ Superuser-correctieactie. Bestaande `Button`-, formulier- en Melding-componenten
 worden hergebruikt; geen nieuwe kleur, schermafmetingen, componentstijl of
 extra in-screen feedbackpatroon.
 
+### Artikelbeheer: gelijkwaardige GTIN-notaties zonder melding — 15 november 2026
+
+Een checksum-geldige GTIN-13 en GTIN-14 met precies één extra voorloopnul
+beschrijven dezelfde identiteit. Bij dezelfde bevestigde Catalogusproducteigenaar
+toont **Identificeren** automatisch één uniforme barcode (GTIN-13 waar geldig),
+zonder dubbele regel, informatieve melding, correctieknop of OFF-kandidatenzoekactie.
+Deze stille presentatienormalisatie schrijft geen barcodeclaim, bon, product,
+huishoudartikel of voorraadgegeven om. Een ongeldig controlecijfer blijft zichtbaar
+als een afzonderlijke claim. Bij verschillende Catalogusproducteigenaren blijft
+de expliciete identiteitscontrole vereist; die mag nooit stil worden afgehandeld.
+
 ### Artikelbeheer: leesbare Werkvoorraad-filters — 15 november 2026
 
 De taaksoortknoppen van de Werkvoorraad blijven ook tijdens het laden leesbaar.

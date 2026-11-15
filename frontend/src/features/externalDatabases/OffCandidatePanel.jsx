@@ -27,8 +27,9 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const identityState = ed2BarcodeIdentityState(item)
+  const alreadyIdentified = identityState.equivalent && !identityState.catalogOwnerConflict
   const requiresIdentityReview = identityState.barcodeConflict
-    || identityState.catalogOwnerConflict || identityState.equivalent
+    || identityState.catalogOwnerConflict
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -45,9 +46,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => () => verificationRef.current?.abort(), [])
 
   useEffect(() => {
-    if (requiresIdentityReview) {
-      // The only safe action until resolution is the central Superuser
-      // conflict overlay, not a legacy OFF or household-bound write flow.
+    if (requiresIdentityReview || alreadyIdentified) {
+      // Neither a genuine identity conflict nor an already-confirmed,
+      // equivalent GTIN needs an unrelated OFF search. Only actual conflicts
+      // expose the central Superuser review overlay.
       setResults([])
       setError('')
       setLoading(false)
@@ -83,7 +85,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
     search()
     return () => { active = false; controller.abort() }
-  }, [item, attempt, requiresIdentityReview])
+  }, [item, attempt, requiresIdentityReview, alreadyIdentified])
 
   async function selectCandidate(candidate) {
     if (verifying || linking || requiresIdentityReview) return
@@ -191,6 +193,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
       setLinking(false)
     }
   }
+
+  if (alreadyIdentified) return null
 
   if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
