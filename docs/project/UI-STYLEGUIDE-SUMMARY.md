@@ -1899,3 +1899,17 @@ De vijf bestaande inhoudelijke werkgebieden **Identificeren, Matchen, Classifice
 De Werkvoorraad wordt pas na expliciete selectie geladen en hergebruikt uitsluitend bestaande, bevoegdheidsbewaakte read-only gegevensbronnen. Binnen de bestaande centrale \`DataTable\` staan taaksoort, artikel, winkel, bonartikelnummer, barcode, concrete reden en een actie naar het juiste bestaande werkgebied. De afzonderlijke taaksoortknoppen tonen alleen volledig verifieerbare tellers; per GS1/CBS-systeem kan hetzelfde Catalogusproduct twee verschillende classificatietaken hebben. Een onbeschikbare projectie geeft een fout zonder fictieve nul of een gedeeltelijke eindteller. De bestaande server-bevoegdheidsgecontroleerde synoniemanalyse levert per Catalogusproduct een afzonderlijke beoordeeltaak wanneer minstens één niet-bevestigd synoniemvoorstel bestaat. Deze teller betreft dus **artikelen met een synoniemvoorstel**, niet het aantal bewezen equivalenties. Bij fout of onvolledigheid worden helemaal geen fictieve aantallen getoond.
 
 Een geselecteerde rij krijgt de bestaande standaardselectiestijl; de actieknop eronder navigeert naar het betreffende werkgebied en brengt waar mogelijk de bron-/Catalogusselectie mee. Alleen de Superuser krijgt uitvoerbare Matchen-taken; Frontteamgebruikers krijgen de overige taken naar bestaande serverbevoegdheden. Het scherm gebruikt \`AppShell\`, \`ScreenCard\`, \`Button\`, \`DataTable\`, gewone responsieve paginering en bestaande primaire kleur-/feedbacktokens. Er is geen aparte kaart-, tabel-, modal- of overlayvariant toegevoegd.
+
+
+### Artikelbeheer: leesbare Werkvoorraad-filters — 15 november 2026
+
+De taaksoortknoppen van de Werkvoorraad blijven ook tijdens het laden leesbaar.
+De actieve taaksoort gebruikt de bestaande primaire Inhuis-knop (donkergroene
+achtergrond, witte tekst). Inactieve taaksoorten gebruiken binnen de bestaande
+ED2-tellerbalk een witte achtergrond, donkergroene tekst en een dunne rand
+met de standaard Inhuis-kleurtoken `--color-ui-primary`. Daarmee wordt het
+contrast hersteld zonder een nieuwe knopcomponent of kleurtoken. Eventuele
+bestaande statusafhankelijke ED2-tellerachtergronden blijven behouden.
+De filterknoppen, de tellerdefinities en alle beveiligde read-only gegevensbronnen
+blijven functioneel ongewijzigd. De bestaande Playwrighttest controleert de
+leesbare kleurcombinatie voor mobiele en desktopweergave.
