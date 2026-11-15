@@ -72,6 +72,9 @@ def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='pla
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
     validate_recognition_actor(str(actor_id), actor_type)
 
+    # An unattended system run may reuse only independently proven same-product
+    # identities. Creating a new variant and synonym edge requires explicit
+    # human review and retains the existing Superuser path.
     options = matching_batch_preview(conn)["targets"]
     # Never arbitrarily choose between different proven products. In the
     # ambiguous case the existing human-reviewed batch remains available.
@@ -87,7 +90,8 @@ def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='pla
     eligible = [
         row for row in plan["items"]
         if row.get("receipt_article_number")
-        and row["mode"] in {"same_product", "synonym_variant"}
+        and row["mode"] in ({"same_product"} if actor_type == "system_service"
+                            else {"same_product", "synonym_variant"})
     ]
     linked, synonyms, conflicts, name_linked = 0, 0, 0, 0
     for row in eligible[:MAX_BATCH]:
@@ -121,7 +125,8 @@ def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='pla
     # include a source matched by the first phase of this same transaction.
     # Do not choose a merely similarly named product or a competing identity.
     code_free = [row for row in plan["items"] if not row.get("receipt_article_number")
-                 and row["mode"] in {"same_product", "synonym_variant"}]
+                 and row["mode"] in ({"same_product"} if actor_type == "system_service"
+                                      else {"same_product", "synonym_variant"})]
     if code_free and linked < MAX_BATCH:
         # Both name projections are evaluated before processing any
         # code-free row. Never repeat the expensive full ED2 overview for
