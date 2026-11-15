@@ -1120,6 +1120,9 @@ def materialize_existing_ed2_manual_barcodes(payload: Ed2HistoricalBarcodesReque
                 ))
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    # Wake only after the complete barcode-materialization transaction commits.
+    from app.services.article_recognition_background_worker import signal_receipt_committed
+    signal_receipt_committed()
     return {
         "ok": True,
         "processed": len(results),
@@ -1174,6 +1177,8 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
                 )
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        from app.services.article_recognition_background_worker import signal_receipt_committed
+        signal_receipt_committed()
         return {
             "saved": True, "source": "manual", "gtin": gtin,
             "off_found": False, "off_unavailable": False,
@@ -1282,6 +1287,9 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
                     },
                 ) from error
             raise HTTPException(status_code=409, detail=str(error)) from error
+        if result.get("ok") is True:
+            from app.services.article_recognition_background_worker import signal_receipt_committed
+            signal_receipt_committed()
         return {
             "saved": bool(result.get("ok")), "source": "off",
             "gtin": gtin, "off_found": True,
@@ -1304,6 +1312,8 @@ def save_ed2_manual_barcode(payload: Ed2ManualBarcodeRequest):
             )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    from app.services.article_recognition_background_worker import signal_receipt_committed
+    signal_receipt_committed()
     return {
         "saved": True, "source": "manual", "gtin": gtin, "off_found": False,
         "off_unavailable": off_unavailable, "classification_pending": False,

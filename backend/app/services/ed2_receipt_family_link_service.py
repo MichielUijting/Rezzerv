@@ -26,6 +26,7 @@ from app.services.article_synonym_service import (
     load_products, confirmed_pairs, confirm_pairs, _fingerprint,
 )
 from app.services.authorization_foundation_service import write_authorization_audit
+from app.services.article_recognition_service_actor import validate_recognition_actor
 
 
 def _parts(source):
@@ -128,11 +129,11 @@ def _guard_preexisting_claims(conn, source):
 
 
 def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_id,
-                             match_mode, expected_fingerprint, actor_id, automatic=False):
+                             match_mode, expected_fingerprint, actor_id, automatic=False,
+                             actor_type="platform_user"):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Bevestiging van centrale bonartikelen vereist PostgreSQL.")
-    if not actor_id:
-        raise ValueError("Een bevoegde bevestiger ontbreekt.")
+    validate_recognition_actor(actor_id, actor_type)
     retailer, label, code = _parts(source)
     # Serialize overlapping requests and the synonym lock before any write.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
@@ -227,7 +228,7 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
         }], actor_id)
         synonym_created = bool(outcome.get("linked"))
     write_authorization_audit(
-        conn, actor_user_id=actor_id, actor_type="platform_user",
+        conn, actor_user_id=actor_id, actor_type=actor_type,
         action="catalog.ed2.barcode_free_courgette.confirmed",
         object_type="ed2_receipt_family_link",
         object_id="|".join((retailer, label, code)),

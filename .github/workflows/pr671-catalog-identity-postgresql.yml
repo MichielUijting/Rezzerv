@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/catalog_identity_resolution_service.py'
+      - 'backend/app/services/article_recognition_service_actor.py'
+      - 'backend/app/services/article_recognition_background_worker.py'
+      - 'backend/app/services/receipt_service.py'
+      - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/ed2_receipt_family_link_service.py'
       - 'backend/app/services/automatic_curated_identity_matching_service.py'
       - 'backend/app/services/proven_exact_receipt_name_service.py'
@@ -25,6 +29,7 @@ on:
       - 'backend/tests/test_automatic_curated_identity_matching_service.py'
       - 'backend/tests/test_proven_exact_receipt_name_service.py'
       - 'backend/tests/test_proven_exact_receipt_name_postgresql.py'
+      - 'backend/tests/test_article_recognition_background_worker.py'
       - 'backend/tests/test_curated_identity_batch_service.py'
       - 'backend/tests/test_catalog_identity_resolution_service.py'
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
@@ -89,6 +94,7 @@ jobs:
             backend/tests/test_automatic_curated_identity_matching_service.py \
             backend/tests/test_proven_exact_receipt_name_service.py \
             backend/tests/test_proven_exact_receipt_name_postgresql.py \
+            backend/tests/test_article_recognition_background_worker.py \
             backend/tests/test_curated_identity_batch_service.py \
             backend/tests/test_catalog_identity_resolution_service.py \
             backend/tests/test_catalog_identity_backfill_preview_service.py \

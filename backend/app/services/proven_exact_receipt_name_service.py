@@ -2,8 +2,8 @@
 
 This is central product identity, NOT a synonym link or a household article
 identity. No product, GTIN, receipt source, inventory or household is created
-or modified. Automatic writes are initiated only by the explicit authorized
-POST, never while opening or filtering Artikelbeheer.
+or modified. Automatic writes are initiated by a Superuser-only explicit POST or by
+the trusted internal post-commit worker, never by a GET or a household session.
 
 A normalized label may be reused when an independently confirmed retailer
 article number OR a verified Catalogus-linked GTIN proves exactly ONE active
@@ -19,6 +19,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError
 
 from app.services.authorization_foundation_service import write_authorization_audit
+from app.services.article_recognition_service_actor import validate_recognition_actor
 from app.services.catalog_retailer_identity_keys import (
     canonical_catalog_retailer, catalog_retailer_aliases,
 )
@@ -359,13 +360,15 @@ def _ensure_active_product(conn, product_id):
 
 def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id,
                               audit_action="catalog.ed2.proven_receipt_name.confirmed",
-                              audit_reason="automatic_confirmed_receipt_name_v2"):
+                              audit_reason="automatic_confirmed_receipt_name_v2",
+                              actor_type="platform_user"):
     """Store one exact retailer+name+number tuple under the central write lock.
 
     Receipt item numbers are NOT GTINs. A different number is no reason to
     reject an independently proven name, but existing claims on that exact
     tuple or its store-bound number are never overwritten.
     """
+    validate_recognition_actor(actor_id, actor_type)
     retailer, name, code = source_key
     if not _ensure_active_product(conn, product_id):
         raise ValueError("Het bewezen Catalogusproduct is niet meer actief.")
@@ -433,7 +436,7 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
         "product": product_id, "actor": actor_id,
     })
     write_authorization_audit(
-        conn, actor_user_id=actor_id, actor_type="platform_user",
+        conn, actor_user_id=actor_id, actor_type=actor_type,
         action=audit_action,
         object_type="ed2_receipt_family_link",
         object_id="|".join(source_key),
@@ -519,12 +522,11 @@ def manually_match_confirmed_receipt(
             "catalog_product_id": product_id}
 
 
-def automatically_match_proven_exact_names(conn, *, actor_id):
+def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platform_user"):
     """One controlled PostgreSQL batch, max 50 matches; no GET-time mutation."""
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
-    if not actor_id:
-        raise ValueError("Een geautoriseerde gebruiker ontbreekt.")
+    validate_recognition_actor(actor_id, actor_type)
     # Uses the same global central-identity write lock as curated-family writes.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
     # The complete ED2 projection is expensive: real local diagnostics
@@ -566,6 +568,7 @@ def automatically_match_proven_exact_names(conn, *, actor_id):
                     conn, source_key=candidate["source_key"],
                     product_id=candidate["product_id"],
                     witness=candidate["witness"], actor_id=actor_id,
+                    actor_type=actor_type,
                 ):
                     linked += 1
                     if not candidate["source_key"][2]:

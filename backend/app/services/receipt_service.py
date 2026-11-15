@@ -2008,7 +2008,12 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         }
         if include_debug:
             response['parser_debug'] = build_parser_debug_payload(parse_result)
-        return response
+    # The preceding transaction has COMMITTED before any background work is
+    # signaled. No matching side-effect is permitted inside receipt ingestion.
+    if receipt_table_id is not None and parse_result.is_receipt:
+        from app.services.article_recognition_background_worker import signal_receipt_committed
+        signal_receipt_committed()
+    return response
 
 
 def _resolve_reparse_source_payload(record: dict[str, Any], file_bytes: bytes) -> tuple[bytes, str, str]:
@@ -2241,6 +2246,9 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 ),
                 {'id': receipt_table_id, 'confidence_score': parse_result.confidence_score},
             )
+    if parse_result.is_receipt:
+        from app.services.article_recognition_background_worker import signal_receipt_committed
+        signal_receipt_committed()
     return {'receipt_table_id': receipt_table_id, 'parse_status': determine_final_parse_status(parse_result), 'line_count': len(parse_result.lines), 'deleted': False}
 
 

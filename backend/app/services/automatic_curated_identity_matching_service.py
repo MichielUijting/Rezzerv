@@ -19,6 +19,7 @@ from app.services.external_article_product_link_service import (
 )
 
 from app.services.curated_identity_batch_service import matching_batch_preview, MAX_BATCH
+from app.services.article_recognition_service_actor import validate_recognition_actor
 from app.services.ed2_receipt_family_link_service import (
     _parts, _family_variant, _matching_target, _snapshot,
     confirm_courgette_receipt,
@@ -66,12 +67,14 @@ def _independently_proven_exact_names(conn):
     }
 
 
-def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
+def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='platform_user') -> dict:
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
-    if not actor_id:
-        raise ValueError("Een geautoriseerde gebruiker ontbreekt.")
+    validate_recognition_actor(actor_id, actor_type)
 
+    # An unattended system run may reuse only independently proven same-product
+    # identities. Creating a new variant and synonym edge requires explicit
+    # human review and retains the existing Superuser path.
     options = matching_batch_preview(conn)["targets"]
     # Never arbitrarily choose between different proven products. In the
     # ambiguous case the existing human-reviewed batch remains available.
@@ -87,7 +90,8 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
     eligible = [
         row for row in plan["items"]
         if row.get("receipt_article_number")
-        and row["mode"] in {"same_product", "synonym_variant"}
+        and row["mode"] in ({"same_product"} if actor_type == "system_service"
+                            else {"same_product", "synonym_variant"})
     ]
     linked, synonyms, conflicts, name_linked = 0, 0, 0, 0
     for row in eligible[:MAX_BATCH]:
@@ -107,6 +111,7 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
                     match_mode=row["mode"],
                     expected_fingerprint=row["target_fingerprint"],
                     actor_id=actor_id,
+                    actor_type=actor_type,
                     automatic=True,
                 )
             if not result.get("already_confirmed"):
@@ -120,7 +125,8 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
     # include a source matched by the first phase of this same transaction.
     # Do not choose a merely similarly named product or a competing identity.
     code_free = [row for row in plan["items"] if not row.get("receipt_article_number")
-                 and row["mode"] in {"same_product", "synonym_variant"}]
+                 and row["mode"] in ({"same_product"} if actor_type == "system_service"
+                                      else {"same_product", "synonym_variant"})]
     if code_free and linked < MAX_BATCH:
         # Both name projections are evaluated before processing any
         # code-free row. Never repeat the expensive full ED2 overview for
@@ -153,7 +159,7 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
                         target_product_id=current["id"],
                         match_mode="same_product",
                         expected_fingerprint=_snapshot(source, current, "same_product"),
-                        actor_id=actor_id, automatic=True,
+                        actor_id=actor_id, actor_type=actor_type, automatic=True,
                     )
                 if not result.get("already_confirmed"):
                     linked += 1
