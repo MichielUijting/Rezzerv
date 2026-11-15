@@ -35,6 +35,22 @@ assert.equal(admin.tasks.find((task) => task.key === 'receipt:a6').type, 'identi
 assert.equal(admin.tasks.filter((task) => task.productId === 'product-1').length, 2)
 assert.equal(admin.tasks.filter((task) => task.sourceId === 'a5').length, 0)
 
+const conflict = projectArticleWorkQueue([
+  { id: 'conflicted', retailer_code: 'ah', receipt_line_text: 'ELSTAR',
+    identity_status: 'catalog_linked', catalog_product_id: 'p1',
+    identity_catalog_product_id: 'p2', manual_barcode: '8712345678901' },
+  { id: 'bad-barcode', retailer_code: 'jumbo', receipt_line_text: 'MELK',
+    identity_status: 'catalog_linked', catalog_product_id: 'p1',
+    manual_barcode: '8712345678901', article_code: '8712345678902' },
+], [], [])
+assert.deepEqual(conflict.counts, {
+  review: 2, matching: 0, repair: 0, identify: 0, classify: 0,
+})
+assert.throws(() => projectArticleWorkQueue([
+  { id: 'unproven', retailer_code: 'ah', receipt_line_text: 'MELK',
+    identity_status: 'catalog_linked' },
+], [], []), /centrale productidentiteit/i)
+
 const frontteam = projectArticleWorkQueue(source, products, tasks)
 assert.equal(frontteam.counts.matching, 0)
 assert.equal(frontteam.tasks.some((task) => task.area === 'matching'), false)
