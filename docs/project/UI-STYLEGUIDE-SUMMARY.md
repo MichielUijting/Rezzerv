@@ -1972,3 +1972,17 @@ meegenomen. De actie schrijft niets en geeft voortgang, succes of fouten via
 de bestaande centrale Melding-overlay; geen eigen dialoog of in-screenmelding.
 Een latere classificatie-import is een **afzonderlijke** PO-opdracht en niet
 aanwezig in deze wijziging.
+
+### Artikelbeheer: import/export onder Classificeren — 16 november 2026
+
+De knop **Catalogus exporteren** staat uitsluitend binnen het werkgebied
+**Classificeren** (in de navigatie: Classificeren) en niet langer op de lege
+Artikelbeheer-startpagina. In dezelfde sectie kan de Superuser of een volgens
+bestaande autorisatieregels bevoegde Frontteammedewerker een Excel-/CSV-
+classificatievoorstellenbestand selecteren, eerst alleen-lezen laten toetsen en
+per artikel expliciet GS1- en CBS-codes goedkeuren. De preview toont
+ongewijzigde codes, voorgestelde codes, te controleren bestaande GS1-codes en
+blokkades. Bestaande classificaties blijven behouden, tenzij de bevoegde
+gebruiker per artikel ook **Bestaande code vervangen** aanvinkt. De bulkgoedkeuring
+vereist een bevestiging via de centrale Melding-overlay en verwerkt maximaal
+100 codes in één transactionele batch, zonder nieuwe modal of tabelcomponent.

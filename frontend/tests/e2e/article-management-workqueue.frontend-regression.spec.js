@@ -159,6 +159,8 @@ test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbehee
     body: 'PK-mock-binary-export',
   }))
   await page.goto('/externe-databases-2')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Classificeren' }).click()
   const button = page.getByRole('button', { name: 'Catalogus exporteren' })
   await expect(button).toBeVisible()
   const download = page.waitForEvent('download')
@@ -172,6 +174,54 @@ test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbehee
 test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ page }) => {
   await mountMockBackend(page, { frontteam: true })
   await page.goto('/externe-databases-2')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Classificeren' }).click()
   await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Matchen' })).toHaveCount(0)
+})
+
+test('Classificeren: import controleert eerst en bevestigt alleen expliciet gekozen GS1 en CBS', async ({ page }) => {
+  await mountMockBackend(page)
+  const sent = []
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 1, blocked: 0, review_existing: 1, no_changes_yet: true,
+    rows: [{
+      product_id: 'product-milk', name: 'Halfvolle melk', brand: '',
+      snapshot_sha256: 'a'.repeat(64), current_gpc: '10000002', current_cbs: '',
+      gpc_status: 'Bestaand - controle nodig', cbs_status: 'Voorstel hoog',
+      gpc_reason: '', cbs_reason: 'Productnaam', review_existing: true,
+      problem: '', invalid_gpc: [], invalid_cbs: [],
+      gpc_options: [{ code: '10000001', label: 'Drinkmelk', kind: 'bestaand controleren' }],
+      cbs_options: [{ code: '011420', label: 'Melk', reference_version: '2026', kind: 'voorstel' }],
+    }],
+  } }))
+  await page.route('**/api/cbs-classifications/classification-import/confirm', async route => {
+    sent.push(route.request().postDataJSON())
+    await route.fulfill({ json: { updated_gpc: 1, updated_cbs: 1, unchanged: 0, processed: 2 } })
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await expect(page.getByTestId('classification-import-panel')).toBeVisible()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'Inhuis_Classificatievoorstellen.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('testfile-contents'),
+  })
+  await expect(page.getByTestId('classification-import-table')).toHaveCount(0)
+  await page.getByTestId('classification-import-preview').click()
+  await expect(page.getByTestId('classification-import-table')).toContainText('Halfvolle melk')
+  await page.getByLabel('GPC voorstel Halfvolle melk').selectOption('10000001')
+  await page.getByLabel('CBS voorstel Halfvolle melk').selectOption('011420')
+  await expect(page.getByTestId('classification-import-confirm')).toContainText('2')
+  await page.getByTestId('classification-import-confirm').click()
+  await expect(page.getByText('Bestaande code vervangen')).toBeVisible()
+  await expect(page.getByText('Bestaande code vervangen').locator('input')).not.toBeChecked()
+  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
+  await expect(page.getByRole('alert')).toContainText('Bevestig per artikel')
+  expect(sent).toHaveLength(0)
+  await page.getByText('Bestaande code vervangen').locator('input').check()
+  await page.getByTestId('classification-import-confirm').click()
+  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
+  await expect.poll(() => sent.length).toBe(1)
+  expect(sent[0].decisions.map(item => item.system).sort()).toEqual(['cbs', 'gpc'])
+  expect(sent[0].decisions.find(item => item.system === 'gpc').allow_replace).toBe(true)
 })

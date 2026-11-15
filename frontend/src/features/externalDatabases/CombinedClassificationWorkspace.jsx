@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import ClassificationImportPanel from './ClassificationImportPanel'
 import CatalogGpcActionPage from '../catalog/CatalogGpcActionPage'
 import CbsClassificationPage from '../catalog/CbsClassificationPage'
 import DataTable from '../../ui/DataTable'
@@ -90,6 +91,7 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
 
   return <section aria-label="GS1 en CBS classificeren" data-testid="combined-classification-workspace">
     <h3>Artikel classificeren</h3>
+    <ClassificationImportPanel onApplied={() => setRevision((value) => value + 1)} />
     <p>Kies één centraal Catalogusartikel; de status voor GS1 en CBS hoort bij dezelfde productidentiteit. Een keuze opent de bestaande officiële bevestigingsroutes.</p>
     {!loading && !error && productTotal !== null && taskCount !== null
       ? <p role="status" data-testid="classification-workqueue-counts">

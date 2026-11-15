@@ -98,12 +98,6 @@ export default function ExternalDatabases2Page() {
   const { showFeedback } = useAppFeedback()
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
-  const session = readStoredAuthContext()
-  const mayExportCatalog = Boolean(
-    (session?.is_platform_superuser || session?.is_frontteam)
-    && session?.permissions?.['platform.external_products.view']
-  )
-  const [catalogExporting, setCatalogExporting] = useState(false)
   const [items, setItems] = useState([])
   const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
@@ -179,33 +173,6 @@ export default function ExternalDatabases2Page() {
       disabled={!pageIds.length || unlinking || deleting}
       onChange={togglePageSelection} /> }
     : column), [allPageSelected, pageIds, unlinking, deleting])
-
-  async function exportCatalogClassifications() {
-    if (!mayExportCatalog || catalogExporting) return
-    setCatalogExporting(true)
-    showFeedback({ variant: 'progress', message: 'De volledige Catalogus wordt geëxporteerd...' })
-    try {
-      const response = await fetchJsonWithAuth('/api/cbs-classifications/catalog-export')
-      if (!response.ok || !String(response.headers.get('content-type') || '').includes('application/zip')) {
-        throw new Error('De Catalogusexport is niet beschikbaar. Er is niets gewijzigd.')
-      }
-      const file = await response.blob()
-      if (!file.size) throw new Error('Het exportbestand is leeg. Probeer opnieuw.')
-      const url = URL.createObjectURL(file)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'Inhuis_Catalogus_Classificatie.zip'
-      document.body.appendChild(link)
-      try { link.click() } finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000) }
-      showFeedback({ variant: 'success',
-        message: 'Catalogus geëxporteerd met classificaties, bevestigde matches, synoniemen en officiële referenties.' })
-    } catch (error) {
-      showFeedback({ variant: 'error',
-        message: error?.message || 'De Catalogusexport is mislukt. Er is niets gewijzigd.' })
-    } finally {
-      setCatalogExporting(false)
-    }
-  }
 
   function exportSelected() {
     if (!selectedRows.length) return
@@ -424,12 +391,6 @@ export default function ExternalDatabases2Page() {
         <h2>Artikelbeheer</h2>
         <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea}
           isPlatformSuperuser={isPlatformSuperuser} />
-        {mayExportCatalog ? <div className="rz-mobile-table-bulk-actions">
-          <Button type="button" variant="secondary" onClick={exportCatalogClassifications}
-            disabled={catalogExporting} data-testid="article-management-catalog-export">
-            {catalogExporting ? 'Catalogus exporteren...' : 'Catalogus exporteren'}
-          </Button>
-        </div> : null}
         {activeArea === 'workqueue' ? <ArticleManagementWorkQueue isPlatformSuperuser={isPlatformSuperuser}
           onOpenTask={(task) => {
             if (task.area === 'matching' && !isPlatformSuperuser) return
