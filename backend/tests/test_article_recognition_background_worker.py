@@ -128,3 +128,35 @@ def test_postcommit_wake_uses_no_user_or_product_arguments():
     worker.signal_receipt_committed()
     assert worker._RECEIPT_COMMITTED.is_set()
     worker._RECEIPT_COMMITTED.clear()
+
+
+
+def test_ingest_and_reparse_signal_only_after_transaction_scope():
+    """Regressions must not make automatic matching part of a bon DB commit."""
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "app" / "services"
+              / "receipt_service.py").read_text(encoding="utf-8")
+    module = ast.parse(source)
+    for function_name in ("ingest_receipt", "reparse_receipt"):
+        function = next(node for node in module.body
+                        if isinstance(node, ast.FunctionDef)
+                        and node.name == function_name)
+        transaction_blocks = [node for node in function.body
+                              if isinstance(node, ast.With)
+                              and any(isinstance(context.context_expr, ast.Call)
+                                      and isinstance(context.context_expr.func, ast.Attribute)
+                                      and context.context_expr.func.attr == "begin"
+                                      for context in node.items)]
+        assert transaction_blocks, function_name
+        trigger_blocks = [node for node in function.body
+                          if isinstance(node, ast.If)
+                          and any(isinstance(child, ast.Call)
+                                  and isinstance(child.func, ast.Name)
+                                  and child.func.id == "signal_receipt_committed"
+                                  for child in ast.walk(node))]
+        assert len(trigger_blocks) == 1, function_name
+        assert trigger_blocks[0].lineno > max(node.end_lineno for node in transaction_blocks)
+        assert any(isinstance(node, ast.Return) for node in function.body
+                   if node.lineno > trigger_blocks[0].end_lineno)
