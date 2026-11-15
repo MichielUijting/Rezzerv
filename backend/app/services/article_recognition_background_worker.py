@@ -14,7 +14,6 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.article_recognition_service_actor import SERVICE_ACTOR_ID
-from app.services.maintenance_runtime import writer_operation
 
 LOG = logging.getLogger(__name__)
 
@@ -67,13 +66,21 @@ def perform_recognition_pass(conn) -> dict:
             "limit_reached": bool(family.get("limit_reached") or names.get("limit_reached"))}
 
 
-@writer_operation
 def run_one_recognition_pass(engine: Engine) -> dict:
     """Maintenance-admitted private call; no household session or API actor."""
     if engine.dialect.name != "postgresql":
         return {"status": "unavailable", "linked": 0, "limit_reached": False}
-    with engine.begin() as conn:
-        return perform_recognition_pass(conn)
+    # The maintenance infrastructure depends on full application/Alembic
+    # startup contracts. Import it only for a live PostgreSQL write, not
+    # while importing read-only test helpers in isolated CI environments.
+    from app.services.maintenance_runtime import writer_operation
+
+    @writer_operation
+    def admitted_pass():
+        with engine.begin() as conn:
+            return perform_recognition_pass(conn)
+
+    return admitted_pass()
 
 
 async def _recognition_worker(engine: Engine, stop: asyncio.Event) -> None:
