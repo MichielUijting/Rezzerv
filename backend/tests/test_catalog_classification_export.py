@@ -112,17 +112,29 @@ def test_export_api_enforces_canonical_role_and_permission(monkeypatch):
     def deny(permission):
         assert permission == "platform.external_products.view"
         raise HTTPException(403, "Toegang geweigerd")
-    monkeypatch.setattr(routes, "_actor", deny)
+    monkeypatch.setattr(routes, "require_platform_permission_from_session", deny)
     assert client.get("/api/cbs-classifications/catalog-export").status_code == 403
-    for actor in (SimpleNamespace(is_platform_superuser=True, context_type="system"),
-                  SimpleNamespace(is_frontteam=True, is_platform_superuser=False,
-                                  context_type="regular")):
+    cases = [
+        (SimpleNamespace(is_platform_superuser=False, is_frontteam=False,
+                         context_type="regular"), 403),
+        (SimpleNamespace(is_platform_superuser=True, is_frontteam=False,
+                         context_type="regular"), 403),
+        (SimpleNamespace(is_platform_superuser=False, is_frontteam=True,
+                         context_type="system"), 403),
+        (SimpleNamespace(is_platform_superuser=True, is_frontteam=False,
+                         context_type="system"), 200),
+        (SimpleNamespace(is_platform_superuser=False, is_frontteam=True,
+                         context_type="regular"), 200),
+    ]
+    for actor, status in cases:
         def allow(permission, chosen=actor):
             assert permission == "platform.external_products.view"
             return chosen
-        monkeypatch.setattr(routes, "_actor", allow)
+        monkeypatch.setattr(routes, "require_platform_permission_from_session", allow)
         result = client.get("/api/cbs-classifications/catalog-export")
-        assert result.status_code == 200
+        assert result.status_code == status
+        if status != 200:
+            continue
         assert result.headers["content-type"].startswith("application/zip")
         assert "attachment" in result.headers["content-disposition"]
         assert result.headers["cache-control"] == "no-store"

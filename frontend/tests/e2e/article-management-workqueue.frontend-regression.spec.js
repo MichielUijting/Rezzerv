@@ -131,7 +131,8 @@ test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbehee
   await expect(button).toBeVisible()
   const download = page.waitForEvent('download')
   await button.click()
-  await expect(await download).toHaveProperty('suggestedFilename', 'Inhuis_Catalogus_Classificatie.zip')
+  const downloaded = await download
+  expect(downloaded.suggestedFilename()).toBe('Inhuis_Catalogus_Classificatie.zip')
   await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeEnabled()
   expect(requests.filter(req => req.method === 'POST')).toEqual([])
 })
