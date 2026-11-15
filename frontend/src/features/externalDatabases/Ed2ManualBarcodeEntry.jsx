@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import { ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 
 /** Saving the barcode is confirmed Catalogus identification; OFF is optional. */
 export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = null }) {
   const { showFeedback } = useAppFeedback()
   const lastConflictPrompted = useRef('')
-  const hasBarcodeConflict = Boolean(item.article_code && item.manual_barcode
-    && String(item.article_code) !== String(item.manual_barcode))
+  const identity = ed2BarcodeIdentityState(item)
+  const hasBarcodeConflict = identity.barcodeConflict
   const mayResolveConflict = hasBarcodeConflict
     && Boolean(readStoredAuthContext()?.is_platform_superuser)
   const [barcode, setBarcode] = useState('')
@@ -345,6 +346,17 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
         Deze codes zijn niet gelijk; bevestig eerst de juiste identiteit.</p>
       <Button type="button" onClick={showBarcodeConflictOptions}
         data-testid="ed2-barcode-conflict-open">Barcode corrigeren</Button>
+    </section>
+  )
+
+  if (identity.catalogOwnerConflict) return (
+    <section className="rz-external-manual-barcode" data-testid="ed2-equivalent-gtin-owner-review">
+      <h4>Catalogusidentiteit controleren</h4>
+      <p>De Catalogusbarcode <strong>{item.article_code}</strong> en de bewaarde
+        barcode <strong>{item.manual_barcode}</strong> vertegenwoordigen dezelfde GTIN.
+        Ze verwijzen echter naar verschillende Catalogusproducten; dit is geen
+        barcodeconflict dat door het kiezen van een code kan worden opgelost.
+        Er is geen wijziging uitgevoerd.</p>
     </section>
   )
 
