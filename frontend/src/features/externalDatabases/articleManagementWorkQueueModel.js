@@ -14,7 +14,9 @@ export const WORK_TYPES = [
   { key: 'classify', title: 'Classificeren' },
 ]
 
-export function projectArticleWorkQueue(receiptItems, products, classificationTasks, { isSuperuser = false } = {}) {
+export function projectArticleWorkQueue(receiptItems, products, classificationTasks, {
+  isSuperuser = false, canClassifyGpc = true, canClassifyCbs = true,
+} = {}) {
   if (!Array.isArray(receiptItems) || !Array.isArray(products) || !Array.isArray(classificationTasks)) {
     throw new Error('De werkvoorraadbronnen zijn onvolledig.')
   }
@@ -83,6 +85,7 @@ export function projectArticleWorkQueue(receiptItems, products, classificationTa
     }
     const product = byProduct.get(productId)
     taskKeys.add(key)
+    if ((system === 'gpc' && !canClassifyGpc) || (system === 'cbs' && !canClassifyCbs)) continue
     queue.push({
       key: 'classification:' + key, type: 'classify', name: String(product.name || ''),
       retailer: '', number: '', barcode: String(product.gtin || ''),
