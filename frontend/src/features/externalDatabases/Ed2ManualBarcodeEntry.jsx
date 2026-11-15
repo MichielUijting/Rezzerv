@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Button from '../../ui/Button'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 /** Saving the barcode is confirmed Catalogus identification; OFF is optional. */
 export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = null }) {
   const { showFeedback } = useAppFeedback()
+  const lastConflictPrompted = useRef('')
+  const mayResolveConflict = Boolean(readStoredAuthContext()?.is_platform_superuser
+    && item.article_code && item.manual_barcode
+    && String(item.article_code) !== String(item.manual_barcode))
   const [barcode, setBarcode] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -239,6 +243,110 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
       setSaving(false)
     }
   }
+
+  function showBarcodeConflictOptions() {
+    if (!mayResolveConflict) return
+    showFeedback({
+      variant: 'warning',
+      title: 'Barcodeconflict: ' + item.receipt_line_text,
+      message: 'Inhuis heeft twee afwijkende barcodes voor dit bonartikel. Welke is correct?',
+      detail: 'Winkel: ' + (item.retailer || item.retailer_code)
+        + '; bonartikelnummer: ' + (item.receipt_article_number || 'ontbreekt')
+        + '. Er wordt nog niets gewijzigd. Een nieuwe barcode moet echt bij het product horen.',
+      dismissMode: 'blocked',
+      testId: 'ed2-barcode-conflict-options',
+      inputFields: [
+        {
+          name: 'mode', label: 'Kies de juiste barcode', type: 'select', required: true,
+          placeholder: 'Kies een barcodecorrectie',
+          options: [
+            { value: 'keep_catalog', label: 'Catalogusbarcode behouden: ' + item.article_code },
+            { value: 'keep_manual', label: 'Handmatig opgeslagen barcode behouden: ' + item.manual_barcode },
+            { value: 'use_other', label: 'Een andere barcode invoeren' },
+          ],
+        },
+        {
+          name: 'new_gtin', label: 'Andere EAN/GTIN (alleen bij de derde keuze)',
+          type: 'text', value: '', placeholder: 'Vul een echte barcode in',
+        },
+      ],
+      primaryActionLabel: 'Gevolgen bekijken',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async ({ mode, new_gtin }) => {
+        if (mode === 'use_other' && !/^(?:[0-9]{8}|[0-9]{12,14})$/.test(String(new_gtin || '').trim())) {
+          throw new Error('Vul bij de derde keuze een echte EAN/GTIN van 8, 12, 13 of 14 cijfers in.')
+        }
+        const data = { receipt_item_id: item.id, mode, new_gtin: mode === 'use_other'
+          ? String(new_gtin || '').trim() : '' }
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes/conflicts/preview', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        const preview = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(typeof preview.detail === 'string'
+          ? preview.detail : 'De gevolgen konden niet worden gecontroleerd.')
+        if (!preview.can_confirm) {
+          showFeedback({
+            variant: 'warning', title: 'Deze correctie is nog niet veilig',
+            message: (preview.blocked_reasons || []).join(' ') || 'Een bestaande koppeling moet eerst beoordeeld worden.',
+            detail: 'Er is niets gewijzigd. Kies eventueel een andere optie.',
+            testId: 'ed2-barcode-conflict-blocked',
+          })
+          return false
+        }
+        showFeedback({
+          variant: 'warning',
+          title: 'Barcodecorrectie bevestigen',
+          message: 'Voor ' + item.receipt_line_text + ' (' + (item.receipt_article_number || 'zonder bonartikelnummer')
+            + ') wordt barcode ' + preview.new_gtin + ' gekozen.',
+          detail: mode === 'keep_catalog'
+            ? 'De afwijkende handmatige barcodeclaim wordt alleen voor dit bonartikel verwijderd. De overige Catalogusproducten, kassabonnen, huishoudartikelen en voorraad blijven behouden.'
+            : 'De bestaande centrale koppeling wordt alleen voor deze exacte bonartikelidentiteit beëindigd en de gekozen barcode opnieuw gecontroleerd. Oude Catalogusproducten, kassabonnen, huishoudartikelen en voorraad blijven behouden.',
+          primaryActionLabel: 'Correctie bevestigen',
+          secondaryActionLabel: 'Terug',
+          dismissMode: 'blocked',
+          testId: 'ed2-barcode-conflict-confirm',
+          onSecondaryAction: () => showBarcodeConflictOptions(),
+          onPrimaryAction: async () => {
+            const saved = await fetchJsonWithAuth('/api/catalog/ed2/manual-barcodes/conflicts/confirm', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...data, preview_fingerprint: preview.preview_fingerprint }),
+            })
+            const result = await saved.json().catch(() => ({}))
+            if (!saved.ok || result.corrected !== true) throw new Error(
+              typeof result.detail === 'string' ? result.detail
+                : 'De barcodecorrectie is niet bevestigd. Er is niets veilig gewijzigd.')
+            onSaved({ status: 'success',
+              message: 'De barcode van ' + item.receipt_line_text + ' is gecontroleerd en gecorrigeerd naar '
+                + result.gtin + '. De kassabonnen en voorraad zijn niet gewijzigd.' })
+            showFeedback({
+              variant: 'success', title: 'Barcodeconflict opgelost',
+              message: 'Correcte barcode: ' + result.gtin + '. De artikellijst wordt vernieuwd.',
+            })
+            return false
+          },
+        })
+        return false
+      },
+    })
+  }
+
+  useEffect(() => {
+    if (!mayResolveConflict || lastConflictPrompted.current === item.id) return
+    lastConflictPrompted.current = item.id
+    showBarcodeConflictOptions()
+  }, [item.id, mayResolveConflict, showFeedback])
+
+  if (mayResolveConflict) return (
+    <section className="rz-external-manual-barcode" data-testid="ed2-barcode-conflict-resolver">
+      <h4>Barcodeconflict controleren</h4>
+      <p>Catalogusbarcode: <strong>{item.article_code}</strong>.
+        Handmatig opgeslagen barcode: <strong>{item.manual_barcode}</strong>.
+        Deze codes zijn niet gelijk; bevestig eerst de juiste identiteit.</p>
+      <Button type="button" onClick={showBarcodeConflictOptions}
+        data-testid="ed2-barcode-conflict-open">Barcode corrigeren</Button>
+    </section>
+  )
 
   if (!canConfirm) return null
 
