@@ -14,12 +14,12 @@ const codeOf = (article) => article?.primary_gtin || article?.barcode_labels?.[0
 const order = { linked: 0, suggested: 1, other: 2 }
 const orderedPair = (left, right) => [left, right].sort()
 
-export default function ArticleSynonymsPage({ embedded = false }) {
+export default function ArticleSynonymsPage({ embedded = false, initialArticleId = '' }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [articles, setArticles] = useState([])
   const [addedFrom, setAddedFrom] = useState('')
-  const [activeArticle, setActiveArticle] = useState(searchParams.get('artikel') || '')
+  const [activeArticle, setActiveArticle] = useState(initialArticleId || searchParams.get('artikel') || '')
   const [options, setOptions] = useState([])
   const [checked, setChecked] = useState(new Set())
   const [loading, setLoading] = useState(true)

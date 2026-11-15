@@ -23,9 +23,9 @@ const columns = [
       ? item.cbs_code + ' · ' + item.cbs_name : 'Niet geclassificeerd' },
 ]
 
-export default function CombinedClassificationWorkspace() {
+export default function CombinedClassificationWorkspace({ initialProductId = '' }) {
   const [products, setProducts] = useState([])
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useState(initialProductId)
   const [taskCount, setTaskCount] = useState(null)
   const [productTotal, setProductTotal] = useState(null)
   const [loading, setLoading] = useState(true)

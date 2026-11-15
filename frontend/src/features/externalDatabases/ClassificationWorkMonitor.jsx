@@ -18,5 +18,12 @@ export default function ClassificationWorkMonitor({ activeArea, onAreaChange, is
         {area.title}
       </Button>)}
     </div>
+    <div className="rz-article-management-workqueue-action">
+      <Button type="button" variant={activeArea === 'workqueue' ? 'primary' : 'secondary'}
+        aria-pressed={activeArea === 'workqueue'}
+        onClick={() => onAreaChange('workqueue')}>
+        Werkvoorraad
+      </Button>
+    </div>
   </nav>
 }
