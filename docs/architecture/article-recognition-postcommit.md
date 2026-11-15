@@ -7,6 +7,7 @@ TEST_LEVEL_PROVISIONAL: L (backend, autorisatie/audit en kassabonketen).
 
 1. Kassa/bonimport parseert en slaat de bron, bon en bonregels via het bestaande transactieschema op. De duplicate gate en huishoud-/voorraadverwerking blijven gezaghebbend.
 2. **Pas nadat** de opslagtransactie is gecommit, zet de server een niet-blokkerend intern signaal. Het bevat **geen** bondata, account-ID, productkeuze of gebruikersrechten.
+   Hetzelfde signaal wordt na een bevestigde barcode-/Catalogusmaterialisatie vanuit Artikelbeheer gegeven. Hierdoor worden andere artikelidentiteiten direct opnieuw bekeken zodra nieuw veilig bewijs beschikbaar is.
 3. Een uitsluitend serverintern achtergrondproces voert maximaal acht batches na elkaar uit en hervat wanneer er nog **daadwerkelijk nieuwe bevestigde matches** zijn ontstaan. Het bewaakt onderhoudsstatus en pakt één globale PostgreSQL-advisory-lock voordat het de bestaande matchingservices aanroept.
 4. De bestaande bewezen exact-bonnaam-/curated-identiteitservices valideren de huidige bron en de actuele Catalogusproducten opnieuw en gebruiken de bestaande transactionele writes, audit en conflictblokkades. Het workerpad gebruikt een gereserveerde **system_service**-actor, nooit een geleend Superuser- of huishoudaccount.
 5. De onbemande curated matching beperkt zich tot **same_product**. Aanmaken van een nieuwe variant, bevestigen van een synoniemrelatie en ambiguïteit vereisen nog altijd de bestaande menselijke controle.

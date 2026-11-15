@@ -160,3 +160,34 @@ def test_ingest_and_reparse_signal_only_after_transaction_scope():
         assert trigger_blocks[0].lineno > max(node.end_lineno for node in transaction_blocks)
         assert any(isinstance(node, ast.Return) for node in function.body
                    if node.lineno > trigger_blocks[0].end_lineno)
+
+
+
+def test_catalog_identity_confirmation_only_wakes_after_successful_write():
+    """A failed HTTP confirmation never schedules a supposedly confirmed proof."""
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "app" / "api"
+              / "catalog_routes.py").read_text(encoding="utf-8")
+    module = ast.parse(source)
+    expected = {
+        "materialize_existing_ed2_manual_barcodes": 1,
+        "save_ed2_manual_barcode": 3,
+    }
+    for name, expected_signals in expected.items():
+        function = next(n for n in module.body
+                        if isinstance(n, ast.FunctionDef) and n.name == name)
+        signals = [n for n in ast.walk(function)
+                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                   and n.func.id == "signal_receipt_committed"]
+        assert len(signals) == expected_signals, name
+        transactions = [n for n in ast.walk(function)
+                        if isinstance(n, ast.With)
+                        and any(isinstance(item.context_expr, ast.Call)
+                                and isinstance(item.context_expr.func, ast.Attribute)
+                                and item.context_expr.func.attr == "begin"
+                                for item in n.items)]
+        assert transactions, name
+        for signal in signals:
+            assert not any(t.lineno < signal.lineno < t.end_lineno for t in transactions), name
