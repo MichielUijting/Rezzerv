@@ -61,6 +61,7 @@ class Store:
         }
         self.writes = []
         self.locks = []
+        self.receipt_names = []
 
     def execute(self, stmt, params=None):
         sql = " ".join(str(stmt).split())
@@ -78,6 +79,8 @@ class Store:
                          if row["retailer_code"] in p["aliases"]
                          and row["external_article_code"] == p["code"]
                          and row["status"] in ("confirmed", "classification_pending")])
+        if sql.startswith("SELECT DISTINCT") and "FROM receipt_table_lines rtl" in sql:
+            return Rows(self.receipt_names)
         if sql.startswith("SELECT id, status, primary_gtin FROM global_products"):
             return Rows([self.product] if p["id"] == self.product["id"] else [])
         if sql.startswith("DELETE FROM ed2_manual_barcodes"):
@@ -271,3 +274,16 @@ def test_frontteam_cannot_preview_or_confirm_central_barcode_corrections(monkeyp
         with pytest.raises(HTTPException) as error:
             request()
         assert error.value.status_code == 403
+
+
+def test_other_households_receipt_names_with_same_store_code_block_shared_mutation(context):
+    conn, events = context
+    conn.receipt_names.append({"retailer": "Albert Heijn", "bonnaam": "AH ANDERE RIJST"})
+    for mode, barcode in [("keep_manual", ""), ("use_other", OTHER_GTIN)]:
+        checked = preview(conn, mode, barcode)
+        assert checked["can_confirm"] is False
+        assert any("andere artikelnamen" in reason for reason in checked["blocked_reasons"])
+        with pytest.raises(ValueError, match="Correctie"):
+            confirm(conn, checked["preview_fingerprint"], mode, barcode)
+    assert preview(conn, "keep_catalog")["can_confirm"] is True
+    assert not conn.writes and not events
