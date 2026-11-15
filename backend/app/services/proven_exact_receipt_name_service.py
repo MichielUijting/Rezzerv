@@ -368,7 +368,7 @@ def _persist_exact_name_match(conn, *, source_key, product_id, witness, actor_id
     reject an independently proven name, but existing claims on that exact
     tuple or its store-bound number are never overwritten.
     """
-    validate_recognition_actor(str(actor_id), actor_type)
+    validate_recognition_actor(actor_id, actor_type)
     retailer, name, code = source_key
     if not _ensure_active_product(conn, product_id):
         raise ValueError("Het bewezen Catalogusproduct is niet meer actief.")
@@ -526,7 +526,7 @@ def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platfo
     """One controlled PostgreSQL batch, max 50 matches; no GET-time mutation."""
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
-    validate_recognition_actor(str(actor_id), actor_type)
+    validate_recognition_actor(actor_id, actor_type)
     # Uses the same global central-identity write lock as curated-family writes.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
     # The complete ED2 projection is expensive: real local diagnostics
