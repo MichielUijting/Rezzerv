@@ -58,7 +58,7 @@ function needsManualMatching(item) {
     && Boolean(String(item.automatic_match_review_reason || '').trim())
 }
 
-export default function Ed2MatchPage() {
+export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const mountedRef = useRef(false)
@@ -78,8 +78,14 @@ export default function Ed2MatchPage() {
     if (!Array.isArray(payload.items)) {
       throw new Error('Inhuis heeft geen geldig bonartikeloverzicht teruggegeven.')
     }
-    if (mountedRef.current) setItems(payload.items.map(displayRow))
-  }, [])
+    if (mountedRef.current) {
+      const loaded = payload.items.map(displayRow)
+      setItems(loaded)
+      if (initialReceiptItemId && loaded.some((item) => item.id === initialReceiptItemId && needsManualMatching(item))) {
+        setLeftId(initialReceiptItemId)
+      }
+    }
+  }, [initialReceiptItemId])
 
   const runAutomaticCheck = useCallback(async () => {
     if (!isSuperuser || !mountedRef.current || inFlightRef.current) return false

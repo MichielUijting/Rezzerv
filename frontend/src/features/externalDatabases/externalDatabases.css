@@ -651,3 +651,6 @@
 .rz-ed2-match-review-reason { display: block; max-width: 370px; margin-top: 3px;
   font-size: .78rem; color: #805300; line-height: 1.3;
   overflow-wrap: anywhere; }
+
+/* Separate process entry; the five Artikelbeheer work areas remain unchanged. */
+.rz-article-management-workqueue-action { margin: 0 0 16px; }
