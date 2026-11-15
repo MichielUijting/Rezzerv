@@ -5,7 +5,10 @@ may confirm or remove classifications; clients never supply role or actor IDs.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text as __sql
 
@@ -22,6 +25,7 @@ from app.services.cbs_classification_service import (
 from app.services.article_workqueue_service import (
     load_classification_workqueue, load_identification_workqueue,
 )
+from app.services.catalog_classification_export_service import build_catalog_classification_export
 from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter(prefix="/api/cbs-classifications", tags=["cbs-classification"])
@@ -79,6 +83,26 @@ def classification_workqueue(offset: int = Query(default=0, ge=0),
     _actor("platform.external_products.view")
     with engine.connect() as conn:
         return load_classification_workqueue(conn, offset=offset, limit=limit)
+
+
+@router.get("/catalog-export")
+def export_catalog_classifications():
+    """One authenticated, complete, read-only export; no household or receipt history."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        if conn.dialect.name == "postgresql":
+            conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        contents = build_catalog_classification_export(conn)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=contents,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="Inhuis_Catalogus_Classificatie_{stamp}.zip"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/products")
