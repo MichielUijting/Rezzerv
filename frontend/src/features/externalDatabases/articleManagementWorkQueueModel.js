@@ -36,16 +36,26 @@ export function projectArticleWorkQueue(receiptItems, products, classificationTa
     if (!['not_identified', 'saved_only', 'review', 'catalog_linked'].includes(status)) {
       throw new Error('Een bonartikel heeft een onbekende identificatiestatus.')
     }
-    if (status === 'catalog_linked') continue
-
     const manual = String(source.manual_barcode || '').trim()
     const central = String(source.article_code || '').trim()
+    const explicitProduct = String(source.identity_catalog_product_id || '').trim()
+    const centralProduct = String(source.catalog_product_id || '').trim()
+    const conflictingClaims = Boolean(
+      (explicitProduct && centralProduct && explicitProduct !== centralProduct)
+      || (manual && central && manual !== central),
+    )
+    if (status === 'catalog_linked' && !conflictingClaims) {
+      if (!explicitProduct && !centralProduct) {
+        throw new Error('Een bevestigde Cataloguskoppeling heeft geen centrale productidentiteit.')
+      }
+      continue
+    }
     const hasClaim = Boolean(manual || central || source.identity_catalog_product_id || source.catalog_product_id)
     const manualEligible = status === 'not_identified'
       && !hasClaim && Boolean(String(source.automatic_match_review_reason || '').trim())
     let type = 'identify'
     let reason = 'Er is nog geen betrouwbaar bevestigd Catalogusproduct.'
-    if (status === 'review' || (status === 'saved_only' && !source.identity_repairable)) {
+    if (status === 'review' || conflictingClaims || (status === 'saved_only' && !source.identity_repairable)) {
       type = 'review'
       reason = 'De bewaarde artikelidentiteit vraagt een controle voordat Inhuis deze kan koppelen.'
     } else if (status === 'saved_only' && source.identity_repairable && GTIN_SHAPE.test(manual)) {
