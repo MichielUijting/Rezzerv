@@ -65,6 +65,8 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('article-workqueue-table')).not.toContainText('ELSTAR')
     expect(requests.filter((req) => req.method === 'POST')).toEqual([])
 
+    // Up to this point, reading and filtering Werkvoorraad must be GET-only.
+    expect(requests.filter((req) => req.method === 'POST')).toEqual([])
     await page.getByRole('button', { name: 'Identificeren: 1' }).click()
     await expect(page.getByTestId('article-workqueue-table')).toContainText('TOMPOUCEN')
     await expect(page.getByTestId('article-workqueue-table')).not.toContainText('WASMIDDEL')
@@ -72,7 +74,10 @@ for (const width of [390, 1280]) {
     await page.getByRole('button', { name: 'Naar Identificeren' }).click()
     await expect(page.getByTestId('external-databases-2-table')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Artikelbeheer' }).first()).toBeVisible()
-    expect(requests.filter((req) => req.method === 'POST')).toEqual([])
+    // Identificeren has an existing POST /products/search-preview which only
+    // previews candidate products. It is neither a match confirmation nor a write.
+    expect(requests.filter((req) => req.method === 'POST'
+      && req.path !== '/api/external-databases/products/search-preview')).toEqual([])
   })
 }
 
