@@ -104,6 +104,32 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
             blocks.append("De Cataloguskoppeling geldt ook buiten deze exacte bonnaam. Deze gedeelde koppeling kan niet automatisch worden vervangen.")
         if str(central.get("retailer_code") or "") != retailer:
             blocks.append("De bestaande centrale koppeling gebruikt een afwijkende winkelalias; een afzonderlijke beoordeling is nodig.")
+    if mode != "keep_catalog" and central:
+        # The legacy central resolver uses retailer+article-code before receipt
+        # name. A different real bonnaam with the same code could therefore
+        # lose its Catalogus identity. Refuse to retire such a shared link.
+        other_receipt_names = conn.execute(text("""
+            SELECT DISTINCT
+                COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer,
+                COALESCE(NULLIF(rtl.corrected_raw_label, ''),
+                         NULLIF(rtl.normalized_label, ''),
+                         NULLIF(rtl.raw_label, ''), '') AS bonnaam
+            FROM receipt_table_lines rtl
+            JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+            WHERE rtl.external_article_code = :code
+              AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+              AND rt.deleted_at IS NULL
+            LIMIT 101
+        """), {"code": code}).mappings().all()
+        if any(
+            canonical_catalog_retailer(row["retailer"]) == retailer
+            and normalize_external_link_receipt_text(row["bonnaam"]) != label
+            for row in other_receipt_names
+        ):
+            blocks.append(
+                "Dezelfde winkelartikelcode komt op originele bonnen met andere "
+                "artikelnamen voor. Een gedeelde koppeling mag niet worden gewijzigd."
+            )
     if mode != "keep_catalog" and manual:
         scope = classify_barcode_scope(selected_gtin)["scope"] if selected_gtin else ""
         if scope not in ("global_candidate", "restricted"):
