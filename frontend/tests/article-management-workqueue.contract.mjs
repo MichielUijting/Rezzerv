@@ -87,9 +87,9 @@ assert.equal(realIdentityReviews.counts.review, 5)
 assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'owner-mismatch').reason,
   /verschillende Catalogusproducten/)
 assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'different-gtins').reason,
-  /barcodes verschillen/)
+  /barcode en de Catalogusbarcode verschillen/)
 assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'bad-check-digit').reason,
-  /barcodes verschillen/)
+  /barcode en de Catalogusbarcode verschillen/)
 assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'server-review').reason,
   /status Te beoordelen/)
 assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'saved-unrepairable').reason,
