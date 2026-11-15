@@ -19,6 +19,7 @@ from app.services.external_article_product_link_service import (
 )
 
 from app.services.curated_identity_batch_service import matching_batch_preview, MAX_BATCH
+from app.services.article_recognition_service_actor import validate_recognition_actor
 from app.services.ed2_receipt_family_link_service import (
     _parts, _family_variant, _matching_target, _snapshot,
     confirm_courgette_receipt,
@@ -66,11 +67,10 @@ def _independently_proven_exact_names(conn):
     }
 
 
-def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
+def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='platform_user') -> dict:
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
-    if not actor_id:
-        raise ValueError("Een geautoriseerde gebruiker ontbreekt.")
+    validate_recognition_actor(str(actor_id), actor_type)
 
     options = matching_batch_preview(conn)["targets"]
     # Never arbitrarily choose between different proven products. In the
@@ -107,6 +107,7 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
                     match_mode=row["mode"],
                     expected_fingerprint=row["target_fingerprint"],
                     actor_id=actor_id,
+                    actor_type=actor_type,
                     automatic=True,
                 )
             if not result.get("already_confirmed"):
@@ -153,7 +154,7 @@ def automatically_match_curated_receipts(conn, *, actor_id: str) -> dict:
                         target_product_id=current["id"],
                         match_mode="same_product",
                         expected_fingerprint=_snapshot(source, current, "same_product"),
-                        actor_id=actor_id, automatic=True,
+                        actor_id=actor_id, actor_type=actor_type, automatic=True,
                     )
                 if not result.get("already_confirmed"):
                     linked += 1
