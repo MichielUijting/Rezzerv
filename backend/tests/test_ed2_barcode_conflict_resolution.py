@@ -32,6 +32,9 @@ class Rows:
     def all(self):
         return [dict(row) for row in self.rows]
 
+    def first(self):
+        return dict(self.rows[0]) if self.rows else None
+
 
 class Store:
     dialect = SimpleNamespace(name="postgresql")
