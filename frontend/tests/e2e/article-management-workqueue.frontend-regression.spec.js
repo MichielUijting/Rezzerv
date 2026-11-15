@@ -120,6 +120,38 @@ test('Fout of onvolledige classificatieprojectie levert geen fictieve nul taken 
   expect(requests.filter((req) => req.method === 'POST')).toEqual([])
 })
 
+for (const width of [390, 1280]) {
+  test('Overzicht staat naast Werkvoorraad en beide navigeren zelfstandig op ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const requests = await mountMockBackend(page)
+    await page.goto('/externe-databases-2')
+    const nav = page.getByTestId('classification-work-monitor')
+    const editing = nav.locator('.rz-article-management-areas')
+    const secondary = nav.locator('.rz-article-management-workqueue-action')
+    await expect(editing.getByRole('button')).toHaveCount(4)
+    await expect(editing.getByRole('button', { name: 'Overzicht' })).toHaveCount(0)
+    await expect(secondary.getByRole('button')).toHaveCount(2)
+    const work = secondary.getByRole('button', { name: 'Werkvoorraad' })
+    const overview = secondary.getByRole('button', { name: 'Overzicht' })
+    const workBox = await work.boundingBox()
+    const overviewBox = await overview.boundingBox()
+    const editorsBox = await editing.boundingBox()
+    expect(workBox).not.toBeNull()
+    expect(overviewBox).not.toBeNull()
+    expect(editorsBox).not.toBeNull()
+    expect(overviewBox.x).toBeGreaterThan(workBox.x)
+    expect(Math.abs(overviewBox.y - workBox.y)).toBeLessThan(3)
+    expect(workBox.y).toBeGreaterThan(editorsBox.y)
+    await overview.click()
+    await expect(page.getByTestId('article-relationship-overview')).toBeVisible()
+    await expect(overview).toHaveAttribute('aria-pressed', 'true')
+    await work.click()
+    await expect(page.getByTestId('article-workqueue-table')).toBeVisible()
+    await expect(work).toHaveAttribute('aria-pressed', 'true')
+    expect(requests.filter((req) => req.method === 'POST')).toEqual([])
+  })
+}
+
 test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbeheer', async ({ page }) => {
   const requests = await mountMockBackend(page)
   await page.route('**/api/cbs-classifications/catalog-export', route => route.fulfill({

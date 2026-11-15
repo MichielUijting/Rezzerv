@@ -1,3 +1,4 @@
+import { displayEd2Gtin, ed2BarcodeIdentityState } from '../src/features/externalDatabases/ed2BarcodeIdentity.js'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { isEmptyTableCell, matchesTableFilter } from '../src/ui/dataTableFilter.js'
@@ -30,9 +31,27 @@ assert.match(src, /column\.filterPredicate\(row, activeFilterValue\)/)
 // The filter therefore searches both values, while =leeg / =nietleeg
 // treat the cell as empty only when neither barcode exists.
 const artikelbeheer = fs.readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
-assert.match(artikelbeheer, /getSortValue: \(row\) => row\.article_code \|\| row\.manual_barcode \|\| ''/)
-assert.match(artikelbeheer, /getFilterValue: \(row\) => \[row\.article_code, row\.manual_barcode\]\.filter\(Boolean\)\.join\(' '\)/)
-assert.match(artikelbeheer, /renderCell: \(row\) => row\.article_code && row\.manual_barcode && row\.article_code !== row\.manual_barcode/)
+assert.match(artikelbeheer, /getSortValue: \(row\) => displayEd2Gtin\(row\.article_code \|\| row\.manual_barcode \|\| ''\)/)
+assert.match(artikelbeheer, /getFilterValue: \(row\) => \[row\.article_code, row\.manual_barcode,/)
+assert.match(artikelbeheer, /filterPredicate: \(row, filter\) => \[row\.article_code, row\.manual_barcode,/)
+assert.match(artikelbeheer, /displayEd2Gtin\(row\.article_code \|\| row\.manual_barcode \|\| ''\)\]\.filter\(Boolean\)/)
+assert.match(artikelbeheer, /const \{ barcodeConflict, catalogOwnerConflict \} = ed2BarcodeIdentityState\(row\)/)
+assert.equal(displayEd2Gtin('08719587106174'), '8719587106174')
+assert.equal(displayEd2Gtin('08719587106175'), '08719587106175')
+const equivalent = ed2BarcodeIdentityState({
+  article_code: '8719587106174', manual_barcode: '08719587106174',
+  catalog_product_id: 'milk', identity_catalog_product_id: 'milk',
+})
+assert.equal(equivalent.equivalent, true)
+assert.equal(equivalent.barcodeConflict, false)
+assert.equal(equivalent.catalogOwnerConflict, false)
+assert.equal(ed2BarcodeIdentityState({ ...equivalent,
+  article_code: '8719587106174', manual_barcode: '08719587106174',
+  catalog_product_id: 'milk', identity_catalog_product_id: 'other',
+}).catalogOwnerConflict, true)
+assert.equal(ed2BarcodeIdentityState({
+  article_code: '8719587106174', manual_barcode: '08719587106175',
+}).barcodeConflict, true)
 
 const visibleBarcode = (row) => [row.article_code, row.manual_barcode].filter(Boolean).join(' ')
 const manualBarcode = { article_code: '', manual_barcode: '2008218100008' }

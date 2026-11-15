@@ -1894,12 +1894,56 @@ selectie en keyboardbediening blijven gelijk.
 
 ## Artikelbeheer: aparte procesingang Werkvoorraad — 15 november 2026
 
-De vijf bestaande inhoudelijke werkgebieden **Identificeren, Matchen, Classificeren, Synoniemen en Overzicht** blijven onveranderd als eerste werkgebieden. Daaronder staat een afzonderlijke compacte standaardknop **Werkvoorraad** voor procesbegeleiding; deze is geen zesde editor en voert bij openen geen matching-POST uit.
+De vier uitvoerende werkgebieden **Identificeren, Matchen, Classificeren en Synoniemen** vormen de bovenste knoppenrij. Daaronder staan de afzonderlijke standaardknoppen **Werkvoorraad** (procesbegeleiding) en direct rechts daarnaast **Overzicht** (alleen-lezen grafische Catalogusrelaties). De twee knoppen blijven ook op mobiele schermen samen in één responsieve rij zolang de beschikbare breedte dit toelaat. Werkvoorraad is geen editor en voert bij openen geen matching-POST uit; Overzicht behoudt de bestaande leesfunctionaliteit. Navigatie naar alle werkgebieden en bestaande bevoegdheden blijven ongewijzigd.
 
 De Werkvoorraad wordt pas na expliciete selectie geladen en hergebruikt uitsluitend bestaande, bevoegdheidsbewaakte read-only gegevensbronnen. Binnen de bestaande centrale \`DataTable\` staan taaksoort, artikel, winkel, bonartikelnummer, barcode, concrete reden en een actie naar het juiste bestaande werkgebied. De afzonderlijke taaksoortknoppen tonen alleen volledig verifieerbare tellers; per GS1/CBS-systeem kan hetzelfde Catalogusproduct twee verschillende classificatietaken hebben. Een onbeschikbare projectie geeft een fout zonder fictieve nul of een gedeeltelijke eindteller. De bestaande server-bevoegdheidsgecontroleerde synoniemanalyse levert per Catalogusproduct een afzonderlijke beoordeeltaak wanneer minstens één niet-bevestigd synoniemvoorstel bestaat. Deze teller betreft dus **artikelen met een synoniemvoorstel**, niet het aantal bewezen equivalenties. Bij fout of onvolledigheid worden helemaal geen fictieve aantallen getoond.
 
 Een geselecteerde rij krijgt de bestaande standaardselectiestijl; de actieknop eronder navigeert naar het betreffende werkgebied en brengt waar mogelijk de bron-/Catalogusselectie mee. Alleen de Superuser krijgt uitvoerbare Matchen-taken; Frontteamgebruikers krijgen de overige taken naar bestaande serverbevoegdheden. Het scherm gebruikt \`AppShell\`, \`ScreenCard\`, \`Button\`, \`DataTable\`, gewone responsieve paginering en bestaande primaire kleur-/feedbacktokens. Er is geen aparte kaart-, tabel-, modal- of overlayvariant toegevoegd.
 
+
+### Artikelbeheer: Superuser-overlay voor conflicterende barcodes — 15 november 2026
+
+Bij een bonartikel met twee verschillende bestaande barcodeclaims opent bij
+selectie voor de platform-Superuser de bestaande centrale Inhuis-Melding als
+blokkerende overlay, met de Catalogusbarcode en handmatig opgeslagen barcode.
+Een standaard keuzelijst biedt **Catalogus behouden**, **Handmatig behouden**
+of **Andere echte barcode invoeren**. De bestaande centrale overlay gebruikt
+hierbij een contextgebonden keuzelijst-placeholder in plaats van de tekst van
+een classificatiedialoog. Na **Gevolgen bekijken** volgt een tweede centrale
+overlay voor expliciete definitieve bevestiging; annuleren schrijft niets.
+
+De opslagcontrole is aan één exacte combinatie van winkelketen, genormaliseerde
+bonnaam en bonartikelnummer gebonden. Een gedeelde, onduidelijke of tussentijds
+gewijzigde koppeling levert een blokkerende melding met reden op. De bestaande
+Catalogusproducten, oorspronkelijke kassabonnen, huishoudartikelen en voorraad
+worden niet automatisch gewijzigd of verwijderd. Frontteam ziet bij een conflict
+uitsluitend uitleg, niet de oude ongeschikte koppelingknop en niet de
+Superuser-correctieactie. Bestaande `Button`-, formulier- en Melding-componenten
+worden hergebruikt; geen nieuwe kleur, schermafmetingen, componentstijl of
+extra in-screen feedbackpatroon.
+
+### Artikelbeheer: gelijkwaardige GTIN-notaties zonder melding — 15 november 2026
+
+Een checksum-geldige GTIN-13 en GTIN-14 met precies één extra voorloopnul
+beschrijven dezelfde identiteit. Bij dezelfde bevestigde Catalogusproducteigenaar
+toont **Identificeren** automatisch één uniforme barcode (GTIN-13 waar geldig),
+zonder dubbele regel, informatieve melding, correctieknop of OFF-kandidatenzoekactie.
+Deze stille presentatienormalisatie schrijft geen barcodeclaim, bon, product,
+huishoudartikel of voorraadgegeven om. Een ongeldig controlecijfer blijft zichtbaar
+als een afzonderlijke claim. Bij verschillende Catalogusproducteigenaren blijft
+de expliciete identiteitscontrole vereist; die mag nooit stil worden afgehandeld.
+
+### Artikelbeheer: Werkvoorraad gebruikt dezelfde GTIN-identiteitscontrole — 15 november 2026
+
+De Werkvoorraad `Identificatie controleren` mag een geldige GTIN-13 en een
+gelijkwaardige GTIN-14 met één voorloopnul niet als twee barcodeclaims tellen.
+Dezelfde checksum-geverifieerde GTIN-vergelijking als in Identificeren is leidend.
+Bij dezelfde Catalogusproducteigenaar en de status `catalog_linked` verdwijnt
+de onterechte controletaak automatisch, zonder schrijven naar de database.
+Werkelijke afwijkende barcodes, verschillende Catalogusproducteigenaren en
+servermatig gemarkeerde reviewstatussen blijven controleerbaar. De kolom
+`Waarom deze taak?` onderscheidt die concrete oorzaken in begrijpelijke tekst.
+Deze wijziging wijzigt geen beveiliging, Catalogusidentiteit, kassabon of voorraad.
 
 ### Artikelbeheer: leesbare Werkvoorraad-filters — 15 november 2026
 

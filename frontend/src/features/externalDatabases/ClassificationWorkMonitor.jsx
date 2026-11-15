@@ -5,7 +5,6 @@ const AREAS = [
   { key: 'matching', title: 'Matchen', superuserOnly: true },
   { key: 'classify', title: 'Classificeren' },
   { key: 'synonyms', title: 'Synoniemen' },
-  { key: 'overview', title: 'Overzicht' },
 ]
 
 export default function ClassificationWorkMonitor({ activeArea, onAreaChange, isPlatformSuperuser = false }) {
@@ -23,6 +22,11 @@ export default function ClassificationWorkMonitor({ activeArea, onAreaChange, is
         aria-pressed={activeArea === 'workqueue'}
         onClick={() => onAreaChange('workqueue')}>
         Werkvoorraad
+      </Button>
+      <Button type="button" variant={activeArea === 'overview' ? 'primary' : 'secondary'}
+        aria-pressed={activeArea === 'overview'}
+        onClick={() => onAreaChange('overview')}>
+        Overzicht
       </Button>
     </div>
   </nav>

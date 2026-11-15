@@ -11,6 +11,7 @@ import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import { displayEd2Gtin, ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 import Ed2MatchPage from './Ed2MatchPage'
 import ArticleManagementWorkQueue from './ArticleManagementWorkQueue'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
@@ -27,18 +28,29 @@ const columns = [
   { key: 'retailer', label: 'Winkelketen', width: 170, sortable: true, filterable: true },
   { key: 'receipt_article_number', label: 'Bonartikelnummer', width: 190, sortable: true, filterable: true },
   { key: 'article_code', label: 'Art./Barcode', width: 185, sortable: true, filterable: true,
-    getSortValue: (row) => row.article_code || row.manual_barcode || '',
-    getFilterValue: (row) => [row.article_code, row.manual_barcode].filter(Boolean).join(' '),
-    filterPredicate: (row, filter) => [row.article_code, row.manual_barcode].filter(Boolean)
+    getSortValue: (row) => displayEd2Gtin(row.article_code || row.manual_barcode || ''),
+    getFilterValue: (row) => [row.article_code, row.manual_barcode,
+      displayEd2Gtin(row.article_code || row.manual_barcode || '')].filter(Boolean).join(' '),
+    filterPredicate: (row, filter) => [row.article_code, row.manual_barcode,
+      displayEd2Gtin(row.article_code || row.manual_barcode || '')].filter(Boolean)
       .join(' ').toLowerCase().includes(String(filter).toLowerCase()),
-    renderCell: (row) => row.article_code && row.manual_barcode && row.article_code !== row.manual_barcode
-      ? <span title={`Barcodeconflict: Catalogus ${row.article_code}; handmatig ${row.manual_barcode}. Geen automatische wijziging.`}>
-        <span>{row.article_code}</span>
-        <span style={{ display: 'block' }}>Handmatig: {row.manual_barcode}</span>
-      </span>
-      : row.article_code || (row.manual_barcode
-        ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{row.manual_barcode}</span>
-        : '') },
+    renderCell: (row) => {
+      const { barcodeConflict, catalogOwnerConflict } = ed2BarcodeIdentityState(row)
+      if (row.article_code && row.manual_barcode && (barcodeConflict || catalogOwnerConflict)) {
+        return <span title={catalogOwnerConflict
+          ? 'Dezelfde GTIN verwijst naar verschillende Catalogusproducten; afzonderlijk beoordelen.'
+          : `Barcodeconflict: Catalogus ${row.article_code}; handmatig ${row.manual_barcode}. Geen automatische wijziging.`}>
+          <span>{row.article_code}</span>
+          <span style={{ display: 'block' }}>Handmatig: {row.manual_barcode}</span>
+        </span>
+      }
+      // Identical, checksum-valid GTIN-13/14 identities need one ordinary
+      // barcode display, never an extra conflict label or database mutation.
+      const barcode = displayEd2Gtin(row.article_code || row.manual_barcode || '')
+      return row.article_code ? barcode : (barcode
+        ? <span title="Handmatig ingevoerde barcode; geen bevestigde Cataloguskoppeling">{barcode}</span>
+        : '')
+    } },
   { key: 'identity_status_label', label: 'Identificatie', width: 225,
     sortable: true, filterable: true,
     getSortValue: (row) => row.identity_status_label || 'Nog identificeren',
@@ -200,7 +212,7 @@ export default function ExternalDatabases2Page() {
     const content = [exportColumns.map(([, label]) => label),
       ...selectedRows.map((row) => exportColumns.map(([key]) =>
         key === 'link_status' ? STATUSES[row.link_status] || STATUSES.unlinked
-          : key === 'article_code' ? row.article_code || row.manual_barcode || '' : row[key]))]
+          : key === 'article_code' ? displayEd2Gtin(row.article_code || row.manual_barcode || '') : row[key]))]
       .map((row) => row.map(csvCell).join(';')).join('\r\n')
     const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')

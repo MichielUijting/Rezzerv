@@ -35,6 +35,8 @@ on:
       - 'backend/tests/test_catalog_identity_backfill_preview_service.py'
       - 'backend/tests/test_catalog_identity_route_security.py'
       - 'backend/tests/test_catalog_identity_chain_postgresql.py'
+      - 'backend/app/services/ed2_barcode_conflict_resolution_service.py'
+      - 'backend/tests/test_ed2_barcode_conflict_postgresql.py'
       - 'backend/tests/test_barcode_purchase_household_article_reuse_contract.py'
       - 'backend/tests/test_household_identity_prevention.py'
       - 'backend/tests/test_receipt_to_unpack_retailer_code_contract.py'
@@ -101,6 +103,7 @@ jobs:
             backend/tests/test_receipt_to_unpack_retailer_code_contract.py \
             backend/tests/test_catalog_identity_route_security.py \
             backend/tests/test_catalog_identity_chain_postgresql.py \
+            backend/tests/test_ed2_barcode_conflict_postgresql.py \
             backend/tests/test_barcode_purchase_household_article_reuse_contract.py \
             backend/tests/test_household_identity_prevention.py
 
