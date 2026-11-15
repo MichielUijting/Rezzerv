@@ -391,6 +391,8 @@ test('WALDK HALF: equivalent GTIN-13 and leading-zero GTIN-14 never create a fal
   await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toHaveCount(0)
   await expect(page.getByTestId('ed2-barcode-conflict-open')).toHaveCount(0)
   await expect(page.getByTestId('ed2-barcode-conflict-readonly')).toHaveCount(0)
+  await expect(page.getByTestId('ed2-equivalent-gtin-info')).toBeVisible()
+  await expect(page.getByTestId('ed2-catalog-identity-check')).toHaveCount(0)
   expect(writes).toHaveLength(0)
   expect(previews).toHaveLength(0)
 })

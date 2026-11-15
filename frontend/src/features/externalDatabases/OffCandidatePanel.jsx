@@ -27,7 +27,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const identityState = ed2BarcodeIdentityState(item)
-  const requiresIdentityReview = identityState.barcodeConflict || identityState.catalogOwnerConflict
+  const requiresIdentityReview = identityState.barcodeConflict
+    || identityState.catalogOwnerConflict || identityState.equivalent
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
