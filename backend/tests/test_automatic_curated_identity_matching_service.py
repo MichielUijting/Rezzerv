@@ -337,3 +337,26 @@ def test_curated_codefree_batch_rechecks_proof_only_twice(monkeypatch):
     result = auto.automatically_match_curated_receipts(_Connection(), actor_id="frontteam")
     assert result["linked"] == 3
     assert calls["overview"] == 2
+
+
+
+def test_private_postcommit_worker_never_creates_a_variant_or_synonym(monkeypatch):
+    from app.services.article_recognition_service_actor import SERVICE_ACTOR_ID
+    rows = [_row("001", "same_product"), _row("002", "synonym_variant")]
+    monkeypatch.setattr(auto, "matching_batch_preview",
+                        lambda conn, target_product_id=None: _plan(items=rows))
+    monkeypatch.setattr(auto, "resolve_external_article_identity",
+                        lambda conn, item_id: {
+                            "retailer_code": "lidl", "receipt_text": "courgette groen",
+                            "external_article_code": item_id.split("-")[-1]})
+    called = []
+    monkeypatch.setattr(auto, "confirm_courgette_receipt",
+                        lambda conn, **kw: called.append(kw) or
+                        {"synonym_created": False, "already_confirmed": False})
+    summary = auto.automatically_match_curated_receipts(
+        _Connection(), actor_id=SERVICE_ACTOR_ID, actor_type="system_service")
+    assert summary["linked"] == 1
+    assert summary["synonyms_created"] == 0
+    assert len(called) == 1
+    assert called[0]["match_mode"] == "same_product"
+    assert called[0]["actor_type"] == "system_service"
