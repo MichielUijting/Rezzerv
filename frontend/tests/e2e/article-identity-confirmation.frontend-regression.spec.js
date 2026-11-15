@@ -228,3 +228,144 @@ test('Lidl: historical conflict preview never offers the confirmation action', a
   await expect(blocked).toContainText('bevestigde andere Cataloguskoppeling')
   expect(writes).toBe(0)
 })
+
+
+// The Superuser can correct a conflicting retailer+receipt identity while
+// working in the platform System household: no household receipt write.
+async function openRisottoConflict(page, { isSuperuser = true, blocked = false } = {}) {
+  const writes = []
+  const previews = []
+  let savedManual = '8722800072026'
+  await page.route('**/api/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/session') return route.fulfill({ json: {
+      user_id: isSuperuser ? 'platform-superuser' : 'frontteam-user',
+      active_household_id: '0', context_type: 'system', role: 'admin',
+      is_platform_superuser: isSuperuser, is_frontteam: !isSuperuser,
+      permissions: { 'platform.external_products.link_existing': true,
+        'platform.external_products.view': true },
+    } })
+    if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
+    if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
+    if (path === '/api/features') return route.fulfill({ json: { features: {} } })
+    if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
+    if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
+      items: [{
+        id: 'receipt-table-line:risotto', receipt_line_text: 'RISOTTORIJST',
+        retailer_code: 'ah', receipt_article_number: '24827',
+        article_code: '8712345678906', manual_barcode: savedManual,
+        identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
+        link_status: 'classification_pending',
+      }], counts: { unlinked: 0, classification_pending: 1, linked: 0 },
+    } })
+    if (path === '/api/external-databases/products/search-preview') {
+      return route.fulfill({ json: { provider: 'none', results: [] } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/conflicts/preview') {
+      const request = route.request().postDataJSON()
+      previews.push(request)
+      return route.fulfill({ json: {
+        can_confirm: !blocked, blocked_reasons: blocked
+          ? ['De centrale koppeling geldt ook buiten deze bonnaam.'] : [],
+        new_gtin: request.mode === 'keep_catalog' ? '8712345678906'
+          : request.mode === 'keep_manual' ? '8722800072026' : request.new_gtin,
+        preview_fingerprint: 'a'.repeat(64),
+      } })
+    }
+    if (path === '/api/catalog/ed2/manual-barcodes/conflicts/confirm') {
+      const request = route.request().postDataJSON()
+      writes.push(request)
+      if (request.mode === 'keep_catalog') savedManual = ''
+      return route.fulfill({ json: {
+        corrected: true, gtin: request.mode === 'keep_catalog'
+          ? '8712345678906' : request.mode === 'keep_manual'
+            ? '8722800072026' : request.new_gtin,
+        receipt_changes: 0, household_changes: 0, stock_changes: 0,
+      } })
+    }
+    if (path === '/api/barcodes/confirm-retailer-code') {
+      writes.push({ unexpected_legacy_write: true })
+    }
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByTestId('classification-work-monitor')
+    .getByRole('button', { name: 'Identificeren' }).click()
+  await page.getByTestId('external-databases-2-table')
+    .locator('tbody tr', { hasText: 'RISOTTORIJST' }).dblclick()
+  return { writes, previews }
+}
+
+test('Superuser: Risottorijst conflict prompts options, preview is read-only and needs explicit OK', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page)
+  const options = page.getByTestId('ed2-barcode-conflict-options-overlay')
+  await expect(options).toBeVisible()
+  await expect(options).toContainText('24827')
+  await expect(options).toContainText('RISOTTORIJST')
+  await expect(options).toContainText('Andere EAN/GTIN')
+  await expect(page.getByTestId('ed2-catalog-identity-check')).toHaveCount(0)
+  expect(writes).toHaveLength(0)
+  await options.getByTestId('ed2-barcode-conflict-options-field-mode')
+    .selectOption('keep_catalog')
+  await options.getByRole('button', { name: 'Gevolgen bekijken' }).click()
+  const confirm = page.getByTestId('ed2-barcode-conflict-confirm-overlay')
+  await expect(confirm).toBeVisible()
+  expect(previews).toEqual([{ receipt_item_id: 'receipt-table-line:risotto',
+    mode: 'keep_catalog', new_gtin: '' }])
+  expect(writes).toHaveLength(0)
+  await confirm.getByRole('button', { name: 'Terug' }).click()
+  await expect(options).toBeVisible()
+  await options.getByRole('button', { name: 'Annuleren' }).click()
+  expect(writes).toHaveLength(0)
+
+  await page.getByTestId('ed2-barcode-conflict-open').click()
+  await options.getByTestId('ed2-barcode-conflict-options-field-mode')
+    .selectOption('keep_catalog')
+  await options.getByRole('button', { name: 'Gevolgen bekijken' }).click()
+  await expect(confirm).toBeVisible()
+  await confirm.getByRole('button', { name: 'Correctie bevestigen' }).click()
+  await expect.poll(() => writes.length).toBe(1)
+  expect(writes[0]).toEqual({
+    receipt_item_id: 'receipt-table-line:risotto',
+    mode: 'keep_catalog', new_gtin: '', preview_fingerprint: 'a'.repeat(64),
+  })
+  await expect(page.getByTestId('external-databases-2-table')).toContainText('RISOTTORIJST')
+  await expect(page.getByTestId('external-databases-2-table')).not.toContainText('Handmatig:')
+})
+
+test('Superuser: unsafe correction is shown as blocking overlay and writes nothing', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page, { blocked: true })
+  const options = page.getByTestId('ed2-barcode-conflict-options-overlay')
+  await options.getByTestId('ed2-barcode-conflict-options-field-mode')
+    .selectOption('keep_manual')
+  await options.getByRole('button', { name: 'Gevolgen bekijken' }).click()
+  const blocked = page.getByTestId('ed2-barcode-conflict-blocked-overlay')
+  await expect(blocked).toBeVisible()
+  await expect(blocked).toContainText('buiten deze bonnaam')
+  expect(previews).toHaveLength(1)
+  expect(writes).toHaveLength(0)
+})
+
+test('Superuser: other barcode is only reviewed, never generated from store code', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page)
+  const options = page.getByTestId('ed2-barcode-conflict-options-overlay')
+  await options.getByTestId('ed2-barcode-conflict-options-field-mode')
+    .selectOption('use_other')
+  await options.getByTestId('ed2-barcode-conflict-options-field-new_gtin')
+    .fill('8711111111111')
+  await options.getByRole('button', { name: 'Gevolgen bekijken' }).click()
+  await expect(page.getByTestId('ed2-barcode-conflict-confirm-overlay')).toBeVisible()
+  expect(previews).toEqual([{ receipt_item_id: 'receipt-table-line:risotto',
+    mode: 'use_other', new_gtin: '8711111111111' }])
+  expect(writes).toHaveLength(0)
+})
+
+test('Frontteam: conflicting identity never exposes Superuser or legacy write button', async ({ page }) => {
+  const { writes, previews } = await openRisottoConflict(page, { isSuperuser: false })
+  await expect(page.getByTestId('ed2-barcode-conflict-readonly')).toBeVisible()
+  await expect(page.getByTestId('ed2-barcode-conflict-options-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('ed2-catalog-identity-check')).toHaveCount(0)
+  await expect(page.getByTestId('ed2-barcode-conflict-open')).toHaveCount(0)
+  expect(previews).toHaveLength(0)
+  expect(writes).toHaveLength(0)
+})
