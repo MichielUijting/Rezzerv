@@ -40,6 +40,11 @@ assert.equal(frontteam.counts.matching, 0)
 assert.equal(frontteam.tasks.some((task) => task.area === 'matching'), false)
 assert.equal(frontteam.tasks.filter((task) => task.type === 'classify').length, 2)
 assert.equal(frontteam.tasks.find((task) => task.sourceId === 'a2').type, 'identify')
+const cbsOnly = projectArticleWorkQueue(source, products, tasks, {
+  canClassifyGpc: false, canClassifyCbs: true,
+})
+assert.equal(cbsOnly.counts.classify, 1)
+assert.equal(cbsOnly.tasks.find((task) => task.type === 'classify').system, 'cbs')
 
 for (const [receipts, classes, classification, expected] of [
   [[source[0], source[0]], products, tasks, /dubbel/i],
