@@ -73,13 +73,18 @@ export default function ArticleManagementWorkQueue({ isPlatformSuperuser = false
       try {
         // Both existing GETs enforce canonical platform permissions server-side.
         // Opening this page never invokes the Superuser-only matching POST.
-        const [sourceResponse, classification] = await Promise.all([
+        const [sourceResponse, classification, synonymResponse] = await Promise.all([
           fetchJsonWithAuth('/api/external-databases/articles-overview', {
             method: 'GET', signal: controller.signal,
           }),
           readFullClassificationWorkQueue(controller.signal),
+          fetchJsonWithAuth('/api/external-databases/article-synonyms/analysis', {
+            method: 'GET', signal: controller.signal,
+          }),
         ])
         if (!sourceResponse.ok) throw new Error('De identificatietaken konden niet worden opgehaald.')
+        if (!synonymResponse.ok) throw new Error('De synoniemtaken konden niet worden opgehaald.')
+        const synonymAnalysis = await synonymResponse.json().catch(() => ({}))
         const source = await sourceResponse.json().catch(() => ({}))
         if (!Array.isArray(source.items) || !Number.isSafeInteger(source.total)
             || source.total !== source.items.length) {
@@ -92,6 +97,8 @@ export default function ArticleManagementWorkQueue({ isPlatformSuperuser = false
             isSuperuser: isPlatformSuperuser,
             canClassifyGpc: canCurrentUserPerform('gpc.update', actor),
             canClassifyCbs: canCurrentUserPerform('platform.external_products.link_existing', actor),
+            canManageSynonyms: canCurrentUserPerform('platform.external_products.link_existing', actor),
+            synonymAnalysis,
           },
         )
         if (!controller.signal.aborted) setResult(queue)
@@ -148,7 +155,8 @@ export default function ArticleManagementWorkQueue({ isPlatformSuperuser = false
       <p role="status" data-testid="article-workqueue-count-summary">
         {result.tasks.length} open taken in de getoonde taaksoorten.
         Dit is geen aantal unieke Catalogusartikelen; classificaties voor GS1 en CBS
-        worden afzonderlijk geteld.
+        worden afzonderlijk geteld. Synoniemtaken tellen Catalogusproducten
+        met minimaal één onbevestigd voorstel.
       </p>
       <DataTable columns={columns} data={rows} getRowKey={(item) => item.key}
         pageSize={10} dataTestId="article-workqueue-table"
@@ -171,18 +179,15 @@ export default function ArticleManagementWorkQueue({ isPlatformSuperuser = false
         <Button disabled={!selected}
           onClick={() => { if (selected) onOpenTask(selected) }}>
           {selected ? 'Naar ' + (selected.type === 'matching' ? 'Matchen'
-            : selected.type === 'classify' ? 'Classificeren' : 'Identificeren')
+            : selected.type === 'classify' ? 'Classificeren'
+              : selected.type === 'synonyms' ? 'Synoniemen' : 'Identificeren')
             : 'Selecteer een taak'}
         </Button>
       </div>
       <p className="rz-external-databases-muted">
-        Synoniemen: hiervoor is nog geen betrouwbare platformbrede telling van
-        beoordeelbare voorstellen beschikbaar. Het bestaande werkgebied blijft
-        beschikbaar; Inhuis toont geen fictieve nul.
+        Alle synoniemvoorstellen worden opnieuw beoordeeld in Synoniemen; de
+        Werkvoorraad bevestigt of koppelt geen productrelaties.
       </p>
-      <Button variant="secondary" onClick={() => onOpenTask({ area: 'synonyms' })}>
-        Naar Synoniemen
-      </Button>
     </> : null}
   </section>
 }
