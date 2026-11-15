@@ -138,10 +138,14 @@ async def preview_catalog_classification_import(request: Request):
     _actor("platform.external_products.view")
     if int(request.headers.get("content-length") or 0) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Importbestand mag maximaal 5 MB zijn.")
-    body = await request.body()
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Importbestand mag maximaal 5 MB zijn.")
     filename = request.headers.get("x-inhuis-filename", "")
     try:
-        rows = read_proposals(body, filename)
+        rows = read_proposals(bytes(body), filename)
         with engine.connect() as conn:
             if conn.dialect.name == "postgresql":
                 conn = conn.execution_options(

@@ -218,6 +218,8 @@ test('Classificeren: import controleert eerst en bevestigt alleen expliciet geko
   await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
   await expect(page.getByRole('alert')).toContainText('Bevestig per artikel')
   expect(sent).toHaveLength(0)
+  // The warning dialog correctly intercepts clicks until explicitly closed.
+  await page.getByRole('button', { name: 'Annuleren' }).click()
   await page.getByText('Bestaande code vervangen').locator('input').check()
   await page.getByTestId('classification-import-confirm').click()
   await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()

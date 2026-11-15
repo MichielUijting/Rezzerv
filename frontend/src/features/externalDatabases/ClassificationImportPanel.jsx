@@ -112,8 +112,8 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     let count = 0
     for (const row of preview?.rows || []) {
       if (row.problem || row.invalid_gpc.length || row.invalid_cbs.length) continue
+      const productChoices = []
       for (const system of ['gpc', 'cbs']) {
-        if (count >= LIMIT) break
         if (system === 'gpc' && !canGpc) continue
         if (!canConfirm || processed[selectionKey(row, system)]) continue
         const status = system === 'gpc' ? row.gpc_status : row.cbs_status
@@ -121,11 +121,15 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
         const candidate = (system === 'gpc' ? row.gpc_options : row.cbs_options)
           .find((option) => option.kind === 'voorstel')
         if (status === 'Voorstel hoog' && !current && candidate) {
-          choices[selectionKey(row, system)] = candidate
-          count += 1
+          productChoices.push([selectionKey(row, system), candidate])
         }
       }
-      if (count >= LIMIT) break
+      // Never split GS1 and CBS for one product across separate batches:
+      // that would invalidate the export fingerprint after the first write.
+      if (count + productChoices.length > LIMIT) continue
+      for (const [key, candidate] of productChoices) choices[key] = candidate
+      count += productChoices.length
+      if (count === LIMIT) break
     }
     setSelection(choices)
     setOverrides({})
