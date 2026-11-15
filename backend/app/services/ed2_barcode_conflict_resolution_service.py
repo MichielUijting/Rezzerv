@@ -25,6 +25,12 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_article_code, normalize_external_link_receipt_text,
 )
 
+def _gtin_key(value: str) -> str:
+    """Only checksum-valid GTINs compare equal as padded 14-digit identities."""
+    checked = validate_barcode(value, "gtin")
+    return str(checked["normalized_value"]).zfill(14) if checked["valid"] else ""
+
+
 MODES = {"keep_catalog", "keep_manual", "use_other"}
 
 
@@ -37,8 +43,8 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
     retailer = canonical_catalog_retailer(source["retailer_code"])
     label = normalize_external_link_receipt_text(source["receipt_text"])
     code = normalize_external_link_article_code(source["external_article_code"])
-    if not retailer or not label or not code or not str(receipt_item_id or "").strip():
-        raise ValueError("Een volledige winkel-, bonnaam- en bonartikelcode is verplicht.")
+    if not retailer or not label or not str(receipt_item_id or "").strip():
+        raise ValueError("Een winkelketen en een exacte bonnaam zijn verplicht.")
     aliases = list(catalog_retailer_aliases(retailer))
     select_manual = """
         SELECT retailer_code, receipt_text_normalized, external_article_code,
@@ -63,6 +69,7 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
         JOIN global_products gp ON gp.id = link.global_product_id
         WHERE link.retailer_code IN :aliases
           AND link.external_article_code = :code
+          AND (:code <> '' OR link.receipt_text_normalized = :label)
           AND link.status IN ('confirmed', 'classification_pending')
         ORDER BY link.id
     """
@@ -87,27 +94,38 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
         blocks.append("De Catalogusbarcode is niet geldig of ontbreekt.")
     if str(central.get("product_status") or "").lower() != "active":
         blocks.append("Het gekoppelde Catalogusproduct is niet actief.")
-    if old_gtin == catalog_gtin and old_gtin:
-        blocks.append("Beide barcodeclaims zijn inmiddels gelijk; verversen volstaat.")
+    if _gtin_key(old_gtin) and _gtin_key(old_gtin) == _gtin_key(catalog_gtin):
+        blocks.append(
+            "Deze GTIN-13/GTIN-14 notaties beschrijven dezelfde barcode. "
+            "Er is geen barcodecorrectie nodig; controleer een eventuele "
+            "afwijkende Catalogusproductkoppeling afzonderlijk."
+        )
     selected_gtin = catalog_gtin if mode == "keep_catalog" else old_gtin
     if mode == "use_other":
         checked = validate_barcode(new_gtin, "gtin")
         if not checked["valid"]:
             blocks.append("Voer een echte geldige EAN/GTIN met controlecijfer in.")
         selected_gtin = str(checked.get("normalized_value") or "")
-        if selected_gtin in (old_gtin, catalog_gtin):
-            blocks.append("Kies voor een bestaande code de bijbehorende optie in plaats van 'Andere barcode'.")
+        if _gtin_key(selected_gtin) and _gtin_key(selected_gtin) in (
+            _gtin_key(old_gtin), _gtin_key(catalog_gtin)
+        ):
+            blocks.append("Kies voor een bestaande barcode de bijbehorende optie; een voorloopnul maakt geen andere GTIN.")
     # A code-only or aliased central link may serve many receipt identities.
     # Never change that shared link merely to solve one visible ED2 conflict.
+    if central and str(central.get("receipt_text_normalized") or "") != label:
+        blocks.append(
+            "De Cataloguskoppeling is niet uniek voor deze exacte bonnaam. "
+            "Controleer eerst welke artikelen de gedeelde koppeling gebruiken."
+        )
     if mode != "keep_catalog" and central:
         if str(central.get("receipt_text_normalized") or "") != label:
             blocks.append("De Cataloguskoppeling geldt ook buiten deze exacte bonnaam. Deze gedeelde koppeling kan niet automatisch worden vervangen.")
         if str(central.get("retailer_code") or "") != retailer:
             blocks.append("De bestaande centrale koppeling gebruikt een afwijkende winkelalias; een afzonderlijke beoordeling is nodig.")
-    if mode != "keep_catalog" and central:
-        # The legacy central resolver uses retailer+article-code before receipt
-        # name. A different real bonnaam with the same code could therefore
-        # lose its Catalogus identity. Refuse to retire such a shared link.
+    if mode != "keep_catalog" and central and code:
+        # Retailer article codes can be shared across receipt descriptions.
+        # With NO article code the resolver instead requires an exact name,
+        # so scanning all unrelated code-less receipts would be incorrect.
         other_receipt_names = conn.execute(text("""
             SELECT DISTINCT
                 COALESCE(NULLIF(rt.store_chain, ''), rt.store_name, '') AS retailer,
@@ -136,6 +154,27 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
             blocks.append(
                 "Dezelfde winkelartikelcode komt op originele bonnen met andere "
                 "artikelnamen voor. Een gedeelde koppeling mag niet worden gewijzigd."
+            )
+    if not code:
+        # A nameless retailer code may be absent on historical receipts.
+        # Reassignment is only safe when the exact retailer+name has a single
+        # central identity, not a second code-bound product with the same name.
+        other_links = conn.execute(
+            text("""
+                SELECT DISTINCT global_product_id, external_article_code
+                  FROM external_article_product_links
+                 WHERE retailer_code IN :aliases
+                   AND receipt_text_normalized = :label
+                   AND status IN ('confirmed', 'classification_pending')
+                 LIMIT 2
+            """).bindparams(bindparam("aliases", expanding=True)),
+            {"aliases": aliases, "label": label},
+        ).mappings().all()
+        if len(other_links) != 1 or str(other_links[0]["external_article_code"] or "") != "":
+            blocks.append(
+                "Voor deze winkel en bonnaam bestaan meerdere mogelijke "
+                "Cataloguskoppelingen of bonartikelcodes. Een correctie "
+                "zonder bonartikelnummer is daarom niet veilig."
             )
     if mode != "keep_catalog" and manual:
         scope = classify_barcode_scope(selected_gtin)["scope"] if selected_gtin else ""
