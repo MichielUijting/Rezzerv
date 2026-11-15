@@ -3,6 +3,8 @@
  * Never matches by name, assigns a Catalogus ID, or grants write permissions.
  * A row is one unresolved source identity or one (product, classification system).
  */
+import { equivalentCatalogGtin, displayEd2Gtin } from './ed2BarcodeIdentity.js'
+
 const PRIORITY = { review: 0, matching: 1, repair: 2, identify: 3, synonyms: 4, classify: 5 }
 const GTIN_SHAPE = /^(?:[0-9]{8}|[0-9]{12,14})$/
 
@@ -42,10 +44,16 @@ export function projectArticleWorkQueue(receiptItems, products, classificationTa
     const central = String(source.article_code || '').trim()
     const explicitProduct = String(source.identity_catalog_product_id || '').trim()
     const centralProduct = String(source.catalog_product_id || '').trim()
-    const conflictingClaims = Boolean(
-      (explicitProduct && centralProduct && explicitProduct !== centralProduct)
-      || (manual && central && manual !== central),
+    const differentCatalogOwners = Boolean(
+      explicitProduct && centralProduct && explicitProduct !== centralProduct
     )
+    // Use the same checksum-validated comparison as Identificeren:
+    // GTIN-13 and a leading-zero GTIN-14 are one product identity.
+    // Distinct or invalid codes must still be reviewed.
+    const differentBarcodes = Boolean(
+      manual && central && manual !== central && !equivalentCatalogGtin(manual, central)
+    )
+    const conflictingClaims = differentCatalogOwners || differentBarcodes
     if (status === 'catalog_linked' && !conflictingClaims) {
       if (!explicitProduct && !centralProduct) {
         throw new Error('Een bevestigde Cataloguskoppeling heeft geen centrale productidentiteit.')
@@ -57,9 +65,18 @@ export function projectArticleWorkQueue(receiptItems, products, classificationTa
       && !hasClaim && Boolean(String(source.automatic_match_review_reason || '').trim())
     let type = 'identify'
     let reason = 'Er is nog geen betrouwbaar bevestigd Catalogusproduct.'
-    if (status === 'review' || conflictingClaims || (status === 'saved_only' && !source.identity_repairable)) {
+    if (differentCatalogOwners) {
       type = 'review'
-      reason = 'De bewaarde artikelidentiteit vraagt een controle voordat Inhuis deze kan koppelen.'
+      reason = 'De bewaarde koppeling en de Cataloguskoppeling verwijzen naar verschillende Catalogusproducten.'
+    } else if (differentBarcodes) {
+      type = 'review'
+      reason = 'De bewaarde barcode en de Catalogusbarcode verschillen; controleer welke code juist is.'
+    } else if (status === 'review') {
+      type = 'review'
+      reason = 'Deze artikelidentiteit heeft de status Te beoordelen. Een veilige koppeling is nog niet bevestigd.'
+    } else if (status === 'saved_only' && !source.identity_repairable) {
+      type = 'review'
+      reason = 'Barcode bewaard, maar automatisch herstel is niet veilig bewezen.'
     } else if (status === 'saved_only' && source.identity_repairable && GTIN_SHAPE.test(manual)) {
       type = 'repair'
       reason = 'Barcode bewaard; de centrale Cataloguskoppeling moet nog worden hersteld.'
@@ -74,7 +91,7 @@ export function projectArticleWorkQueue(receiptItems, products, classificationTa
     // Frontteam members receive no executable matching task or implied access.
     if (type === 'matching' && !isSuperuser) continue
     queue.push({
-      key: 'receipt:' + sourceId, type, name, retailer, number, barcode: central || manual,
+      key: 'receipt:' + sourceId, type, name, retailer, number, barcode: displayEd2Gtin(central || manual),
       reason, sourceId, productId: '', system: '', area: type === 'matching' ? 'matching' : 'identity',
     })
   }

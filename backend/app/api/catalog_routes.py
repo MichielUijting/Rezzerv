@@ -32,6 +32,9 @@ from app.services.proven_exact_receipt_name_service import (
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
+from app.services.ed2_barcode_conflict_resolution_service import (
+    preview_barcode_conflict_resolution, confirm_barcode_conflict_resolution,
+)
 from app.services.global_product_service import build_global_product_fingerprint
 from app.services.article_synonym_service import RETAILER_NAMES
 from app.services.external_article_confirmation_service import resolve_external_article_identity
@@ -138,6 +141,16 @@ class Ed2LidlBarcodeCorrectionPreviewRequest(BaseModel):
 class Ed2LidlBarcodeCorrectionConfirmRequest(Ed2LidlBarcodeCorrectionPreviewRequest):
     expected_old_gtin: str
     preview_fingerprint: str
+
+
+class Ed2BarcodeConflictPreviewRequest(BaseModel):
+    receipt_item_id: str = Field(min_length=1, max_length=250)
+    mode: str
+    new_gtin: str = ""
+
+
+class Ed2BarcodeConflictConfirmRequest(Ed2BarcodeConflictPreviewRequest):
+    preview_fingerprint: str = Field(min_length=64, max_length=64)
 
 
 class CatalogImageUpdateRequest(BaseModel):
@@ -1011,6 +1024,50 @@ def list_ed2_manual_barcodes():
         )).mappings().all()
     return {"items": [dict(row) for row in rows]}
 
+
+
+@router.post("/ed2/manual-barcodes/conflicts/preview")
+def preview_ed2_barcode_conflict_resolution(payload: Ed2BarcodeConflictPreviewRequest):
+    """Read-only Superuser preview for one exact retail receipt identity."""
+    _require_authorized_bonnaam_actor()
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    try:
+        with engine.connect() as conn:
+            source = resolve_external_article_identity(conn, payload.receipt_item_id.strip())
+            return preview_barcode_conflict_resolution(
+                conn, source=source, receipt_item_id=payload.receipt_item_id.strip(),
+                mode=payload.mode, new_gtin=payload.new_gtin,
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/ed2/manual-barcodes/conflicts/confirm")
+def confirm_ed2_barcode_conflict_resolution(payload: Ed2BarcodeConflictConfirmRequest):
+    """Exact preview fingerprint and database locks required for a mutation."""
+    actor = _require_authorized_bonnaam_actor()
+    _ed2_barcode_tables_ready()
+    if not {"product_identities", "auth_audit_log"}.issubset(_tables()):
+        raise HTTPException(status_code=503, detail="Barcodecorrectie en audit zijn niet beschikbaar.")
+    if any(ch not in "0123456789abcdef" for ch in payload.preview_fingerprint):
+        raise HTTPException(status_code=422, detail="De gevolgencontrole ontbreekt.")
+    try:
+        with engine.begin() as conn:
+            source = resolve_external_article_identity(conn, payload.receipt_item_id.strip())
+            result = confirm_barcode_conflict_resolution(
+                conn, source=source, receipt_item_id=payload.receipt_item_id.strip(),
+                mode=payload.mode, new_gtin=payload.new_gtin,
+                preview_fingerprint=payload.preview_fingerprint,
+                actor_user_id=actor.user_id,
+            )
+        # Wake only after the corrected central identity has committed.
+        from app.services.article_recognition_background_worker import signal_receipt_committed
+        signal_receipt_committed()
+        return result
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post("/ed2/manual-barcodes/lidl/preview-correction")
