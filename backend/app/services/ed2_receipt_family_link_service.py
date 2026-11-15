@@ -133,7 +133,7 @@ def confirm_courgette_receipt(conn, *, source, receipt_item_id, target_product_i
                              actor_type="platform_user"):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Bevestiging van centrale bonartikelen vereist PostgreSQL.")
-    validate_recognition_actor(str(actor_id), actor_type)
+    validate_recognition_actor(actor_id, actor_type)
     retailer, label, code = _parts(source)
     # Serialize overlapping requests and the synonym lock before any write.
     conn.execute(text("SELECT pg_advisory_xact_lock(639643644)"))
