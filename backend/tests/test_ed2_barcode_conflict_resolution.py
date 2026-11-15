@@ -78,7 +78,21 @@ class Store:
             return Rows([row for row in self.links
                          if row["retailer_code"] in p["aliases"]
                          and row["external_article_code"] == p["code"]
+                         and (p["code"] or row["receipt_text_normalized"] == p["label"])
                          and row["status"] in ("confirmed", "classification_pending")])
+        if sql.startswith("SELECT DISTINCT global_product_id, external_article_code"):
+            values = {(row["global_product_id"], row["external_article_code"])
+                      for row in self.links if row["retailer_code"] in p["aliases"]
+                      and row["receipt_text_normalized"] == p["label"]
+                      and row["status"] in ("confirmed", "classification_pending")}
+            return Rows([{"global_product_id": x, "external_article_code": y}
+                         for x, y in values])
+        if sql.startswith("SELECT DISTINCT external_article_code, gtin"):
+            values = {(row["external_article_code"], row["gtin"])
+                      for row in self.manual if row["retailer_code"] in p["aliases"]
+                      and row["receipt_text_normalized"] == p["label"]}
+            return Rows([{"external_article_code": x, "gtin": y}
+                         for x, y in values])
         if sql.startswith("SELECT DISTINCT") and "FROM receipt_table_lines rtl" in sql:
             return Rows(self.receipt_names)
         if sql.startswith("SELECT id, status, primary_gtin FROM global_products"):
@@ -315,4 +329,81 @@ def test_truncated_shared_retailer_code_evidence_cannot_authorize_reassignment(c
     assert any("te veel" in reason for reason in checked["blocked_reasons"])
     with pytest.raises(ValueError, match="Correctie"):
         confirm(conn, checked["preview_fingerprint"], "use_other", OTHER_GTIN)
+    assert not conn.writes and not events
+
+
+def _waldk_half_without_retailer_article_number(conn):
+    conn.manual[0].update(receipt_text_normalized="waldk half", external_article_code="")
+    conn.links[0].update(receipt_text_normalized="waldk half", external_article_code="")
+    return {
+        "retailer_code": "Albert Heijn", "receipt_text": "WALDK HALF",
+        "external_article_code": "",
+    }
+
+
+def test_equivalent_gtin_13_and_zero_prefixed_gtin_14_are_not_a_barcode_conflict(context):
+    conn, events = context
+    conn.manual[0]["gtin"] = "08719587106174"
+    conn.manual[0]["barcode_scope"] = "global_candidate"
+    conn.product["primary_gtin"] = "08719587106174"
+    conn.links[0]["primary_gtin"] = "8719587106174"
+    for mode, code in [("keep_catalog", ""), ("keep_manual", ""),
+                       ("use_other", "8711111111111")]:
+        prepared = preview(conn, mode, code)
+        assert not prepared["can_confirm"]
+        assert any("dezelfde barcode" in line for line in prepared["blocked_reasons"])
+        with pytest.raises(ValueError, match="Correctie"):
+            confirm(conn, prepared["preview_fingerprint"], mode, code)
+    assert not conn.writes and not events
+
+
+def test_missing_retailer_article_number_allows_unique_exact_name_with_preview(context):
+    conn, events = context
+    source = _waldk_half_without_retailer_article_number(conn)
+    prepared = service.preview_barcode_conflict_resolution(
+        conn, source=source, receipt_item_id="receipt-table-line:waldk",
+        mode="keep_catalog",
+    )
+    assert prepared["can_confirm"], prepared["blocked_reasons"]
+    assert prepared["article_code"] == ""
+    assert not conn.writes and not events
+    result = service.confirm_barcode_conflict_resolution(
+        conn, source=source, receipt_item_id="receipt-table-line:waldk",
+        mode="keep_catalog", new_gtin="",
+        preview_fingerprint=prepared["preview_fingerprint"],
+        actor_user_id="superuser-1",
+    )
+    assert result["corrected"] is True
+    assert conn.writes == ["delete_manual"]
+    assert conn.links[0]["status"] == "confirmed"
+    assert not any("receipt_" in change or "household" in change for change in conn.writes)
+
+
+def test_missing_retailer_article_number_cannot_reassign_ambiguous_name(context):
+    conn, events = context
+    source = _waldk_half_without_retailer_article_number(conn)
+    conn.links.append({**conn.links[0],
+        "id": "another-id", "external_article_code": "44555",
+        "global_product_id": "another-product"})
+    for mode, new_code in [("keep_catalog", ""), ("keep_manual", ""),
+                           ("use_other", OTHER_GTIN)]:
+        prepared = service.preview_barcode_conflict_resolution(
+            conn, source=source, receipt_item_id="receipt-table-line:waldk",
+            mode=mode, new_gtin=new_code)
+        assert not prepared["can_confirm"]
+        assert any("meerdere mogelijke" in why for why in prepared["blocked_reasons"])
+    assert not conn.writes and not events
+
+
+def test_missing_retailer_article_number_with_other_manual_claim_blocks(context):
+    conn, events = context
+    source = _waldk_half_without_retailer_article_number(conn)
+    conn.manual.append({**conn.manual[0], "external_article_code": "88999",
+                        "gtin": OTHER_GTIN})
+    prepared = service.preview_barcode_conflict_resolution(
+        conn, source=source, receipt_item_id="receipt-table-line:waldk",
+        mode="keep_catalog",
+    )
+    assert not prepared["can_confirm"]
+    assert any("andere winkelartikelcode" in why for why in prepared["blocked_reasons"])
     assert not conn.writes and not events
