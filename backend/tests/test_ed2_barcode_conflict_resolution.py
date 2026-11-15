@@ -234,7 +234,10 @@ def test_shared_central_link_blocked_for_manual_or_other_choice(context):
         assert any("gedeelde koppeling" in message for message in checked["blocked_reasons"])
         with pytest.raises(ValueError, match="Correctie"):
             confirm(conn, checked["preview_fingerprint"], mode, barcode)
-    assert preview(conn, "keep_catalog")["can_confirm"] is True
+    # A code-only shared Catalogus link cannot be claimed in either direction.
+    catalog = preview(conn, "keep_catalog")
+    assert catalog["can_confirm"] is False
+    assert any("exacte bonnaam" in message for message in catalog["blocked_reasons"])
     assert not conn.writes and not events
 
 
