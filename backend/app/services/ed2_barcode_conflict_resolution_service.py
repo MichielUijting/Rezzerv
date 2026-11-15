@@ -178,11 +178,17 @@ def confirm_barcode_conflict_resolution(
     retailer = canonical_catalog_retailer(source["retailer_code"])
     label = normalize_external_link_receipt_text(source["receipt_text"])
     code = normalize_external_link_article_code(source["external_article_code"])
+    # Discover the old and selected GTIN before taking any advisory lock.
+    # Revalidate the entire snapshot under row locks below. This preserves
+    # the lock order shared with ordinary ED2 materialisation.
+    candidate = _inspect(conn, source=source, receipt_item_id=receipt_item_id,
+                         mode=mode, new_gtin=new_gtin)
     keys = {"ed2-receipt:" + retailer + "|" + label + "|" + code}
-    for barcode in (new_gtin,):
+    for barcode in (candidate["old_manual_gtin"], candidate["new_gtin"]):
         if barcode:
             scope = classify_barcode_scope(barcode)["scope"]
-            keys.add("ed2-barcode:" + ("global" if scope == "global_candidate" else retailer) + ":" + barcode)
+            if scope in ("global_candidate", "restricted"):
+                keys.add("ed2-barcode:" + ("global" if scope == "global_candidate" else retailer) + ":" + barcode)
     # Existing ordinary ED2 materialisation uses the same lock namespace.
     for key in sorted(keys):
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 677))"),
