@@ -33,7 +33,8 @@ def export_database():
     schema = "catalog_export_" + uuid4().hex
     with owner.begin() as conn:
         conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
-    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"},
+                           pool_pre_ping=True)
     try:
         statements = [
             "CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, category TEXT, primary_gtin TEXT, size_value TEXT, size_unit TEXT, source TEXT, status TEXT)",
@@ -130,6 +131,20 @@ def test_export_api_enforces_canonical_role_and_permission(monkeypatch, export_d
     app = FastAPI()
     app.include_router(routes.router)
     client = TestClient(app)
+
+    # Guard against the actual PR691 failure: pool pre-ping may run first,
+    # but the export itself must still start REPEATABLE READ READ ONLY.
+    real_export = build_catalog_classification_export
+    def assert_snapshot_before_export(conn):
+        flags = conn.execute(text(
+            "SELECT current_setting('transaction_isolation') AS isolation_level, "
+            "current_setting('transaction_read_only') AS read_only"
+        )).mappings().one()
+        assert flags["isolation_level"] == "repeatable read"
+        assert flags["read_only"] == "on"
+        return real_export(conn)
+    monkeypatch.setattr(routes, "build_catalog_classification_export", assert_snapshot_before_export)
+
     def deny(permission):
         assert permission == "platform.external_products.view"
         raise HTTPException(403, "Toegang geweigerd")

@@ -91,8 +91,13 @@ def export_catalog_classifications():
     _actor("platform.external_products.view")
     with engine.connect() as conn:
         if conn.dialect.name == "postgresql":
-            conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-        contents = build_catalog_classification_export(conn)
+            # Configure the DBAPI transaction before the first SELECT. A pooled
+            # connection can already have performed a PostgreSQL pre-ping.
+            conn = conn.execution_options(
+                isolation_level="REPEATABLE READ", postgresql_readonly=True,
+            )
+        with conn.begin():
+            contents = build_catalog_classification_export(conn)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return Response(
         content=contents,
