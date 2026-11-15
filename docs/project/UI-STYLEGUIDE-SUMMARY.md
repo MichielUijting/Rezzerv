@@ -1933,6 +1933,18 @@ huishoudartikel of voorraadgegeven om. Een ongeldig controlecijfer blijft zichtb
 als een afzonderlijke claim. Bij verschillende Catalogusproducteigenaren blijft
 de expliciete identiteitscontrole vereist; die mag nooit stil worden afgehandeld.
 
+### Artikelbeheer: Werkvoorraad gebruikt dezelfde GTIN-identiteitscontrole — 15 november 2026
+
+De Werkvoorraad `Identificatie controleren` mag een geldige GTIN-13 en een
+gelijkwaardige GTIN-14 met één voorloopnul niet als twee barcodeclaims tellen.
+Dezelfde checksum-geverifieerde GTIN-vergelijking als in Identificeren is leidend.
+Bij dezelfde Catalogusproducteigenaar en de status `catalog_linked` verdwijnt
+de onterechte controletaak automatisch, zonder schrijven naar de database.
+Werkelijke afwijkende barcodes, verschillende Catalogusproducteigenaren en
+servermatig gemarkeerde reviewstatussen blijven controleerbaar. De kolom
+`Waarom deze taak?` onderscheidt die concrete oorzaken in begrijpelijke tekst.
+Deze wijziging wijzigt geen beveiliging, Catalogusidentiteit, kassabon of voorraad.
+
 ### Artikelbeheer: leesbare Werkvoorraad-filters — 15 november 2026
 
 De taaksoortknoppen van de Werkvoorraad blijven ook tijdens het laden leesbaar.

@@ -51,6 +51,50 @@ assert.throws(() => projectArticleWorkQueue([
     identity_status: 'catalog_linked' },
 ], [], []), /centrale productidentiteit/i)
 
+
+const equivalentGtinClaims = projectArticleWorkQueue([
+  { id: 'waldk', retailer_code: 'ah', receipt_line_text: 'WALDK HALF',
+    receipt_article_number: '', identity_status: 'catalog_linked',
+    manual_barcode: '08719587106174', article_code: '8719587106174',
+    identity_catalog_product_id: 'milk-product', catalog_product_id: 'milk-product' },
+  { id: 'waldk-other-receipt', retailer_code: 'ah', receipt_line_text: 'WALDK HALF',
+    receipt_article_number: '45653', identity_status: 'catalog_linked',
+    manual_barcode: '8719587106174', article_code: '08719587106174',
+    identity_catalog_product_id: 'milk-product', catalog_product_id: 'milk-product' },
+], [], [])
+assert.equal(equivalentGtinClaims.counts.review, 0)
+assert.equal(equivalentGtinClaims.tasks.length, 0,
+  'Equivalent GTIN-13/14 claims must not generate an Identificatie controleren task')
+
+const realIdentityReviews = projectArticleWorkQueue([
+  { id: 'owner-mismatch', retailer_code: 'ah', receipt_line_text: 'WALDK HALF',
+    identity_status: 'catalog_linked', manual_barcode: '08719587106174',
+    article_code: '8719587106174', catalog_product_id: 'milk-product',
+    identity_catalog_product_id: 'other-product' },
+  { id: 'different-gtins', retailer_code: 'ah', receipt_line_text: 'RISOTTORIJST',
+    identity_status: 'catalog_linked', manual_barcode: '8722800072026',
+    article_code: '8712345678906', catalog_product_id: 'product-1' },
+  { id: 'bad-check-digit', retailer_code: 'ah', receipt_line_text: 'WALDK HALF',
+    identity_status: 'catalog_linked', manual_barcode: '08719587106175',
+    article_code: '8719587106174', catalog_product_id: 'milk-product' },
+  { id: 'server-review', retailer_code: 'ah', receipt_line_text: 'ZK KNOFLOOKP',
+    identity_status: 'review', manual_barcode: '8712200080646' },
+  { id: 'saved-unrepairable', retailer_code: 'ah', receipt_line_text: 'ANDER ARTIKEL',
+    identity_status: 'saved_only', identity_repairable: false,
+    manual_barcode: '8712200080646' },
+], [], [])
+assert.equal(realIdentityReviews.counts.review, 5)
+assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'owner-mismatch').reason,
+  /verschillende Catalogusproducten/)
+assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'different-gtins').reason,
+  /barcodes verschillen/)
+assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'bad-check-digit').reason,
+  /barcodes verschillen/)
+assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'server-review').reason,
+  /status Te beoordelen/)
+assert.match(realIdentityReviews.tasks.find(t => t.sourceId === 'saved-unrepairable').reason,
+  /automatisch herstel/)
+
 const frontteam = projectArticleWorkQueue(source, products, tasks)
 assert.equal(frontteam.counts.matching, 0)
 assert.equal(frontteam.tasks.some((task) => task.area === 'matching'), false)
