@@ -331,6 +331,11 @@ test('Superuser: Risottorijst conflict prompts options, preview is read-only and
   })
   await expect(page.getByTestId('external-databases-2-table')).toContainText('RISOTTORIJST')
   await expect(page.getByTestId('external-databases-2-table')).not.toContainText('Handmatig:')
+  // The parent owns the single post-save success Melding, never a double overlay.
+  const success = page.getByTestId('app-feedback-success-overlay')
+  await expect(success).toBeVisible()
+  await expect(success).toContainText('Barcodeconflict opgelost')
+  await expect(success).toHaveCount(1)
 })
 
 test('Superuser: unsafe correction is shown as blocking overlay and writes nothing', async ({ page }) => {
