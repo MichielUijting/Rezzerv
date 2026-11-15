@@ -317,13 +317,12 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
             if (!saved.ok || result.corrected !== true) throw new Error(
               typeof result.detail === 'string' ? result.detail
                 : 'De barcodecorrectie is niet bevestigd. Er is niets veilig gewijzigd.')
+            // The parent refreshes the list and publishes one standard
+            // success Melding; avoid competing/double success overlays.
             onSaved({ status: 'success',
-              message: 'De barcode van ' + item.receipt_line_text + ' is gecontroleerd en gecorrigeerd naar '
-                + result.gtin + '. De kassabonnen en voorraad zijn niet gewijzigd.' })
-            showFeedback({
-              variant: 'success', title: 'Barcodeconflict opgelost',
-              message: 'Correcte barcode: ' + result.gtin + '. De artikellijst wordt vernieuwd.',
-            })
+              message: 'Barcodeconflict opgelost voor ' + item.receipt_line_text
+                + '. Correcte barcode: ' + result.gtin
+                + '. De kassabonnen en voorraad zijn niet gewijzigd.' })
             return false
           },
         })
