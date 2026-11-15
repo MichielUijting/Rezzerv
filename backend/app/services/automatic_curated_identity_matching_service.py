@@ -70,7 +70,7 @@ def _independently_proven_exact_names(conn):
 def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='platform_user') -> dict:
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
-    validate_recognition_actor(str(actor_id), actor_type)
+    validate_recognition_actor(actor_id, actor_type)
 
     # An unattended system run may reuse only independently proven same-product
     # identities. Creating a new variant and synonym edge requires explicit
