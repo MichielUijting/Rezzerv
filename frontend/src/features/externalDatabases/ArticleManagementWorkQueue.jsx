@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext, canCurrentUserPerform } from '../../lib/authSession'
 import { projectArticleWorkQueue, WORK_TYPES } from './articleManagementWorkQueueModel'
 
 const PAGE_SIZE = 100
@@ -85,9 +85,14 @@ export default function ArticleManagementWorkQueue({ isPlatformSuperuser = false
             || source.total !== source.items.length) {
           throw new Error('Het bonartikeloverzicht is onvolledig.')
         }
+        const actor = readStoredAuthContext()
         const queue = projectArticleWorkQueue(
           source.items, classification.products, classification.tasks,
-          { isSuperuser: isPlatformSuperuser },
+          {
+            isSuperuser: isPlatformSuperuser,
+            canClassifyGpc: canCurrentUserPerform('gpc.update', actor),
+            canClassifyCbs: canCurrentUserPerform('platform.external_products.link_existing', actor),
+          },
         )
         if (!controller.signal.aborted) setResult(queue)
       } catch (err) {
