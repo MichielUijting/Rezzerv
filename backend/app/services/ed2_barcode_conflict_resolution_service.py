@@ -176,6 +176,21 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
                 "Cataloguskoppelingen of bonartikelcodes. Een correctie "
                 "zonder bonartikelnummer is daarom niet veilig."
             )
+        matching_manuals = conn.execute(
+            text("""
+                SELECT DISTINCT external_article_code, gtin
+                  FROM ed2_manual_barcodes
+                 WHERE retailer_code IN :aliases
+                   AND receipt_text_normalized = :label
+                 LIMIT 2
+            """).bindparams(bindparam("aliases", expanding=True)),
+            {"aliases": aliases, "label": label},
+        ).mappings().all()
+        if len(matching_manuals) != 1 or str(matching_manuals[0]["external_article_code"] or ""):
+            blocks.append(
+                "Bij deze bonnaam bestaat ook een andere winkelartikelcode "
+                "of barcodeclaim. Correctie zonder bonartikelnummer is niet eenduidig."
+            )
     if mode != "keep_catalog" and manual:
         scope = classify_barcode_scope(selected_gtin)["scope"] if selected_gtin else ""
         if scope not in ("global_candidate", "restricted"):
