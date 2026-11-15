@@ -31,11 +31,11 @@ assert.match(src, /column\.filterPredicate\(row, activeFilterValue\)/)
 // The filter therefore searches both values, while =leeg / =nietleeg
 // treat the cell as empty only when neither barcode exists.
 const artikelbeheer = fs.readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
-assert.match(artikelbeheer, /getSortValue: \\(row\\) => displayEd2Gtin\\(row\\.article_code \\|\\| row\\.manual_barcode \\|\\| ''\\)/)
-assert.match(artikelbeheer, /getFilterValue: \\(row\\) => \\[row\\.article_code, row\\.manual_barcode,/)
-assert.match(artikelbeheer, /filterPredicate: \\(row, filter\\) => \\[row\\.article_code, row\\.manual_barcode,/)
-assert.match(artikelbeheer, /displayEd2Gtin\\(row\\.article_code \\|\\| row\\.manual_barcode \\|\\| ''\\)\\]\\.filter\\(Boolean\\)/)
-assert.match(artikelbeheer, /const \\{ barcodeConflict, catalogOwnerConflict \\} = ed2BarcodeIdentityState\\(row\\)/)
+assert.match(artikelbeheer, /getSortValue: \(row\) => displayEd2Gtin\(row\.article_code \|\| row\.manual_barcode \|\| ''\)/)
+assert.match(artikelbeheer, /getFilterValue: \(row\) => \[row\.article_code, row\.manual_barcode,/)
+assert.match(artikelbeheer, /filterPredicate: \(row, filter\) => \[row\.article_code, row\.manual_barcode,/)
+assert.match(artikelbeheer, /displayEd2Gtin\(row\.article_code \|\| row\.manual_barcode \|\| ''\)\]\.filter\(Boolean\)/)
+assert.match(artikelbeheer, /const \{ barcodeConflict, catalogOwnerConflict \} = ed2BarcodeIdentityState\(row\)/)
 assert.equal(displayEd2Gtin('08719587106174'), '8719587106174')
 assert.equal(displayEd2Gtin('08719587106175'), '08719587106175')
 const equivalent = ed2BarcodeIdentityState({
