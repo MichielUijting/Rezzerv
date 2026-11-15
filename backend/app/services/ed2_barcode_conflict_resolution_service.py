@@ -77,7 +77,7 @@ def _inspect(conn, *, source: dict[str, Any], receipt_item_id: str,
         link_sql += " FOR UPDATE OF link"
     links = [dict(row) for row in conn.execute(
         text(link_sql).bindparams(bindparam("aliases", expanding=True)),
-        {"aliases": aliases, "code": code},
+        {"aliases": aliases, "code": code, "label": label},
     ).mappings().all()]
     blocks = []
     if len(manual_rows) != 1:
