@@ -386,7 +386,13 @@ export default function ExternalDatabases2Page() {
             if (task.area === 'identity') {
               setSelectedItem(null)
               setSelectedIds([])
-              setFilters({})
+              // Filter on actual source attributes; source ID remains the
+              // definitive selection so equal names never identify a task.
+              setFilters({
+                receipt_line_text: task.name,
+                retailer: RETAILERS[task.retailer] || task.retailer,
+                ...(task.number ? { receipt_article_number: task.number } : {}),
+              })
               setActiveStatusCounter('')
               setTablePage(1)
             }
