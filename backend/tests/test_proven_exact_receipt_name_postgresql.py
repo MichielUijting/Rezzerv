@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.services.proven_exact_receipt_name_service import _persist_exact_name_match
+from app.services.article_recognition_service_actor import SERVICE_ACTOR_ID
 
 
 def _isolated_connection():
@@ -120,6 +121,22 @@ def test_exact_name_write_has_no_gtin_synonym_or_household_side_effects():
                 actor_id="platform-frontteam")
         assert conn.execute(text("SELECT count(*) FROM ed2_receipt_family_links")).scalar_one() == 1
         assert conn.execute(text("SELECT count(*) FROM auth_audit_log")).scalar_one() == 1
+        # Autonomous recognition has a distinct, non-human actor in the same
+        # canonical audit table, never the receipt uploader or a Superuser.
+        assert _persist_exact_name_match(
+            conn, source_key=("jumbo", "andere bewezen melk", "114"),
+            product_id="milk", witness=arguments["witness"],
+            actor_id=SERVICE_ACTOR_ID, actor_type="system_service"
+        ) is True
+        audit_actors = conn.execute(text("""
+            SELECT actor_user_id, actor_type FROM auth_audit_log
+            ORDER BY actor_type
+        """)).all()
+        assert (SERVICE_ACTOR_ID, "system_service") in [tuple(row) for row in audit_actors]
+        assert ("platform-frontteam", "platform_user") in [tuple(row) for row in audit_actors]
+        assert conn.execute(text("SELECT COUNT(*) FROM ed2_receipt_family_links")).scalar_one() == 2
+        assert before == conn.execute(text(
+            "SELECT id, name, primary_gtin FROM global_products ORDER BY id")).all()
     finally:
         conn.rollback()
         conn.close()
