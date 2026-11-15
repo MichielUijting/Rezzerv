@@ -1921,3 +1921,16 @@ uitsluitend uitleg, niet de oude ongeschikte koppelingknop en niet de
 Superuser-correctieactie. Bestaande `Button`-, formulier- en Melding-componenten
 worden hergebruikt; geen nieuwe kleur, schermafmetingen, componentstijl of
 extra in-screen feedbackpatroon.
+
+### Artikelbeheer: leesbare Werkvoorraad-filters — 15 november 2026
+
+De taaksoortknoppen van de Werkvoorraad blijven ook tijdens het laden leesbaar.
+De actieve taaksoort gebruikt de bestaande primaire Inhuis-knop (donkergroene
+achtergrond, witte tekst). Inactieve taaksoorten gebruiken binnen de bestaande
+ED2-tellerbalk een witte achtergrond, donkergroene tekst en een dunne rand
+met de standaard Inhuis-kleurtoken `--color-ui-primary`. Daarmee wordt het
+contrast hersteld zonder een nieuwe knopcomponent of kleurtoken. Eventuele
+bestaande statusafhankelijke ED2-tellerachtergronden blijven behouden.
+De filterknoppen, de tellerdefinities en alle beveiligde read-only gegevensbronnen
+blijven functioneel ongewijzigd. De bestaande Playwrighttest controleert de
+leesbare kleurcombinatie voor mobiele en desktopweergave.
