@@ -287,3 +287,32 @@ def test_other_households_receipt_names_with_same_store_code_block_shared_mutati
             confirm(conn, checked["preview_fingerprint"], mode, barcode)
     assert preview(conn, "keep_catalog")["can_confirm"] is True
     assert not conn.writes and not events
+
+
+def test_catalog_product_owner_disagreement_blocks_keep_manual(context, monkeypatch):
+    conn, events = context
+    monkeypatch.setattr(
+        service, "_owner", lambda *_args, **_kwargs: ("different-product", True)
+    )
+    checked = preview(conn, "keep_manual")
+    assert checked["can_confirm"] is False
+    assert any("niet aantoonbaar" in reason for reason in checked["blocked_reasons"])
+    with pytest.raises(ValueError, match="Correctie"):
+        confirm(conn, checked["preview_fingerprint"], "keep_manual")
+    assert not conn.writes and not events
+
+
+def test_truncated_shared_retailer_code_evidence_cannot_authorize_reassignment(context):
+    conn, events = context
+    # A bounded preview must never claim an exact match if it has sampled only
+    # 101 out of a possible larger set of receipt identities.
+    conn.receipt_names = [
+        {"retailer": "Albert Heijn", "bonnaam": "RISOTTORIJST"}
+        for _ in range(101)
+    ]
+    checked = preview(conn, "use_other", OTHER_GTIN)
+    assert checked["can_confirm"] is False
+    assert any("te veel" in reason for reason in checked["blocked_reasons"])
+    with pytest.raises(ValueError, match="Correctie"):
+        confirm(conn, checked["preview_fingerprint"], "use_other", OTHER_GTIN)
+    assert not conn.writes and not events
