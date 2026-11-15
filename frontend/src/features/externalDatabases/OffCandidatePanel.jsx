@@ -6,6 +6,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import { ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
@@ -25,8 +26,8 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
-  const hasBarcodeConflict = Boolean(item.article_code && item.manual_barcode
-    && String(item.article_code) !== String(item.manual_barcode))
+  const identityState = ed2BarcodeIdentityState(item)
+  const requiresIdentityReview = identityState.barcodeConflict || identityState.catalogOwnerConflict
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -43,7 +44,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => () => verificationRef.current?.abort(), [])
 
   useEffect(() => {
-    if (hasBarcodeConflict) {
+    if (requiresIdentityReview) {
       // The only safe action until resolution is the central Superuser
       // conflict overlay, not a legacy OFF or household-bound write flow.
       setResults([])
@@ -81,10 +82,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
     search()
     return () => { active = false; controller.abort() }
-  }, [item, attempt, hasBarcodeConflict])
+  }, [item, attempt, requiresIdentityReview])
 
   async function selectCandidate(candidate) {
-    if (verifying || linking || hasBarcodeConflict) return
+    if (verifying || linking || requiresIdentityReview) return
     setLinkError('')
     if (item.link_status && item.link_status !== 'unlinked') {
       setLinkError('Dit artikel is al gekoppeld of wacht op classificatie. Controleer eerst de bestaande koppeling.')
@@ -190,7 +191,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
   }
 
-  if (hasBarcodeConflict) return (
+  if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
       data-testid="ed2-barcode-conflict-panel">
       <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
