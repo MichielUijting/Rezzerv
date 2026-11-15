@@ -242,3 +242,32 @@ def test_ambiguous_retailer_links_and_absent_actor_fail_closed(context):
     with pytest.raises(ValueError, match="bevestiger"):
         confirm(conn, "a" * 64, actor="")
     assert not conn.writes and not events
+
+
+def test_frontteam_cannot_preview_or_confirm_central_barcode_corrections(monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_routes
+
+    monkeypatch.setattr(
+        catalog_routes, "require_platform_permission_from_session",
+        lambda permission: SimpleNamespace(
+            user_id="frontteam", is_platform_superuser=False,
+        ),
+    )
+    requests = [
+        lambda: catalog_routes.preview_ed2_barcode_conflict_resolution(
+            catalog_routes.Ed2BarcodeConflictPreviewRequest(
+                receipt_item_id=RECEIPT_ITEM, mode="keep_catalog",
+            )
+        ),
+        lambda: catalog_routes.confirm_ed2_barcode_conflict_resolution(
+            catalog_routes.Ed2BarcodeConflictConfirmRequest(
+                receipt_item_id=RECEIPT_ITEM, mode="keep_catalog",
+                preview_fingerprint="a" * 64,
+            )
+        ),
+    ]
+    for request in requests:
+        with pytest.raises(HTTPException) as error:
+            request()
+        assert error.value.status_code == 403
