@@ -209,5 +209,5 @@ const homeNavigation = readFileSync(new URL('../src/features/home/homeNavigation
 const articleManagement = readFileSync(new URL('../src/features/externalDatabases/ExternalDatabases2Page.jsx', import.meta.url), 'utf8')
 assert.doesNotMatch(homeNavigation, /key:\s*'artikelsynoniemen'/)
 assert.match(homeNavigation, /key:\s*'externe-databases-2', label:\s*'Artikelbeheer'/)
-assert.match(articleManagement, /activeArea === "synonyms"\s*\?\s*<ArticleSynonymsPage embedded\s*\/>/)
+assert.match(articleManagement, /activeArea === "synonyms"\s*\?\s*<ArticleSynonymsPage[\s\S]*?embedded initialArticleId=\{queueTaskFocus\?\.area === 'synonyms'/)
 assert.match(articleManagement, /import ArticleSynonymsPage from/)
