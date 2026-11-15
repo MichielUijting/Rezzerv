@@ -12,6 +12,7 @@ import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import Ed2MatchPage from './Ed2MatchPage'
+import ArticleManagementWorkQueue from './ArticleManagementWorkQueue'
 import ClassificationWorkMonitor from './ClassificationWorkMonitor'
 import CombinedClassificationWorkspace from './CombinedClassificationWorkspace'
 import ArticleSynonymsPage from '../articleSynonyms/ArticleSynonymsPage'
@@ -94,6 +95,7 @@ export default function ExternalDatabases2Page() {
   const [tablePage, setTablePage] = useState(() => Math.max(1, Number(restored?.page) || 1))
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [queueTaskFocus, setQueueTaskFocus] = useState(null)
   const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
@@ -356,8 +358,9 @@ export default function ExternalDatabases2Page() {
             classification_pending: loadedItems.filter((item) => item.link_status === 'classification_pending').length,
             linked: loadedItems.filter((item) => item.link_status === 'linked').length,
           })
-          if (location.state?.selectedItemId) {
-            setSelectedItem(loadedItems.find((item) => item.id === location.state.selectedItemId) || null)
+          if (queueTaskFocus?.sourceId || location.state?.selectedItemId) {
+            const targetId = queueTaskFocus?.sourceId || location.state.selectedItemId
+            setSelectedItem(loadedItems.find((item) => item.id === targetId) || null)
           }
         }
       } catch {
@@ -368,7 +371,7 @@ export default function ExternalDatabases2Page() {
     }
     load()
     return () => { cancelled = true }
-  }, [location.state?.selectedItemId, refreshVersion, activeArea, showFeedback])
+  }, [location.state?.selectedItemId, queueTaskFocus?.sourceId, refreshVersion, activeArea, showFeedback])
 
   return (
     <AppShell title="Artikelbeheer" showExit={false}>
@@ -376,8 +379,24 @@ export default function ExternalDatabases2Page() {
         <h2>Artikelbeheer</h2>
         <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea}
           isPlatformSuperuser={isPlatformSuperuser} />
-        {activeArea === 'matching' && isPlatformSuperuser ? <Ed2MatchPage /> : null}
-        {activeArea === "classify" ? <CombinedClassificationWorkspace /> : null}
+        {activeArea === 'workqueue' ? <ArticleManagementWorkQueue isPlatformSuperuser={isPlatformSuperuser}
+          onOpenTask={(task) => {
+            if (task.area === 'matching' && !isPlatformSuperuser) return
+            setQueueTaskFocus(task)
+            if (task.area === 'identity') {
+              setSelectedItem(null)
+              setSelectedIds([])
+              setFilters({})
+              setActiveStatusCounter('')
+              setTablePage(1)
+            }
+            setActiveArea(task.area)
+          }} /> : null}
+        {activeArea === 'matching' && isPlatformSuperuser
+          ? <Ed2MatchPage initialReceiptItemId={queueTaskFocus?.area === 'matching' ? queueTaskFocus.sourceId : ''} /> : null}
+        {activeArea === "classify" ? <CombinedClassificationWorkspace
+          key={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : 'classify'}
+          initialProductId={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : ''} /> : null}
         {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
         {activeArea === "overview" ? <ArticleRelationshipOverview /> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
