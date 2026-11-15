@@ -435,7 +435,7 @@ function AppFeedbackDialog({
                     data-testid={`${testId}-field-${field.name}`}
                     style={{ minHeight: '48px', padding: '10px 12px', fontSize: '16px', width: '100%' }}
                   >
-                    <option value="">Kies welke classificatie moet gelden</option>
+                    <option value="">{field.placeholder || "Maak een keuze"}</option>
                     {field.options.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}

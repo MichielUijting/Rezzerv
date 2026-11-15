@@ -6,6 +6,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
+import { ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 import Ed2BarcodeScanner from './Ed2BarcodeScanner'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
@@ -25,6 +26,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
+  const identityState = ed2BarcodeIdentityState(item)
+  const alreadyIdentified = identityState.equivalent && !identityState.catalogOwnerConflict
+  const requiresIdentityReview = identityState.barcodeConflict
+    || identityState.catalogOwnerConflict
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -41,6 +46,15 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => () => verificationRef.current?.abort(), [])
 
   useEffect(() => {
+    if (requiresIdentityReview || alreadyIdentified) {
+      // Neither a genuine identity conflict nor an already-confirmed,
+      // equivalent GTIN needs an unrelated OFF search. Only actual conflicts
+      // expose the central Superuser review overlay.
+      setResults([])
+      setError('')
+      setLoading(false)
+      return undefined
+    }
     const controller = new AbortController()
     let active = true
     setLoading(true)
@@ -71,10 +85,10 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
     search()
     return () => { active = false; controller.abort() }
-  }, [item, attempt])
+  }, [item, attempt, requiresIdentityReview, alreadyIdentified])
 
   async function selectCandidate(candidate) {
-    if (verifying || linking) return
+    if (verifying || linking || requiresIdentityReview) return
     setLinkError('')
     if (item.link_status && item.link_status !== 'unlinked') {
       setLinkError('Dit artikel is al gekoppeld of wacht op classificatie. Controleer eerst de bestaande koppeling.')
@@ -179,6 +193,15 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
       setLinking(false)
     }
   }
+
+  if (alreadyIdentified) return null
+
+  if (requiresIdentityReview) return (
+    <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
+      data-testid="ed2-barcode-conflict-panel">
+      <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
+    </section>
+  )
 
   return (
     <section className="rz-external-receipt-detail" aria-labelledby="off-candidate-heading" data-testid="external-databases-2-off-panel" aria-busy={loading || verifying || linking}>
