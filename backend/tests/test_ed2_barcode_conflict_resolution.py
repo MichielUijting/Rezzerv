@@ -18,7 +18,7 @@ SOURCE = {
 RECEIPT_ITEM = "receipt-table-line:risotto"
 CATALOG_GTIN = "8712345678906"
 MANUAL_GTIN = "8722800072026"
-OTHER_GTIN = "8711111111116"
+OTHER_GTIN = "8711111111111"
 
 
 class Rows:
@@ -170,7 +170,7 @@ def test_catalog_choice_previews_without_writing_then_removes_only_exact_manual_
     assert conn.writes == ["delete_manual"]
     assert [e[0] for e in events] == ["audit"]
     assert conn.locks == sorted(conn.locks)
-    with pytest.raises(ValueError, match="Barcodegegevens|Correctie"):
+    with pytest.raises(ValueError, match="barcodegegevens|Correctie"):
         confirm(conn, prepared["preview_fingerprint"])
 
 
