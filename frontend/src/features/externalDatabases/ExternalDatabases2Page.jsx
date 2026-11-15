@@ -403,7 +403,9 @@ export default function ExternalDatabases2Page() {
         {activeArea === "classify" ? <CombinedClassificationWorkspace
           key={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : 'classify'}
           initialProductId={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : ''} /> : null}
-        {activeArea === "synonyms" ? <ArticleSynonymsPage embedded /> : null}
+        {activeArea === "synonyms" ? <ArticleSynonymsPage
+          key={queueTaskFocus?.area === 'synonyms' ? queueTaskFocus.productId : 'synonyms'}
+          embedded initialArticleId={queueTaskFocus?.area === 'synonyms' ? queueTaskFocus.productId : ''} /> : null}
         {activeArea === "overview" ? <ArticleRelationshipOverview /> : null}
         {activeArea === 'identity' ? <div id="ed2-work-table" className="rz-external-receipt-overview">
         <div className="rz-external-ed2-counters" aria-label="Artikelstatussen">
