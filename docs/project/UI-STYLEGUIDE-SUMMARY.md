@@ -1890,3 +1890,12 @@ standaard `Table`-component met een losse `Pagination` gebruiken
 24 px ruimte onder hun tabelviewport. Dit is alleen een visuele
 afstandscorrectie; het aantal rijen, sortering, filters, scrollbar,
 selectie en keyboardbediening blijven gelijk.
+
+
+## Artikelbeheer: aparte procesingang Werkvoorraad — 15 november 2026
+
+De vijf bestaande inhoudelijke werkgebieden **Identificeren, Matchen, Classificeren, Synoniemen en Overzicht** blijven onveranderd als eerste werkgebieden. Daaronder staat een afzonderlijke compacte standaardknop **Werkvoorraad** voor procesbegeleiding; deze is geen zesde editor en voert bij openen geen matching-POST uit.
+
+De Werkvoorraad wordt pas na expliciete selectie geladen en hergebruikt uitsluitend bestaande, bevoegdheidsbewaakte read-only gegevensbronnen. Binnen de bestaande centrale \`DataTable\` staan taaksoort, artikel, winkel, bonartikelnummer, barcode, concrete reden en een actie naar het juiste bestaande werkgebied. De afzonderlijke taaksoortknoppen tonen alleen volledig verifieerbare tellers; per GS1/CBS-systeem kan hetzelfde Catalogusproduct twee verschillende classificatietaken hebben. Een onbeschikbare projectie geeft een fout zonder fictieve nul of een gedeeltelijke eindteller. Voor synoniemvoorstellen zonder gezaghebbende centrale taakprojectie wordt geen teller verzonnen.
+
+Een geselecteerde rij krijgt de bestaande standaardselectiestijl; de actieknop eronder navigeert naar het betreffende werkgebied en brengt waar mogelijk de bron-/Catalogusselectie mee. Alleen de Superuser krijgt uitvoerbare Matchen-taken; Frontteamgebruikers krijgen de overige taken naar bestaande serverbevoegdheden. Het scherm gebruikt \`AppShell\`, \`ScreenCard\`, \`Button\`, \`DataTable\`, gewone responsieve paginering en bestaande primaire kleur-/feedbacktokens. Er is geen aparte kaart-, tabel-, modal- of overlayvariant toegevoegd.
