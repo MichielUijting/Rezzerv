@@ -187,50 +187,87 @@ def _official_cbs(conn, codes):
 
 
 def preview_import(conn, rows):
+    """Only actionable differences; identical GS1/CBS codes are never work items."""
     actual = current_products(conn)
     gs_codes = {x.get(key) for x in rows for key in ("gpc_voorstel", "gpc_controlealternatief")} - {""}
     cb_codes = {x.get(key) for x in rows for key in ("cbs_voorstel", "cbs_controlealternatief")} - {""}
     gs_ref = _official_gpc(conn, gs_codes)
     cb_ref = _official_cbs(conn, cb_codes)
+
+    def proposals(source, keys, official, existing, system):
+        candidates = []
+        invalid = []
+        seen = set()
+        for key, kind in keys:
+            code = str(source.get(key) or "").strip()
+            if not code or code == existing or code in seen:
+                continue
+            seen.add(code)
+            if code not in official:
+                invalid.append(code)
+                continue
+            record = official[code]
+            choice = {"code": code, "label": record if system == "gpc" else record["name"],
+                      "kind": kind}
+            if system == "cbs":
+                choice["reference_version"] = record["reference_version"]
+            candidates.append(choice)
+        return candidates, invalid
+
     out = []
-    for x in rows:
-        current = actual.get(x["product_id"])
-        problem = ""
+    counts = {"gpc_new": 0, "gpc_replace": 0, "cbs_new": 0, "cbs_replace": 0}
+    for source in rows:
+        current = actual.get(source["product_id"])
+        existing_gpc = str(current.get("gpc_brick_code") or "") if current else ""
+        existing_cbs = str(current.get("cbs_code") or "") if current else ""
+        gpc_candidates, invalid_gpc = proposals(
+            source, (("gpc_voorstel", "voorstel"), ("gpc_controlealternatief", "bestaand controleren")),
+            gs_ref, existing_gpc, "gpc",
+        )
+        cbs_candidates, invalid_cbs = proposals(
+            source, (("cbs_voorstel", "voorstel"), ("cbs_controlealternatief", "bestaand controleren")),
+            cb_ref, existing_cbs, "cbs",
+        )
+        # No visible work if both proposed values are already current. This
+        # also applies to spreadsheet rows flagged "Bestaand - controle nodig".
+        if not (gpc_candidates or cbs_candidates or invalid_gpc or invalid_cbs):
+            continue
+        problems = []
         if not current:
-            problem = "Catalogusartikel ontbreekt of is verwijderd."
-        elif current["name"] != x["name"] or current["snapshot_sha256"] != x["snapshot_sha256"]:
-            problem = "Catalogusartikel of classificatie is sinds de export gewijzigd."
-        elif (x["gpc_bestaand"] or "") != (current.get("gpc_brick_code") or "") or (
-             x["cbs_bestaand"] or "") != (current.get("cbs_code") or ""):
-            problem = "Bestaande classificaties verschillen van het exportbestand."
-        gpc_options = [{"code": code, "label": gs_ref[code], "kind": kind}
-                       for code, kind in ((x["gpc_voorstel"], "voorstel"),
-                                          (x["gpc_controlealternatief"], "bestaand controleren"))
-                       if code and code in gs_ref]
-        cbs_options = [{"code": code, "label": cb_ref[code]["name"],
-                        "reference_version": cb_ref[code]["reference_version"], "kind": kind}
-                       for code, kind in ((x["cbs_voorstel"], "voorstel"),
-                                          (x["cbs_controlealternatief"], "bestaand controleren"))
-                       if code and code in cb_ref]
+            problems.append("Catalogusartikel ontbreekt of is verwijderd.")
+        elif current["name"] != source["name"] or current["snapshot_sha256"] != source["snapshot_sha256"]:
+            problems.append("Catalogusartikel of classificatie is sinds de export gewijzigd.")
+        elif (source["gpc_bestaand"] or "") != existing_gpc or (source["cbs_bestaand"] or "") != existing_cbs:
+            problems.append("Bestaande classificaties verschillen van het exportbestand.")
+        if len(gpc_candidates) > 1 or len(cbs_candidates) > 1:
+            problems.append("Meerdere verschillende voorstellen voor dezelfde classificatie; handmatig beoordelen.")
+        if invalid_gpc or invalid_cbs:
+            problems.append("Een of meer voorstelcodes ontbreken in de actuele officiële referentie.")
+        problem = " ".join(problems)
+        gpc_change = gpc_candidates[0] if len(gpc_candidates) == 1 and not invalid_gpc else None
+        cbs_change = cbs_candidates[0] if len(cbs_candidates) == 1 and not invalid_cbs else None
+        if not problem:
+            if gpc_change:
+                counts["gpc_replace" if existing_gpc else "gpc_new"] += 1
+            if cbs_change:
+                counts["cbs_replace" if existing_cbs else "cbs_new"] += 1
         out.append({
-            "product_id": x["product_id"], "name": x["name"], "brand": x["brand"],
-            "snapshot_sha256": x["snapshot_sha256"],
-            "current_gpc": current.get("gpc_brick_code", "") if current else "",
-            "current_cbs": current.get("cbs_code", "") if current else "",
-            "gpc_status": x["gpc_status"], "cbs_status": x["cbs_status"],
-            "gpc_reason": x["gpc_onderbouwing"], "cbs_reason": x["cbs_onderbouwing"],
-            "review_existing": bool(x["controle_bestaande_code"]),
-            "gpc_options": gpc_options, "cbs_options": cbs_options,
-            "problem": problem,
-            "invalid_gpc": [code for code in (x["gpc_voorstel"], x["gpc_controlealternatief"]) if code and code not in gs_ref],
-            "invalid_cbs": [code for code in (x["cbs_voorstel"], x["cbs_controlealternatief"]) if code and code not in cb_ref],
+            "product_id": source["product_id"], "name": source["name"],
+            "brand": source["brand"], "snapshot_sha256": source["snapshot_sha256"],
+            "current_gpc": existing_gpc, "current_cbs": existing_cbs,
+            "gpc_status": source["gpc_status"], "cbs_status": source["cbs_status"],
+            "gpc_reason": source["gpc_onderbouwing"], "cbs_reason": source["cbs_onderbouwing"],
+            "review_existing": bool(source["controle_bestaande_code"]),
+            "gpc_options": gpc_candidates, "cbs_options": cbs_candidates,
+            "gpc_change": gpc_change, "cbs_change": cbs_change,
+            "problem": problem, "invalid_gpc": invalid_gpc, "invalid_cbs": invalid_cbs,
         })
     return {
-        "rows": out,
-        "total": len(out),
+        "rows": out, "total": len(rows), "changed_count": len(out),
+        "unchanged": len(rows) - len(out),
         "review_existing": sum(bool(x["review_existing"]) for x in out),
-        "blocked": sum(bool(x["problem"] or x["invalid_gpc"] or x["invalid_cbs"]) for x in out),
-        "no_changes_yet": True,
+        "blocked": sum(bool(x["problem"]) for x in out),
+        "no_changes_yet": True, **counts,
     }
 
 

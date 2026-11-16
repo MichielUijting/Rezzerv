@@ -23,15 +23,26 @@ Excel is nooit het autoriteitsbewijs voor een code.
 Alleen na Artikelbeheer → **Classificeren** zijn de twee standaardacties
 **Catalogus exporteren** en **Classificaties importeren** zichtbaar.
 Importeren start met Excel (.xlsx) of CSV en een expliciete read-only preview.
-De tabel toont het Catalogusartikel, beide bestaande codes, geldige voorstellen,
-redenen voor review en eventuele blokkades. Zoeken, filteren en de
-bestaande DataTable-paginering (8) blijven beschikbaar.
-De knop om hoge voorstellen te selecteren kiest maximaal 100 nieuwe
-classificaties zonder bestaande code; die selectie is nog géén goedkeuring.
-Andere voorgestelde/controlecodes kunnen apart per systeem worden gekozen.
-Een andere bestaande GS1/CBS-code vervangen kan alleen als de gebruiker
-per keuze **Bestaande code vervangen** expliciet aanvinkt.
-De centrale Melding-overlay vraagt een laatste bevestiging vóór het schrijven.
+De importwerkvoorraad bevat **uitsluitend** artikelen waarvoor ten minste één
+voorgestelde officiële GS1 GPC- of CBS ECOICOP-code anders is dan de **actuele**
+classificatie. Een gelijke code wordt niet getoond, ook niet als Excel
+"Bestaand - controle nodig" meldt. Afwijkingen worden per classificatiesysteem
+uitgesplitst in **Nieuw** en **Anders dan bestaand**, met code, omschrijving,
+status en onderbouwing. Geen voorstel of dezelfde code als de actuele code
+betekent geen importtaak; meerdere verschillende voorstellen voor één systeem
+worden niet automatisch gekozen maar als blokkade getoond.
+
+De bestaande DataTable blijft de paginerings-, sorteer- en filterautoriteit
+(8 regels per pagina). De **enige checkboxes** zijn de rijselectie en
+**Alles op deze pagina** rechtsboven. Rijselectie betekent: verwerk alle
+veilige nieuwe/afwijkende GS1- en CBS-voorstellen van dat artikel tezamen.
+De verwerking gebeurt met de primaire bulkknop **Geselecteerde rijen verwerken**
+rechts **onder de tabel**, bij de standaardpaginering. Maximaal 100
+classificatiecodes per batch, zonder één artikel tussen twee batches te splitsen.
+De centrale Melding-overlay toont aantallen toe te voegen én te vervangen
+classificaties en vraagt expliciete definitieve bevestiging. Er zijn geen
+checkboxes of code-keuzelijsten midden in de tabel, geen automatische
+classificatietoekenning en geen stille overschrijving.
 
 ## Backendveiligheid
 - Preview: alleen lezen, PostgreSQL REPEATABLE READ READ ONLY, controle van

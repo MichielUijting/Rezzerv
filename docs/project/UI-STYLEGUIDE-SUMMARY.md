@@ -1980,9 +1980,14 @@ De knop **Catalogus exporteren** staat uitsluitend binnen het werkgebied
 Artikelbeheer-startpagina. In dezelfde sectie kan de Superuser of een volgens
 bestaande autorisatieregels bevoegde Frontteammedewerker een Excel-/CSV-
 classificatievoorstellenbestand selecteren, eerst alleen-lezen laten toetsen en
-per artikel expliciet GS1- en CBS-codes goedkeuren. De preview toont
-ongewijzigde codes, voorgestelde codes, te controleren bestaande GS1-codes en
-blokkades. Bestaande classificaties blijven behouden, tenzij de bevoegde
-gebruiker per artikel ook **Bestaande code vervangen** aanvinkt. De bulkgoedkeuring
-vereist een bevestiging via de centrale Melding-overlay en verwerkt maximaal
-100 codes in één transactionele batch, zonder nieuwe modal of tabelcomponent.
+per artikel expliciet GS1- en CBS-codes goedkeuren. De importwerkvoorraad toont uitsluitend GS1- of CBS-classificaties die
+**nieuw** of **anders** zijn dan de actuele Cataloguscode. Voorstellen die
+gelijk zijn aan de huidige classificatie verdwijnen, ook wanneer het Excelbestand
+nog een controlemarkering heeft. De gebruiker selecteert artikelen uitsluitend
+met een rijcheckbox of met **Alles op deze pagina** rechtsboven. Er staan geen
+codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
+**onder de standaardtabel** en de bestaande centrale Melding-overlay vraagt
+expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal
+100 classificatiecodes per transactionele batch; verschillende onduidelijke
+alternatieven worden geblokkeerd. Bestaande classificaties van niet-geselecteerde
+artikelen blijven onveranderd.

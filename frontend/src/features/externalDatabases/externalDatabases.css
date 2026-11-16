@@ -666,6 +666,9 @@
 .rz-classification-import-panel { margin: 1rem 0 1.25rem; }
 .rz-classification-import-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: .75rem 0; }
 .rz-classification-import-actions label { display: flex; flex-direction: column; gap: .25rem; max-width: min(100%, 26rem); }
-.rz-classification-import-choice { display: flex; flex-direction: column; gap: .4rem; min-width: 13rem; }
-.rz-classification-import-choice select { max-width: 19rem; width: 100%; }
-.rz-classification-import-choice label { display: flex; align-items: center; gap: .25rem; font-weight: 400; }
+.rz-classification-import-select-all { display: flex; justify-content: flex-end; margin: .3rem 0; }
+.rz-classification-import-select-all label { display: inline-flex; align-items: center; gap: .45rem; }
+.rz-classification-import-proposal { display: flex; flex-direction: column; gap: .15rem; overflow-wrap: anywhere; }
+.rz-classification-import-proposal small { line-height: 1.4; }
+[data-testid="classification-import-table"] tr[aria-selected="true"] > td { background: #d7f2df; }
+[data-testid="classification-import-table"] td input[type="checkbox"] { cursor: pointer; }

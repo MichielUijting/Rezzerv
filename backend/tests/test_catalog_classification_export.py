@@ -250,3 +250,56 @@ def test_classification_import_csv_and_excel_share_columns():
         workbook.writestr("xl/_rels/workbook.xml.rels", rels)
         workbook.writestr("xl/worksheets/sheet1.xml", tab)
     assert read_proposals(zipped.getvalue(), "voorstellen.xlsx")[0]["cbs_voorstel"] == "011920"
+
+
+def test_import_preview_hides_identical_codes_per_gpc_and_cbs_even_if_review_flagged(export_database):
+    with export_database.connect() as conn:
+        current = current_products(conn)["p1"]
+        record = {key: "" for key in CSV_FIELDS}
+        record.update({
+            "product_id": "p1", "name": current["name"],
+            "snapshot_sha256": current["snapshot_sha256"],
+            "gpc_bestaand": current["gpc_brick_code"],
+            "cbs_bestaand": current["cbs_code"],
+            "gpc_voorstel": current["gpc_brick_code"],
+            "gpc_controlealternatief": current["gpc_brick_code"],
+            "cbs_voorstel": current["cbs_code"],
+            "controle_bestaande_code": "ja",
+        })
+        result = preview_import(conn, [record])
+        assert result["total"] == 1
+        assert result["changed_count"] == 0 and result["unchanged"] == 1
+        assert result["rows"] == []
+        assert result["review_existing"] == 0
+        assert result["gpc_new"] == result["gpc_replace"] == 0
+        assert result["cbs_new"] == result["cbs_replace"] == 0
+
+
+def test_import_preview_shows_only_differing_system_and_blocks_unofficial_code(export_database):
+    with export_database.connect() as conn:
+        current = current_products(conn)["p1"]
+        record = {key: "" for key in CSV_FIELDS}
+        record.update({
+            "product_id": "p1", "name": current["name"],
+            "snapshot_sha256": current["snapshot_sha256"],
+            "gpc_bestaand": current["gpc_brick_code"],
+            "cbs_bestaand": current["cbs_code"],
+            "gpc_voorstel": current["gpc_brick_code"],
+            "cbs_voorstel": "011410",
+            "cbs_status": "Voorstel middel",
+            "controle_bestaande_code": "ja",
+        })
+        result = preview_import(conn, [record])
+        assert result["changed_count"] == 1 and result["unchanged"] == 0
+        assert result["gpc_new"] == result["gpc_replace"] == 0
+        assert result["cbs_new"] == 0 and result["cbs_replace"] == 1
+        item = result["rows"][0]
+        assert item["gpc_change"] is None and item["gpc_options"] == []
+        assert item["cbs_change"]["code"] == "011410"
+        assert item["current_cbs"] == "011420"
+        assert item["problem"] == ""
+        record["cbs_voorstel"] = "999999"
+        blocked = preview_import(conn, [record])
+        assert blocked["changed_count"] == 1 and blocked["blocked"] == 1
+        assert blocked["rows"][0]["cbs_change"] is None
+        assert blocked["rows"][0]["invalid_cbs"] == ["999999"]

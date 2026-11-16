@@ -180,19 +180,20 @@ test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ 
   await expect(page.getByRole('button', { name: 'Matchen' })).toHaveCount(0)
 })
 
-test('Classificeren: import controleert eerst en bevestigt alleen expliciet gekozen GS1 en CBS', async ({ page }) => {
+test('Classificeren: alleen nieuwe en afwijkende classificaties, rijselectie en bulk onder de tabel', async ({ page }) => {
   await mountMockBackend(page)
   const sent = []
   await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
-    total: 1, blocked: 0, review_existing: 1, no_changes_yet: true,
+    total: 617, unchanged: 616, changed_count: 1, gpc_new: 0, gpc_replace: 1,
+    cbs_new: 1, cbs_replace: 0, blocked: 0, review_existing: 1, no_changes_yet: true,
     rows: [{
       product_id: 'product-milk', name: 'Halfvolle melk', brand: '',
       snapshot_sha256: 'a'.repeat(64), current_gpc: '10000002', current_cbs: '',
       gpc_status: 'Bestaand - controle nodig', cbs_status: 'Voorstel hoog',
-      gpc_reason: '', cbs_reason: 'Productnaam', review_existing: true,
+      gpc_reason: 'GS1 mogelijk onjuist', cbs_reason: 'Productnaam', review_existing: true,
       problem: '', invalid_gpc: [], invalid_cbs: [],
-      gpc_options: [{ code: '10000001', label: 'Drinkmelk', kind: 'bestaand controleren' }],
-      cbs_options: [{ code: '011420', label: 'Melk', reference_version: '2026', kind: 'voorstel' }],
+      gpc_change: { code: '10000001', label: 'Drinkmelk', kind: 'bestaand controleren' },
+      cbs_change: { code: '011420', label: 'Melk', reference_version: '2026', kind: 'voorstel' },
     }],
   } }))
   await page.route('**/api/cbs-classifications/classification-import/confirm', async route => {
@@ -201,30 +202,62 @@ test('Classificeren: import controleert eerst en bevestigt alleen expliciet geko
   })
   await page.goto('/externe-databases-2')
   await page.getByRole('button', { name: 'Classificeren' }).click()
-  await expect(page.getByTestId('classification-import-panel')).toBeVisible()
   await page.getByTestId('classification-file').setInputFiles({
     name: 'Inhuis_Classificatievoorstellen.csv', mimeType: 'text/csv',
     buffer: Buffer.from('testfile-contents'),
   })
   await expect(page.getByTestId('classification-import-table')).toHaveCount(0)
   await page.getByTestId('classification-import-preview').click()
-  await expect(page.getByTestId('classification-import-table')).toContainText('Halfvolle melk')
-  await expect(page.getByTestId('classification-import-table')).toContainText('Productnaam')
-  await page.getByLabel('GPC voorstel Halfvolle melk').selectOption('10000001')
-  await page.getByLabel('CBS voorstel Halfvolle melk').selectOption('011420')
-  await expect(page.getByTestId('classification-import-confirm')).toContainText('2')
-  await page.getByTestId('classification-import-confirm').click()
-  await expect(page.getByText('Bestaande code vervangen')).toBeVisible()
-  await expect(page.getByText('Bestaande code vervangen').locator('input')).not.toBeChecked()
-  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
-  await expect(page.getByRole('alert')).toContainText('Bevestig per artikel')
+  const table = page.getByTestId('classification-import-table')
+  await expect(table).toContainText('Halfvolle melk')
+  await expect(table).toContainText('10000001')
+  await expect(table).toContainText('011420')
+  await expect(table).toContainText('Productnaam')
+  await expect(page.getByTestId('classification-import-summary')).toContainText('616 gelijke overgeslagen')
+  await expect(table.getByRole('checkbox')).toHaveCount(1)
+  await expect(table.getByRole('combobox')).toHaveCount(0)
+  await expect(page.getByText('Bestaande code vervangen')).toHaveCount(0)
+  const selection = page.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' })
+  const all = page.getByRole('checkbox', { name: 'Alles op deze pagina' })
+  await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
+  await all.check()
+  await expect(selection).toBeChecked()
+  await all.uncheck()
+  await expect(selection).not.toBeChecked()
+  await selection.check()
+  await expect(page.getByTestId('classification-import-confirm')).toContainText('(1)')
+  const bulk = page.getByTestId('classification-import-confirm')
+  await bulk.click()
+  await expect(page.getByTestId('app-feedback-warning-overlay')).toContainText('1 GS1 vervangen')
+  await expect(page.getByTestId('app-feedback-warning-overlay')).toContainText('1 CBS nieuw')
   expect(sent).toHaveLength(0)
-  // The warning dialog correctly intercepts clicks until explicitly closed.
   await page.getByRole('button', { name: 'Annuleren' }).click()
-  await page.getByText('Bestaande code vervangen').locator('input').check()
-  await page.getByTestId('classification-import-confirm').click()
+  await expect(selection).toBeChecked()
+  await bulk.click()
   await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
   await expect.poll(() => sent.length).toBe(1)
   expect(sent[0].decisions.map(item => item.system).sort()).toEqual(['cbs', 'gpc'])
   expect(sent[0].decisions.find(item => item.system === 'gpc').allow_replace).toBe(true)
+  expect(sent[0].decisions.find(item => item.system === 'cbs').allow_replace).toBe(false)
+  await expect(table).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
+})
+
+test('Classificeren: identieke voorstellen verdwijnen zelfs als Excel controle nodig zegt', async ({ page }) => {
+  await mountMockBackend(page)
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 617, unchanged: 617, changed_count: 0, gpc_new: 0, gpc_replace: 0,
+    cbs_new: 0, cbs_replace: 0, blocked: 0, review_existing: 0, no_changes_yet: true,
+    rows: [],
+  } }))
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'classificaties.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('unused'),
+  })
+  await page.getByTestId('classification-import-preview').click()
+  await expect(page.getByTestId('classification-import-summary')).toContainText('617 gelijke overgeslagen')
+  await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
+  await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
+  await expect(page.getByRole('checkbox', { name: 'Alles op deze pagina' })).toBeDisabled()
 })

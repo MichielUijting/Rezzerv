@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import DataTable from '../../ui/DataTable'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -6,7 +6,19 @@ import { fetchJsonWithAuth, canCurrentUserPerform, readStoredAuthContext } from 
 
 const LIMIT = 100
 
-function selectionKey(row, system) { return row.product_id + ':' + system }
+function changesFor(row) {
+  return [row.gpc_change, row.cbs_change].filter(Boolean).length
+}
+
+const columns = [
+  { key: 'select', label: 'Selecteer', width: 86 },
+  { key: 'name', label: 'Artikel', width: 230, sortable: true, filterable: true },
+  { key: 'current_gpc', label: 'GS1 bestaand', width: 130, filterable: true },
+  { key: 'gpc_change', label: 'GS1 voorgesteld', width: 270 },
+  { key: 'current_cbs', label: 'CBS bestaand', width: 130, filterable: true },
+  { key: 'cbs_change', label: 'CBS voorgesteld', width: 270 },
+  { key: 'problem', label: 'Controle', width: 200 },
+]
 
 async function parseError(response, fallback) {
   const data = await response.json().catch(() => ({}))
@@ -22,26 +34,49 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   const canGpc = canCurrentUserPerform('platform.gpc.update', session)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [selection, setSelection] = useState({})
-  const [overrides, setOverrides] = useState({})
+  const [selectedRows, setSelectedRows] = useState({})
   const [processed, setProcessed] = useState({})
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [pageRows, setPageRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
 
-  const selected = useMemo(() => Object.entries(selection).filter(([, choice]) => Boolean(choice)), [selection])
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return (preview?.rows || []).filter((row) => {
-      if (needle && ![row.name, row.brand, row.product_id, row.current_gpc, row.current_cbs]
+      if (processed[row.product_id]) return false
+      if (needle && ![row.name, row.brand, row.product_id, row.current_gpc,
+        row.current_cbs, row.gpc_change?.code, row.cbs_change?.code,
+        row.gpc_change?.label, row.cbs_change?.label]
         .some((value) => String(value || '').toLowerCase().includes(needle))) return false
-      if (filter === 'review') return row.review_existing
-      if (filter === 'proposals') return Boolean(row.gpc_options.length || row.cbs_options.length)
-      if (filter === 'problems') return Boolean(row.problem || row.invalid_gpc.length || row.invalid_cbs.length)
+      if (filter === 'new') return Boolean(
+        (!row.current_gpc && row.gpc_change) || (!row.current_cbs && row.cbs_change))
+      if (filter === 'different') return Boolean(
+        (row.current_gpc && row.gpc_change) || (row.current_cbs && row.cbs_change))
+      if (filter === 'problems') return Boolean(row.problem)
       return true
     })
-  }, [preview, search, filter])
+  }, [preview, search, filter, processed])
+
+  const selected = useMemo(() =>
+    (preview?.rows || []).filter((row) => selectedRows[row.product_id] && !processed[row.product_id]),
+  [preview, selectedRows, processed])
+  const selectedCodes = selected.reduce((count, row) => count + changesFor(row), 0)
+  const canSelect = (row) => Boolean(canConfirm && !busy && !row.problem &&
+    changesFor(row) && (!row.gpc_change || canGpc) && !processed[row.product_id])
+
+  const onPageRowsChange = useCallback((items) => {
+    setPageRows((previous) => {
+      const nextIds = items.map((item) => item.product_id).join('|')
+      const previousIds = previous.map((item) => item.product_id).join('|')
+      return nextIds === previousIds ? previous : items
+    })
+  }, [])
+
+  const selectablePage = pageRows.filter(canSelect)
+  const allPageSelected = Boolean(selectablePage.length
+    && selectablePage.every((row) => selectedRows[row.product_id]))
 
   async function exportCatalog() {
     if (exportBusy) return
@@ -72,8 +107,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     if (!file || busy) return
     setBusy(true)
     setPreview(null)
-    setSelection({})
-    setOverrides({})
+    setSelectedRows({})
     setProcessed({})
     showFeedback({ variant: 'progress', message: 'Voorstellen worden gelezen en met de actuele Catalogus gecontroleerd...' })
     try {
@@ -98,69 +132,69 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     }
   }
 
-  function setChoice(row, system, code) {
-    const key = selectionKey(row, system)
-    const options = system === 'gpc' ? row.gpc_options : row.cbs_options
-    const option = options.find((item) => item.code === code)
-    if (row.problem || (system === 'gpc' && !canGpc) || !canConfirm || processed[key]) return
-    setSelection((previous) => ({ ...previous, [key]: option || null }))
-    setOverrides((previous) => ({ ...previous, [key]: false }))
+  function toggleRow(row) {
+    if (!canSelect(row)) return
+    const isSelected = Boolean(selectedRows[row.product_id])
+    if (!isSelected && selectedCodes + changesFor(row) > LIMIT) {
+      showFeedback({ variant: 'warning',
+        message: 'Maximaal 100 GS1- en CBS-codes per verwerking. Verwerk eerst de huidige selectie.' })
+      return
+    }
+    setSelectedRows((previous) => {
+      const next = { ...previous }
+      if (next[row.product_id]) delete next[row.product_id]
+      else next[row.product_id] = true
+      return next
+    })
   }
 
-  function selectHigh() {
-    const choices = {}
-    let count = 0
-    for (const row of preview?.rows || []) {
-      if (row.problem || row.invalid_gpc.length || row.invalid_cbs.length) continue
-      const productChoices = []
-      for (const system of ['gpc', 'cbs']) {
-        if (system === 'gpc' && !canGpc) continue
-        if (!canConfirm || processed[selectionKey(row, system)]) continue
-        const status = system === 'gpc' ? row.gpc_status : row.cbs_status
-        const current = system === 'gpc' ? row.current_gpc : row.current_cbs
-        const candidate = (system === 'gpc' ? row.gpc_options : row.cbs_options)
-          .find((option) => option.kind === 'voorstel')
-        if (status === 'Voorstel hoog' && !current && candidate) {
-          productChoices.push([selectionKey(row, system), candidate])
-        }
+  function togglePage() {
+    const eligible = pageRows.filter(canSelect)
+    if (!eligible.length) return
+    const allChecked = eligible.every((row) => selectedRows[row.product_id])
+    const next = { ...selectedRows }
+    if (allChecked) {
+      for (const row of eligible) delete next[row.product_id]
+    } else {
+      for (const row of eligible) next[row.product_id] = true
+      const proposed = (preview?.rows || []).filter((row) => next[row.product_id])
+      if (proposed.reduce((sum, row) => sum + changesFor(row), 0) > LIMIT) {
+        showFeedback({ variant: 'warning',
+          message: 'De volledige pagina past niet binnen maximaal 100 classificaties. Kies minder rijen.' })
+        return
       }
-      // Never split GS1 and CBS for one product across separate batches:
-      // that would invalidate the export fingerprint after the first write.
-      if (count + productChoices.length > LIMIT) continue
-      for (const [key, candidate] of productChoices) choices[key] = candidate
-      count += productChoices.length
-      if (count === LIMIT) break
     }
-    setSelection(choices)
-    setOverrides({})
-    showFeedback({ variant: 'info', message: `${count} hoge voorstellen zonder bestaande classificatie geselecteerd. Controleer de keuzes vóór goedkeuring.` })
+    setSelectedRows(next)
+  }
+
+  function buildDecisions() {
+    const decisions = []
+    for (const row of selected) {
+      if (!canSelect(row)) throw new Error('Een geselecteerd artikel is niet meer verwerkbaar. Controleer het bestand opnieuw.')
+      for (const [system, change] of [['gpc', row.gpc_change], ['cbs', row.cbs_change]]) {
+        if (!change) continue
+        const existing = system === 'gpc' ? row.current_gpc : row.current_cbs
+        decisions.push({
+          product_id: row.product_id, expected_name: row.name,
+          expected_sha256: row.snapshot_sha256,
+          system, code: change.code, reference_version: change.reference_version || '',
+          approved: true, allow_replace: Boolean(existing && existing !== change.code),
+        })
+      }
+    }
+    if (!decisions.length || decisions.length > LIMIT) {
+      throw new Error('Selecteer rijen met in totaal 1 tot en met 100 classificaties.')
+    }
+    return decisions
   }
 
   async function commit() {
     if (busy) return false
-    const decisions = []
-    for (const row of preview?.rows || []) {
-      for (const system of ['gpc', 'cbs']) {
-        const key = selectionKey(row, system)
-        const choice = selection[key]
-        if (!choice || processed[key]) continue
-        const current = system === 'gpc' ? row.current_gpc : row.current_cbs
-        if (current && current !== choice.code && !overrides[key]) {
-          throw new Error('Bevestig per artikel expliciet dat de bestaande classificatie mag worden vervangen.')
-        }
-        decisions.push({
-          product_id: row.product_id,
-          expected_name: row.name,
-          expected_sha256: row.snapshot_sha256,
-          system,
-          code: choice.code,
-          reference_version: choice.reference_version || '',
-          approved: true,
-          allow_replace: Boolean(overrides[key]),
-        })
-      }
+    let decisions
+    try { decisions = buildDecisions() } catch (error) {
+      showFeedback({ variant: 'error', message: error.message })
+      return false
     }
-    if (!decisions.length || decisions.length > LIMIT) throw new Error('Kies 1 tot en met 100 codes per verwerking.')
     setBusy(true)
     try {
       const response = await fetchJsonWithAuth('/api/cbs-classifications/classification-import/confirm', {
@@ -169,11 +203,12 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       })
       if (!response.ok) throw new Error(await parseError(response, 'Classificaties konden niet veilig worden bevestigd.'))
       const result = await response.json()
-      setProcessed((previous) => ({ ...previous, ...Object.fromEntries(decisions.map((d) => [d.product_id + ':' + d.system, true])) }))
-      setSelection({})
-      setOverrides({})
+      setProcessed((previous) => ({ ...previous,
+        ...Object.fromEntries(decisions.map((decision) => [decision.product_id, true])) }))
+      setSelectedRows({})
       onApplied()
-      showFeedback({ variant: 'success', message: `${result.updated_gpc} GS1- en ${result.updated_cbs} CBS-classificaties opgeslagen. ${result.unchanged} waren al gelijk. Andere artikelen zijn ongewijzigd.` })
+      showFeedback({ variant: 'success',
+        message: `${result.updated_gpc} GS1- en ${result.updated_cbs} CBS-classificaties opgeslagen. ${result.unchanged} waren al gelijk. De overige artikelen zijn ongewijzigd.` })
       return true
     } catch (error) {
       showFeedback({ variant: 'error', message: error.message || 'Classificaties zijn niet opgeslagen.' })
@@ -184,17 +219,16 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   }
 
   function approveSelection() {
-    if (!selected.length || selected.length > LIMIT || busy) return
-    const replacements = (preview?.rows || []).flatMap((row) =>
-      ['gpc', 'cbs'].filter((system) => {
-        const choice = selection[selectionKey(row, system)]
-        return choice && (system === 'gpc' ? row.current_gpc : row.current_cbs)
-          && choice.code !== (system === 'gpc' ? row.current_gpc : row.current_cbs)
-      }))
+    if (!selected.length || !selectedCodes || selectedCodes > LIMIT || busy) return
+    const changes = { newGpc: 0, replaceGpc: 0, newCbs: 0, replaceCbs: 0 }
+    for (const row of selected) {
+      if (row.gpc_change) changes[row.current_gpc ? 'replaceGpc' : 'newGpc'] += 1
+      if (row.cbs_change) changes[row.current_cbs ? 'replaceCbs' : 'newCbs'] += 1
+    }
     showFeedback({
       variant: 'warning',
-      title: 'Classificaties definitief verwerken?',
-      message: `${selected.length} expliciet geselecteerde classificaties. Daarvan vervangen ${replacements.length} een bestaande classificatie. De hele batch wordt in één transactie opgeslagen.`,
+      title: 'Geselecteerde classificaties verwerken?',
+      message: `${selected.length} artikelen, ${selectedCodes} classificaties: ${changes.newGpc} GS1 nieuw, ${changes.replaceGpc} GS1 vervangen, ${changes.newCbs} CBS nieuw, ${changes.replaceCbs} CBS vervangen. De bestaande codes van geselecteerde artikelen worden alleen vervangen na deze expliciete bevestiging. De hele batch wordt samen opgeslagen.`,
       primaryActionLabel: 'Goedkeuren en verwerken',
       secondaryActionLabel: 'Annuleren',
       onPrimaryAction: commit,
@@ -202,94 +236,74 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     })
   }
 
-  function selector(row, system) {
-    const key = selectionKey(row, system)
-    const current = system === 'gpc' ? row.current_gpc : row.current_cbs
-    const options = system === 'gpc' ? row.gpc_options : row.cbs_options
-    const picked = selection[key]
-    const disabled = busy || row.problem || !canConfirm || (system === 'gpc' && !canGpc) || processed[key]
-    return <div className="rz-classification-import-choice">
-      <select aria-label={system.toUpperCase() + ' voorstel ' + row.name}
-        value={picked?.code || ''} disabled={Boolean(disabled)}
-        onChange={(event) => setChoice(row, system, event.target.value)}>
-        <option value="">Niet verwerken</option>
-        {options.map((option) => <option key={option.code} value={option.code}>
-          {option.code} · {option.label} {option.kind === 'bestaand controleren' ? '(controle)' : ''}
-        </option>)}
-      </select>
-      <small className="rz-classification-import-explanation">
-        {system === 'gpc' ? row.gpc_status : row.cbs_status}
-        {(system === 'gpc' ? row.gpc_reason : row.cbs_reason)
-          ? ' · ' + (system === 'gpc' ? row.gpc_reason : row.cbs_reason) : ''}
-      </small>
-      {picked && current && picked.code !== current ? <label>
-        <input type="checkbox" checked={Boolean(overrides[key])} disabled={Boolean(disabled)}
-          onChange={(event) => setOverrides((previous) => ({ ...previous, [key]: event.target.checked }))} />
-        Bestaande code vervangen
-      </label> : null}
-      {processed[key] ? <span>Verwerkt</span> : null}
+  function proposedCell(row, system) {
+    const choice = system === 'gpc' ? row.gpc_change : row.cbs_change
+    const existing = system === 'gpc' ? row.current_gpc : row.current_cbs
+    const invalid = system === 'gpc' ? row.invalid_gpc : row.invalid_cbs
+    if (!choice) return invalid?.length ? <span>Code niet geldig</span> : <span>—</span>
+    const status = system === 'gpc' ? row.gpc_status : row.cbs_status
+    const reason = system === 'gpc' ? row.gpc_reason : row.cbs_reason
+    return <div className="rz-classification-import-proposal">
+      <strong>{choice.code} · {choice.label}</strong>
+      <small>{existing ? 'Anders dan bestaand' : 'Nieuw'}{status ? ' · ' + status : ''}</small>
+      {reason ? <small>{reason}</small> : null}
     </div>
   }
-
-  const columns = [
-    { key: 'name', label: 'Artikel', width: 240, sortable: true, filterable: true },
-    { key: 'current_gpc', label: 'GS1 bestaand', width: 130, filterable: true },
-    { key: 'gpc_options', label: 'GS1 verwerken', width: 290 },
-    { key: 'current_cbs', label: 'CBS bestaand', width: 130, filterable: true },
-    { key: 'cbs_options', label: 'CBS verwerken', width: 290 },
-    { key: 'problem', label: 'Controle', width: 250, filterable: true,
-      getFilterValue: (row) => [row.problem, row.gpc_status, row.cbs_status].join(' ') },
-  ]
 
   return <section className="rz-classification-import-panel" aria-label="Catalogus exporteren en classificaties importeren"
     data-testid="classification-import-panel">
     <h3>Classificaties importeren en exporteren</h3>
-    <p>Importeer de Excel uit ChatGPT of de bijbehorende CSV. Voorstellen zijn niet automatisch bewezen: kies zelf welke officiële codes mogen worden toegepast. Bestaande classificaties worden niet zonder aparte toestemming vervangen.</p>
+    <p>Alleen nieuwe of afwijkende officiële GS1- en CBS-codes worden getoond. Selecteer de artikelen die je wilt verwerken en bevestig alle toevoegingen en vervangingen gezamenlijk.</p>
     <div className="rz-classification-import-actions">
       {canView ? <Button type="button" variant="secondary" onClick={exportCatalog}
         disabled={exportBusy} data-testid="classification-catalog-export">Catalogus exporteren</Button> : null}
       {canView ? <label>
         Classificatiebestand
         <input type="file" accept=".xlsx,.csv" data-testid="classification-file"
-          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelection({}); setProcessed({}) }} />
+          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelectedRows({}); setProcessed({}) }} />
       </label> : null}
       {canView ? <Button type="button" variant="secondary" disabled={!file || busy}
         onClick={inspectFile} data-testid="classification-import-preview">Import controleren</Button> : null}
     </div>
     {preview ? <>
       <p role="status" data-testid="classification-import-summary">
-        {preview.total} artikelen · {preview.review_existing} bestaande classificaties ter controle · {preview.blocked} blokkades · {selected.length} geselecteerde codes. Maximaal {LIMIT} per verwerking.
+        {preview.total} artikelen gecontroleerd · {preview.unchanged} gelijke overgeslagen · {preview.changed_count} met nieuwe of afwijkende codes · {preview.blocked} blokkades.
+        GPC: {preview.gpc_new} nieuw, {preview.gpc_replace} anders. CBS: {preview.cbs_new} nieuw, {preview.cbs_replace} anders.
       </p>
       <div className="rz-classification-import-actions">
-        <label>Zoeken <input value={search} onChange={(e) => setSearch(e.target.value)} /></label>
-        <label>Weergave <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">Alle artikelen</option>
-          <option value="proposals">Met voorstellen</option>
-          <option value="review">Bestaand controleren</option>
+        <label>Zoeken <input value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label>Weergave <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">Nieuw en afwijkend</option>
+          <option value="new">Nieuwe classificaties</option>
+          <option value="different">Afwijkend van bestaande</option>
           <option value="problems">Blokkades</option>
         </select></label>
-        <Button type="button" variant="secondary" onClick={selectHigh} disabled={!canConfirm || busy}>
-          Selecteer 100 hoge voorstellen
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => { setSelection({}); setOverrides({}) }} disabled={busy}>
-          Selectie wissen
-        </Button>
-        <Button type="button" onClick={approveSelection} disabled={busy || !canConfirm || !selected.length || selected.length > LIMIT}
-          data-testid="classification-import-confirm">Goedkeuren ({selected.length})</Button>
+        <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {LIMIT})</span>
+      </div>
+      <div className="rz-classification-import-select-all">
+        <label><input type="checkbox" aria-label="Alles op deze pagina" checked={allPageSelected}
+          disabled={busy || !selectablePage.length} onChange={togglePage} /> Alles op deze pagina</label>
       </div>
       <DataTable dataTestId="classification-import-table" columns={columns} data={rows}
-        getRowKey={(row) => row.product_id} pageSize={8}
-        emptyMessage="Geen artikelen gevonden."
-        renderRow={(row) => <tr key={row.product_id}>
+        getRowKey={(row) => row.product_id} pageSize={8} onPageRowsChange={onPageRowsChange}
+        emptyMessage="Geen nieuwe of afwijkende classificaties gevonden."
+        paginationActions={<>
+          <Button type="button" variant="secondary" onClick={() => setSelectedRows({})}
+            disabled={busy || !selected.length}>Selectie wissen</Button>
+          <Button type="button" onClick={approveSelection}
+            disabled={busy || !selected.length || selectedCodes > LIMIT}
+            data-testid="classification-import-confirm">Geselecteerde rijen verwerken ({selected.length})</Button>
+        </>}
+        renderRow={(row) => <tr key={row.product_id} aria-selected={Boolean(selectedRows[row.product_id])}>
+          <td><input type="checkbox" aria-label={`Selecteer ${row.name}`}
+            checked={Boolean(selectedRows[row.product_id])}
+            disabled={!canSelect(row)} onChange={() => toggleRow(row)} /></td>
           <td>{row.name}{row.brand ? ' · ' + row.brand : ''}</td>
-          <td>{row.current_gpc || '—'}</td>
-          <td>{selector(row, 'gpc')}</td>
-          <td>{row.current_cbs || '—'}</td>
-          <td>{selector(row, 'cbs')}</td>
-          <td>{row.problem || (row.invalid_gpc.length || row.invalid_cbs.length
-            ? 'Niet-officiële voorstelcode: ' + [...row.invalid_gpc, ...row.invalid_cbs].join(', ')
-            : row.review_existing ? 'Bestaande GS1 controleren'
-              : row.gpc_status + ' / ' + row.cbs_status)}</td>
+          <td>{row.gpc_change ? row.current_gpc || '—' : '—'}</td>
+          <td>{proposedCell(row, 'gpc')}</td>
+          <td>{row.cbs_change ? row.current_cbs || '—' : '—'}</td>
+          <td>{proposedCell(row, 'cbs')}</td>
+          <td>{row.problem || (row.review_existing ? 'Bestaande classificatie controleren' : 'Klaar voor beoordeling')}</td>
         </tr>} />
     </> : null}
   </section>
