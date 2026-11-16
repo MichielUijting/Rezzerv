@@ -671,8 +671,8 @@ De mobiele hoofdtabbladen zijn:
 - **Huishouden**;
 - **Identiteit**;
 - **Productdata**;
-- **Voorraad**;
-- **Locaties**, uitsluitend wanneer locatie-ondersteuning actief is.
+- **Voorraad**, uitsluitend wanneer **Waar inhuis** (locatieregistratie) actief is; zonder locatieregistratie staat de totale actuele voorraad met bestaande `QuantityStepper` uitsluitend in de bovenste kaart;
+- **Locaties**, uitsluitend wanneer **Waar inhuis** (locatieregistratie) actief is.
 
 Er is op mobiel **geen Overzicht-tab met subtabs**. De vier desktop-onderdelen Artikel, Huishouden, Identiteit en Productdata zijn ieder een zelfstandig hoofdtabblad. De bestaande gedeelde artikelcomponenten blijven de inhoudelijke authority, maar hun desktop-subtabbalk wordt in deze mobiele presentatie verborgen.
 
@@ -681,7 +681,7 @@ Er is op mobiel **geen Overzicht-tab met subtabs**. De vier desktop-onderdelen A
 Mobiele presentatieregels:
 - de tabbalk gebruikt compacte pill-tabs zonder desktopachtige knopshadow; actieve tab is duidelijk gemarkeerd en de balk mag horizontaal scrollen;
 - velden en acties worden op smalle schermen verticaal gestapeld; horizontaal pagina-scrollen is niet nodig;
-- **Voorraad** gebruikt dezelfde bestaande voorraadmutatie-authority als desktop;
+- **Voorraad** gebruikt wanneer locatieregistratie actief is dezelfde bestaande voorraadmutatie-authority als desktop; het openen van de tab en het herladen na een mutatie mogen geen JavaScript-fout veroorzaken; de bovenste `QuantityStepper` blijft ook zonder locatieregistratie de bestaande (bevoegdheidsbewaakte) voorraadmutatie bedienen;
 - **Locaties** gebruikt dezelfde bestaande locatie-/verplaatsauthority als desktop;
 - bij actieve locatie-ondersteuning wordt de actuele locatie ook in de bovenste voorraadkaart getoond;
 - voor het **Systeemhuishouden** geldt de systeemcontext als locatie-ondersteunend, ook zonder reguliere `household_product_configuration`;
