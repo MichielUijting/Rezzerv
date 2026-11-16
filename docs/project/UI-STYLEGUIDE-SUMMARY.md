@@ -2034,3 +2034,13 @@ wissen andere bestaande selecties niet. **Selectie wissen** en
 De CSV bevat alleen de geselecteerde Catalogusvelden en is read-only,
 geen nieuwe classificatie of importbestand. Het openen van de twee
 classificatiepanelen via een artikelrij werkt onafhankelijk van de checkbox.
+
+## Scan & Identificeer: centrale Frontteam-scanner — 16 november 2026
+
+Voor de Superuser en bevoegde Frontteamleden is één gedeelde functie **Scan & Identificeer** beschikbaar. Een compacte, door de bestaande `MobileAppChrome` toegevoegde actie **Scan** staat rechts in de mobiele sticky bovenbalk naast het bestaande Inhuis-logo. De onderste actiebalk behoudt zijn vijf functies en bestaande paginanavigatie. Op desktop is dezelfde functie vanuit de gedeelde header bereikbaar; bij Artikelbeheer → Identificeren, Uitpakken en voorraadartikeldetails is bovendien een contextactie opgenomen. Voor gewone huishoudgebruikers en kijkers wordt deze actie niet getoond.
+
+Het scherm gebruikt de bestaande Inhuis `AppShell`, `ScreenCard`, `Button`, `BarcodeScannerModal` en de centrale Melding-overlay. Er ontstaat geen nieuw navigatietype, geen eigen scannercamera-implementatie en geen nieuwe kleur-/fonttoken. De content is een rustige verticale flow, op mobiel op volledige beschikbare breedte; actieknoppen stapelen of wikkelen waar nodig en bonartikelkeuzes blijven leesbaar met touchvriendelijke knophoogten.
+
+Een fysieke scan, gekozen foto en handmatig ingevoerde GTIN worden gelijk behandeld als **read-only input**. Eerst verschijnt de bekende Catalogusnaam/foto, een onbekende barcode of een concrete conflict-/winkelcode-uitleg. Een onbekende wereldwijd bruikbare GTIN vereist een door de gebruiker ingevulde productnaam én expliciete bevestiging via de bestaande Melding-overlay vóór Catalogusopslag. OFF, GS1 en CBS zijn geen vereisten voor identiteit. Winkelinterne codes worden niet als wereldwijde GTIN opgeslagen en bestaande identiteiten worden nooit door een scan overschreven.
+
+Een gescande barcode kan vervolgens aan een **handmatig gekozen** bestaand bonartikel worden meegegeven. Dit opent de bestaande Identificeren-bewaar-/conflictworkflow; selectie of herkenning alleen maakt geen bon-, huishoudartikel- of voorraadmutatie. Vanuit Voorraad en Uitpakken staat de artikelcontext ter informatie zichtbaar, maar artikelidentiteiten worden zonder bewijs niet automatisch samengevoegd of gewijzigd. De gedeelde Melding-overlay verzorgt waarschuwingen, expliciete opslagbevestigingen en fout-/succesmeldingen.
