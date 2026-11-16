@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection
+from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection, should_project_group
 
 
 @pytest.mark.parametrize('value,unit,expected', [(1, 'l', (1, 'l')), (500, 'ml', (.5, 'l')), (75, 'cl', (.75, 'l')), (250, 'g', (.25, 'kg')), (2, 'stuk', (2, 'stuk'))])
@@ -98,6 +98,41 @@ def _metadata(article_id, product_id, size, unit='l'):
             'size_value': size, 'size_unit': unit,
             'product_name': 'Halfvolle melk', 'variant': '',
             'brick_code': None, 'facts_json': None}
+
+
+
+def test_exact_same_catalog_product_projects_multiple_household_matches_once():
+    # Repeated historical household records with one proven central product
+    # must no longer render duplicate Bijna op signals or double-count stock.
+    meta = [_metadata('house-old', 'gp-one', 1),
+            _metadata('house-new', 'gp-one', 1)]
+    conn = _SynonymConnection(meta, [])
+    articles = [
+        {'id': 'house-old', 'global_product_id': 'gp-one'},
+        {'id': 'house-new', 'global_product_id': 'gp-one'},
+    ]
+    groups = load_groups(conn, 'household-1', articles, {})
+    assert len(groups) == 1
+    assert {member['id'] for member in groups[0]['members']} == {'house-old', 'house-new'}
+    assert should_project_group(groups[0]) is True
+    assert groups[0]['factors'] == {'house-old': 1.0, 'house-new': 1.0}
+    assert all(params['household_id'] == 'household-1'
+               for sql, params in conn.calls if 'FROM household_articles' in sql)
+
+
+def test_unsafe_product_or_unrelated_groups_are_not_combined():
+    assert should_project_group({
+        'key': ('product', 'gp-one'),
+        'members': [{'id': 'a', 'global_product_id': 'gp-one'},
+                    {'id': 'b', 'global_product_id': 'gp-two'}],
+    }) is False
+    assert should_project_group({
+        'key': ('product', 'a'), 'members': [{'id': 'a', 'global_product_id': None},
+                                           {'id': 'b', 'global_product_id': None}],
+    }) is False
+    assert should_project_group({
+        'key': ('product', 'gp-one'), 'members': [{'id': 'a', 'global_product_id': 'gp-one'}],
+    }) is False
 
 
 def test_confirmed_pair_is_grouped_with_content_conversion_and_household_scope():
