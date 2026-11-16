@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
+import BrandLogo from '../ui/BrandLogo.jsx'
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   canCurrentUserPerform,
@@ -39,6 +40,7 @@ const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
 })
 
 const MOBILE_ROUTE_TITLES = Object.freeze([
+  ['/scan-identificeren', 'Scan & Identificeer'],
   ['/dashboard', 'Inzichten'],
   ['/voorraad/incidentele-aankoop', 'Incidentele aankoop'],
   ['/voorraad/', 'Artikel in Voorraad'],
@@ -283,6 +285,17 @@ export default function MobileAppChrome({ children }) {
         showBack
         backTestId="mobile-global-back"
         onBack={backHandler}
+        trailingAction={isFrontteamMemberFromContext(context)
+          && location.pathname !== '/scan-identificeren'
+          ? <div className="rz-mobile-scan-header-actions">
+              <button type="button" className="rz-mobile-scan-header-button"
+                onClick={() => navigate('/scan-identificeren', { state: { from: location.pathname } })}
+                aria-label="Scan & Identificeer" data-testid="mobile-universal-scan-action">
+                ▦ Scan
+              </button>
+              <BrandLogo variant="mobile" />
+            </div>
+          : null}
       />
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
