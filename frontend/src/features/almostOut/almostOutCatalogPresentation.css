@@ -1,0 +1,16 @@
+/* Bijna op: explain photo absence without changing the shared thumbnail. */
+.rz-almost-out-photo-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.rz-almost-out-photo-reason {
+  max-width: 115px;
+  text-align: center;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  color: var(--rz-text-muted, #536b6a);
+}
