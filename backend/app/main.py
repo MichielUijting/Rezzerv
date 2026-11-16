@@ -4561,12 +4561,12 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             bucket = settings_map_by_article.setdefault(article_id, {})
             bucket[str(row.get('setting_key') or '').strip()] = _parse_json_setting_value(row.get('setting_value'))
 
-    from app.services.almost_out_group_service import load_groups, load_group_projection
+    from app.services.almost_out_group_service import load_groups, load_group_projection, should_project_group
     items: list[dict] = []
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
-        grouped = group['key'][0] in {'automatic_product_type', 'confirmed_synonym'}
+        grouped = should_project_group(group)
         candidates = [group['members'][0]] if grouped else group['members']
         for article_row in candidates:
             article_id = str(article_row['id'])
@@ -4593,24 +4593,12 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
 
-    # Only resolve missing photos for signals actually shown in Bijna op;
-    # the projection is read-only and uses exact Catalogus identity evidence.
-    missing_photo_ids = {
-        str(item.get('household_article_id') or '').strip()
-        for item in items if not normalize_optional_text_field(item.get('image_url'))
-    }
-    if missing_photo_ids:
-        from app.services.household_alias_policy import resolve_household_catalog_images
-        source_rows = [
-            dict(row) for row in article_rows
-            if str(row.get('id') or '').strip() in missing_photo_ids
-        ]
-        images = resolve_household_catalog_images(conn, text, source_rows)
-        for item in items:
-            if not normalize_optional_text_field(item.get('image_url')):
-                item['image_url'] = images.get(
-                    str(item.get('household_article_id') or '').strip(), ''
-                )
+    # Only visible signals get photo enrichment. Use their exact matched
+    # product-group members before the existing confirmed-synonym fallback.
+    # All source household rows have already been filtered by household_id;
+    # this projection is read-only, with no inventory or identity writes.
+    from app.services.almost_out_image_projection import fill_visible_almost_out_photos
+    fill_visible_almost_out_photos(conn, text, article_rows, items)
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),
