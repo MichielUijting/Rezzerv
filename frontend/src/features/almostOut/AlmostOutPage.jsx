@@ -162,6 +162,7 @@ export default function AlmostOutPage() {
       id: String(item?.household_article_id || item?.article_id || item?.article_name || Math.random()),
       ...buildArticleNames(item),
       imageUrl: String(item?.image_url || '').trim(),
+      photoMissingReason: String(item?.photo_missing_reason || '').trim(),
       gpcBrickName: String(item?.gpc_brick_name || '').trim(),
       gpcClassName: String(item?.gpc_class_name || '').trim(),
       gpcFamilyName: String(item?.gpc_family_name || '').trim(),
@@ -323,7 +324,12 @@ export default function AlmostOutPage() {
                     <td><input type="checkbox" aria-label={`Selecteer ${row.householdName || row.primaryName}`} checked={selectedIds.includes(row.id)} onChange={() => toggleSelected(row.id)} disabled={bulkBusy} /></td>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
-                        <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
+                        <span className="rz-almost-out-photo-wrap" title={row.photoMissingReason || undefined}>
+                          <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
+                          {!row.imageUrl && row.photoMissingReason ? (
+                            <span className="rz-almost-out-photo-reason">{row.photoMissingReason}</span>
+                          ) : null}
+                        </span>
                         <span>{row.householdName || '—'}</span>
                       </div>
                     </td>
