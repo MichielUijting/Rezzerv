@@ -72,6 +72,34 @@ gegevens. Er zijn geen
 checkboxes of code-keuzelijsten midden in de tabel, geen automatische
 classificatietoekenning en geen stille overschrijving.
 
+## Centrale Cataloguswerkvoorraad onder Classificeren
+De onderste classificatietabel bevat **alle niet-verwijderde centrale
+Catalogusproducten**; zij is niet gelijk aan de importpreview en meet niet of
+ChatGPT voor een product een voorstel had. De teller open classificatietaken
+telt ontbrekende GS1 en ontbrekende CBS per product **afzonderlijk**.
+Een lege importpreview betekent slechts dat het huidige voorstelbestand geen
+nieuwe of afwijkende verwerkbare codes meer aanbiedt.
+
+De bestaande gedeelde DataTable blijft verantwoordelijk voor zoeken, filters,
+sortering en paginering (8 rijen per pagina). Selectie is uitsluitend voor
+**export**: een rijcheckbox, een selectievak zonder kolomtitel in de eerste
+tabelkop (alleen de zichtbare pagina) en de apart gelabelde checkbox
+**Alle rijen in de tabel** direct rechtsboven (alle rijen in de actuele
+zoek-/kolomfilters, ook op andere pagina's). Selecties buiten een filter
+blijven geselecteerd, ook bij een paginawissel. De teller noemt het totale
+aantal geselecteerde artikelen; **Selectie wissen** en **Geselecteerde rijen
+exporteren** staan onder de tabel bij de standaardpaginering.
+
+De browser exporteert een UTF-8/semicolon CSV met BOM en afgeschermde
+spreadsheet-formules. Het bestand bevat uitsluitend de geselecteerde
+Catalogusproduct-ID's, naam, merk, barcode, actuele GS1-/CBS-code,
+CBS-omschrijving/referentie en geclassificeerd-status, over alle pagina's.
+Er is geen backend-POST en er worden geen Catalogus- of huishoudgegevens
+gewijzigd. De export is **een onderzoeks-/werklijst** en geen directe
+importautoriteit: de 23 importvelden en actuele `snapshot_sha256` ontbreken.
+Gebruik voor een latere officiële import opnieuw de Catalogusexport en de
+bestaande preview-/goedkeuringsroute.
+
 ## Backendveiligheid
 - Preview: alleen lezen, PostgreSQL REPEATABLE READ READ ONLY, controle van
   bestandsformaat, kolommen, unieke product-ID's en controlehashes.
