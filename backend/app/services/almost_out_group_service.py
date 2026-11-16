@@ -230,6 +230,26 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     return list(groups.values())
 
 
+
+def should_project_group(group):
+    """True only for an established safe grouping or one exact product identity.
+
+    A single Catalogus product may have multiple *household* article records
+    from older receipts. Its inventory must be evaluated once, while the
+    original member IDs remain intact. An unproven name is never a key.
+    """
+    kind = group['key'][0]
+    if kind in {'automatic_product_type', 'confirmed_synonym'}:
+        return True
+    if kind != 'product' or len(group['members']) < 2:
+        return False
+    product_ids = {
+        str(member.get('global_product_id') or '').strip()
+        for member in group['members']
+    }
+    return len(product_ids) == 1 and '' not in product_ids and group['key'][1] in product_ids
+
+
 def load_group_projection(conn, household_id, group):
     ids = [str(row['id']) for row in group['members']]
     params = {'household_id': str(household_id), 'ids': ids}
