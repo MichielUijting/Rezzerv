@@ -91,6 +91,6 @@
 .rz-mobile-scan-header-button {
   min-height: 40px; padding: 6px 10px; border: 1px solid currentColor;
   border-radius: 8px; background: transparent; color: inherit;
-  font: inherit; font-weight: 600; cursor: pointer;
+  font: inherit; cursor: pointer;
 }
 .rz-mobile-scan-header-button:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
