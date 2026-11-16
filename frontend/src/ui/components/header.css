@@ -175,6 +175,6 @@
 .rz-universal-header-scan {
   border: 1px solid currentColor; border-radius: 8px; padding: 7px 11px;
   margin-inline: 10px; background: transparent; color: inherit;
-  font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+  font: inherit; cursor: pointer; white-space: nowrap;
 }
 .rz-universal-header-scan:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
