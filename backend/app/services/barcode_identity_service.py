@@ -151,6 +151,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
             "mutated": False,
         }
 
+    image_projection = "gp.image_url AS image_url" if "image_url" in _column_names(conn, "global_products") else "NULL AS image_url"
     identity_join = ""
     identity_columns = "NULL AS identity_id, NULL AS identity_source, FALSE AS identity_is_primary"
     identity_match_expression = "0 AS has_matching_gtin_identity"
@@ -200,6 +201,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
                 gp.brand,
                 gp.status,
                 gp.primary_gtin,
+                {image_projection},
                 {identity_columns},
                 {identity_match_expression},
                 {gpc_columns}
@@ -264,6 +266,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
             "brand": item.get("brand"),
             "status": item.get("status"),
             "primary_gtin": item.get("primary_gtin"),
+            "image_url": item.get("image_url"),
         },
         "identity": {
             "identity_id": str(item.get("identity_id") or "") or None,
