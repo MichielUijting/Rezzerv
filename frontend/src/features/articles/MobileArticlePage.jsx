@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
@@ -8,6 +8,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
+  isFrontteamMemberFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility.js'
@@ -70,6 +71,7 @@ function formatQuantity(value) {
 }
 
 export default function MobileArticlePage() {
+  const navigate = useNavigate()
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
@@ -335,6 +337,13 @@ export default function MobileArticlePage() {
             </div>
           </div>
 
+          {isFrontteamMemberFromContext(authContext) ? (
+            <button type="button" className="rz-mobile-article-text-action"
+              data-testid="mobile-article-universal-scan"
+              onClick={() => navigate('/scan-identificeren', {
+                state: { householdArticleId, articleName, from: '/voorraad/' + articleId },
+              })}>Scan &amp; Identificeer</button>
+          ) : null}
           <div className="rz-mobile-article-stock-row">
             <div className="rz-mobile-article-stock-copy">
               <span className="rz-mobile-article-stock-label">Actuele voorraad</span>
