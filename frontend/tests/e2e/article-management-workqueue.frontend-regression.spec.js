@@ -343,25 +343,31 @@ test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', a
   await expect(page.getByText('1 rijen geselecteerd')).toBeVisible()
 })
 
-test('Classificeren: alle rijen selecteren boven 100 codes bevestigt niets', async ({ page }) => {
+test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusief 200 GS1/CBS-codes', async ({ page }) => {
   await mountMockBackend(page)
   const rows = Array.from({ length: 101 }, (_, index) => ({
     product_id: `article-${index + 1}`,
-    name: `Product ${index + 1}`, brand: '',
+    name: `Product ${String(index + 1).padStart(3, '0')}`, brand: '',
     snapshot_sha256: 'c'.repeat(64), current_gpc: '', current_cbs: '',
-    gpc_status: '', cbs_status: 'Voorstel hoog', gpc_reason: '', cbs_reason: '',
+    gpc_status: 'Voorstel hoog', cbs_status: 'Voorstel hoog', gpc_reason: '', cbs_reason: '',
     review_existing: false, problem: '', invalid_gpc: [], invalid_cbs: [],
-    gpc_options: [], cbs_options: [], gpc_change: null,
+    gpc_options: [], cbs_options: [],
+    gpc_change: { code: '10000001', label: 'GPC', reference_version: '' },
     cbs_change: { code: '011420', label: 'Melk', reference_version: '2026' },
   }))
   await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
     total: 101, unchanged: 0, changed_count: 101, blocked: 0,
-    gpc_new: 0, gpc_replace: 0, cbs_new: 101, cbs_replace: 0, rows,
+    gpc_new: 101, gpc_replace: 0, cbs_new: 101, cbs_replace: 0, rows,
   } }))
   const attempted = []
-  await page.route('**/api/cbs-classifications/classification-import/confirm', route => {
-    attempted.push(route.request().postDataJSON())
-    return route.fulfill({ status: 409, json: { detail: 'Blocked' } })
+  await page.route('**/api/cbs-classifications/classification-import/confirm', async route => {
+    const decisions = route.request().postDataJSON().decisions
+    attempted.push(decisions)
+    await route.fulfill({ json: {
+      updated_gpc: decisions.filter(item => item.system === 'gpc').length,
+      updated_cbs: decisions.filter(item => item.system === 'cbs').length,
+      unchanged: 0, processed: decisions.length,
+    } })
   })
   await page.goto('/externe-databases-2')
   await page.getByRole('button', { name: 'Classificeren' }).click()
@@ -369,11 +375,49 @@ test('Classificeren: alle rijen selecteren boven 100 codes bevestigt niets', asy
     name: 'voorstellen.csv', mimeType: 'text/csv', buffer: Buffer.from('mock'),
   })
   await page.getByTestId('classification-import-preview').click()
-  const table = page.getByTestId('classification-import-table')
   const all = page.getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const bulk = page.getByTestId('classification-import-confirm')
   await all.check()
   await expect(page.getByText('101 rijen geselecteerd')).toBeVisible()
-  await expect(all).toBeChecked()
-  await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
+  const prompt = page.getByTestId('app-feedback-warning-overlay')
+  await expect(prompt).toContainText('100 artikelen (200 classificaties)')
+  await expect(prompt).toContainText('1 andere geselecteerde rijen')
+  await expect(page.getByRole('button', { name: 'Eerste 100 rijen verwerken' })).toBeVisible()
   expect(attempted).toHaveLength(0)
+
+  // No auto-dismiss: even after the normal 4-second transient timeout, the
+  // decision must still be visible until cancel/approval/outside-click.
+  await page.waitForTimeout(4300)
+  await expect(prompt).toBeVisible()
+  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await expect(prompt).toHaveCount(0)
+  expect(attempted).toHaveLength(0)
+  await expect(bulk).toBeEnabled()
+
+  await bulk.click()
+  await expect(prompt).toBeVisible()
+  await prompt.click({ position: { x: 2, y: 2 } })
+  await expect(prompt).toHaveCount(0)
+  expect(attempted).toHaveLength(0)
+
+  await bulk.click()
+  await page.getByRole('button', { name: 'Eerste 100 rijen verwerken' }).click()
+  await expect.poll(() => attempted.length).toBe(1)
+  expect(attempted[0]).toHaveLength(200)
+  expect(new Set(attempted[0].map(item => item.product_id)).size).toBe(100)
+  expect(attempted[0].filter(item => item.system === 'gpc')).toHaveLength(100)
+  expect(attempted[0].filter(item => item.system === 'cbs')).toHaveLength(100)
+  expect(attempted[0].some(item => item.product_id === 'article-101')).toBe(false)
+  await expect(page.getByText('1 rijen geselecteerd')).toBeVisible()
+  await expect(bulk).toContainText('(1)')
+
+  // The remaining selected article can be processed in a new explicit batch.
+  await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
+  await bulk.click()
+  await expect(page.getByRole('button', { name: 'Goedkeuren en verwerken' })).toBeVisible()
+  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
+  await expect.poll(() => attempted.length).toBe(2)
+  expect(attempted[1]).toHaveLength(2)
+  expect(attempted[1].map(item => item.product_id)).toEqual(['article-101', 'article-101'])
+  await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
 })
