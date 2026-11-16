@@ -253,7 +253,7 @@ test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterd
   expect(contents).toContain('"catalog-1";"Product 01";"";"0000000000001"')
   expect(contents).toContain('"catalog-5";"Product 05";"\'=CMD"')
   expect(contents).toContain('"catalog-10";"Product 10"')
-  expect(contents.split('\\r\\n').filter(Boolean)).toHaveLength(11)
+  expect(contents.split('\r\n').filter(Boolean)).toHaveLength(11)
   expect(requests.filter(req => req.method === 'POST')).toEqual([])
 
   await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
