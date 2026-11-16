@@ -35,6 +35,9 @@ export default function UniversalScanIdentifyPage() {
   const [checking, setChecking] = useState(false)
   const [saving, setSaving] = useState(false)
   const [productName, setProductName] = useState(() => String(source.articleName || ''))
+  const [offSuggestion, setOffSuggestion] = useState(null)
+  const [offBusy, setOffBusy] = useState(false)
+  const [offChecked, setOffChecked] = useState(false)
   const [receiptQuery, setReceiptQuery] = useState('')
   const [receiptItems, setReceiptItems] = useState(null)
   const [receiptsBusy, setReceiptsBusy] = useState(false)
@@ -45,6 +48,8 @@ export default function UniversalScanIdentifyPage() {
     setBarcode(gtin)
     setLookup(null)
     setReceiptItems(null)
+    setOffSuggestion(null)
+    setOffChecked(false)
     if (!/^(?:\d{8}|\d{12,14})$/.test(gtin)) {
       showFeedback({ variant: 'warning', message: 'Scan of vul een barcode van 8, 12, 13 of 14 cijfers in.' })
       return
@@ -102,6 +107,35 @@ export default function UniversalScanIdentifyPage() {
     setLookup(null)
     setChecking(false)
     setReceiptItems(null)
+    setOffSuggestion(null)
+    setOffChecked(false)
+  }
+
+  async function checkOpenFoodFacts() {
+    if (!current?.valid || resultStatus !== 'not_found' || offBusy) return
+    const serial = requestRef.current
+    setOffBusy(true)
+    setOffChecked(false)
+    setOffSuggestion(null)
+    try {
+      const response = await fetchJsonWithAuth('/api/barcodes/identify-suggestion/' + encodeURIComponent(current.gtin))
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(readableDetail(result, 'Open Food Facts kon niet worden gecontroleerd.'))
+      if (serial !== requestRef.current) return
+      setOffChecked(true)
+      setOffSuggestion(result.status === 'found' ? result.product : null)
+      if (result.status === 'external_source_unavailable') {
+        showFeedback({ variant: 'warning', message: 'Open Food Facts is tijdelijk niet bereikbaar. Je kunt de productnaam zelf invullen.' })
+      } else if (result.status !== 'found') {
+        showFeedback({ variant: 'info', message: 'Geen product gevonden met precies deze barcode. Je kunt de productnaam zelf invullen.' })
+      }
+    } catch (error) {
+      if (serial === requestRef.current) {
+        showFeedback({ variant: 'warning', message: error.message || 'Productinformatie kon niet worden opgehaald.' })
+      }
+    } finally {
+      if (serial === requestRef.current) setOffBusy(false)
+    }
   }
 
   async function loadReceiptCandidates() {
@@ -223,6 +257,25 @@ export default function UniversalScanIdentifyPage() {
               ) : resultStatus === 'not_found' ? (
                 <>
                   <p>Deze barcode is nog niet bekend in de Catalogus. Vul de productnaam in en bevestig het opslaan.</p>
+                  <Button type="button" variant="secondary" disabled={offBusy}
+                    data-testid="universal-scan-off-suggestion"
+                    onClick={() => void checkOpenFoodFacts()}>
+                    {offBusy ? 'OFF controleren…' : 'Productgegevens zoeken in Open Food Facts'}
+                  </Button>
+                  {offChecked && offSuggestion ? (
+                    <div className="rz-universal-scan-product" data-testid="universal-scan-off-result">
+                      {offSuggestion.image_url ? <img src={offSuggestion.image_url} alt="Voorgestelde productfoto van Open Food Facts" /> : null}
+                      <div>
+                        <strong>{offSuggestion.product_name || 'Productvoorstel'}</strong>
+                        {offSuggestion.brand ? <p>{offSuggestion.brand}</p> : null}
+                        <p>Voorstel van Open Food Facts — nog niet opgeslagen</p>
+                        <Button type="button" variant="secondary"
+                          onClick={() => setProductName(String(offSuggestion.product_name || ''))}>
+                          Productnaam overnemen
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   <label htmlFor="universal-scan-product-name">Productnaam op de verpakking</label>
                   <input id="universal-scan-product-name" className="rz-input" value={productName} maxLength={200}
                     onChange={(event) => setProductName(event.target.value)} placeholder="Bijvoorbeeld: Halfvolle melk 1 liter" />
