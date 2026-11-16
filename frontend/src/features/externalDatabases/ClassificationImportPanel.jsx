@@ -217,6 +217,11 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
           {option.code} · {option.label} {option.kind === 'bestaand controleren' ? '(controle)' : ''}
         </option>)}
       </select>
+      <small className="rz-classification-import-explanation">
+        {system === 'gpc' ? row.gpc_status : row.cbs_status}
+        {(system === 'gpc' ? row.gpc_reason : row.cbs_reason)
+          ? ' · ' + (system === 'gpc' ? row.gpc_reason : row.cbs_reason) : ''}
+      </small>
       {picked && current && picked.code !== current ? <label>
         <input type="checkbox" checked={Boolean(overrides[key])} disabled={Boolean(disabled)}
           onChange={(event) => setOverrides((previous) => ({ ...previous, [key]: event.target.checked }))} />

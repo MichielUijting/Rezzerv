@@ -209,6 +209,7 @@ test('Classificeren: import controleert eerst en bevestigt alleen expliciet geko
   await expect(page.getByTestId('classification-import-table')).toHaveCount(0)
   await page.getByTestId('classification-import-preview').click()
   await expect(page.getByTestId('classification-import-table')).toContainText('Halfvolle melk')
+  await expect(page.getByTestId('classification-import-table')).toContainText('Productnaam')
   await page.getByLabel('GPC voorstel Halfvolle melk').selectOption('10000001')
   await page.getByLabel('CBS voorstel Halfvolle melk').selectOption('011420')
   await expect(page.getByTestId('classification-import-confirm')).toContainText('2')

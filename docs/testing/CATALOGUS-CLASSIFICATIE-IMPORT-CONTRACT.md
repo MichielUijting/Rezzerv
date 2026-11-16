@@ -61,3 +61,7 @@ afhandelen, daarna de import-PR op de dan actuele main herbaseren/synchroniseren
 zes versiebronnen controleren, normale en F7 Full exact-candidate controleren,
 functioneel lokaal accepteren en **afzonderlijke expliciete merge-GO** verkrijgen.
 Een goedgekeurd Excelbestand is geen merge- of productie-GO.
+
+Tijdens importcontrole toont elke GS1/CBS-keuzelijst ook de oorspronkelijke
+status en de indicatieve onderbouwing uit de spreadsheet, zodat de gebruiker
+nooit alleen op basis van een codenummer hoeft goed te keuren.
