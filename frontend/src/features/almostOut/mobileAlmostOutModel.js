@@ -52,6 +52,7 @@ export function buildMobileAlmostOutRows(items = []) {
       householdName,
       productName,
       imageUrl: String(item?.image_url || '').trim(),
+      photoMissingReason: String(item?.photo_missing_reason || '').trim(),
       gpcBrickName: String(item?.gpc_brick_name || '').trim(),
       gpcClassName: String(item?.gpc_class_name || '').trim(),
       gpcFamilyName: String(item?.gpc_family_name || '').trim(),
