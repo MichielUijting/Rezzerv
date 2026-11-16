@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -178,6 +179,87 @@ test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ 
   await page.getByRole('button', { name: 'Classificeren' }).click()
   await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Matchen' })).toHaveCount(0)
+})
+
+
+test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterde rijen en exporteert alleen de selectie', async ({ page }) => {
+  const requests = await mountMockBackend(page)
+  const items = Array.from({ length: 10 }, (_, index) => ({
+    id: `catalog-${index + 1}`,
+    name: `Product ${String(index + 1).padStart(2, '0')}`,
+    brand: index === 4 ? '=CMD' : '',
+    gtin: index === 0 ? '0000000000001' : String(8710000000000 + index),
+    gpc_code: index === 0 ? '10000001' : '',
+    gpc_status: index === 0 ? 'classified' : 'unclassified',
+    cbs_code: index === 9 ? '011420' : '',
+    cbs_status: index === 9 ? 'classified' : 'unclassified',
+    cbs_name: index === 9 ? 'Melk' : '',
+    cbs_reference_version: index === 9 ? '2026' : '',
+  }))
+  await page.route('**/api/cbs-classifications/workqueue?**', route => route.fulfill({ json: {
+    task_count_scope: 'page', product_count_scope: 'global', total: items.length,
+    items, tasks: items.flatMap(item => [
+      ...(!item.gpc_code ? [{ key: `${item.id}:gpc`, global_product_id: item.id, system: 'gpc' }] : []),
+      ...(!item.cbs_code ? [{ key: `${item.id}:cbs`, global_product_id: item.id, system: 'cbs' }] : []),
+    ]),
+  } }))
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+
+  const table = page.getByTestId('combined-classification-articles')
+  const selectionCount = page.getByTestId('classification-workqueue-selected-count')
+  const all = page.getByTestId('classification-workqueue-select-all-table')
+  const pageAll = page.getByTestId('classification-workqueue-select-all-page')
+  const exportButton = page.getByTestId('classification-workqueue-export')
+  const paging = page.getByRole('navigation', { name: 'Paginering' })
+  await expect(table).toContainText('Product 01')
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+  await expect(exportButton).toBeDisabled()
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+  const header = table.locator('thead tr').first().locator('th').first()
+  await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
+  await expect(header).not.toContainText('Alle rijen in de tabel')
+
+  await pageAll.check()
+  await expect(selectionCount).toContainText('8 rijen geselecteerd')
+  await expect(all).not.toBeChecked()
+  await paging.getByRole('button', { name: '+' }).click()
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(2)
+  await expect(pageAll).not.toBeChecked()
+  await pageAll.check()
+  await expect(selectionCount).toContainText('10 rijen geselecteerd')
+  await expect(all).toBeChecked()
+  await all.uncheck()
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+
+  // Row checkbox is independent from opening the GS1/CBS article editor.
+  await table.getByRole('checkbox', { name: 'Selecteer Product 10' }).check()
+  await expect(page.getByTestId('combined-selected-article')).toHaveCount(0)
+  const cbsFilter = table.getByRole('textbox', { name: 'Filter op CBS ECOICOPv2' })
+  await cbsFilter.fill('niet g')
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+  await all.check()
+  // The previously selected article outside the filter is deliberately preserved.
+  await expect(selectionCount).toContainText('10 rijen geselecteerd')
+  await expect(pageAll).toBeChecked()
+
+  const downloadPromise = page.waitForEvent('download')
+  await exportButton.click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv')
+  const contents = await readFile(await download.path(), 'utf8')
+  expect(contents.charCodeAt(0)).toBe(0xfeff)
+  expect(contents).toContain('"product_id";"Artikel";"Merk";"Barcode";"GS1 GPC code";"CBS ECOICOPv2 code"')
+  expect(contents).toContain('"catalog-1";"Product 01";"";"0000000000001"')
+  expect(contents).toContain('"catalog-5";"Product 05";"\'=CMD"')
+  expect(contents).toContain('"catalog-10";"Product 10"')
+  expect(contents.split('\\r\\n').filter(Boolean)).toHaveLength(11)
+  expect(requests.filter(req => req.method === 'POST')).toEqual([])
+
+  await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
+  await page.getByTestId('classification-workqueue-clear').click()
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+  await expect(exportButton).toBeDisabled()
 })
 
 test('Classificeren: alleen nieuwe en afwijkende classificaties, rijselectie en bulk onder de tabel', async ({ page }) => {
