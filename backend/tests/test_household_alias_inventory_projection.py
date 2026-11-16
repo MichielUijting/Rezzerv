@@ -554,10 +554,14 @@ def test_almost_out_image_fallback_happens_after_visibility_filtering():
     source = (Path(__file__).resolve().parents[1] / 'app' / 'main.py').read_text(encoding='utf-8')
     body = source.split('def build_almost_out_items(', 1)[1].split('def get_household_article_details_for_inventory(', 1)[0]
     assert body.index("if evaluation.get('include_in_almost_out'):") < body.index(
-        'images = resolve_household_catalog_images(conn, text, source_rows)'
+        'fill_visible_almost_out_photos(conn, text, article_rows, items)'
     )
     assert "ha.global_product_id, ha.barcode" in body
-    assert "item['image_url'] = images.get(" in body
+    photo_source = (Path(__file__).resolve().parents[1] / 'app' / 'services'
+                    / 'almost_out_image_projection.py').read_text(encoding='utf-8')
+    assert 'if not str(item.get(\'image_url\') or \'\').strip()' in photo_source
+    assert 'resolve_household_catalog_images(conn, text_factory, missing_rows)' in photo_source
+    assert 'item[\'image_url\'] = url' in photo_source
 
 
 def test_inventory_inline_household_name_does_not_rename_inventory_identity():
