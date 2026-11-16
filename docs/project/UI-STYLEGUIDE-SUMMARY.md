@@ -14,6 +14,12 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Bijna op: Voorspeltermijn en identiteitsgebonden productfoto — 16 november 2026
+
+Bijna op (desktop én mobiel) toont boven de lijst de **Voorspeltermijn: N dagen** uit exact dezelfde huishoudinstelling als Instellingen → Bijna op. Een huishoudbeheerder kan via **Wijzigen** het aantal hele, niet-negatieve dagen invoeren en expliciet opslaan of annuleren. Overige gebruikers zien de waarde read-only. Instellingen noemt het veld **Voorspeltermijn (dagen)**. Beide schermen laden de actuele huishoudinstelling en tonen na opslag onmiddellijk de nieuwe waarde. Als voorspelling is uitgeschakeld wordt dit naast de bewaarde waarde vermeld.
+
+De bestaande Bijna-op-lijst toont alleen artikelen die aan de signaalregels voldoen. Bewezen overeenkomende Catalogusproducten en alleen aantoonbaar veilige synoniem-/producttypegroepen kunnen gezamenlijk worden geprojecteerd. Foto's komen eerst van het eigen artikel, vervolgens van een bevestigd groepslid en daarna van de bestaande exact-identiteits-/direct bevestigde synoniemresolver. Zonder betrouwbaar beeld blijft **Geen foto** correct; geen fuzzy naam- of GPC-breed plaatje tonen.
+
 ## Gedeelde tabel: horizontale scrollbar onder de laatste rij — 10 november 2026
 
 Alle schermen die het standaard Inhuis-tabelcomponent `Table` / `DataTable` gebruiken, tonen een eventuele horizontale scrollbar **onder** de laatste zichtbare tabelrij. De scrollbar mag niet over de onderste rij, checkbox of tekst heen vallen. De gedeelde `.rz-table-wrapper` reserveert hiervoor een eigen onderruimte van 24 px en telt die mee in de maximale tabelhoogte. Dezelfde ruimte geldt voor de gespecialiseerde Voorraad- en winkelbatchtabellen. Paginering en bulkacties blijven buiten de tabelscrollcontainer staan; horizontaal scrollen verandert geen selectie of zichtbare regels.
