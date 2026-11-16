@@ -195,7 +195,7 @@ export default function SettingsAlmostOutPage() {
 
             <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
               <Input
-                label="Extra voorspeltermijn (dagen)"
+                label="Voorspeltermijn (dagen)"
                 type="number"
                 min="0"
                 step="1"
