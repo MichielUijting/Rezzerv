@@ -299,7 +299,7 @@ test('Classificeren: alleen nieuwe en afwijkende classificaties, rijselectie en 
   await expect(table.getByRole('checkbox')).toHaveCount(2)
   await expect(table.getByRole('combobox')).toHaveCount(0)
   await expect(page.getByText('Bestaande code vervangen')).toHaveCount(0)
-  const selection = page.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' })
+  const selection = table.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' })
   const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
   const pageAll = table.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })
   const header = table.locator('thead tr').first().locator('th').first()
@@ -389,30 +389,30 @@ test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', a
 
   // The header checkbox selects only the eight rows on the visible page.
   await pageAll.check()
-  await expect(page.getByText('8 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('8 rijen geselecteerd')).toBeVisible()
   await expect(all).not.toBeChecked()
   await paging.getByRole('button', { name: '+' }).click()
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(1)
   await expect(pageAll).not.toBeChecked()
   await pageAll.check()
-  await expect(page.getByText('9 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('9 rijen geselecteerd')).toBeVisible()
   await expect(all).toBeChecked()
   await pageAll.uncheck()
-  await expect(page.getByText('8 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('8 rijen geselecteerd')).toBeVisible()
 
   // Changing page preserves the other page's selection and header state.
   await paging.getByRole('button', { name: '-' }).click()
   await expect(pageAll).toBeChecked()
   await expect(all).not.toBeChecked()
   await pageAll.uncheck()
-  await expect(page.getByText('0 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('0 rijen geselecteerd')).toBeVisible()
   await expect(pageAll).not.toBeChecked()
 
   // The separate control above the table selects across page boundaries.
   await all.check()
-  await expect(page.getByText('9 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('9 rijen geselecteerd')).toBeVisible()
   await all.uncheck()
-  await expect(page.getByText('0 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('0 rijen geselecteerd')).toBeVisible()
 
   // Both controls obey the current DataTable filters, without forgetting other selections.
   await table.getByRole('textbox', { name: 'Filter op Artikel' }).fill('Product 09')
@@ -420,10 +420,10 @@ test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', a
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(1)
   await all.check()
   await expect(pageAll).toBeChecked()
-  await expect(page.getByText('1 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
   await table.getByRole('textbox', { name: 'Filter op Artikel' }).fill('')
   await expect(all).not.toBeChecked()
-  await expect(page.getByText('1 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
 })
 
 test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusief 200 GS1/CBS-codes', async ({ page }) => {
@@ -461,7 +461,7 @@ test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusi
   const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
   const bulk = page.getByTestId('classification-import-confirm')
   await all.check()
-  await expect(page.getByText('101 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('101 rijen geselecteerd')).toBeVisible()
   const prompt = page.getByTestId('app-feedback-warning-overlay')
   await expect(prompt).toContainText('100 artikelen (200 classificaties)')
   await expect(prompt).toContainText('1 andere geselecteerde rijen')
@@ -491,7 +491,7 @@ test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusi
   expect(attempted[0].filter(item => item.system === 'gpc')).toHaveLength(100)
   expect(attempted[0].filter(item => item.system === 'cbs')).toHaveLength(100)
   expect(attempted[0].some(item => item.product_id === 'article-101')).toBe(false)
-  await expect(page.getByText('1 rijen geselecteerd')).toBeVisible()
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
   await expect(bulk).toContainText('(1)')
 
   // The remaining selected article can be processed in a new explicit batch.
