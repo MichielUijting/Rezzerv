@@ -45,19 +45,62 @@ def test_quantity_weighted_rhythm_handles_different_packages_and_same_day_purcha
         {'event_type': 'consume', 'quantity': -1, 'purchase_date': '2026-10-17'},
         {'event_type': 'purchase', 'quantity': 200, 'purchase_date': '2026-10-24'},
     ]
-    result = prediction_from_events(events, 7, now)
+    result = prediction_from_events(
+        events, 7, now, current_quantity=1, minimum_stock=0,
+    )
     assert result['purchase_event_count'] == 2
     assert result['average_purchase_interval_days'] == 7
-    # First litre lasted 7 days; the last two litres last 14 days, 7 remain.
+    assert result['estimated_consumption_per_day'] == pytest.approx(1 / 7)
+    # Current stock, not the most recent purchase quantity, drives prediction.
     assert result['predicted_days_until_depletion'] == 7
+    assert result['predicted_quantity_at_horizon'] == pytest.approx(0)
     assert result['prediction_triggered'] is True
-    assert prediction_from_events(events, 6, now)['prediction_triggered'] is False
+    assert prediction_from_events(
+        events, 6, now, current_quantity=1, minimum_stock=0,
+    )['prediction_triggered'] is False
+
+
+def test_stock_above_minimum_does_not_trigger_on_old_purchase_rhythm():
+    now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+    events = [
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-10-19'},
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-11-02'},
+    ]
+    safe = prediction_from_events(events, 20, now,
+                                  current_quantity=12, minimum_stock=0)
+    assert safe is not None
+    assert safe['predicted_quantity_at_horizon'] == pytest.approx(12 - 20/14)
+    assert safe['prediction_triggered'] is False
+    urgent = prediction_from_events(events, 20, now,
+                                    current_quantity=1, minimum_stock=0)
+    assert urgent['predicted_quantity_at_horizon'] == pytest.approx(1 - 20/14)
+    assert urgent['prediction_triggered'] is True
+    # No forecast with a stock quantity not reconciled/known to this caller.
+    assert prediction_from_events(events, 20, now) is None
+    assert prediction_from_events(events, 20, now, current_quantity=-1) is None
+
+
+def test_predicted_minimum_is_distinct_from_current_physical_zero():
+    now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+    events = [
+        {'event_type': 'purchase', 'quantity': 2, 'purchase_date': '2026-10-19'},
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-11-02'},
+    ]
+    projected = prediction_from_events(
+        events, 14, now, current_quantity=3, minimum_stock=1,
+    )
+    assert projected['prediction_triggered'] is True
+    assert projected['predicted_quantity_at_horizon'] == pytest.approx(1)
+    assert projected['predicted_days_until_depletion'] == pytest.approx(14)
 
 
 def test_same_day_only_and_unusable_dates_have_no_prediction():
     events = [{'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-10-09'}] * 2
-    assert prediction_from_events(events, 7) is None
-    assert prediction_from_events([{'event_type': 'purchase', 'quantity': 1, 'purchase_date': 'invalid'}], 7) is None
+    assert prediction_from_events(events, 7, current_quantity=2) is None
+    assert prediction_from_events(
+        [{'event_type': 'purchase', 'quantity': 1, 'purchase_date': 'invalid'}],
+        7, current_quantity=2,
+    ) is None
 
 
 class _Rows:
