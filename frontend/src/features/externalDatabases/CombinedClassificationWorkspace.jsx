@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import ClassificationImportPanel from './ClassificationImportPanel'
 import CatalogGpcActionPage from '../catalog/CatalogGpcActionPage'
 import CbsClassificationPage from '../catalog/CbsClassificationPage'
 import DataTable from '../../ui/DataTable'
+import Button from '../../ui/Button'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, canCurrentUserPerform, readStoredAuthContext } from '../../lib/authSession'
 
 const PAGE_SIZE = 100
 
 const columns = [
+  { key: 'select', width: 60, className: 'rz-classification-workqueue-select-column' },
   { key: 'name', label: 'Artikel', width: 280, sortable: true, filterable: true,
     renderCell: (item) => item.name + (item.brand ? ' · ' + item.brand : '') },
   { key: 'gtin', label: 'Barcode', width: 160, sortable: true, filterable: true },
@@ -24,9 +26,32 @@ const columns = [
       ? item.cbs_code + ' · ' + item.cbs_name : 'Niet geclassificeerd' },
 ]
 
+// Read-only working-list export; intentionally NOT the 23-column import format.
+const EXPORT_FIELDS = [
+  ['id', 'product_id'],
+  ['name', 'Artikel'],
+  ['brand', 'Merk'],
+  ['gtin', 'Barcode'],
+  ['gpc_code', 'GS1 GPC code'],
+  ['cbs_code', 'CBS ECOICOPv2 code'],
+  ['cbs_name', 'CBS omschrijving'],
+  ['cbs_reference_version', 'CBS referentieversie'],
+  ['gpc_status', 'GS1 status'],
+  ['cbs_status', 'CBS status'],
+]
+
+function csvField(value) {
+  let result = String(value ?? '')
+  if (/^\s*[=+@-]/.test(result)) result = "'" + result
+  return '"' + result.replace(/"/g, '""') + '"'
+}
+
 export default function CombinedClassificationWorkspace({ initialProductId = '' }) {
   const [products, setProducts] = useState([])
   const [selectedId, setSelectedId] = useState(initialProductId)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [filteredTableRows, setFilteredTableRows] = useState([])
+  const [pageRows, setPageRows] = useState([])
   const [taskCount, setTaskCount] = useState(null)
   const [productTotal, setProductTotal] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -78,7 +103,11 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
           }
           items.push(...data.items)
         } while (items.length < total)
-        if (!controller.signal.aborted) setProducts(items)
+        if (!controller.signal.aborted) {
+          setProducts(items)
+          const liveIds = new Set(items.map((item) => item.id))
+          setSelectedIds((previous) => previous.filter((id) => liveIds.has(id)))
+        }
       } catch (err) {
         if (!controller.signal.aborted) setError(err.message || 'Artikelen niet beschikbaar.')
       } finally {
@@ -89,21 +118,119 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
     return () => controller.abort()
   }, [revision])
 
+  // Keep the standard DataTable as the authority for sort, filter and paging.
+  const onFilteredRowsChange = useCallback((items) => {
+    setFilteredTableRows((previous) => (
+      previous.length === items.length && previous.every((row, i) => row.id === items[i].id)
+        ? previous : items
+    ))
+  }, [])
+  const onPageRowsChange = useCallback((items) => {
+    setPageRows((previous) => (
+      previous.length === items.length && previous.every((row, i) => row.id === items[i].id)
+        ? previous : items
+    ))
+  }, [])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const visibleIds = useMemo(() => new Set(products.map((item) => item.id)), [products])
+  const pageIds = pageRows.map((row) => row.id).filter((id) => visibleIds.has(id))
+  const filteredIds = filteredTableRows.map((row) => row.id).filter((id) => visibleIds.has(id))
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedSet.has(id))
+  const allTableSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedSet.has(id))
+
+  const toggleIds = useCallback((ids, checked) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous)
+      for (const id of ids) {
+        if (checked) next.add(id)
+        else next.delete(id)
+      }
+      return [...next]
+    })
+  }, [])
+  const togglePage = useCallback(() => toggleIds(pageIds, !allPageSelected),
+    [toggleIds, pageIds, allPageSelected])
+  const toggleTable = useCallback(() => toggleIds(filteredIds, !allTableSelected),
+    [toggleIds, filteredIds, allTableSelected])
+
+  const tableColumns = useMemo(() => [
+    { ...columns[0], renderFilter: () => <input type="checkbox"
+      aria-label="Alle rijen op deze pagina" title="Alle rijen op deze pagina"
+      data-testid="classification-workqueue-select-all-page"
+      checked={allPageSelected} disabled={loading || !pageIds.length}
+      onChange={togglePage} /> },
+    ...columns.slice(1),
+  ], [allPageSelected, loading, pageIds.length, togglePage])
+
+  function exportSelection() {
+    if (loading || error || !selectedIds.length) return
+    const ordered = [
+      ...filteredTableRows.filter((item) => selectedSet.has(item.id)),
+      ...products.filter((item) => selectedSet.has(item.id) &&
+        !filteredTableRows.some((visible) => visible.id === item.id)),
+    ]
+    if (!ordered.length) return
+    const rows = [
+      EXPORT_FIELDS.map(([, label]) => label),
+      ...ordered.map((item) => EXPORT_FIELDS.map(([field]) => (
+        field === 'gpc_status' || field === 'cbs_status'
+          ? (item[field] === 'classified' ? 'Geclassificeerd' : 'Niet geclassificeerd')
+          : item[field]
+      ))),
+    ]
+    const csv = rows.map((cells) => cells.map(csvField).join(';')).join('\r\n') + '\r\n'
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv'
+    document.body.appendChild(anchor)
+    try { anchor.click() } finally {
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+    showFeedback({ variant: 'success',
+      message: `${ordered.length} geselecteerde Catalogusartikelen geëxporteerd. Geen classificaties gewijzigd.` })
+  }
+
   return <section aria-label="GS1 en CBS classificeren" data-testid="combined-classification-workspace">
     <h3>Artikel classificeren</h3>
     <ClassificationImportPanel onApplied={() => setRevision((value) => value + 1)} />
-    <p>Kies één centraal Catalogusartikel; de status voor GS1 en CBS hoort bij dezelfde productidentiteit. Een keuze opent de bestaande officiële bevestigingsroutes.</p>
+    <p>Deze tabel toont alle centrale Catalogusartikelen. Een open classificatietaak betekent een ontbrekende GS1- of CBS-code, niet noodzakelijk een mislukte import. Kies één artikel om beide classificaties te beoordelen of selecteer rijen om te exporteren.</p>
     {!loading && !error && productTotal !== null && taskCount !== null
       ? <p role="status" data-testid="classification-workqueue-counts">
         {productTotal} unieke Catalogusartikelen · {taskCount} open classificatietaken
         (afzonderlijk geteld voor GS1 en CBS).
       </p> : null}
+    <div className="rz-classification-workqueue-select-actions">
+      <span role="status" data-testid="classification-workqueue-selected-count">
+        {selectedIds.length} rijen geselecteerd
+      </span>
+      <label className="rz-classification-import-select-all">
+        <input type="checkbox" checked={allTableSelected}
+          disabled={loading || Boolean(error) || !filteredIds.length}
+          onChange={toggleTable} aria-label="Alle rijen in de tabel"
+          data-testid="classification-workqueue-select-all-table" />
+        <span>Alle rijen in de tabel</span>
+      </label>
+    </div>
 
     <DataTable
       dataTestId="combined-classification-articles"
-      columns={columns} data={products}
+      columns={tableColumns} data={error ? [] : products}
       getRowKey={(item) => item.id}
       pageSize={8}
+      onFilteredRowsChange={onFilteredRowsChange}
+      onPageRowsChange={onPageRowsChange}
+      paginationActions={<>
+        <Button type="button" variant="secondary" disabled={loading || !selectedIds.length}
+          onClick={() => setSelectedIds([])} data-testid="classification-workqueue-clear">
+          Selectie wissen
+        </Button>
+        <Button type="button" variant="secondary" disabled={loading || Boolean(error) || !selectedIds.length}
+          onClick={exportSelection} data-testid="classification-workqueue-export">
+          Geselecteerde rijen exporteren ({selectedIds.length})
+        </Button>
+      </>}
       emptyMessage={loading ? 'Catalogusartikelen laden...' : error ? 'Artikelen niet beschikbaar.' : 'Geen Catalogusartikelen.'}
       renderRow={(item) => <tr key={item.id} tabIndex={0}
         aria-selected={selectedId === item.id}
@@ -111,12 +238,20 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
         onClick={() => setSelectedId(item.id)}
         onDoubleClick={() => setSelectedId(item.id)}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
             setSelectedId(item.id)
           }
         }}>
-        {columns.map((column) => <td key={column.key}>
+        <td className="rz-classification-workqueue-select-cell"
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}>
+          <input type="checkbox" aria-label={`Selecteer ${item.name}`}
+            checked={selectedSet.has(item.id)} disabled={loading}
+            onChange={(event) => toggleIds([item.id], event.target.checked)} />
+        </td>
+        {columns.slice(1).map((column) => <td key={column.key}>
           {typeof column.renderCell === 'function' ? column.renderCell(item) : item[column.key]}
         </td>)}
       </tr>}
