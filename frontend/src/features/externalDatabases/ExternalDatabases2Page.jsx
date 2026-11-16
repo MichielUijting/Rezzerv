@@ -99,7 +99,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
-  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState ? 'identity' : null)
+  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -109,6 +109,8 @@ export default function ExternalDatabases2Page() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [queueTaskFocus, setQueueTaskFocus] = useState(null)
   const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
+  // A transferred scan is only input for the existing confirmed ED2 workflow.
+  // It must not write a Catalogus or household link during navigation.
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -385,6 +387,16 @@ export default function ExternalDatabases2Page() {
     return () => { cancelled = true }
   }, [location.state?.selectedItemId, queueTaskFocus?.sourceId, refreshVersion, activeArea, showFeedback])
 
+  useEffect(() => {
+    const scanned = String(location.state?.scannedBarcode || '').trim()
+    if (!selectedItem || !scanned || selectedItem.id !== location.state?.selectedItemId) return
+    setPendingScannedBarcode({ receiptItemId: selectedItem.id, value: scanned })
+    const nextState = { ...(location.state || {}) }
+    delete nextState.scannedBarcode
+    delete nextState.scanSource
+    navigate(location.pathname + location.search, { replace: true, state: nextState })
+  }, [selectedItem?.id, location.state?.selectedItemId, location.state?.scannedBarcode, location.pathname, location.search, navigate])
+
   return (
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
@@ -434,6 +446,14 @@ export default function ExternalDatabases2Page() {
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
+        <div className="rz-mobile-table-bulk-actions">
+          <Button type="button" variant="secondary" data-testid="ed2-universal-scan"
+            onClick={() => navigate('/scan-identificeren', { state: selectedItem
+              ? { receiptItemId: selectedItem.id, articleName: selectedItem.receipt_line_text }
+              : {} })}>
+            {selectedItem ? 'Barcode scannen voor geselecteerd artikel' : 'Barcode scannen zonder artikelselectie'}
+          </Button>
+        </div>
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -526,7 +546,7 @@ export default function ExternalDatabases2Page() {
             </section>
           </div>
           : selectedItem ? <div key={selectedItem.id}>
-            <OffCandidatePanel item={selectedItem} returnState={returnState}
+            <OffCandidatePanel item={selectedItem} returnState={returnState} preScannedBarcode={pendingScannedBarcode}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
