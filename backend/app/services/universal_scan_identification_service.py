@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.barcode_identity_service import lookup_gtin, validate_barcode
 from app.services.barcode_scope_service import classify_barcode_scope
@@ -21,6 +21,34 @@ class UniversalScanIdentityError(ValueError):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+def equivalent_global_gtins(gtin: str) -> list[str]:
+    """All checksum-valid, leading-zero GTIN representations of one identity."""
+    padded = gtin.zfill(14)
+    alternatives = []
+    for size in (8, 12, 13, 14):
+        if padded.startswith("0" * (14 - size)):
+            candidate = padded[14 - size:]
+            if validate_barcode(candidate, "gtin")["valid"]:
+                alternatives.append(candidate)
+    return sorted(set(alternatives))
+
+
+def existing_equivalent_owners(conn: Any, aliases: list[str]) -> set[str]:
+    """Read both ownership registries; do not create a duplicate GTIN alias."""
+    primary_stmt = text("""
+        SELECT id FROM global_products WHERE primary_gtin IN :aliases
+    """).bindparams(bindparam("aliases", expanding=True))
+    identity_stmt = text("""
+        SELECT global_product_id AS id FROM product_identities
+        WHERE identity_type IN ('gtin', 'ean', 'upc')
+          AND identity_value IN :aliases
+    """).bindparams(bindparam("aliases", expanding=True))
+    rows = [
+        *conn.execute(primary_stmt, {"aliases": aliases}).mappings().all(),
+        *conn.execute(identity_stmt, {"aliases": aliases}).mappings().all(),
+    ]
+    return {str(row["id"]) for row in rows if str(row.get("id") or "").strip()}
 
 
 def confirm_scanned_catalog_gtin(conn: Any, *, barcode: Any, product_name: Any) -> dict[str, Any]:
@@ -36,14 +64,23 @@ def confirm_scanned_catalog_gtin(conn: Any, *, barcode: Any, product_name: Any) 
     if not name or len(name) > 200:
         raise UniversalScanIdentityError(422, "Vul een productnaam van maximaal 200 tekens in.")
 
-    # The same lock namespace/order as ED2 for globally scoped barcodes.
+    # Lock all equivalent textual GTIN forms together. A global identity
+    # is not unique only because its checksum-valid notation has an extra zero.
+    aliases = equivalent_global_gtins(gtin)
     if conn.dialect.name == "postgresql":
         conn.execute(text(
             "SELECT pg_advisory_xact_lock(hashtextextended(:key, 677))"
-        ), {"key": "ed2-barcode:global:" + gtin})
+        ), {"key": "universal-scan:global:" + gtin.zfill(14)})
 
+    owners = existing_equivalent_owners(conn, aliases)
+    if len(owners) > 1:
+        raise UniversalScanIdentityError(409, "Deze barcode heeft meerdere bestaande Cataloguseigenaren.")
     existing = lookup_gtin(conn, gtin)
     status = existing["match_status"]
+    if owners and status == "not_found":
+        raise UniversalScanIdentityError(
+            409, "Deze barcode bestaat al onder een gelijkwaardige GTIN-notatie. Controleer de bestaande Cataloguskoppeling."
+        )
     if status == "matched":
         return {
             "saved": False, "status": "already_known",
@@ -54,16 +91,6 @@ def confirm_scanned_catalog_gtin(conn: Any, *, barcode: Any, product_name: Any) 
         raise UniversalScanIdentityError(
             409, "Deze barcode heeft al een onvolledige of conflicterende identiteit. Controleer eerst de Catalogus."
         )
-
-    # Old ean/upc identities are still ownership evidence. Never put an
-    # alternate global GTIN claim on a freshly inserted product.
-    owners = conn.execute(text("""
-        SELECT DISTINCT global_product_id FROM product_identities
-         WHERE identity_type IN ('gtin', 'ean', 'upc')
-           AND identity_value = :gtin
-    """), {"gtin": gtin}).mappings().all()
-    if owners:
-        raise UniversalScanIdentityError(409, "Deze barcode is al als productidentiteit in gebruik.")
 
     product_id = str(uuid.uuid4())
     conn.execute(text("""
