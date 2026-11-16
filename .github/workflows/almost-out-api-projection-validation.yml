@@ -14,10 +14,13 @@ on:
       - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/services/almost_out_group_service.py'
+      - 'backend/app/services/almost_out_image_projection.py'
+      - 'backend/app/services/household_alias_policy.py'
       - 'backend/app/services/automatic_product_type_service.py'
       - 'backend/app/data/product_consumption_policy.json'
       - 'backend/tests/test_automatic_product_type_service.py'
       - 'backend/tests/test_almost_out_group_service.py'
+      - 'backend/tests/test_almost_out_image_projection.py'
       - 'backend/app/database.py'
       - 'backend/app/testing/canonical_scenario_catalog.py'
       - 'backend/app/testing/postgresql_acceptance_foundation.py'
@@ -98,10 +101,12 @@ jobs:
           python -m py_compile \
             backend/tests/almost_out_api_projection_selftest.py \
             backend/app/main.py \
+            backend/app/services/almost_out_group_service.py \
+            backend/app/services/almost_out_image_projection.py \
             backend/app/testing/canonical_scenario_catalog.py
 
       - name: Validate GPC grouping and quantity weighted predictions
-        run: python -m pytest -q backend/tests/test_almost_out_group_service.py backend/tests/test_automatic_product_type_service.py
+        run: python -m pytest -q backend/tests/test_almost_out_group_service.py backend/tests/test_almost_out_image_projection.py backend/tests/test_automatic_product_type_service.py
 
       - name: Validate Almost-out projection through real PostgreSQL API
         shell: bash
