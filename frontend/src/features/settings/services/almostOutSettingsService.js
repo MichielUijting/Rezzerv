@@ -32,7 +32,7 @@ function settingsErrorMessage(detail, fallback) {
 
 export function isValidPredictionDays(value) {
   const text = String(value ?? '').trim()
-  return /^(0|[1-9]\\d*)$/.test(text) && Number.isSafeInteger(Number(text))
+  return /^(0|[1-9]\d*)$/.test(text) && Number.isSafeInteger(Number(text))
 }
 
 function normalizeSettings(value = {}) {
