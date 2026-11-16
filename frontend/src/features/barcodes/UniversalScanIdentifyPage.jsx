@@ -50,6 +50,7 @@ export default function UniversalScanIdentifyPage() {
     setReceiptItems(null)
     setOffSuggestion(null)
     setOffChecked(false)
+    setOffBusy(false)
     if (!/^(?:\d{8}|\d{12,14})$/.test(gtin)) {
       showFeedback({ variant: 'warning', message: 'Scan of vul een barcode van 8, 12, 13 of 14 cijfers in.' })
       return
@@ -109,6 +110,7 @@ export default function UniversalScanIdentifyPage() {
     setReceiptItems(null)
     setOffSuggestion(null)
     setOffChecked(false)
+    setOffBusy(false)
   }
 
   async function checkOpenFoodFacts() {
