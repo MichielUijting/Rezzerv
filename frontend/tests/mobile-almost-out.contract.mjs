@@ -41,6 +41,15 @@ assert.equal(rows[0].idealStock, 4)
 assert.equal(rows[0].amountToBuy, 3)
 assert.equal(rows[0].packaging, '1 liter')
 assert.equal(rows[0].location, 'Keuken / Koelkast')
+const missingPhotoRows = buildMobileAlmostOutRows([{
+  household_article_id: 'article-without-link',
+  household_article_name: 'Goudsalami',
+  product_name: 'Goudsalami',
+  image_url: '',
+  photo_missing_reason: 'Geen bevestigde Cataloguskoppeling',
+}])
+assert.equal(missingPhotoRows[0].photoMissingReason, 'Geen bevestigde Cataloguskoppeling')
+assert.equal(missingPhotoRows[0].detailId, 'article-without-link')
 assert.equal(formatAlmostOutQuantity(2.5), '2.5')
 
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
@@ -68,6 +77,7 @@ assert.match(mobileSource, /data-testid="mobile-almost-out-location-filter"/)
 assert.match(mobileSource, /Te kopen \{formatAlmostOutQuantity\(row\.amountToBuy\)\}/)
 assert.match(mobileSource, /CatalogArticleThumbnail/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
+assert.match(mobileSource, /row\.photoMissingReason/)
 assert.match(mobileSource, /GPC-groep:/)
 assert.match(mobileSource, /GPC-familie:/)
 assert.match(mobileSource, /\/voorraad\/\$\{encodeURIComponent\(row\.detailId\)\}/)
@@ -87,4 +97,19 @@ assert.match(mobileSource.slice(actionPanel - 115, actionPanel), /rz-mobile-tabl
 assert.ok(actionPanel > listView && moveAction > actionPanel && deleteAction > moveAction, 'Verwijderen moet rechts van Naar Boodschappenlijst in het onderste actiepaneel staan')
 assert.ok(!mobileSource.slice(selectToolbar, listView).includes('>Verwijderen</Button>'), 'Verwijderen mag niet in de bovenste selectieregel staan')
 assert.match(mobileSource, /Verwijderingen ongedaan maken/)
+const desktopSource = readFileSync(new URL('../src/features/almostOut/AlmostOutPage.jsx', import.meta.url), 'utf8')
+const horizonSource = readFileSync(new URL('../src/features/almostOut/AlmostOutPredictionTerm.jsx', import.meta.url), 'utf8')
+const settingsSource = readFileSync(new URL('../src/features/settings/SettingsAlmostOutPage.jsx', import.meta.url), 'utf8')
+assert.match(desktopSource, /photoMissingReason: String\(item\?\.photo_missing_reason/)
+assert.match(desktopSource, /row\.photoMissingReason/)
+assert.match(desktopSource, /<AlmostOutPredictionTerm onSaved=/)
+assert.match(mobileSource, /<AlmostOutPredictionTerm onSaved=\{reload\}/)
+assert.match(settingsSource, /label="Voorspeltermijn \(dagen\)"/)
+assert.doesNotMatch(settingsSource, /Extra voorspeltermijn \(dagen\)/)
+assert.match(horizonSource, /Voorspeltermijn:<\/strong>/)
+assert.match(horizonSource, /isHouseholdAdmin/)
+assert.match(horizonSource, /fetchAlmostOutSettings\(\)/)
+assert.match(horizonSource, /saveAlmostOutSettings\(\{ \.\.\.latest, predictionDays: days \}\)/)
+assert.match(horizonSource, /onSaved\?\.\(\)/)
+
 console.log('MOBILE_ALMOST_OUT_CONTRACT_GREEN')

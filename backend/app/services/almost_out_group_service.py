@@ -230,6 +230,26 @@ def load_groups(conn, household_id, article_rows, settings_by_article):
     return list(groups.values())
 
 
+
+def should_project_group(group):
+    """True only for an established safe grouping or one exact product identity.
+
+    A single Catalogus product may have multiple *household* article records
+    from older receipts. Its inventory must be evaluated once, while the
+    original member IDs remain intact. An unproven name is never a key.
+    """
+    kind = group['key'][0]
+    if kind in {'automatic_product_type', 'confirmed_synonym'}:
+        return True
+    if kind != 'product' or len(group['members']) < 2:
+        return False
+    product_ids = {
+        str(member.get('global_product_id') or '').strip()
+        for member in group['members']
+    }
+    return len(product_ids) == 1 and '' not in product_ids and group['key'][1] in product_ids
+
+
 def load_group_projection(conn, household_id, group):
     ids = [str(row['id']) for row in group['members']]
     params = {'household_id': str(household_id), 'ids': ids}
@@ -281,10 +301,27 @@ def load_group_projection(conn, household_id, group):
     }
 
 
-def prediction_from_events(events, prediction_days, now=None):
-    """Quantity-weighted purchase rhythm; multiple purchases on one day are one occasion."""
+def prediction_from_events(events, prediction_days, now=None, *, current_quantity=None, minimum_stock=0):
+    """Forecast a stock threshold using observed purchase volume *and current stock*.
+
+    A purchase date is one occasion even if multiple receipt lines were
+    accepted that day. The historical replacement rate is an estimate, not a
+    claim of measured consumption. When there is insufficient history, fail
+    closed and let the existing minimum-stock rule decide.
+    """
     days: dict[Any, float] = {}
     now = now or datetime.now(timezone.utc)
+    try:
+        stock = float(current_quantity)
+        minimum = float(minimum_stock)
+        horizon = int(prediction_days)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(number) for number in (stock, minimum)):
+        return None
+    if stock < 0 or minimum < 0 or horizon <= 0:
+        return None
+
     for event in events:
         if event.get('event_type') not in {'purchase', 'auto_repurchase'}:
             continue
@@ -294,34 +331,55 @@ def prediction_from_events(events, prediction_days, now=None):
         date = None
         for raw in (event.get('purchase_date'), event.get('created_at')):
             try:
-                date = datetime.fromisoformat(str(raw).replace('Z', '+00:00'))
-                date = date.replace(tzinfo=timezone.utc) if date.tzinfo is None else date.astimezone(timezone.utc)
-                break
+                if isinstance(raw, datetime):
+                    date = raw
+                elif raw is not None:
+                    date = datetime.fromisoformat(str(raw).replace('Z', '+00:00'))
+                if date is not None:
+                    date = date.replace(tzinfo=timezone.utc) if date.tzinfo is None else date.astimezone(timezone.utc)
+                    break
             except (ValueError, TypeError):
-                continue
-        if date is None:
+                date = None
+        if date is None or date.date() > now.date():
             continue
-        if date.date() > now.date():
-            continue
-        days[date.date()] = days.get(date.date(), 0) + quantity
+        days[date.date()] = days.get(date.date(), 0.0) + quantity
+
     dates = sorted(days)
     if len(dates) < 2:
         return None
     elapsed = (dates[-1] - dates[0]).days
-    # Quantities bought before the last occasion supplied the observed interval.
-    rate = sum(days[date] for date in dates[:-1]) / elapsed
+    if elapsed <= 0:
+        return None
+
+    # Exclude the newest purchase because its quantity has not yet been
+    # consumed over a following observed interval.
+    rate = sum(days[day] for day in dates[:-1]) / elapsed
+    if not math.isfinite(rate) or rate <= 0:
+        return None
+    until = max((stock - minimum) / rate, 0.0)
+    projected = stock - rate * horizon
+    if not math.isfinite(projected):
+        return None
     last = datetime.combine(dates[-1], datetime.min.time(), tzinfo=timezone.utc)
     since = max((now - last).total_seconds() / 86400, 0)
-    until = max(days[dates[-1]] / rate - since, 0)
+    try:
+        predicted_at = now + timedelta(days=until)
+    except OverflowError:
+        return None
     return {
-        'prediction_available': True, 'prediction_basis': 'quantity_weighted_purchase_interval',
+        'prediction_available': True,
+        'prediction_basis': 'stock_adjusted_purchase_rate',
         'prediction_scope': 'automatic_product_type',
-        'average_purchase_interval_days': elapsed / (len(dates) - 1),
-        'average_purchase_quantity': sum(days.values()) / len(dates),
-        'last_purchase_at': last.isoformat(), 'days_since_last_purchase': since,
+        'average_purchase_interval_days': round(elapsed / (len(dates) - 1), 3),
+        'average_purchase_quantity': round(sum(days.values()) / len(dates), 3),
+        'last_purchase_at': last.isoformat(),
+        'days_since_last_purchase': round(since, 3),
+        'estimated_consumption_per_day': rate,
+        'predicted_quantity_at_horizon': projected,
         'predicted_days_until_depletion': round(until, 3),
-        'predicted_depletion_date': (now + timedelta(days=until)).date().isoformat(),
-        'predicted_depletion_at': (now + timedelta(days=until)).isoformat(),
-        'prediction_threshold_days': prediction_days,
-        'prediction_triggered': until <= prediction_days, 'purchase_event_count': len(dates),
+        'predicted_depletion_date': predicted_at.date().isoformat(),
+        'predicted_depletion_at': predicted_at.isoformat(),
+        'prediction_threshold_days': horizon,
+        'prediction_triggered': projected <= minimum,
+        'purchase_event_count': len(dates),
     }

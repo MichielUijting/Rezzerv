@@ -30,6 +30,11 @@ function settingsErrorMessage(detail, fallback) {
   return fallback
 }
 
+export function isValidPredictionDays(value) {
+  const text = String(value ?? '').trim()
+  return /^(0|[1-9]\d*)$/.test(text) && Number.isSafeInteger(Number(text))
+}
+
 function normalizeSettings(value = {}) {
   const normalizedPolicyMode = String(value.policy_mode || value.policyMode || ALMOST_OUT_POLICY_MODES.ADVISORY).trim().toLowerCase()
   const allowed = new Set(Object.values(ALMOST_OUT_POLICY_MODES))

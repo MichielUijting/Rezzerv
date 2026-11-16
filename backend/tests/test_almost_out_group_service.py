@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection
+from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection, should_project_group
 
 
 @pytest.mark.parametrize('value,unit,expected', [(1, 'l', (1, 'l')), (500, 'ml', (.5, 'l')), (75, 'cl', (.75, 'l')), (250, 'g', (.25, 'kg')), (2, 'stuk', (2, 'stuk'))])
@@ -45,19 +45,62 @@ def test_quantity_weighted_rhythm_handles_different_packages_and_same_day_purcha
         {'event_type': 'consume', 'quantity': -1, 'purchase_date': '2026-10-17'},
         {'event_type': 'purchase', 'quantity': 200, 'purchase_date': '2026-10-24'},
     ]
-    result = prediction_from_events(events, 7, now)
+    result = prediction_from_events(
+        events, 7, now, current_quantity=1, minimum_stock=0,
+    )
     assert result['purchase_event_count'] == 2
     assert result['average_purchase_interval_days'] == 7
-    # First litre lasted 7 days; the last two litres last 14 days, 7 remain.
+    assert result['estimated_consumption_per_day'] == pytest.approx(1 / 7)
+    # Current stock, not the most recent purchase quantity, drives prediction.
     assert result['predicted_days_until_depletion'] == 7
+    assert result['predicted_quantity_at_horizon'] == pytest.approx(0)
     assert result['prediction_triggered'] is True
-    assert prediction_from_events(events, 6, now)['prediction_triggered'] is False
+    assert prediction_from_events(
+        events, 6, now, current_quantity=1, minimum_stock=0,
+    )['prediction_triggered'] is False
+
+
+def test_stock_above_minimum_does_not_trigger_on_old_purchase_rhythm():
+    now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+    events = [
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-10-19'},
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-11-02'},
+    ]
+    safe = prediction_from_events(events, 20, now,
+                                  current_quantity=12, minimum_stock=0)
+    assert safe is not None
+    assert safe['predicted_quantity_at_horizon'] == pytest.approx(12 - 20/14)
+    assert safe['prediction_triggered'] is False
+    urgent = prediction_from_events(events, 20, now,
+                                    current_quantity=1, minimum_stock=0)
+    assert urgent['predicted_quantity_at_horizon'] == pytest.approx(1 - 20/14)
+    assert urgent['prediction_triggered'] is True
+    # No forecast with a stock quantity not reconciled/known to this caller.
+    assert prediction_from_events(events, 20, now) is None
+    assert prediction_from_events(events, 20, now, current_quantity=-1) is None
+
+
+def test_predicted_minimum_is_distinct_from_current_physical_zero():
+    now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+    events = [
+        {'event_type': 'purchase', 'quantity': 2, 'purchase_date': '2026-10-19'},
+        {'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-11-02'},
+    ]
+    projected = prediction_from_events(
+        events, 14, now, current_quantity=3, minimum_stock=1,
+    )
+    assert projected['prediction_triggered'] is True
+    assert projected['predicted_quantity_at_horizon'] == pytest.approx(1)
+    assert projected['predicted_days_until_depletion'] == pytest.approx(14)
 
 
 def test_same_day_only_and_unusable_dates_have_no_prediction():
     events = [{'event_type': 'purchase', 'quantity': 1, 'purchase_date': '2026-10-09'}] * 2
-    assert prediction_from_events(events, 7) is None
-    assert prediction_from_events([{'event_type': 'purchase', 'quantity': 1, 'purchase_date': 'invalid'}], 7) is None
+    assert prediction_from_events(events, 7, current_quantity=2) is None
+    assert prediction_from_events(
+        [{'event_type': 'purchase', 'quantity': 1, 'purchase_date': 'invalid'}],
+        7, current_quantity=2,
+    ) is None
 
 
 class _Rows:
@@ -98,6 +141,41 @@ def _metadata(article_id, product_id, size, unit='l'):
             'size_value': size, 'size_unit': unit,
             'product_name': 'Halfvolle melk', 'variant': '',
             'brick_code': None, 'facts_json': None}
+
+
+
+def test_exact_same_catalog_product_projects_multiple_household_matches_once():
+    # Repeated historical household records with one proven central product
+    # must no longer render duplicate Bijna op signals or double-count stock.
+    meta = [_metadata('house-old', 'gp-one', 1),
+            _metadata('house-new', 'gp-one', 1)]
+    conn = _SynonymConnection(meta, [])
+    articles = [
+        {'id': 'house-old', 'global_product_id': 'gp-one'},
+        {'id': 'house-new', 'global_product_id': 'gp-one'},
+    ]
+    groups = load_groups(conn, 'household-1', articles, {})
+    assert len(groups) == 1
+    assert {member['id'] for member in groups[0]['members']} == {'house-old', 'house-new'}
+    assert should_project_group(groups[0]) is True
+    assert groups[0]['factors'] == {'house-old': 1.0, 'house-new': 1.0}
+    assert all(params['household_id'] == 'household-1'
+               for sql, params in conn.calls if 'FROM household_articles' in sql)
+
+
+def test_unsafe_product_or_unrelated_groups_are_not_combined():
+    assert should_project_group({
+        'key': ('product', 'gp-one'),
+        'members': [{'id': 'a', 'global_product_id': 'gp-one'},
+                    {'id': 'b', 'global_product_id': 'gp-two'}],
+    }) is False
+    assert should_project_group({
+        'key': ('product', 'a'), 'members': [{'id': 'a', 'global_product_id': None},
+                                           {'id': 'b', 'global_product_id': None}],
+    }) is False
+    assert should_project_group({
+        'key': ('product', 'gp-one'), 'members': [{'id': 'a', 'global_product_id': 'gp-one'}],
+    }) is False
 
 
 def test_confirmed_pair_is_grouped_with_content_conversion_and_household_scope():

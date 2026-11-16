@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from datetime import datetime, timedelta, timezone
 
 from app import main as api
 
@@ -26,9 +27,15 @@ def _evaluate(monkeypatch, *, shopping_days, prediction_enabled=False, predictio
         calls.append(kwargs["prediction_days"])
         if not prediction_available:
             return None
+        minimum = min_stock if min_stock is not None else 0
+        assert kwargs["minimum_stock"] == minimum
+        rate = max(stock - minimum, 0) / predicted_until if predicted_until > 0 else 1
+        projected = stock - rate * kwargs["prediction_days"]
         return {
             "prediction_available": True,
-            "prediction_triggered": predicted_until <= kwargs["prediction_days"],
+            "prediction_triggered": projected <= minimum,
+            "predicted_quantity_at_horizon": projected,
+            "estimated_consumption_per_day": rate,
             "predicted_days_until_depletion": predicted_until,
             "prediction_threshold_days": kwargs["prediction_days"],
         }
@@ -49,7 +56,7 @@ def test_next_shopping_day_triggers_forecast_even_without_extra_prediction(monke
     assert near["shopping_days"] == 3
     assert near["effective_prediction_days"] == 3
     assert near["current_quantity"] == 4
-    assert near["amount_to_buy"] == 2
+    assert near["amount_to_buy"] == 5  # ideal 6, forecast stock 1 at shopping day
     assert calls == [3]
 
     far, calls = _evaluate(monkeypatch, shopping_days=2)
@@ -89,3 +96,125 @@ def test_inconsistent_stock_does_not_become_a_forecast(monkeypatch):
     assert result["include_in_almost_out"] is False
     assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_INCONSISTENT
     assert calls == []
+
+def test_horizon_forecast_uses_expected_stock_not_shelf_quantity(monkeypatch):
+    # A 20-day horizon can call for restocking even when today's three
+    # packages are above the one-package ideal stock.
+    forecast, _ = _evaluate(
+        monkeypatch, shopping_days=0, prediction_enabled=True,
+        prediction_days=20, min_stock=0, predicted_until=15, stock=3,
+    )
+    assert forecast["trigger_type"] == "predicted"
+    assert forecast["amount_to_buy"] > 0
+    assert forecast["predicted_quantity_at_horizon"] == pytest.approx(-1)
+    assert forecast["current_quantity"] == 3
+
+
+def test_forecast_does_not_show_well_stocked_article_when_usage_is_slow(monkeypatch):
+    safe, _ = _evaluate(
+        monkeypatch, shopping_days=20, min_stock=0,
+        predicted_until=120, stock=12,
+    )
+    assert safe["prediction_available"] is True
+    assert safe["prediction_triggered"] is False
+    assert safe["include_in_almost_out"] is False
+
+
+def test_minimum_equals_ideal_still_yields_nonzero_advice(monkeypatch):
+    # Crossing the threshold is actionable even when target == minimum.
+    monkeypatch.setattr(api, "get_household_product_inventory_rows",
+                        lambda *_: [{"quantity": 1}])
+    monkeypatch.setattr(api, "get_household_product_event_rows", lambda *_: [])
+    row = {"id": "minimum-article", "naam": "Olie", "min_stock": 1,
+           "ideal_stock": 1}
+    settings = {"shopping_days": 0, "prediction_enabled": False,
+                "prediction_days": 0, "policy_mode": "advisory"}
+    result = api.evaluate_household_article_almost_out(
+        object(), "household-1", row,
+        household_settings=settings, article_settings_map={})
+    assert result["trigger_type"] == "stock"
+    assert result["amount_to_buy"] == 1
+
+
+def test_no_minimum_keeps_forecast_but_never_fabricates_stock_trigger(monkeypatch):
+    # Historical product-type groups without a minimum may still forecast
+    # physical depletion; the minimum-stock trigger itself remains disabled.
+    result, calls = _evaluate(
+        monkeypatch, shopping_days=20, min_stock=None,
+        predicted_until=2, stock=3,
+    )
+    assert result["include_in_almost_out"] is True
+    assert result["stock_triggered"] is False
+    assert result["trigger_type"] == "predicted"
+    assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
+    assert result["amount_to_buy"] > 0
+    assert calls == [20]
+
+def test_single_household_forecast_respects_current_stock_and_scoped_history(monkeypatch):
+    today = datetime.now(timezone.utc)
+    observed = [
+        {"event_type": "purchase", "quantity": 2,
+         "purchase_date": (today - timedelta(days=21)).date().isoformat()},
+        {"event_type": "auto_repurchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=7)).date().isoformat()},
+    ]
+    calls = []
+
+    class Rows:
+        def mappings(self):
+            return self
+        def all(self):
+            return observed
+
+    class FakeConnection:
+        def execute(self, statement, params):
+            calls.append((str(statement), params))
+            return Rows()
+
+    monkeypatch.setattr(api, "get_household_product_member_article_rows",
+                        lambda *_: [{"id": "rice-1", "naam": "Basmati rijst"}])
+    result = api.compute_household_product_prediction(
+        FakeConnection(), "household-rice", "rice-1", "Basmati rijst",
+        current_quantity=2, prediction_days=20, minimum_stock=0,
+    )
+    assert len(calls) == 1
+    assert "household_id = :household_id" in calls[0][0]
+    assert calls[0][1]["household_id"] == "household-rice"
+    assert calls[0][1]["article_ids"] == ["rice-1"]
+    assert result["prediction_triggered"] is True
+    assert result["predicted_quantity_at_horizon"] == pytest.approx(2 - 2*20/14)
+    assert result["current_quantity_at_evaluation"] == 2
+    assert result["prediction_scope"] == "household_article"
+
+
+def test_confirmed_synonym_group_predicts_using_combined_stock_without_writes():
+    today = datetime.now(timezone.utc)
+    events = [
+        {"event_type": "purchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=14)).date().isoformat()},
+        {"event_type": "auto_repurchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=7)).date().isoformat()},
+    ]
+    group = {
+        "inventory_rows": [{"quantity": 2}],
+        "event_rows": events,
+        "member_article_ids": ["rice-lidl", "rice-ah"],
+        "member_data_inconsistent": False,
+        "aggregation_scope": "confirmed_synonym",
+    }
+    article = {"id": "rice-lidl", "naam": "Basmati rijst",
+               "min_stock": 0, "ideal_stock": 1}
+    settings = {
+        "shopping_days": 0, "prediction_enabled": True,
+        "prediction_days": 20, "policy_mode": "advisory",
+    }
+    signal = api.evaluate_household_article_almost_out(
+        object(), "household-rice", article, settings, {}, group,
+    )
+    assert signal["data_state"] == api.ALMOST_OUT_DATA_STATE_OK
+    assert signal["include_in_almost_out"] is True
+    assert signal["trigger_type"] == "predicted"
+    assert signal["current_quantity"] == 2
+    assert signal["member_article_ids"] == ["rice-lidl", "rice-ah"]
+    assert signal["predicted_quantity_at_horizon"] == pytest.approx(2 - 20/7)
+    assert signal["amount_to_buy"] == 2

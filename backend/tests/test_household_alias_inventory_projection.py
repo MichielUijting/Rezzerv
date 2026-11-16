@@ -550,14 +550,53 @@ def test_catalog_name_does_not_override_unmatched_household_barcode():
     assert resolve_household_catalog_images(conn, lambda q: q, [item]) == {}
 
 
+def test_verified_catalog_evidence_exports_confirmed_receipt_identity():
+    verified = {}
+    with CentralCatalogProjectionEngine().begin() as conn:
+        image = resolve_household_catalog_images(
+            conn, lambda value: value, [_unlinked_receipt_article()],
+            verified_identity_by_article=verified,
+        )
+    assert verified == {ARTICLE_ID: 'global-product-a'}
+    assert image == {ARTICLE_ID: 'https://images.example.test/bio-dadeltjes.jpg'}
+
+
+def test_verified_catalog_evidence_rejects_conflicting_receipts():
+    verified = {}
+    with CentralCatalogProjectionEngine(ambiguous=True).begin() as conn:
+        image = resolve_household_catalog_images(
+            conn, lambda value: value, [_unlinked_receipt_article()],
+            verified_identity_by_article=verified,
+        )
+    assert verified == {}
+    assert image == {}
+
+
+def test_unique_name_photo_never_counts_as_proven_catalog_product():
+    verified = {}
+    image = resolve_household_catalog_images(
+        ExactNameCatalogConnection(photo='https://images.example.test/name-only.jpg'),
+        lambda value: value,
+        [{'id': ARTICLE_ID, 'naam': 'Aardappelpuree', 'barcode': '',
+          'global_product_id': None, 'image_url': ''}],
+        verified_identity_by_article=verified,
+    )
+    assert image == {ARTICLE_ID: 'https://images.example.test/name-only.jpg'}
+    assert verified == {}  # Name-only legacy photo cannot rename or classify.
+
+
 def test_almost_out_image_fallback_happens_after_visibility_filtering():
     source = (Path(__file__).resolve().parents[1] / 'app' / 'main.py').read_text(encoding='utf-8')
     body = source.split('def build_almost_out_items(', 1)[1].split('def get_household_article_details_for_inventory(', 1)[0]
     assert body.index("if evaluation.get('include_in_almost_out'):") < body.index(
-        'images = resolve_household_catalog_images(conn, text, source_rows)'
+        'fill_visible_almost_out_photos(conn, text, article_rows, items)'
     )
     assert "ha.global_product_id, ha.barcode" in body
-    assert "item['image_url'] = images.get(" in body
+    photo_source = (Path(__file__).resolve().parents[1] / 'app' / 'services'
+                    / 'almost_out_image_projection.py').read_text(encoding='utf-8')
+    assert 'if not str(item.get(\'image_url\') or \'\').strip()' in photo_source
+    assert 'resolve_household_catalog_images(conn, text_factory, missing_rows)' in photo_source
+    assert 'item[\'image_url\'] = url' in photo_source
 
 
 def test_inventory_inline_household_name_does_not_rename_inventory_identity():

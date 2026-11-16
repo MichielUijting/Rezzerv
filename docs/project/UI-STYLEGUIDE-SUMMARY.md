@@ -14,6 +14,26 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Bijna op: Voorspeltermijn en identiteitsgebonden productfoto — 16 november 2026
+
+Bijna op (desktop én mobiel) toont boven de lijst de **Voorspeltermijn: N dagen** uit exact dezelfde huishoudinstelling als Instellingen → Bijna op. Een huishoudbeheerder kan via **Wijzigen** het aantal hele, niet-negatieve dagen invoeren en expliciet opslaan of annuleren. Overige gebruikers zien de waarde read-only. Instellingen noemt het veld **Voorspeltermijn (dagen)**. Beide schermen laden de actuele huishoudinstelling en tonen na opslag onmiddellijk de nieuwe waarde. Als voorspelling is uitgeschakeld wordt dit naast de bewaarde waarde vermeld.
+
+De bestaande Bijna-op-lijst toont alleen artikelen die aan de signaalregels voldoen. Bewezen overeenkomende Catalogusproducten en alleen aantoonbaar veilige synoniem-/producttypegroepen kunnen gezamenlijk worden geprojecteerd. Foto's komen eerst van het eigen artikel, vervolgens van een bevestigd groepslid en daarna van de bestaande exact-identiteits-/direct bevestigde synoniemresolver. Zonder betrouwbaar beeld blijft **Geen foto** correct; geen fuzzy naam- of GPC-breed plaatje tonen.
+
+### Bijna op — Cataloguspresentatie bij bewezen bonmatches (16 november 2026)
+
+De kolom **Huishoudnaam** en mobiele kaarttitel blijven de huishoudspecifieke
+artikelnaam. **Productnaam** toont de werkelijke naam van het bewezen
+Catalogusproduct, ook wanneer oudere huishoudartikelen slechts via een
+bevestigde kassabonmatch, GTIN of `product_identities` aan de centrale
+Catalogus verbonden zijn. De foto en bekende GS1-hiërarchie komen van
+diezelfde bewezen product-ID. Zonder foto verschijnt de begrijpelijke
+redenen **Geen bevestigde Cataloguskoppeling** of **Catalogus heeft geen
+foto**. Op mobiel staat de reden in de reguliere contextregel, op desktop
+naast de compacte foto. Een naamgelijkenis is op zichzelf nooit een
+productidentiteit. De onderliggende voorraad, selectie, navigatie en
+huishoudartikel-ID blijven ongewijzigd.
+
 ## Gedeelde tabel: horizontale scrollbar onder de laatste rij — 10 november 2026
 
 Alle schermen die het standaard Inhuis-tabelcomponent `Table` / `DataTable` gebruiken, tonen een eventuele horizontale scrollbar **onder** de laatste zichtbare tabelrij. De scrollbar mag niet over de onderste rij, checkbox of tekst heen vallen. De gedeelde `.rz-table-wrapper` reserveert hiervoor een eigen onderruimte van 24 px en telt die mee in de maximale tabelhoogte. Dezelfde ruimte geldt voor de gespecialiseerde Voorraad- en winkelbatchtabellen. Paginering en bulkacties blijven buiten de tabelscrollcontainer staan; horizontaal scrollen verandert geen selectie of zichtbare regels.
@@ -665,8 +685,8 @@ De mobiele hoofdtabbladen zijn:
 - **Huishouden**;
 - **Identiteit**;
 - **Productdata**;
-- **Voorraad**;
-- **Locaties**, uitsluitend wanneer locatie-ondersteuning actief is.
+- **Voorraad**, uitsluitend wanneer **Waar inhuis** (locatieregistratie) actief is; zonder locatieregistratie staat de totale actuele voorraad met bestaande `QuantityStepper` uitsluitend in de bovenste kaart;
+- **Locaties**, uitsluitend wanneer **Waar inhuis** (locatieregistratie) actief is.
 
 Er is op mobiel **geen Overzicht-tab met subtabs**. De vier desktop-onderdelen Artikel, Huishouden, Identiteit en Productdata zijn ieder een zelfstandig hoofdtabblad. De bestaande gedeelde artikelcomponenten blijven de inhoudelijke authority, maar hun desktop-subtabbalk wordt in deze mobiele presentatie verborgen.
 
@@ -675,7 +695,7 @@ Er is op mobiel **geen Overzicht-tab met subtabs**. De vier desktop-onderdelen A
 Mobiele presentatieregels:
 - de tabbalk gebruikt compacte pill-tabs zonder desktopachtige knopshadow; actieve tab is duidelijk gemarkeerd en de balk mag horizontaal scrollen;
 - velden en acties worden op smalle schermen verticaal gestapeld; horizontaal pagina-scrollen is niet nodig;
-- **Voorraad** gebruikt dezelfde bestaande voorraadmutatie-authority als desktop;
+- **Voorraad** gebruikt wanneer locatieregistratie actief is dezelfde bestaande voorraadmutatie-authority als desktop; het openen van de tab en het herladen na een mutatie mogen geen JavaScript-fout veroorzaken; de bovenste `QuantityStepper` blijft ook zonder locatieregistratie de bestaande (bevoegdheidsbewaakte) voorraadmutatie bedienen;
 - **Locaties** gebruikt dezelfde bestaande locatie-/verplaatsauthority als desktop;
 - bij actieve locatie-ondersteuning wordt de actuele locatie ook in de bovenste voorraadkaart getoond;
 - voor het **Systeemhuishouden** geldt de systeemcontext als locatie-ondersteunend, ook zonder reguliere `household_product_configuration`;

@@ -10,6 +10,7 @@ import {
   ALMOST_OUT_POLICY_MODES,
   fetchAlmostOutSettings,
   saveAlmostOutSettings,
+  isValidPredictionDays,
 } from './services/almostOutSettingsService'
 
 function stableStringify(value) {
@@ -86,6 +87,10 @@ export default function SettingsAlmostOutPage() {
   }, [isDirty])
 
   async function handleSave() {
+    if (!isValidPredictionDays(predictionDays)) {
+      showFeedback({ variant: 'error', message: 'Voorspeltermijn moet een heel niet-negatief aantal dagen zijn.' })
+      return false
+    }
     const days = Number(shoppingDays)
     if (!Number.isInteger(days) || days < 0 || days > 365) {
       showFeedback({ variant: 'error', message: 'Vul een heel aantal dagen tussen 0 en 365 in.' })
@@ -195,7 +200,7 @@ export default function SettingsAlmostOutPage() {
 
             <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
               <Input
-                label="Extra voorspeltermijn (dagen)"
+                label="Voorspeltermijn (dagen)"
                 type="number"
                 min="0"
                 step="1"

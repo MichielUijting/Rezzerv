@@ -4,6 +4,7 @@ import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
 import Select from '../../ui/Select.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import AlmostOutPredictionTerm from './AlmostOutPredictionTerm.jsx'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import {
@@ -193,6 +194,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
     >
       <MobileModuleHeader title="Bijna op" testId="mobile-almost-out-header" />
       <main className="rz-mobile-inventory-content">
+        <AlmostOutPredictionTerm onSaved={reload} />
         <section className="rz-mobile-inventory-toolbar" aria-label="Bijna op zoeken en filteren">
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
             <span className="rz-mobile-inventory-label">Zoek</span>
@@ -271,6 +273,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
               const title = row.householdName || row.primaryName
               const contextParts = []
               if (row.productName && row.productName !== title) contextParts.push(row.productName)
+              if (!row.imageUrl && row.photoMissingReason) contextParts.push(row.photoMissingReason)
               if (row.packaging && row.packaging !== '—') contextParts.push(row.packaging)
               if (row.gpcBrickName) contextParts.push(`Brick: ${row.gpcBrickName}`)
               if (row.gpcClassName) contextParts.push(`GPC-groep: ${row.gpcClassName}`)

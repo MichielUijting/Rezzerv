@@ -9,7 +9,9 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import AlmostOutPredictionTerm from './AlmostOutPredictionTerm.jsx'
 import '../stores/locationlessStoreImport.css'
+import './almostOutCatalogPresentation.css'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function normalizeNumber(value) {
@@ -96,6 +98,7 @@ async function syncLocationTrackingLevel() {
 export default function AlmostOutPage() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [refreshTick, setRefreshTick] = useState(0)
   const { showFeedback } = useAppFeedback()
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -153,13 +156,14 @@ export default function AlmostOutPage() {
     syncLocationTrackingLevel()
     loadAlmostOut()
     return () => { cancelled = true }
-  }, [showFeedback])
+  }, [showFeedback, refreshTick])
 
   const rows = useMemo(() => {
     return (items || []).map((item) => ({
       id: String(item?.household_article_id || item?.article_id || item?.article_name || Math.random()),
       ...buildArticleNames(item),
       imageUrl: String(item?.image_url || '').trim(),
+      photoMissingReason: String(item?.photo_missing_reason || '').trim(),
       gpcBrickName: String(item?.gpc_brick_name || '').trim(),
       gpcClassName: String(item?.gpc_class_name || '').trim(),
       gpcFamilyName: String(item?.gpc_family_name || '').trim(),
@@ -273,6 +277,7 @@ export default function AlmostOutPage() {
     <AppShell title="Bijna op" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="almost-out-page">
         <ScreenCard>
+          <AlmostOutPredictionTerm onSaved={() => setRefreshTick((tick) => tick + 1)} />
           <Table tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
               <colgroup>
                 <col style={{ width: `${tableWidths.select}px` }} />
@@ -320,7 +325,12 @@ export default function AlmostOutPage() {
                     <td><input type="checkbox" aria-label={`Selecteer ${row.householdName || row.primaryName}`} checked={selectedIds.includes(row.id)} onChange={() => toggleSelected(row.id)} disabled={bulkBusy} /></td>
                     <td title={row.householdName || '—'}>
                       <div className="rz-product-row-identity">
-                        <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
+                        <span className="rz-almost-out-photo-wrap" title={row.photoMissingReason || undefined}>
+                          <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
+                          {!row.imageUrl && row.photoMissingReason ? (
+                            <span className="rz-almost-out-photo-reason">{row.photoMissingReason}</span>
+                          ) : null}
+                        </span>
                         <span>{row.householdName || '—'}</span>
                       </div>
                     </td>

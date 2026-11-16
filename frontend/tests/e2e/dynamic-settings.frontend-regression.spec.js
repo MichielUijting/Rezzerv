@@ -348,3 +348,76 @@ for (const width of [390, 1280]) {
     await expect(page.getByRole('status')).toHaveCount(0)
   })
 }
+
+
+for (const width of [390, 1280]) {
+  test(`Voorspeltermijn updates from Bijna op and Instellingen share one household value at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let settings = {
+      prediction_enabled: true, prediction_days: 7, shopping_days: 3,
+      policy_mode: 'override', is_household_admin: true,
+    }
+    const writes = []
+    let almostOutReads = 0
+    await page.route('**/api/**', route => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      if (path === '/api/household/almost-out-settings') {
+        if (request.method() === 'PUT') {
+          const payload = request.postDataJSON()
+          writes.push(payload)
+          settings = { ...settings, ...payload }
+        }
+        return route.fulfill({ json: settings })
+      }
+      if (path === '/api/households/horizon-household/almost-out') {
+        almostOutReads += 1
+        return route.fulfill({ json: { items: [] } })
+      }
+      const responses = {
+        '/api/session': {
+          authenticated: true, context_type: 'regular',
+          active_household_id: 'horizon-household', active_household_name: 'Test huishouden',
+          user_id: 'horizon-admin', email: 'horizon@example.test',
+          user: { id: 'horizon-admin', email: 'horizon@example.test' },
+          role: 'admin', display_role: 'admin', household_role: 'household.admin',
+          permissions: { 'household_settings.view': true, 'household_settings.manage': true },
+          supported_permissions: ['household_settings.view', 'household_settings.manage'],
+        },
+        '/api/session/households': { items: [], can_switch_households: false },
+        '/api/household': { id: 'horizon-household', name: 'Test huishouden' },
+        '/api/onboarding/capabilities': { product_configuration: { location_tracking_level: 'none' } },
+        '/api/maintenance/status': { state: 'normal' },
+      }
+      return route.fulfill({ json: responses[path] ?? {} })
+    })
+
+    await page.goto('/bijna-op')
+    const horizon = page.getByTestId('almost-out-prediction-term')
+    await expect(horizon).toContainText('Voorspeltermijn: 7 dagen')
+    const readsBefore = almostOutReads
+    await horizon.getByTestId('almost-out-prediction-edit').click()
+    await horizon.getByTestId('almost-out-prediction-input').fill('9')
+    await horizon.getByTestId('almost-out-prediction-save').click()
+    await expect(horizon).toContainText('Voorspeltermijn: 9 dagen')
+    await expect.poll(() => almostOutReads).toBeGreaterThan(readsBefore)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toMatchObject({
+      prediction_enabled: true, prediction_days: 9,
+      shopping_days: 3, policy_mode: 'override',
+    })
+    await page.goto('/instellingen/bijna-op-voorspelling')
+    const input = page.getByTestId('almost-out-prediction-days')
+    await expect(input).toHaveValue('9')
+    await expect(page.getByText('Voorspeltermijn (dagen)')).toBeVisible()
+    await input.fill('11')
+    await page.getByTestId('almost-out-settings-save').click()
+    await expect.poll(() => settings.prediction_days).toBe(11)
+    await page.goto('/bijna-op')
+    await expect(page.getByTestId('almost-out-prediction-term')).toContainText('Voorspeltermijn: 11 dagen')
+    settings = { ...settings, is_household_admin: false }
+    await page.reload()
+    await expect(page.getByTestId('almost-out-prediction-term')).toContainText('11 dagen')
+    await expect(page.getByTestId('almost-out-prediction-edit')).toHaveCount(0)
+  })
+}

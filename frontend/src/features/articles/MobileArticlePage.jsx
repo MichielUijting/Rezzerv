@@ -131,7 +131,7 @@ export default function MobileArticlePage() {
   const detailTabs = useMemo(
     () => locationTrackingEnabled
       ? ['Artikel', 'Huishouden', 'Identiteit', 'Productdata', 'Voorraad', 'Locaties']
-      : ['Artikel', 'Huishouden', 'Identiteit', 'Productdata', 'Voorraad'],
+      : ['Artikel', 'Huishouden', 'Identiteit', 'Productdata'],
     [locationTrackingEnabled],
   )
 
@@ -178,6 +178,11 @@ export default function MobileArticlePage() {
       if (showLoading) setLoading(false)
     }
   }
+
+  // The location-specific Voorraad/Locaties tabs must reload the same
+  // household-scoped article and inventory state after a successful mutation.
+  // Without this callback React would crash when either tab is opened.
+  const refreshInventory = () => loadAll({ showLoading: false })
 
   useEffect(() => {
     loadAll()

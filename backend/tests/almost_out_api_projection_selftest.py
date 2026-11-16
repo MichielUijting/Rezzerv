@@ -171,7 +171,8 @@ def _verify_gpc_variant_aggregation(engine, main, client, headers, url):
     assert result['average_purchase_quantity'] == 1
     assert result['prediction_triggered'] is True
     assert result['current_quantity'] == 0
-    assert result['amount_to_buy'] == 2  # Buy whole representative packages.
+    assert result['predicted_quantity_at_horizon'] == -1  # One package is forecast to be consumed within 7 days.
+    assert result['amount_to_buy'] == 3  # Ideal 1.5 minus forecast -1 => 2.5, rounded to 3 whole packages.
     # The existing endpoint hides the entire group, including when a nonrepresentative is selected.
     response = client.post(url + '/hide', headers=headers, json={'article_ids': ['f3-gpc-lidl']})
     assert response.status_code == 200, response.text

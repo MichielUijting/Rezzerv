@@ -467,7 +467,7 @@ def _confirmed_synonym_photo_urls(conn, product_ids: set[str]) -> dict[str, str]
     return found
 
 
-def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, Any]], *, verified_identity_by_article=None) -> dict[str, str]:
     """Read-only own Catalogus photo first, then direct confirmed synonym photo.
 
     An article is matched to a central product through its exact GTIN, product
@@ -505,6 +505,15 @@ def resolve_household_catalog_images(conn, text, article_rows: list[dict[str, An
         ambiguous_articles=ambiguous_articles,
     ) if central_candidates else {}
     images = {**central, **canonical}
+    # Export only proven product identities to callers needing Catalogus names
+    # and classification. A legacy exact-name photo below remains a *photo*
+    # fallback, never sufficient evidence for a product identity.
+    if verified_identity_by_article is not None:
+        verified_identity_by_article.update({
+            article_id: product_id
+            for article_id, product_id in by_article.items()
+            if article_id not in ambiguous_articles and product_id
+        })
     # Older households can predate all canonical IDs/receipt links. Only
     # a unique, literal Catalogus name can then identify their exact product.
     # If a barcode exists but no exact match was proven, do not override it.
