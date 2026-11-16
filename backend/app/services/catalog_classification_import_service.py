@@ -272,9 +272,13 @@ def preview_import(conn, rows):
 
 
 def confirm_import(conn, decisions, *, actor_id: str):
-    if not actor_id or not (1 <= len(decisions) <= 100):
-        raise ImportContractError("Kies 1 tot en met 100 classificaties per verwerking.")
+    # A full article may contain both a GS1 and a CBS change; approve at most
+    # 100 complete articles (therefore at most 200 code decisions) atomically.
+    if not actor_id or not (1 <= len(decisions) <= 200):
+        raise ImportContractError("Kies maximaal 100 complete artikelen (maximaal 200 classificaties) per verwerking.")
     keys = [(d["product_id"], d["system"]) for d in decisions]
+    if len({product_id for product_id, _ in keys}) > 100:
+        raise ImportContractError("Kies maximaal 100 complete artikelen per verwerking.")
     if len(set(keys)) != len(keys):
         raise ImportContractError("Dubbele classificatiekeuzes zijn niet toegestaan.")
     if any(d.get("approved") is not True or d["system"] not in ("gpc", "cbs")
