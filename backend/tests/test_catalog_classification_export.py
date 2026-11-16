@@ -13,8 +13,10 @@ from types import SimpleNamespace
 from zipfile import ZipFile
 
 from fastapi import FastAPI, HTTPException
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
+from app.services.catalog_classification_import_service import (CSV_FIELDS, EXCEL_FIELDS, ImportContractError, read_proposals, preview_import, confirm_import, current_products)
 
 from app.api import cbs_classification_routes as routes
 from app.services.catalog_classification_export_service import build_catalog_classification_export
@@ -38,10 +40,13 @@ def export_database():
     try:
         statements = [
             "CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT, brand TEXT, variant TEXT, category TEXT, primary_gtin TEXT, size_value TEXT, size_unit TEXT, source TEXT, status TEXT)",
-            "CREATE TABLE global_product_gpc_bricks (global_product_id TEXT PRIMARY KEY, brick_code TEXT, assignment_source TEXT)",
+            "CREATE TABLE global_product_gpc_bricks (global_product_id TEXT PRIMARY KEY, brick_code TEXT, assignment_source TEXT, confidence DOUBLE PRECISION NOT NULL DEFAULT 1.0, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
             "CREATE TABLE gpc_product_groups (gpc_brick_code TEXT PRIMARY KEY, gpc_brick_name TEXT, gpc_class_name TEXT, gpc_family_name TEXT, language_code TEXT, active BOOLEAN, source_version TEXT)",
-            "CREATE TABLE global_product_cbs_classifications (global_product_id TEXT PRIMARY KEY, cbs_code TEXT, reference_version TEXT, version INTEGER, is_active BOOLEAN, confirmation_source TEXT)",
-            "CREATE TABLE cbs_ecoicop_categories (cbs_code TEXT, reference_version TEXT, name_nl TEXT, parent_code TEXT, level INTEGER, source_url TEXT, PRIMARY KEY(cbs_code, reference_version))",
+            "CREATE TABLE gpc_bricks (brick_code TEXT PRIMARY KEY)",
+            "CREATE TABLE global_product_cbs_classifications (global_product_id TEXT PRIMARY KEY, cbs_code TEXT, reference_version TEXT, version INTEGER, is_active BOOLEAN, confirmation_source TEXT, confirmed_by TEXT DEFAULT '', confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE cbs_ecoicop_categories (cbs_code TEXT, reference_version TEXT, name_nl TEXT, parent_code TEXT, level INTEGER, valid_from DATE, source_url TEXT, PRIMARY KEY(cbs_code, reference_version))",
+            "CREATE TABLE global_product_cbs_history (id TEXT PRIMARY KEY, global_product_id TEXT, cbs_code TEXT, reference_version TEXT, version INTEGER, action TEXT, confirmed_by TEXT, confirmation_source TEXT)",
+            "CREATE TABLE auth_audit_log (id TEXT PRIMARY KEY, actor_user_id TEXT, actor_type TEXT, household_id TEXT, support_session_id TEXT, action TEXT, object_type TEXT, object_id TEXT, old_value TEXT, new_value TEXT, reason TEXT, ticket_reference TEXT, created_at TEXT)",
             "CREATE TABLE external_article_product_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, status TEXT)",
             "CREATE TABLE ed2_receipt_family_links (global_product_id TEXT, retailer_code TEXT, receipt_text_normalized TEXT, external_article_code TEXT, match_mode TEXT, confirmed_by TEXT)",
             "CREATE TABLE article_synonym_links (left_product_id TEXT, right_product_id TEXT)",
@@ -56,12 +61,13 @@ def export_database():
                 ('p3','Nog te classificeren','','','','',NULL,NULL,'manual','inactive'),
                 ('gone','Verwijderd','','','','',NULL,NULL,'manual','deleted')
             """))
-            conn.execute(text("INSERT INTO global_product_gpc_bricks VALUES ('p1','10000001','manual')"))
+            conn.execute(text("INSERT INTO global_product_gpc_bricks (global_product_id, brick_code, assignment_source) VALUES ('p1','10000001','manual')"))
             conn.execute(text("INSERT INTO gpc_product_groups VALUES ('10000001','Drinkmelk','Zuivel','Zuivel','nl',TRUE,'2026-05')"))
-            conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p1','011420','2026',2,TRUE,'manual')"))
-            conn.execute(text("INSERT INTO global_product_cbs_classifications VALUES ('p2','011410','2026',1,FALSE,'manual')"))
-            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011420','2026','Halfvolle en magere melk',NULL,4,'cbs.nl')"))
-            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011410','2026','Volle melk',NULL,4,'cbs.nl')"))
+            conn.execute(text("INSERT INTO gpc_bricks VALUES ('10000001')"))
+            conn.execute(text("INSERT INTO global_product_cbs_classifications (global_product_id, cbs_code, reference_version, version, is_active, confirmation_source) VALUES ('p1','011420','2026',2,TRUE,'manual')"))
+            conn.execute(text("INSERT INTO global_product_cbs_classifications (global_product_id, cbs_code, reference_version, version, is_active, confirmation_source) VALUES ('p2','011410','2026',1,FALSE,'manual')"))
+            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011420','2026','Halfvolle en magere melk',NULL,4,'2026-01-01','cbs.nl')"))
+            conn.execute(text("INSERT INTO cbs_ecoicop_categories VALUES ('011410','2026','Volle melk',NULL,4,'2026-01-01','cbs.nl')"))
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('p1','ah','AH HV MELK','38856','confirmed')"))
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('p2','jumbo','GEEN BEWIJS','200','classification_pending')"))
             conn.execute(text("INSERT INTO external_article_product_links VALUES ('gone','ah','GEDELETED','1','confirmed')"))
@@ -177,3 +183,196 @@ def test_export_api_enforces_canonical_role_and_permission(monkeypatch, export_d
         with ZipFile(io.BytesIO(result.content)) as archive:
             assert len(_csv(archive, "catalogus.csv")) == 3
     engine.dispose()
+
+def test_classification_import_preview_and_atomic_authorized_approval(export_database):
+    with export_database.begin() as conn:
+        source = current_products(conn)["p3"]
+        proposal = {key: "" for key in CSV_FIELDS}
+        proposal.update({"product_id": "p3", "name": source["name"],
+                         "snapshot_sha256": source["snapshot_sha256"],
+                         "gpc_voorstel": "10000001", "gpc_status": "Voorstel hoog",
+                         "cbs_voorstel": "011420", "cbs_status": "Voorstel hoog"})
+        report = preview_import(conn, [proposal])
+        assert report["total"] == 1 and report["blocked"] == 0
+        assert report["rows"][0]["gpc_options"][0]["code"] == "10000001"
+        assert report["rows"][0]["cbs_options"][0]["reference_version"] == "2026"
+        stale = dict(proposal, snapshot_sha256="a"*64)
+        assert preview_import(conn, [stale])["rows"][0]["problem"]
+        decisions = [
+            dict(product_id="p3", system="gpc", code="10000001",
+                 expected_name=source["name"], expected_sha256=source["snapshot_sha256"],
+                 reference_version="", approved=True, allow_replace=False),
+            dict(product_id="p3", system="cbs", code="011420",
+                 expected_name=source["name"], expected_sha256=source["snapshot_sha256"],
+                 reference_version="2026", approved=True, allow_replace=False),
+        ]
+        with pytest.raises(ImportContractError):
+            confirm_import(conn, [dict(decisions[0], approved=False)], actor_id="user-1")
+        with pytest.raises(ImportContractError, match="verouderd"):
+            confirm_import(conn, [dict(decisions[0], expected_sha256="a"*64)], actor_id="user-1")
+        result = confirm_import(conn, decisions, actor_id="user-1")
+        assert result["updated_gpc"] == 1 and result["updated_cbs"] == 1
+    with export_database.connect() as conn:
+        assert conn.execute(text("SELECT brick_code FROM global_product_gpc_bricks WHERE global_product_id = 'p3'")).scalar_one() == "10000001"
+        assert conn.execute(text("SELECT cbs_code FROM global_product_cbs_classifications WHERE global_product_id = 'p3'")).scalar_one() == "011420"
+        assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_history")).scalar_one() == 1
+        assert conn.execute(text("SELECT COUNT(*) FROM auth_audit_log WHERE actor_user_id = 'user-1'")).scalar_one() == 1
+
+
+def test_classification_import_rejects_more_than_100_distinct_articles_before_database_access():
+    class NoDatabase:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("Rejected batch must not touch the database")
+
+    decisions = [
+        {"product_id": f"p{i}", "system": "cbs", "approved": True}
+        for i in range(101)
+    ]
+    with pytest.raises(ImportContractError, match="100 complete artikelen"):
+        confirm_import(NoDatabase(), decisions, actor_id="authorized-superuser")
+
+    # The HTTP input boundary additionally limits the absolute number of
+    # decisions to 200; it never accepts 201+ classification changes.
+    complete = [
+        dict(product_id=f"p{i}", system=system, code="10000001" if system == "gpc" else "011420",
+             expected_name=f"Batchartikel {i}", expected_sha256="b" * 64,
+             reference_version="" if system == "gpc" else "2026",
+             approved=True, allow_replace=False)
+        for i in range(100) for system in ("gpc", "cbs")
+    ]
+    assert len(routes.ClassificationImportConfirmation(decisions=complete).decisions) == 200
+    with pytest.raises(ValidationError):
+        routes.ClassificationImportConfirmation(decisions=complete + [complete[0]])
+
+
+def test_classification_import_100_complete_articles_are_one_atomic_batch(export_database):
+    with export_database.begin() as conn:
+        for i in range(100):
+            conn.execute(text("""
+                INSERT INTO global_products
+                    (id, name, brand, variant, category, primary_gtin, size_value,
+                     size_unit, source, status)
+                VALUES (:id, :name, '', '', '', '', NULL, NULL, 'manual', 'active')
+            """), {"id": f"batch-{i:03}", "name": f"Batchartikel {i:03}"})
+        live = current_products(conn)
+        decisions = [
+            dict(product_id=f"batch-{i:03}", system=system,
+                 code="10000001" if system == "gpc" else "011420",
+                 expected_name=f"Batchartikel {i:03}",
+                 expected_sha256=live[f"batch-{i:03}"]["snapshot_sha256"],
+                 reference_version="" if system == "gpc" else "2026",
+                 approved=True, allow_replace=False)
+            for i in range(100) for system in ("gpc", "cbs")
+        ]
+        # A stale item among the 100 rejects the entire batch.
+        stale = [dict(decision) for decision in decisions]
+        stale[-1]["expected_sha256"] = "a" * 64
+        with pytest.raises(ImportContractError, match="verouderd"):
+            confirm_import(conn, stale, actor_id="authorized-superuser")
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_gpc_bricks "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 0
+        result = confirm_import(conn, decisions, actor_id="authorized-superuser")
+        assert result["updated_gpc"] == 100
+        assert result["updated_cbs"] == 100
+    with export_database.connect() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_gpc_bricks "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 100
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_cbs_classifications "
+            "WHERE global_product_id LIKE 'batch-%' AND is_active"
+        )).scalar_one() == 100
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_cbs_history "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 100
+
+
+def test_classification_import_csv_and_excel_share_columns():
+    import zipfile
+    from xml.sax.saxutils import escape
+    sample = {field: "" for field in CSV_FIELDS}
+    sample.update({"product_id": "p1", "name": "Courgette",
+                   "snapshot_sha256": "a"*64, "cbs_voorstel": "011920"})
+    output = io.StringIO()
+    csvwriter = csv.DictWriter(output, fieldnames=CSV_FIELDS, delimiter=";")
+    csvwriter.writeheader()
+    csvwriter.writerow(sample)
+    assert read_proposals(output.getvalue().encode(), "voorstellen.csv")[0]["cbs_voorstel"] == "011920"
+    with pytest.raises(ImportContractError):
+        read_proposals(output.getvalue().encode(), "voorstellen.exe")
+    def xml_cells(values, row_no):
+        return "".join(f'<c r="{chr(65+i)}{row_no}" t="inlineStr"><is><t>{escape(str(value))}</t></is></c>'
+                       for i, value in enumerate(values))
+    tab = ('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+           '<sheetData><row r="1">' + xml_cells(EXCEL_FIELDS, 1) + '</row>'
+           '<row r="2">' + xml_cells([sample[k] for k in CSV_FIELDS], 2) +
+           '</row></sheetData></worksheet>')
+    book = ('<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheets><sheet name="Alle artikelen" sheetId="1"'
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+            ' r:id="rId1"/></sheets></workbook>')
+    rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Target="/xl/worksheets/sheet1.xml"/></Relationships>')
+    zipped = io.BytesIO()
+    with zipfile.ZipFile(zipped, "w") as workbook:
+        workbook.writestr("xl/workbook.xml", book)
+        workbook.writestr("xl/_rels/workbook.xml.rels", rels)
+        workbook.writestr("xl/worksheets/sheet1.xml", tab)
+    assert read_proposals(zipped.getvalue(), "voorstellen.xlsx")[0]["cbs_voorstel"] == "011920"
+
+
+def test_import_preview_hides_identical_codes_per_gpc_and_cbs_even_if_review_flagged(export_database):
+    with export_database.connect() as conn:
+        current = current_products(conn)["p1"]
+        record = {key: "" for key in CSV_FIELDS}
+        record.update({
+            "product_id": "p1", "name": current["name"],
+            "snapshot_sha256": current["snapshot_sha256"],
+            "gpc_bestaand": current["gpc_brick_code"],
+            "cbs_bestaand": current["cbs_code"],
+            "gpc_voorstel": current["gpc_brick_code"],
+            "gpc_controlealternatief": current["gpc_brick_code"],
+            "cbs_voorstel": current["cbs_code"],
+            "controle_bestaande_code": "ja",
+        })
+        result = preview_import(conn, [record])
+        assert result["total"] == 1
+        assert result["changed_count"] == 0 and result["unchanged"] == 1
+        assert result["rows"] == []
+        assert result["review_existing"] == 0
+        assert result["gpc_new"] == result["gpc_replace"] == 0
+        assert result["cbs_new"] == result["cbs_replace"] == 0
+
+
+def test_import_preview_shows_only_differing_system_and_blocks_unofficial_code(export_database):
+    with export_database.connect() as conn:
+        current = current_products(conn)["p1"]
+        record = {key: "" for key in CSV_FIELDS}
+        record.update({
+            "product_id": "p1", "name": current["name"],
+            "snapshot_sha256": current["snapshot_sha256"],
+            "gpc_bestaand": current["gpc_brick_code"],
+            "cbs_bestaand": current["cbs_code"],
+            "gpc_voorstel": current["gpc_brick_code"],
+            "cbs_voorstel": "011410",
+            "cbs_status": "Voorstel middel",
+            "controle_bestaande_code": "ja",
+        })
+        result = preview_import(conn, [record])
+        assert result["changed_count"] == 1 and result["unchanged"] == 0
+        assert result["gpc_new"] == result["gpc_replace"] == 0
+        assert result["cbs_new"] == 0 and result["cbs_replace"] == 1
+        item = result["rows"][0]
+        assert item["gpc_change"] is None and item["gpc_options"] == []
+        assert item["cbs_change"]["code"] == "011410"
+        assert item["current_cbs"] == "011420"
+        assert item["problem"] == ""
+        record["cbs_voorstel"] = "999999"
+        blocked = preview_import(conn, [record])
+        assert blocked["changed_count"] == 1 and blocked["blocked"] == 1
+        assert blocked["rows"][0]["cbs_change"] is None
+        assert blocked["rows"][0]["invalid_cbs"] == ["999999"]

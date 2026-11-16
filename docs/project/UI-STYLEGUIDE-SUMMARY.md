@@ -1972,3 +1972,45 @@ meegenomen. De actie schrijft niets en geeft voortgang, succes of fouten via
 de bestaande centrale Melding-overlay; geen eigen dialoog of in-screenmelding.
 Een latere classificatie-import is een **afzonderlijke** PO-opdracht en niet
 aanwezig in deze wijziging.
+
+### Artikelbeheer: import/export onder Classificeren — 16 november 2026
+
+De knop **Catalogus exporteren** staat uitsluitend binnen het werkgebied
+**Classificeren** (in de navigatie: Classificeren) en niet langer op de lege
+Artikelbeheer-startpagina. In dezelfde sectie kan de Superuser of een volgens
+bestaande autorisatieregels bevoegde Frontteammedewerker een Excel-/CSV-
+classificatievoorstellenbestand selecteren, eerst alleen-lezen laten toetsen en
+per artikel expliciet GS1- en CBS-codes goedkeuren. De importwerkvoorraad toont uitsluitend GS1- of CBS-classificaties die
+**nieuw** of **anders** zijn dan de actuele Cataloguscode. Voorstellen die
+gelijk zijn aan de huidige classificatie verdwijnen, ook wanneer het Excelbestand
+nog een controlemarkering heeft. De gebruiker selecteert artikelen met een rijcheckbox, een checkbox zonder
+kolomtitel in de eerste tabelkop voor **de huidige pagina**, of de checkbox
+**Alle rijen in de tabel** rechtsboven de tabel. Alleen die laatste selecteert
+ook de overige pagina's binnen de huidige zoek-/weergave-/kolomfilters;
+beide groepsselecties sluiten geblokkeerde rijen uit. Een paginaselectie
+wijzigt niet de geselecteerde rijen op andere pagina's. Bij meer dan 100 geselecteerde artikelrijen verschijnt een blijvende
+centrale Melding-overlay met **Eerste 100 rijen verwerken** en **Annuleren**.
+De gebruiker kan de overlay sluiten via Annuleren of buiten het venster;
+er is geen automatische verdwijntijd. De bulkactie blijft beschikbaar.
+Per batch worden maximaal 100 complete artikelen met hun bijbehorende GS1-
+en CBS-wijzigingen verwerkt, maximaal 200 codes in één transactie.
+Andere geselecteerde rijen blijven na succesvolle verwerking geselecteerd.
+Er staan geen codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
+**onder de standaardtabel** en de bestaande centrale Melding-overlay vraagt
+expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal 100 complete artikelrijen (en maximaal 200 classificatiecodes)
+per transactionele batch; verschillende onduidelijke alternatieven worden
+geblokkeerd. Bestaande classificaties van niet-geselecteerde
+artikelen blijven onveranderd.
+
+**Aanvullend PO-besluit: selecteren en exporteren in de onderste
+Cataloguswerkvoorraad (16 november 2026).** Deze onderste tabel toont alle
+Catalogusartikelen en de actuele GS1-/CBS-status, onafhankelijk van de
+importpreview. De tabel volgt hetzelfde selectiesjabloon: een rijcheckbox,
+een onbenoemde checkbox in de eerste kolomkop voor alleen de zichtbare pagina,
+en **Alle rijen in de tabel** inclusief checkbox rechtsboven voor alle
+actueel gefilterde rijen, ook op andere pagina's. Filters en paginawissels
+wissen andere bestaande selecties niet. **Selectie wissen** en
+**Geselecteerde rijen exporteren** staan onder de standaardtabel.
+De CSV bevat alleen de geselecteerde Catalogusvelden en is read-only,
+geen nieuwe classificatie of importbestand. Het openen van de twee
+classificatiepanelen via een artikelrij werkt onafhankelijk van de checkbox.

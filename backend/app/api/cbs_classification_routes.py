@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 from sqlalchemy import text as __sql
 
 from app.db import engine
@@ -26,6 +27,9 @@ from app.services.article_workqueue_service import (
     load_classification_workqueue, load_identification_workqueue,
 )
 from app.services.catalog_classification_export_service import build_catalog_classification_export
+from app.services.catalog_classification_import_service import (
+    ImportContractError, MAX_BYTES, read_proposals, preview_import, confirm_import,
+)
 from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter(prefix="/api/cbs-classifications", tags=["cbs-classification"])
@@ -108,6 +112,71 @@ def export_catalog_classifications():
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+
+class ClassificationImportDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    product_id: str = Field(min_length=1, max_length=200)
+    system: Literal["gpc", "cbs"]
+    code: str = Field(min_length=6, max_length=8)
+    expected_name: str = Field(min_length=1, max_length=500)
+    expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference_version: str = ""
+    approved: Literal[True]
+    allow_replace: bool = False
+
+
+class ClassificationImportConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    decisions: list[ClassificationImportDecision] = Field(min_length=1, max_length=200)
+
+
+@router.post("/classification-import/preview")
+async def preview_catalog_classification_import(request: Request):
+    """Parse CSV/Excel in memory and validate against the live official Catalogus."""
+    _actor("platform.external_products.view")
+    if int(request.headers.get("content-length") or 0) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Importbestand mag maximaal 5 MB zijn.")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Importbestand mag maximaal 5 MB zijn.")
+    filename = request.headers.get("x-inhuis-filename", "")
+    try:
+        rows = read_proposals(bytes(body), filename)
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn = conn.execution_options(
+                    isolation_level="REPEATABLE READ", postgresql_readonly=True,
+                )
+            with conn.begin():
+                return preview_import(conn, rows)
+    except ImportContractError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/classification-import/confirm")
+def confirm_catalog_classification_import(payload: ClassificationImportConfirmation):
+    """Only explicitly approved official codes, all-or-nothing for each batch."""
+    actor = _actor("platform.external_products.link_existing")
+    if any(item.system == "gpc" for item in payload.decisions):
+        # Keep the GS1 authority at least as strict as the existing manual GS1 editor.
+        require_platform_permission_from_session("platform.gpc.update")
+    try:
+        with engine.begin() as conn:
+            return confirm_import(
+                conn, [item.model_dump() for item in payload.decisions],
+                actor_id=str(actor.user_id),
+            )
+    except ImportContractError as exc:
+        reason = str(exc)
+        status = 409 if any(word in reason for word in (
+            "verouderd", "gewijzigd", "ontbreekt", "andere naam")) else 422
+        raise HTTPException(status_code=status, detail=reason) from exc
+    except (CBSDecisionError, CBSConcurrentChange) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/products")

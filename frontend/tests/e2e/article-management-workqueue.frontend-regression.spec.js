@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -27,7 +28,7 @@ function mountMockBackend(page, { frontteam = false, invalidClassPage = false } 
       context_type: frontteam ? 'regular' : 'system', role: 'admin',
       is_platform_superuser: !frontteam, is_frontteam: frontteam,
       permissions: { 'platform.external_products.view': true, 'platform.external_products.link_existing': true,
-        'gpc.update': !frontteam },
+        'gpc.update': !frontteam, 'platform.gpc.update': !frontteam },
     } })
     if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
     if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
@@ -159,6 +160,8 @@ test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbehee
     body: 'PK-mock-binary-export',
   }))
   await page.goto('/externe-databases-2')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Classificeren' }).click()
   const button = page.getByRole('button', { name: 'Catalogus exporteren' })
   await expect(button).toBeVisible()
   const download = page.waitForEvent('download')
@@ -172,6 +175,332 @@ test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbehee
 test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ page }) => {
   await mountMockBackend(page, { frontteam: true })
   await page.goto('/externe-databases-2')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Classificeren' }).click()
   await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Matchen' })).toHaveCount(0)
+})
+
+
+test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterde rijen en exporteert alleen de selectie', async ({ page }) => {
+  const requests = await mountMockBackend(page)
+  const items = Array.from({ length: 10 }, (_, index) => ({
+    id: `catalog-${index + 1}`,
+    name: `Product ${String(index + 1).padStart(2, '0')}`,
+    brand: index === 4 ? '=CMD' : '',
+    gtin: index === 0 ? '0000000000001' : String(8710000000000 + index),
+    gpc_code: index === 0 ? '10000001' : '',
+    gpc_status: index === 0 ? 'classified' : 'unclassified',
+    cbs_code: index === 9 ? '011420' : '',
+    cbs_status: index === 9 ? 'classified' : 'unclassified',
+    cbs_name: index === 9 ? 'Melk' : '',
+    cbs_reference_version: index === 9 ? '2026' : '',
+  }))
+  await page.route('**/api/cbs-classifications/workqueue?**', route => route.fulfill({ json: {
+    task_count_scope: 'page', product_count_scope: 'global', total: items.length,
+    items, tasks: items.flatMap(item => [
+      ...(!item.gpc_code ? [{ key: `${item.id}:gpc`, global_product_id: item.id, system: 'gpc' }] : []),
+      ...(!item.cbs_code ? [{ key: `${item.id}:cbs`, global_product_id: item.id, system: 'cbs' }] : []),
+    ]),
+  } }))
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+
+  const table = page.getByTestId('combined-classification-articles')
+  const selectionCount = page.getByTestId('classification-workqueue-selected-count')
+  const all = page.getByTestId('classification-workqueue-select-all-table')
+  const pageAll = page.getByTestId('classification-workqueue-select-all-page')
+  const exportButton = page.getByTestId('classification-workqueue-export')
+  const paging = page.getByRole('navigation', { name: 'Paginering' })
+  await expect(table).toContainText('Product 01')
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+  await expect(exportButton).toBeDisabled()
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+  const header = table.locator('thead tr').first().locator('th').first()
+  await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
+  await expect(header).not.toContainText('Alle rijen in de tabel')
+
+  await pageAll.check()
+  await expect(selectionCount).toContainText('8 rijen geselecteerd')
+  await expect(all).not.toBeChecked()
+  await paging.getByRole('button', { name: '+' }).click()
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(2)
+  await expect(pageAll).not.toBeChecked()
+  await pageAll.check()
+  await expect(selectionCount).toContainText('10 rijen geselecteerd')
+  await expect(all).toBeChecked()
+  await all.uncheck()
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+
+  // Row checkbox is independent from opening the GS1/CBS article editor.
+  await table.getByRole('checkbox', { name: 'Selecteer Product 10' }).check()
+  await expect(page.getByTestId('combined-selected-article')).toHaveCount(0)
+  const cbsFilter = table.getByRole('textbox', { name: 'Filter op CBS ECOICOPv2' })
+  await cbsFilter.fill('niet g')
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+  await all.check()
+  // The previously selected article outside the filter is deliberately preserved.
+  await expect(selectionCount).toContainText('10 rijen geselecteerd')
+  await expect(pageAll).toBeChecked()
+
+  const downloadPromise = page.waitForEvent('download')
+  await exportButton.click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv')
+  const contents = await readFile(await download.path(), 'utf8')
+  expect(contents.charCodeAt(0)).toBe(0xfeff)
+  expect(contents).toContain('"product_id";"Artikel";"Merk";"Barcode";"GS1 GPC code";"CBS ECOICOPv2 code"')
+  expect(contents).toContain('"catalog-1";"Product 01";"";"0000000000001"')
+  expect(contents).toContain('"catalog-5";"Product 05";"\'=CMD"')
+  expect(contents).toContain('"catalog-10";"Product 10"')
+  expect(contents.split('\r\n').filter(Boolean)).toHaveLength(11)
+  expect(requests.filter(req => req.method === 'POST')).toEqual([])
+
+  await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
+  await page.getByTestId('classification-workqueue-clear').click()
+  await expect(selectionCount).toContainText('0 rijen geselecteerd')
+  await expect(exportButton).toBeDisabled()
+})
+
+test('Classificeren: alleen nieuwe en afwijkende classificaties, rijselectie en bulk onder de tabel', async ({ page }) => {
+  await mountMockBackend(page)
+  const sent = []
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 617, unchanged: 616, changed_count: 1, gpc_new: 0, gpc_replace: 1,
+    cbs_new: 1, cbs_replace: 0, blocked: 0, review_existing: 1, no_changes_yet: true,
+    rows: [{
+      product_id: 'product-milk', name: 'Halfvolle melk', brand: '',
+      snapshot_sha256: 'a'.repeat(64), current_gpc: '10000002', current_cbs: '',
+      gpc_status: 'Bestaand - controle nodig', cbs_status: 'Voorstel hoog',
+      gpc_reason: 'GS1 mogelijk onjuist', cbs_reason: 'Productnaam', review_existing: true,
+      problem: '', invalid_gpc: [], invalid_cbs: [],
+      gpc_change: { code: '10000001', label: 'Drinkmelk', kind: 'bestaand controleren' },
+      cbs_change: { code: '011420', label: 'Melk', reference_version: '2026', kind: 'voorstel' },
+    }],
+  } }))
+  await page.route('**/api/cbs-classifications/classification-import/confirm', async route => {
+    sent.push(route.request().postDataJSON())
+    await route.fulfill({ json: { updated_gpc: 1, updated_cbs: 1, unchanged: 0, processed: 2 } })
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'Inhuis_Classificatievoorstellen.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('testfile-contents'),
+  })
+  await expect(page.getByTestId('classification-import-table')).toHaveCount(0)
+  await page.getByTestId('classification-import-preview').click()
+  const table = page.getByTestId('classification-import-table')
+  await expect(table).toContainText('Halfvolle melk')
+  await expect(table).toContainText('10000001')
+  await expect(table).toContainText('011420')
+  await expect(table).toContainText('Productnaam')
+  await expect(page.getByTestId('classification-import-summary')).toContainText('616 gelijke overgeslagen')
+  await expect(table.getByRole('checkbox')).toHaveCount(2)
+  await expect(table.getByRole('combobox')).toHaveCount(0)
+  await expect(page.getByText('Bestaande code vervangen')).toHaveCount(0)
+  const selection = table.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' })
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const pageAll = table.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })
+  const header = table.locator('thead tr').first().locator('th').first()
+  await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
+  await expect(header).not.toContainText('Alle rijen in de tabel')
+  await expect(header).not.toContainText('Selecteer')
+  await expect(page.locator('.rz-classification-import-select-actions')).toHaveCSS('justify-content', 'flex-end')
+  await expect(all).toBeVisible()
+  await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
+  await pageAll.check()
+  await expect(selection).toBeChecked()
+  await expect(all).toBeChecked()
+  await pageAll.uncheck()
+  await expect(selection).not.toBeChecked()
+  await all.check()
+  await expect(selection).toBeChecked()
+  await all.uncheck()
+  await expect(selection).not.toBeChecked()
+  await selection.check()
+  await expect(page.getByTestId('classification-import-confirm')).toContainText('(1)')
+  const bulk = page.getByTestId('classification-import-confirm')
+  await bulk.click()
+  await expect(page.getByTestId('app-feedback-warning-overlay')).toContainText('1 GS1 vervangen')
+  await expect(page.getByTestId('app-feedback-warning-overlay')).toContainText('1 CBS nieuw')
+  expect(sent).toHaveLength(0)
+  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await expect(selection).toBeChecked()
+  await bulk.click()
+  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
+  await expect.poll(() => sent.length).toBe(1)
+  expect(sent[0].decisions.map(item => item.system).sort()).toEqual(['cbs', 'gpc'])
+  expect(sent[0].decisions.find(item => item.system === 'gpc').allow_replace).toBe(true)
+  expect(sent[0].decisions.find(item => item.system === 'cbs').allow_replace).toBe(false)
+  await expect(table).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
+})
+
+test('Classificeren: identieke voorstellen verdwijnen zelfs als Excel controle nodig zegt', async ({ page }) => {
+  await mountMockBackend(page)
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 617, unchanged: 617, changed_count: 0, gpc_new: 0, gpc_replace: 0,
+    cbs_new: 0, cbs_replace: 0, blocked: 0, review_existing: 0, no_changes_yet: true,
+    rows: [],
+  } }))
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'classificaties.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('unused'),
+  })
+  await page.getByTestId('classification-import-preview').click()
+  await expect(page.getByTestId('classification-import-summary')).toContainText('617 gelijke overgeslagen')
+  await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
+  await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
+  await expect(page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })).toBeDisabled()
+})
+
+test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', async ({ page }) => {
+  await mountMockBackend(page)
+  const rows = Array.from({ length: 9 }, (_, index) => ({
+    product_id: `article-${index + 1}`,
+    name: `Product ${String(index + 1).padStart(2, '0')}`,
+    brand: '', snapshot_sha256: 'b'.repeat(64),
+    current_gpc: '', current_cbs: '',
+    gpc_status: '', cbs_status: 'Voorstel hoog', gpc_reason: '', cbs_reason: 'Productnaam',
+    review_existing: false, problem: '', invalid_gpc: [], invalid_cbs: [],
+    gpc_options: [], cbs_options: [],
+    gpc_change: null, cbs_change: {
+      code: '011420', label: 'Melk', reference_version: '2026', kind: 'voorstel',
+    },
+  }))
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 9, unchanged: 0, changed_count: 9, blocked: 0,
+    gpc_new: 0, gpc_replace: 0, cbs_new: 9, cbs_replace: 0,
+    rows,
+  } }))
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'voorstellen.csv', mimeType: 'text/csv', buffer: Buffer.from('mock'),
+  })
+  await page.getByTestId('classification-import-preview').click()
+  const table = page.getByTestId('classification-import-table')
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const pageAll = table.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })
+  const paging = page.getByRole('navigation', { name: 'Paginering' })
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+
+  // The header checkbox selects only the eight rows on the visible page.
+  await pageAll.check()
+  await expect(page.getByTestId('classification-import-panel').getByText('8 rijen geselecteerd')).toBeVisible()
+  await expect(all).not.toBeChecked()
+  await paging.getByRole('button', { name: '+' }).click()
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(1)
+  await expect(pageAll).not.toBeChecked()
+  await pageAll.check()
+  await expect(page.getByTestId('classification-import-panel').getByText('9 rijen geselecteerd')).toBeVisible()
+  await expect(all).toBeChecked()
+  await pageAll.uncheck()
+  await expect(page.getByTestId('classification-import-panel').getByText('8 rijen geselecteerd')).toBeVisible()
+
+  // Changing page preserves the other page's selection and header state.
+  await paging.getByRole('button', { name: '-' }).click()
+  await expect(pageAll).toBeChecked()
+  await expect(all).not.toBeChecked()
+  await pageAll.uncheck()
+  await expect(page.getByTestId('classification-import-panel').getByText('0 rijen geselecteerd')).toBeVisible()
+  await expect(pageAll).not.toBeChecked()
+
+  // The separate control above the table selects across page boundaries.
+  await all.check()
+  await expect(page.getByTestId('classification-import-panel').getByText('9 rijen geselecteerd')).toBeVisible()
+  await all.uncheck()
+  await expect(page.getByTestId('classification-import-panel').getByText('0 rijen geselecteerd')).toBeVisible()
+
+  // Both controls obey the current DataTable filters, without forgetting other selections.
+  await table.getByRole('textbox', { name: 'Filter op Artikel' }).fill('Product 09')
+  await expect(table).toContainText('Product 09')
+  await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(1)
+  await all.check()
+  await expect(pageAll).toBeChecked()
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
+  await table.getByRole('textbox', { name: 'Filter op Artikel' }).fill('')
+  await expect(all).not.toBeChecked()
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
+})
+
+test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusief 200 GS1/CBS-codes', async ({ page }) => {
+  await mountMockBackend(page)
+  const rows = Array.from({ length: 101 }, (_, index) => ({
+    product_id: `article-${index + 1}`,
+    name: `Product ${String(index + 1).padStart(3, '0')}`, brand: '',
+    snapshot_sha256: 'c'.repeat(64), current_gpc: '', current_cbs: '',
+    gpc_status: 'Voorstel hoog', cbs_status: 'Voorstel hoog', gpc_reason: '', cbs_reason: '',
+    review_existing: false, problem: '', invalid_gpc: [], invalid_cbs: [],
+    gpc_options: [], cbs_options: [],
+    gpc_change: { code: '10000001', label: 'GPC', reference_version: '' },
+    cbs_change: { code: '011420', label: 'Melk', reference_version: '2026' },
+  }))
+  await page.route('**/api/cbs-classifications/classification-import/preview', route => route.fulfill({ json: {
+    total: 101, unchanged: 0, changed_count: 101, blocked: 0,
+    gpc_new: 101, gpc_replace: 0, cbs_new: 101, cbs_replace: 0, rows,
+  } }))
+  const attempted = []
+  await page.route('**/api/cbs-classifications/classification-import/confirm', async route => {
+    const decisions = route.request().postDataJSON().decisions
+    attempted.push(decisions)
+    await route.fulfill({ json: {
+      updated_gpc: decisions.filter(item => item.system === 'gpc').length,
+      updated_cbs: decisions.filter(item => item.system === 'cbs').length,
+      unchanged: 0, processed: decisions.length,
+    } })
+  })
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren' }).click()
+  await page.getByTestId('classification-file').setInputFiles({
+    name: 'voorstellen.csv', mimeType: 'text/csv', buffer: Buffer.from('mock'),
+  })
+  await page.getByTestId('classification-import-preview').click()
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const bulk = page.getByTestId('classification-import-confirm')
+  await all.check()
+  await expect(page.getByTestId('classification-import-panel').getByText('101 rijen geselecteerd')).toBeVisible()
+  const prompt = page.getByTestId('app-feedback-warning-overlay')
+  await expect(prompt).toContainText('100 artikelen (200 classificaties)')
+  await expect(prompt).toContainText('1 andere geselecteerde rijen')
+  await expect(page.getByRole('button', { name: 'Eerste 100 rijen verwerken' })).toBeVisible()
+  expect(attempted).toHaveLength(0)
+
+  // No auto-dismiss: even after the normal 4-second transient timeout, the
+  // decision must still be visible until cancel/approval/outside-click.
+  await page.waitForTimeout(4300)
+  await expect(prompt).toBeVisible()
+  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await expect(prompt).toHaveCount(0)
+  expect(attempted).toHaveLength(0)
+  await expect(bulk).toBeEnabled()
+
+  await bulk.click()
+  await expect(prompt).toBeVisible()
+  await prompt.click({ position: { x: 2, y: 2 } })
+  await expect(prompt).toHaveCount(0)
+  expect(attempted).toHaveLength(0)
+
+  await bulk.click()
+  await page.getByRole('button', { name: 'Eerste 100 rijen verwerken' }).click()
+  await expect.poll(() => attempted.length).toBe(1)
+  expect(attempted[0]).toHaveLength(200)
+  expect(new Set(attempted[0].map(item => item.product_id)).size).toBe(100)
+  expect(attempted[0].filter(item => item.system === 'gpc')).toHaveLength(100)
+  expect(attempted[0].filter(item => item.system === 'cbs')).toHaveLength(100)
+  expect(attempted[0].some(item => item.product_id === 'article-101')).toBe(false)
+  await expect(page.getByTestId('classification-import-panel').getByText('1 rijen geselecteerd')).toBeVisible()
+  await expect(bulk).toContainText('(1)')
+
+  // The remaining selected article can be processed in a new explicit batch.
+  await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
+  await bulk.click()
+  await expect(page.getByRole('button', { name: 'Goedkeuren en verwerken' })).toBeVisible()
+  await page.getByRole('button', { name: 'Goedkeuren en verwerken' }).click()
+  await expect.poll(() => attempted.length).toBe(2)
+  expect(attempted[1]).toHaveLength(2)
+  expect(attempted[1].map(item => item.product_id)).toEqual(['article-101', 'article-101'])
+  await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
 })

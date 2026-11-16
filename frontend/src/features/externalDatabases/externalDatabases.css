@@ -585,6 +585,10 @@
 }
 
 /* Artikelbeheer: equal GS1/CBS columns share one central Catalogus selection. */
+.rz-classification-workqueue-select-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin: .65rem 0 .5rem; }
+.rz-classification-workqueue-select-column, .rz-classification-workqueue-select-cell { text-align: center; }
+.rz-classification-workqueue-select-column input[type="checkbox"] { display: block; margin: 0 auto; cursor: pointer; }
+.rz-classification-workqueue-select-cell input[type="checkbox"] { cursor: pointer; margin: 0; }
 .rz-classification-detail { margin-top: 16px; min-width: 0; }
 .rz-classification-selected-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
 .rz-classification-selected-heading span { overflow-wrap: anywhere; }
@@ -661,3 +665,18 @@
   gap: 10px;
   margin: 0 0 16px;
 }
+
+/* Classificeren: standaard acties en compact importoverzicht onder het werkgebied. */
+.rz-classification-import-panel { margin: 1rem 0 1.25rem; }
+.rz-classification-import-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: .75rem 0; }
+.rz-classification-import-actions label { display: flex; flex-direction: column; gap: .25rem; max-width: min(100%, 26rem); }
+.rz-classification-import-select-actions { display: flex; justify-content: flex-end; align-items: center; margin: .35rem 0 .45rem; }
+.rz-classification-import-select-all { display: inline-flex; align-items: center; gap: .45rem; white-space: normal; line-height: 1.25; font-size: .82rem; cursor: pointer; }
+.rz-classification-import-select-all input { flex: 0 0 auto; cursor: pointer; }
+.rz-classification-import-select-all span { overflow-wrap: normal; }
+.rz-classification-import-page-column, .rz-classification-import-select-cell { text-align: center; }
+.rz-classification-import-page-select { display: block; margin: 0 auto; cursor: pointer; }
+.rz-classification-import-proposal { display: flex; flex-direction: column; gap: .15rem; overflow-wrap: anywhere; }
+.rz-classification-import-proposal small { line-height: 1.4; }
+[data-testid="classification-import-table"] tr[aria-selected="true"] > td { background: #d7f2df; }
+[data-testid="classification-import-table"] td input[type="checkbox"] { cursor: pointer; }
