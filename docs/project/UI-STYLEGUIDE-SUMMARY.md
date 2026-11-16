@@ -1983,10 +1983,12 @@ classificatievoorstellenbestand selecteren, eerst alleen-lezen laten toetsen en
 per artikel expliciet GS1- en CBS-codes goedkeuren. De importwerkvoorraad toont uitsluitend GS1- of CBS-classificaties die
 **nieuw** of **anders** zijn dan de actuele Cataloguscode. Voorstellen die
 gelijk zijn aan de huidige classificatie verdwijnen, ook wanneer het Excelbestand
-nog een controlemarkering heeft. De gebruiker selecteert artikelen uitsluitend
-met een rijcheckbox of met **Alle rijen in de tabel** als eerste kolomkop,
-zonder titel *Selecteer*. De kopselectie geldt voor alle filterresultaten,
-ook buiten de zichtbare pagina, en sluit geblokkeerde rijen uit. Een selectie
+nog een controlemarkering heeft. De gebruiker selecteert artikelen met een rijcheckbox, een checkbox zonder
+kolomtitel in de eerste tabelkop voor **de huidige pagina**, of de checkbox
+**Alle rijen in de tabel** rechtsboven de tabel. Alleen die laatste selecteert
+ook de overige pagina's binnen de huidige zoek-/weergave-/kolomfilters;
+beide groepsselecties sluiten geblokkeerde rijen uit. Een paginaselectie
+wijzigt niet de geselecteerde rijen op andere pagina's. Een selectie
 boven de bestaande grens van 100 classificatiecodes kan niet worden verwerkt;
 de gebruiker beperkt de selectie of past filters toe. Er staan geen
 codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
