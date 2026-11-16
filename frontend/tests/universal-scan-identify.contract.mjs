@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf8')
+const scan = read('src/features/barcodes/UniversalScanIdentifyPage.jsx')
+const router = read('src/app/router/AppRouter.jsx')
+const mobile = read('src/app/MobileAppChrome.jsx')
+const desktop = read('src/ui/Header.jsx')
+const ed2 = read('src/features/externalDatabases/ExternalDatabases2Page.jsx')
+const candidate = read('src/features/externalDatabases/OffCandidatePanel.jsx')
+const inventoryMobile = read('src/features/articles/MobileArticlePage.jsx')
+const inventoryDesktop = read('src/features/articles/ArticlePage.jsx')
+const unpack = read('src/features/receipts/ReceiptsPage.jsx')
+
+assert.match(router, /path: '\/scan-identificeren', element: <ProtectedFrontteam><UniversalScanIdentifyPage/)
+for (const header of [mobile, desktop]) {
+  assert.match(header, /isFrontteamMemberFromContext/)
+  assert.match(header, /\/scan-identificeren/)
+}
+assert.match(scan, /useBarcodeScanner/)
+assert.match(scan, /BarcodeScannerModal/)
+assert.match(scan, /scanImageFile/)
+assert.match(scan, /\/api\/barcodes\//)
+assert.match(scan, /\/api\/barcodes\/identify-catalog/)
+assert.match(scan, /testId: 'universal-scan-confirm-catalog'/)
+assert.match(scan, /primaryActionLabel: 'Opslaan in Catalogus'/)
+assert.match(scan, /scannedBarcode: current.gtin/)
+assert.match(scan, /selectedItemId: id/)
+assert.match(scan, /match_status === 'not_found'|resultStatus === 'not_found'/)
+assert.doesNotMatch(scan, /\/api\/purchases\//)
+assert.doesNotMatch(scan, /\/api\/inventory\//)
+assert.match(ed2, /location.state\?\.scannedBarcode/)
+assert.match(ed2, /preScannedBarcode=\{pendingScannedBarcode\}/)
+assert.match(candidate, /preScannedBarcode/)
+for (const item of [inventoryMobile, inventoryDesktop, unpack]) {
+  assert.match(item, /\/scan-identificeren/)
+  assert.match(item, /isFrontteamMemberFromContext/)
+}
+console.log('UNIVERSAL_SCAN_IDENTIFY_FRONTTEAM_GREEN')
