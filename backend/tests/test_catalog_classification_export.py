@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from zipfile import ZipFile
 
 from fastapi import FastAPI, HTTPException
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from app.services.catalog_classification_import_service import (CSV_FIELDS, EXCEL_FIELDS, ImportContractError, read_proposals, preview_import, confirm_import, current_products)
@@ -216,6 +217,78 @@ def test_classification_import_preview_and_atomic_authorized_approval(export_dat
         assert conn.execute(text("SELECT cbs_code FROM global_product_cbs_classifications WHERE global_product_id = 'p3'")).scalar_one() == "011420"
         assert conn.execute(text("SELECT COUNT(*) FROM global_product_cbs_history")).scalar_one() == 1
         assert conn.execute(text("SELECT COUNT(*) FROM auth_audit_log WHERE actor_user_id = 'user-1'")).scalar_one() == 1
+
+
+def test_classification_import_rejects_more_than_100_distinct_articles_before_database_access():
+    class NoDatabase:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("Rejected batch must not touch the database")
+
+    decisions = [
+        {"product_id": f"p{i}", "system": "cbs", "approved": True}
+        for i in range(101)
+    ]
+    with pytest.raises(ImportContractError, match="100 complete artikelen"):
+        confirm_import(NoDatabase(), decisions, actor_id="authorized-superuser")
+
+    # The HTTP input boundary additionally limits the absolute number of
+    # decisions to 200; it never accepts 201+ classification changes.
+    complete = [
+        dict(product_id=f"p{i}", system=system, code="10000001" if system == "gpc" else "011420",
+             expected_name=f"Batchartikel {i}", expected_sha256="b" * 64,
+             reference_version="" if system == "gpc" else "2026",
+             approved=True, allow_replace=False)
+        for i in range(100) for system in ("gpc", "cbs")
+    ]
+    assert len(routes.ClassificationImportConfirmation(decisions=complete).decisions) == 200
+    with pytest.raises(ValidationError):
+        routes.ClassificationImportConfirmation(decisions=complete + [complete[0]])
+
+
+def test_classification_import_100_complete_articles_are_one_atomic_batch(export_database):
+    with export_database.begin() as conn:
+        for i in range(100):
+            conn.execute(text("""
+                INSERT INTO global_products
+                    (id, name, brand, variant, category, primary_gtin, size_value,
+                     size_unit, source, status)
+                VALUES (:id, :name, '', '', '', '', NULL, NULL, 'manual', 'active')
+            """), {"id": f"batch-{i:03}", "name": f"Batchartikel {i:03}"})
+        live = current_products(conn)
+        decisions = [
+            dict(product_id=f"batch-{i:03}", system=system,
+                 code="10000001" if system == "gpc" else "011420",
+                 expected_name=f"Batchartikel {i:03}",
+                 expected_sha256=live[f"batch-{i:03}"]["snapshot_sha256"],
+                 reference_version="" if system == "gpc" else "2026",
+                 approved=True, allow_replace=False)
+            for i in range(100) for system in ("gpc", "cbs")
+        ]
+        # A stale item among the 100 rejects the entire batch.
+        stale = [dict(decision) for decision in decisions]
+        stale[-1]["expected_sha256"] = "a" * 64
+        with pytest.raises(ImportContractError, match="verouderd"):
+            confirm_import(conn, stale, actor_id="authorized-superuser")
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_gpc_bricks "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 0
+        result = confirm_import(conn, decisions, actor_id="authorized-superuser")
+        assert result["updated_gpc"] == 100
+        assert result["updated_cbs"] == 100
+    with export_database.connect() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_gpc_bricks "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 100
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_cbs_classifications "
+            "WHERE global_product_id LIKE 'batch-%' AND is_active"
+        )).scalar_one() == 100
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM global_product_cbs_history "
+            "WHERE global_product_id LIKE 'batch-%'"
+        )).scalar_one() == 100
 
 
 def test_classification_import_csv_and_excel_share_columns():
