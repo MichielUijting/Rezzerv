@@ -1957,3 +1957,18 @@ bestaande statusafhankelijke ED2-tellerachtergronden blijven behouden.
 De filterknoppen, de tellerdefinities en alle beveiligde read-only gegevensbronnen
 blijven functioneel ongewijzigd. De bestaande Playwrighttest controleert de
 leesbare kleurcombinatie voor mobiele en desktopweergave.
+
+### Artikelbeheer: Catalogus voor externe classificatie exporteren — 15 november 2026
+
+Artikelbeheer toont voor bevoegde Superusers en Frontteamleden één aparte
+standaardactie **Catalogus exporteren**, ongeacht welk werkgebied openstaat.
+De bestaande bonartikel-actie **Exporteren** onder Identificeren blijft uitsluitend
+een selectie-export en verandert niet. De nieuwe Catalogusactie levert een
+download met de volledige niet-verwijderde centrale Catalogus, bestaande officiële
+GS1/CBS-classificaties, bevestigde winkel-/bonartikelmatches, expliciet bevestigde
+synoniemen en actuele officiële classificatiereferenties. Geen onbevestigde
+matches, voorstellen, privékassabonnen, huishouddata of voorraad worden
+meegenomen. De actie schrijft niets en geeft voortgang, succes of fouten via
+de bestaande centrale Melding-overlay; geen eigen dialoog of in-screenmelding.
+Een latere classificatie-import is een **afzonderlijke** PO-opdracht en niet
+aanwezig in deze wijziging.

@@ -151,3 +151,27 @@ for (const width of [390, 1280]) {
     expect(requests.filter((req) => req.method === 'POST')).toEqual([])
   })
 }
+
+test('Catalogusexport is een afzonderlijke alleen-lezen download in Artikelbeheer', async ({ page }) => {
+  const requests = await mountMockBackend(page)
+  await page.route('**/api/cbs-classifications/catalog-export', route => route.fulfill({
+    status: 200, headers: { 'content-type': 'application/zip' },
+    body: 'PK-mock-binary-export',
+  }))
+  await page.goto('/externe-databases-2')
+  const button = page.getByRole('button', { name: 'Catalogus exporteren' })
+  await expect(button).toBeVisible()
+  const download = page.waitForEvent('download')
+  await button.click()
+  const downloaded = await download
+  expect(downloaded.suggestedFilename()).toBe('Inhuis_Catalogus_Classificatie.zip')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeEnabled()
+  expect(requests.filter(req => req.method === 'POST')).toEqual([])
+})
+
+test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ page }) => {
+  await mountMockBackend(page, { frontteam: true })
+  await page.goto('/externe-databases-2')
+  await expect(page.getByRole('button', { name: 'Catalogus exporteren' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Matchen' })).toHaveCount(0)
+})
