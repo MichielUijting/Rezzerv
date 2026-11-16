@@ -75,3 +75,42 @@ aankoopgeschiedenis, samenvoeging per aankoopdag, bevestigde synoniemgroepen,
 exacte huishoudscoping, behoud van instellingen, leesoperaties zonder
 databasewrites, behoud van bestaande minimumvoorraadsignalen en een niet-nul
 advies bij gelijk minimum en streef.
+
+## Eén bewezen Catalogusidentiteit voor presentatie — 16 november 2026
+
+De lijst blijft **household-scoped** en gebruikt voor voorraadmutaties,
+verborgen signalen, selecties, export en doorklikken uitsluitend het bestaande
+`household_article_id`. De huishoudnaam blijft de gekozen eigen naam.
+De **Productnaam** is echter een Catalogusgegeven zodra het product eenduidig
+via de bestaande bewezen route is herleid:
+
+1. Direct `household_articles.global_product_id`.
+2. Een eenduidige `product_identities`-relatie of exacte Catalogus-GTIN.
+3. Exact bevestigde kassabon-/winkelartikel-identiteit met bronherleidbaarheid
+   van dezelfde huishoudartikel-ID, inclusief de centrale ED2-familierelatie.
+4. Als het zichtbare signaal aantoonbaar een veilig gegroepeerde productgroep
+   vertegenwoordigt, kan een bewezen groepslid presentatie leveren wanneer
+   de vertegenwoordiger geen eigen bewezen Catalogus-ID heeft.
+
+De bestaande fotovolgorde blijft: eigen foto, veilig groepslid en bestaande
+rechtstreeks bevestigde Catalogussynoniemrelatie. Als het resultaat geen
+foto bevat, toont Bijna op zichtbaar de reden **Geen bevestigde
+Cataloguskoppeling** of **Catalogus heeft geen foto**. Een unieke historische
+naam-only-fotofallback blijft bestaande backwards-compatibility, maar mag
+**nooit** een nieuw identiteitsbewijs opleveren voor Productnaam of GS1.
+
+De GS1-gegevens komen uit de **reeds bestaande** toewijzing op het
+betreffende bevestigde Catalogusproduct. De nieuwe presentatie voert nooit
+automatische GS1-classificatie uit. Daardoor worden de huidige
+householdartikelnaam, voorraad, winkelbonnen, GTIN's, synoniemen,
+classificatie-toewijzingen en voorraadregels **niet** gewijzigd.
+
+Bij ambigue bonherkomst, tegenstrijdige GTIN/productidentiteiten of
+onvoldoende bewijs wordt **geen ander Catalogusproduct gekozen op naam**;
+de oorspronkelijke huishoudartikelpresentatie blijft zichtbaar.
+Verschillende huishoudens worden niet samengevoegd.
+
+De extra regressies dekken: bevestigde kassabonmatch met afwijkende
+Catalogusnaam/foto/GPC, directe identiteit zonder foto, onbewijsbare
+naam-match zonder hernoeming, meerdere veilige groepsleden, eigen product
+boven groepslid, ambigue bonmatch, geen huishouddatawrites, desktop en mobiel.
