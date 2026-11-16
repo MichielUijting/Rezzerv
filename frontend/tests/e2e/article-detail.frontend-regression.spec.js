@@ -274,6 +274,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const articleId = 'household-article-dropdown-test';
     const articleName = 'Dropdown testartikel';
     let savedFavoriteStore = '';
+    let locationTrackingLevel = 'none';
+    let inventoryQuantity = 2;
 
     await page.route('**/api/session', async (route) => {
       await route.fulfill({
@@ -307,7 +309,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
           initial_choice_required: false,
           shared_household_minimum_required: false,
           can_manage: true,
-          product_configuration: { location_tracking_level: 'none' },
+          product_configuration: { location_tracking_level: locationTrackingLevel },
         }),
       });
     });
@@ -321,7 +323,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
             id: 'inventory-dropdown-test',
             household_article_id: articleId,
             artikel: articleName,
-            aantal: 2,
+            aantal: inventoryQuantity,
           }],
         }),
       });
@@ -400,6 +402,15 @@ test.describe('Artikeldetail frontend-regressie', () => {
 
     await page.goto(`/voorraad/${articleId}`);
     await expect(page.getByTestId('mobile-article-detail-page')).toBeVisible();
+    await expect(page.getByTestId('mobile-article-detail-page')).toHaveAttribute('data-location-tracking', 'disabled');
+    // With Waar inhuis off the hero is the sole inventory control:
+    // neither the redundant stock tab nor the location tab should be available.
+    await expect(page.getByTestId('mobile-article-stock-value')).toContainText('2');
+    await expect(page.getByTestId('mobile-article-tab-stock')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-article-tab-locations')).toHaveCount(0);
+    for (const tabName of ['article', 'household', 'identity', 'productdata']) {
+      await expect(page.getByTestId(`mobile-article-tab-${tabName}`)).toBeVisible();
+    }
 
     await page.getByTestId('mobile-article-tab-household').click();
     const trigger = page.getByTestId('mobile-article-favorite-store-select');
@@ -460,6 +471,34 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await expect(trigger).toContainText('Plus');
     await page.getByTestId('article-household-settings-save').click();
     await expect.poll(() => savedFavoriteStore).toBe('Plus');
+
+    // In a household with Waar inhuis, both tabs must work and successful
+    // inventory mutations must refresh without the undefined-callback crash.
+    locationTrackingLevel = 'global';
+    await page.route(`**/api/household-articles/${articleId}/inventory-events`, async (route) => {
+      expect(route.request().method()).toBe('POST');
+      const payload = route.request().postDataJSON();
+      expect(payload.event_type).toBe('adjustment');
+      expect(payload.inventory_id).toBe('inventory-dropdown-test');
+      inventoryQuantity = Number(payload.quantity);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ row_new_quantity: inventoryQuantity }),
+      });
+    });
+    await page.reload();
+    await expect(page.getByTestId('mobile-article-detail-page')).toHaveAttribute('data-location-tracking', 'enabled');
+    await expect(page.getByTestId('mobile-article-tab-stock')).toBeVisible();
+    await expect(page.getByTestId('mobile-article-tab-locations')).toBeVisible();
+    await page.getByTestId('mobile-article-tab-stock').click();
+    await expect(page.getByText('Totale voorraad', { exact: true })).toBeVisible();
+    await page.getByTestId('article-stock-adjust-inventory-dropdown-test').click();
+    await page.getByLabel('Nieuwe hoeveelheid').fill('3');
+    await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click();
+    await expect.poll(() => inventoryQuantity).toBe(3);
+    await expect(page.getByTestId('mobile-article-stock-value')).toContainText('3');
+    await expect(page.getByTestId('mobile-article-tab-stock')).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
 });
