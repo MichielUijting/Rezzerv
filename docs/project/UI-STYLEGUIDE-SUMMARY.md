@@ -20,6 +20,20 @@ Bijna op (desktop én mobiel) toont boven de lijst de **Voorspeltermijn: N dagen
 
 De bestaande Bijna-op-lijst toont alleen artikelen die aan de signaalregels voldoen. Bewezen overeenkomende Catalogusproducten en alleen aantoonbaar veilige synoniem-/producttypegroepen kunnen gezamenlijk worden geprojecteerd. Foto's komen eerst van het eigen artikel, vervolgens van een bevestigd groepslid en daarna van de bestaande exact-identiteits-/direct bevestigde synoniemresolver. Zonder betrouwbaar beeld blijft **Geen foto** correct; geen fuzzy naam- of GPC-breed plaatje tonen.
 
+### Bijna op — Cataloguspresentatie bij bewezen bonmatches (16 november 2026)
+
+De kolom **Huishoudnaam** en mobiele kaarttitel blijven de huishoudspecifieke
+artikelnaam. **Productnaam** toont de werkelijke naam van het bewezen
+Catalogusproduct, ook wanneer oudere huishoudartikelen slechts via een
+bevestigde kassabonmatch, GTIN of `product_identities` aan de centrale
+Catalogus verbonden zijn. De foto en bekende GS1-hiërarchie komen van
+diezelfde bewezen product-ID. Zonder foto verschijnt de begrijpelijke
+redenen **Geen bevestigde Cataloguskoppeling** of **Catalogus heeft geen
+foto**. Op mobiel staat de reden in de reguliere contextregel, op desktop
+naast de compacte foto. Een naamgelijkenis is op zichzelf nooit een
+productidentiteit. De onderliggende voorraad, selectie, navigatie en
+huishoudartikel-ID blijven ongewijzigd.
+
 ## Gedeelde tabel: horizontale scrollbar onder de laatste rij — 10 november 2026
 
 Alle schermen die het standaard Inhuis-tabelcomponent `Table` / `DataTable` gebruiken, tonen een eventuele horizontale scrollbar **onder** de laatste zichtbare tabelrij. De scrollbar mag niet over de onderste rij, checkbox of tekst heen vallen. De gedeelde `.rz-table-wrapper` reserveert hiervoor een eigen onderruimte van 24 px en telt die mee in de maximale tabelhoogte. Dezelfde ruimte geldt voor de gespecialiseerde Voorraad- en winkelbatchtabellen. Paginering en bulkacties blijven buiten de tabelscrollcontainer staan; horizontaal scrollen verandert geen selectie of zichtbare regels.
