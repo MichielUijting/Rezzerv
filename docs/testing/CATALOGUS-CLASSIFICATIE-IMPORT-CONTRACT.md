@@ -46,13 +46,29 @@ pagina's blijven bewaard wanneer alleen de paginacheckbox wordt gewijzigd.
 Er staat geen kolomtitel **Selecteer**. Rijselectie betekent: verwerk alle
 veilige nieuwe/afwijkende GS1- en CBS-voorstellen van dat artikel tezamen.
 De verwerking gebeurt met de primaire bulkknop **Geselecteerde rijen verwerken**
-rechts **onder de tabel**, bij de standaardpaginering. Maximaal 100
-classificatiecodes per batch, zonder één artikel tussen twee batches te splitsen.
-Bij een selectie van meer dan 100 codes blijft de bulkactie uitgeschakeld;
-de gebruiker krijgt een begrijpelijke centrale Melding en moet de selectie
-verkleinen of filteren. Selecteren zelf schrijft nooit gegevens.
-De centrale Melding-overlay toont aantallen toe te voegen én te vervangen
-classificaties en vraagt expliciete definitieve bevestiging. Er zijn geen
+rechts **onder de tabel**, bij de standaardpaginering. De **verwerkingsgrens
+is 100 volledige artikelrijen**, niet 100 afzonderlijke codes. Een artikel kan
+één GS1- en één CBS-wijziging bevatten: maximaal 200 classificatiebeslissingen
+per batch. Een rij wordt nooit tussen twee batches gesplitst.
+
+Bij een selectie van meer dan 100 artikelrijen is de verwerkingsknop **wel
+beschikbaar**. Direct na de brede selectie verschijnt de centrale
+**blijvende keuze-overlay** met **Eerste 100 rijen verwerken** en **Annuleren**.
+De eerste 100 **geselecteerde** artikelen volgen de actuele gefilterde en
+gesorteerde tabelvolgorde; eerder geselecteerde maar niet meer zichtbare
+artikelen komen daarna, zodat zij niet onopgemerkt verdwijnen. De overlay
+blijft aanwezig tot een expliciete actie of klik buiten het venster; er is
+**geen automatische tijdslimiet**. Annuleren of buiten het venster klikken
+schrijft niets en behoudt de selectie. Ook na annuleren blijft de bulkknop
+beschikbaar om de beslissing opnieuw te openen.
+
+De centrale Melding-overlay toont de exacte aantallen toe te voegen én te
+vervangen GS1-/CBS-classificaties **van de eerste batch** en vraagt vóór
+iedere batch expliciete toestemming. De import verwerkt die maximaal 100
+artikelen samen in één transactie; bij succes blijven de nog geselecteerde
+artikelen zichtbaar/geselecteerd voor een volgende batch. Bij een mislukte
+batch wordt niets van die batch verwerkt. Selecteren zelf schrijft nooit
+gegevens. Er zijn geen
 checkboxes of code-keuzelijsten midden in de tabel, geen automatische
 classificatietoekenning en geen stille overschrijving.
 
@@ -64,9 +80,10 @@ classificatietoekenning en geen stille overschrijving.
   `platform.external_products.link_existing` voor bevestiging en aanvullend
   `platform.gpc.update` wanneer de batch GS1 schrijft; backend bepaalt identiteit.
 - Geen onbewezen automatisch koppelen op naam of synoniemen.
-- Per bevestigde batch maximaal 100 unieke (product-ID, systeem)-keuzes,
-  validatie van de actuele productnaam, snapshot, bestaande code, officiële
-  referentie en eventueel expliciete vervangingskeuze.
+- Per bevestigde batch maximaal 100 unieke product-ID's en maximaal
+  200 unieke (product-ID, systeem)-keuzes. De backend controleert beide grenzen
+  onafhankelijk en valideert actuele productnaam, snapshot, bestaande code,
+  officiële referentie en expliciete vervangingskeuze.
 - Eén transactie: óf alle geselecteerde GS1/CBS-wijzigingen worden opgeslagen
   óf geen enkele. CBS gebruikt de bestaande `confirm_cbs_batch` en
   versie-/historiecontroles. GS1 gebruikt de bestaande canonieke
@@ -78,11 +95,10 @@ classificatietoekenning en geen stille overschrijving.
   catalogusproductkoppelingen in scope.
 
 ## Acceptatiebewijs en afhankelijkheid
-Deze import is een afzonderlijke gestapelde Draft-PR boven de nog niet
-gemergde export-PR #691. Eerst #691 afzonderlijk volgens eigen gates
-afhandelen, daarna de import-PR op de dan actuele main herbaseren/synchroniseren,
-zes versiebronnen controleren, normale en F7 Full exact-candidate controleren,
-functioneel lokaal accepteren en **afzonderlijke expliciete merge-GO** verkrijgen.
+Export-PR #691 is gemerged in main. Deze import blijft als zelfstandige
+Draft-PR #692 open. Controleer de zes versiebronnen, normale/preflight- en
+F7 Full exact-candidate-controles op de definitieve importkandidaat,
+laat de PO lokaal accepteren en verkrijg **afzonderlijke expliciete merge-GO**.
 Een goedgekeurd Excelbestand is geen merge- of productie-GO.
 
 Tijdens importcontrole toont elke GS1/CBS-keuzelijst ook de oorspronkelijke
