@@ -151,7 +151,14 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
             "mutated": False,
         }
 
-    image_projection = "gp.image_url AS image_url" if "image_url" in _column_names(conn, "global_products") else "NULL AS image_url"
+    # Some read-only authority connections deliberately expose execute() only.
+    # They have no SQLAlchemy schema inspector; product photos are optional.
+    image_projection = (
+        "gp.image_url AS image_url"
+        if getattr(conn, "dialect", None) is not None
+        and "image_url" in _column_names(conn, "global_products")
+        else "NULL AS image_url"
+    )
     identity_join = ""
     identity_columns = "NULL AS identity_id, NULL AS identity_source, FALSE AS identity_is_primary"
     identity_match_expression = "0 AS has_matching_gtin_identity"
