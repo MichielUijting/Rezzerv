@@ -129,7 +129,7 @@ class ClassificationImportDecision(BaseModel):
 
 class ClassificationImportConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    decisions: list[ClassificationImportDecision] = Field(min_length=1, max_length=100)
+    decisions: list[ClassificationImportDecision] = Field(min_length=1, max_length=200)
 
 
 @router.post("/classification-import/preview")
