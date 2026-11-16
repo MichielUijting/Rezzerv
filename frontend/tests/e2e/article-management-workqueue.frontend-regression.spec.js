@@ -321,7 +321,8 @@ test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', a
   // Changing page preserves the other page's selection and header state.
   await paging.getByRole('button', { name: '-' }).click()
   await expect(pageAll).toBeChecked()
-  await all.uncheck()
+  await expect(all).not.toBeChecked()
+  await pageAll.uncheck()
   await expect(page.getByText('0 rijen geselecteerd')).toBeVisible()
   await expect(pageAll).not.toBeChecked()
 
