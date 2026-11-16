@@ -33,12 +33,19 @@ betekent geen importtaak; meerdere verschillende voorstellen voor één systeem
 worden niet automatisch gekozen maar als blokkade getoond.
 
 De bestaande DataTable blijft de paginerings-, sorteer- en filterautoriteit
-(8 regels per pagina). De **enige checkboxes** zijn de rijselectie en
-**Alles op deze pagina** rechtsboven. Rijselectie betekent: verwerk alle
+(8 regels per pagina). De **enige checkboxes** zijn de rijselectie en **Alle rijen in de tabel**
+in de eerste kolomkop; er staat géén kolomtitel **Selecteer** en geen
+afzonderlijk selectievak boven de tabel. De kopcheckbox selecteert alle
+selecteerbare rijen die aan de actuele zoek-, weergave- en kolomfilters voldoen,
+**ook op andere pagina's**, en schakelt die selectie weer uit. Niet-selecteerbare
+regels worden niet geselecteerd. Rijselectie betekent: verwerk alle
 veilige nieuwe/afwijkende GS1- en CBS-voorstellen van dat artikel tezamen.
 De verwerking gebeurt met de primaire bulkknop **Geselecteerde rijen verwerken**
 rechts **onder de tabel**, bij de standaardpaginering. Maximaal 100
 classificatiecodes per batch, zonder één artikel tussen twee batches te splitsen.
+Bij een selectie van meer dan 100 codes blijft de bulkactie uitgeschakeld;
+de gebruiker krijgt een begrijpelijke centrale Melding en moet de selectie
+verkleinen of filteren. Selecteren zelf schrijft nooit gegevens.
 De centrale Melding-overlay toont aantallen toe te voegen én te vervangen
 classificaties en vraagt expliciete definitieve bevestiging. Er zijn geen
 checkboxes of code-keuzelijsten midden in de tabel, geen automatische

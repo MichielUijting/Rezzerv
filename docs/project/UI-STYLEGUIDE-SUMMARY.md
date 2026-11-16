@@ -1984,7 +1984,11 @@ per artikel expliciet GS1- en CBS-codes goedkeuren. De importwerkvoorraad toont 
 **nieuw** of **anders** zijn dan de actuele Cataloguscode. Voorstellen die
 gelijk zijn aan de huidige classificatie verdwijnen, ook wanneer het Excelbestand
 nog een controlemarkering heeft. De gebruiker selecteert artikelen uitsluitend
-met een rijcheckbox of met **Alles op deze pagina** rechtsboven. Er staan geen
+met een rijcheckbox of met **Alle rijen in de tabel** als eerste kolomkop,
+zonder titel *Selecteer*. De kopselectie geldt voor alle filterresultaten,
+ook buiten de zichtbare pagina, en sluit geblokkeerde rijen uit. Een selectie
+boven de bestaande grens van 100 classificatiecodes kan niet worden verwerkt;
+de gebruiker beperkt de selectie of past filters toe. Er staan geen
 codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
 **onder de standaardtabel** en de bestaande centrale Melding-overlay vraagt
 expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal

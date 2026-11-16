@@ -11,7 +11,7 @@ function changesFor(row) {
 }
 
 const columns = [
-  { key: 'select', label: 'Selecteer', width: 86 },
+  { key: 'select', width: 176 },
   { key: 'name', label: 'Artikel', width: 230, sortable: true, filterable: true },
   { key: 'current_gpc', label: 'GS1 bestaand', width: 130, filterable: true },
   { key: 'gpc_change', label: 'GS1 voorgesteld', width: 270 },
@@ -38,7 +38,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   const [processed, setProcessed] = useState({})
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [pageRows, setPageRows] = useState([])
+  const [filteredTableRows, setFilteredTableRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
 
@@ -63,20 +63,49 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     (preview?.rows || []).filter((row) => selectedRows[row.product_id] && !processed[row.product_id]),
   [preview, selectedRows, processed])
   const selectedCodes = selected.reduce((count, row) => count + changesFor(row), 0)
-  const canSelect = (row) => Boolean(canConfirm && !busy && !row.problem &&
-    changesFor(row) && (!row.gpc_change || canGpc) && !processed[row.product_id])
+  const canSelect = useCallback((row) => Boolean(canConfirm && !busy && !row.problem &&
+    changesFor(row) && (!row.gpc_change || canGpc) && !processed[row.product_id]),
+  [canConfirm, busy, canGpc, processed])
 
-  const onPageRowsChange = useCallback((items) => {
-    setPageRows((previous) => {
-      const nextIds = items.map((item) => item.product_id).join('|')
-      const previousIds = previous.map((item) => item.product_id).join('|')
-      return nextIds === previousIds ? previous : items
+  // DataTable is the single authority for its filters/sorting. This callback
+  // receives ALL rows passing those filters, not just the active page.
+  const onFilteredRowsChange = useCallback((items) => {
+    setFilteredTableRows((previous) => {
+      const currentIds = previous.map((row) => row.product_id).join('|')
+      const nextIds = items.map((row) => row.product_id).join('|')
+      return currentIds === nextIds ? previous : items
     })
   }, [])
+  const selectableTableRows = filteredTableRows.filter(canSelect)
+  const allTableSelected = Boolean(selectableTableRows.length &&
+    selectableTableRows.every((row) => selectedRows[row.product_id]))
 
-  const selectablePage = pageRows.filter(canSelect)
-  const allPageSelected = Boolean(selectablePage.length
-    && selectablePage.every((row) => selectedRows[row.product_id]))
+  const toggleAllTableRows = useCallback(() => {
+    if (!selectableTableRows.length) return
+    const next = { ...selectedRows }
+    if (allTableSelected) {
+      for (const row of selectableTableRows) delete next[row.product_id]
+    } else {
+      for (const row of selectableTableRows) next[row.product_id] = true
+    }
+    setSelectedRows(next)
+    const count = (preview?.rows || []).reduce((sum, row) =>
+      sum + (next[row.product_id] ? changesFor(row) : 0), 0)
+    if (count > LIMIT) {
+      showFeedback({ variant: 'warning',
+        message: `${count} codes geselecteerd. Er kunnen maximaal ${LIMIT} codes per verwerking worden verwerkt. Beperk je selectie met de filters of vink rijen uit.` })
+    }
+  }, [allTableSelected, selectableTableRows, selectedRows, preview, showFeedback])
+
+  const tableColumns = useMemo(() => [
+    { ...columns[0], renderFilter: () => <label className="rz-classification-import-select-all">
+      <input type="checkbox" aria-label="Alle rijen in de tabel"
+        checked={allTableSelected} disabled={busy || !selectableTableRows.length}
+        onChange={toggleAllTableRows} />
+      <span>Alle rijen in de tabel</span>
+    </label> },
+    ...columns.slice(1),
+  ], [allTableSelected, busy, selectableTableRows.length, toggleAllTableRows])
 
   async function exportCatalog() {
     if (exportBusy) return
@@ -109,6 +138,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     setPreview(null)
     setSelectedRows({})
     setProcessed({})
+    setFilteredTableRows([])
     showFeedback({ variant: 'progress', message: 'Voorstellen worden gelezen en met de actuele Catalogus gecontroleerd...' })
     try {
       const response = await fetchJsonWithAuth('/api/cbs-classifications/classification-import/preview', {
@@ -135,36 +165,12 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   function toggleRow(row) {
     if (!canSelect(row)) return
     const isSelected = Boolean(selectedRows[row.product_id])
-    if (!isSelected && selectedCodes + changesFor(row) > LIMIT) {
-      showFeedback({ variant: 'warning',
-        message: 'Maximaal 100 GS1- en CBS-codes per verwerking. Verwerk eerst de huidige selectie.' })
-      return
-    }
     setSelectedRows((previous) => {
       const next = { ...previous }
       if (next[row.product_id]) delete next[row.product_id]
       else next[row.product_id] = true
       return next
     })
-  }
-
-  function togglePage() {
-    const eligible = pageRows.filter(canSelect)
-    if (!eligible.length) return
-    const allChecked = eligible.every((row) => selectedRows[row.product_id])
-    const next = { ...selectedRows }
-    if (allChecked) {
-      for (const row of eligible) delete next[row.product_id]
-    } else {
-      for (const row of eligible) next[row.product_id] = true
-      const proposed = (preview?.rows || []).filter((row) => next[row.product_id])
-      if (proposed.reduce((sum, row) => sum + changesFor(row), 0) > LIMIT) {
-        showFeedback({ variant: 'warning',
-          message: 'De volledige pagina past niet binnen maximaal 100 classificaties. Kies minder rijen.' })
-        return
-      }
-    }
-    setSelectedRows(next)
   }
 
   function buildDecisions() {
@@ -265,7 +271,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       {canView ? <label>
         Classificatiebestand
         <input type="file" accept=".xlsx,.csv" data-testid="classification-file"
-          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelectedRows({}); setProcessed({}) }} />
+          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelectedRows({}); setProcessed({}); setFilteredTableRows([]) }} />
       </label> : null}
       {canView ? <Button type="button" variant="secondary" disabled={!file || busy}
         onClick={inspectFile} data-testid="classification-import-preview">Import controleren</Button> : null}
@@ -283,14 +289,10 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
           <option value="different">Afwijkend van bestaande</option>
           <option value="problems">Blokkades</option>
         </select></label>
-        <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {LIMIT})</span>
+        <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {LIMIT} per verwerking)</span>
       </div>
-      <div className="rz-classification-import-select-all">
-        <label><input type="checkbox" aria-label="Alles op deze pagina" checked={allPageSelected}
-          disabled={busy || !selectablePage.length} onChange={togglePage} /> Alles op deze pagina</label>
-      </div>
-      <DataTable dataTestId="classification-import-table" columns={columns} data={rows}
-        getRowKey={(row) => row.product_id} pageSize={8} onPageRowsChange={onPageRowsChange}
+      <DataTable dataTestId="classification-import-table" columns={tableColumns} data={rows}
+        getRowKey={(row) => row.product_id} pageSize={8} onFilteredRowsChange={onFilteredRowsChange}
         emptyMessage="Geen nieuwe of afwijkende classificaties gevonden."
         paginationActions={<>
           <Button type="button" variant="secondary" onClick={() => setSelectedRows({})}
