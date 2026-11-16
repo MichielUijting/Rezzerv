@@ -1988,12 +1988,16 @@ kolomtitel in de eerste tabelkop voor **de huidige pagina**, of de checkbox
 **Alle rijen in de tabel** rechtsboven de tabel. Alleen die laatste selecteert
 ook de overige pagina's binnen de huidige zoek-/weergave-/kolomfilters;
 beide groepsselecties sluiten geblokkeerde rijen uit. Een paginaselectie
-wijzigt niet de geselecteerde rijen op andere pagina's. Een selectie
-boven de bestaande grens van 100 classificatiecodes kan niet worden verwerkt;
-de gebruiker beperkt de selectie of past filters toe. Er staan geen
-codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
+wijzigt niet de geselecteerde rijen op andere pagina's. Bij meer dan 100 geselecteerde artikelrijen verschijnt een blijvende
+centrale Melding-overlay met **Eerste 100 rijen verwerken** en **Annuleren**.
+De gebruiker kan de overlay sluiten via Annuleren of buiten het venster;
+er is geen automatische verdwijntijd. De bulkactie blijft beschikbaar.
+Per batch worden maximaal 100 complete artikelen met hun bijbehorende GS1-
+en CBS-wijzigingen verwerkt, maximaal 200 codes in één transactie.
+Andere geselecteerde rijen blijven na succesvolle verwerking geselecteerd.
+Er staan geen codekeuzelijsten of vervangingscheckboxes in de tabel. De bulkknop staat rechts
 **onder de standaardtabel** en de bestaande centrale Melding-overlay vraagt
-expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal
-100 classificatiecodes per transactionele batch; verschillende onduidelijke
-alternatieven worden geblokkeerd. Bestaande classificaties van niet-geselecteerde
+expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal 100 complete artikelrijen (en maximaal 200 classificatiecodes)
+per transactionele batch; verschillende onduidelijke alternatieven worden
+geblokkeerd. Bestaande classificaties van niet-geselecteerde
 artikelen blijven onveranderd.
