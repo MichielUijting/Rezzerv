@@ -14,8 +14,15 @@ const context = vm.createContext({
     return { ok: response.ok, json: async () => response.body }
   },
 })
-vm.runInContext(source.replace(/^import .*$/gm, '').replace(/export /g, '') + '\nthis.service = { ALMOST_OUT_POLICY_OPTIONS, saveAlmostOutSettings, fetchAlmostOutSettings }', context)
+vm.runInContext(source.replace(/^import .*$/gm, '').replace(/export /g, '') + '\nthis.service = { ALMOST_OUT_POLICY_OPTIONS, saveAlmostOutSettings, fetchAlmostOutSettings, isValidPredictionDays }', context)
 const service = context.service
+for (const good of ['0', '7', '365', '366', 14]) {
+  assert.equal(service.isValidPredictionDays(good), true, `valid forecast horizon ${good}`)
+}
+for (const invalid of ['-1', '0.5', 'abc', '', null, '1e3', '9007199254740992']) {
+  assert.equal(service.isValidPredictionDays(invalid), false, `invalid forecast horizon ${invalid}`)
+}
+
 assert.equal(service.ALMOST_OUT_POLICY_OPTIONS.length, 2)
 assert.equal(service.ALMOST_OUT_POLICY_OPTIONS.map(option => option.value).join(','), 'advisory,override')
 for (const option of service.ALMOST_OUT_POLICY_OPTIONS) {
