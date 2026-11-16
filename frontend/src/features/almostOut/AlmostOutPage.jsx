@@ -11,6 +11,7 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import AlmostOutPredictionTerm from './AlmostOutPredictionTerm.jsx'
 import '../stores/locationlessStoreImport.css'
+import './almostOutCatalogPresentation.css'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
 function normalizeNumber(value) {
