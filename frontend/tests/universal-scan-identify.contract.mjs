@@ -11,6 +11,7 @@ const candidate = read('src/features/externalDatabases/OffCandidatePanel.jsx')
 const inventoryMobile = read('src/features/articles/MobileArticlePage.jsx')
 const inventoryDesktop = read('src/features/articles/ArticlePage.jsx')
 const unpack = read('src/features/receipts/ReceiptsPage.jsx')
+const unpackDetail = read('src/features/stores/StoreBatchDetailPage.jsx')
 
 assert.match(router, /path: '\/scan-identificeren', element: <ProtectedFrontteam><UniversalScanIdentifyPage/)
 for (const header of [mobile, desktop]) {
@@ -36,4 +37,6 @@ for (const item of [inventoryMobile, inventoryDesktop, unpack]) {
   assert.match(item, /\/scan-identificeren/)
   assert.match(item, /isFrontteamMemberFromContext/)
 }
+assert.match(unpackDetail, /unpack-line-universal-scan-/)
+assert.match(unpackDetail, /isFrontteamMemberFromContext/)
 console.log('UNIVERSAL_SCAN_IDENTIFY_FRONTTEAM_GREEN')
