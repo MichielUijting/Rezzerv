@@ -240,7 +240,12 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     const choice = system === 'gpc' ? row.gpc_change : row.cbs_change
     const existing = system === 'gpc' ? row.current_gpc : row.current_cbs
     const invalid = system === 'gpc' ? row.invalid_gpc : row.invalid_cbs
-    if (!choice) return invalid?.length ? <span>Code niet geldig</span> : <span>—</span>
+    if (!choice) {
+      const alternatives = system === 'gpc' ? row.gpc_options : row.cbs_options
+      if (invalid?.length) return <span>Niet-officiële code: {invalid.join(', ')}</span>
+      if (alternatives?.length > 1) return <span>Meerdere alternatieven: {alternatives.map((option) => option.code).join(', ')}</span>
+      return <span>—</span>
+    }
     const status = system === 'gpc' ? row.gpc_status : row.cbs_status
     const reason = system === 'gpc' ? row.gpc_reason : row.cbs_reason
     return <div className="rz-classification-import-proposal">
@@ -303,7 +308,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
           <td>{proposedCell(row, 'gpc')}</td>
           <td>{row.cbs_change ? row.current_cbs || '—' : '—'}</td>
           <td>{proposedCell(row, 'cbs')}</td>
-          <td>{row.problem || (row.review_existing ? 'Bestaande classificatie controleren' : 'Klaar voor beoordeling')}</td>
+          <td>{row.problem || (row.review_existing && row.gpc_change ? 'Bestaande GS1 controleren' : 'Klaar voor beoordeling')}</td>
         </tr>} />
     </> : null}
   </section>
