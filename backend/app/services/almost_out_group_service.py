@@ -362,7 +362,10 @@ def prediction_from_events(events, prediction_days, now=None, *, current_quantit
         return None
     last = datetime.combine(dates[-1], datetime.min.time(), tzinfo=timezone.utc)
     since = max((now - last).total_seconds() / 86400, 0)
-    predicted_at = now + timedelta(days=until)
+    try:
+        predicted_at = now + timedelta(days=until)
+    except OverflowError:
+        return None
     return {
         'prediction_available': True,
         'prediction_basis': 'stock_adjusted_purchase_rate',
