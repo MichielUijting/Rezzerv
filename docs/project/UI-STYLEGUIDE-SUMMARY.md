@@ -2001,3 +2001,16 @@ expliciet akkoord op de getelde toevoegingen en vervangingen. Maximaal 100 compl
 per transactionele batch; verschillende onduidelijke alternatieven worden
 geblokkeerd. Bestaande classificaties van niet-geselecteerde
 artikelen blijven onveranderd.
+
+**Aanvullend PO-besluit: selecteren en exporteren in de onderste
+Cataloguswerkvoorraad (16 november 2026).** Deze onderste tabel toont alle
+Catalogusartikelen en de actuele GS1-/CBS-status, onafhankelijk van de
+importpreview. De tabel volgt hetzelfde selectiesjabloon: een rijcheckbox,
+een onbenoemde checkbox in de eerste kolomkop voor alleen de zichtbare pagina,
+en **Alle rijen in de tabel** inclusief checkbox rechtsboven voor alle
+actueel gefilterde rijen, ook op andere pagina's. Filters en paginawissels
+wissen andere bestaande selecties niet. **Selectie wissen** en
+**Geselecteerde rijen exporteren** staan onder de standaardtabel.
+De CSV bevat alleen de geselecteerde Catalogusvelden en is read-only,
+geen nieuwe classificatie of importbestand. Het openen van de twee
+classificatiepanelen via een artikelrij werkt onafhankelijk van de checkbox.
