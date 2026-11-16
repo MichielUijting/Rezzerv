@@ -9,6 +9,7 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import AlmostOutPredictionTerm from './AlmostOutPredictionTerm.jsx'
 import '../stores/locationlessStoreImport.css'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 
@@ -96,6 +97,7 @@ async function syncLocationTrackingLevel() {
 export default function AlmostOutPage() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [refreshTick, setRefreshTick] = useState(0)
   const { showFeedback } = useAppFeedback()
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -153,7 +155,7 @@ export default function AlmostOutPage() {
     syncLocationTrackingLevel()
     loadAlmostOut()
     return () => { cancelled = true }
-  }, [showFeedback])
+  }, [showFeedback, refreshTick])
 
   const rows = useMemo(() => {
     return (items || []).map((item) => ({
@@ -273,6 +275,7 @@ export default function AlmostOutPage() {
     <AppShell title="Bijna op" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="almost-out-page">
         <ScreenCard>
+          <AlmostOutPredictionTerm onSaved={() => setRefreshTick((tick) => tick + 1)} />
           <Table tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="almost-out-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
               <colgroup>
                 <col style={{ width: `${tableWidths.select}px` }} />
