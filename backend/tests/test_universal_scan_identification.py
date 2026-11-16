@@ -94,3 +94,44 @@ def test_incomplete_existing_product_requires_manual_review(database):
         assert exc.value.status_code == 409
         assert conn.execute(text("SELECT name FROM global_products")).scalar_one() == "Oude naam"
         assert conn.execute(text("SELECT COUNT(*) FROM product_identities")).scalar_one() == 0
+
+
+def test_route_denies_unprivileged_user_before_any_database_write(database, monkeypatch):
+    from fastapi import HTTPException
+    from app.api import barcode_routes
+
+    value = gtin("871234567890")
+    monkeypatch.setattr(barcode_routes, "_require_auth", lambda _authorization: {"user_id": "other"})
+    def deny(_permission):
+        raise HTTPException(status_code=403, detail="Ontbrekende platformpermissie")
+    monkeypatch.setattr(barcode_routes, "require_platform_permission_from_session", deny)
+    def forbidden_writer(*_args, **_kwargs):
+        raise AssertionError("Onbevoegde gebruiker bereikte de Catalogusschrijver")
+    monkeypatch.setattr(barcode_routes, "confirm_scanned_catalog_gtin", forbidden_writer)
+    monkeypatch.setattr(barcode_routes, "engine", database)
+
+    with pytest.raises(HTTPException) as exc:
+        barcode_routes.identify_scanned_catalog_barcode(
+            {"gtin": value, "product_name": "Melk"}, authorization=None
+        )
+    assert exc.value.status_code == 403
+    with database.begin() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one() == 0
+
+
+def test_authorized_route_requires_canonical_platform_permission(database, monkeypatch):
+    from app.api import barcode_routes
+
+    permissions = []
+    monkeypatch.setattr(barcode_routes, "_require_auth", lambda _authorization: {"user_id": "frontteam"})
+    monkeypatch.setattr(barcode_routes, "require_platform_permission_from_session",
+                        lambda permission: permissions.append(permission))
+    monkeypatch.setattr(barcode_routes, "engine", database)
+    result = barcode_routes.identify_scanned_catalog_barcode(
+        {"gtin": gtin("871234567890"), "product_name": "Havermelk"}, authorization=None
+    )
+    assert result["saved"] is True
+    assert permissions == ["platform.external_products.link_existing"]
+    with database.begin() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one() == 0
+        assert conn.execute(text("SELECT COUNT(*) FROM household_articles")).scalar_one() == 1
