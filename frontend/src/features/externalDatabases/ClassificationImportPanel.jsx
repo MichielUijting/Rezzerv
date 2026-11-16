@@ -11,7 +11,7 @@ function changesFor(row) {
 }
 
 const columns = [
-  { key: 'select', width: 176 },
+  { key: 'select', width: 64, className: 'rz-classification-import-page-column' },
   { key: 'name', label: 'Artikel', width: 230, sortable: true, filterable: true },
   { key: 'current_gpc', label: 'GS1 bestaand', width: 130, filterable: true },
   { key: 'gpc_change', label: 'GS1 voorgesteld', width: 270 },
@@ -39,6 +39,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [filteredTableRows, setFilteredTableRows] = useState([])
+  const [pageRows, setPageRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
 
@@ -67,8 +68,8 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     changesFor(row) && (!row.gpc_change || canGpc) && !processed[row.product_id]),
   [canConfirm, busy, canGpc, processed])
 
-  // DataTable is the single authority for its filters/sorting. This callback
-  // receives ALL rows passing those filters, not just the active page.
+  // DataTable owns filtering, sorting and pagination. Keep the full filtered
+  // result and the current page separate so each checkbox has one clear scope.
   const onFilteredRowsChange = useCallback((items) => {
     setFilteredTableRows((previous) => {
       const currentIds = previous.map((row) => row.product_id).join('|')
@@ -76,36 +77,51 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       return currentIds === nextIds ? previous : items
     })
   }, [])
+  const onPageRowsChange = useCallback((items) => {
+    setPageRows((previous) => {
+      const currentIds = previous.map((row) => row.product_id).join('|')
+      const nextIds = items.map((row) => row.product_id).join('|')
+      return currentIds === nextIds ? previous : items
+    })
+  }, [])
   const selectableTableRows = filteredTableRows.filter(canSelect)
+  const selectablePageRows = pageRows.filter(canSelect)
   const allTableSelected = Boolean(selectableTableRows.length &&
     selectableTableRows.every((row) => selectedRows[row.product_id]))
+  const allPageSelected = Boolean(selectablePageRows.length &&
+    selectablePageRows.every((row) => selectedRows[row.product_id]))
 
-  const toggleAllTableRows = useCallback(() => {
-    if (!selectableTableRows.length) return
+  const toggleGroup = useCallback((items, allSelected) => {
+    if (!items.length) return
     const next = { ...selectedRows }
-    if (allTableSelected) {
-      for (const row of selectableTableRows) delete next[row.product_id]
-    } else {
-      for (const row of selectableTableRows) next[row.product_id] = true
+    for (const row of items) {
+      if (allSelected) delete next[row.product_id]
+      else next[row.product_id] = true
     }
     setSelectedRows(next)
     const count = (preview?.rows || []).reduce((sum, row) =>
-      sum + (next[row.product_id] ? changesFor(row) : 0), 0)
+      sum + (next[row.product_id] && !processed[row.product_id] ? changesFor(row) : 0), 0)
     if (count > LIMIT) {
       showFeedback({ variant: 'warning',
         message: `${count} codes geselecteerd. Er kunnen maximaal ${LIMIT} codes per verwerking worden verwerkt. Beperk je selectie met de filters of vink rijen uit.` })
     }
-  }, [allTableSelected, selectableTableRows, selectedRows, preview, showFeedback])
+  }, [selectedRows, preview, processed, showFeedback])
+
+  const toggleAllTableRows = useCallback(() => {
+    toggleGroup(selectableTableRows, allTableSelected)
+  }, [toggleGroup, selectableTableRows, allTableSelected])
+  const toggleAllPageRows = useCallback(() => {
+    toggleGroup(selectablePageRows, allPageSelected)
+  }, [toggleGroup, selectablePageRows, allPageSelected])
 
   const tableColumns = useMemo(() => [
-    { ...columns[0], renderFilter: () => <label className="rz-classification-import-select-all">
-      <input type="checkbox" aria-label="Alle rijen in de tabel"
-        checked={allTableSelected} disabled={busy || !selectableTableRows.length}
-        onChange={toggleAllTableRows} />
-      <span>Alle rijen in de tabel</span>
-    </label> },
+    { ...columns[0], renderFilter: () => <input type="checkbox"
+      className="rz-classification-import-page-select"
+      aria-label="Alle rijen op deze pagina" title="Alle rijen op deze pagina"
+      checked={allPageSelected} disabled={busy || !selectablePageRows.length}
+      onChange={toggleAllPageRows} /> },
     ...columns.slice(1),
-  ], [allTableSelected, busy, selectableTableRows.length, toggleAllTableRows])
+  ], [allPageSelected, busy, selectablePageRows.length, toggleAllPageRows])
 
   async function exportCatalog() {
     if (exportBusy) return
@@ -139,6 +155,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     setSelectedRows({})
     setProcessed({})
     setFilteredTableRows([])
+    setPageRows([])
     showFeedback({ variant: 'progress', message: 'Voorstellen worden gelezen en met de actuele Catalogus gecontroleerd...' })
     try {
       const response = await fetchJsonWithAuth('/api/cbs-classifications/classification-import/preview', {
@@ -271,7 +288,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       {canView ? <label>
         Classificatiebestand
         <input type="file" accept=".xlsx,.csv" data-testid="classification-file"
-          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelectedRows({}); setProcessed({}); setFilteredTableRows([]) }} />
+          onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setSelectedRows({}); setProcessed({}); setFilteredTableRows([]); setPageRows([]) }} />
       </label> : null}
       {canView ? <Button type="button" variant="secondary" disabled={!file || busy}
         onClick={inspectFile} data-testid="classification-import-preview">Import controleren</Button> : null}
@@ -291,8 +308,17 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
         </select></label>
         <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {LIMIT} per verwerking)</span>
       </div>
+      <div className="rz-classification-import-select-actions">
+        <label className="rz-classification-import-select-all">
+          <input type="checkbox" aria-label="Alle rijen in de tabel"
+            checked={allTableSelected} disabled={busy || !selectableTableRows.length}
+            onChange={toggleAllTableRows} />
+          <span>Alle rijen in de tabel</span>
+        </label>
+      </div>
       <DataTable dataTestId="classification-import-table" columns={tableColumns} data={rows}
-        getRowKey={(row) => row.product_id} pageSize={8} onFilteredRowsChange={onFilteredRowsChange}
+        getRowKey={(row) => row.product_id} pageSize={8}
+        onFilteredRowsChange={onFilteredRowsChange} onPageRowsChange={onPageRowsChange}
         emptyMessage="Geen nieuwe of afwijkende classificaties gevonden."
         paginationActions={<>
           <Button type="button" variant="secondary" onClick={() => setSelectedRows({})}
@@ -302,7 +328,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
             data-testid="classification-import-confirm">Geselecteerde rijen verwerken ({selected.length})</Button>
         </>}
         renderRow={(row) => <tr key={row.product_id} aria-selected={Boolean(selectedRows[row.product_id])}>
-          <td><input type="checkbox" aria-label={`Selecteer ${row.name}`}
+          <td className="rz-classification-import-select-cell"><input type="checkbox" aria-label={`Selecteer ${row.name}`}
             checked={Boolean(selectedRows[row.product_id])}
             disabled={!canSelect(row)} onChange={() => toggleRow(row)} /></td>
           <td>{row.name}{row.brand ? ' · ' + row.brand : ''}</td>
