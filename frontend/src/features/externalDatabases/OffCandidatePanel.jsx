@@ -22,7 +22,7 @@ const columns = [
     renderCell: (row) => `${Math.round(row.match * 100)}%` },
 ]
 
-export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) {
+export default function OffCandidatePanel({ item, onLinkOutcome, returnState, preScannedBarcode = null }) {
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
@@ -41,6 +41,11 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (linkError) showFeedback({ variant: 'error', message: linkError }) }, [linkError, showFeedback])
   const [scannedBarcode, setScannedBarcode] = useState(null)
+  useEffect(() => {
+    if (preScannedBarcode?.receiptItemId === item.id && preScannedBarcode.value) {
+      setScannedBarcode(preScannedBarcode)
+    }
+  }, [preScannedBarcode?.receiptItemId, preScannedBarcode?.value, item.id])
   const verificationRef = useRef(null)
 
   useEffect(() => () => verificationRef.current?.abort(), [])
