@@ -273,6 +273,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
               const title = row.householdName || row.primaryName
               const contextParts = []
               if (row.productName && row.productName !== title) contextParts.push(row.productName)
+              if (!row.imageUrl && row.photoMissingReason) contextParts.push(row.photoMissingReason)
               if (row.packaging && row.packaging !== '—') contextParts.push(row.packaging)
               if (row.gpcBrickName) contextParts.push(`Brick: ${row.gpcBrickName}`)
               if (row.gpcClassName) contextParts.push(`GPC-groep: ${row.gpcClassName}`)
