@@ -4250,7 +4250,7 @@ def get_household_product_event_rows(conn, household_id: str, household_article_
 
 
 
-def compute_household_product_prediction(conn, household_id: str, household_article_id: str, article_name: str, *, current_quantity: float, prediction_days: int, global_product_id: str | None = None) -> dict | None:
+def compute_household_product_prediction(conn, household_id: str, household_article_id: str, article_name: str, *, current_quantity: float, prediction_days: int, global_product_id: str | None = None, minimum_stock: float = 0) -> dict | None:
     member_rows = get_household_product_member_article_rows(conn, household_id, household_article_id, global_product_id)
     article_ids = [str(row.get('id') or '').strip() for row in member_rows if str(row.get('id') or '').strip()]
     article_names = [str(row.get('naam') or '').strip() for row in member_rows if str(row.get('naam') or '').strip()]
@@ -4260,7 +4260,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
     purchase_rows = conn.execute(
         text(
             """
-            SELECT article_id, article_name, quantity, purchase_date, created_at
+            SELECT article_id, article_name, event_type, quantity, purchase_date, created_at
             FROM inventory_events
             WHERE household_id = :household_id
               AND COALESCE(quantity, 0) > 0
@@ -4282,54 +4282,18 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
         },
     ).mappings().all()
 
-    timestamps: list[datetime] = []
-    purchase_quantities: list[float] = []
-    for row in purchase_rows:
-        dt = _parse_event_datetime_to_utc(row.get('purchase_date')) or _parse_event_datetime_to_utc(row.get('created_at'))
-        if dt is None:
-            continue
-        timestamps.append(dt)
-        quantity = normalize_optional_numeric_field(row.get('quantity'))
-        if quantity is not None and quantity > 0:
-            purchase_quantities.append(float(quantity))
-
-    if len(timestamps) < 2:
+    from app.services.almost_out_group_service import prediction_from_events
+    forecast = prediction_from_events(
+        purchase_rows, prediction_days, current_quantity=current_quantity,
+        minimum_stock=minimum_stock,
+    )
+    if forecast is None:
         return None
-
-    interval_days: list[float] = []
-    for previous, current in zip(timestamps, timestamps[1:]):
-        delta_days = (current - previous).total_seconds() / 86400.0
-        if delta_days > 0:
-            interval_days.append(delta_days)
-    if not interval_days:
-        return None
-
-    average_purchase_interval_days = sum(interval_days) / len(interval_days)
-    last_purchase_at = timestamps[-1]
-    now = datetime.now(timezone.utc)
-    days_since_last_purchase = max((now - last_purchase_at).total_seconds() / 86400.0, 0.0)
-    predicted_days_until_depletion = max(average_purchase_interval_days - days_since_last_purchase, 0.0)
-    predicted_depletion_at = now + timedelta(days=predicted_days_until_depletion)
-    average_purchase_quantity = (sum(purchase_quantities) / len(purchase_quantities)) if purchase_quantities else None
-
     return {
-        'prediction_available': True,
-        'prediction_basis': 'average_purchase_interval',
+        **forecast,
         'prediction_scope': 'global_product' if str(global_product_id or '').strip() else 'household_article',
-        'average_purchase_interval_days': float(round(average_purchase_interval_days, 3)),
-        'average_purchase_quantity': float(round(average_purchase_quantity, 3)) if average_purchase_quantity is not None else None,
-        'last_purchase_at': last_purchase_at.isoformat(),
-        'days_since_last_purchase': float(round(days_since_last_purchase, 3)),
-        'predicted_days_until_depletion': float(round(predicted_days_until_depletion, 3)),
-        'predicted_depletion_date': predicted_depletion_at.date().isoformat(),
-        'predicted_depletion_at': predicted_depletion_at.isoformat(),
-        'prediction_threshold_days': int(prediction_days),
-        'prediction_triggered': predicted_days_until_depletion <= float(prediction_days),
         'current_quantity_at_evaluation': float(round(current_quantity, 6)),
-        'purchase_event_count': len(timestamps),
     }
-
-
 
 def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
@@ -4377,7 +4341,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
 
     prediction_payload = None
     prediction_triggered = False
-    if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and effective_prediction_days > 0:
+    if data_state == ALMOST_OUT_DATA_STATE_OK and effective_prediction_days > 0:
         prediction_payload = None if group_projection else compute_household_product_prediction(
             conn,
             household_id,
@@ -4386,11 +4350,28 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             current_quantity=current_quantity,
             prediction_days=effective_prediction_days,
             global_product_id=global_product_id,
+            minimum_stock=float(min_stock),
         )
         if group_projection:
             from app.services.almost_out_group_service import prediction_from_events
-            prediction_payload = prediction_from_events(event_rows, effective_prediction_days)
-        prediction_triggered = bool(prediction_payload and prediction_payload.get('prediction_triggered'))
+            prediction_payload = prediction_from_events(
+                event_rows, effective_prediction_days, current_quantity=current_quantity,
+                minimum_stock=float(min_stock),
+            )
+        # The historical purchase calendar alone must never produce a Bijna op
+        # signal. Only stock projected at the horizon below the household
+        # minimum provides actionable forecast evidence.
+        projected_quantity = (
+            prediction_payload.get('predicted_quantity_at_horizon')
+            if prediction_payload else None
+        )
+        prediction_triggered = bool(
+            prediction_payload
+            and prediction_payload.get('prediction_triggered')
+            and projected_quantity is not None
+            and math.isfinite(float(projected_quantity))
+            and float(projected_quantity) <= float(min_stock)
+        )
 
     include_item = False
     trigger_type = None
@@ -4416,8 +4397,19 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     packaging_unit = normalize_optional_text_field(article_settings_map.get('packaging_unit'))
     packaging_quantity = normalize_optional_numeric_field(article_settings_map.get('packaging_quantity'))
     fallback_ideal_stock = float(ideal_stock) if ideal_stock is not None else ((float(min_stock) + 1.0) if min_stock is not None else 1.0)
-    amount_to_buy = max(fallback_ideal_stock - current_quantity, 0.0)
-    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, 1 if group_projection else packaging_quantity)
+    # A forecast is a future need, not a statement that the shelf is already
+    # below its target today. Include expected usage through the horizon.
+    target_stock = current_quantity
+    if trigger_type == 'predicted' and prediction_payload is not None:
+        target_stock = float(prediction_payload['predicted_quantity_at_horizon'])
+    amount_to_buy = max(fallback_ideal_stock - target_stock, 0.0)
+    package_step = 1 if group_projection else packaging_quantity
+    amount_to_buy = round_up_quantity_to_packaging(amount_to_buy, package_step)
+    if include_item and amount_to_buy <= 0:
+        # A signal at a minimum equal to the ideal still requires at least
+        # one purchasable unit; 'Te kopen 0' would not be actionable.
+        one_package = normalize_optional_numeric_field(package_step)
+        amount_to_buy = float(one_package) if one_package is not None and one_package > 0 else 1.0
 
     default_location_id = normalize_optional_text_field(article_settings_map.get('default_location_id'))
     default_sublocation_id = normalize_optional_text_field(article_settings_map.get('default_sublocation_id'))
