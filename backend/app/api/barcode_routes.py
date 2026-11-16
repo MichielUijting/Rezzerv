@@ -26,6 +26,8 @@ from app.services.household_context_adapter import (
 from app.services.universal_scan_identification_service import (
     UniversalScanIdentityError, confirm_scanned_catalog_gtin,
 )
+from app.services.off_search_service import lookup_off_product_by_gtin
+from app.services.barcode_scope_service import classify_barcode_scope
 
 router = APIRouter(prefix="/api/barcodes", tags=["barcodes"])
 _require_authenticated_context: Callable[..., dict] | None = None
@@ -128,6 +130,33 @@ def confirm_retailer_code_from_barcode(
             return {**confirmed, "historical_repair": repair}
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/identify-suggestion/{gtin}")
+def scanned_barcode_off_suggestion(
+    gtin: str,
+    authorization: Optional[str] = Header(None),
+):
+    """Explicit read-only OFF lookup for an unknown, globally scoped GTIN.
+
+    Never attach OFF metadata directly. The operator reviews the exact-GTIN
+    suggestion and separately confirms a manually chosen Catalogus name.
+    """
+    _require_auth(authorization)
+    require_platform_permission_from_session("platform.external_products.link_existing")
+    checked = validate_barcode(gtin, "gtin")
+    if not checked["valid"]:
+        raise HTTPException(status_code=422, detail="Geen geldige GTIN.")
+    value = str(checked["normalized_value"])
+    if classify_barcode_scope(value)["scope"] != "global_candidate":
+        raise HTTPException(status_code=409, detail="Winkelinterne code: beoordeel eerst het winkelartikel.")
+    result = lookup_off_product_by_gtin(value)
+    return {
+        "status": result.get("status") or "unavailable",
+        "gtin": value,
+        "product": result.get("product") if result.get("status") == "found" else None,
+        "mutated": False,
+    }
 
 
 @router.post("/identify-catalog")
