@@ -405,7 +405,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await expect(page.getByTestId('mobile-article-detail-page')).toHaveAttribute('data-location-tracking', 'disabled');
     // With Waar inhuis off the hero is the sole inventory control:
     // neither the redundant stock tab nor the location tab should be available.
-    await expect(page.getByTestId('mobile-article-stock-value')).toContainText('2');
+    await expect(page.getByTestId('mobile-article-stock-value')).toHaveValue('2');
     await expect(page.getByTestId('mobile-article-tab-stock')).toHaveCount(0);
     await expect(page.getByTestId('mobile-article-tab-locations')).toHaveCount(0);
     for (const tabName of ['article', 'household', 'identity', 'productdata']) {
@@ -497,7 +497,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await page.getByLabel('Nieuwe hoeveelheid').fill('3');
     await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click();
     await expect.poll(() => inventoryQuantity).toBe(3);
-    await expect(page.getByTestId('mobile-article-stock-value')).toContainText('3');
+    await expect(page.getByTestId('mobile-article-stock-value')).toHaveValue('3');
     await expect(page.getByTestId('mobile-article-tab-stock')).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
