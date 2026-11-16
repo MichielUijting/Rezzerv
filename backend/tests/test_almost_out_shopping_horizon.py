@@ -26,9 +26,14 @@ def _evaluate(monkeypatch, *, shopping_days, prediction_enabled=False, predictio
         calls.append(kwargs["prediction_days"])
         if not prediction_available:
             return None
+        assert kwargs["minimum_stock"] == min_stock
+        rate = max(stock - min_stock, 0) / predicted_until if predicted_until > 0 else 1
+        projected = stock - rate * kwargs["prediction_days"]
         return {
             "prediction_available": True,
-            "prediction_triggered": predicted_until <= kwargs["prediction_days"],
+            "prediction_triggered": projected <= min_stock,
+            "predicted_quantity_at_horizon": projected,
+            "estimated_consumption_per_day": rate,
             "predicted_days_until_depletion": predicted_until,
             "prediction_threshold_days": kwargs["prediction_days"],
         }
@@ -49,7 +54,7 @@ def test_next_shopping_day_triggers_forecast_even_without_extra_prediction(monke
     assert near["shopping_days"] == 3
     assert near["effective_prediction_days"] == 3
     assert near["current_quantity"] == 4
-    assert near["amount_to_buy"] == 2
+    assert near["amount_to_buy"] == 5  # ideal 6, forecast stock 1 at shopping day
     assert calls == [3]
 
     far, calls = _evaluate(monkeypatch, shopping_days=2)
@@ -88,4 +93,52 @@ def test_inconsistent_stock_does_not_become_a_forecast(monkeypatch):
     result, calls = _evaluate(monkeypatch, shopping_days=5, stock=-1)
     assert result["include_in_almost_out"] is False
     assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_INCONSISTENT
+    assert calls == []
+
+def test_horizon_forecast_uses_expected_stock_not_shelf_quantity(monkeypatch):
+    # A 20-day horizon can call for restocking even when today's three
+    # packages are above the one-package ideal stock.
+    forecast, _ = _evaluate(
+        monkeypatch, shopping_days=0, prediction_enabled=True,
+        prediction_days=20, min_stock=0, predicted_until=15, stock=3,
+    )
+    assert forecast["trigger_type"] == "predicted"
+    assert forecast["amount_to_buy"] > 0
+    assert forecast["predicted_quantity_at_horizon"] == pytest.approx(-1)
+    assert forecast["current_quantity"] == 3
+
+
+def test_forecast_does_not_show_well_stocked_article_when_usage_is_slow(monkeypatch):
+    safe, _ = _evaluate(
+        monkeypatch, shopping_days=20, min_stock=0,
+        predicted_until=120, stock=12,
+    )
+    assert safe["prediction_available"] is True
+    assert safe["prediction_triggered"] is False
+    assert safe["include_in_almost_out"] is False
+
+
+def test_minimum_equals_ideal_still_yields_nonzero_advice(monkeypatch):
+    # Crossing the threshold is actionable even when target == minimum.
+    monkeypatch.setattr(api, "get_household_product_inventory_rows",
+                        lambda *_: [{"quantity": 1}])
+    monkeypatch.setattr(api, "get_household_product_event_rows", lambda *_: [])
+    row = {"id": "minimum-article", "naam": "Olie", "min_stock": 1,
+           "ideal_stock": 1}
+    settings = {"shopping_days": 0, "prediction_enabled": False,
+                "prediction_days": 0, "policy_mode": "advisory"}
+    result = api.evaluate_household_article_almost_out(
+        object(), "household-1", row,
+        household_settings=settings, article_settings_map={})
+    assert result["trigger_type"] == "stock"
+    assert result["amount_to_buy"] == 1
+
+
+def test_no_minimum_stock_never_creates_a_forecast_signal(monkeypatch):
+    result, calls = _evaluate(
+        monkeypatch, shopping_days=20, min_stock=None,
+        predicted_until=2, stock=3,
+    )
+    assert result["include_in_almost_out"] is False
+    assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
     assert calls == []
