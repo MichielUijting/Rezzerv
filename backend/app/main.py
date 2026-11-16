@@ -4594,6 +4594,11 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     # this projection is read-only, with no inventory or identity writes.
     from app.services.almost_out_image_projection import fill_visible_almost_out_photos
     fill_visible_almost_out_photos(conn, text, article_rows, items)
+    # Use the same proven identity route to enrich the Catalogus product name,
+    # assigned GS1 classification and missing-photo explanation. Never change
+    # household_article_id, stock, purchase history or the visibility decision.
+    from app.services.almost_out_catalog_projection import fill_visible_almost_out_catalog_details
+    fill_visible_almost_out_catalog_details(conn, text, article_rows, items)
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),
