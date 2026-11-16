@@ -10,6 +10,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import { isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { MobilePaginationControls } from '../../ui/MobilePagination.jsx'
 import { mobileReceiptStatusClass } from './mobileReceiptStatus.js'
@@ -314,6 +315,12 @@ export default function ReceiptsPage() {
       <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen" data-testid="mobile-unpack-page">
         <MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header" />
         <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
+          {isFrontteamMemberFromContext(readStoredAuthContext()) ? (
+            <Button type="button" variant="secondary" data-testid="mobile-unpack-universal-scan"
+              onClick={() => navigate('/scan-identificeren', { state: { from: '/kassabonnen' } })}>
+              Scan &amp; Identificeer
+            </Button>
+          ) : null}
           <div className="rz-mobile-inventory-toolbar">
             <div className="rz-mobile-inventory-search">
               <input className="rz-input" value={filters.winkel} onChange={(event) => handleFilterChange('winkel', event.target.value)} placeholder="Zoek winkel" aria-label="Zoek winkel" />
@@ -404,6 +411,14 @@ export default function ReceiptsPage() {
     <AppShell title="Uitpakken" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
+        {isFrontteamMemberFromContext(readStoredAuthContext()) ? (
+          <div style={{ paddingBottom: '12px' }}>
+            <Button type="button" variant="secondary" data-testid="desktop-unpack-universal-scan"
+              onClick={() => navigate('/scan-identificeren', { state: { from: '/kassabonnen' } })}>
+              Scan &amp; Identificeer
+            </Button>
+          </div>
+        ) : null}
         <Table dataTestId="receipts-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
             <colgroup>
               <col style={{ width: `${tableWidths.select}px` }} />
