@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from datetime import datetime, timedelta, timezone
 
 from app import main as api
 
@@ -148,3 +149,72 @@ def test_no_minimum_keeps_forecast_but_never_fabricates_stock_trigger(monkeypatc
     assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
     assert result["amount_to_buy"] > 0
     assert calls == [20]
+
+def test_single_household_forecast_respects_current_stock_and_scoped_history(monkeypatch):
+    today = datetime.now(timezone.utc)
+    observed = [
+        {"event_type": "purchase", "quantity": 2,
+         "purchase_date": (today - timedelta(days=21)).date().isoformat()},
+        {"event_type": "auto_repurchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=7)).date().isoformat()},
+    ]
+    calls = []
+
+    class Rows:
+        def mappings(self):
+            return self
+        def all(self):
+            return observed
+
+    class FakeConnection:
+        def execute(self, statement, params):
+            calls.append((str(statement), params))
+            return Rows()
+
+    monkeypatch.setattr(api, "get_household_product_member_article_rows",
+                        lambda *_: [{"id": "rice-1", "naam": "Basmati rijst"}])
+    result = api.compute_household_product_prediction(
+        FakeConnection(), "household-rice", "rice-1", "Basmati rijst",
+        current_quantity=2, prediction_days=20, minimum_stock=0,
+    )
+    assert len(calls) == 1
+    assert "household_id = :household_id" in calls[0][0]
+    assert calls[0][1]["household_id"] == "household-rice"
+    assert calls[0][1]["article_ids"] == ["rice-1"]
+    assert result["prediction_triggered"] is True
+    assert result["predicted_quantity_at_horizon"] == pytest.approx(2 - 2*20/14)
+    assert result["current_quantity_at_evaluation"] == 2
+    assert result["prediction_scope"] == "household_article"
+
+
+def test_confirmed_synonym_group_predicts_using_combined_stock_without_writes():
+    today = datetime.now(timezone.utc)
+    events = [
+        {"event_type": "purchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=14)).date().isoformat()},
+        {"event_type": "auto_repurchase", "quantity": 1,
+         "purchase_date": (today - timedelta(days=7)).date().isoformat()},
+    ]
+    group = {
+        "inventory_rows": [{"quantity": 2}],
+        "event_rows": events,
+        "member_article_ids": ["rice-lidl", "rice-ah"],
+        "member_data_inconsistent": False,
+        "aggregation_scope": "confirmed_synonym",
+    }
+    article = {"id": "rice-lidl", "naam": "Basmati rijst",
+               "min_stock": 0, "ideal_stock": 1}
+    settings = {
+        "shopping_days": 0, "prediction_enabled": True,
+        "prediction_days": 20, "policy_mode": "advisory",
+    }
+    signal = api.evaluate_household_article_almost_out(
+        object(), "household-rice", article, settings, {}, group,
+    )
+    assert signal["data_state"] == api.ALMOST_OUT_DATA_STATE_OK
+    assert signal["include_in_almost_out"] is True
+    assert signal["trigger_type"] == "predicted"
+    assert signal["current_quantity"] == 2
+    assert signal["member_article_ids"] == ["rice-lidl", "rice-ah"]
+    assert signal["predicted_quantity_at_horizon"] == pytest.approx(2 - 20/7)
+    assert signal["amount_to_buy"] == 2
