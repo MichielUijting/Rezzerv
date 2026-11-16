@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -11,7 +11,7 @@ import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 import ArticleAnalyticsSubtabs from './tabs/ArticleAnalyticsSubtabs'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession'
 
 const TABS_WITH_LOCATIONS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 const TABS_WITHOUT_LOCATIONS = ['Overzicht', 'Voorraad', 'Historie', 'Analyse']
@@ -298,6 +298,7 @@ function ArticleDetailState({ title, message }) {
 }
 
 export default function ArticlePage() {
+  const navigate = useNavigate()
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
   const { showFeedback } = useAppFeedback()
@@ -519,6 +520,16 @@ export default function ArticlePage() {
       <ScreenCard fullWidth>
         <div className="rz-article-detail-page" data-testid="article-detail-page">
           <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
+          {isFrontteamMemberFromContext(readStoredAuthContext()) && articleData ? (
+            <button type="button" className="rz-button-secondary" data-testid="desktop-article-universal-scan"
+              onClick={() => navigate('/scan-identificeren', {
+                state: {
+                  householdArticleId: articleData.household_article_id || articleData.id || '',
+                  articleName: articleData.name || '',
+                  from: '/voorraad/' + articleId,
+                },
+              })}>Scan &amp; Identificeer</button>
+          ) : null}
 
           {inventoryLoading ? (
             <ArticleDetailState title="Artikeldetail laden" message="De live artikelgegevens worden geladen. Als live data niet beschikbaar is, wordt beschikbare demo-informatie gebruikt." />
