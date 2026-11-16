@@ -300,7 +300,7 @@ test('Classificeren: alleen nieuwe en afwijkende classificaties, rijselectie en 
   await expect(table.getByRole('combobox')).toHaveCount(0)
   await expect(page.getByText('Bestaande code vervangen')).toHaveCount(0)
   const selection = page.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' })
-  const all = page.getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
   const pageAll = table.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })
   const header = table.locator('thead tr').first().locator('th').first()
   await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
@@ -353,7 +353,7 @@ test('Classificeren: identieke voorstellen verdwijnen zelfs als Excel controle n
   await expect(page.getByTestId('classification-import-summary')).toContainText('617 gelijke overgeslagen')
   await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
   await expect(page.getByTestId('classification-import-confirm')).toBeDisabled()
-  await expect(page.getByRole('checkbox', { name: 'Alle rijen in de tabel' })).toBeDisabled()
+  await expect(page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })).toBeDisabled()
 })
 
 test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', async ({ page }) => {
@@ -382,7 +382,7 @@ test('Classificeren: selecteer alle gefilterde tabelrijen over paginagrenzen', a
   })
   await page.getByTestId('classification-import-preview').click()
   const table = page.getByTestId('classification-import-table')
-  const all = page.getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
   const pageAll = table.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })
   const paging = page.getByRole('navigation', { name: 'Paginering' })
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
@@ -458,7 +458,7 @@ test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusi
     name: 'voorstellen.csv', mimeType: 'text/csv', buffer: Buffer.from('mock'),
   })
   await page.getByTestId('classification-import-preview').click()
-  const all = page.getByRole('checkbox', { name: 'Alle rijen in de tabel' })
+  const all = page.getByTestId('classification-import-panel').getByRole('checkbox', { name: 'Alle rijen in de tabel' })
   const bulk = page.getByTestId('classification-import-confirm')
   await all.check()
   await expect(page.getByText('101 rijen geselecteerd')).toBeVisible()
