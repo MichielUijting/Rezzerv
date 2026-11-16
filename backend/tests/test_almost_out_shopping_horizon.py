@@ -26,12 +26,13 @@ def _evaluate(monkeypatch, *, shopping_days, prediction_enabled=False, predictio
         calls.append(kwargs["prediction_days"])
         if not prediction_available:
             return None
-        assert kwargs["minimum_stock"] == min_stock
-        rate = max(stock - min_stock, 0) / predicted_until if predicted_until > 0 else 1
+        minimum = min_stock if min_stock is not None else 0
+        assert kwargs["minimum_stock"] == minimum
+        rate = max(stock - minimum, 0) / predicted_until if predicted_until > 0 else 1
         projected = stock - rate * kwargs["prediction_days"]
         return {
             "prediction_available": True,
-            "prediction_triggered": projected <= min_stock,
+            "prediction_triggered": projected <= minimum,
             "predicted_quantity_at_horizon": projected,
             "estimated_consumption_per_day": rate,
             "predicted_days_until_depletion": predicted_until,
@@ -134,11 +135,16 @@ def test_minimum_equals_ideal_still_yields_nonzero_advice(monkeypatch):
     assert result["amount_to_buy"] == 1
 
 
-def test_no_minimum_stock_never_creates_a_forecast_signal(monkeypatch):
+def test_no_minimum_keeps_forecast_but_never_fabricates_stock_trigger(monkeypatch):
+    # Historical product-type groups without a minimum may still forecast
+    # physical depletion; the minimum-stock trigger itself remains disabled.
     result, calls = _evaluate(
         monkeypatch, shopping_days=20, min_stock=None,
         predicted_until=2, stock=3,
     )
-    assert result["include_in_almost_out"] is False
+    assert result["include_in_almost_out"] is True
+    assert result["stock_triggered"] is False
+    assert result["trigger_type"] == "predicted"
     assert result["data_state"] == api.ALMOST_OUT_DATA_STATE_NO_MIN_STOCK
-    assert calls == []
+    assert result["amount_to_buy"] > 0
+    assert calls == [20]
