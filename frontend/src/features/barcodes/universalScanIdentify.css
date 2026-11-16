@@ -1,0 +1,18 @@
+.rz-universal-scan { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 900px; }
+.rz-universal-scan h2, .rz-universal-scan h3, .rz-universal-scan p { margin: 0; }
+.rz-universal-scan label { font-weight: 600; }
+.rz-universal-scan-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.rz-universal-scan-actions > .rz-input { flex: 1 1 240px; min-width: 0; }
+.rz-universal-scan-context { border-inline-start: 3px solid var(--color-primary, #005f6a); padding: 10px 12px; }
+.rz-universal-scan-result { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--color-border, #d7dddf); padding-top: 16px; }
+.rz-universal-scan-product { display: flex; gap: 16px; align-items: center; }
+.rz-universal-scan-product img { width: 100px; height: 100px; object-fit: contain; border-radius: 8px; }
+.rz-universal-scan-receipts { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--color-border, #d7dddf); }
+.rz-universal-scan-candidates { display: grid; gap: 8px; max-height: 400px; overflow-y: auto; }
+.rz-universal-scan-candidate { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--color-border, #d7dddf); border-radius: 8px; }
+.rz-universal-scan-candidate span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 580px) {
+  .rz-universal-scan { gap: 12px; }
+  .rz-universal-scan-candidate { align-items: flex-start; flex-direction: column; }
+  .rz-universal-scan-candidate button { width: 100%; }
+}
