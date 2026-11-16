@@ -4,7 +4,17 @@ import DataTable from '../../ui/DataTable'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, canCurrentUserPerform, readStoredAuthContext } from '../../lib/authSession'
 
-const LIMIT = 100
+// A batch contains up to 100 complete articles (GS1 and CBS remain together).
+const MAX_ROWS_PER_BATCH = 100
+
+function orderedSelectedRows(previewRows, tableRows, selectedMap, processedMap) {
+  const isSelected = (row) => selectedMap[row.product_id] && !processedMap[row.product_id]
+  const ordered = tableRows.filter(isSelected)
+  const seen = new Set(ordered.map((row) => row.product_id))
+  // Rows selected before a filter change remain selected and follow the
+  // current table results; do not silently drop them from the batch.
+  return [...ordered, ...previewRows.filter((row) => isSelected(row) && !seen.has(row.product_id))]
+}
 
 function changesFor(row) {
   return [row.gpc_change, row.cbs_change].filter(Boolean).length
@@ -64,6 +74,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     (preview?.rows || []).filter((row) => selectedRows[row.product_id] && !processed[row.product_id]),
   [preview, selectedRows, processed])
   const selectedCodes = selected.reduce((count, row) => count + changesFor(row), 0)
+  const orderedSelected = orderedSelectedRows(preview?.rows || [], filteredTableRows, selectedRows, processed)
   const canSelect = useCallback((row) => Boolean(canConfirm && !busy && !row.problem &&
     changesFor(row) && (!row.gpc_change || canGpc) && !processed[row.product_id]),
   [canConfirm, busy, canGpc, processed])
@@ -91,7 +102,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
   const allPageSelected = Boolean(selectablePageRows.length &&
     selectablePageRows.every((row) => selectedRows[row.product_id]))
 
-  const toggleGroup = useCallback((items, allSelected) => {
+  function toggleGroup(items, allSelected) {
     if (!items.length) return
     const next = { ...selectedRows }
     for (const row of items) {
@@ -99,13 +110,13 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       else next[row.product_id] = true
     }
     setSelectedRows(next)
-    const count = (preview?.rows || []).reduce((sum, row) =>
-      sum + (next[row.product_id] && !processed[row.product_id] ? changesFor(row) : 0), 0)
-    if (count > LIMIT) {
-      showFeedback({ variant: 'warning',
-        message: `${count} codes geselecteerd. Er kunnen maximaal ${LIMIT} codes per verwerking worden verwerkt. Beperk je selectie met de filters of vink rijen uit.` })
+    if (!allSelected) {
+      const selectedNow = orderedSelectedRows(preview?.rows || [], filteredTableRows, next, processed)
+      // The old warning disappeared after a few seconds. This is now an
+      // explicit, persistent choice, with no write until user approval.
+      if (selectedNow.length > MAX_ROWS_PER_BATCH) openApproval(selectedNow)
     }
-  }, [selectedRows, preview, processed, showFeedback])
+  }
 
   const toggleAllTableRows = useCallback(() => {
     toggleGroup(selectableTableRows, allTableSelected)
@@ -190,9 +201,17 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     })
   }
 
-  function buildDecisions() {
+  function buildDecisions(batchRows) {
+    if (!batchRows.length || batchRows.length > MAX_ROWS_PER_BATCH ||
+        new Set(batchRows.map((row) => row.product_id)).size !== batchRows.length) {
+      throw new Error('Selecteer maximaal 100 complete artikelrijen per verwerking.')
+    }
     const decisions = []
-    for (const row of selected) {
+    for (const row of batchRows) {
+      if (!(preview?.rows || []).some((item) => item.product_id === row.product_id) ||
+          processed[row.product_id]) {
+        throw new Error('Het geselecteerde artikel is niet meer beschikbaar. Controleer het bestand opnieuw.')
+      }
       if (!canSelect(row)) throw new Error('Een geselecteerd artikel is niet meer verwerkbaar. Controleer het bestand opnieuw.')
       for (const [system, change] of [['gpc', row.gpc_change], ['cbs', row.cbs_change]]) {
         if (!change) continue
@@ -205,16 +224,16 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
         })
       }
     }
-    if (!decisions.length || decisions.length > LIMIT) {
-      throw new Error('Selecteer rijen met in totaal 1 tot en met 100 classificaties.')
+    if (!decisions.length || decisions.length > MAX_ROWS_PER_BATCH * 2) {
+      throw new Error('Een batch mag maximaal 100 artikelen met hun GS1- en CBS-classificaties bevatten.')
     }
     return decisions
   }
 
-  async function commit() {
+  async function commit(batchRows) {
     if (busy) return false
     let decisions
-    try { decisions = buildDecisions() } catch (error) {
+    try { decisions = buildDecisions(batchRows) } catch (error) {
       showFeedback({ variant: 'error', message: error.message })
       return false
     }
@@ -226,12 +245,15 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
       })
       if (!response.ok) throw new Error(await parseError(response, 'Classificaties konden niet veilig worden bevestigd.'))
       const result = await response.json()
+      const processedIds = new Set(batchRows.map((row) => row.product_id))
       setProcessed((previous) => ({ ...previous,
-        ...Object.fromEntries(decisions.map((decision) => [decision.product_id, true])) }))
-      setSelectedRows({})
+        ...Object.fromEntries([...processedIds].map((id) => [id, true])) }))
+      // Keep the remaining selected rows for the next user-approved batch.
+      setSelectedRows((previous) => Object.fromEntries(
+        Object.entries(previous).filter(([id]) => !processedIds.has(id))))
       onApplied()
       showFeedback({ variant: 'success',
-        message: `${result.updated_gpc} GS1- en ${result.updated_cbs} CBS-classificaties opgeslagen. ${result.unchanged} waren al gelijk. De overige artikelen zijn ongewijzigd.` })
+        message: `${batchRows.length} artikelen verwerkt: ${result.updated_gpc} GS1- en ${result.updated_cbs} CBS-classificaties opgeslagen. ${result.unchanged} waren al gelijk. De overige geselecteerde artikelen zijn nog niet verwerkt.` })
       return true
     } catch (error) {
       showFeedback({ variant: 'error', message: error.message || 'Classificaties zijn niet opgeslagen.' })
@@ -241,22 +263,30 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
     }
   }
 
-  function approveSelection() {
-    if (!selected.length || !selectedCodes || selectedCodes > LIMIT || busy) return
+  function openApproval(orderedRows = orderedSelected) {
+    if (!orderedRows.length || busy) return
+    const batchRows = orderedRows.slice(0, MAX_ROWS_PER_BATCH)
+    const batchCodes = batchRows.reduce((sum, row) => sum + changesFor(row), 0)
+    const remainingRows = orderedRows.length - batchRows.length
     const changes = { newGpc: 0, replaceGpc: 0, newCbs: 0, replaceCbs: 0 }
-    for (const row of selected) {
+    for (const row of batchRows) {
       if (row.gpc_change) changes[row.current_gpc ? 'replaceGpc' : 'newGpc'] += 1
       if (row.cbs_change) changes[row.current_cbs ? 'replaceCbs' : 'newCbs'] += 1
     }
     showFeedback({
       variant: 'warning',
-      title: 'Geselecteerde classificaties verwerken?',
-      message: `${selected.length} artikelen, ${selectedCodes} classificaties: ${changes.newGpc} GS1 nieuw, ${changes.replaceGpc} GS1 vervangen, ${changes.newCbs} CBS nieuw, ${changes.replaceCbs} CBS vervangen. De bestaande codes van geselecteerde artikelen worden alleen vervangen na deze expliciete bevestiging. De hele batch wordt samen opgeslagen.`,
-      primaryActionLabel: 'Goedkeuren en verwerken',
+      dismissMode: 'outside-or-ok',
+      title: remainingRows ? 'Eerste 100 geselecteerde rijen verwerken?' : 'Geselecteerde classificaties verwerken?',
+      message: `${batchRows.length} artikelen (${batchCodes} classificaties): ${changes.newGpc} GS1 nieuw, ${changes.replaceGpc} GS1 vervangen, ${changes.newCbs} CBS nieuw, ${changes.replaceCbs} CBS vervangen. ${remainingRows ? `De eerste 100 geselecteerde rijen in de huidige tabelvolgorde worden samen verwerkt; ${remainingRows} andere geselecteerde rijen blijven staan voor de volgende verwerking. ` : ''}Alle GS1- en CBS-wijzigingen per artikel worden samen en pas na jouw bevestiging opgeslagen.`,
+      primaryActionLabel: remainingRows ? 'Eerste 100 rijen verwerken' : 'Goedkeuren en verwerken',
       secondaryActionLabel: 'Annuleren',
-      onPrimaryAction: commit,
+      onPrimaryAction: () => commit(batchRows),
       onSecondaryAction: () => {},
     })
+  }
+
+  function approveSelection() {
+    openApproval()
   }
 
   function proposedCell(row, system) {
@@ -306,7 +336,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
           <option value="different">Afwijkend van bestaande</option>
           <option value="problems">Blokkades</option>
         </select></label>
-        <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {LIMIT} per verwerking)</span>
+        <span>{selected.length} rijen geselecteerd · {selectedCodes} codes (maximaal {MAX_ROWS_PER_BATCH} artikelen per verwerking)</span>
       </div>
       <div className="rz-classification-import-select-actions">
         <label className="rz-classification-import-select-all">
@@ -324,7 +354,7 @@ export default function ClassificationImportPanel({ onApplied = () => {} }) {
           <Button type="button" variant="secondary" onClick={() => setSelectedRows({})}
             disabled={busy || !selected.length}>Selectie wissen</Button>
           <Button type="button" onClick={approveSelection}
-            disabled={busy || !selected.length || selectedCodes > LIMIT}
+            disabled={busy || !selected.length}
             data-testid="classification-import-confirm">Geselecteerde rijen verwerken ({selected.length})</Button>
         </>}
         renderRow={(row) => <tr key={row.product_id} aria-selected={Boolean(selectedRows[row.product_id])}>
