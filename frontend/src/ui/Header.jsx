@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   fetchAuthContext,
+  isFrontteamMemberFromContext,
   readStoredAuthContext,
 } from "../lib/authSession.js";
 import "./components/header.css";
@@ -19,6 +20,7 @@ function activeHouseholdLabel(context) {
 
 export default function Header({ title }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [authContext, setAuthContext] = useState(() => readStoredAuthContext());
   const [households, setHouseholds] = useState([]);
   const [canSwitchHouseholds, setCanSwitchHouseholds] = useState(false);
@@ -126,6 +128,13 @@ export default function Header({ title }) {
         </div>
       </div>
 
+      {showUserBox && isFrontteamMemberFromContext(authContext) && location.pathname !== "/scan-identificeren" && (
+        <button type="button" className="rz-universal-header-scan"
+          aria-label="Scan & Identificeer" data-testid="desktop-universal-scan-action"
+          onClick={() => navigate("/scan-identificeren", { state: { from: location.pathname } })}>
+          ▦ Barcode scannen
+        </button>
+      )}
       {showUserBox && (
         <div className="rz-userbox-wrapper">
           <div className="rz-userbox">
