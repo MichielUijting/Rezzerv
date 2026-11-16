@@ -4,6 +4,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchAlmostOutSettings,
   saveAlmostOutSettings,
+  isValidPredictionDays,
 } from '../settings/services/almostOutSettingsService.js'
 
 // Both Bijna op views edit the same household key as Instellingen.
@@ -39,9 +40,8 @@ export default function AlmostOutPredictionTerm({ onSaved }) {
 
   async function save() {
     const days = Number(value)
-    if (!/^(0|[1-9]\d*)$/.test(String(value).trim()) ||
-        !Number.isInteger(days) || days > 365) {
-      showFeedback({ variant: 'error', message: 'Voorspeltermijn moet een heel aantal dagen tussen 0 en 365 zijn.' })
+    if (!isValidPredictionDays(value)) {
+      showFeedback({ variant: 'error', message: 'Voorspeltermijn moet een heel niet-negatief aantal dagen zijn.' })
       return
     }
     if (!settings?.isHouseholdAdmin || busy) return
@@ -84,7 +84,7 @@ export default function AlmostOutPredictionTerm({ onSaved }) {
     {editing ? <>
       <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span>Voorspeltermijn (dagen)</span>
-        <input className="rz-input" type="number" inputMode="numeric" min="0" max="365" step="1"
+        <input className="rz-input" type="number" inputMode="numeric" min="0" step="1"
           value={value} onChange={(event) => setValue(event.target.value)}
           disabled={busy} data-testid="almost-out-prediction-input"
           style={{ width: 88 }} />
