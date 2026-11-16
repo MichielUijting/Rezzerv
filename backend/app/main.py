@@ -4341,7 +4341,10 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
 
     prediction_payload = None
     prediction_triggered = False
-    if data_state == ALMOST_OUT_DATA_STATE_OK and effective_prediction_days > 0:
+    if data_state != ALMOST_OUT_DATA_STATE_INCONSISTENT and effective_prediction_days > 0:
+        # Some historical product-type signals intentionally have no minimum
+        # configured. Their forecast still uses physical depletion (zero).
+        prediction_minimum = float(min_stock) if min_stock is not None else 0.0
         prediction_payload = None if group_projection else compute_household_product_prediction(
             conn,
             household_id,
@@ -4350,13 +4353,13 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             current_quantity=current_quantity,
             prediction_days=effective_prediction_days,
             global_product_id=global_product_id,
-            minimum_stock=float(min_stock),
+            minimum_stock=prediction_minimum,
         )
         if group_projection:
             from app.services.almost_out_group_service import prediction_from_events
             prediction_payload = prediction_from_events(
                 event_rows, effective_prediction_days, current_quantity=current_quantity,
-                minimum_stock=float(min_stock),
+                minimum_stock=prediction_minimum,
             )
         # The historical purchase calendar alone must never produce a Bijna op
         # signal. Only stock projected at the horizon below the household
@@ -4370,7 +4373,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
             and prediction_payload.get('prediction_triggered')
             and projected_quantity is not None
             and math.isfinite(float(projected_quantity))
-            and float(projected_quantity) <= float(min_stock)
+            and float(projected_quantity) <= prediction_minimum
         )
 
     include_item = False
