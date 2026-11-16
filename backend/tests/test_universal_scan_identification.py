@@ -135,3 +135,16 @@ def test_authorized_route_requires_canonical_platform_permission(database, monke
     with database.begin() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one() == 0
         assert conn.execute(text("SELECT COUNT(*) FROM household_articles")).scalar_one() == 1
+
+
+def test_equivalent_gtin_thirteen_fourteen_cannot_create_second_catalog_owner(database):
+    thirteen = gtin("871234567890")
+    fourteen = "0" + thirteen
+    with database.begin() as conn:
+        first = confirm_scanned_catalog_gtin(conn, barcode=thirteen, product_name="Melk")
+        with pytest.raises(UniversalScanIdentityError) as exc:
+            confirm_scanned_catalog_gtin(conn, barcode=fourteen, product_name="Nieuwe melk")
+        assert exc.value.status_code == 409
+        assert conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one() == 1
+        assert conn.execute(text("SELECT COUNT(*) FROM product_identities")).scalar_one() == 1
+        assert conn.execute(text("SELECT id FROM global_products")).scalar_one() == first["product"]["global_product_id"]
