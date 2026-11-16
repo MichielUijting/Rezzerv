@@ -210,3 +210,38 @@ def test_authorized_route_requires_canonical_platform_permission(database, monke
     assert permissions == ["platform.external_products.link_existing"]
     assert len(database.conn.inventory_events) == 1
     assert len(database.conn.household_articles) == 1
+
+
+def test_off_suggestion_is_read_only_and_requires_permission(database, monkeypatch):
+    value = gtin("871234567890")
+    permissions = []
+    calls = []
+    monkeypatch.setattr(barcode_routes, "_require_auth", lambda _authorization: {"user_id": "frontteam"})
+    monkeypatch.setattr(barcode_routes, "require_platform_permission_from_session",
+                        lambda permission: permissions.append(permission))
+    monkeypatch.setattr(barcode_routes, "lookup_off_product_by_gtin",
+                        lambda gtin_value: calls.append(gtin_value) or {
+                            "status": "found",
+                            "product": {"gtin": value, "product_name": "OFF-havermelk"},
+                            "mutated": False,
+                        })
+    before = (dict(database.conn.products), list(database.conn.identities),
+              list(database.conn.inventory_events))
+    result = barcode_routes.scanned_barcode_off_suggestion(value, authorization=None)
+    assert result["status"] == "found" and result["mutated"] is False
+    assert result["product"]["product_name"] == "OFF-havermelk"
+    assert calls == [value]
+    assert permissions == ["platform.external_products.link_existing"]
+    assert before == (database.conn.products, database.conn.identities,
+                      database.conn.inventory_events)
+
+
+def test_off_suggestion_does_not_lookup_restricted_barcode(monkeypatch):
+    monkeypatch.setattr(barcode_routes, "_require_auth", lambda _authorization: {"user_id": "frontteam"})
+    monkeypatch.setattr(barcode_routes, "require_platform_permission_from_session", lambda _key: None)
+    def forbid_external_request(_code):
+        raise AssertionError("Winkelinterne code werd onveilig extern opgezocht")
+    monkeypatch.setattr(barcode_routes, "lookup_off_product_by_gtin", forbid_external_request)
+    with pytest.raises(HTTPException) as exc:
+        barcode_routes.scanned_barcode_off_suggestion(gtin("201234567890"), authorization=None)
+    assert exc.value.status_code == 409
