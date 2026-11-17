@@ -19,7 +19,9 @@ export default function BarcodeScannerModal({
   const { showFeedback } = useAppFeedback()
   useEffect(() => {
     if (open && cameraState?.status === 'error' && cameraState.message) {
-      showFeedback({ variant: 'error', message: cameraState.message })
+      // An explicit retry can fail with the same browser error immediately.
+      // Do not suppress the new result as a duplicate of the prior attempt.
+      showFeedback({ variant: 'error', message: cameraState.message, dedupeMs: 0 })
     }
   }, [open, cameraState?.status, cameraState?.message, showFeedback])
   function requestTemporaryCameraMode() {
