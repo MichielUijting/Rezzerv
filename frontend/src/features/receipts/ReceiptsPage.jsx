@@ -411,14 +411,6 @@ export default function ReceiptsPage() {
     <AppShell title="Uitpakken" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
-        {isFrontteamMemberFromContext(readStoredAuthContext()) ? (
-          <div style={{ paddingBottom: '12px' }}>
-            <Button type="button" variant="secondary" data-testid="desktop-unpack-universal-scan"
-              onClick={() => navigate('/scan-identificeren', { state: { from: '/kassabonnen' } })}>
-              Scan &amp; Identificeer
-            </Button>
-          </div>
-        ) : null}
         <Table dataTestId="receipts-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
             <colgroup>
               <col style={{ width: `${tableWidths.select}px` }} />
