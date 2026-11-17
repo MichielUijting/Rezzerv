@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard.jsx'
 import Button from '../../ui/Button.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeScannerModal from './BarcodeScannerModal.jsx'
 import './universalScanIdentify.css'
@@ -26,6 +27,7 @@ function matchesReceipt(item, needle) {
 export default function UniversalScanIdentifyPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const photoRef = useRef(null)
   const requestRef = useRef(0)
@@ -38,7 +40,19 @@ export default function UniversalScanIdentifyPage() {
   const [offSuggestion, setOffSuggestion] = useState(null)
   const [offBusy, setOffBusy] = useState(false)
   const [offChecked, setOffChecked] = useState(false)
-  const [receiptQuery, setReceiptQuery] = useState('')
+  const [purpose, setPurpose] = useState('bonartikel')
+  const [targetReceipt, setTargetReceipt] = useState(() => {
+    const id = String(source.receiptItemId || '').trim()
+    return id ? {
+      id,
+      receipt_line_text: String(source.articleName || 'Geselecteerd bonartikel'),
+      retailer: String(source.retailer || source.retailerCode || ''),
+      retailer_code: String(source.retailerCode || ''),
+      receipt_article_number: String(source.receiptArticleNumber || ''),
+    } : null
+  })
+  const [showReceiptPicker, setShowReceiptPicker] = useState(false)
+  const [receiptQuery, setReceiptQuery] = useState(() => String(source.receiptItemId ? '' : source.articleName || ''))
   const [receiptItems, setReceiptItems] = useState(null)
   const [receiptsBusy, setReceiptsBusy] = useState(false)
 
@@ -141,6 +155,7 @@ export default function UniversalScanIdentifyPage() {
   }
 
   async function loadReceiptCandidates() {
+    setShowReceiptPicker(true)
     setReceiptsBusy(true)
     try {
       const response = await fetchJsonWithAuth('/api/external-databases/articles-overview')
@@ -157,13 +172,44 @@ export default function UniversalScanIdentifyPage() {
   }
 
   function selectReceipt(item) {
-    const id = String(item.id || '')
-    if (!id || !current?.valid) return
-    navigate('/externe-databases-2', {
-      state: {
-        selectedItemId: id,
-        scannedBarcode: current.gtin,
-        scanSource: 'universal',
+    const id = String(item.id || '').trim()
+    if (!id) return
+    // Selecting a destination is not yet barcode registration.
+    setTargetReceipt({
+      id,
+      receipt_line_text: String(item.receipt_line_text || 'Bonartikel'),
+      retailer: String(item.retailer || item.retailer_code || ''),
+      retailer_code: String(item.retailer_code || ''),
+      receipt_article_number: String(item.receipt_article_number || ''),
+    })
+    setShowReceiptPicker(false)
+  }
+
+  function continueToReceiptIdentification() {
+    if (purpose !== 'bonartikel' || !current?.valid || !targetReceipt?.id) return
+    const selectedTarget = { ...targetReceipt }
+    const scannedGtin = current.gtin
+    const name = selectedTarget.receipt_line_text
+    const retailer = selectedTarget.retailer || selectedTarget.retailer_code || 'winkel onbekend'
+    const code = selectedTarget.receipt_article_number || 'artikelnummer onbekend'
+    showFeedback({
+      variant: 'warning',
+      title: 'Identificatie voor dit bonartikel controleren',
+      message: `${name} · ${retailer} · ${code}: barcode ${scannedGtin} beoordelen?`,
+      detail: 'Er is nog niets gekoppeld. In Artikelbeheer → Identificeren controleer en bevestig je de opslag. Bestaande conflicten blijven beveiligd. Je voorraad en kassabonnen wijzigen niet door deze stap.',
+      dismissMode: 'blocked',
+      primaryActionLabel: 'Verder naar Identificeren',
+      secondaryActionLabel: 'Annuleren',
+      testId: 'universal-scan-confirm-target',
+      onPrimaryAction: () => {
+        navigate('/externe-databases-2', {
+          state: {
+            selectedItemId: selectedTarget.id,
+            scannedBarcode: scannedGtin,
+            scanSource: 'universal',
+          },
+        })
+        return true
       },
     })
   }
