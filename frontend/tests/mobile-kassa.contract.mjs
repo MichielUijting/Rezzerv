@@ -26,6 +26,8 @@ assert.match(mobile, /\/api\/kassa\/receipts-page\?/)
 assert.match(mobile, /page_size: '10'/)
 assert.match(mobile, /zoek: receiptFilter/)
 assert.match(mobile, /Math\.ceil\(receiptTotal \/ 10\)/)
+assert.match(mobile, /Opening the mobile receipt camera never requires the full inbox/)
+assert.match(mobile, /if \(requestedView === 'bonnen' \|\| manualReceiptListRef\.current\) \{[\s\S]*await loadReceipts\(id, \{ page: 1, initialize: true \}\)/)
 assert.doesNotMatch(mobile, /useMobilePagination\(filteredReceipts, receiptFilter\)/)
 
 assert.match(mobile,/Nieuwe scan/)

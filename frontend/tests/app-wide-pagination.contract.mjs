@@ -28,6 +28,7 @@ for (const marker of [
   'const pageInboxItems = listItems',
   'setInboxTotal(Number(list?.total || 0))',
   'setInboxSummary({',
+  'disabled={isLoading}',
 ]) assert.ok(kassa.includes(marker), 'Kassa server paging: ' + marker)
 assert.doesNotMatch(kassa, /const pageInboxItems = listItems\.slice\(/)
 assert.doesNotMatch(kassa, /setSelectedReceiptIds\(\(current\) => current\.filter\(\(id\) => visibleIds\.has\(String\(id\)\)\)\)/)

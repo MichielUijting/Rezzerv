@@ -3470,8 +3470,8 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} aria-label="Geselecteerde bonnen goedkeuren" data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
-                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-delete-selected-button">Verwijderen</Button>
+                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts || isLoading} aria-label="Geselecteerde bonnen goedkeuren" data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
+                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts || isLoading} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
               <style>{`
@@ -3527,6 +3527,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
+                        disabled={isLoading}
                         onChange={toggleSelectAllVisible}
                         aria-label="Selecteer alle zichtbare bonnen"
                       />
@@ -3623,7 +3624,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                 </tbody>
               </Table>
               </div>
-              {inboxPageCount > 1 ? <Pagination page={currentInboxPage} pageCount={inboxPageCount} onPageChange={setInboxPage} /> : null}
+              {inboxPageCount > 1 ? <Pagination page={currentInboxPage} pageCount={inboxPageCount} onPageChange={setInboxPage} disabled={isLoading} /> : null}
 
             </div>
           </ScreenCard>

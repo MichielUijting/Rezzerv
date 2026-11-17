@@ -224,17 +224,20 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       if (cancelled) return
       const id = String(household?.active_household_id ?? household?.id ?? '')
       setHouseholdId(id)
-      await loadReceipts(id, { page: 1, initialize: true })
-      receiptBootstrapRef.current = false
-      if (cancelled) return
       if (requestedReceiptId) {
+        receiptBootstrapRef.current = false
         await openReceipt(requestedReceiptId)
         return
       }
       if (requestedView === 'bonnen' || manualReceiptListRef.current) {
+        await loadReceipts(id, { page: 1, initialize: true })
+        receiptBootstrapRef.current = false
+        if (cancelled) return
         setMode('list')
         return
       }
+      // Opening the mobile receipt camera never requires the full inbox.
+      receiptBootstrapRef.current = false
       await startCamera()
     }).catch(() => {
       receiptBootstrapRef.current = false
