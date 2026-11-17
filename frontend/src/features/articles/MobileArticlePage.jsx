@@ -78,6 +78,12 @@ export default function MobileArticlePage() {
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
   const authContext = readStoredAuthContext() || {}
   const canEditInventory = isHouseholdAdminFromContext(authContext)
+  // A Frontteam member with a normal household 'lid' role may edit the
+  // exact household article through the existing guarded PATCH route.
+  const householdArticleEditor = isHouseholdAdminFromContext(authContext)
+    || ['lid', 'member', 'household.member'].includes(
+      String(authContext?.display_role || authContext?.role || '').trim().toLowerCase(),
+    )
   const {
     visibilityMap,
     isLoading: visibilityLoading,
@@ -338,7 +344,7 @@ export default function MobileArticlePage() {
             </div>
           </div>
 
-          {isFrontteamMemberFromContext(authContext) && isHouseholdAdminFromContext(authContext)
+          {isFrontteamMemberFromContext(authContext) && householdArticleEditor
             && householdArticleId ? (
             <div className="rz-mobile-article-scan-identity">
               <span>Barcode: <strong>{articleData?.barcode || 'Geen barcode'}</strong></span>
