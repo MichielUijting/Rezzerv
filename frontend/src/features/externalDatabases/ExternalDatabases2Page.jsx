@@ -541,7 +541,7 @@ export default function ExternalDatabases2Page() {
                 setRefreshVersion((value) => value + 1)
               }} />
             <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
-              {isMobile ? <Ed2BarcodeScanner receiptItemId={selectedItem.id}
+              {isMobile ? <Ed2BarcodeScanner receiptItemId={selectedItem.id} articleLabel={selectedItem.receipt_line_text}
                 onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} /> : null}
               <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
                 onSaved={(outcome) => {
