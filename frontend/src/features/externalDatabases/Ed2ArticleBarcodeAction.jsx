@@ -82,5 +82,6 @@ export default function Ed2ArticleBarcodeAction({ item, onSaved }) {
   }
   return <ArticleBarcodeScanAction articleName={item.receipt_line_text}
     currentBarcode={previous} prepareConfirmation={prepare} onConfirm={confirm}
+    showSuccessOnConfirm={false}
     testId="ed2-article-barcode-scan" />
 }
