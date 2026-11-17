@@ -5,7 +5,7 @@ import Select from '../ui/Select.jsx'
 import MobileArticleRow from '../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../ui/QuantityStepper.jsx'
-import { MobilePaginationControls, useMobilePagination } from '../ui/MobilePagination.jsx'
+import { MobilePaginationControls } from '../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
@@ -106,28 +106,46 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
     .sort((a, b) => a.firstSeenIndex - b.firstSeenIndex)
 }
 
-async function loadMobileInventory() {
-  // Rendering the first page must wait for inventory, not for a separate
-  // article-group dropdown/assignment service.
-  const groupPromise = fetchJsonWithAuth(
-    `/api/article-groups/household-articles?_ts=${Date.now()}`,
-    { method: 'GET', cache: 'no-store' },
-  ).then(async (response) => response.ok ? (await response.json().catch(() => ({}))) : {}).catch(() => ({}))
-  const inventoryResponse = await fetchJsonWithAuth(
-    `/api/dev/inventory-preview?_ts=${Date.now()}`,
+async function loadMobileInventory(options = {}) {
+  // Server groups by household article before selecting the ten visible
+  // articles. All underlying inventory targets of each article are retained.
+  const params = new URLSearchParams({
+    page: String(options.page || 1),
+    page_size: '10',
+    query: String(options.query || ''),
+    location_filter: String(options.locationFilter || ''),
+    group_filter: String(options.groupFilter || ''),
+    sort_key: String(options.sortKey || 'name-asc'),
+    location_tracking_enabled: String(options.locationTrackingEnabled !== false),
+  })
+  const response = await fetchJsonWithAuth(
+    `/api/voorraad/mobile-page?${params.toString()}`,
     { method: 'GET', cache: 'no-store' },
   )
-  const inventoryData = await inventoryResponse.json().catch(() => ({}))
-  if (!inventoryResponse.ok) {
-    throw new Error(inventoryData?.detail || 'Voorraad kon niet worden geladen')
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data?.detail || 'Voorraad kon niet worden geladen')
   }
-  const liveRows = Array.isArray(inventoryData?.rows) ? inventoryData.rows : []
-  return { initialRows: buildMobileInventoryRows(liveRows), liveRows, groupPromise }
+  if (!Array.isArray(data?.rows) || !Number.isFinite(Number(data?.total))) {
+    throw new Error('Voorraad heeft een onverwacht paginaantwoord ontvangen.')
+  }
+  return {
+    initialRows: buildMobileInventoryRows(data.rows),
+    total: Number(data.total),
+    inventoryTotal: Number(data.inventory_total || 0),
+    locations: Array.isArray(data.location_options) ? data.location_options : [],
+    groups: Array.isArray(data.article_group_options) ? data.article_group_options : [],
+  }
 }
 
 export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const navigate = useNavigate()
   const [rows, setRows] = useState([])
+  const [inventoryPage, setInventoryPage] = useState(1)
+  const [inventoryTotal, setInventoryTotal] = useState(0)
+  const [inventoryOverallTotal, setInventoryOverallTotal] = useState(0)
+  const [allLocationOptions, setAllLocationOptions] = useState([])
+  const [allGroupOptions, setAllGroupOptions] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
@@ -146,26 +164,34 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setError('')
     const generation = ++loadGenerationRef.current
     try {
-      const { initialRows, liveRows, groupPromise } = await loadMobileInventory()
+      const { initialRows, total, inventoryTotal: overallTotal, locations, groups } = await loadMobileInventory({
+        page: inventoryPage, query, locationFilter, groupFilter, sortKey, locationTrackingEnabled,
+      })
       if (generation !== loadGenerationRef.current) return
       setRows(initialRows)
-      // Enrich labels after the first page is visible. Ignore stale responses.
-      groupPromise.then((groups) => {
-        if (generation !== loadGenerationRef.current || mutationLockRef.current) return
-        const assignments = Array.isArray(groups?.items) ? groups.items : []
-        setRows(buildMobileInventoryRows(liveRows, assignments))
-      })
+      setInventoryTotal(total)
+      setInventoryOverallTotal(overallTotal)
+      setAllLocationOptions(locations)
+      setAllGroupOptions(groups)
     } catch (err) {
+      if (generation !== loadGenerationRef.current) return
       setRows([])
       setError(String(err?.message || 'Voorraad kon niet worden geladen'))
     } finally {
-      setIsLoading(false)
+      if (generation === loadGenerationRef.current) setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    reload()
-  }, [])
+    // Keep old rows visible without allowing actions until the requested page
+    // and filters are consistent; debounce only free-text input.
+    setIsLoading(true)
+    const timer = window.setTimeout(() => { reload().catch(() => {}) }, query ? 250 : 0)
+    return () => {
+      window.clearTimeout(timer)
+      ++loadGenerationRef.current
+    }
+  }, [inventoryPage, query, locationFilter, groupFilter, sortKey, locationTrackingEnabled])
 
   useEffect(() => {
     if (locationTrackingEnabled) return
@@ -174,7 +200,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   }, [locationTrackingEnabled])
 
   async function submitInventoryMutation(row, mutation, nextRowQuantity) {
-    if (!canEditInventory || mutationLockRef.current || !row?.householdArticleId) return
+    if (!canEditInventory || isLoading || mutationLockRef.current || !row?.householdArticleId) return
     const inventoryId = String(mutation.inventory_id || '')
     const previousRows = rows
     // Optimistic feedback: change the number immediately, not after two full GETs.
@@ -204,6 +230,11 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       const serverQuantity = Number(data?.row_new_quantity)
       if (data?.row_new_quantity != null && Number.isFinite(serverQuantity)) {
         setRows((current) => applyInventoryRowQuantity(current, row.id, inventoryId, serverQuantity))
+        if (serverQuantity <= 0 && row.inventoryEntries.length === 1) {
+          // Preserve accurate pagination totals when the last stock unit is consumed.
+          setInventoryTotal((current) => Math.max(0, current - 1))
+          setInventoryOverallTotal((current) => Math.max(0, current - 1))
+        }
       }
     } catch (err) {
       setRows(previousRows)
@@ -233,42 +264,26 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     await submitInventoryMutation(row, mutation, Number(mutation.quantity))
   }
 
-  const locationOptions = useMemo(() => {
-    if (!locationTrackingEnabled) return []
-    return [...new Set(rows.map((row) => row.location).filter((value) => value && value !== 'Geen locatie'))]
-      .sort((a, b) => a.localeCompare(b, 'nl'))
-  }, [locationTrackingEnabled, rows])
+  // Server-side filters, name/location sorting and household article grouping
+  // apply to the full household, not merely the visible page.
+  const locationOptions = allLocationOptions
+  const articleGroupOptions = allGroupOptions
+  const filteredRows = rows
+  const inventoryPageCount = Math.max(1, Math.ceil(inventoryTotal / 10))
+  const inventoryPagination = {
+    page: inventoryPage,
+    pageCount: inventoryPageCount,
+    pageItems: filteredRows,
+    setPage: setInventoryPage,
+  }
+  useEffect(() => {
+    if (!isLoading && inventoryPage > inventoryPageCount) setInventoryPage(inventoryPageCount)
+  }, [isLoading, inventoryPage, inventoryPageCount])
 
-  const articleGroupOptions = useMemo(() => {
-    return [...new Set(rows.map((row) => row.articleGroup).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, 'nl'))
-  }, [rows])
-
-  const filteredRows = useMemo(() => {
-    const needle = normalizeText(query)
-    const nextRows = rows.filter((row) => {
-      if (locationTrackingEnabled && locationFilter && row.location !== locationFilter) return false
-      if (groupFilter && row.articleGroup !== groupFilter) return false
-      if (!needle) return true
-      const searchableValues = [row.householdName, row.productName, row.articleGroup, row.gpcBrickName, row.gpcClassName, row.gpcFamilyName]
-      if (locationTrackingEnabled) searchableValues.push(row.location, row.sublocation)
-      return searchableValues.some((value) => normalizeText(value).includes(needle))
-    })
-
-    return nextRows.sort((a, b) => {
-      if (sortKey === 'name-desc') return b.householdName.localeCompare(a.householdName, 'nl')
-      if (locationTrackingEnabled && sortKey === 'location') return a.location.localeCompare(b.location, 'nl') || a.householdName.localeCompare(b.householdName, 'nl')
-      return a.householdName.localeCompare(b.householdName, 'nl')
-    })
-  }, [groupFilter, locationFilter, locationTrackingEnabled, query, rows, sortKey])
-
-  const inventoryPagination = useMobilePagination(
-    filteredRows,
-    [query, locationFilter, groupFilter, sortKey, locationTrackingEnabled].join('|'),
-  )
   const hasActiveFilters = Boolean(query || groupFilter || (locationTrackingEnabled && locationFilter))
 
   function clearFilters() {
+    setInventoryPage(1)
     setQuery('')
     setLocationFilter('')
     setGroupFilter('')
@@ -276,9 +291,9 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
   const resultSummary = isLoading
     ? 'Voorraad laden…'
-    : (filteredRows.length === rows.length
-      ? `${rows.length} artikelen`
-      : `${filteredRows.length} van ${rows.length} artikelen`)
+    : (inventoryTotal === inventoryOverallTotal
+      ? `${inventoryOverallTotal} artikelen`
+      : `${inventoryTotal} van ${inventoryOverallTotal} artikelen`)
 
   return (
     <div
@@ -296,7 +311,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               className="rz-input"
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setInventoryPage(1); setQuery(event.target.value) }}
               placeholder={locationTrackingEnabled ? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'}
               autoComplete="off"
             />
@@ -309,7 +324,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 <Select
                   ariaLabelledby="mobile-inventory-location-label"
                   value={locationFilter}
-                  onChange={setLocationFilter}
+                  onChange={(value) => { setInventoryPage(1); setLocationFilter(value) }}
                   triggerClassName="rz-mobile-inventory-select-trigger"
                   options={[
                     { value: '', label: 'Alle locaties' },
@@ -324,7 +339,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               <Select
                 ariaLabelledby="mobile-inventory-group-label"
                 value={groupFilter}
-                onChange={setGroupFilter}
+                onChange={(value) => { setInventoryPage(1); setGroupFilter(value) }}
                 triggerClassName="rz-mobile-inventory-select-trigger"
                 options={[
                   { value: '', label: 'Alle groepen' },
@@ -338,7 +353,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               <Select
                 ariaLabelledby="mobile-inventory-sort-label"
                 value={sortKey}
-                onChange={setSortKey}
+                onChange={(value) => { setInventoryPage(1); setSortKey(value) }}
                 triggerClassName="rz-mobile-inventory-select-trigger"
                 options={[
                   { value: 'name-asc', label: 'Naam A–Z' },
@@ -378,7 +393,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
         {!error && !isLoading && filteredRows.length === 0 ? (
           <section className="rz-mobile-inventory-state">
-            <strong>{rows.length === 0 ? 'Nog geen voorraad beschikbaar.' : 'Geen artikelen gevonden.'}</strong>
+            <strong>{inventoryOverallTotal === 0 ? 'Nog geen voorraad beschikbaar.' : 'Geen artikelen gevonden.'}</strong>
             {hasActiveFilters ? <span>Pas je zoekopdracht of filters aan.</span> : null}
           </section>
         ) : null}
@@ -405,22 +420,22 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                   ].filter(Boolean)}
                   imageUrl={row.imageUrl}
                   imageProductName={row.productName || row.householdName}
-                  onActivate={detailTarget && !rowBusy ? () => navigate(detailTarget) : null}
+                  onActivate={detailTarget && !rowBusy && !isLoading ? () => navigate(detailTarget) : null}
                   testId={detailTarget ? `mobile-inventory-open-detail-${row.detailId}` : undefined}
                   side={(
                     <>
                       {canEditInventory ? (
                         <QuantityStepper
                           value={formatQuantity(row.quantity)}
-                          decreaseDisabled={!decreaseTarget || rowBusy}
-                          increaseDisabled={!increaseTarget || rowBusy}
+                          decreaseDisabled={!decreaseTarget || rowBusy || isLoading}
+                          increaseDisabled={!increaseTarget || rowBusy || isLoading}
                           decreaseLabel={`Boek 1 af van ${row.householdName}`}
                           increaseLabel={`Boek 1 op bij ${row.householdName}`}
                           valueLabel={exactQuantityTarget
                             ? `Aantal ${formatQuantity(row.quantity)}. Tik om aan te passen`
                             : `Aantal ${formatQuantity(row.quantity)}`}
                           valueEditable={Boolean(exactQuantityTarget)}
-                          valueDisabled={rowBusy}
+                          valueDisabled={rowBusy || isLoading}
                           testIdPrefix={`mobile-inventory-${row.detailId || row.id}`}
                           onValueCommit={(nextQuantity) => setExactInventoryQuantity(row, nextQuantity)}
                           onDecrease={(event) => {
@@ -445,7 +460,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
             })}
           </section>
         ) : null}
-        <MobilePaginationControls {...inventoryPagination} ariaLabel="Paginering Voorraad" />
+        <div style={{ pointerEvents: isLoading ? 'none' : undefined }}><MobilePaginationControls {...inventoryPagination} ariaLabel="Paginering Voorraad" /></div>
       </main>
 
     </div>
