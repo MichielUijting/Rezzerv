@@ -30,10 +30,9 @@ import {
   StoreArticleSelector,
 } from './storeImportShared'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
-import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
-import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
-import { isHouseholdAdminFromContext } from '../../lib/authSession.js'
+import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
+import { isHouseholdAdminFromContext, isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import {
   DIRECT_CONSUMPTION,
   STOCK,
@@ -235,7 +234,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
   const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
-  const [activeBarcodeLineId, setActiveBarcodeLineId] = useState('')
   const [activeDetailLineId, setActiveDetailLineId] = useState(receiptLineId)
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
@@ -282,26 +280,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
 
-
-  const {
-    videoRef: barcodeVideoRef,
-    isOpen: barcodeCameraOpen,
-    cameraState: barcodeCameraState,
-    cameraMeta: barcodeCameraMeta,
-    availableCameras: barcodeAvailableCameras,
-    startScanner: startBarcodeScanner,
-    stopScanner: stopBarcodeScanner,
-    switchCamera: switchBarcodeCamera,
-  } = useBarcodeScanner({
-    screenContext: 'Uitpakken',
-    onDetected: async (detectedBarcode) => {
-      const lineId = activeBarcodeLineId
-      const normalized = String(detectedBarcode || '').trim()
-      if (!lineId || !normalized) return
-      setBarcodeDrafts((current) => ({ ...current, [lineId]: normalized }))
-      await validateReceiptLineBarcode(lineId, normalized)
-    },
-  })
 
   function barcodeInitialValue(line) {
     return firstTextValue(line?.barcode, line?.gtin, line?.primary_gtin, line?.matched_global_product_gtin)
@@ -631,9 +609,28 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  async function openReceiptLineBarcodeScanner(lineId) {
-    setActiveBarcodeLineId(String(lineId))
-    await startBarcodeScanner(barcodeCameraMeta.deviceId || '')
+  async function saveDirectScannedReceiptBarcode(line, gtin, { expectedOldBarcode }) {
+    const current = barcodeInitialValue(line)
+    if (String(current || '').trim() !== expectedOldBarcode) {
+      throw new Error('De bestaande barcode is gewijzigd. Open dit bonartikel opnieuw.')
+    }
+    const householdArticleId = String(getDraftValues(line).articleId || '').trim()
+    if (!householdArticleId) {
+      throw new Error('Er is nog geen bestaand voorraadartikel voor deze bonregel gekozen. Sla eerst de artikelkeuze op.')
+    }
+    await fetchJson(
+      `/api/barcodes/${encodeURIComponent(gtin)}/save-household-article`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          purchase_import_line_id: String(line.id),
+          household_article_id: householdArticleId,
+          expected_old_gtin: expectedOldBarcode,
+          article_name: String(line.article_name_raw || ''),
+        }),
+      },
+    )
+    await refreshBatch(batch.batch_id)
   }
 
   function showUitpakkenFeedback(variant, message, options = {}) {
@@ -1982,8 +1979,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   async function closeReceiptLineDetail() {
     setActiveDetailLineId('')
-    setActiveBarcodeLineId('')
-    stopBarcodeScanner()
     if (batch?.batch_id) {
       try {
         await refreshBatch(batch.batch_id)
@@ -2146,7 +2141,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           : 'rz-mobile-unpack-row--new'
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
+                    <tr
+                      key={line.id}
+                      className={rowClassName}
+                      data-testid={`receipt-line-${line.id}`}
+                      title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? 'Tik voor bonartikeldetails' : 'Dubbelklik om bonartikeldetails te openen'}
+                      tabIndex={isMobileViewport ? 0 : undefined}
+                      aria-label={isMobileViewport ? `Details van ${formatReceiptLineLabel(line.article_name_raw)} openen` : undefined}
+                      onClick={isMobileViewport ? (event) => {
+                        // Checkbox, dropdowns en andere rij-acties mogen geen details openen.
+                        if (event.target.closest('button, input, select, textarea, a, [role="button"], [role="combobox"]')) return
+                        openReceiptLineDetail(line.id)
+                      } : undefined}
+                      onKeyDown={isMobileViewport ? (event) => {
+                        if (event.target !== event.currentTarget) return
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openReceiptLineDetail(line.id)
+                        }
+                      } : undefined}
+                      onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}
+                    >
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
                       <td className="rz-store-batch-col-item">
                         <div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div>
@@ -2351,7 +2366,22 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
 
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
-                  <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd>
+                    <BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} showScan={false} />
+                    {isMobileViewport && (
+                      isFrontteamMemberFromContext(readStoredAuthContext())
+                      || isHouseholdAdminFromContext(readStoredAuthContext())
+                    ) ? (
+                      <ArticleBarcodeScanAction articleName={line.article_name_raw || 'Bonartikel'}
+                        currentBarcode={barcodeInitialValue(line)}
+                        testId={`unpack-line-barcode-scan-${line.id}`}
+                        disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                        onConfirm={(gtin, options) => saveDirectScannedReceiptBarcode(line, gtin, options)} />
+                    ) : null}
+                    {isMobileViewport && activeDetailEntry.processingStatus === 'processed'
+                      ? <p className="rz-modal-text">Deze bonregel is al verwerkt. De barcode kan hier niet meer worden gewijzigd.</p>
+                      : null}
+                  </dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
                     <dd style={{ display: 'grid', gap: '10px' }}>
@@ -2485,19 +2515,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             </div>
           ) : null}
-          <BarcodeScannerModal
-            open={barcodeCameraOpen}
-            title="Barcode voor bonregel scannen"
-            videoRef={barcodeVideoRef}
-            cameraState={barcodeCameraState}
-            cameraMeta={barcodeCameraMeta}
-            availableCameras={barcodeAvailableCameras}
-            onSwitchCamera={switchBarcodeCamera}
-            onClose={() => {
-              stopBarcodeScanner(true, 'uitpakken-overlay-close')
-              setActiveBarcodeLineId('')
-            }}
-          />
           {locationPickerLineId ? (() => {
             const pickerIsBulk = locationPickerMode === 'bulk'
             const pickerEntry = pickerIsBulk ? null : lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))

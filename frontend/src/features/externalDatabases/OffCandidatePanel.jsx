@@ -7,7 +7,7 @@ import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import { ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
-import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ArticleBarcodeAction from './Ed2ArticleBarcodeAction.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 const columns = [
@@ -22,7 +22,7 @@ const columns = [
     renderCell: (row) => `${Math.round(row.match * 100)}%` },
 ]
 
-export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) {
+export default function OffCandidatePanel({ item, onLinkOutcome, returnState, preScannedBarcode = null }) {
   const navigate = useNavigate()
   const isMobile = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
@@ -41,6 +41,11 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (linkError) showFeedback({ variant: 'error', message: linkError }) }, [linkError, showFeedback])
   const [scannedBarcode, setScannedBarcode] = useState(null)
+  useEffect(() => {
+    if (preScannedBarcode?.receiptItemId === item.id && preScannedBarcode.value) {
+      setScannedBarcode(preScannedBarcode)
+    }
+  }, [preScannedBarcode?.receiptItemId, preScannedBarcode?.value, item.id])
   const verificationRef = useRef(null)
 
   useEffect(() => () => verificationRef.current?.abort(), [])
@@ -194,12 +199,18 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
     }
   }
 
-  if (alreadyIdentified) return null
+  if (alreadyIdentified) return isMobile ? (
+    <section className="rz-external-receipt-detail" aria-label="Barcode van geïdentificeerd artikel">
+      <h3>Barcode van {item.receipt_line_text}</h3>
+      <Ed2ArticleBarcodeAction item={item} onSaved={onLinkOutcome} />
+    </section>
+  ) : null
 
   if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
       data-testid="ed2-barcode-conflict-panel">
-      <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
+      {isMobile ? <Ed2ArticleBarcodeAction item={item} onSaved={onLinkOutcome} /> : null}
+      <Ed2ManualBarcodeEntry item={item} scannedBarcode={preScannedBarcode} onSaved={onLinkOutcome} />
     </section>
   )
 
@@ -212,9 +223,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState }) 
           <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item, ed2TableState: returnState } })}>
             Zelf zoeken in OFF
           </Button>
-          <Ed2BarcodeScanner key={item.id} receiptItemId={item.id}
-            disabled={item.link_status === 'linked' && !item.manual_barcode}
-            onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} />
+          {isMobile ? <Ed2ArticleBarcodeAction key={item.id} item={item} onSaved={onLinkOutcome} /> : null}
         </div>
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}

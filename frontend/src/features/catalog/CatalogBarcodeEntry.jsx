@@ -1,94 +1,83 @@
 import { useEffect, useState } from 'react'
 import { fetchJsonWithAuth } from '../../lib/authSession'
-import useBarcodeScanner from '../../lib/useBarcodeScanner'
-import BarcodeScannerModal from '../barcodes/BarcodeScannerModal'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
 
-/** One shared Catalogus editor for the desktop and mobile article detail. */
-export default function CatalogBarcodeEntry({ globalProductId, primaryGtin, canEdit, mobile, onSaved }) {
+/** One named Catalogus product. Desktop stays manual; mobile can scan directly. */
+export default function CatalogBarcodeEntry({
+  globalProductId, primaryGtin, productName = '', canEdit, canReplace = false, canScan = false,
+  mobile, onSaved,
+}) {
   const [gtin, setGtin] = useState('')
   const [saving, setSaving] = useState(false)
   const { showFeedback } = useAppFeedback()
-  const {
-    videoRef, isOpen, cameraState, cameraMeta, availableCameras,
-    startScanner, stopScanner, switchCamera,
-  } = useBarcodeScanner({
-    screenContext: 'Catalogus gedeelde barcode',
-    onDetected: (detected) => {
-      setGtin(String(detected || '').trim())
-      showFeedback({ variant: 'info', message: 'Barcode gevonden. Controleer de code en bevestig met Opslaan.' })
-      stopScanner(true)
-    },
-  })
+  const known = String(primaryGtin || '').trim()
 
-  useEffect(() => {
-    setGtin('')
-    stopScanner()
-  }, [globalProductId, primaryGtin, stopScanner])
+  useEffect(() => { setGtin('') }, [globalProductId, primaryGtin])
 
-  if (String(primaryGtin || '').trim()) return null
   if (!canEdit) {
-    return <p>Nog geen barcode bekend. Een bevoegd catalogusbeheerder kan deze toevoegen.</p>
+    return known ? null : <p>Nog geen barcode bekend. Een bevoegd catalogusbeheerder kan deze toevoegen.</p>
   }
 
-  async function saveBarcode(event) {
+  async function persistBarcode(value, { replace = false, expectedOldBarcode = '' } = {}) {
+    if (replace && !canReplace) {
+      throw new Error('Alleen een bevoegd Catalogusbeheerder kan een bestaande barcode vervangen.')
+    }
+    const url = replace
+      ? `/api/catalog/${encodeURIComponent(globalProductId)}/gtin/replace`
+      : `/api/catalog/${encodeURIComponent(globalProductId)}/gtin`
+    const response = await fetchJsonWithAuth(url, {
+      method: 'PUT',
+      body: JSON.stringify({
+        gtin: String(value).trim(),
+        ...(replace ? { expected_old_gtin: expectedOldBarcode } : {}),
+      }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(typeof result?.detail === 'string'
+      ? result.detail : 'Deze barcode kon niet veilig aan dit Catalogusartikel worden gekoppeld.')
+    onSaved?.(String(result.gtin))
+    return result
+  }
+
+  async function saveManual(event) {
     event.preventDefault()
-    if (!gtin.trim() || saving) return
+    if (!gtin.trim() || saving || known) return
     setSaving(true)
     try {
-      const response = await fetchJsonWithAuth(
-        `/api/catalog/${encodeURIComponent(globalProductId)}/gtin`,
-        { method: 'PUT', body: JSON.stringify({ gtin: gtin.trim() }) },
-      )
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result?.detail || 'De barcode kon niet worden opgeslagen.')
-      onSaved(String(result.gtin))
-      showFeedback({ variant: 'success', message: 'De barcode is centraal in de Catalogus opgeslagen.' })
-    } catch (saveError) {
-      showFeedback({ variant: 'error', message: saveError?.message || 'De barcode kon niet worden opgeslagen.' })
+      await persistBarcode(gtin.trim())
+      showFeedback({ variant: 'success', message: 'Barcode opgeslagen in de Catalogus.' })
+    } catch (error) {
+      showFeedback({ variant: 'error', message: error?.message || 'Barcode niet opgeslagen.' })
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <section className={mobile ? 'rz-mobile-catalog-detail-card' : 'rz-catalog-detail-section'} data-testid="catalog-shared-gtin-entry">
-      <h3>Barcode toevoegen aan Catalogus</h3>
-      <p>Deze barcode geldt voor alle huishoudens. Er wordt geen voorraad aangepast.</p>
-      <form onSubmit={saveBarcode}>
-        <label htmlFor="catalog-shared-gtin-input">Barcode (EAN/GTIN)</label>
+    <section className={mobile ? 'rz-mobile-catalog-detail-card' : 'rz-catalog-detail-section'}
+      data-testid="catalog-shared-gtin-entry">
+      <h3>Barcode voor {productName || 'Catalogusartikel'}</h3>
+      <p>Huidige barcode: <strong>{known || 'Geen barcode'}</strong></p>
+      <p>Deze barcode geldt voor de centrale Catalogus. Scannen verandert geen voorraad.</p>
+      {!known ? <form onSubmit={saveManual}>
+        <label htmlFor="catalog-shared-gtin-input">Barcode (EAN/GTIN) handmatig invoeren</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-          <input
-            id="catalog-shared-gtin-input"
-            className="rz-input"
-            inputMode="numeric"
-            autoComplete="off"
-            value={gtin}
-            onChange={(event) => setGtin(event.target.value)}
-            disabled={saving}
-            placeholder="Barcode invoeren"
-            data-testid="catalog-shared-gtin-input"
-          />
-          <button type="submit" className="rz-button-primary" disabled={saving || !gtin.trim()} data-testid="catalog-shared-gtin-save">
+          <input id="catalog-shared-gtin-input" className="rz-input" inputMode="numeric"
+            autoComplete="off" value={gtin} onChange={(event) => setGtin(event.target.value)}
+            disabled={saving} placeholder="Barcode invoeren"
+            data-testid="catalog-shared-gtin-input" />
+          <button type="submit" className="rz-button-primary"
+            disabled={saving || !gtin.trim()} data-testid="catalog-shared-gtin-save">
             {saving ? 'Opslaan…' : 'Opslaan'}
           </button>
-          {mobile ? (
-            <button type="button" className="rz-button-secondary" onClick={() => startScanner()} disabled={saving} data-testid="catalog-shared-gtin-scan">
-              Barcode scannen
-            </button>
-          ) : null}
         </div>
-      </form>
-      <BarcodeScannerModal
-        open={isOpen}
-        title="Barcode scannen voor Catalogus"
-        videoRef={videoRef}
-        cameraState={cameraState}
-        cameraMeta={cameraMeta}
-        availableCameras={availableCameras}
-        onSwitchCamera={switchCamera}
-        onClose={() => stopScanner()}
-      />
+      </form> : null}
+      {mobile && canScan && (known ? canReplace : canEdit) ? (
+        <ArticleBarcodeScanAction articleName={productName || 'Catalogusartikel'}
+          currentBarcode={known} disabled={saving} onConfirm={persistBarcode}
+          testId="catalog-shared-gtin-scan" />
+      ) : null}
     </section>
   )
 }
