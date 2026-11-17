@@ -185,7 +185,7 @@ def _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek="", t
 
 
 def _page_payload(rows, *, page, page_size, winkel="", datum="", totaal="",
-                  artikelen="", status="", zoek="", time_zone="UTC", sort_key="date", sort_direction="desc"):
+                  artikelen="", status="", zoek="", time_zone="UTC", sort_key="date", sort_direction="desc", focus_receipt_id=""):
     items = _deduped_receipts(rows)
     counts = {
         "Controle nodig": sum(item["inbox_status"] == "Controle nodig" for item in items),
@@ -193,6 +193,14 @@ def _page_payload(rows, *, page, page_size, winkel="", datum="", totaal="",
     }
     filtered = _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek, time_zone)
     sorted_items = _sort_receipts(filtered, sort_key, sort_direction)
+    # Resolve an explicitly requested receipt in the filtered, household-scoped
+    # order. The client still receives at most one page (never the full inbox).
+    focus_id = str(focus_receipt_id or "").strip()
+    if focus_id:
+        focus_index = next((index for index, item in enumerate(sorted_items)
+                            if str(item.get("receipt_table_id") or "") == focus_id), None)
+        if focus_index is not None:
+            page = focus_index // page_size + 1
     start = (page - 1) * page_size
     return {
         "items": sorted_items[start:start + page_size],
@@ -208,6 +216,7 @@ def list_kassa_receipts_page(
     householdId: str = Query(...),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=10),
+    focus_receipt_id: str = Query(default="", max_length=128),
     winkel: str = Query(default="", max_length=200),
     datum: str = Query(default="", max_length=200),
     totaal: str = Query(default="", max_length=100),
@@ -240,6 +249,7 @@ def list_kassa_receipts_page(
         rows, page=page, page_size=page_size, winkel=winkel, datum=datum,
         totaal=totaal, artikelen=artikelen, status=status, zoek=zoek, time_zone=time_zone,
         sort_key=sort_key, sort_direction=sort_direction,
+        focus_receipt_id=focus_receipt_id,
     )
     elapsed = perf_counter() - started
     if elapsed >= 0.5:

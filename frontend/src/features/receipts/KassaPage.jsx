@@ -2250,22 +2250,25 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   async function loadReceipts(nextHouseholdId = householdId, options = {}) {
     if (!nextHouseholdId) return []
     const requestedPage = Math.max(1, Number(options?.page ?? inboxPage) || 1)
+    const activeFilters = options?.resetFilters ? DEFAULT_RECEIPT_FILTERS : filters
+    const focusReceiptId = String(options?.focusReceiptId || "").trim()
     const params = new URLSearchParams({
       householdId: String(nextHouseholdId),
       page: String(requestedPage),
       page_size: '10',
-      winkel: filters.winkel,
-      datum: filters.datum,
-      totaal: filters.totaal,
-      artikelen: filters.artikelen,
-      status: filters.status,
+      winkel: activeFilters.winkel,
+      datum: activeFilters.datum,
+      totaal: activeFilters.totaal,
+      artikelen: activeFilters.artikelen,
+      status: activeFilters.status,
       time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       sort_key: inboxSort.key,
       sort_direction: inboxSort.direction,
       initialize: String(options?.initialize !== false),
     })
+    if (focusReceiptId) params.set("focus_receipt_id", focusReceiptId)
     inboxQueryKeyRef.current = JSON.stringify([
-      String(nextHouseholdId), requestedPage, filters, inboxSort,
+      String(nextHouseholdId), requestedPage, activeFilters, inboxSort,
     ])
     const requestId = ++inboxPageRequestRef.current
     if (inboxHouseholdRef.current && inboxHouseholdRef.current !== String(nextHouseholdId)) {
@@ -2287,6 +2290,14 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       const list = await fetchJson(`/api/kassa/receipts-page?${params.toString()}`)
       items = Array.isArray(list?.items) ? list.items : []
       if (requestId === inboxPageRequestRef.current) {
+        if (focusReceiptId) {
+          const focusedPage = Math.max(1, Number(list?.page || requestedPage) || requestedPage)
+          // Keep the subsequent page-change effect in sync with the resolved page.
+          inboxQueryKeyRef.current = JSON.stringify([
+            String(nextHouseholdId), focusedPage, activeFilters, inboxSort,
+          ])
+          setInboxPage(focusedPage)
+        }
         setReceipts(items)
         setInboxTotal(Number(list?.total || 0))
         setInboxSummary({
@@ -2369,16 +2380,21 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
             // keep local fallback when backend sync fails
           }
         }
-        const items = await loadReceipts(resolvedHouseholdId, { initialize: true, page: 1 })
+        // Resolve duplicate redirects on the server before showing the inbox:
+        // the previously uploaded receipt need not be on the first ten rows.
+        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
+        const items = await loadReceipts(resolvedHouseholdId, {
+          initialize: true,
+          page: 1,
+          focusReceiptId: duplicateReceiptId,
+          resetFilters: Boolean(duplicateReceiptId),
+        })
         inboxBootstrapRef.current = false
         if (cancelled) return
         // /kassa/nieuw and /kassa are separate route elements. Restore the
         // existing receipt on the destination page rather than relying on
         // selection state from the unmounted upload page.
-        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
         if (duplicateReceiptId) {
-          // A duplicate may be on a different server page: fetch its detail by ID.
-          setInboxPage(1)
           setFilters(DEFAULT_RECEIPT_FILTERS)
           setReceiptInboxFocusId(duplicateReceiptId)
           setSelectedReceiptIds([duplicateReceiptId])
@@ -2485,17 +2501,24 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       setInboxPage(1)
       setFilters(DEFAULT_RECEIPT_FILTERS)
       setReceiptInboxFocusId(existingReceiptId)
-      const refreshedItems = await loadReceipts(householdId, {
-        preserveDuplicateNotice: true,
-        openReceiptId: existingReceiptId,
-        prefetchedDetail: existingReceipt,
-      })
-      const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
-      await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
-      // Select only after refreshing the inbox: pruneReceiptUiState must not
-      // remove the target before the refreshed receipt has entered state.
-      setSelectedReceiptIds([existingReceiptId])
-      if (isAddReceiptRoute) navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
+      if (isAddReceiptRoute) {
+        // The new route owns its own inbox state; focus there after navigation.
+        navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
+      } else {
+        const refreshedItems = await loadReceipts(householdId, {
+          page: 1,
+          resetFilters: true,
+          focusReceiptId: existingReceiptId,
+          initialize: false,
+          preserveDuplicateNotice: true,
+          openReceiptId: existingReceiptId,
+          prefetchedDetail: existingReceipt,
+        })
+        const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
+        await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
+        // Select only after the household-scoped page containing this ID loaded.
+        setSelectedReceiptIds([existingReceiptId])
+      }
     }
 
     try {
