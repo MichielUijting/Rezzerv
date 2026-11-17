@@ -125,7 +125,7 @@ test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als rese
   await expect(scanner.locator('.rz-inline-feedback')).toHaveCount(0)
   await expect(scanner.getByRole('button', { name: 'Camera opnieuw proberen' })).toBeVisible()
   await expect(scanner.getByRole('button', { name: 'Barcode uit foto' })).toBeVisible()
-  await expect(scanner).toContainText('bestaande foto')
+  await expect(scanner).toContainText('Geen werkende camera? Kies Barcode uit foto')
   const initialAttempts = await page.evaluate(() => window.__ed2GetUserMediaAttempts())
   expect(initialAttempts).toBeGreaterThan(0)
   // No automatic permission/compatibility rewrite without explicit action.
