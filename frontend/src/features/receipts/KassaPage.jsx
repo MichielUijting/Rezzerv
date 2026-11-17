@@ -2410,7 +2410,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         }
         if (sharedResult?.shareStatus === 'success') {
           if (sharedResult.duplicate) {
-            await announceDuplicate(sharedResult, items)
+            // Bootstrap has the resolved household ID; the React state value
+            // captured by this mount's callback can still be empty here.
+            await announceDuplicate(sharedResult, items, resolvedHouseholdId)
           } else {
             setDuplicateNotice('')
             setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
@@ -2447,7 +2449,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
-  async function announceDuplicate(result, sourceItems = receipts) {
+  async function announceDuplicate(result, sourceItems = receipts, targetHouseholdId = householdId) {
     let message = formatDuplicateImportMessageV2(result)
     const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
@@ -2505,7 +2507,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         // The new route owns its own inbox state; focus there after navigation.
         navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
       } else {
-        const refreshedItems = await loadReceipts(householdId, {
+        const refreshedItems = await loadReceipts(targetHouseholdId, {
           page: 1,
           resetFilters: true,
           focusReceiptId: existingReceiptId,
