@@ -5,7 +5,7 @@ import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
 
 /** One named Catalogus product. Desktop stays manual; mobile can scan directly. */
 export default function CatalogBarcodeEntry({
-  globalProductId, primaryGtin, productName = '', canEdit, canReplace = false,
+  globalProductId, primaryGtin, productName = '', canEdit, canReplace = false, canScan = false,
   mobile, onSaved,
 }) {
   const [gtin, setGtin] = useState('')
@@ -73,7 +73,7 @@ export default function CatalogBarcodeEntry({
           </button>
         </div>
       </form> : null}
-      {mobile && (known ? canReplace : canEdit) ? (
+      {mobile && canScan && (known ? canReplace : canEdit) ? (
         <ArticleBarcodeScanAction articleName={productName || 'Catalogusartikel'}
           currentBarcode={known} disabled={saving} onConfirm={persistBarcode}
           testId="catalog-shared-gtin-scan" />
