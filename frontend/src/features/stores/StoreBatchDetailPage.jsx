@@ -30,10 +30,8 @@ import {
   StoreArticleSelector,
 } from './storeImportShared'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
-import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
 import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
-import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
 import { isHouseholdAdminFromContext, isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import {
   DIRECT_CONSUMPTION,
@@ -236,7 +234,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
   const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
-  const [activeBarcodeLineId, setActiveBarcodeLineId] = useState('')
   const [activeDetailLineId, setActiveDetailLineId] = useState(receiptLineId)
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
@@ -283,26 +280,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
 
-
-  const {
-    videoRef: barcodeVideoRef,
-    isOpen: barcodeCameraOpen,
-    cameraState: barcodeCameraState,
-    cameraMeta: barcodeCameraMeta,
-    availableCameras: barcodeAvailableCameras,
-    startScanner: startBarcodeScanner,
-    stopScanner: stopBarcodeScanner,
-    switchCamera: switchBarcodeCamera,
-  } = useBarcodeScanner({
-    screenContext: 'Uitpakken',
-    onDetected: async (detectedBarcode) => {
-      const lineId = activeBarcodeLineId
-      const normalized = String(detectedBarcode || '').trim()
-      if (!lineId || !normalized) return
-      setBarcodeDrafts((current) => ({ ...current, [lineId]: normalized }))
-      await validateReceiptLineBarcode(lineId, normalized)
-    },
-  })
 
   function barcodeInitialValue(line) {
     return firstTextValue(line?.barcode, line?.gtin, line?.primary_gtin, line?.matched_global_product_gtin)
@@ -630,11 +607,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     } finally {
       setBusyLineId('')
     }
-  }
-
-  async function openReceiptLineBarcodeScanner(lineId) {
-    setActiveBarcodeLineId(String(lineId))
-    await startBarcodeScanner(barcodeCameraMeta.deviceId || '')
   }
 
   async function saveDirectScannedReceiptBarcode(line, gtin, { expectedOldBarcode }) {
@@ -2006,8 +1978,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   async function closeReceiptLineDetail() {
     setActiveDetailLineId('')
-    setActiveBarcodeLineId('')
-    stopBarcodeScanner()
     if (batch?.batch_id) {
       try {
         await refreshBatch(batch.batch_id)
@@ -2518,19 +2488,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             </div>
           ) : null}
-          <BarcodeScannerModal
-            open={barcodeCameraOpen}
-            title="Barcode voor bonregel scannen"
-            videoRef={barcodeVideoRef}
-            cameraState={barcodeCameraState}
-            cameraMeta={barcodeCameraMeta}
-            availableCameras={barcodeAvailableCameras}
-            onSwitchCamera={switchBarcodeCamera}
-            onClose={() => {
-              stopBarcodeScanner(true, 'uitpakken-overlay-close')
-              setActiveBarcodeLineId('')
-            }}
-          />
           {locationPickerLineId ? (() => {
             const pickerIsBulk = locationPickerMode === 'bulk'
             const pickerEntry = pickerIsBulk ? null : lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
