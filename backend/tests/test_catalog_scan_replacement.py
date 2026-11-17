@@ -176,3 +176,32 @@ def test_equivalent_gtin_alias_cannot_be_reassigned(db):
         change(new=value)
     assert err.value.status_code == 409
     assert conn.products["p1"]["primary_gtin"] == barcode("871234567890")
+
+
+def test_frontteam_replaces_only_unreferenced_gtin(db, monkeypatch):
+    conn, checks = db
+
+    def frontteam_permission(key):
+        checks.append(key)
+        if key == "platform.catalog.update":
+            raise HTTPException(status_code=403, detail="Geen Catalogusbeheerder")
+        if key != "platform.external_products.link_existing":
+            raise AssertionError("Unknown permission " + key)
+
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", frontteam_permission)
+    result = change()
+    assert result["changed"] is True
+    assert checks == ["platform.catalog.update", "platform.external_products.link_existing"]
+    assert conn.products["p1"]["primary_gtin"] == barcode("871234567891")
+
+
+def test_household_admin_alone_cannot_replace_shared_gtin(db, monkeypatch):
+    conn, checks = db
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session",
+                        lambda key: (_ for _ in ()).throw(
+                            HTTPException(status_code=403, detail="Geen platformrechten")))
+    monkeypatch.setattr(catalog_routes, "require_household_admin_from_session", lambda: None)
+    with pytest.raises(HTTPException) as error:
+        change()
+    assert error.value.status_code == 403
+    assert conn.products["p1"]["primary_gtin"] == barcode("871234567890")
