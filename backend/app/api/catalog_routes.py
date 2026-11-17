@@ -1562,6 +1562,21 @@ def set_catalog_primary_gtin(
     return {"global_product_id": global_product_id, "gtin": gtin, "changed": not bool(previous_gtin)}
 
 
+def _require_catalog_gtin_replacer() -> None:
+    """Only Catalogus editors or authorized Frontteam identity specialists.
+
+    Unlike add-only, household-admin fallback must never replace a shared
+    primary GTIN. Dependency checks in the endpoint remain fail-closed.
+    """
+    try:
+        require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
+    require_platform_permission_from_session("platform.external_products.link_existing")
+
+
 @router.put("/{global_product_id}/gtin/replace")
 def replace_catalog_primary_gtin(
     global_product_id: str,
@@ -1573,7 +1588,7 @@ def replace_catalog_primary_gtin(
     needs the existing audited correction procedure. A simple button must not
     silently invalidate old inventory or retailer evidence.
     """
-    require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+    _require_catalog_gtin_replacer()
     required_tables = {"global_products", "product_identities"}
     tables = _tables()
     if not required_tables.issubset(tables):
