@@ -217,9 +217,9 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState, pr
           <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item, ed2TableState: returnState } })}>
             Zelf zoeken in OFF
           </Button>
-          <Ed2BarcodeScanner key={item.id} receiptItemId={item.id}
+          {isMobile ? <Ed2BarcodeScanner key={item.id} receiptItemId={item.id}
             disabled={item.link_status === 'linked' && !item.manual_barcode}
-            onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} />
+            onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} /> : null}
         </div>
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
