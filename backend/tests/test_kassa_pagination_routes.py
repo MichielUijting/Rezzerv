@@ -60,3 +60,12 @@ def test_filter_and_sort_use_all_rows():
     data = _page_payload(rows, page=1, page_size=10, sort_key="total", sort_direction="asc")
     assert [x["receipt_table_id"] for x in data["items"]][:3] == ["21", "20", "19"]
     assert _page_payload(rows, page=1, page_size=10, artikelen="1")["total"] == 22
+
+
+def test_mobile_search_matches_shop_or_canonical_status():
+    rows = [_row("first", store="AH"), _row("second", store="Jumbo")]
+    result = _page_payload(rows, page=1, page_size=10, zoek="jumbo")
+    assert result["total"] == 1
+    assert result["items"][0]["receipt_table_id"] == "second"
+    result = _page_payload(rows, page=1, page_size=10, zoek="gecontroleerd")
+    assert result["total"] == 2

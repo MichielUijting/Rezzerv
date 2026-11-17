@@ -167,8 +167,9 @@ def _sort_receipts(items, sort_key, direction):
     return sorted(items, key=cmp_to_key(compare))
 
 
-def _filter_receipts(items, winkel, datum, totaal, artikelen, status):
+def _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek=""):
     terms = [str(term or "").strip().lower() for term in (winkel, datum, totaal, artikelen)]
+    search = str(zoek or "").strip().lower()
     return [
         row for row in items
         if terms[0] in str(row.get("store_name") or "").lower()
@@ -176,17 +177,18 @@ def _filter_receipts(items, winkel, datum, totaal, artikelen, status):
         and terms[2] in _money_for_filter(row.get("total_amount"), row.get("currency")).lower()
         and terms[3] in str(row.get("line_count") or 0)
         and (not status or row.get("inbox_status") == status)
+        and (not search or search in (str(row.get("store_name") or "") + " " + str(row.get("inbox_status") or "")).lower())
     ]
 
 
 def _page_payload(rows, *, page, page_size, winkel="", datum="", totaal="",
-                  artikelen="", status="", sort_key="date", sort_direction="desc"):
+                  artikelen="", status="", zoek="", sort_key="date", sort_direction="desc"):
     items = _deduped_receipts(rows)
     counts = {
         "Controle nodig": sum(item["inbox_status"] == "Controle nodig" for item in items),
         "Gecontroleerd": sum(item["inbox_status"] == "Gecontroleerd" for item in items),
     }
-    filtered = _filter_receipts(items, winkel, datum, totaal, artikelen, status)
+    filtered = _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek)
     sorted_items = _sort_receipts(filtered, sort_key, sort_direction)
     start = (page - 1) * page_size
     return {
@@ -208,6 +210,7 @@ def list_kassa_receipts_page(
     totaal: str = Query(default="", max_length=100),
     artikelen: str = Query(default="", max_length=100),
     status: str = Query(default="", pattern="^(|Controle nodig|Gecontroleerd)$"),
+    zoek: str = Query(default="", max_length=200),
     sort_key: str = Query(default="date", pattern="^(store|date|total|items)$"),
     sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
     initialize: bool = Query(default=False),
@@ -231,7 +234,7 @@ def list_kassa_receipts_page(
     queried = perf_counter()
     result = _page_payload(
         rows, page=page, page_size=page_size, winkel=winkel, datum=datum,
-        totaal=totaal, artikelen=artikelen, status=status,
+        totaal=totaal, artikelen=artikelen, status=status, zoek=zoek,
         sort_key=sort_key, sort_direction=sort_direction,
     )
     elapsed = perf_counter() - started
