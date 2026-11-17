@@ -2368,13 +2368,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd>
                     <BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} showScan={false} />
-                    {isMobileViewport && isFrontteamMemberFromContext(readStoredAuthContext()) ? (
+                    {isMobileViewport && (
+                      isFrontteamMemberFromContext(readStoredAuthContext())
+                      || isHouseholdAdminFromContext(readStoredAuthContext())
+                    ) ? (
                       <ArticleBarcodeScanAction articleName={line.article_name_raw || 'Bonartikel'}
                         currentBarcode={barcodeInitialValue(line)}
                         testId={`unpack-line-barcode-scan-${line.id}`}
                         disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
                         onConfirm={(gtin, options) => saveDirectScannedReceiptBarcode(line, gtin, options)} />
                     ) : null}
+                    {isMobileViewport && activeDetailEntry.processingStatus === 'processed'
+                      ? <p className="rz-modal-text">Deze bonregel is al verwerkt. De barcode kan hier niet meer worden gewijzigd.</p>
+                      : null}
                   </dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
