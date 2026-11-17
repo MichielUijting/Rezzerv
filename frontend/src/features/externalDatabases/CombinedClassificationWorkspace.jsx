@@ -60,18 +60,22 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
   const { showFeedback } = useAppFeedback()
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const mayUpdateGpc = canCurrentUserPerform('gpc.update', readStoredAuthContext())
-  const selected = useMemo(() => products.find((item) => item.id === selectedId) || null, [products, selectedId])
+  const selected = useMemo(() => loading || error ? null
+    : products.find((item) => item.id === selectedId) || null,
+  [products, selectedId, loading, error])
 
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
       setLoading(true)
+      setProducts([])
       setError('')
       setTaskCount(null)
       setProductTotal(null)
       try {
         const items = []
         let total = 0
+        let previewCommitted = false
         do {
           const response = await fetchJsonWithAuth(
             `/api/cbs-classifications/workqueue?limit=${PAGE_SIZE}&offset=${items.length}`,
@@ -102,6 +106,13 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
             throw new Error('De werkvoorraad bevat dubbele of ongeldige Catalogusidentiteiten.')
           }
           items.push(...data.items)
+          // Render the first eight articles as soon as the first validated
+          // 100-product response arrives. Until all batches are verified the
+          // table is read-only and no global counts/filters are final.
+          if (!previewCommitted && items.length > 0 && !controller.signal.aborted) {
+            previewCommitted = true
+            setProducts(items.slice(0, 8))
+          }
         } while (items.length < total)
         if (!controller.signal.aborted) {
           setProducts(items)
@@ -109,7 +120,11 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
           setSelectedIds((previous) => previous.filter((id) => liveIds.has(id)))
         }
       } catch (err) {
-        if (!controller.signal.aborted) setError(err.message || 'Artikelen niet beschikbaar.')
+        if (!controller.signal.aborted) {
+          // Partial data is never presented as a verified complete worklist.
+          setProducts([])
+          setError(err.message || 'Artikelen niet beschikbaar.')
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
@@ -214,9 +229,16 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
       </label>
     </div>
 
+    {loading && products.length > 0 ? <p role="status" data-testid="classification-first-page-preview">
+      De eerste acht artikelen zijn alvast zichtbaar. Inhuis controleert nog de volledige
+      werkvoorraad; zoeken, selecteren en bewerken worden pas beschikbaar na afronding.
+    </p> : null}
+    <fieldset disabled={loading || Boolean(error)} aria-busy={loading}
+      style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
     <DataTable
       dataTestId="combined-classification-articles"
-      columns={tableColumns} data={error ? [] : products}
+      columns={tableColumns} data={error ? [] : loading ? products.slice(0, 8) : products}
+      pageReady={!loading}
       getRowKey={(item) => item.id}
       pageSize={8}
       onFilteredRowsChange={onFilteredRowsChange}
@@ -235,11 +257,11 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
       renderRow={(item) => <tr key={item.id} tabIndex={0}
         aria-selected={selectedId === item.id}
         className={selectedId === item.id ? 'rz-row-selected' : ''}
-        onClick={() => setSelectedId(item.id)}
-        onDoubleClick={() => setSelectedId(item.id)}
+        onClick={() => { if (!loading) setSelectedId(item.id) }}
+        onDoubleClick={() => { if (!loading) setSelectedId(item.id) }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return
-          if (event.key === 'Enter' || event.key === ' ') {
+          if (!loading && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault()
             setSelectedId(item.id)
           }
@@ -256,6 +278,7 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
         </td>)}
       </tr>}
     />
+    </fieldset>
     {selected ? <div className="rz-classification-detail" data-testid="combined-selected-article">
       <div className="rz-classification-selected-heading">
         <strong>{selected.name}{selected.brand ? ' · ' + selected.brand : ''}</strong>

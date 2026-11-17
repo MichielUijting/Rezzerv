@@ -13,38 +13,53 @@ from sqlalchemy import text
 
 
 CLASSIFICATION_SQL = """
-    SELECT gp.id, gp.name, gp.brand, gp.primary_gtin,
+    -- Page canonical products *before* joining classifications or aggregating
+    -- retailer/synonym relationships. Preserve identity and total semantics.
+    WITH requested_page AS MATERIALIZED (
+        SELECT gp.id, gp.name, gp.brand, gp.primary_gtin
+          FROM global_products gp
+         WHERE LOWER(COALESCE(gp.status, '')) <> 'deleted'
+         ORDER BY LOWER(gp.name), gp.id
+         LIMIT :limit OFFSET :offset
+    ),
+    page_links AS (
+        SELECT e.global_product_id, COUNT(*) AS confirmed_links
+          FROM external_article_product_links e
+          JOIN requested_page page ON page.id = e.global_product_id
+         WHERE e.status = 'confirmed'
+         GROUP BY e.global_product_id
+    ),
+    page_synonym_ids AS (
+        SELECT s.left_product_id AS id
+          FROM article_synonym_links s
+          JOIN requested_page page ON page.id = s.left_product_id
+        UNION ALL
+        SELECT s.right_product_id AS id
+          FROM article_synonym_links s
+          JOIN requested_page page ON page.id = s.right_product_id
+    ),
+    page_synonyms AS (
+        SELECT id, COUNT(*) AS confirmed_synonyms
+          FROM page_synonym_ids
+         GROUP BY id
+    )
+    SELECT page.id, page.name, page.brand, page.primary_gtin,
            gpc.brick_code AS gpc_code,
            cbs.cbs_code, cbs.reference_version AS cbs_reference_version,
            cbs.version AS cbs_version, cbs.is_active AS cbs_active,
            ref.name_nl AS cbs_name,
            COALESCE(links.confirmed_links, 0) AS confirmed_source_links,
            COALESCE(synonyms.confirmed_synonyms, 0) AS confirmed_synonyms
-      FROM global_products gp
-      LEFT JOIN global_product_gpc_bricks gpc ON gpc.global_product_id = gp.id
-      LEFT JOIN global_product_cbs_classifications cbs ON cbs.global_product_id = gp.id
+      FROM requested_page page
+      LEFT JOIN global_product_gpc_bricks gpc ON gpc.global_product_id = page.id
+      LEFT JOIN global_product_cbs_classifications cbs ON cbs.global_product_id = page.id
       LEFT JOIN cbs_ecoicop_categories ref
              ON ref.cbs_code = cbs.cbs_code
             AND ref.reference_version = cbs.reference_version
-      LEFT JOIN (
-          SELECT global_product_id, COUNT(*) AS confirmed_links
-            FROM external_article_product_links
-           WHERE status = 'confirmed'
-           GROUP BY global_product_id
-      ) links ON links.global_product_id = gp.id
-      LEFT JOIN (
-          SELECT id, COUNT(*) AS confirmed_synonyms
-            FROM (
-                SELECT left_product_id AS id FROM article_synonym_links
-                UNION ALL
-                SELECT right_product_id AS id FROM article_synonym_links
-            ) participants
-           GROUP BY id
-      ) synonyms ON synonyms.id = gp.id
-     WHERE LOWER(COALESCE(gp.status, '')) <> 'deleted'
-     ORDER BY LOWER(gp.name), gp.id
+      LEFT JOIN page_links links ON links.global_product_id = page.id
+      LEFT JOIN page_synonyms synonyms ON synonyms.id = page.id
+     ORDER BY LOWER(page.name), page.id
 """
-
 
 def project_classification_tasks(rows):
     """Fail closed on duplicate central identities instead of hiding a join error."""
@@ -91,7 +106,7 @@ def load_classification_workqueue(conn, *, offset=0, limit=100):
         SELECT COUNT(*) FROM global_products
          WHERE LOWER(COALESCE(status, '')) <> 'deleted'
     """)).scalar_one())
-    rows = conn.execute(text(CLASSIFICATION_SQL + " LIMIT :limit OFFSET :offset"),
+    rows = conn.execute(text(CLASSIFICATION_SQL),
                         {"limit": limit, "offset": offset}).mappings().all()
     items, tasks = project_classification_tasks(rows)
     # Page-scoped counts must never masquerade as platform-wide totals.

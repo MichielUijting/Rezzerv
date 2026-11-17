@@ -143,4 +143,23 @@ assert.throws(() => projectArticleWorkQueue(source, products, tasks, {
   synonymAnalysis: { summary: { candidate_pairs: 1 }, items: [] },
 }), /ontbreken/)
 
+// Classification list page 1 must be visible after the first verified batch,
+// without lying about platform-wide counts or allowing partial-list actions.
+import { readFileSync } from 'node:fs'
+const workspace = readFileSync(new URL('../src/features/externalDatabases/CombinedClassificationWorkspace.jsx', import.meta.url), 'utf8')
+for (const expected of [
+  'setProducts(items.slice(0, 8))',
+  'data-testid="classification-first-page-preview"',
+  'fieldset disabled={loading || Boolean(error)} aria-busy={loading}',
+  'data={error ? [] : loading ? products.slice(0, 8) : products}',
+  'pageReady={!loading}',
+  'setProducts([])',
+  "(!loading && (event.key === 'Enter' || event.key === ' '))",
+]) {
+  assert.ok(workspace.includes(expected), 'Classificeren progressive first page: ' + expected)
+}
+assert.match(workspace, /!loading && !error && productTotal !== null && taskCount !== null/)
+assert.match(workspace, /const currentIds = new Set\(items.map\(\(item\) => item\.id\)\)/)
+assert.match(workspace, /setSelectedIds\(\(previous\) => previous\.filter\(\(id\) => liveIds\.has\(id\)\)\)/)
+
 console.log('ARTICLE_MANAGEMENT_WORKQUEUE_MODEL_GREEN')
