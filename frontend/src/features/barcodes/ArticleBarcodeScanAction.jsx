@@ -15,6 +15,7 @@ import BarcodeScannerModal from './BarcodeScannerModal.jsx'
  */
 export default function ArticleBarcodeScanAction({
   articleName, currentBarcode = '', onConfirm, prepareConfirmation = null, disabled = false,
+  showSuccessOnConfirm = true,
   testId = 'article-barcode-scan', title = 'Barcode scannen',
 }) {
   const mobile = useMobileAppViewport()
@@ -75,7 +76,7 @@ export default function ArticleBarcodeScanAction({
           setSaving(true)
           try {
             await onConfirm(barcode, { replace, expectedOldBarcode: existing, prepared })
-            showFeedback({
+            if (showSuccessOnConfirm) showFeedback({
               variant: 'success',
               message: 'Barcode ' + barcode + (replace ? ' vervangen' : ' opgeslagen') + ' bij ' + name + '.',
             })
