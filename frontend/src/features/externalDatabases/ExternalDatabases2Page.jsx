@@ -108,7 +108,13 @@ export default function ExternalDatabases2Page() {
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
   const [queueTaskFocus, setQueueTaskFocus] = useState(null)
-  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
+  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(() => {
+    // Initialize BEFORE selecting the ED2 row, so the automatic conflict
+    // overlay receives the scanned GTIN on its very first render.
+    const receiptItemId = String(location.state?.selectedItemId || '')
+    const value = String(location.state?.scannedBarcode || '').trim()
+    return receiptItemId && value ? { receiptItemId, value } : null
+  })
   // A transferred scan is only input for the existing confirmed ED2 workflow.
   // It must not write a Catalogus or household link during navigation.
   const [selectedIds, setSelectedIds] = useState([])
