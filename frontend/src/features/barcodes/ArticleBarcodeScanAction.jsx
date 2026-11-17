@@ -14,7 +14,7 @@ import BarcodeScannerModal from './BarcodeScannerModal.jsx'
  * outdated/conflicting ownership and must not mutate receipt/stock quantities.
  */
 export default function ArticleBarcodeScanAction({
-  articleName, currentBarcode = '', onConfirm, disabled = false,
+  articleName, currentBarcode = '', onConfirm, prepareConfirmation = null, disabled = false,
   testId = 'article-barcode-scan', title = 'Barcode scannen',
 }) {
   const mobile = useMobileAppViewport()
@@ -29,7 +29,7 @@ export default function ArticleBarcodeScanAction({
   } = useBarcodeScanner({
     timeoutMs: 0,
     screenContext: 'Barcode voor ' + name,
-    onDetected: (rawBarcode) => {
+    onDetected: async (rawBarcode) => {
       const barcode = String(rawBarcode || '').trim()
       if (!/^(?:\d{8}|\d{12,14})$/.test(barcode)) {
         showFeedback({ variant: 'warning', message: 'Geen geldige barcode gelezen. Probeer opnieuw.' })
@@ -44,13 +44,28 @@ export default function ArticleBarcodeScanAction({
         return
       }
       const replace = Boolean(existing)
+      let prepared = null
+      if (typeof prepareConfirmation === 'function') {
+        try {
+          prepared = await prepareConfirmation(barcode, {
+            replace, expectedOldBarcode: existing,
+          })
+        } catch (error) {
+          showFeedback({
+            variant: 'warning',
+            title: 'Barcode niet te vervangen',
+            message: error?.message || 'De bestaande identiteit kon niet veilig worden gecontroleerd.',
+          })
+          return
+        }
+      }
       showFeedback({
         variant: 'warning',
         title: 'Barcode voor ' + name,
         message: replace
           ? 'Bestaande barcode ' + existing + ' vervangen door ' + barcode + '?'
           : 'Barcode ' + barcode + ' opslaan bij ' + name + '?',
-        detail: 'Deze wijziging geldt alleen voor het hierboven genoemde artikel. De identiteit wordt vóór opslaan gecontroleerd. Je voorraad en aankopen worden niet door het scannen gewijzigd.',
+        detail: ['Deze wijziging geldt alleen voor het hierboven genoemde artikel. De identiteit wordt vóór opslaan gecontroleerd. Je voorraad en aankopen worden niet door het scannen gewijzigd.', prepared?.detail].filter(Boolean).join(' '),
         dismissMode: 'blocked',
         primaryActionLabel: replace ? 'Vervangen' : 'Opslaan',
         secondaryActionLabel: 'Annuleren',
@@ -59,7 +74,7 @@ export default function ArticleBarcodeScanAction({
           if (saving) return false
           setSaving(true)
           try {
-            await onConfirm(barcode, { replace, expectedOldBarcode: existing })
+            await onConfirm(barcode, { replace, expectedOldBarcode: existing, prepared })
             showFeedback({
               variant: 'success',
               message: 'Barcode ' + barcode + (replace ? ' vervangen' : ' opgeslagen') + ' bij ' + name + '.',
