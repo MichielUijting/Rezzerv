@@ -703,7 +703,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByText(/Status:.*Vereenvoudigingsniveau:/)).toHaveCount(0);
     await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
     await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
-    
+
     // Een gewone tik op de mobiele bonregel opent het artikel met zijn scanner.
     const pendingRow = page.getByTestId(`receipt-line-${lineId}`);
     await pendingRow.locator('.rz-store-primary').click();
