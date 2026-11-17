@@ -9,6 +9,7 @@ export default function BarcodeIdentityField({
   onChange,
   onValidate,
   onScan,
+  showScan = true,
 }) {
   const busy = state.status === 'loading'
   return (
@@ -27,7 +28,7 @@ export default function BarcodeIdentityField({
         data-testid={`receipt-line-barcode-input-${lineId}`}
       />
       <div className="rz-barcode-field__actions">
-        <Button
+        {showScan && onScan ? <Button
           type="button"
           variant="secondary"
           onClick={onScan}
@@ -35,7 +36,7 @@ export default function BarcodeIdentityField({
           data-testid={`receipt-line-barcode-scan-${lineId}`}
         >
           Scannen
-        </Button>
+        </Button> : null}
         <Button
           type="button"
           variant="secondary"

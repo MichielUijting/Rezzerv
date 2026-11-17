@@ -177,7 +177,7 @@ def test_household_owner_has_narrow_add_only_fallback(catalog_db, monkeypatch):
 
     monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", no_platform_access)
     assert write("p1", gtin())["changed"] is True
-    assert platform_checks == ["denied"]
+    assert platform_checks == ["denied", "denied"]
     assert household_checks == [True]
     assert conn.products["p1"]["primary_gtin"] == gtin()
 
@@ -207,3 +207,20 @@ def test_other_platform_auth_errors_do_not_grant_household_fallback(catalog_db, 
     with pytest.raises(HTTPException) as error:
         write("p1", gtin())
     assert error.value.status_code == 401
+
+
+def test_frontteam_may_add_missing_gtin_but_not_modify_other_catalog_fields(catalog_db, monkeypatch):
+    conn, platform_checks, household_checks = catalog_db
+
+    def frontteam_permission(key):
+        platform_checks.append(key)
+        if key == "platform.catalog.update":
+            raise HTTPException(status_code=403, detail="Geen Catalogusbeheerder")
+        if key != "platform.external_products.link_existing":
+            raise AssertionError("Unexpected permission " + key)
+
+    monkeypatch.setattr(catalog_routes, "require_platform_permission_from_session", frontteam_permission)
+    assert write("p1", gtin())["changed"] is True
+    assert platform_checks == ["platform.catalog.update", "platform.external_products.link_existing"]
+    assert household_checks == []
+    assert conn.products["p1"]["primary_gtin"] == gtin()

@@ -210,6 +210,30 @@ def save_barcode_for_household_article(
 
     try:
         with engine.begin() as conn:
+            if "expected_old_gtin" in payload:
+                # Explicit scanner updates must never apply to an article that
+                # changed after rendering. Lock its current row and keep that
+                # lock through the canonical identity/linking operation.
+                current = conn.execute(text("""
+                    SELECT barcode FROM household_articles
+                    WHERE id = :article_id AND household_id = :household_id
+                    FOR UPDATE
+                """), {
+                    "article_id": str(payload.get("household_article_id") or ""),
+                    "household_id": str(household_context.active_household_id),
+                }).mappings().first()
+                if not current:
+                    raise HTTPException(
+                        status_code=404, detail="Dit huishoudartikel bestaat niet meer in je huishouden."
+                    )
+                expected = str(payload.get("expected_old_gtin") or "").strip()
+                actual = str(current.get("barcode") or "").strip()
+                if actual != expected:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="De barcode van dit artikel is intussen veranderd of verschilt van de bonregel. "
+                               "Open het artikel opnieuw; er is niets opgeslagen."
+                    )
             return save_gtin_catalog_and_household_link(
                 conn,
                 household_id=household_context.active_household_id,
