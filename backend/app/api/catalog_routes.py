@@ -1640,7 +1640,11 @@ def replace_catalog_primary_gtin(
         if old_claim:
             raise HTTPException(status_code=409,
                 detail="Deze barcode heeft bestaande identiteitskoppelingen. Gebruik de gecontroleerde correctie in Artikelbeheer.")
-        if "household_articles" in tables and "global_product_id" in _columns("household_articles"):
+        if "household_articles" in tables:
+            household_columns = _columns("household_articles")
+            if "global_product_id" not in household_columns:
+                raise HTTPException(status_code=503,
+                    detail="Huishoudkoppelingen konden niet veilig worden gecontroleerd.")
             linked_household = conn.execute(text("""
                 SELECT id FROM household_articles
                 WHERE global_product_id = :product_id LIMIT 1
@@ -1648,6 +1652,15 @@ def replace_catalog_primary_gtin(
             if linked_household:
                 raise HTTPException(status_code=409,
                     detail="Dit product is aan huishoudartikelen gekoppeld. Gebruik de gecontroleerde correctie in Artikelbeheer.")
+            if "barcode" in household_columns:
+                old_household_claim = conn.execute(text("""
+                    SELECT id FROM household_articles WHERE barcode IN :aliases LIMIT 1
+                """).bindparams(bindparam("aliases", expanding=True)), {
+                    "aliases": old_aliases,
+                }).first()
+                if old_household_claim:
+                    raise HTTPException(status_code=409,
+                        detail="De oude barcode wordt nog door een huishoudartikel gebruikt. Gebruik de gecontroleerde correctie in Artikelbeheer.")
         if "external_article_product_links" in tables:
             link_columns = _columns("external_article_product_links")
             if "global_product_id" not in link_columns:
