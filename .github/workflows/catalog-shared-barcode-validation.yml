@@ -10,10 +10,10 @@ on:
       - 'frontend/src/features/externalDatabases/BarcodeImportReview.jsx'
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/app/api/barcode_routes.py'
-      - 'backend/app/services/universal_scan_identification_service.py'
-      - 'backend/tests/test_universal_scan_identification.py'
-      - 'frontend/src/features/barcodes/UniversalScanIdentifyPage.jsx'
-      - 'frontend/tests/universal-scan-identify.contract.mjs'
+      - 'backend/tests/test_catalog_scan_replacement.py'
+      - 'frontend/src/features/barcodes/ArticleBarcodeScanAction.jsx'
+      - 'frontend/src/features/externalDatabases/Ed2ArticleBarcodeAction.jsx'
+      - 'frontend/tests/article-barcode-scan.contract.mjs'
       - 'frontend/tests/barcode-camera-recovery.contract.mjs'
       - 'frontend/src/lib/barcodeScanner.js'
       - 'frontend/src/lib/useBarcodeScanner.js'
@@ -85,8 +85,8 @@ jobs:
           python -m pytest -q backend/tests/test_external_ed2_delete_service.py
           python -m pytest -q backend/tests/test_ed2_saved_barcode_catalog.py backend/tests/test_external_unlinked_articles_service.py
           python -m pytest -q backend/tests/test_ed2_barcode_conflict_resolution.py
-          python -m py_compile backend/app/api/barcode_routes.py backend/app/services/universal_scan_identification_service.py backend/tests/test_universal_scan_identification.py
-          python -m pytest -q backend/tests/test_universal_scan_identification.py
+          python -m py_compile backend/app/api/barcode_routes.py backend/tests/test_catalog_scan_replacement.py
+          python -m pytest -q backend/tests/test_catalog_scan_replacement.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -98,6 +98,6 @@ jobs:
           node tests/catalog-product-image.contract.mjs
           node tests/inhuis-feedback-bar.contract.mjs
           node tests/ed2-delete-catalog.contract.mjs
-          node tests/universal-scan-identify.contract.mjs
+          node tests/article-barcode-scan.contract.mjs
           node tests/barcode-camera-recovery.contract.mjs
           npm run build
