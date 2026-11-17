@@ -2326,7 +2326,8 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   }, [householdId, isAddReceiptRoute, inboxPage, filters, inboxSort])
 
   useEffect(() => {
-    if (isAddReceiptRoute || isUploading || !householdId) return undefined
+    if (isAddReceiptRoute || isUploading) return undefined
+    if (!householdId) return undefined
     let cancelled = false
     const refreshKassaInbox = async () => {
       if (cancelled || inboxBootstrapRef.current || receiptInboxRefreshInFlightRef.current) return
