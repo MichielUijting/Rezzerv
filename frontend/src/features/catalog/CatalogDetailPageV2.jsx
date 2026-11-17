@@ -64,7 +64,8 @@ export default function CatalogDetailPageV2() {
   const authContext = readStoredAuthContext()
   const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
   // A household owner can add a missing valid GTIN, but cannot edit Catalogus photos or existing GTINs.
-  const canAddCatalogGtin = canUpdateCatalogImage || isHouseholdAdminFromContext(authContext)
+  const canAddCatalogGtin = canUpdateCatalogImage || isHouseholdAdminFromContext(authContext) || isFrontteamMemberFromContext(authContext)
+  const canReplaceCatalogGtin = canUpdateCatalogImage || isFrontteamMemberFromContext(authContext)
   const uploadInputRef = useRef(null)
   const cameraVideoRef = useRef(null)
   const cameraStreamRef = useRef(null)
@@ -356,7 +357,7 @@ export default function CatalogDetailPageV2() {
                 </div>
               </section>
 
-              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canUpdateCatalogImage} canScan={isFrontteamMemberFromContext(authContext)} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
+              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canReplaceCatalogGtin} canScan={isFrontteamMemberFromContext(authContext)} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
 
               <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-gpc">
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
@@ -486,7 +487,7 @@ export default function CatalogDetailPageV2() {
                 </div>
               </section>
 
-              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canUpdateCatalogImage} canScan={isFrontteamMemberFromContext(authContext)} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
+              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canReplaceCatalogGtin} canScan={isFrontteamMemberFromContext(authContext)} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
