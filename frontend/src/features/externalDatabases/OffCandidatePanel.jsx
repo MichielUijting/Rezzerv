@@ -7,7 +7,7 @@ import { displayRecognition, displaySource } from './offCandidatePresentation'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import { ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
-import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ArticleBarcodeAction from './Ed2ArticleBarcodeAction.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 const columns = [
@@ -204,6 +204,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState, pr
   if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
       data-testid="ed2-barcode-conflict-panel">
+      {isMobile ? <Ed2ArticleBarcodeAction item={item} onSaved={onLinkOutcome} /> : null}
       <Ed2ManualBarcodeEntry item={item} scannedBarcode={preScannedBarcode} onSaved={onLinkOutcome} />
     </section>
   )
@@ -217,9 +218,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState, pr
           <Button type="button" variant="secondary" onClick={() => navigate('/externe-databases-2/off-zoeken/' + encodeURIComponent(item.id), { state: { item, ed2TableState: returnState } })}>
             Zelf zoeken in OFF
           </Button>
-          {isMobile ? <Ed2BarcodeScanner key={item.id} receiptItemId={item.id} articleLabel={item.receipt_line_text}
-            disabled={item.link_status === 'linked' && !item.manual_barcode}
-            onScanned={(value) => setScannedBarcode({ receiptItemId: item.id, value })} /> : null}
+          {isMobile ? <Ed2ArticleBarcodeAction key={item.id} item={item} onSaved={onLinkOutcome} /> : null}
         </div>
         <Ed2ManualBarcodeEntry item={item} scannedBarcode={scannedBarcode} onSaved={onLinkOutcome} />
         {loading ? <p role="status">Kandidaten zoeken bij de winkel en in Open Food Facts...</p> : null}
