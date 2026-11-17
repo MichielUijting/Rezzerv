@@ -23,7 +23,30 @@ async function request(url, payload) {
 export default function Ed2ArticleBarcodeAction({ item, onSaved }) {
   if (!item?.id) return null
   const previous = gtinFromItem(item)
-  async function confirm(barcode, { replace, expectedOldBarcode }) {
+  async function prepare(barcode, { replace, expectedOldBarcode }) {
+    if (!replace) return null
+    if (previous !== expectedOldBarcode) {
+      throw new Error('De bestaande barcode is gewijzigd. Open het artikel opnieuw.')
+    }
+    const lidl = isLidl(item) && Boolean(item.manual_barcode)
+    const data = lidl
+      ? { receipt_item_id: item.id, new_gtin: barcode }
+      : { receipt_item_id: item.id, mode: 'use_other', new_gtin: barcode }
+    const route = lidl
+      ? '/api/catalog/ed2/manual-barcodes/lidl/preview-correction'
+      : '/api/catalog/ed2/manual-barcodes/conflicts/preview'
+    const preview = await request(route, data)
+    if (!preview.can_confirm || !preview.preview_fingerprint) {
+      throw new Error((preview.blocked_reasons || []).join(' ')
+        || 'Deze barcode heeft bestaande koppelingen en kan niet veilig worden vervangen.')
+    }
+    return {
+      lidl, data, preview,
+      detail: 'De bestaande winkel- en Cataloguskoppelingen zijn gecontroleerd. Alleen de correctie voor dit exacte bonartikel wordt toegepast. Bestaande kassabonnen, huishoudartikelen en voorraad blijven behouden.',
+    }
+  }
+
+  async function confirm(barcode, { replace, expectedOldBarcode, prepared }) {
     if (!replace) {
       const data = await request('/api/catalog/ed2/manual-barcodes', {
         receipt_item_id: item.id, gtin: barcode,
@@ -38,37 +61,26 @@ export default function Ed2ArticleBarcodeAction({ item, onSaved }) {
       throw new Error('De bestaande barcode is gewijzigd. Open het artikel opnieuw.')
     }
 
-    // Old retailer claims can affect other data. Always use the repository's
-    // immutable preview fingerprint and authorized correction endpoint.
-    if (isLidl(item) && item.manual_barcode) {
-      const preview = await request('/api/catalog/ed2/manual-barcodes/lidl/preview-correction', {
-        receipt_item_id: item.id, new_gtin: barcode,
-      })
-      if (!preview.can_confirm) throw new Error(
-        (preview.blocked_reasons || []).join(' ') || 'Deze Lidl-correctie is niet veilig.'
-      )
-      const result = await request('/api/catalog/ed2/manual-barcodes/lidl/confirm-correction', {
-        receipt_item_id: item.id,
-        new_gtin: barcode,
-        expected_old_gtin: expectedOldBarcode,
-        preview_fingerprint: preview.preview_fingerprint,
-      })
-      if (result.corrected !== true) throw new Error('Barcodevervanging is niet bevestigd.')
-    } else {
-      const data = { receipt_item_id: item.id, mode: 'use_other', new_gtin: barcode }
-      const preview = await request('/api/catalog/ed2/manual-barcodes/conflicts/preview', data)
-      if (!preview.can_confirm) throw new Error(
-        (preview.blocked_reasons || []).join(' ') ||
-        'Deze barcode kan niet automatisch worden vervangen. Gebruik de bestaande conflictcontrole.'
-      )
-      const result = await request('/api/catalog/ed2/manual-barcodes/conflicts/confirm', {
-        ...data, preview_fingerprint: preview.preview_fingerprint,
-      })
-      if (result.corrected !== true) throw new Error('Barcodevervanging is niet bevestigd.')
+    // The user saw this exact server-side impact preview in the same
+    // Save/Replace/Cancel overlay, before authorizing the correction.
+    if (!prepared?.preview?.can_confirm || !prepared.preview.preview_fingerprint
+        || prepared.data?.new_gtin !== barcode || prepared.data.receipt_item_id !== item.id) {
+      throw new Error('De verplichte gevolgencontrole ontbreekt. Scan opnieuw.')
+    }
+    const route = prepared.lidl
+      ? '/api/catalog/ed2/manual-barcodes/lidl/confirm-correction'
+      : '/api/catalog/ed2/manual-barcodes/conflicts/confirm'
+    const response = await request(route, {
+      ...prepared.data,
+      ...(prepared.lidl ? { expected_old_gtin: expectedOldBarcode } : {}),
+      preview_fingerprint: prepared.preview.preview_fingerprint,
+    })
+    if (response.corrected !== true) {
+      throw new Error('De barcodevervanging is niet bevestigd. De vorige barcode blijft behouden.')
     }
     onSaved?.({ status: 'success', message: 'Barcode vervangen voor ' + item.receipt_line_text })
   }
   return <ArticleBarcodeScanAction articleName={item.receipt_line_text}
-    currentBarcode={previous} onConfirm={confirm}
+    currentBarcode={previous} prepareConfirmation={prepare} onConfirm={confirm}
     testId="ed2-article-barcode-scan" />
 }
