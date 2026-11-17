@@ -85,10 +85,9 @@ const modal = readFileSync(fileURLToPath(new URL('../src/features/barcodes/Barco
 assert.match(modal, /barcode-camera-temporary-consent/)
 assert.match(modal, /onPrimaryAction: \(\) => \{ onTryCompatibility\(\); return true \}/)
 assert.match(modal, /privacyinstellingen van je laptop of browser niet zelf aanpassen/)
-const universal = readFileSync(fileURLToPath(new URL('../src/features/barcodes/UniversalScanIdentifyPage.jsx', import.meta.url)), 'utf8')
-const ed2 = readFileSync(fileURLToPath(new URL('../src/features/externalDatabases/Ed2BarcodeScanner.jsx', import.meta.url)), 'utf8')
-assert.match(universal, /onTryCompatibility=\{\(\) => void startCompatibleCamera\(\)\}/)
-assert.match(ed2, /onTryCompatibility=\{\(\) => void startCompatibleCamera\(\)\}/)
-assert.doesNotMatch(ed2, /cameraErrorRevision|ed2-barcode-scanner-message/,
-  'ED2 must not display two camera error overlays')
+const article = readFileSync(fileURLToPath(new URL('../src/features/barcodes/ArticleBarcodeScanAction.jsx', import.meta.url)), 'utf8')
+assert.match(article, /onTryCompatibility=\{\(\) => void startCompatibleCamera\(\)\}/)
+assert.match(article, /ArticleBarcodeScanAction/)
+assert.doesNotMatch(article, /cameraErrorRevision|ed2-barcode-scanner-message/,
+  'Article scanner must not display multiple camera error overlays')
 console.log('BARCODE_CAMERA_CONSENT_RECOVERY_GREEN')
