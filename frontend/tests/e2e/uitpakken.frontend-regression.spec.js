@@ -560,6 +560,7 @@ test.describe('Uitpakken frontend-regressie', () => {
         'locations.manage': true,
         'article.create': true,
         'article_group.create': true,
+        'frontteam.external_databases.access': true,
         'receipts.process': true,
       };
 
@@ -702,6 +703,27 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByText(/Status:.*Vereenvoudigingsniveau:/)).toHaveCount(0);
     await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
     await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
+    
+    // Een gewone tik op de mobiele bonregel opent het artikel met zijn scanner.
+    const pendingRow = page.getByTestId(`receipt-line-${lineId}`);
+    await pendingRow.locator('.rz-store-primary').click();
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toBeVisible();
+    await expect(page.getByTestId(`unpack-line-barcode-scan-${lineId}`)).toBeVisible();
+    await expect(page.getByTestId(`receipt-line-barcode-input-${lineId}`)).toBeVisible();
+    await page.getByRole('button', { name: 'Sluit bonartikeldetails' }).click();
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toHaveCount(0);
+
+    // Zowel de zichtbare Details-knop als toetsenbordnavigatie blijven werken.
+    await page.getByTestId(`receipt-line-mobile-details-${lineId}`).click();
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toHaveCount(0);
+    await pendingRow.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toHaveCount(0);
+
 
     // A fully completed receipt line is green without selecting it for processing.
     await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).not.toBeChecked();
@@ -714,6 +736,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     await selectAll.check();
     await expect(page.getByTestId(`receipt-line-select-${lineId}`)).toBeChecked();
     await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).toBeChecked();
+    await expect(page.getByTestId('receipt-line-detail-overlay')).toHaveCount(0);
 
     await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--action-needed/);
     await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
