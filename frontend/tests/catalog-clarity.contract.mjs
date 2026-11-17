@@ -81,7 +81,7 @@ assert.match(perArticleScanner, /BarcodeScannerModal/)
 assert.match(perArticleScanner, /replace \? 'Vervangen' : 'Opslaan'/)
 assert.ok(sharedBarcodeEditor.includes('/api/catalog/${encodeURIComponent(globalProductId)}/gtin'))
 assert.ok(sharedBarcodeEditor.includes('data-testid="catalog-shared-gtin-save"'))
-assert.ok(sharedBarcodeEditor.includes('data-testid="catalog-shared-gtin-scan"'))
+assert.ok(sharedBarcodeEditor.includes('testId="catalog-shared-gtin-scan"'))
 assert.ok(!sharedBarcodeEditor.includes('/api/inventory/'))
 assert.ok(!sharedBarcodeEditor.includes('household_article_id'))
 
