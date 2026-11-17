@@ -43,7 +43,6 @@ import ArticleSynonymsPage from '../../features/articleSynonyms/ArticleSynonymsP
 import SynonymAnalysisPage from '../../features/articleSynonyms/SynonymAnalysisPage.jsx'
 import ExternalDatabases2Page from '../../features/externalDatabases/ExternalDatabases2Page.jsx'
 import BarcodeImportReview from '../../features/externalDatabases/BarcodeImportReview.jsx'
-import UniversalScanIdentifyPage from '../../features/barcodes/UniversalScanIdentifyPage.jsx'
 import OffManualSearchPage from '../../features/externalDatabases/OffManualSearchPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
@@ -199,7 +198,6 @@ const router = createBrowserRouter([
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/artikelsynoniemen', element: <ProtectedFrontteam><ArticleSynonymsPage /></ProtectedFrontteam> },
   { path: '/catalogus/synoniemenanalyse', element: <ProtectedFrontteam><SynonymAnalysisPage /></ProtectedFrontteam> },
-  { path: '/scan-identificeren', element: <ProtectedFrontteam><UniversalScanIdentifyPage /></ProtectedFrontteam> },
   { path: '/externe-databases-2', element: <ProtectedFrontteam><ExternalDatabases2Page /></ProtectedFrontteam> },
   { path: '/externe-databases-2/importeren', element: <ProtectedSuperuser><BarcodeImportReview /></ProtectedSuperuser> },
   { path: '/externe-databases-2/off-zoeken/:receiptItemId', element: <ProtectedFrontteam><OffManualSearchPage /></ProtectedFrontteam> },
