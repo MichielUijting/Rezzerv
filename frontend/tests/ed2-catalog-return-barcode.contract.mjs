@@ -92,7 +92,9 @@ assert.match(sharedScan, /onConfirm\(barcode, \{ replace, expectedOldBarcode: ex
 assert.doesNotMatch(sharedScan, /fetchJsonWithAuth/)
 const cameraHook = read('src/lib/useBarcodeScanner.js')
 assert.match(cameraHook, /if \(timeoutMs > 0\) timeoutRef\.current = window\.setTimeout/)
-assert.match(scannerModal, /showFeedback\(\{ variant: 'error', message: cameraState\.message \}\)/)
+// A consciously retried camera failure must show an error again, even
+// when the browser returns the exact same message as the previous attempt.
+assert.match(scannerModal, /showFeedback\(\{ variant: 'error', message: cameraState\.message, dedupeMs: 0 \}\)/)
 assert.match(scannerModal, /onChoosePhoto/)
 assert.match(scannerModal, /onRetry/)
 assert.match(scannerModal, /Camera opnieuw proberen/)
