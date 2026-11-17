@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import inspect, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
@@ -1582,6 +1582,16 @@ def replace_catalog_primary_gtin(
         raise HTTPException(status_code=422, detail="De oude en nieuwe barcode moeten geldig zijn.")
     new_gtin = str(checked["normalized_value"])
     old_gtin = str(old_checked["normalized_value"])
+    # Compare checksum-valid GTIN textual aliases, including EAN-13 encoded
+    # as GTIN-14 with a leading zero. No alternate catalog owner is allowed.
+    def aliases(gtin: str) -> list[str]:
+        padded = gtin.zfill(14)
+        return sorted({
+            padded[14 - length:] for length in (8, 12, 13, 14)
+            if padded.startswith("0" * (14 - length))
+            and validate_barcode(padded[14 - length:], "gtin")["valid"]
+        })
+    new_aliases, old_aliases = aliases(new_gtin), aliases(old_gtin)
     if checked.get("barcode_scope") != "global_candidate":
         raise HTTPException(status_code=409, detail="Winkelinterne barcodes vereisen de winkelgebonden identiteitscontrole.")
     if old_gtin == new_gtin:
@@ -1604,29 +1614,29 @@ def replace_catalog_primary_gtin(
 
         # A new global code may not steal any existing ownership. Check both
         # the primary column and EAN/UPC alias claims; never reassign identities.
-        duplicate = conn.execute(text("""
+        duplicate_query = text("""
             SELECT id FROM global_products
-            WHERE primary_gtin = :new_gtin AND id <> :product_id LIMIT 1
-        """), {"new_gtin": new_gtin, "product_id": global_product_id}).first()
+            WHERE primary_gtin IN :aliases AND id <> :product_id LIMIT 1
+        """).bindparams(bindparam("aliases", expanding=True))
+        duplicate = conn.execute(duplicate_query, {
+            "aliases": new_aliases, "product_id": global_product_id,
+        }).first()
         if duplicate:
             raise HTTPException(status_code=409,
                 detail="Deze barcode hoort al bij een ander Catalogusartikel.")
-        identity_conflict = conn.execute(text("""
+        identity_query = text("""
             SELECT global_product_id FROM product_identities
             WHERE identity_type IN ('gtin', 'ean', 'upc')
-              AND identity_value = :new_gtin
+              AND identity_value IN :aliases
             LIMIT 1
-        """), {"new_gtin": new_gtin}).first()
+        """).bindparams(bindparam("aliases", expanding=True))
+        identity_conflict = conn.execute(identity_query, {"aliases": new_aliases}).first()
         if identity_conflict:
             raise HTTPException(status_code=409,
                 detail="Deze barcode is al als productidentiteit geregistreerd.")
 
         # Never strand historical/household/retailer references to the old code.
-        old_claim = conn.execute(text("""
-            SELECT global_product_id FROM product_identities
-            WHERE identity_type IN ('gtin', 'ean', 'upc')
-              AND identity_value = :old_gtin LIMIT 1
-        """), {"old_gtin": old_gtin}).first()
+        old_claim = conn.execute(identity_query, {"aliases": old_aliases}).first()
         if old_claim:
             raise HTTPException(status_code=409,
                 detail="Deze barcode heeft bestaande identiteitskoppelingen. Gebruik de gecontroleerde correctie in Artikelbeheer.")
