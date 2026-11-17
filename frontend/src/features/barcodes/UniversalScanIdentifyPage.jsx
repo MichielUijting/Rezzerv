@@ -460,7 +460,11 @@ export default function UniversalScanIdentifyPage() {
 
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>Terug</Button>
           <BarcodeScannerModal open={isOpen || cameraState.status === 'error'}
-            title="Barcode scannen (nog niet koppelen)"
+            title={purpose === 'catalogus'
+              ? 'Barcode scannen — alleen Catalogus'
+              : targetReceipt
+                ? `Barcode scannen voor ${targetReceipt.receipt_line_text}`
+                : 'Barcode scannen — bonartikel daarna kiezen'}
             videoRef={videoRef} cameraState={cameraState} cameraMeta={cameraMeta}
             availableCameras={availableCameras} onSwitchCamera={switchCamera}
             onRetry={() => void startScanner()}
