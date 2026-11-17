@@ -108,6 +108,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
         page: String(requestedPage),
         page_size: '10',
         zoek: receiptFilter,
+        time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         initialize: String(options.initialize !== false),
       })
       const result = await fetchJson(`/api/kassa/receipts-page?${params.toString()}`)
@@ -235,7 +236,10 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
         return
       }
       await startCamera()
-    }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
+    }).catch(() => {
+      receiptBootstrapRef.current = false
+      if (!cancelled) setCameraError('Kassa kon niet worden gestart.')
+    })
     return () => {
       cancelled = true
       stopReceiptCameraStream(streamRef.current)

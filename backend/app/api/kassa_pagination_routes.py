@@ -12,7 +12,7 @@ import unicodedata
 from datetime import datetime
 from functools import cmp_to_key
 from time import perf_counter
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Header, Query
 from sqlalchemy import text
@@ -99,13 +99,16 @@ def _deduped_receipts(rows):
     return items
 
 
-def _datetime_for_filter(value):
+def _datetime_for_filter(value, time_zone="UTC"):
     if not value:
         return "-"
     try:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if parsed.tzinfo:
-            parsed = parsed.astimezone(ZoneInfo("Europe/Amsterdam"))
+            try:
+                parsed = parsed.astimezone(ZoneInfo(time_zone))
+            except ZoneInfoNotFoundError:
+                parsed = parsed.astimezone(ZoneInfo("UTC"))
         return parsed.strftime("%d-%m-%Y %H:%M")
     except ValueError:
         return str(value)
@@ -167,13 +170,13 @@ def _sort_receipts(items, sort_key, direction):
     return sorted(items, key=cmp_to_key(compare))
 
 
-def _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek=""):
+def _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek="", time_zone="UTC"):
     terms = [str(term or "").strip().lower() for term in (winkel, datum, totaal, artikelen)]
     search = str(zoek or "").strip().lower()
     return [
         row for row in items
         if terms[0] in str(row.get("store_name") or "").lower()
-        and terms[1] in _datetime_for_filter(row.get("purchase_at")).lower()
+        and terms[1] in _datetime_for_filter(row.get("purchase_at"), time_zone).lower()
         and terms[2] in _money_for_filter(row.get("total_amount"), row.get("currency")).lower()
         and terms[3] in str(row.get("line_count") or 0)
         and (not status or row.get("inbox_status") == status)
@@ -182,13 +185,13 @@ def _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek=""):
 
 
 def _page_payload(rows, *, page, page_size, winkel="", datum="", totaal="",
-                  artikelen="", status="", zoek="", sort_key="date", sort_direction="desc"):
+                  artikelen="", status="", zoek="", time_zone="UTC", sort_key="date", sort_direction="desc"):
     items = _deduped_receipts(rows)
     counts = {
         "Controle nodig": sum(item["inbox_status"] == "Controle nodig" for item in items),
         "Gecontroleerd": sum(item["inbox_status"] == "Gecontroleerd" for item in items),
     }
-    filtered = _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek)
+    filtered = _filter_receipts(items, winkel, datum, totaal, artikelen, status, zoek, time_zone)
     sorted_items = _sort_receipts(filtered, sort_key, sort_direction)
     start = (page - 1) * page_size
     return {
@@ -211,6 +214,7 @@ def list_kassa_receipts_page(
     artikelen: str = Query(default="", max_length=100),
     status: str = Query(default="", pattern="^(|Controle nodig|Gecontroleerd)$"),
     zoek: str = Query(default="", max_length=200),
+    time_zone: str = Query(default="UTC", max_length=100),
     sort_key: str = Query(default="date", pattern="^(store|date|total|items)$"),
     sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
     initialize: bool = Query(default=False),
@@ -234,7 +238,7 @@ def list_kassa_receipts_page(
     queried = perf_counter()
     result = _page_payload(
         rows, page=page, page_size=page_size, winkel=winkel, datum=datum,
-        totaal=totaal, artikelen=artikelen, status=status, zoek=zoek,
+        totaal=totaal, artikelen=artikelen, status=status, zoek=zoek, time_zone=time_zone,
         sort_key=sort_key, sort_direction=sort_direction,
     )
     elapsed = perf_counter() - started

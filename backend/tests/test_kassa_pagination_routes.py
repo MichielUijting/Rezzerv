@@ -69,3 +69,9 @@ def test_mobile_search_matches_shop_or_canonical_status():
     assert result["items"][0]["receipt_table_id"] == "second"
     result = _page_payload(rows, page=1, page_size=10, zoek="gecontroleerd")
     assert result["total"] == 2
+
+
+def test_timezone_date_filter_is_local_to_client():
+    rows = [_row("one", store="AH")]
+    assert _page_payload(rows, page=1, page_size=10, datum="17-11-2026")["total"] == 1
+    assert _page_payload(rows, page=1, page_size=10, datum="16-11-2026")["total"] == 0

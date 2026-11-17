@@ -2243,7 +2243,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     const items = await loadReceipts(householdId, options)
     if (!uploadedReceiptId || items.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)) return items
     const mergedItems = mergeUploadedReceiptIntoItems(items, result)
-    setReceipts([...mergedItems])
+    setReceipts(mergedItems.slice(0, 10))
     setInboxTotal((current) => current + 1)
     return mergedItems
   }
@@ -2259,6 +2259,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       totaal: filters.totaal,
       artikelen: filters.artikelen,
       status: filters.status,
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       sort_key: inboxSort.key,
       sort_direction: inboxSort.direction,
       initialize: String(options?.initialize !== false),
@@ -2269,6 +2270,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     const requestId = ++inboxPageRequestRef.current
     if (inboxHouseholdRef.current && inboxHouseholdRef.current !== String(nextHouseholdId)) {
       // Never retain a prior household's selection or opened receipt.
+      setReceipts([])
+      setInboxTotal(0)
+      setInboxSummary({ 'Controle nodig': 0, Gecontroleerd: 0 })
       setSelectedReceiptIds([])
       setOpenedReceiptId('')
       openedReceiptIdRef.current = ''
@@ -2407,6 +2411,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
           clearShareQueryParams()
         }
       } catch (err) {
+        inboxBootstrapRef.current = false
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Je gegevens konden niet worden geladen.')
           setIsLoading(false)
