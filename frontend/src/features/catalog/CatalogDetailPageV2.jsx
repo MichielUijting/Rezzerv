@@ -356,7 +356,7 @@ export default function CatalogDetailPageV2() {
                 </div>
               </section>
 
-              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
+              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canUpdateCatalogImage} mobile onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
 
               <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-gpc">
                 <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
@@ -486,7 +486,7 @@ export default function CatalogDetailPageV2() {
                 </div>
               </section>
 
-              <CatalogBarcodeEntry globalProductId={globalProductId} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current); showFeedback({ variant: 'success', title: 'Barcode opgeslagen', message: 'De barcode is voor alle huishoudens beschikbaar in de Catalogus.' }) }} />
+              <CatalogBarcodeEntry globalProductId={globalProductId} productName={product.name} primaryGtin={product.primary_gtin} canEdit={canAddCatalogGtin} canReplace={canUpdateCatalogImage} mobile={false} onSaved={(gtin) => { setDetail((current) => current ? { ...current, product: { ...current.product, primary_gtin: gtin } } : current) }} />
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
