@@ -625,6 +625,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         body: JSON.stringify({
           purchase_import_line_id: String(line.id),
           household_article_id: householdArticleId,
+          expected_old_gtin: expectedOldBarcode,
           article_name: String(line.article_name_raw || ''),
         }),
       },
