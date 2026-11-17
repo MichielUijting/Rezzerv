@@ -11,6 +11,7 @@ on:
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/app/api/barcode_routes.py'
       - 'backend/tests/test_catalog_scan_replacement.py'
+      - 'backend/tests/test_unpacked_scanned_barcode_expected_old.py'
       - 'frontend/src/features/barcodes/ArticleBarcodeScanAction.jsx'
       - 'frontend/src/features/externalDatabases/Ed2ArticleBarcodeAction.jsx'
       - 'frontend/tests/article-barcode-scan.contract.mjs'
@@ -87,6 +88,8 @@ jobs:
           python -m pytest -q backend/tests/test_ed2_barcode_conflict_resolution.py
           python -m py_compile backend/app/api/barcode_routes.py backend/tests/test_catalog_scan_replacement.py
           python -m pytest -q backend/tests/test_catalog_scan_replacement.py
+          python -m py_compile backend/tests/test_unpacked_scanned_barcode_expected_old.py
+          python -m pytest -q backend/tests/test_unpacked_scanned_barcode_expected_old.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
