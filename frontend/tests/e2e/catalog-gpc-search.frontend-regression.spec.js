@@ -269,7 +269,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await page.getByTestId('catalog-shared-gtin-input').fill('8712345678901');
     await page.getByTestId('catalog-shared-gtin-save').click();
     await expect.poll(() => saved?.gtin).toBe('8712345678901');
-    await expect(page.getByText('8712345678901', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('catalog-shared-gtin-entry').getByText('8712345678901', { exact: true })).toBeVisible();
     expect(householdWrites).toBe(0);
     expectNoConsoleErrors(consoleErrors);
   });
@@ -342,7 +342,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
       expected_name: 'Aardappelschijfje spek-ui',
     });
     await expect(page.getByTestId('catalog-shared-product-name')).toHaveText('Aardappelschijfjes spek-ui');
-    await expect(page.getByText('8712345678901', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('catalog-shared-gtin-entry').getByText('8712345678901', { exact: true })).toBeVisible();
     await expectNoConsoleErrors(consoleErrors);
   });
 

@@ -255,9 +255,11 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(universalProductField).toBeVisible();
     await expect(universalProductField).toHaveValue(universalArticleName);
 
-    const scanButtonBox = await page.getByTestId(`receipt-line-barcode-scan-${lineId}`).boundingBox();
-    const checkButtonBox = await page.getByTestId(`receipt-line-barcode-check-${lineId}`).boundingBox();
-    expect(scanButtonBox?.height).toBe(checkButtonBox?.height);
+    // Desktop keeps manual validation; the named article scanner exists only on mobile.
+    // The mobile-admin regression below verifies that the separate scanner is visible.
+    await expect(page.getByTestId(`receipt-line-barcode-check-${lineId}`)).toBeVisible();
+    await expect(page.getByTestId(`receipt-line-barcode-scan-${lineId}`)).toHaveCount(0);
+    await expect(page.getByTestId(`unpack-line-barcode-scan-${lineId}`)).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Sluit bonartikeldetails' }).click();
     await expect(page).toHaveURL(new RegExp(`/kassabonnen\\?batch=${batchId}$`));
