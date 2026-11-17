@@ -204,7 +204,7 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState, pr
   if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
       data-testid="ed2-barcode-conflict-panel">
-      <Ed2ManualBarcodeEntry item={item} onSaved={onLinkOutcome} />
+      <Ed2ManualBarcodeEntry item={item} scannedBarcode={preScannedBarcode} onSaved={onLinkOutcome} />
     </section>
   )
 
