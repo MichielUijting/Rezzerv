@@ -9,7 +9,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
-import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ArticleBarcodeAction from './Ed2ArticleBarcodeAction.jsx'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import { displayEd2Gtin, ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 import Ed2MatchPage from './Ed2MatchPage'
@@ -452,16 +452,6 @@ export default function ExternalDatabases2Page() {
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
-        {isMobile ? <div className="rz-mobile-table-bulk-actions">
-          <Button type="button" variant="secondary" data-testid="ed2-universal-scan"
-            onClick={() => navigate('/scan-identificeren', { state: selectedItem
-              ? { receiptItemId: selectedItem.id, articleName: selectedItem.receipt_line_text,
-                  retailer: selectedItem.retailer, retailerCode: selectedItem.retailer_code,
-                  receiptArticleNumber: selectedItem.receipt_article_number }
-              : {} })}>
-            {selectedItem ? 'Barcode scannen voor geselecteerd artikel' : 'Barcode scannen zonder artikelselectie'}
-          </Button>
-        </div> : null}
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -541,8 +531,12 @@ export default function ExternalDatabases2Page() {
                 setRefreshVersion((value) => value + 1)
               }} />
             <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
-              {isMobile ? <Ed2BarcodeScanner receiptItemId={selectedItem.id} articleLabel={selectedItem.receipt_line_text}
-                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} /> : null}
+              {isMobile ? <Ed2ArticleBarcodeAction item={selectedItem} onSaved={(outcome) => {
+                setSelectedItem(null)
+                setPendingScannedBarcode(null)
+                setOffLinkOutcome(outcome)
+                setRefreshVersion((value) => value + 1)
+              }} /> : null}
               <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
                 onSaved={(outcome) => {
                   setSelectedItem(null)
