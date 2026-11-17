@@ -452,14 +452,16 @@ export default function ExternalDatabases2Page() {
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
-        <div className="rz-mobile-table-bulk-actions">
+        {isMobile ? <div className="rz-mobile-table-bulk-actions">
           <Button type="button" variant="secondary" data-testid="ed2-universal-scan"
             onClick={() => navigate('/scan-identificeren', { state: selectedItem
-              ? { receiptItemId: selectedItem.id, articleName: selectedItem.receipt_line_text }
+              ? { receiptItemId: selectedItem.id, articleName: selectedItem.receipt_line_text,
+                  retailer: selectedItem.retailer, retailerCode: selectedItem.retailer_code,
+                  receiptArticleNumber: selectedItem.receipt_article_number }
               : {} })}>
             {selectedItem ? 'Barcode scannen voor geselecteerd artikel' : 'Barcode scannen zonder artikelselectie'}
           </Button>
-        </div>
+        </div> : null}
         <div className="rz-mobile-table-select-row">
           <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
@@ -539,8 +541,8 @@ export default function ExternalDatabases2Page() {
                 setRefreshVersion((value) => value + 1)
               }} />
             <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
-              <Ed2BarcodeScanner receiptItemId={selectedItem.id}
-                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} />
+              {isMobile ? <Ed2BarcodeScanner receiptItemId={selectedItem.id}
+                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} /> : null}
               <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
                 onSaved={(outcome) => {
                   setSelectedItem(null)
