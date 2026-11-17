@@ -107,7 +107,7 @@ def _datetime_for_filter(value, time_zone="UTC"):
         if parsed.tzinfo:
             try:
                 parsed = parsed.astimezone(ZoneInfo(time_zone))
-            except ZoneInfoNotFoundError:
+            except (ZoneInfoNotFoundError, ValueError):
                 parsed = parsed.astimezone(ZoneInfo("UTC"))
         return parsed.strftime("%d-%m-%Y %H:%M")
     except ValueError:
@@ -214,7 +214,7 @@ def list_kassa_receipts_page(
     artikelen: str = Query(default="", max_length=100),
     status: str = Query(default="", pattern="^(|Controle nodig|Gecontroleerd)$"),
     zoek: str = Query(default="", max_length=200),
-    time_zone: str = Query(default="UTC", max_length=100),
+    time_zone: str = Query(default="UTC", max_length=100, pattern=r"^[A-Za-z0-9_+/-]+$"),
     sort_key: str = Query(default="date", pattern="^(store|date|total|items)$"),
     sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
     initialize: bool = Query(default=False),
