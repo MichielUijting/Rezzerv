@@ -10,9 +10,17 @@ export function diagnoseBarcodeCameraFailure(error, {
   const name = String(error?.name || '').toLowerCase()
   const detail = String(error?.message || error || '').toLowerCase()
   const firefox = /firefox/i.test(userAgent)
-  const desktop = /windows|macintosh|linux/i.test(userAgent) && !/android/i.test(userAgent)
+  const windows = /windows/i.test(userAgent)
 
-  if (!secureContext || !mediaSupported || name === 'securityerror' || detail.includes('insecure context')) {
+  if (!mediaSupported && secureContext) {
+    return {
+      reason: 'unsupported_browser',
+      message: 'Deze browser biedt geen live cameratoegang.',
+      advice: 'Probeer een actuele browser met cameratoegang of kies Barcode uit foto. Inhuis verandert geen apparaatinstellingen.',
+      canTryCompatibility: false,
+    }
+  }
+  if (!secureContext || name === 'securityerror' || detail.includes('insecure context')) {
     return {
       reason: 'insecure_or_unsupported',
       message: 'De camera kan hier niet veilig worden gebruikt.',
@@ -28,7 +36,7 @@ export function diagnoseBarcodeCameraFailure(error, {
       advice: firefox
         ? 'Controleer het camera-/toestemmingsicoon links in de Firefox-adresbalk, verwijder een eventuele blokkering en kies Toestaan bij een nieuwe aanvraag.'
         : 'Controleer de cameratoestemming van deze website in de adresbalk en kies Toestaan bij een nieuwe aanvraag.',
-      deviceAdvice: desktop
+      deviceAdvice: windows
         ? 'Op Windows: Instellingen → Privacy en beveiliging → Camera. Controleer Cameratoegang en Toegang voor bureaublad-apps. Inhuis kan deze instellingen niet zelf wijzigen.'
         : 'Controleer zo nodig de cameratoestemming voor de browser in de apparaatinstellingen.',
       canTryCompatibility: false,
@@ -71,5 +79,6 @@ export function diagnoseBarcodeCameraFailure(error, {
 
 export function shouldStopCameraRetries(error) {
   const name = String(error?.name || '').toLowerCase()
-  return ['notallowederror', 'permissiondeniederror', 'securityerror'].includes(name)
+  return ['notallowederror', 'permissiondeniederror', 'permissiondismissederror', 'securityerror'].includes(name)
+    || String(error?.message || '').toLowerCase().includes('permission denied')
 }
