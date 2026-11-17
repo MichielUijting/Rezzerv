@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import Button from '../../ui/Button'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal'
 import useBarcodeScanner from '../../lib/useBarcodeScanner'
@@ -10,8 +10,8 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
   const photoInputRef = useRef(null)
   const { showFeedback } = useAppFeedback()
   const {
-    videoRef, isOpen, cameraState, cameraErrorRevision, cameraMeta, availableCameras,
-    startScanner, stopScanner, switchCamera, scanImageFile,
+    videoRef, isOpen, cameraState, cameraMeta, availableCameras,
+    startScanner, startCompatibleCamera, stopScanner, switchCamera, scanImageFile,
   } = useBarcodeScanner({
     screenContext: 'Externe databases 2 bonartikelbarcode',
     timeoutMs: 0,
@@ -25,18 +25,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
     },
   })
 
-  // ED2 shows genuine camera errors through the standard Melding overlay.
-  // No-result is not a failure: keep the scanner visible and decoding.
-  useEffect(() => {
-    if (cameraState.status !== 'error' || !cameraState.message) return
-    showFeedback({
-      variant: 'error',
-      title: 'Melding',
-      message: cameraState.message,
-      testId: 'ed2-barcode-scanner-message',
-      dedupeMs: 0,
-    })
-  }, [cameraState.status, cameraState.message, cameraErrorRevision, showFeedback])
+  // Shared BarcodeScannerModal owns the single camera-error overlay.
 
   function choosePhoto() {
     if (disabled) return
@@ -73,6 +62,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
         videoRef={videoRef} cameraState={cameraState} cameraMeta={cameraMeta}
         availableCameras={availableCameras} onSwitchCamera={switchCamera}
         onRetry={() => void startScanner()}
+        onTryCompatibility={() => void startCompatibleCamera()}
         onChoosePhoto={cameraState.status === 'error' ? choosePhoto : undefined}
         hideInlineFeedback
         onClose={() => stopScanner()} />
