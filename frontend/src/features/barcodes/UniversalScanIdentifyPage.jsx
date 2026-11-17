@@ -84,7 +84,7 @@ export default function UniversalScanIdentifyPage() {
 
   const {
     videoRef, isOpen, cameraState, cameraMeta, availableCameras,
-    startScanner, stopScanner, switchCamera, scanImageFile,
+    startScanner, startCompatibleCamera, stopScanner, switchCamera, scanImageFile,
   } = useBarcodeScanner({
     timeoutMs: 0,
     screenContext: 'Scan & Identificeer',
@@ -327,6 +327,7 @@ export default function UniversalScanIdentifyPage() {
             title="Scan & Identificeer" videoRef={videoRef} cameraState={cameraState}
             cameraMeta={cameraMeta} availableCameras={availableCameras}
             onSwitchCamera={switchCamera} onRetry={() => void startScanner()}
+            onTryCompatibility={() => void startCompatibleCamera()}
             onChoosePhoto={() => { stopScanner(); photoRef.current?.click() }}
             onClose={() => stopScanner()} />
         </div>
