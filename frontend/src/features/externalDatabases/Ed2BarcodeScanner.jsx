@@ -6,7 +6,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 /** Camera-only input for the already-authorized ED2 manual barcode confirmation.
  * Never writes a receipt, catalog product or inventory record on detection. */
-export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onScanned }) {
+export default function Ed2BarcodeScanner({ receiptItemId, articleLabel = '', disabled = false, onScanned }) {
   const photoInputRef = useRef(null)
   const { showFeedback } = useAppFeedback()
   const {
@@ -58,7 +58,7 @@ export default function Ed2BarcodeScanner({ receiptItemId, disabled = false, onS
         aria-label="Foto van barcode kiezen" data-testid="ed2-barcode-photo-input"
         style={{ display: 'none' }} onChange={handlePhotoChange} />
       <BarcodeScannerModal open={isOpen || cameraState.status === 'error'}
-        title="Barcode scannen voor bonartikel"
+        title={articleLabel ? `Barcode scannen voor ${articleLabel}` : 'Barcode scannen voor bonartikel'}
         videoRef={videoRef} cameraState={cameraState} cameraMeta={cameraMeta}
         availableCameras={availableCameras} onSwitchCamera={switchCamera}
         onRetry={() => void startScanner()}
