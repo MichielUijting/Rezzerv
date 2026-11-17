@@ -14,6 +14,12 @@ on:
       - 'backend/tests/test_universal_scan_identification.py'
       - 'frontend/src/features/barcodes/UniversalScanIdentifyPage.jsx'
       - 'frontend/tests/universal-scan-identify.contract.mjs'
+      - 'frontend/tests/barcode-camera-recovery.contract.mjs'
+      - 'frontend/src/lib/barcodeScanner.js'
+      - 'frontend/src/lib/useBarcodeScanner.js'
+      - 'frontend/src/lib/barcodeCameraRecovery.js'
+      - 'frontend/src/features/barcodes/BarcodeScannerModal.jsx'
+      - 'frontend/src/features/externalDatabases/Ed2BarcodeScanner.jsx'
       - 'backend/tests/test_catalog_shared_gtin_assignment.py'
       - 'backend/tests/test_catalog_shared_name_update.py'
       - 'backend/app/services/ed2_confirmed_barcode_service.py'
@@ -93,4 +99,5 @@ jobs:
           node tests/inhuis-feedback-bar.contract.mjs
           node tests/ed2-delete-catalog.contract.mjs
           node tests/universal-scan-identify.contract.mjs
+          node tests/barcode-camera-recovery.contract.mjs
           npm run build
