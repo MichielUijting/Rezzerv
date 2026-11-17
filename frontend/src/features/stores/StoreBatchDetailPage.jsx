@@ -2141,7 +2141,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           : 'rz-mobile-unpack-row--new'
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
+                    <tr
+                      key={line.id}
+                      className={rowClassName}
+                      data-testid={`receipt-line-${line.id}`}
+                      title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? 'Tik voor bonartikeldetails' : 'Dubbelklik om bonartikeldetails te openen'}
+                      tabIndex={isMobileViewport ? 0 : undefined}
+                      aria-label={isMobileViewport ? `Details van ${formatReceiptLineLabel(line.article_name_raw)} openen` : undefined}
+                      onClick={isMobileViewport ? (event) => {
+                        // Checkbox, dropdowns en andere rij-acties mogen geen details openen.
+                        if (event.target.closest('button, input, select, textarea, a, [role="button"], [role="combobox"]')) return
+                        openReceiptLineDetail(line.id)
+                      } : undefined}
+                      onKeyDown={isMobileViewport ? (event) => {
+                        if (event.target !== event.currentTarget) return
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openReceiptLineDetail(line.id)
+                        }
+                      } : undefined}
+                      onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}
+                    >
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
                       <td className="rz-store-batch-col-item">
                         <div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div>
