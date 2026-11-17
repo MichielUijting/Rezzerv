@@ -105,10 +105,10 @@ export default function ArticleBarcodeScanAction({
     if (!detected) showFeedback({ variant: 'warning', message: 'Geen barcode gevonden in deze foto.' })
   }
 
-  if (!mobile || disabled || typeof onConfirm !== 'function') return null
+  if (!mobile || typeof onConfirm !== 'function') return null
   return (
     <>
-      <Button type="button" variant="secondary" onClick={() => void startScanner()} disabled={saving}
+      <Button type="button" variant="secondary" onClick={() => void startScanner()} disabled={disabled || saving}
         data-testid={testId}>
         {title}
       </Button>
