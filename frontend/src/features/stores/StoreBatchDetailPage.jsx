@@ -32,6 +32,7 @@ import {
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
+import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
 import { isHouseholdAdminFromContext, isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import {
@@ -634,6 +635,29 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   async function openReceiptLineBarcodeScanner(lineId) {
     setActiveBarcodeLineId(String(lineId))
     await startBarcodeScanner(barcodeCameraMeta.deviceId || '')
+  }
+
+  async function saveDirectScannedReceiptBarcode(line, gtin, { expectedOldBarcode }) {
+    const current = barcodeInitialValue(line)
+    if (String(current || '').trim() !== expectedOldBarcode) {
+      throw new Error('De bestaande barcode is gewijzigd. Open dit bonartikel opnieuw.')
+    }
+    const householdArticleId = String(getDraftValues(line).articleId || '').trim()
+    if (!householdArticleId) {
+      throw new Error('Er is nog geen bestaand voorraadartikel voor deze bonregel gekozen. Sla eerst de artikelkeuze op.')
+    }
+    await fetchJson(
+      `/api/barcodes/${encodeURIComponent(gtin)}/save-household-article`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          purchase_import_line_id: String(line.id),
+          household_article_id: householdArticleId,
+          article_name: String(line.article_name_raw || ''),
+        }),
+      },
+    )
+    await refreshBatch(batch.batch_id)
   }
 
   function showUitpakkenFeedback(variant, message, options = {}) {
@@ -2352,13 +2376,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd>
-                    <BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} showScan={isMobileViewport} />
+                    <BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} showScan={false} />
                     {isMobileViewport && isFrontteamMemberFromContext(readStoredAuthContext()) ? (
-                      <Button type="button" variant="secondary"
-                        data-testid={`unpack-line-universal-scan-${line.id}`}
-                        onClick={() => navigate('/scan-identificeren', {
-                          state: { articleName: line.article_name_raw, from: buildBatchDetailPath(batchId) },
-                        })}>Scan &amp; Identificeer</Button>
+                      <ArticleBarcodeScanAction articleName={line.article_name_raw || 'Bonartikel'}
+                        currentBarcode={barcodeInitialValue(line)}
+                        testId={`unpack-line-barcode-scan-${line.id}`}
+                        disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'}
+                        onConfirm={(gtin, options) => saveDirectScannedReceiptBarcode(line, gtin, options)} />
                     ) : null}
                   </dd></div>
                   <div className="rz-receipt-line-detail__wide">
