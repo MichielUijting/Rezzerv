@@ -1,4 +1,5 @@
 import { BrowserMultiFormatReader } from '@zxing/browser'
+import { shouldStopCameraRetries } from './barcodeCameraRecovery.js'
 import { BarcodeFormat, BinaryBitmap, DecodeHintType, HybridBinarizer, MultiFormatReader, RGBLuminanceSource } from '@zxing/library'
 
 const ZXING_NON_FATAL_ERRORS = new Set(['NotFoundException', 'ChecksumException', 'FormatException'])
@@ -276,7 +277,7 @@ async function applyTrackOptimizations(videoTrack) {
   return capabilities
 }
 
-export async function openBarcodeCameraStream(preferredDeviceId = '', log = null) {
+export async function openBarcodeCameraStream(preferredDeviceId = '', log = null, { compatibilityMode = false } = {}) {
   const mobile = isMobileBrowser()
   const availableDevices = await listBarcodeVideoDevices().catch(() => [])
   const prioritizedDevices = [...availableDevices].sort((a, b) => scoreDeviceLabel(b.label) - scoreDeviceLabel(a.label))
@@ -290,9 +291,15 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
     attempts.push(constraints)
   }
 
-  if (preferredDeviceId) {
-    pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: preferredDeviceId } }) })
-  }
+  if (compatibilityMode) {
+    // User-triggered, scan-session-only compatibility mode. Never alter the
+    // Windows/browser camera permission or persist camera configuration.
+    pushAttempt({ audio: false, video: true })
+    pushAttempt({ audio: false, video: { width: { ideal: 640 }, height: { ideal: 480 } } })
+  } else {
+    if (preferredDeviceId) {
+      pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: preferredDeviceId } }) })
+    }
 
   if (mobile) {
     // Op mobiel eerst expliciet de reguliere achtercamera proberen. Voor de
@@ -315,6 +322,7 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
   pushAttempt({ audio: false, video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
   pushAttempt({ audio: false, video: { width: { ideal: 640 }, height: { ideal: 480 } } })
   pushAttempt({ audio: false, video: true })
+  }
 
   let lastError = null
   for (const constraints of attempts) {
@@ -322,7 +330,7 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       const videoTrack = stream?.getVideoTracks?.()?.[0]
       if (videoTrack) {
-        const capabilities = await applyTrackOptimizations(videoTrack)
+        const capabilities = compatibilityMode ? null : await applyTrackOptimizations(videoTrack)
         const trackSettings = videoTrack.getSettings?.() || {}
         const activeDeviceId = trackSettings.deviceId || preferredDeviceId || ''
         const activeLabel = videoTrack.label || prioritizedDevices.find((device) => device.deviceId === activeDeviceId)?.label || ''
@@ -335,6 +343,9 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
       lastError = error
       log?.('CAMERA_START_ATTEMPT_FAILED', { constraints, errorName: error?.name, errorMessage: error?.message })
       console.warn('Barcode scanner camera startpoging mislukt', { constraints, error })
+      // A refused permission is an explicit privacy decision. Never loop
+      // over alternative constraints as a way to prompt again.
+      if (shouldStopCameraRetries(error)) throw error
     }
   }
 
