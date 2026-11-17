@@ -5,6 +5,7 @@ import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   canCurrentUserPerform,
+  isFrontteamMemberFromContext,
   isHouseholdAdminFromContext,
   isPlatformSuperuserFromContext,
   readStoredAuthContext,
