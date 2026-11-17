@@ -19,9 +19,22 @@ assert.match(productGroups, /pageCount > 1 \? <Pagination/)
 const kassa = readFileSync(new URL('../src/features/receipts/KassaPage.jsx', import.meta.url), 'utf8')
 const unpacking = readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
 const mobilePagination = readFileSync(new URL('../src/ui/MobilePagination.jsx', import.meta.url), 'utf8')
+// The Kassa inbox must fetch a bounded server page, not re-slice a full
+// household dataset or drop selections when moving between pages.
+for (const marker of [
+  '/api/kassa/receipts-page?',
+  "page_size: '10'",
+  'initialize: false',
+  'const pageInboxItems = listItems',
+  'setInboxTotal(Number(list?.total || 0))',
+  'setInboxSummary({',
+]) assert.ok(kassa.includes(marker), 'Kassa server paging: ' + marker)
+assert.doesNotMatch(kassa, /const pageInboxItems = listItems\.slice\(/)
+assert.doesNotMatch(kassa, /setSelectedReceiptIds\(\(current\) => current\.filter\(\(id\) => visibleIds\.has\(String\(id\)\)\)\)/)
+
 for (const [label, source, expected] of [
-  ['Kassa page count', kassa, 'const inboxPageCount = Math.max(1, Math.ceil(listItems.length / 10))'],
-  ['Kassa page slicing', kassa, 'const pageInboxItems = listItems.slice((currentInboxPage - 1) * 10, currentInboxPage * 10)'],
+  ['Kassa page count', kassa, 'const inboxPageCount = Math.max(1, Math.ceil(inboxTotal / 10))'],
+  ['Kassa server page', kassa, 'const pageInboxItems = listItems'],
   ['Kassa page selection', kassa, 'const allVisibleSelected = pageInboxItems.length > 0'],
   ['Kassa controls', kassa, 'inboxPageCount > 1 ? <Pagination'],
   ['Uitpakken desktop slicing', unpacking, 'const desktopPageLines = visibleLineUiStates.slice((currentDesktopLinePage - 1) * 10, currentDesktopLinePage * 10)'],
