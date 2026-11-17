@@ -1,5 +1,6 @@
 """Fail-closed identity projections; no live or household database used."""
 import pytest
+import re
 
 from app.services.article_workqueue_service import (
     project_classification_tasks,
@@ -106,6 +107,11 @@ def test_read_only_query_and_explicit_count_scopes():
     assert result["product_count_scope"] == "global"
     assert result["task_count_scope"] == "page"
     assert len(result["tasks"]) == 3
-    assert all(sql.lstrip().upper().startswith("SELECT") for sql in conn.statements)
+    assert all(sql.lstrip().upper().startswith(("SELECT", "WITH")) for sql in conn.statements)
+    # A CTE can be read-only, but never let write-capable CTEs pass silently.
+    assert all(not re.search(r"\\b(?:INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE)\\b",
+                             sql, re.I) for sql in conn.statements)
+    assert any(sql.lstrip().upper().startswith("WITH") and "SELECT page.id" in sql
+               for sql in conn.statements)
     assert all("household_articles" not in sql for sql in conn.statements)
     assert all("receipt_lines" not in sql for sql in conn.statements)

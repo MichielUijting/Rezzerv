@@ -12,9 +12,9 @@ from sqlalchemy import text
 
 
 
+# Page canonical products before joining classifications or aggregating
+# retailer/synonym relationships. Preserve identity and total semantics.
 CLASSIFICATION_SQL = """
-    -- Page canonical products *before* joining classifications or aggregating
-    -- retailer/synonym relationships. Preserve identity and total semantics.
     WITH requested_page AS MATERIALIZED (
         SELECT gp.id, gp.name, gp.brand, gp.primary_gtin
           FROM global_products gp
