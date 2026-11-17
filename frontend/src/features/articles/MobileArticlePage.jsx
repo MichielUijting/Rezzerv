@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
 import Tabs from '../../ui/Tabs.jsx'
@@ -337,12 +338,28 @@ export default function MobileArticlePage() {
             </div>
           </div>
 
-          {isFrontteamMemberFromContext(authContext) ? (
-            <button type="button" className="rz-mobile-article-text-action"
-              data-testid="mobile-article-universal-scan"
-              onClick={() => navigate('/scan-identificeren', {
-                state: { householdArticleId, articleName, from: '/voorraad/' + articleId },
-              })}>Scan &amp; Identificeer</button>
+          {isFrontteamMemberFromContext(authContext) && isHouseholdAdminFromContext(authContext)
+            && householdArticleId ? (
+            <div className="rz-mobile-article-scan-identity">
+              <span>Barcode: <strong>{articleData?.barcode || 'Geen barcode'}</strong></span>
+              <ArticleBarcodeScanAction articleName={articleName}
+                currentBarcode={articleData?.barcode || ''}
+                testId="mobile-article-barcode-scan"
+                onConfirm={async (gtin, { expectedOldBarcode }) => {
+                  const endpoint = `/api/household-articles/${encodeURIComponent(householdArticleId)}`
+                  const latest = await requestJson(endpoint, { method: 'GET', cache: 'no-store' })
+                  if (String(latest?.barcode || '').trim() !== expectedOldBarcode) {
+                    throw new Error('De barcode van dit voorraadartikel is gewijzigd. Open het artikel opnieuw.')
+                  }
+                  const saved = await requestJson(endpoint, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ barcode: gtin }),
+                  })
+                  setArticleData((previous) => previous
+                    ? { ...previous, ...(saved?.details || {}), barcode: gtin }
+                    : previous)
+                }} />
+            </div>
           ) : null}
           <div className="rz-mobile-article-stock-row">
             <div className="rz-mobile-article-stock-copy">
