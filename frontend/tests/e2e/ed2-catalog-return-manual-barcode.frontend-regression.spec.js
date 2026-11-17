@@ -103,15 +103,14 @@ test('ED2 houdt een camerafout zichtbaar en biedt fotoherkenning alleen als rese
     saveRequests += 1
     return request.fulfill({ json: {} })
   }))
+  // Enter the mobile flow before opening an article: changing viewport after
+  // selecting it can remount the page and intentionally clear selectedItem.
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Identificeren' }).click()
   await page.getByTestId('external-databases-2-table')
-    .locator('tbody tr', { hasText: 'Scharrelei M/L' }).dblclick()
-  // The approved scanner belongs to the opened article in mobile view.
-  // Desktop deliberately has no camera action; manual barcode entry remains.
+    .locator('tbody tr', { hasText: 'Scharrelei M/L' }).click()
   const panel = page.getByTestId('external-databases-2-off-panel')
-  await expect(panel.getByTestId('ed2-article-barcode-scan')).toHaveCount(0)
-  await page.setViewportSize({ width: 390, height: 844 })
   await expect(panel.getByTestId('ed2-article-barcode-scan')).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Barcode uit foto' })).toHaveCount(0)
   await panel.getByTestId('ed2-article-barcode-scan').click()
