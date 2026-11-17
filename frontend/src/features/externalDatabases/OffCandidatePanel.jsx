@@ -199,7 +199,12 @@ export default function OffCandidatePanel({ item, onLinkOutcome, returnState, pr
     }
   }
 
-  if (alreadyIdentified) return null
+  if (alreadyIdentified) return isMobile ? (
+    <section className="rz-external-receipt-detail" aria-label="Barcode van geïdentificeerd artikel">
+      <h3>Barcode van {item.receipt_line_text}</h3>
+      <Ed2ArticleBarcodeAction item={item} onSaved={onLinkOutcome} />
+    </section>
+  ) : null
 
   if (requiresIdentityReview) return (
     <section className="rz-external-receipt-detail" aria-label="Barcodeconflict beoordelen"
