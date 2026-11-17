@@ -1589,7 +1589,10 @@ def replace_catalog_primary_gtin(
     silently invalidate old inventory or retailer evidence.
     """
     _require_catalog_gtin_replacer()
-    required_tables = {"global_products", "product_identities"}
+    required_tables = {
+        "global_products", "product_identities",
+        "household_articles", "external_article_product_links",
+    }
     tables = _tables()
     if not required_tables.issubset(tables):
         raise HTTPException(status_code=503, detail="Veilige barcodecorrectie is niet beschikbaar.")
