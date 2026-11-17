@@ -49,13 +49,13 @@ class FakeCatalog:
         if sql.startswith("SELECT id FROM global_products WHERE primary_gtin"):
             return Result(
                 {"id": p["id"]} for p in self.products.values()
-                if p["id"] != args["product_id"] and p["primary_gtin"] == args["new_gtin"]
+                if p["id"] != args["product_id"] and p["primary_gtin"] in args["aliases"]
             )
         if sql.startswith("SELECT global_product_id FROM product_identities"):
-            value = args.get("new_gtin") or args.get("old_gtin")
             return Result(
                 {"global_product_id": i["global_product_id"]} for i in self.identities
-                if i["identity_value"] == value and i["identity_type"] in ("gtin", "ean", "upc")
+                if i["identity_value"] in args["aliases"]
+                and i["identity_type"] in ("gtin", "ean", "upc")
             )
         if sql.startswith("SELECT id FROM household_articles"):
             return Result({"id": h["id"]} for h in self.households
@@ -163,4 +163,16 @@ def test_unauthorized_user_never_gets_write(db, monkeypatch):
     with pytest.raises(HTTPException) as err:
         change()
     assert err.value.status_code == 403
+    assert conn.products["p1"]["primary_gtin"] == barcode("871234567890")
+
+
+def test_equivalent_gtin_alias_cannot_be_reassigned(db):
+    conn, _ = db
+    # A GTIN-13 recorded under its leading-zero 14-digit variant owns the
+    # same identity. A replacement must not create a second Catalogus owner.
+    value = barcode("871234567891")
+    conn.products["p2"]["primary_gtin"] = "0" + value
+    with pytest.raises(HTTPException) as err:
+        change(new=value)
+    assert err.value.status_code == 409
     assert conn.products["p1"]["primary_gtin"] == barcode("871234567890")
