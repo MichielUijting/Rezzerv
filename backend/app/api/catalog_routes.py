@@ -801,6 +801,14 @@ def _require_catalog_gtin_contributor() -> None:
     except HTTPException as error:
         if error.status_code != 403:
             raise
+    try:
+        # Frontteam may contribute a missing, validated Catalogus GTIN but
+        # cannot delete or rename an article through this permission.
+        require_platform_permission_from_session("platform.external_products.link_existing")
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
     require_household_admin_from_session()
 
 
