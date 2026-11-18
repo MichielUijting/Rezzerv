@@ -926,7 +926,8 @@ export default function Voorraad() {
         if (cancelled) return;
         articleAssignmentsRef.current = assignments;
         setRows((current) => applyArticleGroupsToRows(current, assignments));
-      });
+      })
+      .catch(() => { /* Group options remain optional for the fast first paint. */ });
     fetchArticleGroupOptions()
       .then((options) => { if (!cancelled) setArticleGroupOptions(options); })
       .catch((error) => {
@@ -1074,7 +1075,7 @@ export default function Voorraad() {
   }, [serverPaged, needsFullInventory, showFeedback]);
 
   const filteredRows = useMemo(() => {
-    const sourceRows = mergeVisibleZeroRows(rows, localZeroRows)
+    const sourceRows = serverPaged ? rows : mergeVisibleZeroRows(rows, localZeroRows)
     const filtered = sourceRows.filter((row) =>
       editableColumns.every((column) => {
         const filterValue = String(filters[column.key] ?? "").trim().toLowerCase();
@@ -1091,7 +1092,7 @@ export default function Voorraad() {
       locatie: (row) => row.locatie || '',
       sublocatie: (row) => row.sublocatie || '',
     });
-  }, [rows, localZeroRows, filters, tableSort]);
+  }, [rows, localZeroRows, filters, tableSort, serverPaged]);
 
   const paginationPageCount = Math.max(1, Math.ceil((serverPaged ? serverTotal : filteredRows.length) / 10));
   const visibleInventoryRows = (serverLoading || completeInventoryLoading || serverLoadError || (serverPaged && needsFullInventory))
