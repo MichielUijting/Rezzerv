@@ -66,3 +66,17 @@ def test_concurrent_start_reuses_one_job(monkeypatch):
     again = job_service.start_matching_progress(object(), "superuser", lambda *args: None)
     assert state["id"] == again["id"]
     assert CapturedThread.started == 1
+
+def test_postgres_background_worker_uses_maintenance_reservation(monkeypatch):
+    monkeypatch.setattr(job_service, "_JOB", None)
+    from app.services import maintenance_runtime
+    received = []
+    def reserved(**kwargs):
+        received.append(kwargs)
+    monkeypatch.setattr(maintenance_runtime, "start_worker", reserved)
+    engine = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    state = job_service.start_matching_progress(engine, "superuser", lambda *args: None)
+    assert state["state"] == "running"
+    assert len(received) == 1
+    assert received[0]["engine"] is engine
+    assert received[0]["name"] == "ed2-match-progress"

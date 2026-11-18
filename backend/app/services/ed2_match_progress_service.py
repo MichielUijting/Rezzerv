@@ -50,8 +50,15 @@ def start_matching_progress(engine, actor_id, run_pass):
                    matched=0, error="", matching_overview=None)
         _JOB = job
     try:
-        Thread(target=_run, args=(job, engine, actor_id, run_pass),
-               daemon=True, name="ed2-match-progress").start()
+        if getattr(getattr(engine, "dialect", None), "name", None) == "postgresql":
+            # Reserve a durable maintenance operation BEFORE detaching the
+            # browser request; maintenance draining must wait for this worker.
+            from app.services.maintenance_runtime import start_worker
+            start_worker(target=_run, args=(job, engine, actor_id, run_pass),
+                         daemon=True, name="ed2-match-progress", engine=engine)
+        else:
+            Thread(target=_run, args=(job, engine, actor_id, run_pass),
+                   daemon=True, name="ed2-match-progress").start()
     except Exception:
         _publish(job, state="error", error="De achtergrondcontrole kon niet starten.")
     return current_matching_progress()
