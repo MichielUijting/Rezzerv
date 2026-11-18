@@ -114,3 +114,86 @@ def test_initial_mobile_page_does_not_compute_unused_gpc(monkeypatch):
     assert len(result["rows"]) == 1
     assert result["rows"][0]["household_article_id"] == "article-1"
     assert result["rows"][0]["gpc_brick_name"] == ""
+
+
+
+def test_fast_page_only_reads_stock_rows_for_visible_identities():
+    """The SQL first-screen path returns 10 complete articles, not all rows."""
+    from sqlalchemy import create_engine, text
+
+    connection_engine = create_engine("sqlite://")
+    with connection_engine.begin() as conn:
+        for statement in (
+            "CREATE TABLE inventory (id TEXT, naam TEXT, aantal FLOAT, "
+            "household_id TEXT, status TEXT, household_article_id TEXT, "
+            "space_id TEXT, sublocation_id TEXT)",
+            "CREATE TABLE spaces (id TEXT, naam TEXT)",
+            "CREATE TABLE sublocations (id TEXT, naam TEXT)",
+            "CREATE TABLE household_articles (id TEXT, household_id TEXT, article_group_id TEXT)",
+            "CREATE TABLE article_groups (id TEXT, household_id TEXT, name TEXT)",
+        ):
+            conn.execute(text(statement))
+        conn.execute(text("INSERT INTO spaces VALUES ('k', 'Keuken'), ('b', 'Berging')"))
+        conn.execute(text("INSERT INTO article_groups VALUES ('g', 'household-1', 'Zuivel')"))
+        conn.execute(text(
+            "INSERT INTO household_articles VALUES ('milk', 'household-1', 'g')"
+        ))
+        stock = [
+            {"id": "m1", "naam": "Melk", "aantal": 2, "household_id": "household-1",
+             "status": "active", "household_article_id": "milk", "space_id": "k",
+             "sublocation_id": None},
+            {"id": "m2", "naam": "Melk", "aantal": 3, "household_id": "household-1",
+             "status": "active", "household_article_id": "milk", "space_id": "b",
+             "sublocation_id": None},
+        ]
+        stock.extend({
+            "id": f"z{i:02}", "naam": f"Z-{i:02}", "aantal": 1,
+            "household_id": "household-1", "status": "active",
+            "household_article_id": None, "space_id": "k", "sublocation_id": None,
+        } for i in range(23))
+        # Neither an inactive/empty row nor another household may appear.
+        stock.extend([
+            {"id": "ghost", "naam": "A-ghost", "aantal": 0,
+             "household_id": "household-1", "status": "active",
+             "household_article_id": None, "space_id": "k", "sublocation_id": None},
+            {"id": "foreign", "naam": "A-foreign", "aantal": 10,
+             "household_id": "household-2", "status": "active",
+             "household_article_id": None, "space_id": "k", "sublocation_id": None},
+        ])
+        conn.execute(text(
+            "INSERT INTO inventory "
+            "(id, naam, aantal, household_id, status, household_article_id, space_id, sublocation_id) "
+            "VALUES (:id, :naam, :aantal, :household_id, :status, "
+            ":household_article_id, :space_id, :sublocation_id)"
+        ), stock)
+
+        first = pagination._fast_mobile_page(
+            conn, "household-1", page=1, page_size=10, location_tracking_enabled=True,
+        )
+        assert first["total"] == 24
+        assert first["inventory_total"] == 24
+        assert len(first["source_rows"]) == 11  # one article has two stock positions
+        assert {row["id"] for row in first["source_rows"][:2]} == {"m1", "m2"}
+        assert {row["household_article_id"] for row in first["source_rows"][:2]} == {"milk"}
+        assert set(first["location_options"]) == {"Keuken", "Meerdere locaties"}
+        assert set(first["article_group_options"]) == {"Zuivel", "Niet ingedeeld"}
+        assert all(row["id"] not in {"ghost", "foreign"} for row in first["source_rows"])
+
+        second = pagination._fast_mobile_page(
+            conn, "household-1", page=2, page_size=10, location_tracking_enabled=False,
+        )
+        assert len(second["source_rows"]) == 10
+        assert second["location_options"] == []
+        assert second["total"] == 24
+        assert not any(row["household_article_id"] == "milk" for row in second["source_rows"])
+        last = pagination._fast_mobile_page(
+            conn, "household-1", page=3, page_size=10, location_tracking_enabled=True,
+        )
+        assert len(last["source_rows"]) == 4
+        assert last["total"] == 24
+        empty = pagination._fast_mobile_page(
+            conn, "household-1", page=4, page_size=10, location_tracking_enabled=True,
+        )
+        assert not empty["source_rows"]
+        assert empty["total"] == 24
+    connection_engine.dispose()

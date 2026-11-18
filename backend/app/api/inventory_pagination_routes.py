@@ -37,6 +37,97 @@ ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
 """
 
 
+
+# First-screen fast path: PostgreSQL/SQLite selects only the ten household
+# identities before loading their individual location-specific inventory rows.
+# The small group index below supplies exact total counts and global filter
+# options; no entire stock row set or GPC classification is materialized.
+_IDENTITY_SQL = (
+    "CASE WHEN NULLIF(TRIM(CAST(i.household_article_id AS TEXT)), '') IS NOT NULL "
+    "THEN 'household:' || TRIM(CAST(i.household_article_id AS TEXT)) "
+    "ELSE 'inventory:' || CAST(i.id AS TEXT) END"
+)
+_ACTIVE_SQL = (
+    "i.household_id = :household_id "
+    "AND COALESCE(i.status, 'active') = 'active' "
+    "AND COALESCE(i.aantal, 0) > 0"
+)
+_FAST_PAGE_KEYS_SQL = f"""
+WITH ranked AS (
+    SELECT {_IDENTITY_SQL} AS identity_key, i.naam AS article_name,
+           CAST(i.id AS TEXT) AS inventory_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY {_IDENTITY_SQL}
+               ORDER BY lower(COALESCE(i.naam, '')), i.id
+           ) AS identity_rank
+    FROM inventory i
+    WHERE {_ACTIVE_SQL}
+)
+SELECT identity_key FROM ranked
+WHERE identity_rank = 1
+ORDER BY lower(COALESCE(NULLIF(TRIM(article_name), ''), 'Onbekend artikel')),
+         inventory_id
+LIMIT :page_size OFFSET :offset
+"""
+_FAST_GROUP_OPTIONS_SQL = f"""
+SELECT {_IDENTITY_SQL} AS identity_key,
+       COUNT(DISTINCT NULLIF(TRIM(s.naam), '')) AS location_count,
+       MIN(NULLIF(TRIM(s.naam), '')) AS single_location,
+       MIN(COALESCE(NULLIF(TRIM(ag.name), ''), 'Niet ingedeeld')) AS article_group
+FROM inventory i
+LEFT JOIN spaces s ON s.id = i.space_id
+LEFT JOIN household_articles ha
+  ON ha.id = i.household_article_id AND ha.household_id = i.household_id
+LEFT JOIN article_groups ag
+  ON ag.id = ha.article_group_id AND ag.household_id = i.household_id
+WHERE {_ACTIVE_SQL}
+GROUP BY {_IDENTITY_SQL}
+"""
+_FAST_SELECTED_ROWS_SQL = _STOCK_SQL.replace(
+    "ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC",
+    f"AND {_IDENTITY_SQL} IN :identity_keys\n"
+    "ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC",
+)
+
+
+def _fast_mobile_page(conn, household_id, *, page, page_size, location_tracking_enabled):
+    """Return all positions of at most ten identities, never the whole stock."""
+    params = {"household_id": household_id}
+    group_index = conn.execute(text(_FAST_GROUP_OPTIONS_SQL), params).mappings().all()
+    identity_keys = conn.execute(text(_FAST_PAGE_KEYS_SQL), {
+        **params, "page_size": page_size, "offset": (page - 1) * page_size,
+    }).scalars().all()
+    selected_rows = []
+    if identity_keys:
+        from sqlalchemy import bindparam
+
+        selected_rows = [
+            dict(item) for item in conn.execute(
+                text(_FAST_SELECTED_ROWS_SQL).bindparams(bindparam("identity_keys", expanding=True)),
+                {**params, "identity_keys": identity_keys},
+            ).mappings().all()
+        ]
+    locations = set()
+    article_groups = set()
+    for group in group_index:
+        count = int(group.get("location_count") or 0)
+        if location_tracking_enabled and count:
+            locations.add(
+                "Meerdere locaties" if count > 1 else str(group.get("single_location") or "").strip()
+            )
+        article_groups.add(str(group.get("article_group") or "Niet ingedeeld").strip())
+    total = len(group_index)
+    return {
+        "source_rows": selected_rows,
+        "total": total,
+        "inventory_total": total,
+        "location_options": sorted((value for value in locations if value), key=_fold),
+        "article_group_options": sorted(article_groups, key=_fold),
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 def _fold(value):
     raw = unicodedata.normalize("NFKD", str(value or "").strip().casefold())
     return "".join(char for char in raw if not unicodedata.combining(char))
@@ -162,32 +253,44 @@ def mobile_inventory_page(
     household_context = legacy.household_context_from_runtime_context(runtime_context)
     household_id = household_context.active_household_id
 
-    # This first query uses only light list fields, not the expensive GPC
-    # projection. One household/identity may have many underlying stock rows.
+    # For the common no-search initial view, the database paginates by
+    # canonical household-article identity before returning physical rows.
+    # Filtered/classification searches keep the existing exhaustive path.
+    fast_page = (
+        not query.strip() and not location_filter and not group_filter
+        and sort_key == "name-asc"
+    )
     with engine.connect() as conn:
-        rows = [dict(row) for row in conn.execute(
-            text(_STOCK_SQL), {"household_id": household_id},
-        ).mappings().all()]
-        fetch_done = perf_counter()
-        # Classification-dependent search legitimately needs GPC for the full
-        # candidate set. Normal page and location/group filters do not.
-        gpc_all = dutch_gpc_by_household_article(
-            conn, household_id,
-            [row.get("household_article_id") for row in rows],
-        ) if query.strip() else {}
-        model = _project_page(
-            rows, page=page, page_size=page_size, query=query,
-            location_filter=location_filter, group_filter=group_filter,
-            sort_key=sort_key, location_tracking_enabled=location_tracking_enabled,
-            gpc_map=gpc_all,
-        )
-        selected_rows = model.pop("source_rows")
-        # The normal mobile list renders article names, stock counts and
-        # locations; it does not render GPC. Do not trigger expensive GPC
-        # reference checks/assignment work merely to show the first ten rows.
-        # A classification text search still projects all candidate GPC fields
-        # before filtering so articles beyond page one remain discoverable.
-        gpc_page = gpc_all
+        dialect = getattr(getattr(conn, "dialect", None), "name", "")
+        if fast_page and dialect in {"postgresql", "sqlite"}:
+            model = _fast_mobile_page(
+                conn, household_id, page=page, page_size=page_size,
+                location_tracking_enabled=location_tracking_enabled,
+            )
+            selected_rows = model.pop("source_rows")
+            stock_rows_fetched = len(selected_rows)
+            fetch_done = perf_counter()
+            gpc_page = {}
+        else:
+            rows = [dict(row) for row in conn.execute(
+                text(_STOCK_SQL), {"household_id": household_id},
+            ).mappings().all()]
+            fetch_done = perf_counter()
+            # Classification text search must still find groups outside
+            # page one; it remains explicitly more expensive than browsing.
+            gpc_all = dutch_gpc_by_household_article(
+                conn, household_id,
+                [row.get("household_article_id") for row in rows],
+            ) if query.strip() else {}
+            model = _project_page(
+                rows, page=page, page_size=page_size, query=query,
+                location_filter=location_filter, group_filter=group_filter,
+                sort_key=sort_key, location_tracking_enabled=location_tracking_enabled,
+                gpc_map=gpc_all,
+            )
+            selected_rows = model.pop("source_rows")
+            stock_rows_fetched = len(rows)
+            gpc_page = gpc_all
     # Preserve the original preview JSON properties for the mobile projector.
     projected = []
     for row in selected_rows:
@@ -205,6 +308,6 @@ def mobile_inventory_page(
             "project_ms=%.1f source_rows=%d sent_rows=%d groups=%d",
             elapsed * 1000, (fetch_done - started) * 1000,
             (perf_counter() - fetch_done) * 1000,
-            len(rows), len(projected), model["total"],
+            stock_rows_fetched, len(projected), model["total"],
         )
     return model
