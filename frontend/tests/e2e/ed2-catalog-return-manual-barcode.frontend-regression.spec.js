@@ -21,6 +21,7 @@ function bootstrap(route, rows, manualRows, onSave) {
       manual_barcode: manualRows.find((saved) =>
         saved.receipt_item_id === row.id)?.gtin || '',
     })),
+    total: rows.length,
     counts: { unlinked: rows.length, classification_pending: 0, linked: 0 },
   } })
   if (path === '/api/catalog/ed2/bonnamen-matchen/auto') return route.fulfill({ json: {

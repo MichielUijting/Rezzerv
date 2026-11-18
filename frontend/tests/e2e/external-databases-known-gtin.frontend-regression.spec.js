@@ -29,7 +29,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           id: 'receipt-table-line:courgette', receipt_line_text: 'Courgette groen',
           retailer_code: 'lidl', receipt_article_number: '0082346',
           link_status: 'unlinked',
-        }], counts: { unlinked: 1, classification_pending: 0, linked: 0 } } })
+        }], total: 1, counts: { unlinked: 1, classification_pending: 0, linked: 0 } } })
       }
       if (path === autoPath) {
         return route.fulfill({ json: {
@@ -499,7 +499,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
         if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: { items: [
           { id: 'receipt-table-line:jumbo-display', receipt_line_text: 'JUMBO FUET PLAKJES',
             retailer_code: 'jumbo', receipt_article_number: '123', quantity_label: '1' },
-        ] } })
+        ], total: 1 } })
         if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
           provider: 'retailer_catalog', retailer_evidence: { source: 'Jumbo', status: 'name_suggestions', message: notice },
           results: [
@@ -568,6 +568,7 @@ test.describe('Externe databases 2 bekende GTIN regressie', () => {
         if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
           items: [{ ...item, link_status: saved ? 'classification_pending' : 'unlinked',
             article_code: saved ? gtin : '' }],
+          total: 1,
           counts: { unlinked: saved ? 0 : 1, classification_pending: saved ? 1 : 0, linked: 0 },
         } })
         if (path === '/api/external-databases/products/search-preview') return route.fulfill({ json: {
