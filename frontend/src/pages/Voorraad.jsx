@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import InventoryFirstLoadPanel from '../features/inventory/InventoryFirstLoadPanel.jsx';
+import { markInventoryFirstLoad } from '../features/inventory/inventoryFirstLoadProbe.js';
 import useBarcodeScanner from "../lib/useBarcodeScanner.js";
 import { useBlocker, useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
@@ -585,11 +587,14 @@ async function fetchInventoryRows() {
 async function fetchDesktopInventoryPage(page = 1) {
   // Fetch at most ten complete name-based groups, not the complete inventory.
   const params = new URLSearchParams({ page: String(page), page_size: '10' })
+  if (page === 1) markInventoryFirstLoad('page-request-start');
   const response = await fetch('/api/voorraad/desktop-page?' + params.toString(), {
     cache: 'no-store', headers: getAuthHeaders(),
   })
+  if (page === 1) markInventoryFirstLoad('page-response-headers');
   if (!response.ok) throw new Error('Eerste Voorraadpagina kon niet worden geladen')
   const data = await response.json()
+  if (page === 1) markInventoryFirstLoad('page-json-ready');
   if (!Array.isArray(data?.rows) || !Number.isFinite(Number(data?.total))) {
     throw new Error('Voorraad heeft een ongeldig paginaantwoord ontvangen')
   }
@@ -780,6 +785,7 @@ export default function Voorraad() {
   const [serverLoading, setServerLoading] = useState(true);
   const [serverLoadError, setServerLoadError] = useState('');
   const [firstPageSettled, setFirstPageSettled] = useState(false);
+  useEffect(() => { markInventoryFirstLoad('inventory-mounted'); }, []);
   const [completeInventoryLoading, setCompleteInventoryLoading] = useState(false);
   const articleAssignmentsRef = useRef(null);
   const [localZeroRows, setLocalZeroRows] = useState([]);
@@ -964,6 +970,7 @@ export default function Voorraad() {
         setRows(applyArticleGroupsToRows(initialRows, articleAssignmentsRef.current));
         setServerTotal(total);
         setServerLoading(false);
+        if (paginationPage === 1) markInventoryFirstLoad('page-state-ready');
         setFirstPageSettled(true);
         setLocationOptions((current) => mergeLocationOptionStates(
           current, buildLocationOptionStateFromRows(initialRows)
@@ -998,6 +1005,7 @@ export default function Voorraad() {
       .catch((error) => {
         if (cancelled) return;
         setServerLoading(false);
+        if (paginationPage === 1) markInventoryFirstLoad('page-error');
         setFirstPageSettled(true);
         setServerLoadError('De Voorraadpagina kon niet worden geladen.');
         showFeedback({
@@ -1101,6 +1109,18 @@ export default function Voorraad() {
   }, [rows, localZeroRows, filters, tableSort, serverPaged]);
 
   const paginationPageCount = Math.max(1, Math.ceil((serverPaged ? serverTotal : filteredRows.length) / 10));
+  useEffect(() => {
+    if (serverLoading || completeInventoryLoading || serverLoadError || !rows.length) return undefined;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => markInventoryFirstLoad('first-rows-painted'));
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [serverLoading, completeInventoryLoading, serverLoadError, rows.length]);
+
   const visibleInventoryRows = (serverLoading || completeInventoryLoading || serverLoadError || (serverPaged && needsFullInventory))
     ? []
     : (serverPaged
@@ -1611,6 +1631,7 @@ export default function Voorraad() {
   return (
     <div className="rz-screen" data-testid="inventory-page">
       <Header title="Voorraad" />
+      <InventoryFirstLoadPanel />
       <div className="rz-content">
         <div className="rz-content-inner rz-inventory-content-inner">
           <div className="rz-card rz-inventory-card">
