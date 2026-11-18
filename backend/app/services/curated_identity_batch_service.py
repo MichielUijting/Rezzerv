@@ -47,7 +47,7 @@ def _fingerprint(root, entries):
     }, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
-def matching_batch_preview(conn, *, target_product_id=None):
+def matching_batch_preview(conn, *, target_product_id=None, progress_callback=None):
     """Return only strongly approved, independently supported source candidates.
 
     A consumer-provided target is checked against current Catalogus evidence.
@@ -72,7 +72,10 @@ def matching_batch_preview(conn, *, target_product_id=None):
     # Reuse the already protected source listing. It excludes deleted receipts,
     # financial items and duplicate receipt lines and distinguishes identity
     # from the independent GS1 classification status.
-    source_rows = list_all_external_articles(conn=conn)["items"]
+    scan_options = ({"on_progress": lambda checked, total:
+                     progress_callback("familie controleren", checked, total)}
+                    if progress_callback is not None else {})
+    source_rows = list_all_external_articles(conn=conn, **scan_options)["items"]
     seen_keys = set()
     proposed_variants = set()
     for item in source_rows:

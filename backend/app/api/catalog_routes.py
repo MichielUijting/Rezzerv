@@ -922,7 +922,8 @@ def auto_ed2_bonnamen_matchen():
 
 def _background_match_pass(conn, actor_id, progress_callback):
     # Use the same authorities as the existing Superuser-only automatic POST.
-    family = automatically_match_curated_receipts(conn, actor_id=actor_id)
+    family = automatically_match_curated_receipts(
+        conn, actor_id=actor_id, progress_callback=progress_callback)
     general = automatically_match_proven_exact_names(
         conn, actor_id=actor_id, include_match_overview=True,
         progress_callback=progress_callback)

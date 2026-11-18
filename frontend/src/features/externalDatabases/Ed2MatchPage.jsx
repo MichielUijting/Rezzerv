@@ -266,6 +266,8 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
       data-testid="ed2-auto-match-progress"
       className="rz-synonym-analysis-actions">
       <strong>Automatische artikelmatching controleren</strong>
+      <p>Fase: {autoProgress.phase === 'voorbereiden'
+        ? 'Voorbereiden' : autoProgress.phase}.</p>
       <p>Controle {autoProgress.pass_number}: {autoProgress.total > 0
         ? autoProgress.checked + ' van ' + autoProgress.total
           + ' bonartikelen gecontroleerd ('
