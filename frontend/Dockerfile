@@ -6,8 +6,8 @@ ARG REZZERV_VERSION
 ARG REZZERV_COMMIT=unknown
 ENV VITE_REZZERV_VERSION=${REZZERV_VERSION}
 ENV VITE_REZZERV_COMMIT=${REZZERV_COMMIT}
-COPY package.json .
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 RUN node ./node_modules/vite/bin/vite.js build \
     && printf '{"version":"%s","commit":"%s"}\n' "$REZZERV_VERSION" "$REZZERV_COMMIT" > /app/dist/version.json

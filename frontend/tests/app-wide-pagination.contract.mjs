@@ -217,7 +217,15 @@ assert.match(mobileCatalogSearch, /params\.set\('search', query\.trim\(\)\)/)
 assert.match(catalogRouteSource, /normalized_search =/)
 assert.match(catalogRouteSource, /"gpc_brick_code", "gpc_brick_name"/)
 const mobileInventoryPage = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
-assert.match(mobileInventoryPage, /groupPromise/)
+// Mobile Voorraad no longer waits for a separate whole-household article-group
+// request: the server projects complete household articles before page slicing
+// and includes global filter options in its first-page response.
+assert.match(mobileInventoryPage, /\/api\/voorraad\/mobile-page\?/)
+assert.match(mobileInventoryPage, /page_size: '10'/)
+assert.match(mobileInventoryPage, /groups: Array\.isArray\(data\.article_group_options\) \? data\.article_group_options : \[\]/)
+assert.match(mobileInventoryPage, /setAllGroupOptions\(groups\)/)
+assert.match(mobileInventoryPage, /setInventoryTotal\(total\)/)
+assert.doesNotMatch(mobileInventoryPage, /groupPromise/)
 assert.match(mobileInventoryPage, /setRows\(initialRows\)/)
 const mobileHomePage = readFileSync(new URL('../src/features/home/MobileHomePage.jsx', import.meta.url), 'utf8')
 assert.match(mobileHomePage, /huishoud-dashboard is alleen beschikbaar/)

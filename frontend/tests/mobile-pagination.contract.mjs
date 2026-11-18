@@ -26,8 +26,15 @@ assert.match(centralPagination, /last: labels\?\.last \?\? \(Number\.isFinite/)
 assert.match(dataTable, /const effectivePagination = Boolean\(pagination \|\| isMobileViewport\)/)
 assert.match(dataTable, /pageSize = 10/)
 
+// Mobile Voorraad deliberately pages on the server; keep the central
+// controls while verifying the complete page is not locally re-sliced.
+assert.match(inventory, /\/api\/voorraad\/mobile-page/)
+assert.match(inventory, /const inventoryPageCount = Math\.max\(1, Math\.ceil\(inventoryTotal \/ 10\)\)/)
+assert.match(inventory, /pageItems: filteredRows/)
+assert.match(inventory, /<MobilePaginationControls \{\.\.\.inventoryPagination\}/)
+assert.doesNotMatch(inventory, /useMobilePagination\(\s*filteredRows/)
+
 for (const [name, source] of [
-  ['Voorraad', inventory],
   ['Bijna op', almostOut],
   ['Boodschappen', shopping],
   ['Meldingen', support],
