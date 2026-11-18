@@ -280,7 +280,10 @@ test('Classificeren: echte serverpagina, globale filters en selectie/export over
   await expect(exportButton).toBeDisabled()
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
   expect(calls[0]).toMatchObject({ offset: 0, limit: '8', sort: 'name', direction: 'asc' })
-  expect(calls).toHaveLength(1)  // No second 100-product batch in the background.
+  // React StrictMode may repeat the same GET, but must never download a
+  // second (or hundred-item) batch without a user paging/filtering action.
+  expect(calls.length).toBeGreaterThanOrEqual(1)
+  expect(calls.every(call => call.offset === 0 && call.limit === '8')).toBe(true)
   const header = table.locator('thead tr').first().locator('th').first()
   await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
 
