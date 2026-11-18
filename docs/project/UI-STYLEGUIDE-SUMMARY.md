@@ -2034,3 +2034,17 @@ wissen andere bestaande selecties niet. **Selectie wissen** en
 De CSV bevat alleen de geselecteerde Catalogusvelden en is read-only,
 geen nieuwe classificatie of importbestand. Het openen van de twee
 classificatiepanelen via een artikelrij werkt onafhankelijk van de checkbox.
+
+## Barcode scannen bij een individueel artikel — 17 november 2026
+
+**Uitgangspunt:** er staat géén algemene barcodescanner in de mobiele of desktop bovenbalk, en er is géén losse scanwerkstroom zonder artikelcontext. De scanner is een gedeelde mobiele actie bij een **geopend individueel artikel** in Artikelbeheer → Identificeren, Catalogusartikeldetails, Voorraadartikeldetails en de individuele bonregel in Uitpakken. Niet op lijst-/overzichtsniveau. De bestaande handmatige barcodevelden blijven op desktop bestaan.
+
+De gedeelde component `ArticleBarcodeScanAction` toont een knop **Barcode scannen** bij de huidige artikelnaam en bestaande barcode. In het mobiele venster **Bonartikel details** van een Kassabon/Uitpakken staat deze knop direct onder **Barcode / GTIN** voor een Frontteamlid, Superuser of bevoegde huishoudbeheerder. Ook wanneer een artikel tijdelijk niet bewerkbaar of reeds verwerkt is, blijft de knop zichtbaar maar uitgeschakeld en wordt de reden vermeld; hij verdwijnt niet stilzwijgend. De cameradialoog vermeldt de **artikelnaam**. Een herkenning leest uitsluitend de barcode; er wordt niet direct geschreven. Daarna wordt één bestaande centrale bevestigings-overlay gebruikt:
+
+- Heeft het artikel **geen barcode**, dan verschijnt `Barcode [nieuwe code] opslaan bij [artikelnaam]?` met **Opslaan** en **Annuleren**.
+- Heeft het artikel **een andere barcode**, dan verschijnt `Bestaande barcode [oude code] vervangen door [nieuwe code]?` met **Vervangen** en **Annuleren**.
+- Is de gescande code gelijk aan de bestaande, dan volgt uitsluitend de melding **Barcode is al bekend** en wordt niets opgeslagen.
+
+De gebruiker hoeft nooit een doelartikel te kiezen: de geopende artikelidentiteit is de bestemming. Een gewone scan of Annuleren maakt geen aankoop-, huishoud- of voorraadmutatie. Opgeslagen gegevens volgen altijd de bestaande, bevoegde routes voor het specifieke type artikel; mogelijke conflicten, dubbele barcode-eigenaren en verbonden huishoud-/winkelidentiteiten worden fail-closed behandeld. Voor een gedeelde Catalogusvervanging is uitsluitend de bevoegdheid `platform.catalog.update` voldoende; toevoeging van een ontbrekende barcode behoudt het bestaande nauw begrensde rechtenbeleid. Bestaande winkelidentiteitcorrecties worden gecontroleerd met het canonieke preview-fingerprint en de bevoegde correctieroute. Een niet aantoonbaar veilige vervanging wordt geweigerd met een begrijpelijke reden; er worden geen bestaande relaties stilzwijgend overschreven.
+
+**Camerafout/herstel:** Inhuis toont oorzaakspecifieke uitleg en kan na afzonderlijke toestemming tijdelijk een eenvoudige camera-instelling voor die scansessie proberen. De browser/Windows-privacytoestemming wordt nooit door Inhuis aangepast. Foto kiezen blijft een alternatief. Na beëindiging worden mediatracks vrijgegeven. Alle meldingen verlopen via de bestaande overlay en volgen de geldende styleguide. De onderste mobiele actiebalk blijft ongewijzigd.

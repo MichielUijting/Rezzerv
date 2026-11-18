@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import ArticleBarcodeScanAction from '../barcodes/ArticleBarcodeScanAction.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
 import Tabs from '../../ui/Tabs.jsx'
@@ -8,6 +9,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
+  isFrontteamMemberFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility.js'
@@ -70,11 +72,18 @@ function formatQuantity(value) {
 }
 
 export default function MobileArticlePage() {
+  const navigate = useNavigate()
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
   const authContext = readStoredAuthContext() || {}
   const canEditInventory = isHouseholdAdminFromContext(authContext)
+  // A Frontteam member with a normal household 'lid' role may edit the
+  // exact household article through the existing guarded PATCH route.
+  const householdArticleEditor = isHouseholdAdminFromContext(authContext)
+    || ['lid', 'member', 'household.member'].includes(
+      String(authContext?.display_role || authContext?.role || '').trim().toLowerCase(),
+    )
   const {
     visibilityMap,
     isLoading: visibilityLoading,
@@ -335,6 +344,29 @@ export default function MobileArticlePage() {
             </div>
           </div>
 
+          {isFrontteamMemberFromContext(authContext) && householdArticleEditor
+            && householdArticleId ? (
+            <div className="rz-mobile-article-scan-identity">
+              <span>Barcode: <strong>{articleData?.barcode || 'Geen barcode'}</strong></span>
+              <ArticleBarcodeScanAction articleName={articleName}
+                currentBarcode={articleData?.barcode || ''}
+                testId="mobile-article-barcode-scan"
+                onConfirm={async (gtin, { expectedOldBarcode }) => {
+                  const endpoint = `/api/household-articles/${encodeURIComponent(householdArticleId)}`
+                  const latest = await requestJson(endpoint, { method: 'GET', cache: 'no-store' })
+                  if (String(latest?.barcode || '').trim() !== expectedOldBarcode) {
+                    throw new Error('De barcode van dit voorraadartikel is gewijzigd. Open het artikel opnieuw.')
+                  }
+                  const saved = await requestJson(endpoint, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ barcode: gtin }),
+                  })
+                  setArticleData((previous) => previous
+                    ? { ...previous, ...(saved?.details || {}), barcode: gtin }
+                    : previous)
+                }} />
+            </div>
+          ) : null}
           <div className="rz-mobile-article-stock-row">
             <div className="rz-mobile-article-stock-copy">
               <span className="rz-mobile-article-stock-label">Actuele voorraad</span>

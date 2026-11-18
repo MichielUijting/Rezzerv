@@ -52,7 +52,11 @@ assert.match(receipts, /<MobilePaginationControls \{\.\.\.mobileReceiptPaginatio
 assert.match(catalog, /const PAGE_SIZE = 10/)
 assert.match(catalog, /<Pagination page=\{currentPage\} pageCount=\{pageCount\}/)
 
-assert.match(kassa, /const receiptPagination = useMobilePagination\(filteredReceipts/)
+// Kassa inbox is server-paginated; line/detail pagination remains client-side.
+assert.match(kassa, /\/api\/kassa\/receipts-page/)
+assert.match(kassa, /pageCount: Math\.max\(1, Math\.ceil\(receiptTotal \/ 10\)\)/)
+assert.match(kassa, /pageItems: filteredReceipts/)
+assert.doesNotMatch(kassa, /useMobilePagination\(filteredReceipts/)
 assert.match(kassa, /const linePagination = useMobilePagination\(activeLines/)
 assert.match(kassa, /const summaryPagination = useMobilePagination\(lines/)
 assert.match(kassa, /Paginering Bonnen/)

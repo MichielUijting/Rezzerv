@@ -24,6 +24,16 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-tab
 assert.match(detailSource, /const visible = isMobileViewport[\s\S]*\? filteredLineUiStates[\s\S]*: filteredLineUiStates\.filter\(\(entry\) => entry\.processingStatus !== 'processed'\)/)
 assert.match(detailSource, /onDoubleClick=\{isMobileViewport \? undefined : \(\) => openReceiptLineDetail\(line\.id\)\}/)
 assert.match(detailSource, /receipt-line-mobile-details-/)
+assert.match(detailSource, /onClick=\{isMobileViewport \? \(event\) => \{[\s\S]*event\.target\.closest\('button, input, select, textarea, a,[\s\S]*openReceiptLineDetail\(line\.id\)/,
+  'mobile row tap opens details only outside checkbox and dropdown controls')
+assert.match(detailSource, /onKeyDown=\{isMobileViewport \? \(event\) => \{[\s\S]*event\.target !== event\.currentTarget[\s\S]*openReceiptLineDetail\(line\.id\)/,
+  'mobile row opens details with Enter or Space')
+assert.match(detailSource, /data-testid="receipt-line-detail-overlay"/,
+  'mobile detail uses the existing dialog, not a new route')
+assert.match(detailSource, /testId=\{`unpack-line-barcode-scan-\$\{line\.id\}`\}/,
+  'mobile receipt detail exposes its per-article scanner')
+assert.doesNotMatch(detailSource, /onClickCapture=\{isMobileViewport && entry\.processingStatus === 'processed'/,
+  'processed receipt rows must allow read-only detail without an automatic warning')
 assert.match(detailSource, /openReceiptLineDetail\(line\.id\)/, 'mobile must expose the same receipt-line detail capability as desktop')
 assert.match(detailSource, /data-testid="mobile-unpack-line-filters"/)
 assert.match(detailSource, /dataTestId="mobile-unpack-status-filter"/)

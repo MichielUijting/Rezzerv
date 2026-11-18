@@ -12,6 +12,8 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   const hasBarcodeConflict = identity.barcodeConflict
   const mayResolveConflict = hasBarcodeConflict
     && Boolean(readStoredAuthContext()?.is_platform_superuser)
+  const transferredBarcode = scannedBarcode?.receiptItemId === item.id
+    ? String(scannedBarcode.value || '').trim() : ''
   const [barcode, setBarcode] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -269,7 +271,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
         },
         {
           name: 'new_gtin', label: 'Andere EAN/GTIN (alleen bij de derde keuze)',
-          type: 'text', value: '', placeholder: 'Vul een echte barcode in',
+          type: 'text', value: transferredBarcode, placeholder: 'Vul een echte barcode in',
         },
       ],
       primaryActionLabel: 'Gevolgen bekijken',
@@ -341,6 +343,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   if (mayResolveConflict) return (
     <section className="rz-external-manual-barcode" data-testid="ed2-barcode-conflict-resolver">
       <h4>Barcodeconflict controleren</h4>
+      {transferredBarcode ? <p>Nieuw gescand: <strong>{transferredBarcode}</strong>. Alleen na expliciete keuze en gevolgencontrole kan deze barcode worden gebruikt.</p> : null}
       <p>Catalogusbarcode: <strong>{item.article_code}</strong>.
         Handmatig opgeslagen barcode: <strong>{item.manual_barcode}</strong>.
         Deze codes zijn niet gelijk; bevestig eerst de juiste identiteit.</p>
@@ -367,6 +370,7 @@ export default function Ed2ManualBarcodeEntry({ item, onSaved, scannedBarcode = 
   if (hasBarcodeConflict) return (
     <section className="rz-external-manual-barcode" data-testid="ed2-barcode-conflict-readonly">
       <h4>Barcodeconflict</h4>
+      {transferredBarcode ? <p>Nieuw gescand: <strong>{transferredBarcode}</strong>. Er is niets gewijzigd; alleen de Superuser mag een conflict corrigeren.</p> : null}
       <p>Catalogusbarcode: <strong>{item.article_code}</strong>.
         Handmatig opgeslagen barcode: <strong>{item.manual_barcode}</strong>.
         Alleen een platform-Superuser mag dit conflict na gevolgencontrole corrigeren.</p>

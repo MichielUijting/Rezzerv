@@ -43,6 +43,11 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   })
   const [householdId, setHouseholdId] = useState('')
   const [receipts, setReceipts] = useState([])
+  const [receiptPage, setReceiptPage] = useState(1)
+  const [receiptTotal, setReceiptTotal] = useState(0)
+  const receiptQueryKeyRef = useRef('')
+  const receiptBootstrapRef = useRef(true)
+  const receiptHouseholdRef = useRef('')
   const [receiptsLoading, setReceiptsLoading] = useState(false)
   const [receiptsLoadError, setReceiptsLoadError] = useState('')
   useEffect(() => { if (receiptsLoadError) showFeedback({ variant: 'error', message: receiptsLoadError }) }, [receiptsLoadError, showFeedback])
@@ -82,15 +87,38 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     })
   }, [message, showFeedback])
 
-  async function loadReceipts(id = householdId) {
+  async function loadReceipts(id = householdId, options = {}) {
+    const requestedPage = Math.max(1, Number(options.page ?? receiptPage) || 1)
     const requestId = ++receiptRequestRef.current
+    const queryKey = JSON.stringify([String(id), requestedPage, receiptFilter])
+    receiptQueryKeyRef.current = queryKey
+    if (receiptHouseholdRef.current && receiptHouseholdRef.current !== String(id)) {
+      setReceipts([])
+      setReceiptTotal(0)
+      setSelectedReceiptIds([])
+      setReceipt(null)
+    }
+    receiptHouseholdRef.current = String(id)
     setReceiptsLoading(true)
     setReceiptsLoadError('')
     try {
       if (!id) throw new Error('Het actieve huishouden is nog niet geladen.')
-      const result = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(id)}`)
-      if (!Array.isArray(result?.items)) throw new Error('De kassabonlijst heeft een onverwacht antwoord ontvangen.')
-      if (requestId === receiptRequestRef.current) setReceipts(result.items)
+      const params = new URLSearchParams({
+        householdId: String(id),
+        page: String(requestedPage),
+        page_size: '10',
+        zoek: receiptFilter,
+        time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        initialize: String(options.initialize !== false),
+      })
+      const result = await fetchJson(`/api/kassa/receipts-page?${params.toString()}`)
+      if (!Array.isArray(result?.items) || !Number.isFinite(Number(result?.total))) {
+        throw new Error('De kassabonlijst heeft een onverwacht antwoord ontvangen.')
+      }
+      if (requestId === receiptRequestRef.current) {
+        setReceipts(result.items)
+        setReceiptTotal(Number(result.total))
+      }
       return result.items
     } catch (error) {
       if (requestId === receiptRequestRef.current) {
@@ -101,6 +129,18 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       if (requestId === receiptRequestRef.current) setReceiptsLoading(false)
     }
   }
+
+  // Subsequent pages/searches load only their own records, without running the
+  // receipt initialization/auto-approval write path on every page change.
+  useEffect(() => {
+    if (!householdId || mode !== 'list' || receiptBootstrapRef.current) return undefined
+    const key = JSON.stringify([householdId, receiptPage, receiptFilter])
+    if (receiptQueryKeyRef.current === key) return undefined
+    const timer = window.setTimeout(() => {
+      loadReceipts(householdId, { page: receiptPage, initialize: false }).catch(() => {})
+    }, receiptFilter ? 250 : 0)
+    return () => window.clearTimeout(timer)
+  }, [householdId, mode, receiptPage, receiptFilter])
 
   function showReceiptList() {
     manualReceiptListRef.current = true
@@ -184,18 +224,25 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       if (cancelled) return
       const id = String(household?.active_household_id ?? household?.id ?? '')
       setHouseholdId(id)
-      await loadReceipts(id)
-      if (cancelled) return
       if (requestedReceiptId) {
+        receiptBootstrapRef.current = false
         await openReceipt(requestedReceiptId)
         return
       }
       if (requestedView === 'bonnen' || manualReceiptListRef.current) {
+        await loadReceipts(id, { page: 1, initialize: true })
+        receiptBootstrapRef.current = false
+        if (cancelled) return
         setMode('list')
         return
       }
+      // Opening the mobile receipt camera never requires the full inbox.
+      receiptBootstrapRef.current = false
       await startCamera()
-    }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
+    }).catch(() => {
+      receiptBootstrapRef.current = false
+      if (!cancelled) setCameraError('Kassa kon niet worden gestart.')
+    })
     return () => {
       cancelled = true
       stopReceiptCameraStream(streamRef.current)
@@ -461,11 +508,16 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
 
   const lines = receiptLines(receipt)
   const activeLines = lines.filter((line) => !line.is_deleted)
-  const filteredReceipts = useMemo(
-    () => receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())),
-    [receipts, receiptFilter],
-  )
-  const receiptPagination = useMobilePagination(filteredReceipts, receiptFilter)
+  const filteredReceipts = receipts
+  const receiptPagination = {
+    page: receiptPage,
+    pageCount: Math.max(1, Math.ceil(receiptTotal / 10)),
+    pageItems: filteredReceipts,
+    setPage: setReceiptPage,
+  }
+  useEffect(() => {
+    if (receiptPage > receiptPagination.pageCount) setReceiptPage(receiptPagination.pageCount)
+  }, [receiptPage, receiptPagination.pageCount])
   const linePagination = useMobilePagination(activeLines, receiptId(receipt))
   const lineSum = activeLines.reduce((sum, line) => sum + (Number(line.display_line_total ?? line.line_total) || 0), 0)
   const lineDiscount = activeLines.reduce((sum, line) => sum + (Number(line.discount_amount) || 0), 0)
@@ -525,9 +577,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       {mode === 'list' ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list" aria-busy={receiptsLoading}>
           <div className="rz-mobile-kassa-list-actions"><input type="file" accept="image/*,application/pdf" hidden ref={uploadRef} aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} /><Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
-          <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
+          <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => { setReceiptPage(1); setReceiptFilter(event.target.value) }} />
           <div className="rz-mobile-table-select-row" aria-label="Selectie Kassa-bonnen">
-            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...new Set([...current, ...receiptPagination.pageItems.map(receiptId)])] : current.filter((id) => !receiptPagination.pageItems.some((item) => receiptId(item) === id)))} disabled={busy || !receiptPagination.pageItems.length} /> Alles</label>
+            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...new Set([...current, ...receiptPagination.pageItems.map(receiptId)])] : current.filter((id) => !receiptPagination.pageItems.some((item) => receiptId(item) === id)))} disabled={busy || receiptsLoading || !receiptPagination.pageItems.length} /> Alles</label>
           </div>
           {receiptsLoading && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
 
@@ -546,7 +598,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
                     <label className="rz-mobile-article-row-leading">
                       <input type="checkbox" checked={selected} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...current, receiptId(item)] : current.filter((id) => id !== receiptId(item)))} aria-label={`Selecteer ${storeName} van ${purchaseDate}`} />
                     </label>
-                    <button type="button" className="rz-mobile-unpack-main" onClick={() => openReceipt(receiptId(item))} aria-label={`${storeName}, ${purchaseDate}, ${lineCount} artikelen, ${statusLabel}`}>
+                    <button type="button" className="rz-mobile-unpack-main" disabled={receiptsLoading} onClick={() => openReceipt(receiptId(item))} aria-label={`${storeName}, ${purchaseDate}, ${lineCount} artikelen, ${statusLabel}`}>
                       <span className="rz-mobile-inventory-card-title">{storeName}</span>
                       <span className="rz-mobile-inventory-card-meta"><span>{purchaseDate}</span><span>{lineCount} artikelen</span></span>
                     </button>
@@ -555,10 +607,10 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               })}
             </div>
           ) : null}
-          <MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Bonnen" />
+          <div style={{ pointerEvents: receiptsLoading ? 'none' : undefined }}><MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Bonnen" /></div>
           <div className="rz-mobile-kassa-bulk-actions rz-mobile-table-bulk-actions" data-testid="mobile-kassa-bulk-actions">
-            <Button type="button" disabled={!selectedReceiptIds.length || busy} onClick={approveSelectedReceipts}>Goedkeuren</Button>
-            <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
+            <Button type="button" disabled={!selectedReceiptIds.length || busy || receiptsLoading} onClick={approveSelectedReceipts}>Goedkeuren</Button>
+            <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy || receiptsLoading} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
           </div>
         </main>
       ) : null}

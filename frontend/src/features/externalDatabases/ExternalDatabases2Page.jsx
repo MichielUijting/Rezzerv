@@ -9,7 +9,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport'
 import OffCandidatePanel from './OffCandidatePanel'
 import Ed2GpcClassificationPanel from './Ed2GpcClassificationPanel'
-import Ed2BarcodeScanner from './Ed2BarcodeScanner'
+import Ed2ArticleBarcodeAction from './Ed2ArticleBarcodeAction.jsx'
 import Ed2ManualBarcodeEntry from './Ed2ManualBarcodeEntry'
 import { displayEd2Gtin, ed2BarcodeIdentityState } from './ed2BarcodeIdentity.js'
 import Ed2MatchPage from './Ed2MatchPage'
@@ -99,7 +99,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
-  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState ? 'identity' : null)
+  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -108,7 +108,15 @@ export default function ExternalDatabases2Page() {
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
   const [queueTaskFocus, setQueueTaskFocus] = useState(null)
-  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(null)
+  const [pendingScannedBarcode, setPendingScannedBarcode] = useState(() => {
+    // Initialize BEFORE selecting the ED2 row, so the automatic conflict
+    // overlay receives the scanned GTIN on its very first render.
+    const receiptItemId = String(location.state?.selectedItemId || '')
+    const value = String(location.state?.scannedBarcode || '').trim()
+    return receiptItemId && value ? { receiptItemId, value } : null
+  })
+  // A transferred scan is only input for the existing confirmed ED2 workflow.
+  // It must not write a Catalogus or household link during navigation.
   const [selectedIds, setSelectedIds] = useState([])
   const [pageIds, setPageIds] = useState([])
   const [filteredIds, setFilteredIds] = useState([])
@@ -385,6 +393,16 @@ export default function ExternalDatabases2Page() {
     return () => { cancelled = true }
   }, [location.state?.selectedItemId, queueTaskFocus?.sourceId, refreshVersion, activeArea, showFeedback])
 
+  useEffect(() => {
+    const scanned = String(location.state?.scannedBarcode || '').trim()
+    if (!selectedItem || !scanned || selectedItem.id !== location.state?.selectedItemId) return
+    setPendingScannedBarcode({ receiptItemId: selectedItem.id, value: scanned })
+    const nextState = { ...(location.state || {}) }
+    delete nextState.scannedBarcode
+    delete nextState.scanSource
+    navigate(location.pathname + location.search, { replace: true, state: nextState })
+  }, [selectedItem?.id, location.state?.selectedItemId, location.state?.scannedBarcode, location.pathname, location.search, navigate])
+
   return (
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
@@ -513,8 +531,12 @@ export default function ExternalDatabases2Page() {
                 setRefreshVersion((value) => value + 1)
               }} />
             <section className="rz-external-receipt-detail" aria-label="Artikelidentiteit bevestigen">
-              <Ed2BarcodeScanner receiptItemId={selectedItem.id}
-                onScanned={(value) => setPendingScannedBarcode({ receiptItemId: selectedItem.id, value })} />
+              {isMobile ? <Ed2ArticleBarcodeAction item={selectedItem} onSaved={(outcome) => {
+                setSelectedItem(null)
+                setPendingScannedBarcode(null)
+                setOffLinkOutcome(outcome)
+                setRefreshVersion((value) => value + 1)
+              }} /> : null}
               <Ed2ManualBarcodeEntry item={selectedItem} scannedBarcode={pendingScannedBarcode}
                 onSaved={(outcome) => {
                   setSelectedItem(null)
@@ -526,7 +548,7 @@ export default function ExternalDatabases2Page() {
             </section>
           </div>
           : selectedItem ? <div key={selectedItem.id}>
-            <OffCandidatePanel item={selectedItem} returnState={returnState}
+            <OffCandidatePanel item={selectedItem} returnState={returnState} preScannedBarcode={pendingScannedBarcode}
             onLinkOutcome={(outcome) => {
               setOffLinkOutcome(outcome)
               setSelectedItem(null)
