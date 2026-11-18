@@ -304,7 +304,9 @@ test('Classificeren: echte serverpagina, globale filters en selectie/export over
   const cbsFilter = table.getByRole('textbox', { name: 'Filter op CBS ECOICOPv2' })
   await cbsFilter.fill('niet g')
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
-  await all.check()
+  // This checkbox fetches the matching IDs asynchronously: the click itself
+  // must not claim that all filtered rows were already selected.
+  await all.click()
   await expect(selectionCount).toContainText('10 rijen geselecteerd')
   await expect(all).toBeChecked()
 
