@@ -325,8 +325,9 @@ def test_unified_bonnamen_matchen_combines_both_authorities(monkeypatch):
                             "ok": True, "status": "applied", "linked": 2,
                             "synonyms_created": 1, "blocked": 0})
     monkeypatch.setattr(api, "automatically_match_proven_exact_names",
-                        lambda conn, *, actor_id: {
-                            "ok": True, "linked": 3, "blocked": 1})
+                        lambda conn, *, actor_id, include_match_overview=False: {
+                            "ok": True, "linked": 3, "blocked": 1,
+                            "snapshot_requested": include_match_overview})
     response = api.auto_ed2_bonnamen_matchen()
     assert events == ["begin", "commit"]
     assert response["linked"] == 5
@@ -795,3 +796,65 @@ def test_manual_review_requires_two_independently_selectable_catalog_identities(
     # actionable manual choice.
     entries[1]["receipt_article_number"] = "92154"
     assert service.confirmed_product_variant_review_reasons(entries)[entries[2]["id"]]
+
+
+def test_match_workspace_snapshot_reuses_only_zero_write_projection(monkeypatch):
+    rows = [
+        row("ah", "BROOD", "1", "bread", "catalog_linked"),
+        row("lidl", "BROOD", "2", "different", "catalog_linked"),
+        row("jumbo", "BROOD", automatic_match_review_reason="Meerdere uitvoeringen"),
+    ]
+    calls = []
+    def projected(*, conn):
+        calls.append(True)
+        return {"items": rows}
+    monkeypatch.setattr(service, "list_all_external_articles", projected)
+    result = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="superuser", include_match_overview=True)
+    assert result["linked"] == 0
+    assert result["matching_overview"] == {"items": rows, "total": len(rows)}
+    assert len(calls) == 1, "zero-write final pass must not repeat the full projection"
+    no_snapshot = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="superuser")
+    assert "matching_overview" not in no_snapshot
+
+
+def test_match_workspace_snapshot_not_shared_before_write_batch_completion(monkeypatch):
+    rows = [row("ah", "HALFVOLLE MELK", "101", "milk", "catalog_linked"),
+            row("jumbo", "HALFVOLLE MELK")]
+    calls = []
+    def projected(*, conn):
+        calls.append(True)
+        return {"items": rows}
+    monkeypatch.setattr(service, "list_all_external_articles", projected)
+    monkeypatch.setattr(service, "resolve_external_article_identity",
+                        lambda conn, rid: {"retailer_code": "jumbo",
+                                          "receipt_text": "HALFVOLLE MELK",
+                                          "external_article_code": ""})
+    monkeypatch.setattr(service, "_persist_exact_name_match",
+                        lambda conn, **kwargs: True)
+    result = service.automatically_match_proven_exact_names(
+        FakeConn(), actor_id="superuser", include_match_overview=True)
+    assert result["linked"] == 1
+    assert "matching_overview" not in result
+    assert len(calls) == 2, "a mutating batch still validates the proof twice"
+
+
+def test_unified_route_passes_zero_write_matching_snapshot(monkeypatch):
+    from app.api import catalog_routes as api
+    @contextmanager
+    def transaction():
+        yield FakeConn()
+    monkeypatch.setattr(api, "_require_authorized_bonnaam_actor",
+                        lambda: SimpleNamespace(user_id="superuser", is_platform_superuser=True))
+    monkeypatch.setattr(api, "engine", SimpleNamespace(begin=transaction))
+    monkeypatch.setattr(api, "automatically_match_curated_receipts",
+                        lambda conn, *, actor_id: {"linked": 0})
+    overview = {"items": [], "total": 0}
+    def general(conn, *, actor_id, include_match_overview=False):
+        assert include_match_overview is True
+        return {"linked": 0, "matching_overview": overview}
+    monkeypatch.setattr(api, "automatically_match_proven_exact_names", general)
+    result = api.auto_ed2_bonnamen_matchen()
+    assert result["linked"] == 0
+    assert result["matching_overview"] == overview

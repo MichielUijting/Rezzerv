@@ -5,6 +5,7 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
+import { readMatchingOverview } from './ed2MatchingOverview.js'
 import '../articleSynonyms/synonymAnalysis.css'
 
 const AUTO_PROGRESS_KEY = 'ed2-match-entry-progress'
@@ -97,6 +98,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     setRightId('')
     let linked = 0
     let passes = 0
+    let stableOverview = null
     try {
       for (passes = 1; passes <= MAX_AUTO_PASSES; passes += 1) {
         if (!mountedRef.current) return false
@@ -131,7 +133,10 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         }
         // A final zero-write pass proves that newly confirmed receipts do not
         // unlock any further eligible matches. A limited batch must continue.
-        if (!batchLinked && !summary.limit_reached) break
+        if (!batchLinked && !summary.limit_reached) {
+          stableOverview = readMatchingOverview(summary)
+          break
+        }
       }
       if (passes > MAX_AUTO_PASSES) {
         throw new Error('De maximale hoeveelheid automatische controles is bereikt. '
@@ -144,7 +149,18 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         message: 'Automatisch matchen afgerond. De handmatig te matchen artikelen worden geladen.',
         testId: 'ed2-auto-match-progress', dismissMode: 'blocked',
       })
-      await reload()
+      if (stableOverview) {
+        const loaded = stableOverview.map(displayRow)
+        setItems(loaded)
+        if (initialReceiptItemId && loaded.some((item) =>
+          item.id === initialReceiptItemId && needsManualMatching(item))) {
+          setLeftId(initialReceiptItemId)
+        }
+      } else {
+        // Older deployments or incomplete proof responses still use the
+        // unchanged authoritative GET, never an unverified partial list.
+        await reload()
+      }
       if (!mountedRef.current) return false
       setAutoResult({ linked, passes })
       setAutoPhase('ready')
@@ -167,7 +183,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
       inFlightRef.current = false
       if (mountedRef.current) setLoading(false)
     }
-  }, [isSuperuser, showFeedback, dismissFeedbackIfKey, reload])
+  }, [isSuperuser, showFeedback, dismissFeedbackIfKey, reload, initialReceiptItemId])
 
   useEffect(() => {
     if (!isSuperuser) return undefined
