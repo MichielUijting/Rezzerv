@@ -72,8 +72,13 @@ assert.match(mobileSource, /\{ value: 'name-asc', label: 'Naam A–Z' \}/)
 assert.match(mobileSource, /\{ value: 'name-desc', label: 'Naam Z–A' \}/)
 assert.doesNotMatch(mobileSource, /Aantal hoog–laag/)
 assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
-assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
-assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
+assert.match(mobileSource, /\/api\/voorraad\/mobile-page/)
+// The paged backend supplies household-wide group options, avoiding a
+// second full article-group fetch during the first mobile Voorraad render.
+assert.match(mobileSource, /groups: Array\.isArray\(data\.article_group_options\) \? data\.article_group_options : \[\]/)
+assert.match(mobileSource, /setAllGroupOptions\(groups\)/)
+assert.match(mobileSource, /const articleGroupOptions = allGroupOptions/)
+assert.doesNotMatch(mobileSource, /\/api\/article-groups\/household-articles/)
 assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
@@ -186,13 +191,18 @@ assert.equal(applyInventoryRowQuantity(initialRows, 'household:b', 'b-1', 0).len
 assert.strictEqual(applyInventoryRowQuantity(initialRows, 'household:a', 'a-1', -1), initialRows)
 assert.match(mobileSource, /setRows\(\(current\) => applyInventoryRowQuantity/)
 assert.match(mobileSource, /setRows\(previousRows\)/)
-// Initial page load and explicit retry must still fetch authoritative inventory.
-// Quick +/- and exact mutations must never trigger that expensive full reload.
-assert.match(mobileSource, /async function reload\(\) \{[\s\S]*await loadMobileInventory\(\)/)
+// The new read-only server projection groups by household identity before
+// page slicing. A mobile page never fetches the complete inventory response.
+assert.match(mobileSource, /\/api\/voorraad\/mobile-page\?/)
+assert.match(mobileSource, /page_size: '10'/)
+assert.match(mobileSource, /async function reload\(\) \{/)
+assert.match(mobileSource, /await loadMobileInventory\(\{/)
 assert.match(mobileSource, /setRows\(initialRows\)/)
-assert.match(mobileSource, /groupPromise\.then\(\(groups\) => \{/)
-assert.match(mobileSource, /generation !== loadGenerationRef\.current/)
-assert.match(mobileSource, /setRows\(buildMobileInventoryRows\(liveRows, assignments\)\)/)
+assert.match(mobileSource, /setInventoryTotal\(total\)/)
+assert.match(mobileSource, /setAllLocationOptions\(locations\)/)
+assert.match(mobileSource, /setInventoryPage\(1\)/)
+assert.doesNotMatch(mobileSource, /\/api\/dev\/inventory-preview\?_ts/)
+assert.doesNotMatch(mobileSource, /useMobilePagination\(\s*filteredRows/)
 const mutationBlock = mobileSource.slice(
   mobileSource.indexOf('  async function submitInventoryMutation('),
   mobileSource.indexOf('  async function mutateQuickInventory('),

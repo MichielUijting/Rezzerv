@@ -200,7 +200,11 @@
 }
 
 .rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr {
-  cursor: default;
+  cursor: pointer;
+}
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr:focus-visible {
+  outline: 2px solid var(--color-ui-primary);
+  outline-offset: 2px;
 }
 
 .rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr[data-processed="true"] {

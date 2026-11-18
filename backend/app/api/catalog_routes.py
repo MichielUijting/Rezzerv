@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import inspect, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.api.catalog_shopify_review_routes import router as shopify_review_router
@@ -91,6 +91,10 @@ class CatalogNameUpdateRequest(BaseModel):
 
 class CatalogGtinUpdateRequest(BaseModel):
     gtin: str
+
+
+class CatalogGtinReplaceRequest(CatalogGtinUpdateRequest):
+    expected_old_gtin: str = Field(min_length=8, max_length=14)
 
 
 class Ed2ManualBarcodeRequest(BaseModel):
@@ -793,6 +797,14 @@ def _require_catalog_gtin_contributor() -> None:
     """
     try:
         require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
+    try:
+        # Frontteam may contribute a missing, validated Catalogus GTIN but
+        # cannot delete or rename an article through this permission.
+        require_platform_permission_from_session("platform.external_products.link_existing")
         return
     except HTTPException as error:
         if error.status_code != 403:
@@ -1548,6 +1560,157 @@ def set_catalog_primary_gtin(
             )
 
     return {"global_product_id": global_product_id, "gtin": gtin, "changed": not bool(previous_gtin)}
+
+
+def _require_catalog_gtin_replacer() -> None:
+    """Only Catalogus editors or authorized Frontteam identity specialists.
+
+    Unlike add-only, household-admin fallback must never replace a shared
+    primary GTIN. Dependency checks in the endpoint remain fail-closed.
+    """
+    try:
+        require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+        return
+    except HTTPException as error:
+        if error.status_code != 403:
+            raise
+    require_platform_permission_from_session("platform.external_products.link_existing")
+
+
+@router.put("/{global_product_id}/gtin/replace")
+def replace_catalog_primary_gtin(
+    global_product_id: str,
+    payload: CatalogGtinReplaceRequest,
+):
+    """Fail-closed CAS replacement only for an unreferenced Catalogus identity.
+
+    A shared product already used by a household, receipt or product identity
+    needs the existing audited correction procedure. A simple button must not
+    silently invalidate old inventory or retailer evidence.
+    """
+    _require_catalog_gtin_replacer()
+    required_tables = {
+        "global_products", "product_identities",
+        "household_articles", "external_article_product_links",
+    }
+    tables = _tables()
+    if not required_tables.issubset(tables):
+        raise HTTPException(status_code=503, detail="Veilige barcodecorrectie is niet beschikbaar.")
+    product_columns = _columns("global_products")
+    identity_columns = _columns("product_identities")
+    if not {"id", "status", "primary_gtin"}.issubset(product_columns) or not {
+        "identity_value", "identity_type", "global_product_id"
+    }.issubset(identity_columns):
+        raise HTTPException(status_code=503, detail="De identiteitscontrole is niet beschikbaar.")
+    checked = validate_barcode(payload.gtin, "gtin")
+    old_checked = validate_barcode(payload.expected_old_gtin, "gtin")
+    if not checked["valid"] or not old_checked["valid"]:
+        raise HTTPException(status_code=422, detail="De oude en nieuwe barcode moeten geldig zijn.")
+    new_gtin = str(checked["normalized_value"])
+    old_gtin = str(old_checked["normalized_value"])
+    # Compare checksum-valid GTIN textual aliases, including EAN-13 encoded
+    # as GTIN-14 with a leading zero. No alternate catalog owner is allowed.
+    def aliases(gtin: str) -> list[str]:
+        padded = gtin.zfill(14)
+        return sorted({
+            padded[14 - length:] for length in (8, 12, 13, 14)
+            if padded.startswith("0" * (14 - length))
+            and validate_barcode(padded[14 - length:], "gtin")["valid"]
+        })
+    new_aliases, old_aliases = aliases(new_gtin), aliases(old_gtin)
+    if checked.get("barcode_scope") != "global_candidate":
+        raise HTTPException(status_code=409, detail="Winkelinterne barcodes vereisen de winkelgebonden identiteitscontrole.")
+    if old_gtin == new_gtin:
+        raise HTTPException(status_code=409, detail="De barcode is niet gewijzigd.")
+
+    with engine.begin() as conn:
+        if conn.dialect.name == "postgresql":
+            for value in sorted({old_gtin, new_gtin}):
+                conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:gtin))"), {"gtin": value})
+        lock = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        current = conn.execute(text(
+            "SELECT id, status, primary_gtin FROM global_products "
+            "WHERE id = :product_id" + lock
+        ), {"product_id": global_product_id}).mappings().first()
+        if not current or str(current.get("status") or "").lower() == "deleted":
+            raise HTTPException(status_code=404, detail="Catalogusartikel bestaat niet.")
+        if str(current.get("primary_gtin") or "").strip() != old_gtin:
+            raise HTTPException(status_code=409,
+                detail="De bestaande barcode is intussen veranderd. Vernieuw het artikel.")
+
+        # A new global code may not steal any existing ownership. Check both
+        # the primary column and EAN/UPC alias claims; never reassign identities.
+        duplicate_query = text("""
+            SELECT id FROM global_products
+            WHERE primary_gtin IN :aliases AND id <> :product_id LIMIT 1
+        """).bindparams(bindparam("aliases", expanding=True))
+        duplicate = conn.execute(duplicate_query, {
+            "aliases": new_aliases, "product_id": global_product_id,
+        }).first()
+        if duplicate:
+            raise HTTPException(status_code=409,
+                detail="Deze barcode hoort al bij een ander Catalogusartikel.")
+        identity_query = text("""
+            SELECT global_product_id FROM product_identities
+            WHERE identity_type IN ('gtin', 'ean', 'upc')
+              AND identity_value IN :aliases
+            LIMIT 1
+        """).bindparams(bindparam("aliases", expanding=True))
+        identity_conflict = conn.execute(identity_query, {"aliases": new_aliases}).first()
+        if identity_conflict:
+            raise HTTPException(status_code=409,
+                detail="Deze barcode is al als productidentiteit geregistreerd.")
+
+        # Never strand historical/household/retailer references to the old code.
+        old_claim = conn.execute(identity_query, {"aliases": old_aliases}).first()
+        if old_claim:
+            raise HTTPException(status_code=409,
+                detail="Deze barcode heeft bestaande identiteitskoppelingen. Gebruik de gecontroleerde correctie in Artikelbeheer.")
+        if "household_articles" in tables:
+            household_columns = _columns("household_articles")
+            if "global_product_id" not in household_columns:
+                raise HTTPException(status_code=503,
+                    detail="Huishoudkoppelingen konden niet veilig worden gecontroleerd.")
+            linked_household = conn.execute(text("""
+                SELECT id FROM household_articles
+                WHERE global_product_id = :product_id LIMIT 1
+            """), {"product_id": global_product_id}).first()
+            if linked_household:
+                raise HTTPException(status_code=409,
+                    detail="Dit product is aan huishoudartikelen gekoppeld. Gebruik de gecontroleerde correctie in Artikelbeheer.")
+            if "barcode" in household_columns:
+                old_household_claim = conn.execute(text("""
+                    SELECT id FROM household_articles WHERE barcode IN :aliases LIMIT 1
+                """).bindparams(bindparam("aliases", expanding=True)), {
+                    "aliases": old_aliases,
+                }).first()
+                if old_household_claim:
+                    raise HTTPException(status_code=409,
+                        detail="De oude barcode wordt nog door een huishoudartikel gebruikt. Gebruik de gecontroleerde correctie in Artikelbeheer.")
+        if "external_article_product_links" in tables:
+            link_columns = _columns("external_article_product_links")
+            if "global_product_id" not in link_columns:
+                raise HTTPException(status_code=503, detail="Winkelkoppelingen konden niet gecontroleerd worden.")
+            retailer_link = conn.execute(text("""
+                SELECT global_product_id FROM external_article_product_links
+                WHERE global_product_id = :product_id LIMIT 1
+            """), {"product_id": global_product_id}).first()
+            if retailer_link:
+                raise HTTPException(status_code=409,
+                    detail="Dit product heeft winkelkoppelingen. Corrigeer eerst via Artikelbeheer.")
+
+        updated_at = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+        changed = conn.execute(text("""
+            UPDATE global_products SET primary_gtin = :new_gtin""" + updated_at + """
+            WHERE id = :product_id AND primary_gtin = :old_gtin
+        """), {
+            "new_gtin": new_gtin, "old_gtin": old_gtin,
+            "product_id": global_product_id,
+        })
+        if changed.rowcount != 1:
+            raise HTTPException(status_code=409, detail="De barcode is intussen gewijzigd.")
+    return {"global_product_id": global_product_id, "gtin": new_gtin,
+            "previous_gtin": old_gtin, "changed": True}
 
 
 @router.put("/{global_product_id}/image")

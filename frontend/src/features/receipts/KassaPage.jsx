@@ -1978,6 +1978,13 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
   const inboxScrollFrameRef = useRef(null)
   const [inboxScrollHeightPx, setInboxScrollHeightPx] = useState(KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
+  const [inboxPage, setInboxPage] = useState(1)
+  const [inboxTotal, setInboxTotal] = useState(0)
+  const [inboxSummary, setInboxSummary] = useState({ 'Controle nodig': 0, Gecontroleerd: 0 })
+  const inboxPageRequestRef = useRef(0)
+  const inboxQueryKeyRef = useRef('')
+  const inboxBootstrapRef = useRef(true)
+  const inboxHouseholdRef = useRef('')
 
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   useEffect(() => { if (status) showFeedback({ variant: 'success', message: status }) }, [status, showFeedback])
@@ -2236,46 +2243,105 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     const items = await loadReceipts(householdId, options)
     if (!uploadedReceiptId || items.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)) return items
     const mergedItems = mergeUploadedReceiptIntoItems(items, result)
-    setReceipts([...mergedItems])
-    pruneReceiptUiState(mergedItems)
+    setReceipts(mergedItems.slice(0, 10))
+    setInboxTotal((current) => current + 1)
     return mergedItems
   }
   async function loadReceipts(nextHouseholdId = householdId, options = {}) {
+    if (!nextHouseholdId) return []
+    const requestedPage = Math.max(1, Number(options?.page ?? inboxPage) || 1)
+    const activeFilters = options?.resetFilters ? DEFAULT_RECEIPT_FILTERS : filters
+    const focusReceiptId = String(options?.focusReceiptId || "").trim()
+    const params = new URLSearchParams({
+      householdId: String(nextHouseholdId),
+      page: String(requestedPage),
+      page_size: '10',
+      winkel: activeFilters.winkel,
+      datum: activeFilters.datum,
+      totaal: activeFilters.totaal,
+      artikelen: activeFilters.artikelen,
+      status: activeFilters.status,
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      sort_key: inboxSort.key,
+      sort_direction: inboxSort.direction,
+      initialize: String(options?.initialize !== false),
+    })
+    if (focusReceiptId) params.set("focus_receipt_id", focusReceiptId)
+    inboxQueryKeyRef.current = JSON.stringify([
+      String(nextHouseholdId), requestedPage, activeFilters, inboxSort,
+    ])
+    const requestId = ++inboxPageRequestRef.current
+    if (inboxHouseholdRef.current && inboxHouseholdRef.current !== String(nextHouseholdId)) {
+      // Never retain a prior household's selection or opened receipt.
+      setReceipts([])
+      setInboxTotal(0)
+      setInboxSummary({ 'Controle nodig': 0, Gecontroleerd: 0 })
+      setSelectedReceiptIds([])
+      setOpenedReceiptId('')
+      openedReceiptIdRef.current = ''
+      setOpenedReceipt(null)
+      setReceiptInboxFocusId('')
+    }
+    inboxHouseholdRef.current = String(nextHouseholdId)
     if (!options?.silent) setIsLoading(true)
     if (!options?.silent) setError('')
     let items = []
     try {
-      const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
+      const list = await fetchJson(`/api/kassa/receipts-page?${params.toString()}`)
       items = Array.isArray(list?.items) ? list.items : []
-      setReceipts([...items])
-      pruneReceiptUiState(items)
-      setError('')
-      if (!options?.preserveDuplicateNotice) setDuplicateNotice('')
-      const activeReceiptId = String(options?.openReceiptId || openedReceiptIdRef.current || openedReceiptId || '')
-      if (activeReceiptId) {
+      if (requestId === inboxPageRequestRef.current) {
+        if (focusReceiptId) {
+          const focusedPage = Math.max(1, Number(list?.page || requestedPage) || requestedPage)
+          // Keep the subsequent page-change effect in sync with the resolved page.
+          inboxQueryKeyRef.current = JSON.stringify([
+            String(nextHouseholdId), focusedPage, activeFilters, inboxSort,
+          ])
+          setInboxPage(focusedPage)
+        }
+        setReceipts(items)
+        setInboxTotal(Number(list?.total || 0))
+        setInboxSummary({
+          'Controle nodig': Number(list?.counts?.['Controle nodig'] || 0),
+          Gecontroleerd: Number(list?.counts?.Gecontroleerd || 0),
+        })
+        setError('')
+        if (!options?.preserveDuplicateNotice) setDuplicateNotice('')
+      }
+      const activeReceiptId = String(options?.openReceiptId || openedReceiptIdRef.current || '')
+      // Page/filter/sort changes must not refetch or close an unrelated detail.
+      if (activeReceiptId && options?.initialize !== false) {
         const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
-        if (!sourceItem && !options?.prefetchedDetail) {
-          setOpenedReceiptId('')
-          setOpenedReceipt(null)
-        } else {
-          const detail = options?.prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(activeReceiptId)}`)
+        const detail = options?.prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(activeReceiptId)}`)
+        if (requestId === inboxPageRequestRef.current) {
           setOpenedReceiptId(activeReceiptId)
           setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
         }
       }
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
+      if (requestId === inboxPageRequestRef.current) {
+        setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
+      }
     } finally {
-      if (!options?.silent) setIsLoading(false)
+      if (!options?.silent && requestId === inboxPageRequestRef.current) setIsLoading(false)
     }
     return items
   }
 
+  // Changing pages and filters must request a new household-scoped server page;
+  // the previous rows stay visible, but cannot be operated on while loading.
+  useEffect(() => {
+    if (!householdId || isAddReceiptRoute || inboxBootstrapRef.current) return
+    const queryKey = JSON.stringify([householdId, inboxPage, filters, inboxSort])
+    if (inboxQueryKeyRef.current === queryKey) return
+    void loadReceipts(householdId, { page: inboxPage, initialize: false })
+  }, [householdId, isAddReceiptRoute, inboxPage, filters, inboxSort])
+
   useEffect(() => {
     if (isAddReceiptRoute || isUploading) return undefined
+    if (!householdId) return undefined
     let cancelled = false
     const refreshKassaInbox = async () => {
-      if (cancelled || receiptInboxRefreshInFlightRef.current) return
+      if (cancelled || inboxBootstrapRef.current || receiptInboxRefreshInFlightRef.current) return
       receiptInboxRefreshInFlightRef.current = true
       try {
         await loadReceipts(householdId, { silent: true })
@@ -2314,20 +2380,25 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
             // keep local fallback when backend sync fails
           }
         }
-        const items = await loadReceipts(resolvedHouseholdId)
+        // Resolve duplicate redirects on the server before showing the inbox:
+        // the previously uploaded receipt need not be on the first ten rows.
+        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
+        const items = await loadReceipts(resolvedHouseholdId, {
+          initialize: true,
+          page: 1,
+          focusReceiptId: duplicateReceiptId,
+          resetFilters: Boolean(duplicateReceiptId),
+        })
+        inboxBootstrapRef.current = false
         if (cancelled) return
         // /kassa/nieuw and /kassa are separate route elements. Restore the
         // existing receipt on the destination page rather than relying on
         // selection state from the unmounted upload page.
-        const duplicateReceiptId = String(location.state?.duplicateReceiptId || '').trim()
         if (duplicateReceiptId) {
-          const existingItem = items.find((item) => String(item?.receipt_table_id || '') === duplicateReceiptId)
-          if (existingItem) {
-            setFilters(DEFAULT_RECEIPT_FILTERS)
-            setReceiptInboxFocusId(duplicateReceiptId)
-            setSelectedReceiptIds([duplicateReceiptId])
-            await openReceiptDetail(duplicateReceiptId, items)
-          }
+          setFilters(DEFAULT_RECEIPT_FILTERS)
+          setReceiptInboxFocusId(duplicateReceiptId)
+          setSelectedReceiptIds([duplicateReceiptId])
+          await openReceiptDetail(duplicateReceiptId, items)
           navigate('/kassa', { replace: true, state: null })
           return
         }
@@ -2339,7 +2410,9 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         }
         if (sharedResult?.shareStatus === 'success') {
           if (sharedResult.duplicate) {
-            await announceDuplicate(sharedResult, items)
+            // Bootstrap has the resolved household ID; the React state value
+            // captured by this mount's callback can still be empty here.
+            await announceDuplicate(sharedResult, items, resolvedHouseholdId)
           } else {
             setDuplicateNotice('')
             setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
@@ -2357,6 +2430,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
           clearShareQueryParams()
         }
       } catch (err) {
+        inboxBootstrapRef.current = false
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Je gegevens konden niet worden geladen.')
           setIsLoading(false)
@@ -2375,7 +2449,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
-  async function announceDuplicate(result, sourceItems = receipts) {
+  async function announceDuplicate(result, sourceItems = receipts, targetHouseholdId = householdId) {
     let message = formatDuplicateImportMessageV2(result)
     const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
@@ -2426,21 +2500,27 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     })
 
     if (existingReceiptId && !outsideKassa) {
+      setInboxPage(1)
       setFilters(DEFAULT_RECEIPT_FILTERS)
       setReceiptInboxFocusId(existingReceiptId)
-      const refreshedItems = await loadReceipts(householdId, {
-        preserveDuplicateNotice: true,
-        openReceiptId: existingReceiptId,
-        prefetchedDetail: existingReceipt,
-      })
-      const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
-      await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
-      // Select only after refreshing the inbox: pruneReceiptUiState must not
-      // remove the target before the refreshed receipt has entered state.
-      if (itemsForOpen.some((item) => String(item?.receipt_table_id || '') === existingReceiptId)) {
+      if (isAddReceiptRoute) {
+        // The new route owns its own inbox state; focus there after navigation.
+        navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
+      } else {
+        const refreshedItems = await loadReceipts(targetHouseholdId, {
+          page: 1,
+          resetFilters: true,
+          focusReceiptId: existingReceiptId,
+          initialize: false,
+          preserveDuplicateNotice: true,
+          openReceiptId: existingReceiptId,
+          prefetchedDetail: existingReceipt,
+        })
+        const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
+        await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
+        // Select only after the household-scoped page containing this ID loaded.
         setSelectedReceiptIds([existingReceiptId])
       }
-      if (isAddReceiptRoute) navigate('/kassa', { state: { duplicateReceiptId: existingReceiptId } })
     }
 
     try {
@@ -2456,34 +2536,10 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     }
   }
 
-  useEffect(() => {
-    const visibleIds = new Set(receipts.map((receipt) => String(receipt?.receipt_table_id || '')).filter(Boolean))
-    setSelectedReceiptIds((current) => current.filter((id) => visibleIds.has(String(id))))
-    if (openedReceiptId && !visibleIds.has(String(openedReceiptId))) {
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
-    }
-  }, [receipts, openedReceiptId])
-
-  useEffect(() => {
-    if (receipts.length === 0) {
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
-    }
-  }, [receipts])
-
-  const inboxItems = useMemo(() => {
-    return receipts
-      .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
-      .map((item) => ({ ...item, inbox_status: requirePoNormStatusLabel(item) }))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [receipts, deletedReceiptIds])
-
-  const inboxSummary = useMemo(() => ({
-    'Controle nodig': inboxItems.filter((item) => item.inbox_status === 'Controle nodig').length,
-    Gecontroleerd: inboxItems.filter((item) => item.inbox_status === 'Gecontroleerd').length,
-  }), [inboxItems])
-
+  const inboxItems = useMemo(() => receipts
+    .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
+    .map((item) => ({ ...item, inbox_status: requirePoNormStatusLabel(item) })),
+  [receipts, deletedReceiptIds])
 
   const landingFeedback = useMemo(() => {
     if (error) return { message: error, variant: 'error' }
@@ -2492,26 +2548,11 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
     return null
   }, [error, duplicateNotice, status])
 
-  const listItems = useMemo(() => {
-    const filteredItems = inboxItems
-      .filter((item) => String(item.store_name || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
-      .filter((item) => formatDateTime(item.purchase_at).toLowerCase().includes(filters.datum.trim().toLowerCase()))
-      .filter((item) => formatMoney(item.total_amount, item.currency).toLowerCase().includes(filters.totaal.trim().toLowerCase()))
-      .filter((item) => String(item.line_count ?? 0).includes(filters.artikelen.trim()))
-      .filter((item) => (filters.status ? item.inbox_status === filters.status : true))
-    return sortItems(filteredItems, inboxSort, {
-      store: (item) => item.store_name || '',
-      date: (item) => item.purchase_at || '',
-      total: (item) => Number(item.total_amount ?? 0),
-      items: (item) => Number(item.line_count ?? 0),
-    })
-  }, [inboxItems, filters, inboxSort])
-
-  const [inboxPage, setInboxPage] = useState(1)
-  const inboxPageCount = Math.max(1, Math.ceil(listItems.length / 10))
+  // The API applies filters, sort and slicing to the full household inbox.
+  const listItems = inboxItems
+  const inboxPageCount = Math.max(1, Math.ceil(inboxTotal / 10))
   const currentInboxPage = Math.min(inboxPage, inboxPageCount)
-  const pageInboxItems = listItems.slice((currentInboxPage - 1) * 10, currentInboxPage * 10)
-  useEffect(() => { setInboxPage(1) }, [filters, inboxSort])
+  const pageInboxItems = listItems
   useEffect(() => { if (inboxPage > inboxPageCount) setInboxPage(inboxPageCount) }, [inboxPage, inboxPageCount])
   const allVisibleSelected = pageInboxItems.length > 0 && pageInboxItems.every((item) => selectedReceiptIds.includes(String(item.receipt_table_id || '')))
 
@@ -2788,11 +2829,18 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       items: 'artikelen',
     }[key] || key
 
+    setInboxPage(1)
     setFilters((current) => ({ ...current, [mappedKey]: value }))
   }
 
   function applyStatusFilter(value) {
+    setInboxPage(1)
     setFilters((current) => ({ ...current, status: current.status === value ? '' : value }))
+  }
+
+  function handleInboxSort(key) {
+    setInboxPage(1)
+    setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))
   }
 
   async function ensureEmailRouteLoaded(forceReload = false) {
@@ -3016,6 +3064,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
         clearCameraDraft()
             setOpenedReceiptId('')
         setOpenedReceipt(null)
+        setInboxPage(1)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
 
@@ -3121,6 +3170,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       } else {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
+        setInboxPage(1)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
         setUploadProgressState(true, 'Kassa bijwerken...', buildPostImportProgressMessage('De Picnic e-mailbon'), 80, 'refreshing')
@@ -3205,6 +3255,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       } else if (isBatchImport && result?.async && result?.batch_id) {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
+        setInboxPage(1)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setSelectedReceiptIds([])
         setDuplicateNotice('')
@@ -3214,6 +3265,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
       } else {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
+        setInboxPage(1)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
         setUploadProgressState(true, 'Kassa bijwerken...', buildPostImportProgressMessage('De kassabon'), 80, 'refreshing')
@@ -3444,8 +3496,8 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} aria-label="Geselecteerde bonnen goedkeuren" data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
-                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts} data-testid="kassa-delete-selected-button">Verwijderen</Button>
+                <Button type="button" onClick={approveSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts || isLoading} aria-label="Geselecteerde bonnen goedkeuren" data-testid="kassa-approve-selected-button">{isBulkApprovingReceipts ? 'Goedkeuren…' : 'Goedkeuren'}</Button>
+                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0 || isBulkApprovingReceipts || isLoading} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
               <style>{`
@@ -3501,14 +3553,15 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
+                        disabled={isLoading}
                         onChange={toggleSelectAllVisible}
                         aria-label="Selecteer alle zichtbare bonnen"
                       />
                     </ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="store" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'store'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Winkel</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="date" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'date'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Datum</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="total" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'total'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Totaal</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="items" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'items'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Artikelen</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="store" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'store'} sortDirection={inboxSort.direction} onSort={handleInboxSort}>Winkel</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="date" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'date'} sortDirection={inboxSort.direction} onSort={handleInboxSort}>Datum</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="total" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'total'} sortDirection={inboxSort.direction} onSort={handleInboxSort}>Totaal</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="items" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'items'} sortDirection={inboxSort.direction} onSort={handleInboxSort}>Artikelen</ResizableHeaderCell>
                   </tr>
                   <tr className="rz-table-filters">
                     <th />
@@ -3597,7 +3650,7 @@ export default function KassaPage({ scannerProvider = 'inhuis' }) {
                 </tbody>
               </Table>
               </div>
-              {inboxPageCount > 1 ? <Pagination page={currentInboxPage} pageCount={inboxPageCount} onPageChange={setInboxPage} /> : null}
+              {inboxPageCount > 1 ? <Pagination page={currentInboxPage} pageCount={inboxPageCount} onPageChange={setInboxPage} disabled={isLoading} /> : null}
 
             </div>
           </ScreenCard>

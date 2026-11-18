@@ -22,6 +22,8 @@ from app.api.cbs_classification_routes import router as cbs_classification_route
 from app.api.consumer_account_routes import router as consumer_account_router
 from app.api.day_article_routes import router as day_article_router
 from app.api.dashboard_routes import router as dashboard_router
+from app.api.kassa_pagination_routes import router as kassa_pagination_router
+from app.api.inventory_pagination_routes import router as inventory_pagination_router
 from app.api.household_capability_expansion_routes import router as household_capability_expansion_router
 from app.api.household_invitation_acceptance_routes import create_household_invitation_acceptance_router
 from app.api.household_invitation_routes import create_household_invitation_router
@@ -105,6 +107,8 @@ api_router.include_router(cbs_classification_router)
 api_router.include_router(consumer_account_router)
 api_router.include_router(day_article_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(kassa_pagination_router)
+api_router.include_router(inventory_pagination_router)
 api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
 api_router.include_router(household_notification_router)

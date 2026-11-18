@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createBarcodeReader, listBarcodeVideoDevices, mapBarcodeCameraErrorToUserMessage, openBarcodeCameraStream, startBarcodeDecoding } from './barcodeScanner'
+import { diagnoseBarcodeCameraFailure } from './barcodeCameraRecovery.js'
 
 function ensureScannerLogBuffer() {
   if (typeof window === 'undefined') return null
@@ -23,6 +24,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
   const sessionIdRef = useRef('')
   const autoCameraAttemptedRef = useRef(new Set())
   const startScannerRef = useRef(null)
+  const requestTokenRef = useRef(0)
 
   const [isOpen, setIsOpen] = useState(false)
   const [cameraState, setCameraState] = useState({ status: 'idle', message: '' })
@@ -45,6 +47,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
   }, [screenContext])
 
   const stopScanner = useCallback((preserveMessage = false, reason = 'unspecified') => {
+    requestTokenRef.current += 1
     logEvent('SCANNER_STOP_REQUESTED', { preserveMessage, reason })
     busyRef.current = false
     if (timeoutRef.current) {
@@ -72,27 +75,41 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     logEvent('SCANNER_STOP_COMPLETED', { preserveMessage, reason })
   }, [logEvent])
 
-  const startScanner = useCallback(async (preferredDeviceId = '') => {
+  const startScanner = useCallback(async (preferredDeviceId = '', options = {}) => {
+    const compatibilityMode = options?.compatibilityMode === true
     sessionIdRef.current = nextScannerSessionId()
     if (!preferredDeviceId) autoCameraAttemptedRef.current = new Set()
-    logEvent('SCAN_CLICKED', { preferredDeviceId })
+    logEvent('SCAN_CLICKED', { preferredDeviceId, compatibilityMode })
     stopScanner(false, 'restart-before-start')
+    const requestToken = requestTokenRef.current
     busyRef.current = false
     setCameraMeta({ deviceId: '', label: '', decodeAttempts: 0 })
-    setCameraState({ status: 'loading', message: 'Camera openen…' })
+    setCameraState({ status: 'loading', message: compatibilityMode
+      ? 'Camera met tijdelijke eenvoudige instellingen openen…' : 'Camera openen…' })
     setIsOpen(true)
 
     if (!navigator.mediaDevices?.getUserMedia) {
       logEvent('GET_USER_MEDIA_ERROR', { message: 'Live camera is in deze browser niet beschikbaar.' })
       setCameraErrorRevision((revision) => revision + 1)
-      setCameraState({ status: 'error', message: 'Live camera is niet beschikbaar. Tik op Scannen om de camera/fotofunctie van je apparaat te gebruiken.' })
+      const recovery = diagnoseBarcodeCameraFailure({ name: 'SecurityError' }, {
+        secureContext: typeof window === 'undefined' ? false : window.isSecureContext !== false,
+        mediaSupported: false,
+        userAgent: navigator.userAgent || '',
+      })
+      setCameraState({ status: 'error', message: recovery.message, recovery })
       setIsOpen(false)
       return
     }
 
     try {
-      logEvent('GET_USER_MEDIA_START', { preferredDeviceId })
-      const { stream, activeDeviceId, activeLabel, trackSettings } = await openBarcodeCameraStream(preferredDeviceId, logEvent)
+      logEvent('GET_USER_MEDIA_START', { preferredDeviceId, compatibilityMode })
+      const { stream, activeDeviceId, activeLabel, trackSettings } = await openBarcodeCameraStream(
+        preferredDeviceId, logEvent, { compatibilityMode },
+      )
+      if (requestToken !== requestTokenRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       streamRef.current = stream
       readerRef.current = readerRef.current || createBarcodeReader()
       const devices = await listBarcodeVideoDevices().catch(() => [])
@@ -102,6 +119,10 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       setCameraMeta({ deviceId: resolvedActiveDeviceId, label: activeLabel || '', decodeAttempts: 0 })
       logEvent('GET_USER_MEDIA_SUCCESS', { activeDeviceId, activeLabel, trackSettings })
 
+      // A cached browser permission can resolve before React has rendered
+      // the <video> for the newly opened scanner dialog.
+      if (!videoRef.current) await new Promise((resolve) => window.requestAnimationFrame(resolve))
+      if (requestToken !== requestTokenRef.current) return
       const video = videoRef.current
       logEvent('VIDEO_ELEMENT_FOUND', { found: Boolean(video) })
       if (!video) throw new Error('Cameraweergave kon niet worden gestart')
@@ -174,16 +195,27 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       })
 
       logEvent('DECODER_START', { activeDeviceId, activeLabel })
-      setCameraState({ status: 'decoding', message: 'Camera actief. Barcode zoeken…' })
+      setCameraState({ status: 'decoding', message: compatibilityMode
+        ? 'Camera actief met tijdelijke instellingen. Barcode zoeken…'
+        : 'Camera actief. Barcode zoeken…' })
     } catch (error) {
+      if (requestToken !== requestTokenRef.current) return
       logEvent('SCANNER_START_ERROR', { errorName: error?.name, errorMessage: error?.message })
       stopScanner(false, 'start-error')
+      const recovery = diagnoseBarcodeCameraFailure(error, {
+        secureContext: typeof window === 'undefined' ? false : window.isSecureContext !== false,
+        mediaSupported: Boolean(navigator.mediaDevices?.getUserMedia),
+        userAgent: navigator.userAgent || '',
+      })
+      setAvailableCameras(await listBarcodeVideoDevices().catch(() => []))
       setCameraErrorRevision((revision) => revision + 1)
-      setCameraState({ status: 'error', message: mapBarcodeCameraErrorToUserMessage(error) })
+      setCameraState({ status: 'error', message: recovery.message, recovery })
     }
   }, [logEvent, onDetected, screenContext, stopScanner, timeoutMs])
 
   startScannerRef.current = startScanner
+
+  const startCompatibleCamera = useCallback(() => startScanner('', { compatibilityMode: true }), [startScanner])
 
   const scanImageFile = useCallback(async (file) => {
     if (!file) return false
@@ -230,6 +262,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     cameraMeta,
     availableCameras,
     startScanner,
+    startCompatibleCamera,
     stopScanner,
     switchCamera,
     scanImageFile,

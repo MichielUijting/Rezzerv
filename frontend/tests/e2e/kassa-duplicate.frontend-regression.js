@@ -22,12 +22,28 @@ for (const { state, source } of scenarios) {
     }
     await page.route('**/api/**', async (route) => {
       const request = route.request()
-      const path = new URL(request.url()).pathname
+      const url = new URL(request.url())
+      const path = url.pathname
       if (request.method() !== 'GET') writes.push(path)
       let body = { items: [] }
       if (path === '/api/session') body = session
       if (path === '/api/household') body = { ...session, id: 'duplicate-household' }
-      if (path === '/api/receipts') body = { items: ['active', 'rejected'].includes(state) ? [receipt] : [] }
+      if (path === '/api/kassa/receipts-page') {
+        const inKassa = ['active', 'rejected'].includes(state)
+        const focusId = url.searchParams.get('focus_receipt_id')
+        const requestedPage = Number(url.searchParams.get('page') || 1)
+        const pageNumber = focusId === receipt.id && inKassa ? 3 : requestedPage
+        const firstPage = Array.from({ length: 10 }, (_, i) => ({
+          ...receipt, id: `older-${i}`, receipt_table_id: `older-${i}`,
+        }))
+        body = {
+          items: !inKassa ? [] : pageNumber === 3 ? [receipt] : firstPage,
+          total: inKassa ? 21 : 0,
+          page: pageNumber,
+          page_size: 10,
+          counts: { 'Controle nodig': inKassa ? 21 : 0, Gecontroleerd: 0 },
+        }
+      }
       if (path === '/api/receipts/duplicate-receipt') body = receipt
       if (path === '/api/receipts/import') body = {
         duplicate: true, receipt_table_id: receipt.id,

@@ -19,9 +19,23 @@ assert.match(productGroups, /pageCount > 1 \? <Pagination/)
 const kassa = readFileSync(new URL('../src/features/receipts/KassaPage.jsx', import.meta.url), 'utf8')
 const unpacking = readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
 const mobilePagination = readFileSync(new URL('../src/ui/MobilePagination.jsx', import.meta.url), 'utf8')
+// The Kassa inbox must fetch a bounded server page, not re-slice a full
+// household dataset or drop selections when moving between pages.
+for (const marker of [
+  '/api/kassa/receipts-page?',
+  "page_size: '10'",
+  'initialize: false',
+  'const pageInboxItems = listItems',
+  'setInboxTotal(Number(list?.total || 0))',
+  'setInboxSummary({',
+  'disabled={isLoading}',
+]) assert.ok(kassa.includes(marker), 'Kassa server paging: ' + marker)
+assert.doesNotMatch(kassa, /const pageInboxItems = listItems\.slice\(/)
+assert.doesNotMatch(kassa, /setSelectedReceiptIds\(\(current\) => current\.filter\(\(id\) => visibleIds\.has\(String\(id\)\)\)\)/)
+
 for (const [label, source, expected] of [
-  ['Kassa page count', kassa, 'const inboxPageCount = Math.max(1, Math.ceil(listItems.length / 10))'],
-  ['Kassa page slicing', kassa, 'const pageInboxItems = listItems.slice((currentInboxPage - 1) * 10, currentInboxPage * 10)'],
+  ['Kassa page count', kassa, 'const inboxPageCount = Math.max(1, Math.ceil(inboxTotal / 10))'],
+  ['Kassa server page', kassa, 'const pageInboxItems = listItems'],
   ['Kassa page selection', kassa, 'const allVisibleSelected = pageInboxItems.length > 0'],
   ['Kassa controls', kassa, 'inboxPageCount > 1 ? <Pagination'],
   ['Uitpakken desktop slicing', unpacking, 'const desktopPageLines = visibleLineUiStates.slice((currentDesktopLinePage - 1) * 10, currentDesktopLinePage * 10)'],
@@ -203,7 +217,15 @@ assert.match(mobileCatalogSearch, /params\.set\('search', query\.trim\(\)\)/)
 assert.match(catalogRouteSource, /normalized_search =/)
 assert.match(catalogRouteSource, /"gpc_brick_code", "gpc_brick_name"/)
 const mobileInventoryPage = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
-assert.match(mobileInventoryPage, /groupPromise/)
+// Mobile Voorraad no longer waits for a separate whole-household article-group
+// request: the server projects complete household articles before page slicing
+// and includes global filter options in its first-page response.
+assert.match(mobileInventoryPage, /\/api\/voorraad\/mobile-page\?/)
+assert.match(mobileInventoryPage, /page_size: '10'/)
+assert.match(mobileInventoryPage, /groups: Array\.isArray\(data\.article_group_options\) \? data\.article_group_options : \[\]/)
+assert.match(mobileInventoryPage, /setAllGroupOptions\(groups\)/)
+assert.match(mobileInventoryPage, /setInventoryTotal\(total\)/)
+assert.doesNotMatch(mobileInventoryPage, /groupPromise/)
 assert.match(mobileInventoryPage, /setRows\(initialRows\)/)
 const mobileHomePage = readFileSync(new URL('../src/features/home/MobileHomePage.jsx', import.meta.url), 'utf8')
 assert.match(mobileHomePage, /huishoud-dashboard is alleen beschikbaar/)

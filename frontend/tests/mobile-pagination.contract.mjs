@@ -26,8 +26,15 @@ assert.match(centralPagination, /last: labels\?\.last \?\? \(Number\.isFinite/)
 assert.match(dataTable, /const effectivePagination = Boolean\(pagination \|\| isMobileViewport\)/)
 assert.match(dataTable, /pageSize = 10/)
 
+// Mobile Voorraad deliberately pages on the server; keep the central
+// controls while verifying the complete page is not locally re-sliced.
+assert.match(inventory, /\/api\/voorraad\/mobile-page/)
+assert.match(inventory, /const inventoryPageCount = Math\.max\(1, Math\.ceil\(inventoryTotal \/ 10\)\)/)
+assert.match(inventory, /pageItems: filteredRows/)
+assert.match(inventory, /<MobilePaginationControls \{\.\.\.inventoryPagination\}/)
+assert.doesNotMatch(inventory, /useMobilePagination\(\s*filteredRows/)
+
 for (const [name, source] of [
-  ['Voorraad', inventory],
   ['Bijna op', almostOut],
   ['Boodschappen', shopping],
   ['Meldingen', support],
@@ -45,7 +52,11 @@ assert.match(receipts, /<MobilePaginationControls \{\.\.\.mobileReceiptPaginatio
 assert.match(catalog, /const PAGE_SIZE = 10/)
 assert.match(catalog, /<Pagination page=\{currentPage\} pageCount=\{pageCount\}/)
 
-assert.match(kassa, /const receiptPagination = useMobilePagination\(filteredReceipts/)
+// Kassa inbox is server-paginated; line/detail pagination remains client-side.
+assert.match(kassa, /\/api\/kassa\/receipts-page/)
+assert.match(kassa, /pageCount: Math\.max\(1, Math\.ceil\(receiptTotal \/ 10\)\)/)
+assert.match(kassa, /pageItems: filteredReceipts/)
+assert.doesNotMatch(kassa, /useMobilePagination\(filteredReceipts/)
 assert.match(kassa, /const linePagination = useMobilePagination\(activeLines/)
 assert.match(kassa, /const summaryPagination = useMobilePagination\(lines/)
 assert.match(kassa, /Paginering Bonnen/)
