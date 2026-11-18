@@ -785,7 +785,10 @@ export default function Voorraad() {
   const [serverLoading, setServerLoading] = useState(true);
   const [serverLoadError, setServerLoadError] = useState('');
   const [firstPageSettled, setFirstPageSettled] = useState(false);
-  useEffect(() => { markInventoryFirstLoad('inventory-mounted'); }, []);
+  useEffect(() => {
+    markInventoryFirstLoad('view-desktop');
+    markInventoryFirstLoad('inventory-mounted');
+  }, []);
   const [completeInventoryLoading, setCompleteInventoryLoading] = useState(false);
   const articleAssignmentsRef = useRef(null);
   const [localZeroRows, setLocalZeroRows] = useState([]);

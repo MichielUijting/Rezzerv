@@ -8,9 +8,9 @@ import {
 } from './inventoryFirstLoadProbe.js';
 
 function summarizeTrace(trace) {
-  const painted = trace.marks.find((mark) => mark.stage === 'first-rows-painted');
+  const painted = trace.marks.find((mark) => mark.stage === 'first-rows-painted' || mark.stage === 'empty-state-painted');
   const failed = trace.marks.find((mark) => mark.stage === 'page-error' || mark.stage === 'session-error');
-  if (painted) return 'eerste artikelregels na ' + ((painted.timeMs - trace.startedAt) / 1000).toFixed(2) + ' s';
+  if (painted) return (painted.stage === 'empty-state-painted' ? 'lege eerste pagina na ' : 'eerste artikelregels na ') + ((painted.timeMs - trace.startedAt) / 1000).toFixed(2) + ' s';
   if (failed) return 'fout tijdens laden (' + failed.stage + ')';
   return 'laden / meting nog niet voltooid';
 }
@@ -43,7 +43,7 @@ export default function InventoryFirstLoadPanel() {
       <p>Alleen tijdmetingen; er worden geen artikel- of accountgegevens vastgelegd.</p>
       {recent.slice(-2).map((trace, index) => (
         <p key={trace.startedAt}>
-          {recent.length - Math.min(recent.length, 2) + index + 1}. opening: {summarizeTrace(trace)}
+          {recent.length - Math.min(recent.length, 2) + index + 1}. opening ({trace.marks.some((mark) => mark.stage === 'view-mobile') ? 'mobiel' : trace.marks.some((mark) => mark.stage === 'view-desktop') ? 'desktop' : 'onbekend'}): {summarizeTrace(trace)}
         </p>
       ))}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>

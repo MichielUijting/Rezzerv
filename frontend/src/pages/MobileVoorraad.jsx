@@ -6,6 +6,8 @@ import MobileArticleRow from '../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../ui/QuantityStepper.jsx'
 import { MobilePaginationControls } from '../ui/MobilePagination.jsx'
+import InventoryFirstLoadPanel from '../features/inventory/InventoryFirstLoadPanel.jsx'
+import { markInventoryFirstLoad } from '../features/inventory/inventoryFirstLoadProbe.js'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
@@ -118,11 +120,14 @@ async function loadMobileInventory(options = {}) {
     sort_key: String(options.sortKey || 'name-asc'),
     location_tracking_enabled: String(options.locationTrackingEnabled !== false),
   })
+  if (Number(options.page || 1) === 1) markInventoryFirstLoad('page-request-start')
   const response = await fetchJsonWithAuth(
     `/api/voorraad/mobile-page?${params.toString()}`,
     { method: 'GET', cache: 'no-store' },
   )
+  if (Number(options.page || 1) === 1) markInventoryFirstLoad('page-response-headers')
   const data = await response.json().catch(() => ({}))
+  if (Number(options.page || 1) === 1) markInventoryFirstLoad('page-json-ready')
   if (!response.ok) {
     throw new Error(data?.detail || 'Voorraad kon niet worden geladen')
   }
@@ -156,6 +161,10 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const mutationLockRef = useRef(false)
   const loadGenerationRef = useRef(0)
   const { showFeedback } = useAppFeedback()
+  useEffect(() => {
+    markInventoryFirstLoad('view-mobile')
+    markInventoryFirstLoad('inventory-mounted')
+  }, [])
   useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
@@ -169,6 +178,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       })
       if (generation !== loadGenerationRef.current) return
       setRows(initialRows)
+      if (inventoryPage === 1) markInventoryFirstLoad('page-state-ready')
       setInventoryTotal(total)
       setInventoryOverallTotal(overallTotal)
       setAllLocationOptions(locations)
@@ -176,6 +186,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     } catch (err) {
       if (generation !== loadGenerationRef.current) return
       setRows([])
+      if (inventoryPage === 1) markInventoryFirstLoad('page-error')
       setError(String(err?.message || 'Voorraad kon niet worden geladen'))
     } finally {
       if (generation === loadGenerationRef.current) setIsLoading(false)
@@ -280,6 +291,22 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     if (!isLoading && inventoryPage > inventoryPageCount) setInventoryPage(inventoryPageCount)
   }, [isLoading, inventoryPage, inventoryPageCount])
 
+  // Measure the first actually rendered mobile page, not merely the API response.
+  // Both animation frames occur after React has committed the changed rows.
+  useEffect(() => {
+    if (isLoading || error || inventoryPage !== 1) return undefined
+    let secondFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        markInventoryFirstLoad(rows.length ? 'first-rows-painted' : 'empty-state-painted')
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [isLoading, error, inventoryPage, rows.length])
+
   const hasActiveFilters = Boolean(query || groupFilter || (locationTrackingEnabled && locationFilter))
 
   function clearFilters() {
@@ -302,6 +329,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
     >
       <MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" />
+      <InventoryFirstLoadPanel />
 
       <main className="rz-mobile-inventory-content">
         <section className="rz-mobile-inventory-toolbar" aria-label="Voorraad zoeken en filteren">

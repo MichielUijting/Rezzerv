@@ -62,7 +62,8 @@ export function inventoryFirstLoadReport() {
   ];
   history.forEach((trace, index) => {
     lines.push('');
-    lines.push('Opening ' + (index + 1) + ':');
+    const view = trace.marks.some((mark) => mark.stage === 'view-mobile') ? 'mobiel' : (trace.marks.some((mark) => mark.stage === 'view-desktop') ? 'desktop' : 'onbekend');
+    lines.push('Opening ' + (index + 1) + ' - weergave ' + view + ':');
     let previous = trace.startedAt;
     trace.marks.forEach((mark) => {
       const total = (mark.timeMs - trace.startedAt).toFixed(1);
