@@ -323,7 +323,7 @@ def external_databases_articles_overview():
 
 @router.get('/api/external-databases/articles-preview')
 def external_databases_articles_preview(limit: int = Query(default=10, ge=1, le=10)):
-    """Only names for the first provisional page; no Catalogus link assertions."""
+    """The first ten records are fully verified; the global overview follows."""
     return list_external_articles_first_preview(limit=limit)
 
 

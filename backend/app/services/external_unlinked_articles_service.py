@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 import logging
+import re
+import unicodedata
 from time import perf_counter
 
 from sqlalchemy import inspect, text
@@ -308,46 +310,49 @@ def list_articles_without_catalog_barcode() -> dict:
 
 
 
-def list_external_articles_first_preview(*, limit: int = 10, conn=None) -> dict:
-    """Read-only early names; never authoritative for GTIN, status or selection.
+def _first_page_name_sort_key(row):
+    """Stable Dutch-style numeric ordering for the initial displayed names."""
+    name = unicodedata.normalize("NFKD", str(row.get("receipt_line_text") or "").strip().casefold())
+    name = "".join(character for character in name if not unicodedata.combining(character))
+    return tuple(
+        (0, int(token)) if token.isdecimal() else (1, token)
+        for token in re.split(r"(\\d+)", name) if token
+    )
 
-    Read the complete source identity set for correct deduplication and a stable
-    first-page ordering, but defer all expensive central identity projections
-    to the existing authoritative overview endpoint. No product is linked or
-    modified, and provisional rows have no operational identity claims.
+
+def list_external_articles_first_preview(*, limit: int = 10, conn=None) -> dict:
+    """Return the first fully resolved ED2 records; defer global filters/counts.
+
+    Source-identity grouping remains global and exact; only the selected rows
+    undergo central Catalogus/GTIN projection. Data is never written.
     """
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 10:
-        raise ValueError("Voorvertoning: maximaal tien artikelen.")
-    articles = {}
+        raise ValueError("Eerste pagina: maximaal tien artikelen.")
     with (engine.connect() if conn is None else nullcontext(conn)) as connection:
         removed = _removed_ed2_keys(connection)
+        unique = {}
         for source in _source_articles(connection):
             label = str(source.get("receipt_line_text") or "")
             if not label.strip() or is_spaarzegels_flow_excluded(source):
                 continue
-            retailer = _overview_retailer_code(source.get("retailer_code"))
-            number = str(source.get("external_article_code") or "")
-            key = (retailer, label, number)
-            if key in removed or key in articles:
-                continue
-            articles[key] = {
-                "id": source["receipt_item_id"],
-                "receipt_line_text": label,
-                "retailer_code": retailer,
-                "receipt_article_number": number,
-                "quantity_label": str(source.get("quantity_label") or ""),
-            }
-    ordered = sorted(
-        articles.values(),
-        key=lambda article: (
-            article["receipt_line_text"].casefold(),
-            str(article["id"]),
-        ),
-    )
-    return {"items": ordered[:limit], "total": len(ordered), "provisional": True}
+            key = (
+                _overview_retailer_code(source.get("retailer_code")),
+                label,
+                str(source.get("external_article_code") or ""),
+            )
+            if key not in removed and key not in unique:
+                unique[key] = source
+        first_sources = sorted(unique.values(), key=_first_page_name_sort_key)[:limit]
+        projected = list_all_external_articles(conn=connection, source_rows=first_sources)
+    return {
+        "items": projected["items"],
+        "total": len(unique),
+        "first_page_ready": True,
+        "all_articles_ready": False,
+    }
 
 
-def list_all_external_articles(*, conn=None) -> dict:
+def list_all_external_articles(*, conn=None, source_rows=None) -> dict:
     """Platformoverzicht van alle unieke bronartikelen, inclusief Cataloguskoppelingen.
 
     Een bonartikelnummer is geen GTIN. De Art.code-kolom is uitsluitend een
@@ -366,7 +371,7 @@ def list_all_external_articles(*, conn=None) -> dict:
         central_keys = _central_link_keys(conn)
         setup_done = perf_counter()
         removed_keys = _removed_ed2_keys(conn)
-        for source in _source_articles(conn):
+        for source in (_source_articles(conn) if source_rows is None else source_rows):
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
                 continue
