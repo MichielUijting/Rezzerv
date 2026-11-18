@@ -34,6 +34,25 @@ assert.match(mobile, /mobileCatalogTableState/)
 assert.match(detail, /returnToCatalog/)
 assert.match(ed2, /ed2TableState/)
 assert.match(ed2, /pageState=\{tablePage\}/)
+
+const ed2SystemRoutes = read('../backend/app/api/system_routes.py')
+const ed2OverviewService = read('../backend/app/services/external_unlinked_articles_service.py')
+// The first visible ten names are provisional, not a partial authority for
+// Catalogus identity, counters, global selection or write operations.
+assert.match(ed2SystemRoutes, /\/api\/external-databases\/articles-preview/)
+assert.match(ed2OverviewService, /def list_external_articles_first_preview/)
+assert.match(ed2OverviewService, /"provisional": True/)
+assert.match(ed2, /\/api\/external-databases\/articles-preview\?limit=10/)
+assert.match(ed2, /partial\.provisional === true/)
+assert.match(ed2, /previewActive \? previewItems : counterFilteredItems/)
+assert.match(ed2, /pageReady=\{!loading \|\| previewActive\}/)
+assert.match(ed2, /'Wordt gecontroleerd'/)
+assert.match(ed2, /if \(!loading && isMobile\)/)
+assert.match(ed2, /if \(!loading && !isMobile\)/)
+assert.match(ed2, /selectedRows = useMemo\(\(\) => loading \? \[\]/)
+assert.match(ed2, /payload\.total !== payload\.items\.length/)
+assert.match(ed2, /controller\.abort\(\)/)
+
 assert.match(ed2, /sortState=\{tableSort\}/)
 assert.match(ed2, /manual_barcode/)
 // Exactly three status counters, even while a filter is active.
