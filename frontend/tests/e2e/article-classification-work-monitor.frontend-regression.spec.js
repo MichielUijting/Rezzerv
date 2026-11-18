@@ -18,7 +18,16 @@ for (const width of [390, 1280]) {
       } })
       if (path === '/api/maintenance/status') return route.fulfill({ json: { state: 'normal' } })
       if (path === '/api/external-databases/articles-overview') return route.fulfill({ json: {
-        items: [], counts: { unlinked: 3, classification_pending: 2, linked: 7 },
+        items: Array.from({ length: 12 }, (_, idx) => ({
+          id: `article-${idx + 1}`,
+          receipt_line_text: `Testartikel ${idx + 1}`,
+          retailer_code: 'ah',
+          receipt_article_number: String(idx + 1),
+          link_status: idx < 3 ? 'unlinked' : idx < 5 ? 'classification_pending' : 'linked',
+          identity_status: idx < 3 ? 'not_identified' : 'catalog_linked',
+        })),
+        total: 12,
+        counts: { unlinked: 3, classification_pending: 2, linked: 7 },
       } })
       if (path === '/api/catalog') return route.fulfill({ json: { items: [
         { id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', primary_gtin: '8712345678901' },

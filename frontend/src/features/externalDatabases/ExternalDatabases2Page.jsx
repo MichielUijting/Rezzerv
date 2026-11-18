@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -99,6 +99,8 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
+  const [previewItems, setPreviewItems] = useState([])
+  const fullTableNoticeShownRef = useRef(false)
   const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
@@ -143,9 +145,11 @@ export default function ExternalDatabases2Page() {
     const ids = rows.map((row) => row.id)
     setFilteredIds((previous) => previous.length === ids.length && previous.every((id, index) => id === ids[index]) ? previous : ids)
   }, [])
-  const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
+  const selectedRows = useMemo(() => (loading ? previewItems : items)
+    .filter((row) => selectedIds.includes(row.id)), [items, previewItems, selectedIds, loading])
   const counterFilteredItems = useMemo(() => activeStatusCounter
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
+  const previewActive = loading && previewItems.length > 0
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
   const recoverableRows = useMemo(() => items.filter((row) =>
@@ -154,7 +158,7 @@ export default function ExternalDatabases2Page() {
   ), [items])
   // No manual bulk selection required for historically saved, safe candidates.
   // Only the existing explicitly authorized POST may perform the repair.
-  const repairRows = selectedRows.length ? selectedRows : recoverableRows.slice(0, 50)
+  const repairRows = selectedRows.length ? selectedRows : loading ? [] : recoverableRows.slice(0, 50)
   const canMaterializeSaved = selectedRows.length <= 50
     && repairRows.length > 0 && repairRows.length <= 50
     && repairRows.every((row) =>
@@ -178,9 +182,22 @@ export default function ExternalDatabases2Page() {
   const tableColumns = useMemo(() => columns.map((column) => column.key === 'select'
     ? { ...column, header: <input type="checkbox"
       aria-label="Alles op huidige pagina" checked={allPageSelected}
-      disabled={!pageIds.length || unlinking || deleting}
+      disabled={(loading && !previewActive) || !pageIds.length || unlinking || deleting}
       onChange={togglePageSelection} /> }
-    : column), [allPageSelected, pageIds, unlinking, deleting])
+    : column), [allPageSelected, pageIds, unlinking, deleting, loading])
+  function notifyGlobalTablePending() {
+    if (!loading || fullTableNoticeShownRef.current) return
+    fullTableNoticeShownRef.current = true
+    showFeedback({
+      key: 'ed2-complete-table-loading',
+      variant: 'info',
+      title: 'De hele tabel wordt geladen',
+      message: 'Zoeken, sorteren en filteren worden toegepast zodra alle artikelen beschikbaar zijn.',
+      detail: 'Dit kan enkele seconden duren. Je kunt de eerste tien artikelen ondertussen gewoon gebruiken.',
+      dismissMode: 'ok-only',
+      testId: 'ed2-global-filter-wait',
+    })
+  }
 
   function exportSelected() {
     if (!selectedRows.length) return
@@ -357,18 +374,55 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     async function load() {
       if (activeArea !== 'identity') return
       setLoading(true)
+      setPreviewItems([])
+      fullTableNoticeShownRef.current = false
+      // Fully resolved first-page articles can be used immediately. Global
+      // filters and counts remain deferred; restored filters never see a subset.
+      const canPreview = tablePage === 1
+        && tableSort.key === 'receipt_line_text' && tableSort.direction === 'asc'
+        && !activeStatusCounter && !queueTaskFocus?.sourceId
+        && !location.state?.selectedItemId && selectedIds.length === 0
+        && !Object.values(filters).some((value) => String(value || '').trim())
+      if (canPreview) {
+        try {
+          const response = await fetchJsonWithAuth(
+            '/api/external-databases/articles-preview?limit=10',
+            { method: 'GET', signal: controller.signal },
+          )
+          if (response.ok) {
+            const partial = await response.json()
+            if (!cancelled && partial.first_page_ready === true && partial.all_articles_ready === false
+                && Array.isArray(partial.items)
+                && partial.items.length <= 10 && Number.isSafeInteger(partial.total)) {
+              setPreviewItems(partial.items.map((item) => ({
+                ...item,
+                retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+                manual_barcode: item.manual_barcode || '',
+              })))
+            }
+          }
+        } catch {
+          // A preview failure must never block the authoritative overview.
+        }
+      }
+      if (controller.signal.aborted) return
       try {
-        const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
+        const response = await fetchJsonWithAuth(
+          '/api/external-databases/articles-overview',
+          { method: 'GET', signal: controller.signal },
+        )
         const payload = await response.json()
-        if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
-        // The overview projects manual barcode evidence by the authoritative
-        // server-side retailer/receipt/article identity. Do not reconstruct
-        // receipt keys or hide a failed secondary lookup in the browser.
+        if (!response.ok || !Array.isArray(payload.items)
+            || !Number.isSafeInteger(payload.total)
+            || payload.total !== payload.items.length) {
+          throw new Error('Het artikeloverzicht is niet volledig.')
+        }
         if (!cancelled) {
-          const loadedItems = (payload.items || []).map((item) => ({
+          const loadedItems = payload.items.map((item) => ({
             ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
             manual_barcode: item.manual_barcode || '',
           }))
@@ -384,13 +438,18 @@ export default function ExternalDatabases2Page() {
           }
         }
       } catch {
-        if (!cancelled) showFeedback({ variant: 'error', message: 'De artikelen konden niet worden geladen.' })
+        if (!cancelled && !controller.signal.aborted) {
+          showFeedback({ variant: 'error', message: 'De artikelen konden niet worden geladen.' })
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setPreviewItems([])
+          setLoading(false)
+        }
       }
     }
-    load()
-    return () => { cancelled = true }
+    void load()
+    return () => { cancelled = true; controller.abort() }
   }, [location.state?.selectedItemId, queueTaskFocus?.sourceId, refreshVersion, activeArea, showFeedback])
 
   useEffect(() => {
@@ -443,31 +502,34 @@ export default function ExternalDatabases2Page() {
             key={status} type="button" variant="secondary"
             className={`rz-external-ed2-counter--${status}${activeStatusCounter === status ? ' rz-external-ed2-counter--active' : ''}`}
             aria-pressed={activeStatusCounter === status}
-            onClick={() => { setActiveStatusCounter((previous) => previous === status ? '' : status)
+            onClick={() => { notifyGlobalTablePending(); setActiveStatusCounter((previous) => previous === status ? '' : status)
               setTablePage(1)
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
-          >{label}: {counts[status] || 0}</Button>)}
+          disabled={loading && !previewActive}
+          >{label}: {loading ? '...' : (counts[status] || 0)}</Button>)}
         </div>
         <p className="rz-external-databases-muted">
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
         <div className="rz-mobile-table-select-row">
-          <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
+          <label><input type="checkbox" checked={allFilteredSelected} disabled={loading || !filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
         </div>
+        {previewActive ? <p role="status">De eerste tien artikelen zijn klaar voor gebruik. De overige artikelen en globale tellers worden geladen.</p> : null}
         <DataTable
           columns={tableColumns}
-          data={counterFilteredItems}
+          data={previewActive ? previewItems : counterFilteredItems}
+          serverSide={previewActive}
           onPageRowsChange={onPageRowsChange}
           onFilteredRowsChange={onFilteredRowsChange}
           filterState={filters}
-          onFilterChange={(key, value) => { setFilters((previous) => ({ ...previous, [key]: value })); setTablePage(1) }}
+          onFilterChange={(key, value) => { notifyGlobalTablePending(); setFilters((previous) => ({ ...previous, [key]: value })); setTablePage(1) }}
           sortState={tableSort}
-          onSortChange={(value) => { setTableSort(value); setTablePage(1) }}
+          onSortChange={(value) => { notifyGlobalTablePending(); setTableSort(value); setTablePage(1) }}
           pageState={tablePage}
           onPageChange={setTablePage}
-          pageReady={!loading}
+          pageReady={!loading || previewActive}
           getRowKey={(item) => item.id}
           defaultSort={{ key: 'receipt_line_text', direction: 'asc' }}
           emptyMessage={loading ? 'Artikelen laden...' : 'Geen artikelen voor de gekozen filters.'}
@@ -476,15 +538,15 @@ export default function ExternalDatabases2Page() {
             tabIndex={0}
             aria-selected={selectedItem?.id === item.id}
             className={selectedItem?.id === item.id ? 'rz-row-selected' : ''}
-            onClick={() => { if (isMobile) setSelectedItem(item) }}
-            onDoubleClick={() => { if (!isMobile) setSelectedItem(item) }}
+            onClick={() => { if ((!loading || previewActive) && isMobile) setSelectedItem(item) }}
+            onDoubleClick={() => { if ((!loading || previewActive) && !isMobile) setSelectedItem(item) }}
             onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return
+              if ((loading && !previewActive) || event.target !== event.currentTarget) return
               if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedItem(item) }
             }}
           >{columns.map((column) => <td key={column.key}>
             {column.key === 'select' ? <input type="checkbox" aria-label={`Selecteer ${item.receipt_line_text}`}
-              checked={selectedIds.includes(item.id)} disabled={unlinking || deleting}
+              checked={selectedIds.includes(item.id)} disabled={(loading && !previewActive) || unlinking || deleting}
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
               onChange={() => setSelectedIds((current) => current.includes(item.id)

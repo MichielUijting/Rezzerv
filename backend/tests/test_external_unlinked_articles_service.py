@@ -33,6 +33,72 @@ def article_sources(monkeypatch, names, receipts=(), manual_rows=()):
     return statements
 
 
+
+def test_first_page_is_actionable_and_resolves_only_selected_sources(monkeypatch):
+    statements = article_sources(monkeypatch, [
+        ("Zebra", "Z"), ("Aardappel", "1"), ("Aardappel", "2"),
+        ("Boter", "3"), ("Aardappel", "1"), ("Artikel 10", "10"),
+        ("Artikel 2", "2"),
+    ])
+    projections = []
+    def project(conn, row):
+        code = row["external_article_code"]
+        projections.append(code)
+        return {
+            **row, "central_link_active": code == "1",
+            "linked_gtin": "8720326035617" if code == "1" else "",
+            "central_external_article_product_link": {
+                "id": "link-1", "global_product_id": "catalog-1",
+                "global_product_name": "Aardappel",
+                "confirmed_by": "external_databases_off_manual_link",
+            } if code == "1" else {},
+        }
+    monkeypatch.setattr(service, "project_central_link_truth", project)
+    result = service.list_external_articles_first_preview(limit=2)
+    assert result["first_page_ready"] is True
+    assert result["all_articles_ready"] is False
+    assert result["total"] == 6
+    assert [x["receipt_line_text"] for x in result["items"]] == ["Aardappel", "Aardappel"]
+    assert {x["receipt_article_number"] for x in result["items"]} == {"1", "2"}
+    assert set(projections) == {"1", "2"}
+    linked = next(x for x in result["items"] if x["receipt_article_number"] == "1")
+    assert linked["link_status"] == "linked"
+    assert linked["identity_status"] == "catalog_linked"
+    assert linked["article_code"] == "8720326035617"
+    assert linked["off_link_id"] == "link-1"
+    unlinked = next(x for x in result["items"] if x["receipt_article_number"] == "2")
+    assert unlinked["link_status"] == "unlinked"
+    assert unlinked["identity_status"] == "not_identified"
+    assert "counts" not in result
+    assert all(not any(word in query.upper() for word in ("INSERT ", "UPDATE ", "DELETE "))
+               for query in statements)
+
+
+def test_first_page_uses_natural_numeric_article_name_sort():
+    rows = [{"receipt_line_text": v} for v in (
+        "Artikel 10", "Artikel 2", "Áardappel", "Boter",
+    )]
+    result = sorted(rows, key=service._first_page_name_sort_key)
+    assert [x["receipt_line_text"] for x in result] == [
+        "Áardappel", "Artikel 2", "Artikel 10", "Boter",
+    ]
+
+
+def test_first_preview_rejects_invalid_page_sizes():
+    for limit in (0, -1, 11, True, None):
+        try:
+            service.list_external_articles_first_preview(limit=limit)
+        except ValueError:
+            continue
+        raise AssertionError("Ongeldige voorlopige paginagrootte geaccepteerd.")
+
+
+def test_first_preview_remains_platform_view_guarded():
+    assert required_external_database_permission(
+        "GET", "/api/external-databases/articles-preview"
+    ) == "platform.external_products.view"
+
+
 def test_complete_read_only_overview_deduplicates_exact_text_and_chain_regardless_of_code(monkeypatch):
     names = [(f'Artikel {i}', str(i)) for i in range(550)]
     names += [('Artikel 0', '0'), ('Artikel 0', 'andere-code')]

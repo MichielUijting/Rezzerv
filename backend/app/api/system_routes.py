@@ -53,6 +53,7 @@ from app.services.external_article_search_service import search_article_candidat
 from app.services.external_unlinked_articles_service import (
     list_articles_without_catalog_barcode,
     list_all_external_articles,
+    list_external_articles_first_preview,
 )
 from app.services.external_off_bulk_unlink_service import unlink_selected_off_article_links
 from app.services.external_ed2_delete_service import remove_selected_ed2_articles
@@ -318,6 +319,12 @@ def external_databases_unlinked_articles():
 @router.get('/api/external-databases/articles-overview')
 def external_databases_articles_overview():
     return list_all_external_articles()
+
+
+@router.get('/api/external-databases/articles-preview')
+def external_databases_articles_preview(limit: int = Query(default=10, ge=1, le=10)):
+    """The first ten records are fully verified; the global overview follows."""
+    return list_external_articles_first_preview(limit=limit)
 
 
 @router.post('/api/external-databases/off/unlink-selected')
