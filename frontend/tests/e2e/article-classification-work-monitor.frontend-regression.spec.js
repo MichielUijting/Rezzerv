@@ -26,7 +26,11 @@ for (const width of [390, 1280]) {
       if (path === '/api/catalog/p1/gpc-brick') return route.fulfill({ json: {
         assignment: { brick_code: '10000001', brick_description: 'Melk' }, suggestions: [],
       } })
-      if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
+        if (path === '/api/cbs-classifications/workqueue-summary') return route.fulfill({ json: {
+        product_total: 1, task_total: 1,
+        task_count_scope: 'global', product_count_scope: 'global',
+      } })
+    if (path === '/api/cbs-classifications/workqueue' || path === '/api/cbs-classifications/workqueue-page') return route.fulfill({ json: {
         total: 1, task_count_scope: 'page', items: [{
           id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', gtin: '8712345678901',
           gpc_code: '10000001', gpc_status: 'classified',

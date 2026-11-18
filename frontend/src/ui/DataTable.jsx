@@ -65,6 +65,7 @@ export default function DataTable({
   pageState = null,
   onPageChange = null,
   pageReady = true,
+  serverSide = false,
 }) {
   const isMobileViewport = useMobileAppViewport()
   const effectivePagination = Boolean(pagination || isMobileViewport)
@@ -123,7 +124,7 @@ export default function DataTable({
     setInternalSort(next)
   }
 
-  const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
+  const filteredData = useMemo(() => serverSide ? data : data.filter((row) => visibleColumns.every((column) => {
     if (!column.filterable) return true
     const activeFilterValue = activeFilters[column.key]
     const filterValue = normalizeTableFilterText(activeFilterValue)
@@ -140,16 +141,17 @@ export default function DataTable({
         ? column.getValue(row)
         : defaultGetValue(row, column)
     return matchesTableFilter(rawValue, activeFilterValue)
-  })), [data, visibleColumns, activeFilters])
+  })), [data, visibleColumns, activeFilters, serverSide])
 
   const sortedData = useMemo(() => {
+    if (serverSide) return [...filteredData]
     const sortGetters = Object.fromEntries(visibleColumns.map((column) => [column.key, (row) => {
       if (typeof column.getSortValue === 'function') return column.getSortValue(row)
       if (typeof column.getValue === 'function') return column.getValue(row)
       return defaultGetValue(row, column)
     }]))
     return sortItems(filteredData, activeSort, sortGetters)
-  }, [filteredData, visibleColumns, activeSort])
+  }, [filteredData, visibleColumns, activeSort, serverSide])
 
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
   const pageCount = effectivePagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1

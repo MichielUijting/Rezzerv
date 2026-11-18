@@ -143,4 +143,48 @@ assert.throws(() => projectArticleWorkQueue(source, products, tasks, {
   synonymAnalysis: { summary: { candidate_pairs: 1 }, items: [] },
 }), /ontbreken/)
 
+// Server-side classification page 1 is interactive immediately; no hidden
+// 100-item background waterfall, partial global counts or local-only filtering.
+import { readFileSync } from 'node:fs'
+const workspace = readFileSync(new URL('../src/features/externalDatabases/CombinedClassificationWorkspace.jsx', import.meta.url), 'utf8')
+const pagination = readFileSync(new URL('../../backend/app/services/classification_server_paging_service.py', import.meta.url), 'utf8')
+const routes = readFileSync(new URL('../../backend/app/api/cbs_classification_routes.py', import.meta.url), 'utf8')
+const table = readFileSync(new URL('../src/ui/DataTable.jsx', import.meta.url), 'utf8')
+for (const expected of [
+  'const PAGE_SIZE = 8',
+  'workqueue-page?',
+  'workqueue-summary',
+  'workqueue-ids?',
+  'workqueue-selected-export',
+  'serverSide',
+  'filterState={filters} onFilterChange={updateFilter}',
+  'sortState={sortState} onSortChange={updateSort}',
+  'data={loading || error ? [] : products}',
+  'const allTableSelected = filteredTotal > 0',
+  'setSelectedIds((current) =>',
+  'selectionAbortRef.current?.abort()',
+  'onSaved={onClassificationSaved}',
+  'onApplied={onClassificationSaved}',
+  'pageCount={pageCount}',
+  'classification-first-page-ready',
+]) {
+  assert.ok(workspace.includes(expected), 'Classificeren full server pagination: ' + expected)
+}
+assert.doesNotMatch(workspace, /items\.length < total/)
+assert.doesNotMatch(workspace, /setProducts\(items\.slice\(0, 8\)\)/)
+assert.match(table, /if \(serverSide\) return \[\.\.\.filteredData\]/)
+assert.match(table, /serverSide \? data : data\.filter/)
+assert.match(pagination, /MAX_EXPORT_IDS = 20000/)
+assert.match(pagination, /LIMIT :limit OFFSET :offset/)
+assert.match(pagination, /AND gp\.id IN :product_ids/)
+assert.match(pagination, /WHERE \{where\}/)
+assert.match(routes, /@router\.get\("\/workqueue-page"\)/)
+assert.match(routes, /@router\.get\("\/workqueue-summary"\)/)
+assert.match(routes, /@router\.get\("\/workqueue-ids"\)/)
+assert.match(routes, /@router\.post\("\/workqueue-selected-export"\)/)
+assert.match(routes, /_actor\("platform\.external_products\.view"\)/)
+assert.match(workspace, /fetchAllMatchingIds\(filters, controller\.signal\)/)
+assert.match(workspace, /product_ids: selectedIds/)
+assert.match(workspace, /setAllFilterIds\(\{ key: filterKey, ids \}\)/)
+
 console.log('ARTICLE_MANAGEMENT_WORKQUEUE_MODEL_GREEN')

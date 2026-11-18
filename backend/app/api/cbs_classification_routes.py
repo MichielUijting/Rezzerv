@@ -26,6 +26,10 @@ from app.services.cbs_classification_service import (
 from app.services.article_workqueue_service import (
     load_classification_workqueue, load_identification_workqueue,
 )
+from app.services.classification_server_paging_service import (
+    load_server_classification_page, load_server_classification_ids,
+    load_classification_counts, build_selected_classification_csv, MAX_EXPORT_IDS,
+)
 from app.services.catalog_classification_export_service import build_catalog_classification_export
 from app.services.catalog_classification_import_service import (
     ImportContractError, MAX_BYTES, read_proposals, preview_import, confirm_import,
@@ -177,6 +181,89 @@ def confirm_catalog_classification_import(payload: ClassificationImportConfirmat
         raise HTTPException(status_code=status, detail=reason) from exc
     except (CBSDecisionError, CBSConcurrentChange) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+class ClassificationSelectedExport(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    product_ids: list[str] = Field(min_length=1, max_length=MAX_EXPORT_IDS)
+
+
+def _catalog_filters(name: str, gtin: str, gpc_status: str, cbs_status: str) -> dict:
+    return {
+        "name": name, "gtin": gtin,
+        "gpc_status": gpc_status, "cbs_status": cbs_status,
+    }
+
+
+@router.get("/workqueue-page")
+def classification_workqueue_server_page(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=8, ge=1, le=8),
+    sort: Literal["name", "gtin", "gpc_status", "cbs_status"] = "name",
+    direction: Literal["asc", "desc"] = "asc",
+    name: str = Query(default="", max_length=120),
+    gtin: str = Query(default="", max_length=120),
+    gpc_status: str = Query(default="", max_length=120),
+    cbs_status: str = Query(default="", max_length=120),
+):
+    """Eight complete canonical products; search/sort/count apply to all products."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        return load_server_classification_page(
+            conn, offset=offset, limit=limit, sort_key=sort, direction=direction,
+            filters=_catalog_filters(name, gtin, gpc_status, cbs_status),
+        )
+
+
+@router.get("/workqueue-summary")
+def classification_workqueue_server_summary():
+    """Global counts are separate so they never delay the first visible page."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        return load_classification_counts(conn)
+
+
+@router.get("/workqueue-ids")
+def classification_workqueue_server_filtered_ids(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=1000, ge=1, le=1000),
+    name: str = Query(default="", max_length=120),
+    gtin: str = Query(default="", max_length=120),
+    gpc_status: str = Query(default="", max_length=120),
+    cbs_status: str = Query(default="", max_length=120),
+):
+    """IDs only, fetched on explicit 'all rows in table' selection."""
+    _actor("platform.external_products.view")
+    with engine.connect() as conn:
+        return load_server_classification_ids(
+            conn, offset=offset, limit=limit,
+            filters=_catalog_filters(name, gtin, gpc_status, cbs_status),
+        )
+
+
+@router.post("/workqueue-selected-export")
+def export_selected_classification_rows(payload: ClassificationSelectedExport):
+    """Read-only CSV export of explicit canonical IDs; never mutate classifications."""
+    _actor("platform.external_products.view")
+    try:
+        with engine.connect() as conn:
+            if conn.dialect.name == "postgresql":
+                conn = conn.execution_options(
+                    isolation_level="REPEATABLE READ", postgresql_readonly=True,
+                )
+            with conn.begin():
+                contents = build_selected_classification_csv(conn, payload.product_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(
+        content=contents,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/products")
