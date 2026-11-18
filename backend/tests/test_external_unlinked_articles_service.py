@@ -33,6 +33,46 @@ def article_sources(monkeypatch, names, receipts=(), manual_rows=()):
     return statements
 
 
+
+def test_first_preview_avoids_expensive_link_projection_and_preserves_distinct_codes(monkeypatch):
+    statements = article_sources(monkeypatch, [
+        ("Zebra", "Z"), ("Aardappel", "1"), ("Aardappel", "2"),
+        ("Boter", "3"), ("Aardappel", "1"),
+    ])
+    def forbidden_projection(*args, **kwargs):
+        raise AssertionError("Voorvertoning mag geen Cataloguskoppelingen projecteren.")
+    monkeypatch.setattr(service, "project_central_link_truth", forbidden_projection)
+    payload = service.list_external_articles_first_preview(limit=2)
+    assert payload["provisional"] is True
+    assert payload["total"] == 4
+    assert [row["receipt_line_text"] for row in payload["items"]] == [
+        "Aardappel", "Aardappel",
+    ]
+    assert {row["receipt_article_number"] for row in payload["items"]} == {"1", "2"}
+    assert all(set(row) == {
+        "id", "receipt_line_text", "retailer_code",
+        "receipt_article_number", "quantity_label",
+    } for row in payload["items"])
+    assert all("SELECT" in query.upper() and not any(
+        word in query.upper() for word in ("INSERT ", "UPDATE ", "DELETE ")
+    ) for query in statements)
+
+
+def test_first_preview_rejects_invalid_page_sizes():
+    for limit in (0, -1, 11, True, None):
+        try:
+            service.list_external_articles_first_preview(limit=limit)
+        except ValueError:
+            continue
+        raise AssertionError("Ongeldige voorlopige paginagrootte geaccepteerd.")
+
+
+def test_first_preview_remains_platform_view_guarded():
+    assert required_external_database_permission(
+        "GET", "/api/external-databases/articles-preview"
+    ) == "platform.external_products.view"
+
+
 def test_complete_read_only_overview_deduplicates_exact_text_and_chain_regardless_of_code(monkeypatch):
     names = [(f'Artikel {i}', str(i)) for i in range(550)]
     names += [('Artikel 0', '0'), ('Artikel 0', 'andere-code')]

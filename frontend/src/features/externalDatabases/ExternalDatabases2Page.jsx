@@ -99,6 +99,7 @@ export default function ExternalDatabases2Page() {
   const isPlatformSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const restored = location.state?.ed2TableState
   const [items, setItems] = useState([])
+  const [previewItems, setPreviewItems] = useState([])
   const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null)
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
@@ -143,9 +144,10 @@ export default function ExternalDatabases2Page() {
     const ids = rows.map((row) => row.id)
     setFilteredIds((previous) => previous.length === ids.length && previous.every((id, index) => id === ids[index]) ? previous : ids)
   }, [])
-  const selectedRows = useMemo(() => items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds])
+  const selectedRows = useMemo(() => loading ? [] : items.filter((row) => selectedIds.includes(row.id)), [items, selectedIds, loading])
   const counterFilteredItems = useMemo(() => activeStatusCounter
     ? items.filter((row) => row.link_status === activeStatusCounter) : items, [items, activeStatusCounter])
+  const previewActive = loading && previewItems.length > 0
   const canUnlink = selectedRows.length > 0 && selectedRows.length <= 100
     && selectedRows.every((row) => Boolean(row.off_link_id))
   const recoverableRows = useMemo(() => items.filter((row) =>
@@ -178,9 +180,12 @@ export default function ExternalDatabases2Page() {
   const tableColumns = useMemo(() => columns.map((column) => column.key === 'select'
     ? { ...column, header: <input type="checkbox"
       aria-label="Alles op huidige pagina" checked={allPageSelected}
-      disabled={!pageIds.length || unlinking || deleting}
+      disabled={loading || !pageIds.length || unlinking || deleting}
       onChange={togglePageSelection} /> }
-    : column), [allPageSelected, pageIds, unlinking, deleting])
+    : column), [allPageSelected, pageIds, unlinking, deleting, loading])
+  const displayedColumns = previewActive
+    ? tableColumns.map((column) => ({ ...column, sortable: false, filterable: false }))
+    : tableColumns
 
   function exportSelected() {
     if (!selectedRows.length) return
@@ -357,18 +362,53 @@ export default function ExternalDatabases2Page() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     async function load() {
       if (activeArea !== 'identity') return
       setLoading(true)
+      setPreviewItems([])
+      // The provisional first page contains names only and is deliberately
+      // noninteractive. Never use it for a restored filtered/selected task.
+      const canPreview = tablePage === 1
+        && tableSort.key === 'receipt_line_text' && tableSort.direction === 'asc'
+        && !activeStatusCounter && !queueTaskFocus?.sourceId
+        && !location.state?.selectedItemId && selectedIds.length === 0
+        && !Object.values(filters).some((value) => String(value || '').trim())
+      if (canPreview) {
+        try {
+          const response = await fetchJsonWithAuth(
+            '/api/external-databases/articles-preview?limit=10',
+            { method: 'GET', signal: controller.signal },
+          )
+          if (response.ok) {
+            const partial = await response.json()
+            if (!cancelled && partial.provisional === true && Array.isArray(partial.items)
+                && partial.items.length <= 10 && Number.isSafeInteger(partial.total)) {
+              setPreviewItems(partial.items.map((item) => ({
+                ...item,
+                retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
+                __preview: true,
+              })))
+            }
+          }
+        } catch {
+          // A preview failure must never block the authoritative overview.
+        }
+      }
+      if (controller.signal.aborted) return
       try {
-        const response = await fetchJsonWithAuth('/api/external-databases/articles-overview', { method: 'GET' })
+        const response = await fetchJsonWithAuth(
+          '/api/external-databases/articles-overview',
+          { method: 'GET', signal: controller.signal },
+        )
         const payload = await response.json()
-        if (!response.ok) throw new Error('De artikelen konden niet worden geladen.')
-        // The overview projects manual barcode evidence by the authoritative
-        // server-side retailer/receipt/article identity. Do not reconstruct
-        // receipt keys or hide a failed secondary lookup in the browser.
+        if (!response.ok || !Array.isArray(payload.items)
+            || !Number.isSafeInteger(payload.total)
+            || payload.total !== payload.items.length) {
+          throw new Error('Het artikeloverzicht is niet volledig.')
+        }
         if (!cancelled) {
-          const loadedItems = (payload.items || []).map((item) => ({
+          const loadedItems = payload.items.map((item) => ({
             ...item, retailer: RETAILERS[item.retailer_code] || item.retailer_code || 'Onbekend',
             manual_barcode: item.manual_barcode || '',
           }))
@@ -384,13 +424,18 @@ export default function ExternalDatabases2Page() {
           }
         }
       } catch {
-        if (!cancelled) showFeedback({ variant: 'error', message: 'De artikelen konden niet worden geladen.' })
+        if (!cancelled && !controller.signal.aborted) {
+          showFeedback({ variant: 'error', message: 'De artikelen konden niet worden geladen.' })
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setPreviewItems([])
+          setLoading(false)
+        }
       }
     }
-    load()
-    return () => { cancelled = true }
+    void load()
+    return () => { cancelled = true; controller.abort() }
   }, [location.state?.selectedItemId, queueTaskFocus?.sourceId, refreshVersion, activeArea, showFeedback])
 
   useEffect(() => {
@@ -446,19 +491,21 @@ export default function ExternalDatabases2Page() {
             onClick={() => { setActiveStatusCounter((previous) => previous === status ? '' : status)
               setTablePage(1)
               setFilters((previous) => ({ ...previous, link_status: '' })) }}
-          >{label}: {counts[status] || 0}</Button>)}
+          disabled={loading}
+          >{label}: {loading ? '...' : (counts[status] || 0)}</Button>)}
         </div>
         <p className="rz-external-databases-muted">
           Identificatie en GS1-classificatie zijn onafhankelijk.
           Dubbelklik op een bonartikel om een passende Cataloguskoppeling te beoordelen.
         </p>
         <div className="rz-mobile-table-select-row">
-          <label><input type="checkbox" checked={allFilteredSelected} disabled={!filteredIds.length || unlinking || deleting}
+          <label><input type="checkbox" checked={allFilteredSelected} disabled={loading || !filteredIds.length || unlinking || deleting}
             onChange={toggleAllFilteredSelection} /> Alle artikelen op alle pagina’s</label>
         </div>
+        {previewActive ? <p role="status">Eerste artikelen zichtbaar. Identificatie, tellers en selectie worden nog gecontroleerd.</p> : null}
         <DataTable
-          columns={tableColumns}
-          data={counterFilteredItems}
+          columns={displayedColumns}
+          data={previewActive ? previewItems : counterFilteredItems}
           onPageRowsChange={onPageRowsChange}
           onFilteredRowsChange={onFilteredRowsChange}
           filterState={filters}
@@ -467,7 +514,7 @@ export default function ExternalDatabases2Page() {
           onSortChange={(value) => { setTableSort(value); setTablePage(1) }}
           pageState={tablePage}
           onPageChange={setTablePage}
-          pageReady={!loading}
+          pageReady={!loading || previewActive}
           getRowKey={(item) => item.id}
           defaultSort={{ key: 'receipt_line_text', direction: 'asc' }}
           emptyMessage={loading ? 'Artikelen laden...' : 'Geen artikelen voor de gekozen filters.'}
@@ -476,20 +523,22 @@ export default function ExternalDatabases2Page() {
             tabIndex={0}
             aria-selected={selectedItem?.id === item.id}
             className={selectedItem?.id === item.id ? 'rz-row-selected' : ''}
-            onClick={() => { if (isMobile) setSelectedItem(item) }}
-            onDoubleClick={() => { if (!isMobile) setSelectedItem(item) }}
+            onClick={() => { if (!loading && isMobile) setSelectedItem(item) }}
+            onDoubleClick={() => { if (!loading && !isMobile) setSelectedItem(item) }}
             onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return
+              if (loading || event.target !== event.currentTarget) return
               if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedItem(item) }
             }}
           >{columns.map((column) => <td key={column.key}>
             {column.key === 'select' ? <input type="checkbox" aria-label={`Selecteer ${item.receipt_line_text}`}
-              checked={selectedIds.includes(item.id)} disabled={unlinking || deleting}
+              checked={selectedIds.includes(item.id)} disabled={loading || unlinking || deleting}
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
               onChange={() => setSelectedIds((current) => current.includes(item.id)
                 ? current.filter((id) => id !== item.id) : [...current, item.id])} />
-              : typeof column.renderCell === 'function' ? column.renderCell(item) : item[column.key]}
+              : item.__preview && (column.key === 'identity_status_label' || column.key === 'link_status')
+                ? 'Wordt gecontroleerd'
+                : typeof column.renderCell === 'function' ? column.renderCell(item) : item[column.key]}
           </td>)}</tr>}
         />
         <div className="rz-mobile-table-bulk-actions rz-external-ed2-bulk-actions">
@@ -500,7 +549,7 @@ export default function ExternalDatabases2Page() {
             onClick={() => navigate('/externe-databases-2/importeren',
               { state: { ed2TableState: returnState } })}>Importeren</Button> : null}
           <Button type="button" variant="secondary"
-            disabled={!canMaterializeSaved || unlinking || deleting || materializing}
+            disabled={loading || !canMaterializeSaved || unlinking || deleting || materializing}
             onClick={confirmMaterializeSaved}>
             {materializing ? 'Herstellen...' : 'Bewaarde barcodes koppelen'}
           </Button>

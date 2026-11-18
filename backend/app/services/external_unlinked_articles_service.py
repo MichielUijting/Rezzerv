@@ -307,6 +307,46 @@ def list_articles_without_catalog_barcode() -> dict:
     return {"items": items, "total": len(items)}
 
 
+
+def list_external_articles_first_preview(*, limit: int = 10, conn=None) -> dict:
+    """Read-only early names; never authoritative for GTIN, status or selection.
+
+    Read the complete source identity set for correct deduplication and a stable
+    first-page ordering, but defer all expensive central identity projections
+    to the existing authoritative overview endpoint. No product is linked or
+    modified, and provisional rows have no operational identity claims.
+    """
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 10:
+        raise ValueError("Voorvertoning: maximaal tien artikelen.")
+    articles = {}
+    with (engine.connect() if conn is None else nullcontext(conn)) as connection:
+        removed = _removed_ed2_keys(connection)
+        for source in _source_articles(connection):
+            label = str(source.get("receipt_line_text") or "")
+            if not label.strip() or is_spaarzegels_flow_excluded(source):
+                continue
+            retailer = _overview_retailer_code(source.get("retailer_code"))
+            number = str(source.get("external_article_code") or "")
+            key = (retailer, label, number)
+            if key in removed or key in articles:
+                continue
+            articles[key] = {
+                "id": source["receipt_item_id"],
+                "receipt_line_text": label,
+                "retailer_code": retailer,
+                "receipt_article_number": number,
+                "quantity_label": str(source.get("quantity_label") or ""),
+            }
+    ordered = sorted(
+        articles.values(),
+        key=lambda article: (
+            article["receipt_line_text"].casefold(),
+            str(article["id"]),
+        ),
+    )
+    return {"items": ordered[:limit], "total": len(ordered), "provisional": True}
+
+
 def list_all_external_articles(*, conn=None) -> dict:
     """Platformoverzicht van alle unieke bronartikelen, inclusief Cataloguskoppelingen.
 
