@@ -1,5 +1,7 @@
 """Mobile stock pagination: identity, location, filtering, GPC and page boundaries."""
 from app.api.inventory_pagination_routes import _group_rows, _project_page
+import app.api.inventory_pagination_routes as pagination
+from types import SimpleNamespace
 
 
 def _stock(id, household_article_id=None, name="Melk", quantity=1, location="Keuken",
@@ -69,3 +71,46 @@ def test_name_desc_sorts_entire_data_before_slicing():
     page = _project_page(rows, page=2, sort_key="name-desc", page_size=10)
     assert len(page["source_rows"]) == 10
     assert page["source_rows"][0]["id"] == "10"
+
+
+
+def test_initial_mobile_page_does_not_compute_unused_gpc(monkeypatch):
+    """A first-screen GET must not call the heavyweight GPC classifier."""
+    stock = [_stock("stock-1", "article-1", name="Melk", quantity=2)]
+
+    class Connection:
+        def execute(self, statement, parameters):
+            assert parameters == {"household_id": "household-1"}
+            return SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: stock))
+
+    class ContextManager:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        pagination, "engine", SimpleNamespace(connect=lambda: ContextManager()),
+    )
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("GPC projection is not needed on the first page")
+
+    monkeypatch.setattr(pagination, "dutch_gpc_by_household_article", forbidden_projection)
+
+    from app import main as legacy
+    monkeypatch.setattr(legacy, "require_household_context", lambda _auth: object())
+    monkeypatch.setattr(
+        legacy, "household_context_from_runtime_context",
+        lambda _ctx: SimpleNamespace(active_household_id="household-1"),
+    )
+    result = pagination.mobile_inventory_page(
+        page=1, page_size=10, query="", location_filter="", group_filter="",
+        sort_key="name-asc", location_tracking_enabled=True,
+        authorization="Bearer test",
+    )
+    assert result["total"] == 1
+    assert len(result["rows"]) == 1
+    assert result["rows"][0]["household_article_id"] == "article-1"
+    assert result["rows"][0]["gpc_brick_name"] == ""

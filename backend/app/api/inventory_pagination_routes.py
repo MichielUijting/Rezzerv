@@ -182,10 +182,12 @@ def mobile_inventory_page(
             gpc_map=gpc_all,
         )
         selected_rows = model.pop("source_rows")
-        selected_ids = [row.get("household_article_id") for row in selected_rows]
-        gpc_page = gpc_all if query.strip() else dutch_gpc_by_household_article(
-            conn, household_id, selected_ids,
-        )
+        # The normal mobile list renders article names, stock counts and
+        # locations; it does not render GPC. Do not trigger expensive GPC
+        # reference checks/assignment work merely to show the first ten rows.
+        # A classification text search still projects all candidate GPC fields
+        # before filtering so articles beyond page one remain discoverable.
+        gpc_page = gpc_all
     # Preserve the original preview JSON properties for the mobile projector.
     projected = []
     for row in selected_rows:
