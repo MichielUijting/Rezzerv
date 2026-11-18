@@ -8,9 +8,6 @@ unchanged. GPC is fetched separately, after the basic first page is visible.
 """
 from __future__ import annotations
 
-import logging
-from time import perf_counter
-
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 from sqlalchemy import bindparam, text
 
@@ -59,21 +56,15 @@ ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
 """
 
 
-def _select_desktop_page(
-    conn, household_id: str, *, page: int, page_size: int,
-    timings_ms: dict[str, float] | None = None,
-) -> dict:
-    """Return one complete name-group page; optionally time each SQL step."""
+def _select_desktop_page(conn, household_id: str, *, page: int, page_size: int) -> dict:
+    """Return exactly one page of *complete* name groups, plus global total."""
     params = {"household_id": household_id}
-    count_started = perf_counter()
     total = int(conn.execute(text(_DESKTOP_COUNT_SQL), params).scalar() or 0)
-    keys_started = perf_counter()
     keys = conn.execute(text(_DESKTOP_PAGE_KEYS_SQL), {
         **params,
         "page_size": page_size,
         "offset": (page - 1) * page_size,
     }).scalars().all()
-    rows_started = perf_counter()
     rows = []
     if keys:
         rows = [
@@ -85,13 +76,6 @@ def _select_desktop_page(
                 {**params, "group_keys": keys},
             ).mappings().all()
         ]
-    if timings_ms is not None:
-        finished = perf_counter()
-        timings_ms.update(
-            count=(keys_started - count_started) * 1000,
-            keys=(rows_started - keys_started) * 1000,
-            rows=(finished - rows_started) * 1000,
-        )
     return {"rows": rows, "total": total, "page": page, "page_size": page_size}
 
 
@@ -113,30 +97,14 @@ def desktop_inventory_page(
 ):
     from app import main as legacy
 
-    started = perf_counter()
     household_id = _household_id_for_request(authorization)
-    authorized = perf_counter()
-    sql_timings_ms: dict[str, float] = {}
     with engine.connect() as conn:
         page_data = _select_desktop_page(
             conn, household_id, page=page, page_size=page_size,
-            timings_ms=sql_timings_ms,
         )
     page_data["rows"] = [
         legacy._dev_inventory_preview_row(row) for row in page_data["rows"]
     ]
-    elapsed = perf_counter() - started
-    # Always log first-page timings, even when <500 ms: the first local
-    # render can be slow despite fast SQL. No household/user identifiers.
-    if page == 1 or elapsed >= 0.5:
-        logging.getLogger("uvicorn.error").info(
-            "desktop_inventory_page_ms=%.1f auth_ms=%.1f count_ms=%.1f "
-            "keys_ms=%.1f rows_ms=%.1f page=%d total_groups=%d sent_positions=%d",
-            elapsed * 1000, (authorized - started) * 1000,
-            sql_timings_ms.get("count", 0), sql_timings_ms.get("keys", 0),
-            sql_timings_ms.get("rows", 0), page,
-            page_data["total"], len(page_data["rows"]),
-        )
     return page_data
 
 

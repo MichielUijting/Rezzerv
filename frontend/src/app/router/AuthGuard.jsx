@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { clearAuthSession, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
 import { fetchHouseholdOnboarding, requiresManagedOnboarding } from '../../features/onboarding/onboardingState.js'
-import { markInventoryFirstLoad } from '../../features/inventory/inventoryFirstLoadProbe.js'
 
 export default function AuthGuard({ children, allowNone = false }) {
   const location = useLocation()
@@ -11,25 +10,20 @@ export default function AuthGuard({ children, allowNone = false }) {
 
   useEffect(() => {
     let active = true
-    markInventoryFirstLoad('guard-start')
 
     async function checkSessionAndOnboarding() {
       setStatus('checking')
       try {
         const context = readStoredAuthContext() || await fetchAuthContext()
-        markInventoryFirstLoad('session-ready')
         let onboardingState = null
         if (context?.context_type === 'regular') {
           onboardingState = await fetchHouseholdOnboarding(context)
         }
-        markInventoryFirstLoad('onboarding-ready')
         if (!active) return
         setOnboarding(onboardingState)
         setStatus('ready')
-        markInventoryFirstLoad('guard-ready')
       } catch (error) {
         if (!active) return
-        markInventoryFirstLoad('session-error')
         clearAuthSession(error?.message || 'Je sessie is verlopen. Log opnieuw in.')
         setStatus('invalid')
       }

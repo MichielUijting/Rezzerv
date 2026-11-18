@@ -4,9 +4,6 @@ import { readFileSync } from 'node:fs'
 const page = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
 const endpoint = readFileSync(new URL('../../backend/app/api/inventory_desktop_pagination_routes.py', import.meta.url), 'utf8')
 const router = readFileSync(new URL('../../backend/app/api/router.py', import.meta.url), 'utf8')
-const guard = readFileSync(new URL('../src/app/router/AuthGuard.jsx', import.meta.url), 'utf8')
-const probe = readFileSync(new URL('../src/features/inventory/inventoryFirstLoadProbe.js', import.meta.url), 'utf8')
-const panel = readFileSync(new URL('../src/features/inventory/InventoryFirstLoadPanel.jsx', import.meta.url), 'utf8')
 
 // The first screen must not block on the legacy full-stock/GPC projection.
 assert.match(page, /fetchDesktopInventoryPage\(paginationPage\)/)
@@ -46,17 +43,8 @@ assert.match(endpoint, /bindparam\("group_keys", expanding=True\)/)
 assert.match(endpoint, /dutch_gpc_by_household_article\(conn, household_id, ids\)/)
 assert.match(router, /include_router\(inventory_desktop_pagination_router\)/)
 
-// Explicit first-open-only diagnostics must not require browser dev tools or send data.
-assert.match(guard, /markInventoryFirstLoad\('guard-start'\)/)
-assert.match(guard, /markInventoryFirstLoad\('onboarding-ready'\)/)
-assert.match(page, /markInventoryFirstLoad\('page-request-start'\)/)
-assert.match(page, /markInventoryFirstLoad\('first-rows-painted'\)/)
-assert.match(page, /markInventoryFirstLoad\('view-desktop'\)/)
-assert.match(probe, /Opening ' \+ \(index \+ 1\) \+ ' - weergave '/)
-assert.match(panel, /'view-mobile'/)
-assert.match(page, /<InventoryFirstLoadPanel \/>/)
-assert.match(probe, /sessionStorage/)
-assert.match(probe, /window\.location\.pathname !== '\/voorraad'/)
-assert.match(panel, /Rapport downloaden/)
+// No temporary browser diagnostics or per-request timing reports ship in PR #698.
+assert.doesNotMatch(page, /InventoryFirstLoadPanel|markInventoryFirstLoad|voorraadmeting/)
+assert.doesNotMatch(endpoint, /desktop_inventory_page_ms|timings_ms|perf_counter/)
 
 console.log('DESKTOP_VOORRAAD_FIRST_PAGE_CONTRACT_GREEN')
