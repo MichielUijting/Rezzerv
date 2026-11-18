@@ -98,3 +98,61 @@ def test_superuser_context_must_be_system_context(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         routes.classification_workqueue()
     assert exc.value.status_code == 403
+
+
+def test_postgresql_classification_server_paging_filters_summary_and_export(workqueue_database):
+    """Execute the real SQL, not only a stub string contract, on isolated PG."""
+    import csv
+    from io import StringIO
+    from app.services.classification_server_paging_service import (
+        load_server_classification_page, load_server_classification_ids,
+        load_classification_counts, build_selected_classification_csv,
+    )
+
+    with workqueue_database.connect() as conn:
+        before = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+        first = load_server_classification_page(conn, limit=2, offset=0)
+        second = load_server_classification_page(conn, limit=2, offset=2)
+        assert first["total"] == second["total"] == 3
+        assert [item["id"] for item in first["items"]] == ["p1", "p2"]
+        assert [item["id"] for item in second["items"]] == ["p3"]
+        assert {task["key"] for task in first["tasks"]} == {
+            "p1:gpc", "p1:cbs", "p2:cbs",
+        }
+        p1 = first["items"][0]
+        assert p1["confirmed_source_links"] == 2
+        assert p1["confirmed_synonyms"] == 1
+
+        by_name = load_server_classification_page(
+            conn, limit=8, filters={"name": "Melk B"},
+        )
+        assert by_name["total"] == 1
+        assert [item["id"] for item in by_name["items"]] == ["p2"]
+
+        missing_gpc = load_server_classification_page(
+            conn, limit=8, filters={"gpc_status": "Niet geclassificeerd"},
+        )
+        assert [item["id"] for item in missing_gpc["items"]] == ["p1", "p3"]
+        classified_cbs = load_server_classification_page(
+            conn, limit=8, filters={"cbs_status": "011420 Melk"},
+        )
+        assert [item["id"] for item in classified_cbs["items"]] == ["p3"]
+
+        count = load_classification_counts(conn)
+        assert count == {
+            "product_total": 3, "task_total": 4,
+            "task_count_scope": "global", "product_count_scope": "global",
+        }
+
+        all_ids = load_server_classification_ids(conn, limit=10)
+        assert all_ids["ids"] == ["p1", "p2", "p3"]
+        assert all_ids["total"] == 3
+
+        exported = build_selected_classification_csv(conn, ["p3", "p1"])
+        contents = list(csv.reader(
+            StringIO(exported.decode("utf-8-sig")), delimiter=";",
+        ))
+        assert contents[0][:4] == ["product_id", "Artikel", "Merk", "Barcode"]
+        assert [entry[0] for entry in contents[1:]] == ["p3", "p1"]
+        after = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+        assert before == after == 4  # No actual writes; soft-deleted stays stored.
