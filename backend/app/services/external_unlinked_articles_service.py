@@ -316,7 +316,7 @@ def _first_page_name_sort_key(row):
     name = "".join(character for character in name if not unicodedata.combining(character))
     return tuple(
         (0, int(token)) if token.isdecimal() else (1, token)
-        for token in re.split(r"(\\d+)", name) if token
+        for token in re.split(r"(\d+)", name) if token
     )
 
 
