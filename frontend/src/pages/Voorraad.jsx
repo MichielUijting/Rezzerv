@@ -779,6 +779,7 @@ export default function Voorraad() {
   const [serverTotal, setServerTotal] = useState(0);
   const [serverLoading, setServerLoading] = useState(true);
   const [serverLoadError, setServerLoadError] = useState('');
+  const [firstPageSettled, setFirstPageSettled] = useState(false);
   const [completeInventoryLoading, setCompleteInventoryLoading] = useState(false);
   const articleAssignmentsRef = useRef(null);
   const [localZeroRows, setLocalZeroRows] = useState([]);
@@ -918,6 +919,9 @@ export default function Voorraad() {
   }, [purchaseForm]);
 
   useEffect(() => {
+    // Give the first inventory page exclusive priority over household-wide
+    // group/location lookups. Initial cold requests can otherwise compete.
+    if (!firstPageSettled) return undefined;
     let cancelled = false;
     // Editor choices do not block the first page, and household-wide
     // article-group assignments can enrich whichever page is visible.
@@ -946,7 +950,7 @@ export default function Voorraad() {
         }
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [firstPageSettled, showFeedback]);
 
   useEffect(() => {
     if (!serverPaged) return undefined;
@@ -960,6 +964,7 @@ export default function Voorraad() {
         setRows(applyArticleGroupsToRows(initialRows, articleAssignmentsRef.current));
         setServerTotal(total);
         setServerLoading(false);
+        setFirstPageSettled(true);
         setLocationOptions((current) => mergeLocationOptionStates(
           current, buildLocationOptionStateFromRows(initialRows)
         ));
@@ -993,6 +998,7 @@ export default function Voorraad() {
       .catch((error) => {
         if (cancelled) return;
         setServerLoading(false);
+        setFirstPageSettled(true);
         setServerLoadError('De Voorraadpagina kon niet worden geladen.');
         showFeedback({
           variant: 'error',

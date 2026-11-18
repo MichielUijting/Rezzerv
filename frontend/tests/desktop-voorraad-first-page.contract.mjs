@@ -14,6 +14,10 @@ assert.match(page, /setServerTotal\(total\)/)
 assert.match(page, /serverPaged \? serverTotal : filteredRows\.length/)
 assert.match(page, /fetchDesktopPageClassifications\(sourceRows\)/)
 assert.match(page, /setServerLoading\(false\)/)
+assert.match(page, /const \[firstPageSettled, setFirstPageSettled\] = useState\(false\)/)
+assert.match(page, /if \(!firstPageSettled\) return undefined/)
+assert.match(page, /setFirstPageSettled\(true\)/)
+assert.match(page, /\[firstPageSettled, showFeedback\]/)
 
 // Sorting and filtering by Brick, family, quantity and location still require
 // global rows rather than accidentally filtering just the visible ten.
