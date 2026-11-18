@@ -46,6 +46,26 @@ function mountMockBackend(page, { frontteam = false, invalidClassPage = false } 
         ],
       } })
     }
+    if (path === '/api/cbs-classifications/workqueue-summary') return route.fulfill({ json: {
+      product_total: 1, task_total: 2, product_count_scope: 'global', task_count_scope: 'global',
+    } })
+    if (path === '/api/cbs-classifications/workqueue-page') return route.fulfill({ json: {
+      total: 1, limit: 8, offset: 0, product_count_scope: 'filtered', task_count_scope: 'page',
+      items: [{ id: 'catalog-milk', name: 'Halfvolle melk', gtin: '8712345678901',
+        brand: '', gpc_code: '', cbs_code: '',
+        gpc_status: 'unclassified', cbs_status: 'unclassified' }],
+      tasks: [
+        { key: 'catalog-milk:gpc', global_product_id: 'catalog-milk', system: 'gpc' },
+        { key: 'catalog-milk:cbs', global_product_id: 'catalog-milk', system: 'cbs' },
+      ],
+    } })
+    if (path === '/api/cbs-classifications/workqueue-ids') return route.fulfill({
+      json: { ids: ['catalog-milk'], total: 1, offset: 0, limit: 1000 },
+    })
+    if (path === '/api/cbs-classifications/workqueue-selected-export') return route.fulfill({
+      status: 200, contentType: 'text/csv; charset=utf-8',
+      body: '\uFEFF"product_id";"Artikel"\r\n"catalog-milk";"Halfvolle melk"\r\n',
+    })
     if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
       product_count_scope: 'global', task_count_scope: 'page',
       total: invalidClassPage ? 2 : 1, items: [{
@@ -182,11 +202,13 @@ test('Frontteam mag Catalogus exporteren zonder Superuser-matchrecht', async ({ 
 })
 
 
-test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterde rijen en exporteert alleen de selectie', async ({ page }) => {
+test('Classificeren: echte serverpagina, globale filters en selectie/export over pagina’s', async ({ page }) => {
   const requests = await mountMockBackend(page)
+  const calls = []
+  const exported = []
   const items = Array.from({ length: 10 }, (_, index) => ({
-    id: `catalog-${index + 1}`,
-    name: `Product ${String(index + 1).padStart(2, '0')}`,
+    id: 'catalog-' + (index + 1),
+    name: 'Product ' + String(index + 1).padStart(2, '0'),
     brand: index === 4 ? '=CMD' : '',
     gtin: index === 0 ? '0000000000001' : String(8710000000000 + index),
     gpc_code: index === 0 ? '10000001' : '',
@@ -196,52 +218,97 @@ test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterd
     cbs_name: index === 9 ? 'Melk' : '',
     cbs_reference_version: index === 9 ? '2026' : '',
   }))
-  await page.route('**/api/cbs-classifications/workqueue?**', route => route.fulfill({ json: {
-    task_count_scope: 'page', product_count_scope: 'global', total: items.length,
-    items, tasks: items.flatMap(item => [
-      ...(!item.gpc_code ? [{ key: `${item.id}:gpc`, global_product_id: item.id, system: 'gpc' }] : []),
-      ...(!item.cbs_code ? [{ key: `${item.id}:cbs`, global_product_id: item.id, system: 'cbs' }] : []),
-    ]),
+  await page.route('**/api/cbs-classifications/workqueue-summary', route => route.fulfill({ json: {
+    product_total: 10, task_total: 18,
+    task_count_scope: 'global', product_count_scope: 'global',
   } }))
+  await page.route('**/api/cbs-classifications/workqueue-page?**', async route => {
+    const query = new URL(route.request().url()).searchParams
+    const offset = Number(query.get('offset') || 0)
+    const filter = query.get('cbs_status') || ''
+    const filtered = filter.toLowerCase().includes('niet g')
+      ? items.filter(item => !item.cbs_code) : items
+    calls.push({ offset, limit: query.get('limit'), filter,
+      sort: query.get('sort'), direction: query.get('direction') })
+    return route.fulfill({ json: {
+      total: filtered.length, offset, limit: 8,
+      task_count_scope: 'page', product_count_scope: 'filtered',
+      items: filtered.slice(offset, offset + 8),
+      tasks: filtered.slice(offset, offset + 8).flatMap(item => [
+        ...(!item.gpc_code ? [{ key: item.id + ':gpc', global_product_id: item.id, system: 'gpc' }] : []),
+        ...(!item.cbs_code ? [{ key: item.id + ':cbs', global_product_id: item.id, system: 'cbs' }] : []),
+      ]),
+    } })
+  })
+  await page.route('**/api/cbs-classifications/workqueue-ids?**', async route => {
+    const query = new URL(route.request().url()).searchParams
+    const filtered = (query.get('cbs_status') || '').toLowerCase().includes('niet g')
+      ? items.filter(item => !item.cbs_code) : items
+    return route.fulfill({ json: {
+      ids: filtered.map(item => item.id), total: filtered.length, offset: 0, limit: 1000,
+    } })
+  })
+  await page.route('**/api/cbs-classifications/workqueue-selected-export', async route => {
+    const ids = route.request().postDataJSON().product_ids
+    exported.push(ids)
+    const content = '\uFEFF"product_id";"Artikel";"Merk";"Barcode";"GS1 GPC code";"CBS ECOICOPv2 code"\r\n'
+      + ids.map(id => {
+        const item = items.find(product => product.id === id)
+        return '"' + id + '";"' + item.name + '";"'
+          + (item.brand ? "'=CMD" : '') + '";"' + item.gtin + '";"";""\r\n'
+      }).join('')
+    return route.fulfill({
+      status: 200, contentType: 'text/csv; charset=utf-8',
+      body: content, headers: {
+        'content-disposition': 'attachment; filename="Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv"',
+      },
+    })
+  })
+
   await page.goto('/externe-databases-2')
   await page.getByRole('button', { name: 'Classificeren' }).click()
-
   const table = page.getByTestId('combined-classification-articles')
   const selectionCount = page.getByTestId('classification-workqueue-selected-count')
   const all = page.getByTestId('classification-workqueue-select-all-table')
   const pageAll = page.getByTestId('classification-workqueue-select-all-page')
   const exportButton = page.getByTestId('classification-workqueue-export')
   const paging = page.getByRole('navigation', { name: 'Paginering' })
+
   await expect(table).toContainText('Product 01')
+  await expect(page.getByTestId('classification-first-page-ready')).toContainText('10 artikelen')
   await expect(selectionCount).toContainText('0 rijen geselecteerd')
   await expect(exportButton).toBeDisabled()
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
+  expect(calls[0]).toMatchObject({ offset: 0, limit: '8', sort: 'name', direction: 'asc' })
+  // React StrictMode may repeat the same GET, but must never download a
+  // second (or hundred-item) batch without a user paging/filtering action.
+  expect(calls.length).toBeGreaterThanOrEqual(1)
+  expect(calls.every(call => call.offset === 0 && call.limit === '8')).toBe(true)
   const header = table.locator('thead tr').first().locator('th').first()
   await expect(header.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeVisible()
-  await expect(header).not.toContainText('Alle rijen in de tabel')
 
   await pageAll.check()
   await expect(selectionCount).toContainText('8 rijen geselecteerd')
   await expect(all).not.toBeChecked()
   await paging.getByRole('button', { name: '+' }).click()
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(2)
-  await expect(pageAll).not.toBeChecked()
   await pageAll.check()
   await expect(selectionCount).toContainText('10 rijen geselecteerd')
   await expect(all).toBeChecked()
   await all.uncheck()
   await expect(selectionCount).toContainText('0 rijen geselecteerd')
 
-  // Row checkbox is independent from opening the GS1/CBS article editor.
+  // Selection outside a new filter stays selected and exportable.
   await table.getByRole('checkbox', { name: 'Selecteer Product 10' }).check()
   await expect(page.getByTestId('combined-selected-article')).toHaveCount(0)
   const cbsFilter = table.getByRole('textbox', { name: 'Filter op CBS ECOICOPv2' })
   await cbsFilter.fill('niet g')
   await expect(table.getByRole('checkbox', { name: /^Selecteer Product/ })).toHaveCount(8)
-  await all.check()
-  // The previously selected article outside the filter is deliberately preserved.
+  // This checkbox fetches the matching IDs asynchronously: the click itself
+  // must not claim that all filtered rows were already selected.
+  await all.click()
   await expect(selectionCount).toContainText('10 rijen geselecteerd')
-  await expect(pageAll).toBeChecked()
+  await expect(all).toBeChecked()
 
   const downloadPromise = page.waitForEvent('download')
   await exportButton.click()
@@ -249,12 +316,14 @@ test('Classificeren: onderste Catalogustabel selecteert pagina en alle gefilterd
   expect(download.suggestedFilename()).toBe('Inhuis_Artikelclassificeren_Geselecteerde_artikelen.csv')
   const contents = await readFile(await download.path(), 'utf8')
   expect(contents.charCodeAt(0)).toBe(0xfeff)
-  expect(contents).toContain('"product_id";"Artikel";"Merk";"Barcode";"GS1 GPC code";"CBS ECOICOPv2 code"')
-  expect(contents).toContain('"catalog-1";"Product 01";"";"0000000000001"')
+  expect(contents).toContain('"catalog-1";"Product 01"')
   expect(contents).toContain('"catalog-5";"Product 05";"\'=CMD"')
   expect(contents).toContain('"catalog-10";"Product 10"')
   expect(contents.split('\r\n').filter(Boolean)).toHaveLength(11)
-  expect(requests.filter(req => req.method === 'POST')).toEqual([])
+  expect(exported).toHaveLength(1)
+  expect(exported[0]).toHaveLength(10)
+  expect(requests.filter(req => req.method === 'POST'
+    && req.path !== '/api/cbs-classifications/workqueue-selected-export')).toEqual([])
 
   await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
   await page.getByTestId('classification-workqueue-clear').click()

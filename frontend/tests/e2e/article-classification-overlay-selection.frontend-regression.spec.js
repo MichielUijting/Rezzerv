@@ -18,7 +18,11 @@ test('Artikelbeheer: selecteer officiële GS1/CBS-resultaatregel en sla veilig o
     if (path === '/api/onboarding') return route.fulfill({ json: { onboarding_status: 'completed' } })
     if (path === '/api/features') return route.fulfill({ json: { features: {} } })
     if (path === '/api/action-buttons') return route.fulfill({ json: { items: [] } })
-    if (path === '/api/cbs-classifications/workqueue') return route.fulfill({ json: {
+    if (path === '/api/cbs-classifications/workqueue-summary') return route.fulfill({ json: {
+      product_total: 1, task_total: (gpcBrick ? 0 : 1) + (cbsCode ? 0 : 1),
+      task_count_scope: 'global', product_count_scope: 'global',
+    } })
+    if (path === '/api/cbs-classifications/workqueue' || path === '/api/cbs-classifications/workqueue-page') return route.fulfill({ json: {
       total: 1, task_count_scope: 'page', items: [{
         id: 'p1', name: 'Testmelk', brand: 'Voorbeeld', gtin: '8712345678901',
         gpc_code: gpcBrick, gpc_status: 'classified',
