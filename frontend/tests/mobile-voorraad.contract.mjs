@@ -73,7 +73,12 @@ assert.match(mobileSource, /\{ value: 'name-desc', label: 'Naam Z–A' \}/)
 assert.doesNotMatch(mobileSource, /Aantal hoog–laag/)
 assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
 assert.match(mobileSource, /\/api\/voorraad\/mobile-page/)
-assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
+// The paged backend supplies household-wide group options, avoiding a
+// second full article-group fetch during the first mobile Voorraad render.
+assert.match(mobileSource, /groups: Array\.isArray\(data\.article_group_options\) \? data\.article_group_options : \[\]/)
+assert.match(mobileSource, /setAllGroupOptions\(groups\)/)
+assert.match(mobileSource, /const articleGroupOptions = allGroupOptions/)
+assert.doesNotMatch(mobileSource, /\/api\/article-groups\/household-articles/)
 assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
