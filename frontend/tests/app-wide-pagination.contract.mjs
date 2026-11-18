@@ -197,8 +197,8 @@ assert.match(ed2Overview, /onPageRowsChange=\{onPageRowsChange\}/)
 assert.match(ed2Overview, /pageReady=\{!loading\}/)
 assert.doesNotMatch(ed2Overview, />Eerste<|>Vorige<|>Volgende<|>Laatste</)
 const inventoryPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
-assert.match(inventoryPage, /const inventoryPromise = fetchInventoryRows\(\)/)
-assert.match(inventoryPage, /const articleOptionsPromise = fetchArticleGroupOptions\(\)/)
+assert.match(inventoryPage, /fetchDesktopInventoryPage\(paginationPage\)/)
+assert.match(inventoryPage, /fetchArticleGroupOptions\(\)/)
 
 // Regression: catalog page reads never launch a full write/backfill of all
 // products, and unavailable receipt previews must not render as blank panels.
@@ -249,8 +249,9 @@ for (const [name, component, containerClose] of [
 }
 
 const voorraadFirstPage = readFileSync(new URL('../src/pages/Voorraad.jsx', import.meta.url), 'utf8')
-assert.match(voorraadFirstPage, /const inventoryPromise = fetchInventoryRows\(\)/)
-assert.match(voorraadFirstPage, /assignmentPromise\.then\(\(assignments\) =>/)
-assert.doesNotMatch(voorraadFirstPage, /const inventoryPromise = Promise\.all\(\[/)
+assert.match(voorraadFirstPage, /fetchDesktopInventoryPage\(paginationPage\)/)
+assert.match(voorraadFirstPage, /articleAssignmentsRef\.current = assignments/)
+assert.match(voorraadFirstPage, /fetchDesktopPageClassifications\(sourceRows\)/)
+assert.doesNotMatch(voorraadFirstPage, /const inventoryPromise = fetchInventoryRows\(\)/)
 
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')

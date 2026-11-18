@@ -582,6 +582,39 @@ async function fetchInventoryRows() {
   return mergeInventoryRows(data.rows)
 }
 
+async function fetchDesktopInventoryPage(page = 1) {
+  // Fetch at most ten complete name-based groups, not the complete inventory.
+  const params = new URLSearchParams({ page: String(page), page_size: '10' })
+  const response = await fetch('/api/voorraad/desktop-page?' + params.toString(), {
+    cache: 'no-store', headers: getAuthHeaders(),
+  })
+  if (!response.ok) throw new Error('Eerste Voorraadpagina kon niet worden geladen')
+  const data = await response.json()
+  if (!Array.isArray(data?.rows) || !Number.isFinite(Number(data?.total))) {
+    throw new Error('Voorraad heeft een ongeldig paginaantwoord ontvangen')
+  }
+  return {
+    initialRows: mergeInventoryRows(data.rows),
+    sourceRows: data.rows,
+    total: Number(data.total),
+  }
+}
+
+async function fetchDesktopPageClassifications(rawRows = []) {
+  const ids = [...new Set(
+    rawRows.map((item) => String(item?.household_article_id || '').trim()).filter(Boolean)
+  )]
+  if (!ids.length) return {}
+  const response = await fetch('/api/voorraad/desktop-page-classifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ household_article_ids: ids }),
+  })
+  if (!response.ok) throw new Error('Classificaties konden niet worden opgehaald')
+  const data = await response.json()
+  return data?.by_article && typeof data.by_article === 'object' ? data.by_article : {}
+}
+
 async function fetchArticleGroupAssignments() {
   const response = await fetch(`/api/article-groups/household-articles?_ts=${Date.now()}`, {
     cache: 'no-store',
@@ -741,6 +774,14 @@ export default function Voorraad() {
   const navigate = useNavigate();
   const { showFeedback } = useAppFeedback();
   const [rows, setRows] = useState(initialData);
+  const [paginationPage, setPaginationPage] = useState(1);
+  const [serverPaged, setServerPaged] = useState(true);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [serverLoading, setServerLoading] = useState(true);
+  const [serverLoadError, setServerLoadError] = useState('');
+  const [firstPageSettled, setFirstPageSettled] = useState(false);
+  const [completeInventoryLoading, setCompleteInventoryLoading] = useState(false);
+  const articleAssignmentsRef = useRef(null);
   const [localZeroRows, setLocalZeroRows] = useState([]);
   const rowsRef = useRef(initialData)
   const draftRowsRef = useRef(new Map())
@@ -760,6 +801,9 @@ export default function Voorraad() {
     const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
     setLocalZeroRows([])
     setRows(rowsWithArticleGroups)
+    setServerPaged(false)
+    setServerLoading(false)
+    setCompleteInventoryLoading(false)
     setArticleGroupOptions(loadedArticleGroups)
     setLocationOptions(mergedLocationOptions)
     return rowsWithArticleGroups
@@ -875,41 +919,20 @@ export default function Voorraad() {
   }, [purchaseForm]);
 
   useEffect(() => {
+    // Give the first inventory page exclusive priority over household-wide
+    // group/location lookups. Initial cold requests can otherwise compete.
+    if (!firstPageSettled) return undefined;
     let cancelled = false;
-    // The first inventory page needs only the inventory response. Assignment
-    // labels and editor options can arrive afterwards without blocking rows.
-    const inventoryPromise = fetchInventoryRows();
-    const assignmentPromise = fetchArticleGroupAssignments().catch(() => ({ byId: new Map(), byName: new Map() }));
-    const articleOptionsPromise = fetchArticleGroupOptions();
-    const locationsPromise = fetchLocationOptions().catch(() => buildLocationOptionState([]));
-
-    inventoryPromise
-      .then((loadedRows) => {
+    // Editor choices do not block the first page, and household-wide
+    // article-group assignments can enrich whichever page is visible.
+    fetchArticleGroupAssignments()
+      .then((assignments) => {
         if (cancelled) return;
-        setLocalZeroRows([]);
-        setRows(loadedRows);
-        setLocationOptions((current) => mergeLocationOptionStates(current, buildLocationOptionStateFromRows(loadedRows)));
-        // Enrich the already visible rows when assignments are available.
-        // Apply to current rows to retain edits made while the request was in flight.
-        assignmentPromise.then((assignments) => {
-          if (cancelled) return;
-          setRows((current) => applyArticleGroupsToRows(current, assignments));
-        });
+        articleAssignmentsRef.current = assignments;
+        setRows((current) => applyArticleGroupsToRows(current, assignments));
       })
-      .catch((error) => {
-        if (cancelled) return;
-        setLocalZeroRows([]);
-        setRows([]);
-        showFeedback({
-          variant: "error",
-          message: "Live voorraad kon niet worden geladen.",
-          technicalDetail: error?.message || String(error || ""),
-          showTechnicalToggle: true,
-          key: "inventory-load-error",
-        });
-      });
-
-    articleOptionsPromise
+      .catch(() => { /* Group options remain optional for the fast first paint. */ });
+    fetchArticleGroupOptions()
       .then((options) => { if (!cancelled) setArticleGroupOptions(options); })
       .catch((error) => {
         if (!cancelled) showFeedback({
@@ -920,11 +943,73 @@ export default function Voorraad() {
           key: "inventory-article-group-options",
         });
       });
-    locationsPromise.then((options) => {
-      if (!cancelled) setLocationOptions((current) => mergeLocationOptionStates(options, current));
-    });
+    fetchLocationOptions().catch(() => buildLocationOptionState([]))
+      .then((options) => {
+        if (!cancelled) {
+          setLocationOptions((current) => mergeLocationOptionStates(options, current));
+        }
+      });
     return () => { cancelled = true; };
-  }, []);;
+  }, [firstPageSettled, showFeedback]);
+
+  useEffect(() => {
+    if (!serverPaged) return undefined;
+    let cancelled = false;
+    setServerLoading(true);
+    setServerLoadError('');
+    setRows([]);
+    fetchDesktopInventoryPage(paginationPage)
+      .then(({ initialRows, sourceRows, total }) => {
+        if (cancelled) return;
+        setRows(applyArticleGroupsToRows(initialRows, articleAssignmentsRef.current));
+        setServerTotal(total);
+        setServerLoading(false);
+        setFirstPageSettled(true);
+        setLocationOptions((current) => mergeLocationOptionStates(
+          current, buildLocationOptionStateFromRows(initialRows)
+        ));
+        // After the ten articles are already rendered, enrich only these
+        // visible rows with the canonical (potentially expensive) GPC data.
+        fetchDesktopPageClassifications(sourceRows)
+          .then((gpc) => {
+            if (cancelled) return;
+            setRows((current) => current.map((row) => {
+              const classification = gpc[String(row.householdArticleId || '').trim()] || {};
+              return {
+                ...row,
+                brick: String(classification.gpc_brick_name || '').trim(),
+                productfamilie: String(classification.gpc_family_name || '').trim(),
+                gpcBrickName: String(classification.gpc_brick_name || '').trim(),
+                gpcClassName: String(classification.gpc_class_name || '').trim(),
+                gpcFamilyName: String(classification.gpc_family_name || '').trim(),
+              };
+            }));
+          })
+          .catch((error) => {
+            if (!cancelled) showFeedback({
+              variant: 'warning',
+              message: 'Classificaties van de zichtbare voorraadartikelen konden niet worden geladen.',
+              technicalDetail: error?.message || String(error || ''),
+              showTechnicalToggle: true,
+              key: 'inventory-visible-classifications',
+            });
+          });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setServerLoading(false);
+        setFirstPageSettled(true);
+        setServerLoadError('De Voorraadpagina kon niet worden geladen.');
+        showFeedback({
+          variant: 'error',
+          message: 'De Voorraadpagina kon niet worden geladen.',
+          technicalDetail: error?.message || String(error || ''),
+          showTechnicalToggle: true,
+          key: 'inventory-fast-page-error',
+        });
+      });
+    return () => { cancelled = true; };
+  }, [serverPaged, paginationPage, showFeedback]);
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -958,8 +1043,45 @@ export default function Voorraad() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Full-list mode is activated only when a global filter or non-default
+  // sorting needs all items. Normal name-A-Z browsing stays server-paged.
+  const needsFullInventory = Object.values(filters).some(
+    (value) => String(value ?? '').trim() !== ''
+  ) || tableSort.key !== 'huishoudnaam' || tableSort.direction !== 'asc';
+
+  useEffect(() => {
+    if (!serverPaged || !needsFullInventory) return undefined;
+    let cancelled = false;
+    setCompleteInventoryLoading(true);
+    fetchInventoryRows()
+      .then((loadedRows) => {
+        if (cancelled) return;
+        setRows(applyArticleGroupsToRows(loadedRows, articleAssignmentsRef.current));
+        setLocationOptions((current) => mergeLocationOptionStates(
+          current, buildLocationOptionStateFromRows(loadedRows)
+        ));
+        setLocalZeroRows([]);
+        setServerPaged(false);
+        setCompleteInventoryLoading(false);
+        setServerLoadError('');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setCompleteInventoryLoading(false);
+        setServerLoadError('Volledige Voorraad kon niet worden geladen voor dit filter.');
+        showFeedback({
+          variant: 'error',
+          message: 'Volledige Voorraad kon niet worden geladen voor dit filter.',
+          technicalDetail: error?.message || String(error || ''),
+          showTechnicalToggle: true,
+          key: 'inventory-full-list-error',
+        });
+      });
+    return () => { cancelled = true; };
+  }, [serverPaged, needsFullInventory, showFeedback]);
+
   const filteredRows = useMemo(() => {
-    const sourceRows = mergeVisibleZeroRows(rows, localZeroRows)
+    const sourceRows = serverPaged ? rows : mergeVisibleZeroRows(rows, localZeroRows)
     const filtered = sourceRows.filter((row) =>
       editableColumns.every((column) => {
         const filterValue = String(filters[column.key] ?? "").trim().toLowerCase();
@@ -976,11 +1098,14 @@ export default function Voorraad() {
       locatie: (row) => row.locatie || '',
       sublocatie: (row) => row.sublocatie || '',
     });
-  }, [rows, localZeroRows, filters, tableSort]);
+  }, [rows, localZeroRows, filters, tableSort, serverPaged]);
 
-  const [paginationPage, setPaginationPage] = useState(1);
-  const paginationPageCount = Math.max(1, Math.ceil(filteredRows.length / 10));
-  const visibleInventoryRows = filteredRows.slice((Math.min(paginationPage, paginationPageCount) - 1) * 10, Math.min(paginationPage, paginationPageCount) * 10);
+  const paginationPageCount = Math.max(1, Math.ceil((serverPaged ? serverTotal : filteredRows.length) / 10));
+  const visibleInventoryRows = (serverLoading || completeInventoryLoading || serverLoadError || (serverPaged && needsFullInventory))
+    ? []
+    : (serverPaged
+      ? filteredRows
+      : filteredRows.slice((Math.min(paginationPage, paginationPageCount) - 1) * 10, Math.min(paginationPage, paginationPageCount) * 10));
   useEffect(() => { setPaginationPage(1); }, [filters, tableSort]);
   useEffect(() => { if (paginationPage > paginationPageCount) setPaginationPage(paginationPageCount); }, [paginationPage, paginationPageCount]);
 
@@ -1532,10 +1657,19 @@ export default function Voorraad() {
                     <th>
                       <input
                         className="rz-input rz-inline-input"
-                        value={filters.artikelgroep}
-                        onChange={(e) => handleFilterChange("artikelgroep", e.target.value)}
+                        value={filters.brick}
+                        onChange={(e) => handleFilterChange("brick", e.target.value)}
                         placeholder="Filter"
-                        aria-label="Filter op artikelgroep"
+                        aria-label="Filter op Brick"
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={filters.productfamilie}
+                        onChange={(e) => handleFilterChange("productfamilie", e.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op productfamilie"
                       />
                     </th>
                     <th className="rz-num">
@@ -1600,10 +1734,14 @@ export default function Voorraad() {
                     </tr>
                   ))}
 
-                  {filteredRows.length === 0 && (
-                    <tr>
-                      <td colSpan={7}>Nog geen live voorraad beschikbaar.</td>
-                    </tr>
+                  {(serverLoading || completeInventoryLoading) && (
+                    <tr><td colSpan={7}>Voorraadartikelen laden…</td></tr>
+                  )}
+                  {!serverLoading && !completeInventoryLoading && serverLoadError && (
+                    <tr><td colSpan={7}>{serverLoadError}</td></tr>
+                  )}
+                  {!serverLoading && !completeInventoryLoading && !serverLoadError && filteredRows.length === 0 && (
+                    <tr><td colSpan={7}>Nog geen live voorraad beschikbaar.</td></tr>
                   )}
 
                   {Array.from({ length: inventoryFillerRowCount }, (_, index) => (
