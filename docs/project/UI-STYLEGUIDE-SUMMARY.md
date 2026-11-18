@@ -2048,3 +2048,43 @@ De gedeelde component `ArticleBarcodeScanAction` toont een knop **Barcode scanne
 De gebruiker hoeft nooit een doelartikel te kiezen: de geopende artikelidentiteit is de bestemming. Een gewone scan of Annuleren maakt geen aankoop-, huishoud- of voorraadmutatie. Opgeslagen gegevens volgen altijd de bestaande, bevoegde routes voor het specifieke type artikel; mogelijke conflicten, dubbele barcode-eigenaren en verbonden huishoud-/winkelidentiteiten worden fail-closed behandeld. Voor een gedeelde Catalogusvervanging is uitsluitend de bevoegdheid `platform.catalog.update` voldoende; toevoeging van een ontbrekende barcode behoudt het bestaande nauw begrensde rechtenbeleid. Bestaande winkelidentiteitcorrecties worden gecontroleerd met het canonieke preview-fingerprint en de bevoegde correctieroute. Een niet aantoonbaar veilige vervanging wordt geweigerd met een begrijpelijke reden; er worden geen bestaande relaties stilzwijgend overschreven.
 
 **Camerafout/herstel:** Inhuis toont oorzaakspecifieke uitleg en kan na afzonderlijke toestemming tijdelijk een eenvoudige camera-instelling voor die scansessie proberen. De browser/Windows-privacytoestemming wordt nooit door Inhuis aangepast. Foto kiezen blijft een alternatief. Na beëindiging worden mediatracks vrijgegeven. Alle meldingen verlopen via de bestaande overlay en volgen de geldende styleguide. De onderste mobiele actiebalk blijft ongewijzigd.
+
+
+### Artikelbeheer: Classificeren met volledige serverpaginering — 18 november 2026
+
+De onderste Cataloguswerkvoorraad binnen **Classificeren** toont de standaard
+Inhuis-tabel met **acht artikelen per pagina**. De gebruiker kan de eerste pagina
+direct gebruiken; de volledige Catalogus wordt niet langer op de achtergrond
+gedownload als voorwaarde voor selectie, filteren of bewerken.
+
+De centrale DataTable heeft voor deze servergestuurde tabel de expliciete modus
+`serverSide`. Die modus laat dezelfde tabelkoppen, sticky filters, kolombreedtes,
+checkboxen, kolomsortering en mobiele/desktopweergave staan, maar voert niet
+ook nog lokaal filters of sortering op uitsluitend de acht binnengekomen rijen
+uit. De zichtbare gegevens en de exacte paginateller komen van de
+geautoriseerde API. Paginering gebruikt de bestaande Pagination-component
+onder de tabel. Geen nieuw kleur-, knop-, lettertype- of overlaypatroon.
+
+Filters op artikelnaam/merk, barcode, GS1-status en CBS-status en de
+kolomsortering gelden voor de **gehele Catalogus**. De selectievakjes volgen
+het bestaande Inhuis-selectiesjabloon: de onbenoemde checkbox linksboven
+selecteert uitsluitend de acht rijen op de zichtbare pagina; de aparte
+checkbox **Alle rijen in de tabel** selecteert alle artikelen in het huidige
+filter, óók op overige pagina's. Selecties van buiten een gewijzigd filter
+blijven bewaard en kunnen later via de reeds bestaande actie
+**Selectie wissen** worden gewist.
+
+Voor een expliciete totale selectie worden uitsluitend canonieke artikel-ID's
+opgevraagd; het laden van de eerste pagina haalt nooit verborgen pagina's
+met productdetails op. **Geselecteerde rijen exporteren** haalt de exacte
+geselecteerde Catalogusgegevens pas bij die knopdruk op; uitsluitend
+read-only CSV, zonder een classificatie-, import- of matchingmutatie.
+Tijdens de opvraag toont de bestaande tabeltekst **Cataloguspagina laden…**
+en blijven de filtervelden bereikbaar. Voor geautoriseerde gebruikers blijven
+GS1/CBS-details en acties bij een geopend individueel artikel ongewijzigd.
+
+De globale aantallen artikelen en open GS1-/CBS-taken worden afzonderlijk
+opgehaald en verschijnen pas wanneer de volledige telling beschikbaar is;
+een gedeeltelijke pagina telt nooit ten onrechte als het volledige totaal.
+Verzoeken met ongeldige artikelidentiteiten of conflicterende aantallen
+stoppen fail-closed met de bestaande centrale meldings-overlay.
