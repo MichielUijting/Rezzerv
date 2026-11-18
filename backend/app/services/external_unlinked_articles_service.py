@@ -352,7 +352,7 @@ def list_external_articles_first_preview(*, limit: int = 10, conn=None) -> dict:
     }
 
 
-def list_all_external_articles(*, conn=None, source_rows=None) -> dict:
+def list_all_external_articles(*, conn=None, source_rows=None, on_progress=None) -> dict:
     """Platformoverzicht van alle unieke bronartikelen, inclusief Cataloguskoppelingen.
 
     Een bonartikelnummer is geen GTIN. De Art.code-kolom is uitsluitend een
@@ -371,7 +371,27 @@ def list_all_external_articles(*, conn=None, source_rows=None) -> dict:
         central_keys = _central_link_keys(conn)
         setup_done = perf_counter()
         removed_keys = _removed_ed2_keys(conn)
-        for source in (_source_articles(conn) if source_rows is None else source_rows):
+        source_iterator = _source_articles(conn) if source_rows is None else source_rows
+        total_to_check = None
+        if on_progress is not None:
+            # Only count distinct, eligible receipt identities, exactly as the
+            # projection below does. No progress estimate or inferred total.
+            unique_sources = []
+            source_keys = set()
+            for source in source_iterator:
+                label = str(source.get("receipt_line_text") or "")
+                if not label.strip() or is_spaarzegels_flow_excluded(source):
+                    continue
+                key = (_overview_retailer_code(source.get("retailer_code")),
+                       label, str(source.get("external_article_code") or ""))
+                if key in source_keys or key in removed_keys:
+                    continue
+                source_keys.add(key)
+                unique_sources.append(source)
+            total_to_check = len(unique_sources)
+            source_iterator = unique_sources
+            on_progress(0, total_to_check)
+        for source in source_iterator:
             receipt_text = str(source.get("receipt_line_text") or "")
             if not receipt_text.strip() or is_spaarzegels_flow_excluded(source):
                 continue
@@ -486,6 +506,8 @@ def list_all_external_articles(*, conn=None, source_rows=None) -> dict:
                     "external_databases_off_brand_override",
                 } and status != "unlinked" else "",
             })
+            if on_progress is not None:
+                on_progress(len(items), total_to_check)
     # A stable read-only explanation on each affected article. Keep the
     # normal overview path authoritative and avoid a second database scan.
     from app.services.proven_exact_receipt_name_service import (

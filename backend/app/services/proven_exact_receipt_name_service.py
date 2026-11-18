@@ -523,7 +523,8 @@ def manually_match_confirmed_receipt(
 
 
 def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platform_user",
-                                         include_match_overview=False):
+                                         include_match_overview=False,
+                                         progress_callback=None):
     """One controlled PostgreSQL batch, max 50 matches; no GET-time mutation."""
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
@@ -539,14 +540,24 @@ def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platfo
     # independent savepoints and block stale or conflicting records.
     # Reuse this fully resolved, read-only identity snapshot after a zero-write
     # pass. The Matchen screen no longer needs to repeat an expensive scan.
-    overview_rows = list_all_external_articles(conn=conn)["items"]
+    first_scan_options = (
+        {"on_progress": lambda checked, total:
+            progress_callback("controleren", checked, total)}
+        if progress_callback is not None else {}
+    )
+    overview_rows = list_all_external_articles(conn=conn, **first_scan_options)["items"]
     candidates, ambiguous, no_proof = _candidate_plan(
         overview_rows, load_confirmed_bonnaam_aliases(conn))
     selected = candidates[:MAX_EXACT_NAME_BATCH]
     verified_by_key = {}
     if selected:
+        second_scan_options = (
+            {"on_progress": lambda checked, total:
+                progress_callback("hercontroleren", checked, total)}
+            if progress_callback is not None else {}
+        )
         refreshed, _, _ = _candidate_plan(
-            list_all_external_articles(conn=conn)["items"],
+            list_all_external_articles(conn=conn, **second_scan_options)["items"],
             load_confirmed_bonnaam_aliases(conn))
         verified_by_key = {
             (row["source_key"], row["receipt_item_id"]): row
