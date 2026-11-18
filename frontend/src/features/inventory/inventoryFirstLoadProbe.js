@@ -8,7 +8,7 @@ function browserAvailable() {
 }
 
 export function inventoryFirstLoadProbeEnabled() {
-  if (!browserAvailable()) return false;
+  if (!browserAvailable() || window.__inhuisInventoryFirstLoadStopped === true) return false;
   try {
     if (new URLSearchParams(window.location.search).get('voorraadmeting') === '1') {
       window.sessionStorage.setItem(STORAGE_KEY, '1');
@@ -79,5 +79,6 @@ export function stopInventoryFirstLoadProbe() {
   if (!browserAvailable()) return;
   try { window.sessionStorage.removeItem(STORAGE_KEY); } catch {}
   window[HISTORY_KEY] = [];
+  window.__inhuisInventoryFirstLoadStopped = true;
   announce();
 }
