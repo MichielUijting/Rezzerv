@@ -26,6 +26,7 @@ async function startArticlebeheer(page, { found = true } = {}) {
         article_code: linked ? barcode : '', link_status: linked ? 'linked' : 'unlinked',
         quantity_label: '1 liter', manual_barcode: '',
       }],
+      total: 1,
       counts: { unlinked: linked ? 0 : 1, classification_pending: 0, linked: linked ? 1 : 0 },
     } })
     if (path === '/api/external-databases/products/search-preview') {
@@ -116,6 +117,7 @@ test('Lidl: individual correction previews, can cancel and writes only after con
         article_code: '', link_status: 'unlinked',
         quantity_label: '1 stuk', manual_barcode: savedCode,
       }],
+      total: 1,
       counts: { unlinked: 1, linked: 0, classification_pending: 0 },
     } })
     if (path === '/api/external-databases/products/search-preview') {
@@ -197,6 +199,7 @@ test('Lidl: historical conflict preview never offers the confirmation action', a
         retailer_code: 'lidl', receipt_article_number: '456',
         article_code: '', link_status: 'linked', manual_barcode: oldCode,
       }],
+      total: 1,
       counts: { unlinked: 0, linked: 1, classification_pending: 0 },
     } })
     if (path === '/api/external-databases/products/search-preview') {
@@ -262,7 +265,7 @@ async function openRisottoConflict(page, {
         catalog_product_id: catalogOwner, identity_catalog_product_id: manualOwner,
         identity_status: 'catalog_linked', identity_status_label: 'Catalogus gekoppeld',
         link_status: 'classification_pending',
-      }], counts: { unlinked: 0, classification_pending: 1, linked: 0 },
+      }], total: 1, counts: { unlinked: 0, classification_pending: 1, linked: 0 },
     } })
     if (path === '/api/external-databases/products/search-preview') {
       return route.fulfill({ json: { provider: 'none', results: [] } })
