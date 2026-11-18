@@ -98,7 +98,13 @@ def test_query_uses_parameterized_whole_catalog_filters_and_safe_sort():
     assert "LIKE :filter_cbs_status" in where
     for key in svc._SORT_KEYS:
         for direction in ("asc", "desc"):
-            assert "gp.id ASC" in svc._order_sql(key, direction)
+            order = svc._order_sql(key, direction)
+            assert "gp.id ASC" in order
+            assert "CASE WHEN NULLIF(TRIM(" in order
+    assert "LOWER(COALESCE(gp.name, '')) ASC" in svc._order_sql("name", "asc")
+    cbs_order = svc._order_sql("cbs_status", "asc")
+    assert "cbs.cbs_code" in cbs_order
+    assert "ref.name_nl" not in cbs_order
     with pytest.raises(ValueError):
         svc._order_sql("gp.id;DROP TABLE global_products", "asc")
     with pytest.raises(ValueError):

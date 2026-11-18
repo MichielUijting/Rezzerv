@@ -44,6 +44,20 @@ _EXPRESSIONS = {
     "gpc_status": f"COALESCE({_GPC}, 'Niet geclassificeerd')",
     "cbs_status": f"COALESCE({_CBS}, 'Niet geclassificeerd')",
 }
+# The original DataTable sorts CBS by its code, but filters by code+label.
+# Empty names/barcodes sort last in both directions, as in sorting.js.
+_CBS_SORT = (
+    "(SELECT CASE WHEN cbs.is_active THEN "
+    "NULLIF(TRIM(COALESCE(cbs.cbs_code, '')), '') ELSE NULL END "
+    "FROM global_product_cbs_classifications cbs "
+    "WHERE cbs.global_product_id = gp.id)"
+)
+_SORT_EXPRESSIONS = {
+    "name": "COALESCE(gp.name, '')",
+    "gtin": _GTIN,
+    "gpc_status": _EXPRESSIONS["gpc_status"],
+    "cbs_status": f"COALESCE({_CBS_SORT}, 'Niet geclassificeerd')",
+}
 _CLASSIFIED_SQL_NEEDLE = (
     "         ORDER BY LOWER(gp.name), gp.id\n"
     "         LIMIT :limit OFFSET :offset"
@@ -91,7 +105,11 @@ def _filter_sql(filters: dict[str, str]) -> tuple[str, dict]:
 def _order_sql(sort_key: str, direction: str) -> str:
     if sort_key not in _SORT_KEYS or direction not in ("asc", "desc"):
         raise ValueError("Ongeldige sorteervolgorde.")
-    return f"LOWER({_EXPRESSIONS[sort_key]}) {direction.upper()}, gp.id ASC"
+    expression = _SORT_EXPRESSIONS[sort_key]
+    return (
+        f"CASE WHEN NULLIF(TRIM({expression}), '') IS NULL THEN 1 ELSE 0 END ASC, "
+        f"LOWER({expression}) {direction.upper()}, gp.id ASC"
+    )
 
 
 def _select_filtered_ids(
