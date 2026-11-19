@@ -205,11 +205,12 @@ def main() -> int:
         # selecting at most the requested rows in SQL (not every household article).
         conn.execute(text("""
             INSERT INTO household_articles(id, household_id, article_name) VALUES
-                ('h0-milk-extra', '0', 'Melk Extra'),
+                ('h0-zalm-extra', '0', 'Zalm Extra'),
                 ('h0-percent', '0', 'Zak 100% Cacao'),
                 ('h0-underscore', '0', 'Zak 100_Gram'),
                 ('h0-unknown', '0', ''),
-                ('h1-milk-extra', '1', 'Melk Andere')
+                ('h0-bang', '0', 'Zak 100!Compleet'),
+                ('h1-zalm-extra', '1', 'Zalm Andere')
         """))
         statements = []
         from sqlalchemy import event
@@ -226,7 +227,7 @@ def main() -> int:
                 all_articles = article_group_store.list_household_articles_for_grouping(
                     household_id="0"
                 )["items"]
-                for needle in ("mel", "MEL", "zak", "100%", "100_", "onbekend", "geen match"):
+                for needle in ("zal", "ZAL", "zak", "100%", "100_", "100!", "onbekend", "geen match"):
                     for wanted_limit in (1, 3):
                         results = article_group_store.search_household_articles_for_grouping(
                             household_id="0", query=needle, limit=wanted_limit
@@ -237,9 +238,9 @@ def main() -> int:
                         ][:wanted_limit]
                         assert results == expected, (needle, results, expected)
                 other_household_matches = article_group_store.search_household_articles_for_grouping(
-                    household_id="1", query="mel", limit=5
+                    household_id="1", query="zal", limit=5
                 )["items"]
-                assert [item["id"] for item in other_household_matches] == ["h1-milk-extra"]
+                assert [item["id"] for item in other_household_matches] == ["h1-zalm-extra"]
                 assert article_group_store.search_household_articles_for_grouping(
                     household_id="0", query="m", limit=5
                 )["items"] == []

@@ -331,9 +331,9 @@ def search_household_articles_for_grouping(household_id: Any, query: Any, limit:
     safe_limit = max(1, min(int(limit), 50))
     escaped_query = (
         normalized_query.lower()
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
+        .replace("!", "!!")
+        .replace("%", "!%")
+        .replace("_", "!_")
     )
 
     with engine.begin() as conn:
@@ -365,7 +365,7 @@ def search_household_articles_for_grouping(household_id: Any, query: Any, limit:
                 FROM household_articles ha
                 LEFT JOIN article_groups ag ON ag.id = {group_expr}
                 WHERE CAST(ha.household_id AS TEXT) = :household_id
-                  AND lower({visible_name_expr}) LIKE :query ESCAPE '\'
+                  AND lower({visible_name_expr}) LIKE :query ESCAPE '!'
                 ORDER BY lower({name_expr}) ASC, CAST(ha.{id_column} AS TEXT) ASC
                 LIMIT :limit
             """),
