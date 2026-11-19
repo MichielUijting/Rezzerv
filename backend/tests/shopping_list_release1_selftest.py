@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+from app.services import article_group_store
 
 from sqlalchemy import create_engine, text
 
@@ -198,6 +201,54 @@ def main() -> int:
             VALUES ('product-type-brood', 'Brood')
         """))
 
+        # The shopping search must match the legacy display order/fields while
+        # selecting at most the requested rows in SQL (not every household article).
+        conn.execute(text("""
+            INSERT INTO household_articles(id, household_id, article_name) VALUES
+                ('h0-zalm-extra', '0', 'Zalm Extra'),
+                ('h0-percent', '0', 'Zak 100% Cacao'),
+                ('h0-underscore', '0', 'Zak 100_Gram'),
+                ('h0-unknown', '0', ''),
+                ('h0-bang', '0', 'Zak 100!Compleet'),
+                ('h1-zalm-extra', '1', 'Zalm Andere')
+        """))
+        statements = []
+        from sqlalchemy import event
+
+        def capture_household_search(_conn, _cursor, statement, _params, _context, _many):
+            if "FROM household_articles ha" in statement and "LIKE" in statement:
+                statements.append(statement)
+
+        event.listen(test_engine, "before_cursor_execute", capture_household_search)
+        try:
+            with patch.object(article_group_store, "engine", test_engine), patch.object(
+                article_group_store, "ensure_article_group_schema"
+            ):
+                all_articles = article_group_store.list_household_articles_for_grouping(
+                    household_id="0"
+                )["items"]
+                for needle in ("zal", "ZAL", "zak", "100%", "100_", "100!", "onbekend", "geen match"):
+                    for wanted_limit in (1, 3):
+                        results = article_group_store.search_household_articles_for_grouping(
+                            household_id="0", query=needle, limit=wanted_limit
+                        )["items"]
+                        expected = [
+                            item for item in all_articles
+                            if needle.lower() in item["article_name"].lower()
+                        ][:wanted_limit]
+                        assert results == expected, (needle, results, expected)
+                other_household_matches = article_group_store.search_household_articles_for_grouping(
+                    household_id="1", query="zal", limit=5
+                )["items"]
+                assert [item["id"] for item in other_household_matches] == ["h1-zalm-extra"]
+                assert article_group_store.search_household_articles_for_grouping(
+                    household_id="0", query="m", limit=5
+                )["items"] == []
+        finally:
+            event.remove(test_engine, "before_cursor_execute", capture_household_search)
+        assert statements, "The shopping search did not reach a SQL-filtered query"
+        assert all("LIMIT" in statement and "household_id" in statement for statement in statements)
+
         household_results = search_shopping_catalog(
             conn, "0", scope="household_articles", query="mel", limit=20
         )
@@ -229,7 +280,15 @@ def main() -> int:
         assert article_group_results["total"] == 1, article_group_results
         assert article_group_results["items"][0]["article_group_name"] == "Zuivel", article_group_results
 
-        initial = get_active_shopping_list(conn, "0")
+        # No GPC enrichment should run for a list without canonical source IDs.
+        with patch(
+            "app.services.shopping_list_service.dutch_gpc_by_global_product",
+            side_effect=AssertionError("Unexpected global GPC read for an empty list"),
+        ), patch(
+            "app.services.shopping_list_service.dutch_gpc_by_household_article",
+            side_effect=AssertionError("Unexpected household GPC read for an empty list"),
+        ):
+            initial = get_active_shopping_list(conn, "0")
         assert initial["status"] == "active", initial
         assert initial["items"] == [], initial
         first_list_id = initial["id"]
@@ -335,6 +394,8 @@ def main() -> int:
         assert int(inventory_count) == 1, inventory_count
         assert int(inventory_amount) == 7, inventory_amount
 
+    print("SHOPPING_SEARCH_SQL_LIMIT_AND_HOUSEHOLD_SCOPE=PASS")
+    print("SHOPPING_EMPTY_LIST_SKIPS_GPC=PASS")
     print("SHOPPING_LIST_RELEASE_1_SELFTEST=PASS")
     print("catalog_search_four_scopes=PASS")
     print("global_product_direct_image_and_deduplication=PASS")

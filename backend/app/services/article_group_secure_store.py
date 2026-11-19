@@ -19,6 +19,11 @@ def list_household_articles_for_grouping(household_id: Any = None) -> dict[str, 
     return legacy_store.list_household_articles_for_grouping(household_id=household_id)
 
 
+def search_household_articles_for_grouping(household_id: Any, query: Any, limit: int = 5) -> dict[str, Any]:
+    return legacy_store.search_household_articles_for_grouping(
+        household_id=household_id, query=query, limit=limit
+    )
+
 def _required_household_id(household_id: Any) -> str:
     normalized = str(household_id or "").strip()
     if not normalized:
