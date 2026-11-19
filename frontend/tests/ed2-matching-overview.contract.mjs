@@ -39,8 +39,8 @@ assert.match(workspace, /<DataTable columns=\{columns\} data=\{rows\}/)
 console.log('ED2_MATCHING_SNAPSHOT_CONTRACT_GREEN')
 
 assert.match(workspace, /autoProgress\.check_number/)
-assert.match(workspace, /autoProgress\.checks_completed/)
-assert.match(workspace, /autoProgress\.estimated_checks/)
+assert.match(workspace, /job\.checks_completed/)
+assert.match(workspace, /job\.estimated_checks/)
 assert.match(workspace, /autoProgress\.overall_percent/)
 // The original full-text progress description must not return.
 assert.doesNotMatch(workspace, /Nieuwe matches kunnen extra controles nodig maken/)
