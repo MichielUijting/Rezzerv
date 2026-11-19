@@ -29,6 +29,14 @@ assert.doesNotMatch(source, /Bekijk hoeveel bevestigde synoniemen/)
 assert.doesNotMatch(source, /Geselecteerd: \{productName\(selectedProduct\)\}/)
 assert.doesNotMatch(source, /Een synoniem is één rechtstreeks bevestigd/)
 assert.match(synonyms, /searchParams.get\('artikel'\)/)
-assert.match(mobile, /Synoniemenanalyse/)
-assert.match(desktop, /Synoniemenanalyse/)
+// The legacy deep link stays functional, but Catalogus no longer duplicates
+// the management buttons on desktop or mobile.
+assert.doesNotMatch(mobile, /Synoniemenanalyse|Artikelclassificaties toekennen/)
+assert.doesNotMatch(desktop, /Synoniemenanalyse|Artikelclassificaties toekennen/)
+for (const marker of [
+  'SYNONYM_BUCKETS', 'article-synonym-count-summary',
+  'article-synonym-count-', 'synonymCounts', 'toggleSynonymBucket',
+  "synonymBucket === '3+'", 'data={visibleArticles.map(',
+]) assert.ok(synonyms.includes(marker), 'Artikelbeheer Synoniemen teller/filter: ' + marker)
+assert.match(synonyms, /setSynonymBucket\(\(current\) => current === bucket \? '' : bucket\)/)
 console.log('SYNONYM_ANALYSIS_CONTRACT_GREEN')

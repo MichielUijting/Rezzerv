@@ -209,6 +209,7 @@ export default function CbsBulkClassificationActions({ selectedIds, disabled = f
         ticketRef.current += 1
         abortRef.current?.abort()
         setQuery(value)
+        setLooking(false)
         setTrail([])
         setChosen(null)
         setRows([])

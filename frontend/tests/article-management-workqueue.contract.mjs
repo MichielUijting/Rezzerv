@@ -187,4 +187,27 @@ assert.match(workspace, /fetchAllMatchingIds\(filters, controller\.signal\)/)
 assert.match(workspace, /product_ids: selectedIds/)
 assert.match(workspace, /setAllFilterIds\(\{ key: filterKey, ids \}\)/)
 
+
+// Consolidated CBS bulk uses the existing server-paged selection, but obtains
+// fresh exact ID/name/version snapshots before any explicit write confirmation.
+const cbsBulk = readFileSync(new URL('../src/features/externalDatabases/CbsBulkClassificationActions.jsx', import.meta.url), 'utf8')
+const classificationRoutes = readFileSync(new URL('../../backend/app/api/cbs_classification_routes.py', import.meta.url), 'utf8')
+const classificationService = readFileSync(new URL('../../backend/app/services/classification_server_paging_service.py', import.meta.url), 'utf8')
+assert.match(workspace, /CbsBulkClassificationActions selectedIds=\{selectedIds\}/)
+assert.match(cbsBulk, /workqueue-selected-cbs-snapshots/)
+assert.match(cbsBulk, /selectedIds.length > 100/)
+assert.match(cbsBulk, /\/bulk-confirm/)
+assert.match(cbsBulk, /\/bulk-remove/)
+assert.match(cbsBulk, /expected_product_name: item.name/)
+assert.match(cbsBulk, /expected_version: item.version/)
+assert.match(cbsBulk, /category\.reference_version/)
+assert.match(cbsBulk, /category\?\.lowest/)
+assert.match(cbsBulk, /primaryActionLabel: 'Bevestigen'/)
+assert.match(cbsBulk, /secondaryActionLabel: 'Annuleren'/)
+assert.match(classificationRoutes, /@router.post\("\/workqueue-selected-cbs-snapshots"\)/)
+assert.match(classificationRoutes, /_actor\("platform.external_products.view"\)/)
+assert.match(classificationService, /MAX_CBS_BULK_IDS = 100/)
+assert.match(classificationService, /len\(set\(product_ids\)\) != len\(product_ids\)/)
+assert.match(classificationService, /bindparam\("product_ids", expanding=True\)/)
+
 console.log('ARTICLE_MANAGEMENT_WORKQUEUE_MODEL_GREEN')

@@ -654,3 +654,12 @@ De Bijna op-tabel behoudt bij verticaal scrollen de kolomkoppen en
 filterrij zichtbaar, met dezelfde sticky-header en sticky-filters-regels
 als de standaard Voorraadtabel. De scrollbar en pagineringsknoppen
 blijven onder de tabel en overdekken geen rij.
+
+
+## Artikelbeheer centraliseert CBS-bulkacties en synoniemtellers — 19 november 2026
+
+Catalogus blijft het centrale read-only overzicht voor het openen en beoordelen van afzonderlijke Catalogusproducten. De afzonderlijke knoppen **Artikelclassificaties toekennen** en **Synoniemenanalyse** zijn daar zowel op desktop als mobiel vervallen. Bestaande rechtstreeks bezochte, beveiligde routes blijven tijdelijk bereikbaar als compatibiliteit; er is geen automatische datamigratie.
+
+**Artikelbeheer → Classificeren** biedt nu tevens de eerder afzonderlijke CBS-bulkacties. De bestaande paginering van acht Catalogusproducten en selectie over meerdere pagina's blijven behouden. Een CBS-bulkactie is expliciet beperkt tot 1–100 unieke centrale product-ID's; een grotere exportselectie blijft intact maar mag niet impliciet geclassificeerd worden. De gebruiker kiest of doorbladert de officiële **laagste** CBS ECOICOPv2-categorie en bevestigt vervolgens de bewerking. Het verwijderen van CBS-classificaties vereist dat alle geselecteerde artikelen daadwerkelijk actief CBS-geclassificeerd zijn. Voor de mutatie worden uitsluitend de geselecteerde actuele centrale namen en versiegegevens gelezen. De bestaande CBS-backend valideert elke naam, classificatieversie en officiële referentie opnieuw **atomair** en bewaart de historie; GS1, identiteit, voorraad en productrelaties worden nooit ongemerkt gewijzigd. Foutieve, gewijzigde of onvolledige selecties worden afgewezen zonder gedeeltelijke write.
+
+**Artikelbeheer → Synoniemen** toont de aantallen Catalogusproducten met 0, 1, 2 en 3+ **direct bevestigd gekoppelde** synoniemen. De tellers zijn ook filters op de linker artikeltabel en gebruiken de bestaande centrale analyse met canonieke product-ID's. De tellers gelden over de complete Catalogus, onafhankelijk van het aanvullende datumfilter. De bestaande bulk-koppel/ontkoppelacties, conflictdialogen en autorisaties blijven ongewijzigd.
