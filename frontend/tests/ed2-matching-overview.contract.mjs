@@ -34,7 +34,7 @@ assert.match(workspace, /bonnamen-matchen\/progress\/start/)
 assert.match(workspace, /bonnamen-matchen\/progress'/)
 assert.match(workspace, /autoProgress\.checked/)
 assert.match(workspace, /autoProgress\.total/)
-assert.match(workspace, /Math\.floor\(/)
+assert.match(workspace, /autoProgress\.overall_percent/)
 assert.match(workspace, /<DataTable columns=\{columns\} data=\{rows\}/)
 console.log('ED2_MATCHING_SNAPSHOT_CONTRACT_GREEN')
 
