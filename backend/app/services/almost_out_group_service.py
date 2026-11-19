@@ -269,6 +269,12 @@ def load_group_projection(conn, household_id, group):
         WHERE household_id = :household_id AND article_id IN :ids
         ORDER BY created_at, id
     ''').bindparams(bindparam('ids', expanding=True)), params).mappings().all()
+    return _project_group_rows(group, inventory, events)
+
+
+def _project_group_rows(group, inventory, events):
+    """Identical representation for one group, regardless of read strategy."""
+    ids = [str(row['id']) for row in group['members']]
     representative = group['members'][0]
     package_size = group['factors'][str(representative['id'])]
 
@@ -298,6 +304,63 @@ def load_group_projection(conn, household_id, group):
         'aggregation_variant': group['key'][2] if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
         'aggregation_unit': group['key'][3] if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
         'representative_package_content': package_size if group['key'][0] in {'automatic_product_type', 'confirmed_synonym'} else None,
+    }
+
+
+
+def load_group_projections(conn, household_id, groups):
+    """Read source rows for all eligible safe groups in two household queries.
+
+    Groups and identity factors originate only in load_groups; this function
+    cannot infer equivalence. The projection and per-member validation are
+    shared verbatim with load_group_projection, including SQL row ordering.
+    """
+    groups = list(groups)
+    if not groups:
+        return {}
+    ids = sorted({
+        str(member['id'])
+        for group in groups for member in group['members']
+    })
+    params = {'household_id': str(household_id), 'ids': ids}
+    inventory = conn.execute(text('''
+        SELECT i.id, i.household_article_id, i.naam AS article_name,
+               i.aantal AS quantity, i.space_id, i.sublocation_id,
+               COALESCE(s.naam, '') AS space_name, COALESCE(sl.naam, '') AS sublocation_name
+        FROM inventory i
+        LEFT JOIN spaces s ON s.id = i.space_id AND s.household_id = :household_id
+        LEFT JOIN sublocations sl ON sl.id = i.sublocation_id AND sl.space_id = s.id
+        WHERE i.household_id = :household_id AND i.household_article_id IN :ids
+          AND COALESCE(i.status, 'active') = 'active'
+        ORDER BY i.id
+    ''').bindparams(bindparam('ids', expanding=True)), params).mappings().all()
+    events = conn.execute(text('''
+        SELECT * FROM inventory_events
+        WHERE household_id = :household_id AND article_id IN :ids
+        ORDER BY created_at, id
+    ''').bindparams(bindparam('ids', expanding=True)), params).mappings().all()
+
+    inventory_by_article = {}
+    for position, row in enumerate(inventory):
+        inventory_by_article.setdefault(str(row['household_article_id']), []).append((position, row))
+    events_by_article = {}
+    for position, row in enumerate(events):
+        events_by_article.setdefault(str(row['article_id']), []).append((position, row))
+
+    def in_original_order(index, member_ids):
+        positions = {}
+        for article_id in member_ids:
+            for position, row in index.get(article_id, ()):
+                positions[position] = row
+        return [positions[position] for position in sorted(positions)]
+
+    return {
+        id(group): _project_group_rows(
+            group,
+            in_original_order(inventory_by_article, [str(m['id']) for m in group['members']]),
+            in_original_order(events_by_article, [str(m['id']) for m in group['members']]),
+        )
+        for group in groups
     }
 
 

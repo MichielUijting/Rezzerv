@@ -265,8 +265,20 @@ def _dev_inventory_preview_row(row):
 
 
 @app.get("/api/dev/inventory-preview")
-def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+def dev_inventory_preview(
+    authorization: Optional[str] = Header(None),
+    household_article_id: Optional[str] = Query(None),
+):
     timing_started = perf_counter()
+    # Mobile article details need one canonical article, never the entire
+    # household-wide preview. Keep the unfiltered legacy contract unchanged.
+    scoped_article_id = str(household_article_id or '').strip()
+    if household_article_id is not None and not scoped_article_id:
+        raise HTTPException(status_code=400, detail='Huishoudartikel-id mag niet leeg zijn')
+    article_filter = (
+        ' AND i.household_article_id = :household_article_id'
+        if scoped_article_id else ''
+    )
     runtime_context = require_household_context(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     effective_household_id = household_context.active_household_id
@@ -288,9 +300,13 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
             WHERE i.household_id = :household_id
               AND COALESCE(i.status, 'active') = 'active'
+            """ + article_filter + """
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
-        ), {"household_id": effective_household_id}).mappings().all()
+        ), {
+            "household_id": effective_household_id,
+            **({"household_article_id": scoped_article_id} if scoped_article_id else {}),
+        }).mappings().all()
         inventory_query_done = perf_counter()
         gpc_by_article = dutch_gpc_by_household_article(
             conn,
@@ -4025,12 +4041,32 @@ def update_household_article_settings(conn, household_id: str, household_article
 
 
 def build_household_article_detail_service(conn, household_id: str, household_article_id: str) -> dict:
+    # Timing only, never identifiers, article names or private content in logs.
+    # In particular, product identity/enrichment may be slower than stock reads.
+    started = perf_counter()
     details = get_household_article_details(conn, household_id, article_id=household_article_id)
+    identity_done = perf_counter()
     resolved_household_article_id = str(details.get("article_id") or details.get("id") or household_article_id)
     inventory_rows = get_household_article_inventory_rows(conn, household_id, resolved_household_article_id)
+    stock_done = perf_counter()
     event_rows = get_household_article_event_rows(conn, household_id, resolved_household_article_id)
+    events_done = perf_counter()
     settings_payload = get_household_article_settings(conn, household_id, resolved_household_article_id)
+    settings_done = perf_counter()
     price_summary = build_household_article_price_summary(conn, household_id, resolved_household_article_id, details.get("global_product_id"))
+    completed = perf_counter()
+    if completed - started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "article_detail_timing total_ms=%.1f identity_product_ms=%.1f "
+            "stock_ms=%.1f events_ms=%.1f settings_ms=%.1f price_ms=%.1f "
+            "stock_rows=%d history_rows=%d",
+            (completed - started) * 1000, (identity_done - started) * 1000,
+            (stock_done - identity_done) * 1000,
+            (events_done - stock_done) * 1000,
+            (settings_done - events_done) * 1000,
+            (completed - settings_done) * 1000,
+            len(inventory_rows), len(event_rows),
+        )
     return {
         **details,
         "household_article_id": resolved_household_article_id,
@@ -4295,7 +4331,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
         'current_quantity_at_evaluation': float(round(current_quantity, 6)),
     }
 
-def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None, individual_projection: dict[str, Any] | None = None) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
     article_name = str(article_row.get('naam') or '').strip()
     global_product_id = str(article_row.get('global_product_id') or '').strip()
@@ -4317,8 +4353,12 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     if ideal_stock is None and min_stock is not None:
         ideal_stock = float(min_stock) + 1.0
 
-    inventory_rows = group_projection['inventory_rows'] if group_projection else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
-    event_rows = group_projection['event_rows'] if group_projection else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
+    # Individual rows use the exact same household-scoped source projection,
+    # prefetched once for this request. Grouped products retain their
+    # independent, proven aggregate-evaluation path.
+    source_projection = group_projection or individual_projection
+    inventory_rows = source_projection['inventory_rows'] if source_projection is not None else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
+    event_rows = source_projection['event_rows'] if source_projection is not None else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
     current_quantity = calculate_inventory_total_quantity_from_rows(inventory_rows)
     event_net_quantity = calculate_inventory_event_net_quantity(event_rows)
     has_event_history = len(event_rows) > 0
@@ -4345,16 +4385,28 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
         # Some historical product-type signals intentionally have no minimum
         # configured. Their forecast still uses physical depletion (zero).
         prediction_minimum = float(min_stock) if min_stock is not None else 0.0
-        prediction_payload = None if group_projection else compute_household_product_prediction(
-            conn,
-            household_id,
-            household_article_id,
-            article_name,
-            current_quantity=current_quantity,
-            prediction_days=effective_prediction_days,
-            global_product_id=global_product_id,
-            minimum_stock=prediction_minimum,
-        )
+        prediction_payload = None
+        if individual_projection is not None and group_projection is None:
+            from app.services.almost_out_group_service import prediction_from_events
+            prediction_payload = prediction_from_events(
+                individual_projection['purchase_rows'],
+                effective_prediction_days, current_quantity=current_quantity,
+                minimum_stock=prediction_minimum,
+            )
+            if prediction_payload is not None:
+                prediction_payload = {
+                    **prediction_payload,
+                    'prediction_scope': 'global_product' if global_product_id else 'household_article',
+                    'current_quantity_at_evaluation': float(round(current_quantity, 6)),
+                }
+        elif not group_projection:
+            prediction_payload = compute_household_product_prediction(
+                conn, household_id, household_article_id, article_name,
+                current_quantity=current_quantity,
+                prediction_days=effective_prediction_days,
+                global_product_id=global_product_id,
+                minimum_stock=prediction_minimum,
+            )
         if group_projection:
             from app.services.almost_out_group_service import prediction_from_events
             prediction_payload = prediction_from_events(
@@ -4505,6 +4557,9 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
 
 
 def build_almost_out_items(conn, household_id: str) -> list[dict]:
+    # Each stage measures its own cost; logging contains only timings/counts,
+    # never inventory content, auth state or household identifiers.
+    phase_started = perf_counter()
     household_settings = get_household_almost_out_settings(conn, household_id)
     article_rows = conn.execute(
         text(
@@ -4523,6 +4578,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         {'household_id': str(household_id)},
     ).mappings().all()
 
+    article_read_done = perf_counter()
     total_active = len(article_rows)
     if not article_rows:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
@@ -4531,12 +4587,8 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     eligible_count = len(article_rows)
     hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
-    gpc_by_article = dutch_gpc_by_household_article(
-        conn,
-        household_id,
-        article_ids,
-    )
-
+    # Classification is presentation-only. Enrich the *visible* signals
+    # after evaluation, not every household article before the first row.
     settings_map_by_article: dict[str, dict[str, Any]] = {}
     if article_ids:
         settings_rows = conn.execute(
@@ -4556,9 +4608,48 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             bucket = settings_map_by_article.setdefault(article_id, {})
             bucket[str(row.get('setting_key') or '').strip()] = _parse_json_setting_value(row.get('setting_value'))
 
-    from app.services.almost_out_group_service import load_groups, load_group_projection, should_project_group
+    from app.services.almost_out_group_service import (
+        load_groups, load_group_projections, should_project_group,
+    )
     items: list[dict] = []
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
+    grouping_done = perf_counter()
+    # Avoid 3-4 repeated PostgreSQL reads per ordinary article. The same
+    # household-scoped rows are loaded once and replayed in the original SQL
+    # order. Safe product/synonym groups are still evaluated independently.
+    from app.services.almost_out_query_prefetch import prefetch_individual_almost_out
+    forecast_horizon = max(
+        int(household_settings.get('shopping_days') or 0),
+        int(household_settings.get('prediction_days') or 0)
+        if household_settings.get('prediction_enabled') else 0,
+    )
+    individual_candidates = [
+        member
+        for group in groups if not should_project_group(group)
+        for member in group['members']
+        if (forecast_horizon > 0 or member.get('min_stock') is not None)
+        and not settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden')
+    ]
+    individual_projections = prefetch_individual_almost_out(
+        conn, household_id, article_rows, individual_candidates,
+        include_purchases=forecast_horizon > 0,
+    )
+    eligible_grouped = [
+        group for group in groups
+        if should_project_group(group)
+        and (
+            household_settings.get('prediction_enabled')
+            or household_settings.get('shopping_days')
+            or any(member.get('min_stock') is not None for member in group['members'])
+        )
+        and not any(
+            settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True
+            for member in group['members']
+        )
+    ]
+    # Two queries total for grouped inventory/events, not two per group.
+    grouped_projections = load_group_projections(conn, household_id, eligible_grouped)
+    prefetch_done = perf_counter()
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
         grouped = should_project_group(group)
@@ -4573,7 +4664,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 continue
             projection = None
             if grouped:
-                projection = load_group_projection(conn, household_id, group)
+                projection = grouped_projections[id(group)]
                 article_row = dict(article_row)
                 reference_factor = group['factors'][article_id]
                 for field in ('min_stock', 'ideal_stock'):
@@ -4583,10 +4674,23 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 conn, household_id, article_row, household_settings=household_settings,
                 article_settings_map=settings_map_by_article.get(article_id, {}),
                 group_projection=projection,
+                individual_projection=individual_projections.get(article_id) if not grouped else None,
             )
-            evaluation.update(gpc_by_article.get(article_id, {}))
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
+
+    evaluation_done = perf_counter()
+    visible_ids = [
+        str(item['household_article_id']) for item in items
+        if item.get('household_article_id')
+    ]
+    if visible_ids:
+        gpc_by_article = dutch_gpc_by_household_article(
+            conn, household_id, visible_ids,
+        )
+        for item in items:
+            item.update(gpc_by_article.get(str(item['household_article_id']), {}))
+    gpc_done = perf_counter()
 
     # Only visible signals get photo enrichment. Use their exact matched
     # product-group members before the existing confirmed-synonym fallback.
@@ -4594,11 +4698,29 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     # this projection is read-only, with no inventory or identity writes.
     from app.services.almost_out_image_projection import fill_visible_almost_out_photos
     fill_visible_almost_out_photos(conn, text, article_rows, items)
+    photo_done = perf_counter()
     # Use the same proven identity route to enrich the Catalogus product name,
     # assigned GS1 classification and missing-photo explanation. Never change
     # household_article_id, stock, purchase history or the visibility decision.
     from app.services.almost_out_catalog_projection import fill_visible_almost_out_catalog_details
     fill_visible_almost_out_catalog_details(conn, text, article_rows, items)
+    catalog_done = perf_counter()
+    if catalog_done - phase_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "almost_out_phase_timing articles_ms=%.1f groups_ms=%.1f "
+            "prefetch_ms=%.1f evaluate_ms=%.1f gpc_ms=%.1f "
+            "photos_ms=%.1f catalog_ms=%.1f total_ms=%.1f "
+            "active=%d groups=%d grouped=%d signals=%d",
+            (article_read_done - phase_started) * 1000,
+            (grouping_done - article_read_done) * 1000,
+            (prefetch_done - grouping_done) * 1000,
+            (evaluation_done - prefetch_done) * 1000,
+            (gpc_done - evaluation_done) * 1000,
+            (photo_done - gpc_done) * 1000,
+            (catalog_done - photo_done) * 1000,
+            (catalog_done - phase_started) * 1000,
+            total_active, len(groups), len(eligible_grouped), len(items),
+        )
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),
