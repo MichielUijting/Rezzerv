@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import CatalogProductImage from '../catalog/CatalogProductImage'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { buildArticleRelationshipGraph } from './articleRelationshipModel'
 import './articleRelationshipOverview.css'
@@ -80,18 +80,24 @@ export default function ArticleRelationshipOverview() {
   const [error, setError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
   const searchRef = useRef(null)
+  // Full bonartikelgegevens zijn pas nodig wanneer een Catalogusartikel is gekozen.
+  // Hergebruik deze ene read-only aanvraag bij het wisselen tussen artikelen.
+  const receiptOverviewRef = useRef({ revision: -1, promise: null })
 
   useEffect(() => {
     const controller = new AbortController()
+    // Verversen maakt zowel de zoekcatalogus als de eerder gelezen bewijzen ongeldig.
+    receiptOverviewRef.current = {
+      revision: reloadCount,
+      householdId: String(readStoredAuthContext()?.active_household_id || ''),
+      promise: null,
+    }
     setLoading(true)
     setError('')
-    Promise.all([
-      readJson(SYNONYMS_API, controller.signal),
-      readJson(RECEIPTS_API, controller.signal),
-    ]).then(([catalog, overview]) => {
+    setReceipts([])
+    readJson(SYNONYMS_API, controller.signal).then((catalog) => {
       if (controller.signal.aborted) return
       setProducts(Array.isArray(catalog.items) ? catalog.items : [])
-      setReceipts(Array.isArray(overview.items) ? overview.items : [])
     }).catch((err) => { if (!controller.signal.aborted) {
       setError(err.message)
       showFeedback({ variant: 'error', title: 'Relatieoverzicht',
@@ -106,15 +112,34 @@ export default function ArticleRelationshipOverview() {
     setOptions([])
     if (!selectedId) { setLoadingLinks(false); return () => controller.abort() }
     setLoadingLinks(true)
-    readJson(SYNONYMS_API + '/' + encodeURIComponent(selectedId) + '/options', controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setOptions(Array.isArray(result.items) ? result.items : [])
+    const cached = receiptOverviewRef.current
+    const householdId = String(readStoredAuthContext()?.active_household_id || '')
+    if (cached.householdId !== householdId) {
+      // Een eerdere huishoudcontext mag nooit een gedeelde relatiesnapshot leveren.
+      cached.householdId = householdId
+      cached.promise = null
+      setReceipts([])
+    }
+    if (!cached.promise) {
+      // Niet bij openen van het scherm; pas na de eerste artikelkeuze.
+      // Een gedeelde request is niet aan een individuele selectiewissel gekoppeld.
+      cached.promise = readJson(RECEIPTS_API).catch((err) => {
+        cached.promise = null // Een mislukte aanvraag mag opnieuw worden geprobeerd.
+        throw err
       })
-      .catch((err) => { if (!controller.signal.aborted) {
-        setError(err.message)
-        showFeedback({ variant: 'error', title: 'Relatieoverzicht',
-          message: err.message || 'De synoniemrelaties konden niet worden geladen.' })
-      } })
+    }
+    Promise.all([
+      readJson(SYNONYMS_API + '/' + encodeURIComponent(selectedId) + '/options', controller.signal),
+      cached.promise,
+    ]).then(([result, overview]) => {
+      if (controller.signal.aborted) return
+      setOptions(Array.isArray(result.items) ? result.items : [])
+      setReceipts(Array.isArray(overview.items) ? overview.items : [])
+    }).catch((err) => { if (!controller.signal.aborted) {
+      setError(err.message)
+      showFeedback({ variant: 'error', title: 'Relatieoverzicht',
+        message: err.message || 'De artikelrelaties konden niet worden geladen.' })
+    } })
       .finally(() => { if (!controller.signal.aborted) setLoadingLinks(false) })
     return () => controller.abort()
   }, [selectedId, reloadCount, showFeedback])

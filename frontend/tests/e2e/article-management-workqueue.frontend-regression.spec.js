@@ -573,3 +573,30 @@ test('Classificeren: persistente keuze verwerkt eerste 100 artikelrijen, inclusi
   expect(attempted[1].map(item => item.product_id)).toEqual(['article-101', 'article-101'])
   await expect(page.getByTestId('classification-import-table')).toContainText('Geen nieuwe of afwijkende classificaties gevonden.')
 })
+
+
+// A final cross-screen performance regression: opening the relationship
+// search must not download all receipt rows until the user selects a product.
+test('Overzicht: snel zoeken, bonrelaties pas na artikelkeuze en gedeeld bij wisselen', async ({ page }) => {
+  const requests = await mountMockBackend(page)
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Overzicht' }).click()
+  const search = page.getByRole('searchbox', { name: 'Catalogusartikel zoeken' })
+  await expect(search).toBeEnabled()
+
+  const receiptOverviewCalls = () => requests.filter(
+    (request) => request.path === '/api/external-databases/articles-overview'
+  ).length
+  expect(receiptOverviewCalls()).toBe(0)
+
+  await search.fill('Halfvolle')
+  await page.locator('.rz-rel-search-options').getByRole('button', { name: /Halfvolle melk/ }).click()
+  await expect(page.getByLabel('Grafiek met bevestigde artikelrelaties')).toContainText('ELSTAR')
+  expect(receiptOverviewCalls()).toBe(1)
+
+  await search.fill('Volle')
+  await page.locator('.rz-rel-search-options').getByRole('button', { name: /^Volle melk/ }).click()
+  await expect(page.getByLabel('Grafiek met bevestigde artikelrelaties')).toBeVisible()
+  expect(receiptOverviewCalls()).toBe(1)
+  expect(requests.filter((request) => request.method === 'POST')).toEqual([])
+})
