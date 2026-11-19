@@ -298,7 +298,8 @@ export default function Ed2MatchPage({ initialReceiptItemId = '', forceNewCheckO
       data-testid="ed2-auto-match-progress" role="group"
       aria-label="Voortgang automatisch matchen"
       className="rz-synonym-analysis-actions"
-      style={{ display: 'grid', gap: '8px' }}>
+      style={{ display: 'grid', gap: '8px', width: 'min(100%, 520px)',
+        marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
         <strong>Controle {autoProgress.check_number || 1}

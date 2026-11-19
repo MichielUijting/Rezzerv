@@ -45,6 +45,8 @@ assert.match(workspace, /autoProgress\.overall_percent/)
 // The original full-text progress description must not return.
 assert.doesNotMatch(workspace, /Nieuwe matches kunnen extra controles nodig maken/)
 assert.match(workspace, /ed2-auto-match-overall-percent/)
+assert.match(workspace, /width: 'min\\(100%, 520px\\)'/)
+assert.match(workspace, /marginInline: 'auto'/)
 assert.match(workspace, /toLocaleString\('nl-NL'\)/)
 assert.match(workspace, /matchingEntryAction\(job, forceNewCheck\)/)
 assert.match(workspace, /runAutomaticCheck\(true\)/)
