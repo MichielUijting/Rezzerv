@@ -63,3 +63,7 @@ assert.match(parent, /ed2ActiveArea/)
 assert.match(parent, /onAreaChange=\{chooseArea\}/)
 assert.match(parent, /chooseArea\(task\.area\)/)
 console.log('ED2_MATCHING_VIEWPORT_RESUME_CONTRACT_GREEN')
+
+assert.match(parent, /setFreshMatchingSelection\(area === 'matching' && activeArea !== 'matching'\)/)
+assert.match(parent, /forceNewCheckOnEntry=\{freshMatchingSelection\}/)
+assert.match(workspace, /runAutomaticCheck\(forceNewCheckOnEntry\)/)

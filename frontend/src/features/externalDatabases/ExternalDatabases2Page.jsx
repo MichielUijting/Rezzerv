@@ -101,6 +101,7 @@ export default function ExternalDatabases2Page() {
   const [items, setItems] = useState([])
   const [previewItems, setPreviewItems] = useState([])
   const fullTableNoticeShownRef = useRef(false)
+  const [freshMatchingSelection, setFreshMatchingSelection] = useState(false)
   const [activeArea, setActiveArea] = useState(() => {
     // MobileAppChrome remounts its children when the breakpoint changes.
     // Keep the operator's selected workspace in route state, not component state.
@@ -140,6 +141,8 @@ export default function ExternalDatabases2Page() {
 
   function chooseArea(area) {
     if (area === 'matching' && !isPlatformSuperuser) return
+    // An explicit choice starts a fresh check, unlike a breakpoint remount.
+    setFreshMatchingSelection(area === 'matching' && activeArea !== 'matching')
     setActiveArea(area)
     // Persist across the mobile/desktop subtree replacement without a new URL
     // and without storing product data or credentials in browser storage.
@@ -505,7 +508,8 @@ export default function ExternalDatabases2Page() {
             chooseArea(task.area)
           }} /> : null}
         {activeArea === 'matching' && isPlatformSuperuser
-          ? <Ed2MatchPage initialReceiptItemId={queueTaskFocus?.area === 'matching' ? queueTaskFocus.sourceId : ''} /> : null}
+          ? <Ed2MatchPage forceNewCheckOnEntry={freshMatchingSelection}
+            initialReceiptItemId={queueTaskFocus?.area === 'matching' ? queueTaskFocus.sourceId : ''} /> : null}
         {activeArea === "classify" ? <CombinedClassificationWorkspace
           key={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : 'classify'}
           initialProductId={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : ''} /> : null}

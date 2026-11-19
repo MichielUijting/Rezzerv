@@ -58,7 +58,7 @@ function needsManualMatching(item) {
     && Boolean(String(item.automatic_match_review_reason || '').trim())
 }
 
-export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
+export default function Ed2MatchPage({ initialReceiptItemId = '', forceNewCheckOnEntry = false }) {
   const { showFeedback } = useAppFeedback()
   const isSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const mountedRef = useRef(false)
@@ -202,12 +202,12 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     if (!isSuperuser) return undefined
     mountedRef.current = true
     // Delay one task to avoid duplicate POSTs in React StrictMode effect replay.
-    const task = window.setTimeout(() => { void runAutomaticCheck() }, 0)
+    const task = window.setTimeout(() => { void runAutomaticCheck(forceNewCheckOnEntry) }, 0)
     return () => {
       mountedRef.current = false
       window.clearTimeout(task)
      }
-  }, [isSuperuser, runAutomaticCheck])
+  }, [isSuperuser, runAutomaticCheck, forceNewCheckOnEntry])
 
   const leftRows = useMemo(() => items.filter(needsManualMatching), [items])
   const rightRows = useMemo(() => items.filter(confirmedTarget), [items])
