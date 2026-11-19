@@ -4521,6 +4521,9 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
 
 
 def build_almost_out_items(conn, household_id: str) -> list[dict]:
+    # Each stage measures its own cost; logging contains only timings/counts,
+    # never inventory content, auth state or household identifiers.
+    phase_started = perf_counter()
     household_settings = get_household_almost_out_settings(conn, household_id)
     article_rows = conn.execute(
         text(
@@ -4539,6 +4542,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         {'household_id': str(household_id)},
     ).mappings().all()
 
+    article_read_done = perf_counter()
     total_active = len(article_rows)
     if not article_rows:
         logging.getLogger("uvicorn.error").info("almost_out_counts active=0 eligible=0 hidden=0 signals=0")
@@ -4547,12 +4551,8 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     eligible_count = len(article_rows)
     hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
-    gpc_by_article = dutch_gpc_by_household_article(
-        conn,
-        household_id,
-        article_ids,
-    )
-
+    # Classification is presentation-only. Enrich the *visible* signals
+    # after evaluation, not every household article before the first row.
     settings_map_by_article: dict[str, dict[str, Any]] = {}
     if article_ids:
         settings_rows = conn.execute(
@@ -4572,9 +4572,12 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             bucket = settings_map_by_article.setdefault(article_id, {})
             bucket[str(row.get('setting_key') or '').strip()] = _parse_json_setting_value(row.get('setting_value'))
 
-    from app.services.almost_out_group_service import load_groups, load_group_projection, should_project_group
+    from app.services.almost_out_group_service import (
+        load_groups, load_group_projections, should_project_group,
+    )
     items: list[dict] = []
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
+    grouping_done = perf_counter()
     # Avoid 3-4 repeated PostgreSQL reads per ordinary article. The same
     # household-scoped rows are loaded once and replayed in the original SQL
     # order. Safe product/synonym groups are still evaluated independently.
@@ -4595,6 +4598,22 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         conn, household_id, article_rows, individual_candidates,
         include_purchases=forecast_horizon > 0,
     )
+    eligible_grouped = [
+        group for group in groups
+        if should_project_group(group)
+        and (
+            household_settings.get('prediction_enabled')
+            or household_settings.get('shopping_days')
+            or any(member.get('min_stock') is not None for member in group['members'])
+        )
+        and not any(
+            settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden') is True
+            for member in group['members']
+        )
+    ]
+    # Two queries total for grouped inventory/events, not two per group.
+    grouped_projections = load_group_projections(conn, household_id, eligible_grouped)
+    prefetch_done = perf_counter()
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
         grouped = should_project_group(group)
@@ -4609,7 +4628,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 continue
             projection = None
             if grouped:
-                projection = load_group_projection(conn, household_id, group)
+                projection = grouped_projections[id(group)]
                 article_row = dict(article_row)
                 reference_factor = group['factors'][article_id]
                 for field in ('min_stock', 'ideal_stock'):
@@ -4621,9 +4640,21 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 group_projection=projection,
                 individual_projection=individual_projections.get(article_id) if not grouped else None,
             )
-            evaluation.update(gpc_by_article.get(article_id, {}))
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
+
+    evaluation_done = perf_counter()
+    visible_ids = [
+        str(item['household_article_id']) for item in items
+        if item.get('household_article_id')
+    ]
+    if visible_ids:
+        gpc_by_article = dutch_gpc_by_household_article(
+            conn, household_id, visible_ids,
+        )
+        for item in items:
+            item.update(gpc_by_article.get(str(item['household_article_id']), {}))
+    gpc_done = perf_counter()
 
     # Only visible signals get photo enrichment. Use their exact matched
     # product-group members before the existing confirmed-synonym fallback.
@@ -4631,11 +4662,29 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     # this projection is read-only, with no inventory or identity writes.
     from app.services.almost_out_image_projection import fill_visible_almost_out_photos
     fill_visible_almost_out_photos(conn, text, article_rows, items)
+    photo_done = perf_counter()
     # Use the same proven identity route to enrich the Catalogus product name,
     # assigned GS1 classification and missing-photo explanation. Never change
     # household_article_id, stock, purchase history or the visibility decision.
     from app.services.almost_out_catalog_projection import fill_visible_almost_out_catalog_details
     fill_visible_almost_out_catalog_details(conn, text, article_rows, items)
+    catalog_done = perf_counter()
+    if catalog_done - phase_started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "almost_out_phase_timing articles_ms=%.1f groups_ms=%.1f "
+            "prefetch_ms=%.1f evaluate_ms=%.1f gpc_ms=%.1f "
+            "photos_ms=%.1f catalog_ms=%.1f total_ms=%.1f "
+            "active=%d groups=%d grouped=%d signals=%d",
+            (article_read_done - phase_started) * 1000,
+            (grouping_done - article_read_done) * 1000,
+            (prefetch_done - grouping_done) * 1000,
+            (evaluation_done - prefetch_done) * 1000,
+            (gpc_done - evaluation_done) * 1000,
+            (photo_done - gpc_done) * 1000,
+            (catalog_done - photo_done) * 1000,
+            (catalog_done - phase_started) * 1000,
+            total_active, len(groups), len(eligible_grouped), len(items),
+        )
     logging.getLogger("uvicorn.error").info(
         "almost_out_counts active=%d eligible=%d hidden=%d signals=%d",
         total_active, eligible_count, hidden_count, len(items),

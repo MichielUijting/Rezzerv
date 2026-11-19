@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection, should_project_group
+from app.services.almost_out_group_service import content, grouping_key, prediction_from_events, confirmed_synonym_factors, load_groups, load_group_projection, load_group_projections, should_project_group
 
 
 @pytest.mark.parametrize('value,unit,expected', [(1, 'l', (1, 'l')), (500, 'ml', (.5, 'l')), (75, 'cl', (.75, 'l')), (250, 'g', (.25, 'kg')), (2, 'stuk', (2, 'stuk'))])
@@ -399,3 +399,86 @@ def test_four_member_transitive_chain_is_checked_beyond_one_hop():
     db.central = central[:-1]  # A hidden fourth link may never be ignored.
     assert len(load_groups(db, 'house-1',
                            [{'id': 'a'}, {'id': 'b'}], {})) == 2
+
+
+def test_bulk_group_projection_preserves_original_inventory_event_order_and_factors():
+    """Two SQL reads replace 2x per group while retaining identical output."""
+    groups = [
+        {'key': ('product', 'catalog-1'),
+         'members': [{'id': 'a'}, {'id': 'b'}],
+         'factors': {'a': 1, 'b': 1}},
+        {'key': ('confirmed_synonym', 'central-pair', 'Bevestigde synoniemen', 'l'),
+         'members': [{'id': 'c'}, {'id': 'd'}],
+         'factors': {'c': 1, 'd': .5}},
+    ]
+    inventory = [
+        {'id': 'i-a', 'household_article_id': 'a', 'quantity': 1,
+         'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+        {'id': 'i-b', 'household_article_id': 'b', 'quantity': 2,
+         'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+        {'id': 'i-c', 'household_article_id': 'c', 'quantity': 1,
+         'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+        {'id': 'i-d', 'household_article_id': 'd', 'quantity': 2,
+         'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+    ]
+    events = [
+        {'id': 'e-a', 'article_id': 'a', 'quantity': 1},
+        {'id': 'e-c', 'article_id': 'c', 'quantity': 1},
+        {'id': 'e-b', 'article_id': 'b', 'quantity': 2},
+        {'id': 'e-d', 'article_id': 'd', 'quantity': 2},
+    ]
+
+    class ReadOnlyConnection:
+        def __init__(self):
+            self.queries = []
+        def execute(self, stmt, params):
+            sql = str(stmt)
+            self.queries.append((sql, params))
+            assert "household_id = :household_id" in sql
+            assert params['household_id'] == 'household-1'
+            ids = set(params['ids'])
+            if 'FROM inventory i' in sql:
+                assert "COALESCE(i.status, 'active') = 'active'" in sql
+                return _Rows([row for row in inventory if row['household_article_id'] in ids])
+            if 'FROM inventory_events' in sql:
+                return _Rows([row for row in events if row['article_id'] in ids])
+            raise AssertionError('Unexpected write or non-identity-scoped query')
+
+    connection = ReadOnlyConnection()
+    projected = load_group_projections(connection, 'household-1', groups)
+    assert len(connection.queries) == 2
+    assert set(projected) == {id(group) for group in groups}
+    assert [row['id'] for row in projected[id(groups[0])]['event_rows']] == ['e-a', 'e-b']
+    assert [row['id'] for row in projected[id(groups[1])]['event_rows']] == ['e-c', 'e-d']
+    assert [row['quantity'] for row in projected[id(groups[1])]['inventory_rows']] == [1, 1]
+    assert projected[id(groups[1])]['member_data_inconsistent'] is False
+    for group in groups:
+        # This is a regression comparison to the previous per-group source
+        # logic; no new grouping rules or calculation paths are introduced.
+        expected = load_group_projection(ReadOnlyConnection(), 'household-1', group)
+        assert projected[id(group)] == expected
+
+    empty = ReadOnlyConnection()
+    assert load_group_projections(empty, 'household-1', []) == {}
+    assert empty.queries == []
+
+
+def test_bulk_group_projection_rejects_member_stock_history_mismatch():
+    group = {
+        'key': ('product', 'catalog-1'),
+        'members': [{'id': 'a'}, {'id': 'b'}],
+        'factors': {'a': 1, 'b': 1},
+    }
+    class Connection:
+        def execute(self, statement, params):
+            assert params['household_id'] == 'household-1'
+            if 'FROM inventory i' in str(statement):
+                return _Rows([
+                    {'id': 'i-a', 'household_article_id': 'a', 'quantity': 2,
+                     'space_id': None, 'sublocation_id': None, 'space_name': '', 'sublocation_name': ''},
+                ])
+            if 'FROM inventory_events' in str(statement):
+                return _Rows([{'id': 'e-a', 'article_id': 'a', 'quantity': 1}])
+            raise AssertionError('Unexpected query')
+    projected = load_group_projections(Connection(), 'household-1', [group])
+    assert projected[id(group)]['member_data_inconsistent'] is True
