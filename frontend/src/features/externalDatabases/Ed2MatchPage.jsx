@@ -6,6 +6,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
 import { readMatchingOverview } from './ed2MatchingOverview.js'
+import { matchingEntryAction } from './ed2MatchingProgressEntry.js'
 import '../articleSynonyms/synonymAnalysis.css'
 
 const RETAILERS = {
@@ -91,7 +92,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     }
   }, [initialReceiptItemId])
 
-  const runAutomaticCheck = useCallback(async () => {
+  const runAutomaticCheck = useCallback(async (forceNewCheck = false) => {
     if (!isSuperuser || !mountedRef.current || inFlightRef.current) return false
     inFlightRef.current = true
     setLoading(true)
@@ -105,16 +106,29 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
       phase: 'voorbereiden', matched: 0,
     })
     try {
-      const started = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress/start', {
-        method: 'POST',
-      })
-      if (!started.ok) {
-        throw new Error('De achtergrondcontrole kon niet worden gestart (HTTP ' + started.status + ').')
+      // A viewport breakpoint remounts this React page. Reattach to the
+      // authorized server job instead of starting a fresh full-database scan.
+      const statusResponse = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress')
+      let job = await statusResponse.json().catch(() => ({}))
+      if (!statusResponse.ok) {
+        throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
+      }
+      const action = matchingEntryAction(job, forceNewCheck)
+      if (action === 'invalid') {
+        throw new Error('Inhuis heeft een ongeldige matchingstatus teruggegeven.')
+      }
+      if (!mountedRef.current) return false
+      if (action === 'start') {
+        const started = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress/start', {
+          method: 'POST',
+        })
+        job = await started.json().catch(() => ({}))
+        if (!started.ok) {
+          throw new Error('De achtergrondcontrole kon niet worden gestart (HTTP ' + started.status + ').')
+        }
       }
       while (mountedRef.current) {
-        const response = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress')
-        const job = await response.json().catch(() => ({}))
-        if (!response.ok || job.ok !== true) {
+        if (job.ok !== true) {
           throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
         }
         if (!mountedRef.current) return false
@@ -157,6 +171,12 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         }
         if (job.state !== 'running') throw new Error('Onbekende matchingstatus.')
         await new Promise((resolve) => window.setTimeout(resolve, 750))
+        if (!mountedRef.current) return false
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress')
+        job = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
+        }
       }
       return false
     } catch (error) {
@@ -218,7 +238,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
               : 'De match is niet bevestigd.')
           }
           // A new human-confirmed product can unlock further automatic proofs.
-          const ready = await runAutomaticCheck()
+          const ready = await runAutomaticCheck(true)
           if (ready && mountedRef.current) {
             showFeedback({ variant: 'success', title: 'Bonartikel gematcht',
               message: 'De Catalogusidentiteit is gekoppeld en de automatische controle is bijgewerkt. Er is geen barcode overgenomen.' })
@@ -274,35 +294,28 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
 
   return <section aria-label="Bonartikelen matchen" data-testid="ed2-match-workspace">
     <h2>Matchen</h2>
-    <p>Inhuis matcht bij het openen eerst alle veilig automatisch herkenbare bonartikelen.
-      Daarna staan links alleen artikelen met verschillende bevestigde Catalogusuitvoeringen,
-      waarvoor je handmatig het juiste artikel rechts kunt kiezen.</p>
-    {autoPhase === 'checking' ? <div role="status" aria-live="polite"
-      data-testid="ed2-auto-match-progress"
-      className="rz-synonym-analysis-actions">
-      <strong>Automatische artikelmatching controleren</strong>
-      <p>Fase: {autoProgress.phase === 'voorbereiden'
-        ? 'Voorbereiden' : autoProgress.phase}.</p>
-      <p>{autoProgress.check_number > 0
-        ? 'Controle ' + autoProgress.check_number + ': '
-        : 'De eerste controle wordt voorbereid: '}
-        {autoProgress.total > 0
-          ? autoProgress.checked + ' van ' + autoProgress.total
-            + ' bonartikelen gecontroleerd ('
-            + Math.floor((autoProgress.checked / autoProgress.total) * 100)
-            + '% van deze controle)'
-          : 'het aantal bonartikelen wordt vastgesteld.'}</p>
-      <progress value={autoProgress.overall_percent}
-        max={100} aria-label="Totale voorlopige voortgang van het matchen"
+    {autoPhase === 'checking' ? <div
+      data-testid="ed2-auto-match-progress" role="group"
+      aria-label="Voortgang automatisch matchen"
+      className="rz-synonym-analysis-actions"
+      style={{ display: 'grid', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+        <strong>Controle {autoProgress.check_number || 1}
+          {autoProgress.total > 0
+            ? ' · ' + autoProgress.checked.toLocaleString('nl-NL')
+              + '/' + autoProgress.total.toLocaleString('nl-NL') : ''}
+        </strong>
+        <span data-testid="ed2-auto-match-overall-percent"
+          title="Voorlopig totaal; extra matching kan aanvullende controles vereisen.">
+          ca. {autoProgress.overall_percent}%
+        </span>
+      </div>
+      <progress value={autoProgress.overall_percent} max={100}
+        aria-label="Voorlopige totale voortgang van het matchen"
         style={{ width: '100%', accentColor: 'var(--color-ui-primary)' }} />
-      <p>Totale voortgang: {autoProgress.overall_percent}% (voorlopig).
-        {autoProgress.checks_completed} van maximaal {autoProgress.estimated_checks}
-        controles afgerond binnen de nu bekende verwerkingsrondes.
-        Nieuwe matches kunnen extra controles nodig maken.</p>
-      <p>{autoProgress.matched} bonartikel(en) automatisch gekoppeld.
-        De controle loopt door als je naar een ander scherm gaat.</p>
     </div> : null}
-    {autoPhase === 'error' ? <Button onClick={() => { void runAutomaticCheck() }}>
+    {autoPhase === 'error' ? <Button onClick={() => { void runAutomaticCheck(true) }}>
       Automatische controle opnieuw uitvoeren
     </Button> : null}
     {autoPhase === 'ready' ? <>
@@ -329,10 +342,10 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         Artikelen zonder geschikte bewezen match blijven onder Identificeren beschikbaar.
       </p>
       {left && !left.article_code && !left.manual_barcode && curatedCourgette(left.receipt_line_text)
-        ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => { void runAutomaticCheck() }} /> : null}
+        ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => { void runAutomaticCheck(true) }} /> : null}
       <details className="rz-match-tools">
         <summary>Bonnaamregels en familie-uitzonderingen</summary>
-        <Ed2CuratedMatchingBatch autoOnEntryMode onConfirmed={() => { void runAutomaticCheck() }} />
+        <Ed2CuratedMatchingBatch autoOnEntryMode onConfirmed={() => { void runAutomaticCheck(true) }} />
       </details>
     </> : null}
   </section>
