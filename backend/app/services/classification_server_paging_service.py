@@ -17,6 +17,7 @@ from app.services.article_workqueue_service import (
 
 PAGE_SIZE = 8
 MAX_EXPORT_IDS = 20000
+MAX_CBS_BULK_IDS = 100
 _FILTER_KEYS = ("name", "gtin", "gpc_status", "cbs_status")
 _SORT_KEYS = _FILTER_KEYS
 _NAME = (
@@ -207,6 +208,49 @@ def _safe_csv_value(value) -> str:
     if result.lstrip().startswith(("=", "+", "@", "-")):
         result = "'" + result
     return result
+
+
+def load_selected_cbs_snapshots(conn, product_ids: list[str]) -> dict:
+    """Resolve exact selected central IDs without fetching the entire Catalogus.
+
+    A snapshot is only a preflight: atomic confirm/remove rechecks each current
+    name and classification version inside the write transaction.
+    """
+    if not 1 <= len(product_ids) <= MAX_CBS_BULK_IDS:
+        raise ValueError("Selecteer 1 tot maximaal 100 Catalogusartikelen.")
+    if any(not isinstance(pid, str) or not pid or len(pid) > 200 for pid in product_ids):
+        raise ValueError("Ongeldige Catalogusidentiteit.")
+    if len(set(product_ids)) != len(product_ids):
+        raise ValueError("Dubbele Catalogusidentiteit in bulkselectie.")
+
+    rows = conn.execute(
+        text("""
+            SELECT gp.id, gp.name, cc.version, cc.is_active
+              FROM global_products gp
+              LEFT JOIN global_product_cbs_classifications cc
+                ON cc.global_product_id = gp.id
+             WHERE gp.id IN :product_ids
+               AND LOWER(COALESCE(gp.status, '')) <> 'deleted'
+        """).bindparams(bindparam("product_ids", expanding=True)),
+        {"product_ids": product_ids},
+    ).mappings().all()
+    by_id = {str(row["id"]): row for row in rows}
+    if len(rows) != len(product_ids) or set(by_id) != set(product_ids):
+        raise ValueError("De Catalogusselectie is veranderd. Vernieuw de selectie.")
+    if any(not str(by_id[pid]["name"] or "").strip() for pid in product_ids):
+        raise ValueError("Een Catalogusartikel heeft geen geldige naam.")
+    return {
+        "items": [
+            {
+                "id": pid,
+                "name": str(by_id[pid]["name"]),
+                "version": int(by_id[pid]["version"] or 0),
+                "classified": bool(by_id[pid]["is_active"]),
+            }
+            for pid in product_ids
+        ],
+        "total": len(product_ids),
+    }
 
 
 def build_selected_classification_csv(conn, product_ids: list[str]) -> bytes:

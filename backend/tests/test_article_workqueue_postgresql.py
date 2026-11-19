@@ -156,3 +156,23 @@ def test_postgresql_classification_server_paging_filters_summary_and_export(work
         assert [entry[0] for entry in contents[1:]] == ["p3", "p1"]
         after = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
         assert before == after == 4  # No actual writes; soft-deleted stays stored.
+
+
+
+def test_postgresql_selected_cbs_bulk_snapshots_are_bounded_read_only(workqueue_database):
+    """Real SQL in the existing disposable PostgreSQL schema, never production."""
+    from app.services.classification_server_paging_service import load_selected_cbs_snapshots
+
+    with workqueue_database.connect() as conn:
+        before = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+        selected = load_selected_cbs_snapshots(conn, ["p3", "p1"])
+        assert selected == {"total": 2, "items": [
+            {"id": "p3", "name": "Melk C", "version": 2, "classified": True},
+            {"id": "p1", "name": "Melk A", "version": 0, "classified": False},
+        ]}
+        with pytest.raises(ValueError, match="veranderd"):
+            load_selected_cbs_snapshots(conn, ["p1", "p4"])
+        with pytest.raises(ValueError, match="Dubbele"):
+            load_selected_cbs_snapshots(conn, ["p1", "p1"])
+        after = conn.execute(text("SELECT COUNT(*) FROM global_products")).scalar_one()
+        assert before == after == 4

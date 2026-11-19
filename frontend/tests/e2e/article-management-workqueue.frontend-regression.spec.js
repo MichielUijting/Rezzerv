@@ -600,3 +600,81 @@ test('Overzicht: snel zoeken, bonrelaties pas na artikelkeuze en gedeeld bij wis
   expect(receiptOverviewCalls()).toBe(1)
   expect(requests.filter((request) => request.method === 'POST')).toEqual([])
 })
+
+
+
+// Moving the Catalogus CBS bulk action must not turn the first paged overview
+// into an eager full dataset or allow writes before the explicit confirmation.
+test('Artikelbeheer CBS-bulk: exacte selectie, huidige versies, toekennen en verwijderen', async ({ page }) => {
+  const initialRequests = await mountMockBackend(page)
+  let classified = false
+  let version = 0
+  const confirmed = []
+  const removed = []
+  let snapshotCalls = 0
+  await page.route('**/api/cbs-classifications/workqueue-selected-cbs-snapshots', async (route) => {
+    snapshotCalls += 1
+    const body = route.request().postDataJSON()
+    expect(body.product_ids).toEqual(['catalog-milk'])
+    return route.fulfill({ json: {
+      total: 1,
+      items: [{ id: 'catalog-milk', name: 'Halfvolle melk', classified, version }],
+    } })
+  })
+  await page.route('**/api/cbs-classifications/categories/browse*', route => route.fulfill({ json: {
+    items: [{ cbs_code: '011420', name_nl: 'Halfvolle en magere melk',
+      path: 'Voeding › Melk', lowest: true, reference_version: '2026' }],
+    total: 1,
+  } }))
+  await page.route('**/api/cbs-classifications/bulk-confirm', async (route) => {
+    const body = route.request().postDataJSON()
+    confirmed.push(body)
+    expect(body.selections).toEqual([{
+      global_product_id: 'catalog-milk', expected_product_name: 'Halfvolle melk',
+      expected_version: version, cbs_code: '011420', reference_version: '2026',
+    }])
+    classified = true
+    version += 1
+    return route.fulfill({ json: { confirmed: 1, unchanged: 0 } })
+  })
+  await page.route('**/api/cbs-classifications/bulk-remove', async (route) => {
+    const body = route.request().postDataJSON()
+    removed.push(body)
+    expect(body.selections).toEqual([{
+      global_product_id: 'catalog-milk', expected_product_name: 'Halfvolle melk',
+      expected_version: version,
+    }])
+    classified = false
+    version += 1
+    return route.fulfill({ json: { removed: 1 } })
+  })
+
+  await page.goto('/externe-databases-2')
+  await page.getByRole('button', { name: 'Classificeren', exact: true }).click()
+  const table = page.getByTestId('combined-classification-articles')
+  await expect(table).toContainText('Halfvolle melk')
+  await table.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' }).check()
+  await page.getByTestId('classification-cbs-bulk-assign').click()
+  const chooser = page.getByRole('dialog', { name: 'CBS-categorie voor geselecteerde artikelen' })
+  await expect(chooser).toBeVisible()
+  await chooser.getByRole('button', { name: /011420.*Halfvolle en magere melk/ }).click()
+  await expect(page.getByTestId('classification-cbs-bulk-chosen')).toContainText('011420')
+  await page.getByTestId('classification-cbs-bulk-confirm-choice').click()
+  await expect(page.getByTestId('app-feedback-warning')).toContainText('1 artikelen')
+  expect(snapshotCalls).toBe(1)
+  expect(confirmed).toHaveLength(0)
+  await page.getByTestId('app-feedback-warning-primary-button').click()
+  await expect(page.getByTestId('classification-cbs-bulk-assign')).toBeDisabled()
+  expect(confirmed).toHaveLength(1)
+  await page.getByTestId('app-feedback-success-overlay').click({ position: { x: 2, y: 2 } })
+
+  await table.getByRole('checkbox', { name: 'Selecteer Halfvolle melk' }).check()
+  await page.getByTestId('classification-cbs-bulk-remove').click()
+  await expect(page.getByTestId('app-feedback-warning')).toContainText('verwijderen')
+  expect(removed).toHaveLength(0)
+  await page.getByTestId('app-feedback-warning-primary-button').click()
+  await expect(page.getByTestId('classification-cbs-bulk-remove')).toBeDisabled()
+  expect(removed).toHaveLength(1)
+  expect(snapshotCalls).toBe(2)
+  expect(initialRequests.filter((req) => req.path === '/api/cbs-classifications/workqueue').length).toBe(0)
+})

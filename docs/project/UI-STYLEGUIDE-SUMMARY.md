@@ -14,6 +14,14 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Artikelbeheer: centrale classificatie- en synoniemacties — 19 november 2026
+
+Catalogus heeft op desktop én mobiel geen aparte bulkknoppen meer voor **Artikelclassificaties toekennen** en **Synoniemenanalyse**. De Cataloguslijst en detailnavigatie blijven ongewijzigd; beveiligde diepe links blijven bereikbaar voor bestaande verwijzingen.
+
+In Artikelbeheer → **Classificeren** staan de CBS-bulkknoppen onder de gepagineerde tabel. Ze gebruiken de centrale Inhuis-knop en expliciete bevestigingsmelding; de officiële categorie wordt gekozen via de reeds gedeelde classificatie-overlay. Het maximum van 100 artikelen per CBS-bewerking is zichtbaar zonder de grotere exportselectie ongedaan te maken.
+
+In Artikelbeheer → **Synoniemen** gebruikt de rij met vier aantallen de bestaande tellerstijl (0, 1, 2, 3+) inclusief de actieve filterstatus, ook op smalle viewports. Het datumfilter en beide bestaande DataTables blijven onafhankelijk bruikbaar. Er is geen nieuwe kleur, losstaand tabel-/dialogcomponent of alternatieve mobiele navigatie geïntroduceerd.
+
 ## Bijna op: Voorspeltermijn en identiteitsgebonden productfoto — 16 november 2026
 
 Bijna op (desktop én mobiel) toont boven de lijst de **Voorspeltermijn: N dagen** uit exact dezelfde huishoudinstelling als Instellingen → Bijna op. Een huishoudbeheerder kan via **Wijzigen** het aantal hele, niet-negatieve dagen invoeren en expliciet opslaan of annuleren. Overige gebruikers zien de waarde read-only. Instellingen noemt het veld **Voorspeltermijn (dagen)**. Beide schermen laden de actuele huishoudinstelling en tonen na opslag onmiddellijk de nieuwe waarde. Als voorspelling is uitgeschakeld wordt dit naast de bewaarde waarde vermeld.
