@@ -317,6 +317,72 @@ def list_household_articles_for_grouping(household_id: Any = None) -> dict[str, 
     return {"ok": True, "items": items, "mutates_inventory": False}
 
 
+def search_household_articles_for_grouping(household_id: Any, query: Any, limit: int = 5) -> dict[str, Any]:
+    """Return only matching household articles, retaining the grouping display contract.
+
+    The full grouping list must not be materialized for each shopping search.
+    The household predicate, match and limit run in SQL; no records are changed.
+    """
+    ensure_article_group_schema()
+    normalized_household_id = _normalize_household_id(household_id)
+    normalized_query = " ".join(str(query or "").strip().split())
+    if len(normalized_query) < 2:
+        return {"ok": True, "items": [], "mutates_inventory": False}
+    safe_limit = max(1, min(int(limit), 50))
+    escaped_query = (
+        normalized_query.lower()
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+    with engine.begin() as conn:
+        if not _table_exists(conn, "household_articles"):
+            return {"ok": True, "items": [], "mutates_inventory": False}
+        columns = _get_columns(conn, "household_articles")
+        id_column = _first_existing(columns, ["id", "household_article_id"])
+        if not id_column or "household_id" not in columns:
+            return {"ok": True, "items": [], "mutates_inventory": False}
+        name_columns = [
+            col for col in ["custom_name", "naam", "name", "article_name", "display_name", "canonical_name"]
+            if col in columns
+        ]
+        name_expr = (
+            "COALESCE(" + ", ".join(f"NULLIF(CAST(ha.{col} AS TEXT), '')" for col in name_columns) + ", '')"
+            if name_columns else "''"
+        )
+        group_expr = "ha.article_group_id" if "article_group_id" in columns else "NULL"
+        # Empty names retain the grouping screen's visible "Onbekend artikel" fallback.
+        visible_name_expr = f"COALESCE(NULLIF(trim({name_expr}), ''), 'Onbekend artikel')"
+        rows = conn.execute(
+            text(f"""
+                SELECT
+                    CAST(ha.{id_column} AS TEXT) AS id,
+                    CAST(ha.household_id AS TEXT) AS household_id,
+                    {name_expr} AS article_name,
+                    {group_expr} AS article_group_id,
+                    ag.name AS article_group_name
+                FROM household_articles ha
+                LEFT JOIN article_groups ag ON ag.id = {group_expr}
+                WHERE CAST(ha.household_id AS TEXT) = :household_id
+                  AND lower({visible_name_expr}) LIKE :query ESCAPE '\'
+                ORDER BY lower({name_expr}) ASC, CAST(ha.{id_column} AS TEXT) ASC
+                LIMIT :limit
+            """),
+            {"household_id": normalized_household_id, "query": f"%{escaped_query}%", "limit": safe_limit},
+        ).mappings().all()
+
+    items = []
+    for row in rows:
+        items.append({
+            "id": str(row.get("id") or ""),
+            "household_id": str(row.get("household_id") or normalized_household_id),
+            "article_name": str(row.get("article_name") or "").strip() or "Onbekend artikel",
+            "article_group_id": row.get("article_group_id") or None,
+            "article_group_name": row.get("article_group_name") or "Niet ingedeeld",
+        })
+    return {"ok": True, "items": items, "mutates_inventory": False}
+
 def assign_household_article_group(article_id: Any, article_group_id: Any = None, household_id: Any = None) -> dict[str, Any]:
     ensure_article_group_schema()
     normalized_article_id = str(article_id or "").strip()

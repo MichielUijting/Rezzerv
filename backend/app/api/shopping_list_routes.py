@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text
 from app.db import engine
 from app.services.article_group_secure_store import (
     list_article_groups,
-    list_household_articles_for_grouping,
+    search_household_articles_for_grouping,
 )
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
@@ -102,7 +102,9 @@ def _project_existing_catalog(scope: str, household_id: str, query: str, limit: 
     query_lower = normalized_query.lower()
 
     if scope == "household_articles":
-        payload = list_household_articles_for_grouping(household_id=household_id)
+        payload = search_household_articles_for_grouping(
+            household_id=household_id, query=normalized_query, limit=limit
+        )
         source_items = payload.get("items") or []
         items = []
         for item in source_items:

@@ -521,8 +521,12 @@ def get_active_shopping_list(conn: Connection, household_id: str) -> dict[str, A
         for row in rows
         if str(row.get("source_type") or "").strip().lower() == "household_article"
     ]
-    gpc_by_product = dutch_gpc_by_global_product(conn, global_ids)
-    gpc_by_article = dutch_gpc_by_household_article(conn, household_id, household_article_ids)
+    # Avoid expensive Dutch GPC reference preparation for an empty or manual-only list.
+    gpc_by_product = dutch_gpc_by_global_product(conn, global_ids) if global_ids else {}
+    gpc_by_article = (
+        dutch_gpc_by_household_article(conn, household_id, household_article_ids)
+        if household_article_ids else {}
+    )
     items = []
     for row in rows:
         row_payload = dict(row)
