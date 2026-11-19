@@ -256,3 +256,48 @@ assert.match(voorraadFirstPage, /fetchDesktopPageClassifications\(sourceRows\)/)
 assert.doesNotMatch(voorraadFirstPage, /const inventoryPromise = fetchInventoryRows\(\)/)
 
 console.log('APP_WIDE_PAGINATION_CONTRACT_GREEN')
+
+
+// Performance-eindcontrole: Overzicht mag bij een ongewijzigd scherm geen
+// volledig bonartikeloverzicht ophalen voordat er een artikel is geselecteerd.
+// Wisselen tussen Catalogusartikelen hergebruikt daarna dezelfde read-only snapshot.
+const relationshipOverview = readFileSync(new URL('../src/features/externalDatabases/ArticleRelationshipOverview.jsx', import.meta.url), 'utf8')
+const initialRelationshipLoad = relationshipOverview.slice(
+  relationshipOverview.indexOf('  useEffect(() => {'),
+  relationshipOverview.indexOf('  }, [reloadCount, showFeedback])') + '  }, [reloadCount, showFeedback])'.length,
+)
+assert.match(initialRelationshipLoad, /readJson\(SYNONYMS_API, controller\.signal\)/)
+assert.doesNotMatch(initialRelationshipLoad, /readJson\(RECEIPTS_API/)
+assert.match(relationshipOverview, /if \(!selectedId\) \{ setLoadingLinks\(false\)/)
+assert.match(relationshipOverview, /if \(!cached\.promise\)/)
+assert.match(relationshipOverview, /cached\.promise = readJson\(RECEIPTS_API\)/)
+assert.match(relationshipOverview, /setReceipts\(Array\.isArray\(overview\.items\)/)
+assert.match(relationshipOverview, /receiptOverviewRef\.current = \{ revision: reloadCount, promise: null \}/)
+
+// Regressieanker voor de snelle eerste pagina van de grote schermen.
+// De paginering mag niet uitsluitend client-side een volledige dataset inkorten.
+const fastEntryScreens = [
+  ['Kassa desktop', '../src/features/receipts/KassaPage.jsx',
+    ['/api/kassa/receipts-page?', "page_size: '10'", 'initialize: false']],
+  ['Kassa mobiel', '../src/features/kassa/MobileKassa.jsx',
+    ['/api/kassa/receipts-page?', "page_size: '10'", 'initialize: false']],
+  ['Uitpakken', '../src/features/receipts/ReceiptsPage.jsx',
+    ['/api/unpack-start-batches?', "page_size: '10'"]],
+  ['Voorraad desktop', '../src/pages/Voorraad.jsx',
+    ['/api/voorraad/desktop-page?', "page_size: '10'"]],
+  ['Voorraad mobiel', '../src/pages/MobileVoorraad.jsx',
+    ['/api/voorraad/mobile-page?', 'page_size:']],
+  ['Catalogus desktop', '../src/features/catalog/CatalogPage.jsx',
+    ['const PAGE_SIZE = 10', 'limit: String(PAGE_SIZE)', 'offset: String((page - 1) * PAGE_SIZE)']],
+  ['Catalogus mobiel', '../src/features/catalog/MobileCatalogPage.jsx',
+    ['const PAGE_SIZE = 10', 'limit: String(PAGE_SIZE)', 'offset: String((page - 1) * PAGE_SIZE)']],
+  ['Artikelbeheer Identificeren', '../src/features/externalDatabases/ExternalDatabases2Page.jsx',
+    ['/api/external-databases/articles-preview?limit=10', 'partial.first_page_ready === true']],
+  ['Artikelbeheer Classificeren', '../src/features/externalDatabases/CombinedClassificationWorkspace.jsx',
+    ['const PAGE_SIZE = 8', '/api/cbs-classifications/workqueue-page?', 'workqueue-summary']],
+]
+for (const [label, path, markers] of fastEntryScreens) {
+  const source = readFileSync(new URL(path, import.meta.url), 'utf8')
+  for (const marker of markers) assert.ok(source.includes(marker), 'Performance-eindcontrole ' + label + ': ' + marker)
+}
+console.log('APP_WIDE_PERFORMANCE_FINAL_AUDIT_GREEN')
