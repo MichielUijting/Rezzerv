@@ -4041,12 +4041,32 @@ def update_household_article_settings(conn, household_id: str, household_article
 
 
 def build_household_article_detail_service(conn, household_id: str, household_article_id: str) -> dict:
+    # Timing only, never identifiers, article names or private content in logs.
+    # In particular, product identity/enrichment may be slower than stock reads.
+    started = perf_counter()
     details = get_household_article_details(conn, household_id, article_id=household_article_id)
+    identity_done = perf_counter()
     resolved_household_article_id = str(details.get("article_id") or details.get("id") or household_article_id)
     inventory_rows = get_household_article_inventory_rows(conn, household_id, resolved_household_article_id)
+    stock_done = perf_counter()
     event_rows = get_household_article_event_rows(conn, household_id, resolved_household_article_id)
+    events_done = perf_counter()
     settings_payload = get_household_article_settings(conn, household_id, resolved_household_article_id)
+    settings_done = perf_counter()
     price_summary = build_household_article_price_summary(conn, household_id, resolved_household_article_id, details.get("global_product_id"))
+    completed = perf_counter()
+    if completed - started >= 0.5:
+        logging.getLogger("uvicorn.error").info(
+            "article_detail_timing total_ms=%.1f identity_product_ms=%.1f "
+            "stock_ms=%.1f events_ms=%.1f settings_ms=%.1f price_ms=%.1f "
+            "stock_rows=%d history_rows=%d",
+            (completed - started) * 1000, (identity_done - started) * 1000,
+            (stock_done - identity_done) * 1000,
+            (events_done - stock_done) * 1000,
+            (settings_done - events_done) * 1000,
+            (completed - settings_done) * 1000,
+            len(inventory_rows), len(event_rows),
+        )
     return {
         **details,
         "household_article_id": resolved_household_article_id,
