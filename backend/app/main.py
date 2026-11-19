@@ -4295,7 +4295,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
         'current_quantity_at_evaluation': float(round(current_quantity, 6)),
     }
 
-def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None, individual_projection: dict[str, Any] | None = None) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
     article_name = str(article_row.get('naam') or '').strip()
     global_product_id = str(article_row.get('global_product_id') or '').strip()
@@ -4317,8 +4317,12 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
     if ideal_stock is None and min_stock is not None:
         ideal_stock = float(min_stock) + 1.0
 
-    inventory_rows = group_projection['inventory_rows'] if group_projection else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
-    event_rows = group_projection['event_rows'] if group_projection else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
+    # Individual rows use the exact same household-scoped source projection,
+    # prefetched once for this request. Grouped products retain their
+    # independent, proven aggregate-evaluation path.
+    source_projection = group_projection or individual_projection
+    inventory_rows = source_projection['inventory_rows'] if source_projection is not None else get_household_product_inventory_rows(conn, household_id, household_article_id, global_product_id)
+    event_rows = source_projection['event_rows'] if source_projection is not None else get_household_product_event_rows(conn, household_id, household_article_id, global_product_id)
     current_quantity = calculate_inventory_total_quantity_from_rows(inventory_rows)
     event_net_quantity = calculate_inventory_event_net_quantity(event_rows)
     has_event_history = len(event_rows) > 0
@@ -4345,16 +4349,28 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
         # Some historical product-type signals intentionally have no minimum
         # configured. Their forecast still uses physical depletion (zero).
         prediction_minimum = float(min_stock) if min_stock is not None else 0.0
-        prediction_payload = None if group_projection else compute_household_product_prediction(
-            conn,
-            household_id,
-            household_article_id,
-            article_name,
-            current_quantity=current_quantity,
-            prediction_days=effective_prediction_days,
-            global_product_id=global_product_id,
-            minimum_stock=prediction_minimum,
-        )
+        prediction_payload = None
+        if individual_projection is not None and group_projection is None:
+            from app.services.almost_out_group_service import prediction_from_events
+            prediction_payload = prediction_from_events(
+                individual_projection['purchase_rows'],
+                effective_prediction_days, current_quantity=current_quantity,
+                minimum_stock=prediction_minimum,
+            )
+            if prediction_payload is not None:
+                prediction_payload = {
+                    **prediction_payload,
+                    'prediction_scope': 'global_product' if global_product_id else 'household_article',
+                    'current_quantity_at_evaluation': float(round(current_quantity, 6)),
+                }
+        elif not group_projection:
+            prediction_payload = compute_household_product_prediction(
+                conn, household_id, household_article_id, article_name,
+                current_quantity=current_quantity,
+                prediction_days=effective_prediction_days,
+                global_product_id=global_product_id,
+                minimum_stock=prediction_minimum,
+            )
         if group_projection:
             from app.services.almost_out_group_service import prediction_from_events
             prediction_payload = prediction_from_events(
@@ -4559,6 +4575,26 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     from app.services.almost_out_group_service import load_groups, load_group_projection, should_project_group
     items: list[dict] = []
     groups = load_groups(conn, household_id, article_rows, settings_map_by_article)
+    # Avoid 3-4 repeated PostgreSQL reads per ordinary article. The same
+    # household-scoped rows are loaded once and replayed in the original SQL
+    # order. Safe product/synonym groups are still evaluated independently.
+    from app.services.almost_out_query_prefetch import prefetch_individual_almost_out
+    forecast_horizon = max(
+        int(household_settings.get('shopping_days') or 0),
+        int(household_settings.get('prediction_days') or 0)
+        if household_settings.get('prediction_enabled') else 0,
+    )
+    individual_candidates = [
+        member
+        for group in groups if not should_project_group(group)
+        for member in group['members']
+        if (forecast_horizon > 0 or member.get('min_stock') is not None)
+        and not settings_map_by_article.get(str(member['id']), {}).get('almost_out_hidden')
+    ]
+    individual_projections = prefetch_individual_almost_out(
+        conn, household_id, article_rows, individual_candidates,
+        include_purchases=forecast_horizon > 0,
+    )
     for group in groups:
         # Legacy products without explicit variant/content retain their behavior.
         grouped = should_project_group(group)
@@ -4583,6 +4619,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 conn, household_id, article_row, household_settings=household_settings,
                 article_settings_map=settings_map_by_article.get(article_id, {}),
                 group_projection=projection,
+                individual_projection=individual_projections.get(article_id) if not grouped else None,
             )
             evaluation.update(gpc_by_article.get(article_id, {}))
             if evaluation.get('include_in_almost_out'):
