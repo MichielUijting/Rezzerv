@@ -12,6 +12,12 @@ import './synonymAnalysis.css'
 const API = '/api/external-databases/article-synonyms'
 const codeOf = (article) => article?.primary_gtin || article?.barcode_labels?.[0] || article?.article_codes?.[0] || '—'
 const order = { linked: 0, suggested: 1, other: 2 }
+const SYNONYM_BUCKETS = [
+  { key: '0', label: '0 synoniemen' },
+  { key: '1', label: '1 synoniem' },
+  { key: '2', label: '2 synoniemen' },
+  { key: '3+', label: '3 of meer synoniemen' },
+]
 const orderedPair = (left, right) => [left, right].sort()
 
 export default function ArticleSynonymsPage({ embedded = false, initialArticleId = '' }) {
@@ -19,6 +25,7 @@ export default function ArticleSynonymsPage({ embedded = false, initialArticleId
   const navigate = useNavigate()
   const [articles, setArticles] = useState([])
   const [addedFrom, setAddedFrom] = useState('')
+  const [synonymBucket, setSynonymBucket] = useState('')
   const [activeArticle, setActiveArticle] = useState(initialArticleId || searchParams.get('artikel') || '')
   const [options, setOptions] = useState([])
   const [checked, setChecked] = useState(new Set())
@@ -123,7 +130,23 @@ export default function ArticleSynonymsPage({ embedded = false, initialArticleId
   }
 
   const currentArticle = articles.find((item) => item.id === activeArticle)
-  const visibleArticles = articles.filter((item) => !addedFrom || !item.added_on || item.added_on >= addedFrom)
+  // The counters always represent all Catalogusartikelen, not just the visible date filter.
+  const synonymCounts = { '0': 0, '1': 0, '2': 0, '3+': 0 }
+  for (const article of articles) {
+    const count = Math.max(0, Number(article.synonym_count) || 0)
+    synonymCounts[count >= 3 ? '3+' : String(count)] += 1
+  }
+  const visibleArticles = articles.filter((item) =>
+    (!addedFrom || !item.added_on || item.added_on >= addedFrom)
+    && (!synonymBucket || (synonymBucket === '3+'
+      ? Number(item.synonym_count || 0) >= 3
+      : Number(item.synonym_count || 0) === Number(synonymBucket)))
+  )
+  function toggleSynonymBucket(bucket) {
+    setSynonymBucket((current) => current === bucket ? '' : bucket)
+    setActiveArticle('')
+    setChecked(new Set())
+  }
   const rightRows = [...options].sort((a, b) =>
     order[a.status] - order[b.status]
     || (b.score || 0) - (a.score || 0)
@@ -322,6 +345,16 @@ export default function ArticleSynonymsPage({ embedded = false, initialArticleId
   ]
   const content = <>
     <ScreenCard fullWidth>
+      <div className="rz-synonym-analysis-summary" aria-label="Filter op aantal synoniemen"
+        data-testid="article-synonym-count-summary">
+        {SYNONYM_BUCKETS.map(({ key, label }) => <button type="button" key={key}
+          className="rz-synonym-analysis-stat"
+          data-testid={'article-synonym-count-' + key.replace('+', 'plus')}
+          aria-pressed={synonymBucket === key}
+          onClick={() => toggleSynonymBucket(key)}>
+          <strong>{synonymCounts[key]}</strong><span>{label}</span>
+        </button>)}
+      </div>
       <h2>Artikel-synoniemen</h2>
       <div className="rz-synonym-side-by-side">
         <section className="rz-synonym-side" aria-label="Catalogusartikelen links">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ClassificationImportPanel from './ClassificationImportPanel'
 import CatalogGpcActionPage from '../catalog/CatalogGpcActionPage'
 import CbsClassificationPage from '../catalog/CbsClassificationPage'
+import CbsBulkClassificationActions from './CbsBulkClassificationActions.jsx'
 import DataTable from '../../ui/DataTable'
 import Pagination from '../../ui/Pagination.jsx'
 import Button from '../../ui/Button'
@@ -288,7 +289,7 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
   return <section aria-label="GS1 en CBS classificeren" data-testid="combined-classification-workspace">
     <h3>Artikel classificeren</h3>
     <ClassificationImportPanel onApplied={onClassificationSaved} />
-    <p>Deze tabel toont acht Catalogusartikelen per pagina. Zoeken, filteren en sorteren werken over de volledige Catalogus. Kies een artikel om beide classificaties te beoordelen of selecteer rijen om te exporteren.</p>
+    <p>Deze tabel toont acht Catalogusartikelen per pagina. Zoeken, filteren en sorteren werken over de volledige Catalogus. Kies een artikel om beide classificaties te beoordelen of selecteer rijen om te exporteren of maximaal 100 artikelen tegelijk een CBS-classificatie toe te kennen of te verwijderen.</p>
     {summary ? <p role="status" data-testid="classification-workqueue-counts">
       {summary.product_total} unieke Catalogusartikelen · {summary.task_total} open classificatietaken
       (afzonderlijk geteld voor GS1 en CBS).
@@ -356,6 +357,9 @@ export default function CombinedClassificationWorkspace({ initialProductId = '' 
     />
     {!error && pageCount > 1 ? <Pagination page={page} pageCount={pageCount}
       disabled={loading || selectingAll} onPageChange={(next) => { setPage(next); setSelectedId('') }} /> : null}
+    <CbsBulkClassificationActions selectedIds={selectedIds}
+      disabled={loading || selectingAll || exporting || Boolean(error)}
+      onSaved={onClassificationSaved} />
     {selected ? <div className="rz-classification-detail" data-testid="combined-selected-article">
       <div className="rz-classification-selected-heading">
         <strong>{selected.name}{selected.brand ? ' · ' + selected.brand : ''}</strong>
