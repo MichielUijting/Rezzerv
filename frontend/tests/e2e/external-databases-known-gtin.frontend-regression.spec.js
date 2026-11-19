@@ -11,7 +11,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
   test('Identificeren blijft read-only en Matchen controleert automatisch bij toegang', async ({ page }) => {
     const writes = []
-    const autoPath = '/api/catalog/ed2/bonnamen-matchen/auto'
+    const startPath = '/api/catalog/ed2/bonnamen-matchen/progress/start'
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
       if (route.request().method() !== 'GET') writes.push(path)
@@ -31,12 +31,14 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
           link_status: 'unlinked',
         }], total: 1, counts: { unlinked: 1, classification_pending: 0, linked: 0 } } })
       }
-      if (path === autoPath) {
-        return route.fulfill({ json: {
-          ok: true, status: 'anchor_review_required', linked: 0,
-          synonyms_created: 0, barcode_written: false, requires_review: true,
-        } })
-      }
+      if (path === '/api/catalog/ed2/bonnamen-matchen/progress')
+        return route.fulfill({ json: { ok: false, state: 'not_started' } })
+      if (path === startPath) return route.fulfill({ json: {
+        ok: true, state: 'completed', id: 'ed2-automatic-test', phase: 'afgerond',
+        pass_number: 1, check_number: 1, checks_completed: 1,
+        checked: 1, total: 1, estimated_checks: 5, overall_percent: 100,
+        matched: 0, error: '',
+      } })
       if (path === '/api/catalog/ed2/curated-matching-batch/preview') {
         return route.fulfill({ json: { targets: [], items: [], blocked: [] } })
       }
@@ -54,7 +56,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     await page.getByTestId('classification-work-monitor').getByRole('button', { name: 'Matchen' }).click()
     await expect(page.getByTestId('ed2-match-left-table')).toBeVisible()
     await expect(page.getByTestId('ed2-match-left-table')).not.toContainText('Courgette groen')
-    expect(writes).toEqual([autoPath])
+    expect(writes).toEqual([startPath])
   })
 
   test('tellers en kolom Art./Barcode filteren het complete overzicht; barcode zoekt exact in OFF', async ({ page }) => {

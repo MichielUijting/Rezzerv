@@ -29,6 +29,9 @@ from app.services.proven_exact_receipt_name_service import (
     automatically_match_proven_exact_names, confirm_bonnaam_alias,
     manually_match_confirmed_receipt,
 )
+from app.services.ed2_match_progress_service import (
+    start_matching_progress, current_matching_progress,
+)
 from app.services.ed2_barcode_correction_service import (
     preview_lidl_barcode_correction, confirm_lidl_barcode_correction,
 )
@@ -893,12 +896,13 @@ def auto_ed2_bonnamen_matchen():
     with engine.begin() as conn:
         try:
             family = automatically_match_curated_receipts(conn, actor_id=actor.user_id)
-            general = automatically_match_proven_exact_names(conn, actor_id=actor.user_id)
+            general = automatically_match_proven_exact_names(
+                conn, actor_id=actor.user_id, include_match_overview=True)
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
     count = int(family.get("linked") or 0) + int(general.get("linked") or 0)
     synonyms = int(family.get("synonyms_created") or 0)
-    return {
+    result = {
         "ok": True,
         "status": ("applied" if count else family.get("status", "applied")),
         "linked": count,
@@ -909,6 +913,33 @@ def auto_ed2_bonnamen_matchen():
         "requires_review": bool(family.get("requires_review") or general.get("requires_review")),
         "limit_reached": bool(family.get("limit_reached") or general.get("limit_reached")),
     }
+    # Expose a zero-write proof snapshot only to the already authorized
+    # Superuser route. A pass with writes is never a final workspace snapshot.
+    if general.get("matching_overview") is not None:
+        result["matching_overview"] = general["matching_overview"]
+    return result
+
+
+def _background_match_pass(conn, actor_id, progress_callback):
+    # Use the same authorities as the existing Superuser-only automatic POST.
+    family = automatically_match_curated_receipts(
+        conn, actor_id=actor_id, progress_callback=progress_callback)
+    general = automatically_match_proven_exact_names(
+        conn, actor_id=actor_id, include_match_overview=True,
+        progress_callback=progress_callback)
+    return family, general
+
+
+@router.post("/ed2/bonnamen-matchen/progress/start")
+def start_ed2_bonnamen_match_progress():
+    actor = _require_authorized_bonnaam_actor()
+    return start_matching_progress(engine, actor.user_id, _background_match_pass)
+
+
+@router.get("/ed2/bonnamen-matchen/progress")
+def status_ed2_bonnamen_match_progress():
+    _require_authorized_bonnaam_actor()
+    return current_matching_progress()
 
 
 @router.post("/ed2/bonnaam-synoniem/confirm")

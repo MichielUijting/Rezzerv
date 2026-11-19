@@ -27,7 +27,7 @@ from app.services.ed2_receipt_family_link_service import (
 from app.services.external_article_confirmation_service import resolve_external_article_identity
 
 
-def _independently_proven_exact_names(conn):
+def _independently_proven_exact_names(conn, progress_callback=None, phase="familie controleren"):
     """Map exact normalized receipt names to a UNIQUE already-confirmed product.
 
     Names never establish a new central identity on their own. Proof comes
@@ -38,7 +38,10 @@ def _independently_proven_exact_names(conn):
     """
     products = {str(p["id"]): p for p in load_products(conn)}
     choices, disputed = {}, set()
-    for item in list_all_external_articles(conn=conn)["items"]:
+    scan_options = ({"on_progress": lambda checked, total:
+                     progress_callback(phase, checked, total)}
+                    if progress_callback is not None else {})
+    for item in list_all_external_articles(conn=conn, **scan_options)["items"]:
         label = normalize_external_link_receipt_text(item.get("receipt_line_text"))
         code = normalize_external_link_article_code(item.get("receipt_article_number"))
         if not label or not code or not _family_variant(label):
@@ -67,7 +70,9 @@ def _independently_proven_exact_names(conn):
     }
 
 
-def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='platform_user') -> dict:
+def automatically_match_curated_receipts(conn, *, actor_id: str,
+                                         actor_type='platform_user',
+                                         progress_callback=None) -> dict:
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
     validate_recognition_actor(actor_id, actor_type)
@@ -86,7 +91,9 @@ def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='pla
             "blocked": 0, "unprocessed": 0,
         }
     target_id = options[0]["product_id"]
-    plan = matching_batch_preview(conn, target_product_id=target_id)
+    plan_options = ({"progress_callback": progress_callback}
+                    if progress_callback is not None else {})
+    plan = matching_batch_preview(conn, target_product_id=target_id, **plan_options)
     eligible = [
         row for row in plan["items"]
         if row.get("receipt_article_number")
@@ -132,8 +139,12 @@ def automatically_match_curated_receipts(conn, *, actor_id: str, actor_type='pla
         # code-free row. Never repeat the expensive full ED2 overview for
         # every receipt candidate. Source identity and the existing
         # conflict guards remain checked inside the write savepoint.
-        names = _independently_proven_exact_names(conn)
-        refreshed_names = _independently_proven_exact_names(conn)
+        name_options = ({"progress_callback": progress_callback}
+                        if progress_callback is not None else {})
+        names = _independently_proven_exact_names(
+            conn, phase="familie-namen controleren", **name_options)
+        refreshed_names = _independently_proven_exact_names(
+            conn, phase="familie-namen hercontroleren", **name_options)
         for row in code_free[:MAX_BATCH - min(len(eligible), MAX_BATCH)]:
             label = row["source_key"][1]
             product = names.get(label)

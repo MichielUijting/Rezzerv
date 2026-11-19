@@ -101,7 +101,15 @@ export default function ExternalDatabases2Page() {
   const [items, setItems] = useState([])
   const [previewItems, setPreviewItems] = useState([])
   const fullTableNoticeShownRef = useRef(false)
-  const [activeArea, setActiveArea] = useState(() => location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null)
+  const [freshMatchingSelection, setFreshMatchingSelection] = useState(false)
+  const [activeArea, setActiveArea] = useState(() => {
+    // MobileAppChrome remounts its children when the breakpoint changes.
+    // Keep the operator's selected workspace in route state, not component state.
+    const savedArea = location.state?.ed2ActiveArea
+    if (['identity', 'matching', 'classify', 'synonyms', 'workqueue', 'overview'].includes(savedArea)
+        && (savedArea !== 'matching' || isPlatformSuperuser)) return savedArea
+    return location.state?.ed2TableState || location.state?.selectedItemId ? 'identity' : null
+  })
   const [counts, setCounts] = useState({ unlinked: 0, classification_pending: 0, linked: 0 })
   const [filters, setFilters] = useState(() => restored?.filters || {})
   const [activeStatusCounter, setActiveStatusCounter] = useState(() => restored?.activeStatusCounter || '')
@@ -130,6 +138,18 @@ export default function ExternalDatabases2Page() {
   const [offLinkOutcome, setOffLinkOutcome] = useState(() => location.state?.offLinkOutcome || null)
   const isMobile = useMobileAppViewport()
   const returnState = { filters, activeStatusCounter, sort: tableSort, page: tablePage }
+
+  function chooseArea(area) {
+    if (area === 'matching' && !isPlatformSuperuser) return
+    // An explicit choice starts a fresh check, unlike a breakpoint remount.
+    setFreshMatchingSelection(area === 'matching' && activeArea !== 'matching')
+    setActiveArea(area)
+    // Persist across the mobile/desktop subtree replacement without a new URL
+    // and without storing product data or credentials in browser storage.
+    navigate(location.pathname + location.search, {
+      replace: true, state: { ...location.state, ed2ActiveArea: area },
+    })
+  }
   useEffect(() => {
     if (activeArea !== 'identity') return
     navigate(`${location.pathname}${location.search}`, {
@@ -466,7 +486,7 @@ export default function ExternalDatabases2Page() {
     <AppShell title="Artikelbeheer" showExit={false}>
       <ScreenCard fullWidth>
         <h2>Artikelbeheer</h2>
-        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={setActiveArea}
+        <ClassificationWorkMonitor activeArea={activeArea} onAreaChange={chooseArea}
           isPlatformSuperuser={isPlatformSuperuser} />
         {activeArea === 'workqueue' ? <ArticleManagementWorkQueue isPlatformSuperuser={isPlatformSuperuser}
           onOpenTask={(task) => {
@@ -485,10 +505,11 @@ export default function ExternalDatabases2Page() {
               setActiveStatusCounter('')
               setTablePage(1)
             }
-            setActiveArea(task.area)
+            chooseArea(task.area)
           }} /> : null}
         {activeArea === 'matching' && isPlatformSuperuser
-          ? <Ed2MatchPage initialReceiptItemId={queueTaskFocus?.area === 'matching' ? queueTaskFocus.sourceId : ''} /> : null}
+          ? <Ed2MatchPage forceNewCheckOnEntry={freshMatchingSelection}
+            initialReceiptItemId={queueTaskFocus?.area === 'matching' ? queueTaskFocus.sourceId : ''} /> : null}
         {activeArea === "classify" ? <CombinedClassificationWorkspace
           key={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : 'classify'}
           initialProductId={queueTaskFocus?.area === 'classify' ? queueTaskFocus.productId : ''} /> : null}

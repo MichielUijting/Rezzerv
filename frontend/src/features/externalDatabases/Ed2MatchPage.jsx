@@ -5,10 +5,10 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Ed2CuratedMatchingBatch from './Ed2CuratedMatchingBatch'
 import Ed2CourgetteFamilyPanel from './Ed2CourgetteFamilyPanel'
+import { readMatchingOverview } from './ed2MatchingOverview.js'
+import { matchingEntryAction } from './ed2MatchingProgressEntry.js'
 import '../articleSynonyms/synonymAnalysis.css'
 
-const AUTO_PROGRESS_KEY = 'ed2-match-entry-progress'
-const MAX_AUTO_PASSES = 100 // Fail closed instead of looping forever on stale claims.
 const RETAILERS = {
   ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', jumbo: 'Jumbo',
   lidl: 'Lidl', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic',
@@ -58,8 +58,8 @@ function needsManualMatching(item) {
     && Boolean(String(item.automatic_match_review_reason || '').trim())
 }
 
-export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
-  const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
+export default function Ed2MatchPage({ initialReceiptItemId = '', forceNewCheckOnEntry = false }) {
+  const { showFeedback } = useAppFeedback()
   const isSuperuser = Boolean(readStoredAuthContext()?.is_platform_superuser)
   const mountedRef = useRef(false)
   const inFlightRef = useRef(false)
@@ -70,6 +70,11 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
   const [saving, setSaving] = useState(false)
   const [autoPhase, setAutoPhase] = useState('checking')
   const [autoResult, setAutoResult] = useState({ linked: 0, passes: 0 })
+  const [autoProgress, setAutoProgress] = useState({
+    checked: 0, total: 0, check_number: 0, checks_completed: 0,
+    estimated_checks: 5, overall_percent: 0, pass_number: 1,
+    phase: 'voorbereiden', matched: 0,
+  })
 
   const reload = useCallback(async () => {
     const response = await fetchJsonWithAuth('/api/external-databases/articles-overview')
@@ -87,7 +92,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     }
   }, [initialReceiptItemId])
 
-  const runAutomaticCheck = useCallback(async () => {
+  const runAutomaticCheck = useCallback(async (forceNewCheck = false) => {
     if (!isSuperuser || !mountedRef.current || inFlightRef.current) return false
     inFlightRef.current = true
     setLoading(true)
@@ -95,61 +100,85 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     setItems([])
     setLeftId('')
     setRightId('')
-    let linked = 0
-    let passes = 0
+    setAutoProgress({
+      checked: 0, total: 0, check_number: 0, checks_completed: 0,
+      estimated_checks: 5, overall_percent: 0, pass_number: 1,
+      phase: 'voorbereiden', matched: 0,
+    })
     try {
-      for (passes = 1; passes <= MAX_AUTO_PASSES; passes += 1) {
-        if (!mountedRef.current) return false
-        showFeedback({
-          key: AUTO_PROGRESS_KEY, dedupeMs: 0, variant: 'progress',
-          title: 'Automatische artikelmatching controleren',
-          message: 'Controle ' + passes + ' wordt uitgevoerd. '
-            + linked + ' bonartikel(en) automatisch gekoppeld.',
-          detail: 'Inhuis verwerkt alleen onafhankelijk bewezen matches. Meerdere uitvoeringen blijven voor handmatige beoordeling staan.',
-          testId: 'ed2-auto-match-progress', dismissMode: 'blocked',
-        })
-        const response = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/auto', {
+      // A viewport breakpoint remounts this React page. Reattach to the
+      // authorized server job instead of starting a fresh full-database scan.
+      const statusResponse = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress')
+      let job = await statusResponse.json().catch(() => ({}))
+      if (!statusResponse.ok) {
+        throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
+      }
+      const action = matchingEntryAction(job, forceNewCheck)
+      if (action === 'invalid') {
+        throw new Error('Inhuis heeft een ongeldige matchingstatus teruggegeven.')
+      }
+      if (!mountedRef.current) return false
+      if (action === 'start') {
+        const started = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress/start', {
           method: 'POST',
         })
-        const summary = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          throw new Error(typeof summary.detail === 'string' ? summary.detail
-            : 'Automatisch matchen is mislukt (HTTP ' + response.status + ').')
+        job = await started.json().catch(() => ({}))
+        if (!started.ok) {
+          throw new Error('De achtergrondcontrole kon niet worden gestart (HTTP ' + started.status + ').')
         }
-        if (summary.ok !== true || summary.barcode_written !== false) {
-          throw new Error('De matchingcontrole gaf geen betrouwbaar resultaat.')
+      }
+      while (mountedRef.current) {
+        if (job.ok !== true) {
+          throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
         }
-        const batchLinked = Number(summary.linked)
-        if (!Number.isSafeInteger(batchLinked) || batchLinked < 0) {
-          throw new Error('Het aantal gekoppelde artikelen is niet geldig.')
-        }
-        linked += batchLinked
         if (!mountedRef.current) return false
-        if (!batchLinked && summary.limit_reached) {
-          throw new Error('Automatische matching kan de resterende batch niet verwerken. '
-            + 'Er is geen verdere voortgang; de handmatige lijst blijft geblokkeerd.')
+        if (!Number.isSafeInteger(job.checked) || !Number.isSafeInteger(job.total)
+            || job.checked < 0 || job.total < 0 || job.checked > job.total
+            || !Number.isSafeInteger(job.matched) || job.matched < 0
+            || !Number.isSafeInteger(job.check_number) || job.check_number < 0
+            || !Number.isSafeInteger(job.checks_completed) || job.checks_completed < 0
+            || job.checks_completed > job.check_number
+            || !Number.isSafeInteger(job.estimated_checks) || job.estimated_checks < 1
+            || job.check_number > job.estimated_checks
+            || !Number.isSafeInteger(job.overall_percent)
+            || job.overall_percent < 0 || job.overall_percent > 100) {
+          throw new Error('Inhuis heeft een ongeldige voortgang teruggegeven.')
         }
-        // A final zero-write pass proves that newly confirmed receipts do not
-        // unlock any further eligible matches. A limited batch must continue.
-        if (!batchLinked && !summary.limit_reached) break
+        setAutoProgress(job)
+        if (job.state === 'error') {
+          throw new Error(job.error || 'De automatische matching is niet afgerond.')
+        }
+        if (job.state === 'completed') {
+          const stableOverview = readMatchingOverview({
+            ok: true, barcode_written: false, linked: 0, limit_reached: false,
+            matching_overview: job.matching_overview,
+          })
+          if (stableOverview) {
+            const loaded = stableOverview.map(displayRow)
+            setItems(loaded)
+            if (initialReceiptItemId && loaded.some((item) =>
+              item.id === initialReceiptItemId && needsManualMatching(item))) {
+              setLeftId(initialReceiptItemId)
+            }
+          } else {
+            // An incomplete final proof still falls back to the canonical GET.
+            await reload()
+          }
+          if (!mountedRef.current) return false
+          setAutoResult({ linked: job.matched, passes: job.pass_number })
+          setAutoPhase('ready')
+          return true
+        }
+        if (job.state !== 'running') throw new Error('Onbekende matchingstatus.')
+        await new Promise((resolve) => window.setTimeout(resolve, 750))
+        if (!mountedRef.current) return false
+        const response = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress')
+        job = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error('De voortgang van het matchen kon niet worden opgehaald.')
+        }
       }
-      if (passes > MAX_AUTO_PASSES) {
-        throw new Error('De maximale hoeveelheid automatische controles is bereikt. '
-          + 'De handmatige lijst blijft gesloten totdat de controle is afgerond.')
-      }
-      if (!mountedRef.current) return false
-      showFeedback({
-        key: AUTO_PROGRESS_KEY, dedupeMs: 0, variant: 'progress',
-        title: 'Automatische artikelmatching controleren',
-        message: 'Automatisch matchen afgerond. De handmatig te matchen artikelen worden geladen.',
-        testId: 'ed2-auto-match-progress', dismissMode: 'blocked',
-      })
-      await reload()
-      if (!mountedRef.current) return false
-      setAutoResult({ linked, passes })
-      setAutoPhase('ready')
-      dismissFeedbackIfKey(AUTO_PROGRESS_KEY)
-      return true
+      return false
     } catch (error) {
       if (mountedRef.current) {
         setAutoPhase('error')
@@ -167,19 +196,18 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
       inFlightRef.current = false
       if (mountedRef.current) setLoading(false)
     }
-  }, [isSuperuser, showFeedback, dismissFeedbackIfKey, reload])
+  }, [isSuperuser, showFeedback, reload, initialReceiptItemId])
 
   useEffect(() => {
     if (!isSuperuser) return undefined
     mountedRef.current = true
     // Delay one task to avoid duplicate POSTs in React StrictMode effect replay.
-    const task = window.setTimeout(() => { void runAutomaticCheck() }, 0)
+    const task = window.setTimeout(() => { void runAutomaticCheck(forceNewCheckOnEntry) }, 0)
     return () => {
       mountedRef.current = false
       window.clearTimeout(task)
-      dismissFeedbackIfKey(AUTO_PROGRESS_KEY)
-    }
-  }, [isSuperuser, runAutomaticCheck, dismissFeedbackIfKey])
+     }
+  }, [isSuperuser, runAutomaticCheck, forceNewCheckOnEntry])
 
   const leftRows = useMemo(() => items.filter(needsManualMatching), [items])
   const rightRows = useMemo(() => items.filter(confirmedTarget), [items])
@@ -210,7 +238,7 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
               : 'De match is niet bevestigd.')
           }
           // A new human-confirmed product can unlock further automatic proofs.
-          const ready = await runAutomaticCheck()
+          const ready = await runAutomaticCheck(true)
           if (ready && mountedRef.current) {
             showFeedback({ variant: 'success', title: 'Bonartikel gematcht',
               message: 'De Catalogusidentiteit is gekoppeld en de automatische controle is bijgewerkt. Er is geen barcode overgenomen.' })
@@ -266,10 +294,29 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
 
   return <section aria-label="Bonartikelen matchen" data-testid="ed2-match-workspace">
     <h2>Matchen</h2>
-    <p>Inhuis matcht bij het openen eerst alle veilig automatisch herkenbare bonartikelen.
-      Daarna staan links alleen artikelen met verschillende bevestigde Catalogusuitvoeringen,
-      waarvoor je handmatig het juiste artikel rechts kunt kiezen.</p>
-    {autoPhase === 'error' ? <Button onClick={() => { void runAutomaticCheck() }}>
+    {autoPhase === 'checking' ? <div
+      data-testid="ed2-auto-match-progress" role="group"
+      aria-label="Voortgang automatisch matchen"
+      className="rz-synonym-analysis-actions"
+      style={{ display: 'grid', gap: '8px', width: 'min(100%, 520px)',
+        marginInline: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+        <strong>Controle {autoProgress.check_number || 1}
+          {autoProgress.total > 0
+            ? ' · ' + autoProgress.checked.toLocaleString('nl-NL')
+              + '/' + autoProgress.total.toLocaleString('nl-NL') : ''}
+        </strong>
+        <span data-testid="ed2-auto-match-overall-percent"
+          title="Voorlopig totaal; extra matching kan aanvullende controles vereisen.">
+          ca. {autoProgress.overall_percent}%
+        </span>
+      </div>
+      <progress value={autoProgress.overall_percent} max={100}
+        aria-label="Voorlopige totale voortgang van het matchen"
+        style={{ width: '100%', accentColor: 'var(--color-ui-primary)' }} />
+    </div> : null}
+    {autoPhase === 'error' ? <Button onClick={() => { void runAutomaticCheck(true) }}>
       Automatische controle opnieuw uitvoeren
     </Button> : null}
     {autoPhase === 'ready' ? <>
@@ -296,10 +343,10 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         Artikelen zonder geschikte bewezen match blijven onder Identificeren beschikbaar.
       </p>
       {left && !left.article_code && !left.manual_barcode && curatedCourgette(left.receipt_line_text)
-        ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => { void runAutomaticCheck() }} /> : null}
+        ? <Ed2CourgetteFamilyPanel item={left} onConfirmed={() => { void runAutomaticCheck(true) }} /> : null}
       <details className="rz-match-tools">
         <summary>Bonnaamregels en familie-uitzonderingen</summary>
-        <Ed2CuratedMatchingBatch autoOnEntryMode onConfirmed={() => { void runAutomaticCheck() }} />
+        <Ed2CuratedMatchingBatch autoOnEntryMode onConfirmed={() => { void runAutomaticCheck(true) }} />
       </details>
     </> : null}
   </section>

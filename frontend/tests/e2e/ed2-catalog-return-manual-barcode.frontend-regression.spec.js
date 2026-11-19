@@ -3,6 +3,20 @@ import { buildArticleRelationshipGraph } from '../../src/features/externalDataba
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
+// Mock the asynchronous, authenticated background-job contract. These tests
+// must not depend on the retired synchronous /bonnamen-matchen/auto endpoint.
+function matchingJob({ state = 'completed', matched = 0, pass = 1,
+                       checked = 0, total = 0, checkNumber = 0 } = {}) {
+  return {
+    ok: true, id: 'playwright-match-job', state,
+    phase: state === 'completed' ? 'afgerond' : 'controleren',
+    pass_number: pass, check_number: checkNumber,
+    checks_completed: checked === total ? checkNumber : Math.max(0, checkNumber - 1),
+    estimated_checks: 5 * pass, overall_percent: state === 'completed' ? 100 : 0,
+    checked, total, matched, error: '',
+  }
+}
+
 function bootstrap(route, rows, manualRows, onSave) {
   const url = new URL(route.request().url())
   const path = url.pathname
@@ -24,10 +38,10 @@ function bootstrap(route, rows, manualRows, onSave) {
     total: rows.length,
     counts: { unlinked: rows.length, classification_pending: 0, linked: 0 },
   } })
-  if (path === '/api/catalog/ed2/bonnamen-matchen/auto') return route.fulfill({ json: {
-    ok: true, status: 'applied', linked: 0, barcode_written: false,
-    limit_reached: false, synonyms_created: 0,
-  } })
+  if (path === '/api/catalog/ed2/bonnamen-matchen/progress')
+    return route.fulfill({ json: { ok: false, state: 'not_started' } })
+  if (path === '/api/catalog/ed2/bonnamen-matchen/progress/start')
+    return route.fulfill({ json: matchingJob() })
   if (path === '/api/catalog/ed2/manual-barcodes') {
     if (route.request().method() === 'GET') return route.fulfill({ json: { items: manualRows } })
     return onSave(route)
@@ -544,14 +558,10 @@ test('ED2: zes courgettes in één gecontroleerde batch, zonder fictieve barcode
           ? 'e'.repeat(64) : null,
       } })
     }
-    if (url.pathname === '/api/catalog/ed2/bonnamen-matchen/auto') {
+    if (url.pathname === '/api/catalog/ed2/bonnamen-matchen/progress/start') {
       autoRequests.push(route.request().method())
-      // Two independently proven ordinary catalog anchors require an explicit
-      // exception review. Never write the six unresolved receipt identities.
-      return route.fulfill({ json: {
-        ok: true, status: 'anchor_review_required', linked: 0,
-        synonyms_created: 0, barcode_written: false, requires_review: true,
-      } })
+      // The same two proven anchors still require an explicit review.
+      return route.fulfill({ json: matchingJob() })
     }
     if (url.pathname === '/api/catalog/ed2/curated-matching-batch/confirm') {
       const payload = route.request().postDataJSON()
@@ -608,22 +618,20 @@ test('Matchen voert bewezen bonnamen automatisch bij toegang uit tot geen matche
       identity_status_label: 'Nog identificeren', link_status: 'unlinked' },
   ]
   const writes = []
+  let finished = false
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     if (route.request().method() !== 'GET') writes.push(path)
-    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
-      const first = writes.length === 1
-      if (first) {
-        rows[1].identity_status = 'catalog_linked'
-        rows[1].identity_status_label = 'Catalogus gekoppeld'
-        rows[1].catalog_product_id = 'milk-a'
-      }
-      return route.fulfill({ json: {
-        ok: true, status: 'applied', linked: first ? 1 : 0,
-        linked_from_exact_names: first ? 1 : 0,
-        linked_from_families: 0, blocked: 0, synonyms_created: 0,
-        barcode_written: false, limit_reached: false,
-      } })
+    if (path === '/api/catalog/ed2/bonnamen-matchen/progress')
+      return route.fulfill({ json: finished ? matchingJob({ matched: 1, pass: 2 })
+        : { ok: false, state: 'not_started' } })
+    if (path === '/api/catalog/ed2/bonnamen-matchen/progress/start') {
+      // A complete background job incorporates both write and zero-write passes.
+      rows[1].identity_status = 'catalog_linked'
+      rows[1].identity_status_label = 'Catalogus gekoppeld'
+      rows[1].catalog_product_id = 'milk-a'
+      finished = true
+      return route.fulfill({ json: matchingJob({ matched: 1, pass: 2 }) })
     }
     return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
   })
@@ -634,10 +642,7 @@ test('Matchen voert bewezen bonnamen automatisch bij toegang uit tot geen matche
   await expect(table).not.toContainText('HALFVOLLE MELK')
   await expect(page.getByTestId('ed2-auto-match-summary'))
     .toContainText('Bij het openen automatisch gematcht: 1')
-  expect(writes).toEqual([
-    '/api/catalog/ed2/bonnamen-matchen/auto',
-    '/api/catalog/ed2/bonnamen-matchen/auto',
-  ])
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/progress/start'])
 })
 
 
@@ -701,14 +706,12 @@ test('Matchen: serverfout blokkeert de handmatige lijst en kan opnieuw controler
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     if (route.request().method() !== 'GET') writes.push(path)
-    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
+    if (path === '/api/catalog/ed2/bonnamen-matchen/progress/start') {
       if (failFirst) {
         failFirst = false
         return route.fulfill({ status: 500, contentType: 'text/plain', body: 'Internal Server Error' })
       }
-      return route.fulfill({ json: {
-        ok: true, linked: 0, barcode_written: false, limit_reached: false,
-      } })
+      return route.fulfill({ json: matchingJob() })
     }
     if (path === '/api/catalog/ed2/curated-matching-batch/preview') {
       previews += 1
@@ -723,16 +726,16 @@ test('Matchen: serverfout blokkeert de handmatige lijst en kan opnieuw controler
   await page.getByTestId('classification-work-monitor')
     .getByRole('button', { name: 'Matchen' }).click()
   await expect(page.getByTestId('app-feedback-error'))
-    .toContainText('Automatisch matchen is mislukt (HTTP 500)')
+    .toContainText('De achtergrondcontrole kon niet worden gestart (HTTP 500)')
   await expect(page.getByTestId('ed2-match-left-table')).toHaveCount(0)
   expect(previews).toBe(0)
-  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/auto'])
+  expect(writes).toEqual(['/api/catalog/ed2/bonnamen-matchen/progress/start'])
   await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK' }).click()
   await page.getByRole('button', { name: 'Automatische controle opnieuw uitvoeren' }).click()
   await expect(page.getByTestId('ed2-match-left-table')).toBeVisible()
   expect(writes).toEqual([
-    '/api/catalog/ed2/bonnamen-matchen/auto',
-    '/api/catalog/ed2/bonnamen-matchen/auto',
+    '/api/catalog/ed2/bonnamen-matchen/progress/start',
+    '/api/catalog/ed2/bonnamen-matchen/progress/start',
   ])
 })
 
@@ -848,28 +851,35 @@ test('Matchen toont voortgang en daarna uitsluitend echte handmatige uitzonderin
   ]
   let resume
   const held = new Promise((resolve) => { resume = resolve })
-  let calls = 0
+  let started = 0
+  let completed = false
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/catalog/ed2/bonnamen-matchen/auto') {
-      calls += 1
-      if (calls === 1) {
-        await held
-        rows[0].identity_status = 'catalog_linked'
-        rows[0].catalog_product_id = 'elstar-a'
-      }
-      return route.fulfill({ json: {
-        ok: true, status: 'applied', linked: calls === 1 ? 1 : 0,
-        limit_reached: calls === 1, barcode_written: false,
-      } })
+    if (path === '/api/catalog/ed2/bonnamen-matchen/progress/start') {
+      started += 1
+      return route.fulfill({ json: matchingJob({ state: 'running', checked: 2, total: 5,
+        checkNumber: 1 }) })
+    }
+    if (path === '/api/catalog/ed2/bonnamen-matchen/progress') {
+      if (!started) return route.fulfill({ json: { ok: false, state: 'not_started' } })
+      if (!completed) return route.fulfill({ json: matchingJob({
+        state: 'running', checked: 2, total: 5, checkNumber: 1,
+      }) })
+      return route.fulfill({ json: matchingJob({ matched: 1, pass: 2, checked: 5,
+        total: 5, checkNumber: 2 }) })
     }
     return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
+  })
+  void held.then(() => {
+    rows[0].identity_status = 'catalog_linked'
+    rows[0].catalog_product_id = 'elstar-a'
+    completed = true
   })
   await page.goto('/externe-databases-2')
   await page.getByTestId('classification-work-monitor')
     .getByRole('button', { name: 'Identificeren' }).click()
   await expect(page.getByTestId('external-databases-2-table')).toContainText('ONBEKEND ARTIKEL')
-  expect(calls).toBe(0)
+  expect(started).toBe(0)
   await page.getByTestId('classification-work-monitor')
     .getByRole('button', { name: 'Matchen' }).click()
   await expect(page.getByTestId('ed2-auto-match-progress')).toBeVisible()
@@ -884,7 +894,7 @@ test('Matchen toont voortgang en daarna uitsluitend echte handmatige uitzonderin
   await expect(page.getByText('1 handmatig te matchen')).toBeVisible()
   await expect(page.getByTestId('ed2-auto-match-summary'))
     .toContainText('Bij het openen automatisch gematcht: 1')
-  expect(calls).toBe(2)
+  expect(started).toBe(1)
 })
 
 

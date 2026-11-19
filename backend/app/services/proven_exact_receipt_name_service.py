@@ -522,7 +522,9 @@ def manually_match_confirmed_receipt(
             "catalog_product_id": product_id}
 
 
-def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platform_user"):
+def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platform_user",
+                                         include_match_overview=False,
+                                         progress_callback=None):
     """One controlled PostgreSQL batch, max 50 matches; no GET-time mutation."""
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         raise ValueError("Automatische centrale matching vereist PostgreSQL.")
@@ -536,14 +538,26 @@ def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platfo
     # before the first write under the same serialized batch transaction.
     # Per-row raw identity and exact-tuple database guards still run inside
     # independent savepoints and block stale or conflicting records.
+    # Reuse this fully resolved, read-only identity snapshot after a zero-write
+    # pass. The Matchen screen no longer needs to repeat an expensive scan.
+    first_scan_options = (
+        {"on_progress": lambda checked, total:
+            progress_callback("controleren", checked, total)}
+        if progress_callback is not None else {}
+    )
+    overview_rows = list_all_external_articles(conn=conn, **first_scan_options)["items"]
     candidates, ambiguous, no_proof = _candidate_plan(
-        list_all_external_articles(conn=conn)["items"],
-        load_confirmed_bonnaam_aliases(conn))
+        overview_rows, load_confirmed_bonnaam_aliases(conn))
     selected = candidates[:MAX_EXACT_NAME_BATCH]
     verified_by_key = {}
     if selected:
+        second_scan_options = (
+            {"on_progress": lambda checked, total:
+                progress_callback("hercontroleren", checked, total)}
+            if progress_callback is not None else {}
+        )
         refreshed, _, _ = _candidate_plan(
-            list_all_external_articles(conn=conn)["items"],
+            list_all_external_articles(conn=conn, **second_scan_options)["items"],
             load_confirmed_bonnaam_aliases(conn))
         verified_by_key = {
             (row["source_key"], row["receipt_item_id"]): row
@@ -575,7 +589,7 @@ def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platfo
                         codefree_linked += 1
         except (ValueError, HTTPException, IntegrityError):
             conflicts += 1
-    return {
+    result = {
         "ok": True, "status": "applied",
         "linked": linked, "linked_without_article_number": codefree_linked,
         "synonyms_created": 0, "barcode_written": False,
@@ -586,3 +600,11 @@ def automatically_match_proven_exact_names(conn, *, actor_id, actor_type="platfo
         "requires_review": bool(conflicts or ambiguous or no_proof or
                                 len(candidates) > MAX_EXACT_NAME_BATCH),
     }
+    # Only a completed pass with ZERO writes can be returned as the current
+    # workspace. Any write requires another verification pass on fresh data.
+    # The same projection already drives the authoritative candidate plan.
+    if include_match_overview and linked == 0 and len(candidates) <= MAX_EXACT_NAME_BATCH:
+        result["matching_overview"] = {
+            "items": overview_rows, "total": len(overview_rows),
+        }
+    return result
