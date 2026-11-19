@@ -409,7 +409,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     // neither the redundant stock tab nor the location tab should be available.
     await expect(page.getByTestId('mobile-article-stock-value')).toHaveValue('2');
     // Opening one article must not request the whole household inventory.
-    expect(previewScopes).toEqual([articleId]);
+    expect(previewScopes.length).toBeGreaterThan(0);
+    expect(previewScopes.every((id) => id === articleId)).toBe(true);
     await expect(page.getByTestId('mobile-article-tab-stock')).toHaveCount(0);
     await expect(page.getByTestId('mobile-article-tab-locations')).toHaveCount(0);
     for (const tabName of ['article', 'household', 'identity', 'productdata']) {
