@@ -28,7 +28,8 @@ from app.services.article_workqueue_service import (
 )
 from app.services.classification_server_paging_service import (
     load_server_classification_page, load_server_classification_ids,
-    load_classification_counts, build_selected_classification_csv, MAX_EXPORT_IDS,
+    load_classification_counts, build_selected_classification_csv,
+    load_selected_cbs_snapshots, MAX_EXPORT_IDS,
 )
 from app.services.catalog_classification_export_service import build_catalog_classification_export
 from app.services.catalog_classification_import_service import (
@@ -239,6 +240,23 @@ def classification_workqueue_server_filtered_ids(
             conn, offset=offset, limit=limit,
             filters=_catalog_filters(name, gtin, gpc_status, cbs_status),
         )
+
+
+class SelectedCbsSnapshotRequest(BaseModel):
+    """An explicit, bounded Catalogus-ID selection; never a household lookup."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    product_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+@router.post("/workqueue-selected-cbs-snapshots")
+def selected_cbs_snapshots(payload: SelectedCbsSnapshotRequest):
+    """Read-only, current optimistic-lock tokens for at most 100 selected IDs."""
+    _actor("platform.external_products.view")
+    try:
+        with engine.connect() as conn:
+            return load_selected_cbs_snapshots(conn, payload.product_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/workqueue-selected-export")
