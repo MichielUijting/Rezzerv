@@ -50,8 +50,18 @@ async function fetchMobileArticleDetails(articleId) {
   return requestJson(endpoint, { method: 'GET', cache: 'no-store' })
 }
 
-async function fetchMobileInventoryRows() {
-  const payload = await requestJson(`/api/dev/inventory-preview?_ts=${Date.now()}`, { method: 'GET', cache: 'no-store' })
+async function fetchMobileInventoryRows(articleId) {
+  // The preview endpoint supports an exact household_article_id filter.
+  // Reading the entire household's stock and GPC data blocked the detail page
+  // even though this screen can only show the selected article's inventory.
+  const normalizedId = String(articleId || '').trim()
+  const scope = isStableHouseholdArticleId(normalizedId)
+    ? `household_article_id=${encodeURIComponent(normalizedId)}&`
+    : ''
+  const payload = await requestJson(
+    `/api/dev/inventory-preview?${scope}_ts=${Date.now()}`,
+    { method: 'GET', cache: 'no-store' },
+  )
   return Array.isArray(payload?.rows) ? payload.rows : []
 }
 
@@ -175,7 +185,7 @@ export default function MobileArticlePage() {
     try {
       const [details, inventory, locationTracking] = await Promise.all([
         fetchMobileArticleDetails(articleId),
-        fetchMobileInventoryRows(),
+        fetchMobileInventoryRows(articleId),
         fetchMobileLocationTracking(authContext),
       ])
       setArticleData(details)

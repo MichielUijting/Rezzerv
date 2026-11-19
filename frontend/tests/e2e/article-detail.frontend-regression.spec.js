@@ -276,6 +276,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     let savedFavoriteStore = '';
     let locationTrackingLevel = 'none';
     let inventoryQuantity = 2;
+    const previewScopes = [];
 
     await page.route('**/api/session', async (route) => {
       await route.fulfill({
@@ -315,6 +316,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     });
 
     await page.route('**/api/dev/inventory-preview?*', async (route) => {
+      previewScopes.push(new URL(route.request().url()).searchParams.get('household_article_id'));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -406,6 +408,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     // With Waar inhuis off the hero is the sole inventory control:
     // neither the redundant stock tab nor the location tab should be available.
     await expect(page.getByTestId('mobile-article-stock-value')).toHaveValue('2');
+    // Opening one article must not request the whole household inventory.
+    expect(previewScopes).toEqual([articleId]);
     await expect(page.getByTestId('mobile-article-tab-stock')).toHaveCount(0);
     await expect(page.getByTestId('mobile-article-tab-locations')).toHaveCount(0);
     for (const tabName of ['article', 'household', 'identity', 'productdata']) {
@@ -499,6 +503,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await expect.poll(() => inventoryQuantity).toBe(3);
     await expect(page.getByTestId('mobile-article-stock-value')).toHaveValue('3');
     await expect(page.getByTestId('mobile-article-tab-stock')).toBeVisible();
+    expect(previewScopes.length).toBeGreaterThanOrEqual(2);
+    expect(previewScopes.every((id) => id === articleId)).toBe(true);
     expect(consoleErrors).toEqual([]);
   });
 });

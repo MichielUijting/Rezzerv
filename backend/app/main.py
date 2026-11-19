@@ -265,8 +265,20 @@ def _dev_inventory_preview_row(row):
 
 
 @app.get("/api/dev/inventory-preview")
-def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+def dev_inventory_preview(
+    authorization: Optional[str] = Header(None),
+    household_article_id: Optional[str] = Query(None),
+):
     timing_started = perf_counter()
+    # Mobile article details need one canonical article, never the entire
+    # household-wide preview. Keep the unfiltered legacy contract unchanged.
+    scoped_article_id = str(household_article_id or '').strip()
+    if household_article_id is not None and not scoped_article_id:
+        raise HTTPException(status_code=400, detail='Huishoudartikel-id mag niet leeg zijn')
+    article_filter = (
+        ' AND i.household_article_id = :household_article_id'
+        if scoped_article_id else ''
+    )
     runtime_context = require_household_context(authorization)
     household_context = household_context_from_runtime_context(runtime_context)
     effective_household_id = household_context.active_household_id
@@ -288,9 +300,13 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
             WHERE i.household_id = :household_id
               AND COALESCE(i.status, 'active') = 'active'
+            """ + article_filter + """
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
-        ), {"household_id": effective_household_id}).mappings().all()
+        ), {
+            "household_id": effective_household_id,
+            **({"household_article_id": scoped_article_id} if scoped_article_id else {}),
+        }).mappings().all()
         inventory_query_done = perf_counter()
         gpc_by_article = dutch_gpc_by_household_article(
             conn,
