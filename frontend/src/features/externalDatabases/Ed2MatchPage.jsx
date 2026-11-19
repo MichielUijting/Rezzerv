@@ -69,7 +69,11 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
   const [saving, setSaving] = useState(false)
   const [autoPhase, setAutoPhase] = useState('checking')
   const [autoResult, setAutoResult] = useState({ linked: 0, passes: 0 })
-  const [autoProgress, setAutoProgress] = useState({ checked: 0, total: 0, pass_number: 1, phase: 'voorbereiden', matched: 0 })
+  const [autoProgress, setAutoProgress] = useState({
+    checked: 0, total: 0, check_number: 0, checks_completed: 0,
+    estimated_checks: 5, overall_percent: 0, pass_number: 1,
+    phase: 'voorbereiden', matched: 0,
+  })
 
   const reload = useCallback(async () => {
     const response = await fetchJsonWithAuth('/api/external-databases/articles-overview')
@@ -95,7 +99,11 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
     setItems([])
     setLeftId('')
     setRightId('')
-    setAutoProgress({ checked: 0, total: 0, pass_number: 1, phase: 'voorbereiden', matched: 0 })
+    setAutoProgress({
+      checked: 0, total: 0, check_number: 0, checks_completed: 0,
+      estimated_checks: 5, overall_percent: 0, pass_number: 1,
+      phase: 'voorbereiden', matched: 0,
+    })
     try {
       const started = await fetchJsonWithAuth('/api/catalog/ed2/bonnamen-matchen/progress/start', {
         method: 'POST',
@@ -112,7 +120,14 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
         if (!mountedRef.current) return false
         if (!Number.isSafeInteger(job.checked) || !Number.isSafeInteger(job.total)
             || job.checked < 0 || job.total < 0 || job.checked > job.total
-            || !Number.isSafeInteger(job.matched) || job.matched < 0) {
+            || !Number.isSafeInteger(job.matched) || job.matched < 0
+            || !Number.isSafeInteger(job.check_number) || job.check_number < 0
+            || !Number.isSafeInteger(job.checks_completed) || job.checks_completed < 0
+            || job.checks_completed > job.check_number
+            || !Number.isSafeInteger(job.estimated_checks) || job.estimated_checks < 1
+            || job.check_number > job.estimated_checks
+            || !Number.isSafeInteger(job.overall_percent)
+            || job.overall_percent < 0 || job.overall_percent > 100) {
           throw new Error('Inhuis heeft een ongeldige voortgang teruggegeven.')
         }
         setAutoProgress(job)
@@ -268,15 +283,22 @@ export default function Ed2MatchPage({ initialReceiptItemId = '' }) {
       <strong>Automatische artikelmatching controleren</strong>
       <p>Fase: {autoProgress.phase === 'voorbereiden'
         ? 'Voorbereiden' : autoProgress.phase}.</p>
-      <p>Controle {autoProgress.pass_number}: {autoProgress.total > 0
-        ? autoProgress.checked + ' van ' + autoProgress.total
-          + ' bonartikelen gecontroleerd ('
-          + Math.floor((autoProgress.checked / autoProgress.total) * 100)
-          + '% van deze controleronde)'
-        : '0 bonartikelen gecontroleerd; de volledige lijst wordt voorbereid.'}</p>
-      {autoProgress.total > 0 ? <progress value={autoProgress.checked}
-        max={autoProgress.total} aria-label="Gecontroleerde bonartikelen"
-        style={{ width: '100%', accentColor: 'var(--color-ui-primary)' }} /> : null}
+      <p>{autoProgress.check_number > 0
+        ? 'Controle ' + autoProgress.check_number + ': '
+        : 'De eerste controle wordt voorbereid: '}
+        {autoProgress.total > 0
+          ? autoProgress.checked + ' van ' + autoProgress.total
+            + ' bonartikelen gecontroleerd ('
+            + Math.floor((autoProgress.checked / autoProgress.total) * 100)
+            + '% van deze controle)'
+          : 'het aantal bonartikelen wordt vastgesteld.'}</p>
+      <progress value={autoProgress.overall_percent}
+        max={100} aria-label="Totale voorlopige voortgang van het matchen"
+        style={{ width: '100%', accentColor: 'var(--color-ui-primary)' }} />
+      <p>Totale voortgang: {autoProgress.overall_percent}% (voorlopig).
+        {autoProgress.checks_completed} van maximaal {autoProgress.estimated_checks}
+        controles afgerond binnen de nu bekende verwerkingsrondes.
+        Nieuwe matches kunnen extra controles nodig maken.</p>
       <p>{autoProgress.matched} bonartikel(en) automatisch gekoppeld.
         De controle loopt door als je naar een ander scherm gaat.</p>
     </div> : null}

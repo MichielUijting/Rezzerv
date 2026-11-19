@@ -15,6 +15,30 @@ LOG = logging.getLogger(__name__)
 _GUARD = Lock()
 _JOB = None
 _MAX_PASSES = 100
+# Per batch at most 3 curated-family projections and 2 exact-name projections.
+# A new successful match may require another batch, so this is a provisional
+# ceiling for the known batch, never an exact full-job prediction.
+_MAX_SCANS_PER_PASS = 5
+
+
+def _progress_snapshot(job):
+    completed = job["checks_completed"]
+    fraction = (
+        job["checked"] / job["total"]
+        if job["check_number"] > completed and job["total"] > 0 else 0
+    )
+    planned = _MAX_SCANS_PER_PASS * job["pass_number"]
+    percent = 100 if job["state"] == "completed" else min(
+        99, int(100 * (completed + fraction) / planned))
+    return {
+        "check_number": job["check_number"],
+        "checks_completed": completed,
+        "estimated_checks": planned,
+        "overall_percent": percent,
+        "estimate_provisional": job["state"] == "running",
+    }
+
+
 
 
 def _public(job):
@@ -22,7 +46,7 @@ def _public(job):
                 if key not in {"actor_id", "matching_overview"}}
     if job["state"] == "completed" and job.get("matching_overview") is not None:
         response["matching_overview"] = job["matching_overview"]
-    return {"ok": True, **response}
+    return {"ok": True, **response, **_progress_snapshot(job)}
 
 
 def _publish(job, **changes):
@@ -47,6 +71,7 @@ def start_matching_progress(engine, actor_id, run_pass):
             return _public(_JOB)
         job = dict(id=uuid4().hex, actor_id=actor_id, state="running",
                    phase="voorbereiden", pass_number=1, checked=0, total=0,
+                   check_number=0, checks_completed=0,
                    matched=0, error="", matching_overview=None)
         _JOB = job
     try:
@@ -70,10 +95,23 @@ def _run(job, engine, actor_id, run_pass):
             _publish(job, pass_number=number, phase="voorbereiden",
                      checked=0, total=0)
             def update(phase, checked, total):
-                if (not isinstance(checked, int) or not isinstance(total, int)
-                        or checked < 0 or total < 0 or checked > total):
+                if (type(checked) is not int or type(total) is not int
+                        or checked < 0 or total < 0 or checked > total
+                        or not isinstance(phase, str) or not phase.strip()):
                     raise ValueError("Ongeldige gecontroleerde artikelteller.")
-                _publish(job, phase=phase, checked=checked, total=total)
+                with _GUARD:
+                    if checked == 0:
+                        # Each full projection starts with one (0, N) callback;
+                        # never reuse the outer batch number as the scan number.
+                        job["check_number"] += 1
+                        if job["check_number"] > _MAX_SCANS_PER_PASS * number:
+                            raise ValueError("Meer scans dan de verwachte veiligheidsgrens.")
+                    elif (job["check_number"] == job["checks_completed"]
+                          or total != job["total"] or phase != job["phase"]):
+                        raise ValueError("De artikelvoortgang is niet opeenvolgend.")
+                    job.update(phase=phase, checked=checked, total=total)
+                    if checked == total:
+                        job["checks_completed"] = job["check_number"]
 
             with engine.begin() as conn:
                 family, general = run_pass(conn, actor_id, update)
