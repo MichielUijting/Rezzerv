@@ -272,7 +272,8 @@ assert.match(relationshipOverview, /if \(!selectedId\) \{ setLoadingLinks\(false
 assert.match(relationshipOverview, /if \(!cached\.promise\)/)
 assert.match(relationshipOverview, /cached\.promise = readJson\(RECEIPTS_API\)/)
 assert.match(relationshipOverview, /setReceipts\(Array\.isArray\(overview\.items\)/)
-assert.match(relationshipOverview, /receiptOverviewRef\.current = \{ revision: reloadCount, promise: null \}/)
+assert.match(relationshipOverview, /receiptOverviewRef\.current = \{[\s\S]*householdId: String\(readStoredAuthContext\(\)\?\.active_household_id \|\| ''\)/)
+assert.match(relationshipOverview, /if \(cached\.householdId !== householdId\)/)
 
 // Regressieanker voor de snelle eerste pagina van de grote schermen.
 // De paginering mag niet uitsluitend client-side een volledige dataset inkorten.

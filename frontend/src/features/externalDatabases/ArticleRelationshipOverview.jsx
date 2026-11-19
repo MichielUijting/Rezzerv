@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../ui/Button'
 import CatalogProductImage from '../catalog/CatalogProductImage'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { buildArticleRelationshipGraph } from './articleRelationshipModel'
 import './articleRelationshipOverview.css'
@@ -87,7 +87,11 @@ export default function ArticleRelationshipOverview() {
   useEffect(() => {
     const controller = new AbortController()
     // Verversen maakt zowel de zoekcatalogus als de eerder gelezen bewijzen ongeldig.
-    receiptOverviewRef.current = { revision: reloadCount, promise: null }
+    receiptOverviewRef.current = {
+      revision: reloadCount,
+      householdId: String(readStoredAuthContext()?.active_household_id || ''),
+      promise: null,
+    }
     setLoading(true)
     setError('')
     setReceipts([])
@@ -109,6 +113,13 @@ export default function ArticleRelationshipOverview() {
     if (!selectedId) { setLoadingLinks(false); return () => controller.abort() }
     setLoadingLinks(true)
     const cached = receiptOverviewRef.current
+    const householdId = String(readStoredAuthContext()?.active_household_id || '')
+    if (cached.householdId !== householdId) {
+      // Een eerdere huishoudcontext mag nooit een gedeelde relatiesnapshot leveren.
+      cached.householdId = householdId
+      cached.promise = null
+      setReceipts([])
+    }
     if (!cached.promise) {
       // Niet bij openen van het scherm; pas na de eerste artikelkeuze.
       // Een gedeelde request is niet aan een individuele selectiewissel gekoppeld.
