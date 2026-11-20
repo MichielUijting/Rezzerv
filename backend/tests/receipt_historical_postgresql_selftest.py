@@ -543,6 +543,68 @@ def main() -> None:
                     cutover=first_current,
                 )
 
+                # PR2: real PostgreSQL, same isolated rollback transaction.
+                # Only fully owned household-article links and canonical
+                # product semantics may become read-only learning candidates.
+                from app.services.receipt_historical_learning_service import (
+                    load_historical_learning,
+                )
+                from app.api.kassa_pagination_routes import list_historical_kassa_learning
+                article_id = main.ensure_household_article(
+                    conn, new_household, "Historische CI koffiepads",
+                )
+                for index, age_days in enumerate((100, 65, 30, 2)):
+                    candidate_receipt_id, _ = _seed_receipt(
+                        conn, household_id=new_household,
+                        provider_id=provider, connection_id=connection,
+                        store=("Albert Heijn", "Lidl", "Jumbo", "Albert Heijn")[index],
+                        purchase_date=first_current - timedelta(days=age_days),
+                        with_line=True,
+                    )
+                    conn.execute(text("""
+                        UPDATE receipt_table_lines
+                           SET line_role = 'product', inventory_eligible = TRUE,
+                               matched_article_id = :article_id,
+                               article_match_status = 'matched'
+                         WHERE receipt_table_id = :receipt_id
+                    """), {"article_id": article_id, "receipt_id": candidate_receipt_id})
+                learning = load_historical_learning(
+                    conn, household_id=new_household, page=1, page_size=10,
+                )
+                assert learning["total"] == 1, learning
+                candidate = learning["items"][0]
+                assert candidate["key"] == "article:" + article_id, candidate
+                assert candidate["estimate_status"] == "indicative_unconfirmed", candidate
+                assert candidate["requires_confirmation"] is True, candidate
+                assert learning["writes_inventory"] is False, learning
+                assert candidate["source_receipt_count"] == 4, candidate
+                assert load_historical_learning(
+                    conn, household_id=other_household,
+                )["status"] == "legacy_not_enabled"
+
+                class _ReadEngine:
+                    def connect(self):
+                        return nullcontext(conn)
+
+                # Test the actual HTTP route handler, including authorized
+                # household resolution and the absence of any DML side effect.
+                with (
+                    patch("app.api.kassa_pagination_routes.engine", _ReadEngine()),
+                    patch.object(main, "resolve_authorized_household_id",
+                                 return_value=new_household),
+                ):
+                    exposed = list_historical_kassa_learning(
+                        householdId=new_household, page=1, page_size=10,
+                        authorization="ci-authorized",
+                    )
+                assert exposed["items"] == learning["items"], exposed
+                assert any(
+                    getattr(route, "path", "") == "/api/kassa/historical-learning-page"
+                    and "GET" in (getattr(route, "methods", set()) or set())
+                    for route in main.app.routes
+                ), "Read-only PR2 endpoint not registered"
+                print("RECEIPT_HISTORY_POSTGRESQL_LEARNING_READONLY_GREEN")
+
                 # This proof uses real, canonical storage but does not invoke
                 # the stock API: it establishes that no stock is synthesized
                 # by history activation, retention or validation alone.
