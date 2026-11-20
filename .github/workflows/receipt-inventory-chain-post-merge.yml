@@ -137,6 +137,7 @@ jobs:
           DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
           MIGRATION_DATABASE_URL: ''
           REZZERV_DATASTORE_POLICY: postgresql-only
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts-history
         run: |
           python backend/tests/receipt_historical_postgresql_selftest.py | tee receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_100_HISTORICAL_BLOCKED_GREEN' receipt-history-postgresql.log
