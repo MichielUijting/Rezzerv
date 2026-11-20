@@ -89,8 +89,12 @@ function receiptIdFromImport(payload) {
 }
 
 async function uploadReceiptThroughKassa(page, file) {
-  await page.goto('/kassa/nieuw')
-  await expect(page.getByTestId('kassa-add-page')).toBeVisible()
+  // The canonical JPG fixture depicts an old purchase. The history cutover
+  // must hide it from the actionable Kassa list in a newly enabled household.
+  // Import from Kassa itself to keep the real receipt detail available for
+  // a deliberate, browser-only correction into this test's CURRENT purchase.
+  await page.goto('/kassa')
+  await expect(page.getByTestId('kassa-table')).toBeVisible({ timeout: 30_000 })
   const responsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === '/api/receipts/import' && response.request().method() === 'POST'
   ), { timeout: 180_000 })
@@ -101,6 +105,45 @@ async function uploadReceiptThroughKassa(page, file) {
   expect(payload?.duplicate).not.toBe(true)
   const receiptId = receiptIdFromImport(payload)
   expect(receiptId).not.toBe('')
+
+  // This is a deliberately historical source photo. Verify that the backend
+  // retains it as history without offering it as current Kassa work.
+  const householdResponse = await page.request.get('/api/household')
+  expect(householdResponse.ok()).toBeTruthy()
+  const household = await householdResponse.json()
+  const householdId = String(household?.active_household_id || household?.id || '')
+  expect(householdId).not.toBe('')
+  const params = new URLSearchParams({ householdId, page: '1', page_size: '10' })
+  const activeBefore = await page.request.get(`/api/kassa/receipts-page?${params.toString()}`)
+  expect(activeBefore.ok()).toBeTruthy()
+  expect((await activeBefore.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(false)
+
+  const historical = await page.request.get(
+    `/api/kassa/historical-receipts-page?householdId=${encodeURIComponent(householdId)}&page=1&page_size=100`
+  )
+  expect(historical.ok()).toBeTruthy()
+  expect((await historical.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(true)
+
+  // Exercise real, authorized Kassa header editing, not a mocked API or
+  // a test-only inventory bypass. A current date is necessary because these
+  // browser tests cover active Uitpakken and physical article identity.
+  await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('tab', { name: 'Bonkop', exact: true }).click()
+  const purchaseDate = page.getByLabel('Aankoopdatum', { exact: true })
+  await expect(purchaseDate).toBeVisible()
+  const currentDate = new Date().toISOString().slice(0, 10)
+  const saved = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/receipts/${receiptId}`
+    && response.request().method() === 'PATCH'
+  ))
+  await purchaseDate.fill(currentDate)
+  await purchaseDate.blur()
+  expect((await saved).ok()).toBeTruthy()
+
+  // Reload to prove the row is now served by the actual Kassa projection,
+  // rather than its transient optimistic upload fallback.
+  await page.goto('/kassa')
+  await expect(page.getByTestId(`kassa-row-${receiptId}`)).toBeVisible({ timeout: 60_000 })
   return receiptId
 }
 
