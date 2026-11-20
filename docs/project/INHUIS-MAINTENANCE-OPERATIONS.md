@@ -409,3 +409,8 @@ of upgrade. Een deployment is daarom geblokkeerd totdat de duurzame vervanging
 Een test van alleen de actieve aanmeldsessie kan deze twee procedures niet als
 volledig praktijkbewezen afronden. Herstart zonder aanmelding is expliciet
 **niet ondersteund** door de huidige Docker Desktop/CurrentUser-architectuur.
+
+
+## Alleen-lezen Windows/Docker-aanmeldstartcontrole
+
+Voor het uitsluitend **inspecteren** van het Docker Desktop-opstartbeleid en het automatisch terugkomen van **bestaande** Inhuis-containers na Windows-aanmelding is er een apart [controlescript met uitleg](INHUIS-DOCKER-WINDOWS-RESTART-CHECK.md). Dit hulpmiddel voert geen serveracties uit en is **geen vrijstelling van de formele onderhouds-, bewijs- en PO-GO-regels hierboven**.
