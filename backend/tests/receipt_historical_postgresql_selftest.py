@@ -297,9 +297,10 @@ def _prove_historical_workflows(
         conn.execute(text("""
             INSERT INTO purchase_import_lines (
                 id, batch_id, external_line_ref, article_name_raw, quantity_raw,
-                review_decision, processing_status
+                match_status, review_decision, processing_status
             ) VALUES (
-                :id, :batch_id, :ref, 'CI rijst', 1, 'selected', 'processed'
+                :id, :batch_id, :ref, 'CI rijst', 1,
+                'unmatched', 'selected', 'processed'
             )
         """), {"id": _id(), "batch_id": fresh_batch, "ref": _id()})
         try:
