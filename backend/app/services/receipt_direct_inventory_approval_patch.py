@@ -432,6 +432,33 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
             }
             return refreshed
 
+        # A historic receipt is a source of purchase history, not a stock
+        # addition. Approval retains the receipt while bypassing the direct
+        # inventory path. The batch-level guard also protects Uitpakken.
+        from .receipt_historical_import_policy import classify_receipt_for_household
+        history_disposition = "legacy"
+        with main_module.engine.begin() as conn:
+            main_module.require_receipt_write_context(
+                conn, receipt_table_id, authorization,
+            )
+            owner = conn.execute(text(
+                "SELECT household_id FROM receipt_tables WHERE id = :id LIMIT 1"
+            ), {"id": receipt_table_id}).scalar_one_or_none()
+            if owner:
+                history_disposition = classify_receipt_for_household(
+                    conn, household_id=str(owner), receipt_table_id=receipt_table_id,
+                )
+        if history_disposition == "historical":
+            original_approve(receipt_table_id, authorization)
+            retained = main_module.get_receipt_detail(receipt_table_id, authorization)
+            retained["approval_destination"] = "history"
+            return retained
+        if history_disposition == "review_required":
+            raise HTTPException(
+                status_code=409,
+                detail="Controleer eerst de aankoopdatum van deze kassabon voordat deze naar voorraad gaat.",
+            )
+
         # Do not approve a direct receipt whose quantity is only a guessed
         # one-piece parser default. Uitpakken uses the same stock normalizer.
         with main_module.engine.begin() as conn:

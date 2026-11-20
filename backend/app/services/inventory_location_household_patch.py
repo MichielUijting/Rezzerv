@@ -487,14 +487,25 @@ def install_inventory_location_household_patch(main_module) -> None:
         payload,
         authorization: str | None = None,
     ):
-        mode = str(getattr(payload, "mode", "") or "").strip()
-        if mode not in {"ready_only", "selected_only"}:
-            return location_policy_endpoint(batch_id, payload, authorization)
+        # A historical retailer receipt may be retained for learning, but must
+        # never be replayed as an ordinary physical purchase inventory event.
+        # Resolve and authorize the actual household before inspecting policy.
+        from .receipt_historical_import_policy import require_batch_inventory_allowed
 
         household_id, configuration = _batch_household_configuration(
             main_module,
             batch_id,
         )
+        if household_id:
+            main_module.require_household_context(authorization, household_id)
+            with main_module.engine.begin() as policy_conn:
+                require_batch_inventory_allowed(
+                    policy_conn, household_id=household_id, batch_id=batch_id,
+                )
+
+        mode = str(getattr(payload, "mode", "") or "").strip()
+        if mode not in {"ready_only", "selected_only"}:
+            return location_policy_endpoint(batch_id, payload, authorization)
         if (
             not household_id
             or configuration is None
