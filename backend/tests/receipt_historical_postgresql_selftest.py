@@ -563,7 +563,7 @@ def main() -> None:
                     )
                     conn.execute(text("""
                         UPDATE receipt_table_lines
-                           SET line_role = 'product', inventory_eligible = TRUE,
+                           SET line_role = 'product', inventory_eligible = 1,
                                matched_article_id = :article_id,
                                article_match_status = 'matched'
                          WHERE receipt_table_id = :receipt_id
