@@ -26,7 +26,7 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.CheckConstraint(
-            "first_current_purchase_date >= DATE '2000-01-01'",
+            "first_current_purchase_date >= '2000-01-01'",
             name="ck_receipt_history_cutover_date",
         ),
     )

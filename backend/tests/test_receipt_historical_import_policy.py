@@ -2,8 +2,15 @@
 
 Run: python -m unittest backend.tests.test_receipt_historical_import_policy
 """
+import sys
 import unittest
 from datetime import date, datetime
+from pathlib import Path
+
+# Allow a targeted run from the repository root without global PYTHONPATH changes.
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
 from fastapi import HTTPException
 from app.services.receipt_historical_import_policy import (
@@ -95,6 +102,20 @@ class ReceiptHistoricalImportPolicyTest(unittest.TestCase):
             receipt={"purchase_at": None, "purchase_at_source": "retailer"})
         with self.assertRaises(HTTPException):
             require_batch_inventory_allowed(conn, household_id="home-1", batch_id="batch-2")
+
+    def test_cross_household_receipt_reference_fails_closed(self):
+        # The receipt query must not accept an id from another household.
+        conn = _FakeConnection(
+            cutover=date(2026, 11, 20),
+            batch={"source_type": "receipt", "source_reference": "receipt:foreign-id"},
+            receipt=None,
+        )
+        with self.assertRaises(HTTPException) as raised:
+            require_batch_inventory_allowed(conn, household_id="home-1", batch_id="batch-1")
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertTrue(any("household_id = :household_id" in query
+                            for query, _ in conn.queries
+                            if "FROM receipt_tables" in query))
 
     def test_without_cutover_old_receipt_is_not_reclassified(self):
         conn = _FakeConnection(cutover=None,
