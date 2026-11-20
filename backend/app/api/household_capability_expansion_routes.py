@@ -22,6 +22,9 @@ from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
     resolve_household_product_configuration,
 )
+from app.services.receipt_historical_import_policy import (
+    activate_cutover_for_new_onboarding,
+)
 from app.services.household_product_use_case_service import (
     activate_household_product_use_case,
     resolve_active_household_product_use_cases,
@@ -209,6 +212,12 @@ def expand_inhuis_halen(payload: ExpandInhuisHalenRequest):
                     household_id=household_id,
                     use_case="inhuis_halen",
                 )
+                if payload.receipt_processing_enabled:
+                    # Activating receipts later than initial onboarding is
+                    # also a first-use boundary, provided no data exists.
+                    activate_cutover_for_new_onboarding(
+                        conn, household_id=household_id,
+                    )
             return _projection(conn, household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -263,6 +272,10 @@ def expand_waar_inhuis(payload: ExpandWaarInhuisRequest):
                     household_id=household_id,
                     use_case="waar_inhuis",
                 )
+                if payload.receipt_processing_enabled:
+                    activate_cutover_for_new_onboarding(
+                        conn, household_id=household_id,
+                    )
             return _projection(conn, household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

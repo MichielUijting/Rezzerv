@@ -396,12 +396,17 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     household_name=payload.household_name,
                     household_usage_mode=payload.household_usage_mode,
                 )
-                # New households begin learning only at the first canonical
-                # onboarding completion. Existing receipt and stock records
-                # prevent activation without changing their historical meaning.
-                activate_cutover_for_new_onboarding(
+                # The cutover starts when the household actually enables
+                # receipt processing, not simply on registration. Wat Inhuis
+                # may enable receipts through canonical configuration.
+                configuration = resolve_canonical_household_product_configuration(
                     conn, household_id=household_id,
+                    primary_use_case=completed_state.primary_use_case,
                 )
+                if configuration.receipt_processing_enabled:
+                    activate_cutover_for_new_onboarding(
+                        conn, household_id=household_id,
+                    )
             except OnboardingAlreadyCompletedError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             except ValueError as exc:

@@ -28,10 +28,12 @@ Risico: nieuwe Alembic-tabel en blokkering van fysieke voorraadmutaties bij hist
    bonnen en bonnen met onbetrouwbare datum wanneer een grens is ingesteld.
    Dit is tevens de extra beveiliging voor verwerking via Uitpakken.
 6. Bij de eerste bevoegde afronding van een nieuw huishouden stelt de backend
-   de grens automatisch in, uitsluitend als het huishouden nog geen bonnen,
-   voorraad, inventarisbewegingen of importbatches heeft. Dit gebeurt in dezelfde
-   transactie als de onboardingafsluiting. Is er wel bestaande data, dan blijft
-   de grens ongewijzigd en geldt het bestaande gedrag: geen stille herclassificatie.
+   de grens uitsluitend in wanneer bonverwerking daadwerkelijk is ingeschakeld
+   en nog geen bonnen, voorraad, inventarisbewegingen of importbatches bestaan.
+   Het gebeurt in dezelfde transactie als onboarding. Als een huishouden pas
+   later bij uitbreiding van zijn mogelijkheden bonverwerking activeert,
+   wordt de grens op dat latere moment ingesteld, mits de administratie leeg is.
+   Is er al data, dan blijft de grens ongewijzigd: geen stille herclassificatie.
 7. De server-side Uitpakken-lijst filtert voor huishoudens met een grens historische
    en onbetrouwbaar gedateerde kassabonnen uit. Bronbonnen blijven leesbaar in Kassa.
    Zonder grens blijven alle bestaande rijselecties gelijk.
