@@ -78,3 +78,17 @@ De toets verifieert de kalendergrens, onbetrouwbare datum, bestaande huishoudens
 huishoudisolatie en nul voorraad-/inventory-events. Alle ingevoerde fixtures worden
 vóór afronding van de toets teruggedraaid. De volledige receipt→stock-keten en
 F7 Full blijven afzonderlijk verplicht; deze gerichte toets vervangt die niet.
+
+## Kassa versus historische raadpleging
+
+Bestaande huishoudens zonder grens behouden hun volledige Kassa-lijst.
+Bij nieuwe huishoudens met een eerste-aankoopgrens blijven bonnen met een
+betrouwbaar historische aankoopdatum bewaard maar verschijnen niet als
+Kassa- of Uitpakken-werkvoorraad. Een onbekende of automatisch ingevulde
+standaarddatum blijft wél in Kassa ter controle.
+
+De nieuwe read-only route `GET /api/kassa/historical-receipts-page`
+biedt gepagineerde inzage in de werkelijk bewaarde historische bonnen,
+alleen voor de geautoriseerde actieve huishoudencontext. Dit is geen
+status-/voorraadmutatie en vervangt niet het canonieke receipt-statuscontract.
+Een toekomstige onboarding-UI kan deze lijst en de tellers tonen.

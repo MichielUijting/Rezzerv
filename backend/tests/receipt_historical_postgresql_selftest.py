@@ -178,6 +178,31 @@ def main() -> None:
                         raise AssertionError("Historische bon kan voorraad bijschrijven")
                     old_count += 1
                 assert old_count == 100
+                # These receipts are preserved but must not be presented as
+                # pending Kassa or Uitpakken work. Read-only SQL contract.
+                for operation in ("AND rt.approved_at IS NULL", "AND rt.approved_at IS NOT NULL"):
+                    current_visible = conn.execute(text("""
+                        SELECT COUNT(*) FROM receipt_tables rt
+                        LEFT JOIN household_receipt_history_cutovers hrc
+                          ON hrc.household_id = rt.household_id
+                        WHERE rt.household_id=:household_id
+                          """ + operation + """
+                          AND (
+                            hrc.household_id IS NULL OR rt.purchase_at IS NULL
+                            OR lower(trim(COALESCE(rt.purchase_at_source,''))) = 'import_default'
+                            OR CAST(rt.purchase_at AS DATE) >= hrc.first_current_purchase_date
+                          )
+                    """), {"household_id": new_household}).scalar_one()
+                    assert current_visible == 0, operation
+                historical_count = conn.execute(text("""
+                    SELECT COUNT(*) FROM receipt_tables rt
+                    JOIN household_receipt_history_cutovers hrc
+                      ON hrc.household_id=rt.household_id
+                    WHERE rt.household_id=:household_id
+                      AND rt.purchase_at IS NOT NULL
+                      AND CAST(rt.purchase_at AS DATE) < hrc.first_current_purchase_date
+                """), {"household_id": new_household}).scalar_one()
+                assert historical_count == 100
                 print("RECEIPT_HISTORY_POSTGRESQL_100_HISTORICAL_BLOCKED_GREEN")
 
                 recent_id, recent_batch = _seed_receipt(
