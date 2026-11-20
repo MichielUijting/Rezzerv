@@ -8,6 +8,30 @@ const session = {
   is_platform_superuser: false, is_frontteam: false,
 }
 
+test('platformbeheer shows which requests remain open without treating them as live processes', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({ json: session }))
+  await page.route('**/api/maintenance/status', route => route.fulfill({ json: { state: 'normal' } }))
+  await page.route('**/api/platform/maintenance/imports', route => route.fulfill({ json: { paused: true, open_import_registrations: 0, processing_receipts: 0, pending_receipts: 0 } }))
+  await page.route('**/api/platform/maintenance', route => route.fulfill({ json: {
+    state: 'normal', generation: 3, active_operations: 3, host_agent_ready: true,
+    open_operation_details_truncated: false,
+    open_operation_details: [
+      { description: 'Huishoudprofiel ophalen', started_at: '2026-10-29T14:35:46+00:00', started_before_backend: true },
+      { description: 'Gedeelde kassabon importeren', started_at: '2026-11-04T12:56:08+00:00', started_before_backend: true },
+      { description: 'Gedeelde kassabon importeren', started_at: '2026-11-04T13:06:17+00:00', started_before_backend: true },
+    ],
+  } }))
+  await page.goto('/platform/herstel')
+  const panel = page.getByTestId('platform-maintenance-panel')
+  await expect(panel.getByText('Openstaande verwerkingsregistraties: 3.', { exact: false })).toBeVisible()
+  const table = panel.getByTestId('maintenance-open-operations')
+  await expect(table.locator('tbody tr')).toHaveCount(3)
+  await expect(table.getByText('Huishoudprofiel ophalen')).toBeVisible()
+  await expect(table.getByText('Gedeelde kassabon importeren')).toHaveCount(2)
+  await expect(panel.getByText('Een registratie zonder eindtijd bewijst niet dat het verzoek nog draait.', { exact: false })).toBeVisible()
+  await expect(panel.getByText('Vóór huidige backendstart; mogelijk achtergebleven')).toHaveCount(3)
+})
+
 test('maintenance actions use exact generation and never offer an unproved Windows reboot', async ({ page }) => {
   let state = { state: 'normal', generation: 0, active_operations: 0, restart_allowed: false, host_agent_ready: true }
   const requests = []
