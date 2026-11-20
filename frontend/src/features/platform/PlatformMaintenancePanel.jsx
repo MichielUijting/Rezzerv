@@ -3,9 +3,20 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import DataTable from '../../ui/DataTable.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 
-const LABELS = { normal: 'Beschikbaar', announced: 'Onderhoud aangekondigd', draining: 'Lopende verwerkingen afronden', locked: 'Verwerkingen geblokkeerd', verifying: 'Herstel gecontroleerd', blocked: 'Onderzoek nodig' }
+const LABELS = { normal: 'Beschikbaar', announced: 'Onderhoud aangekondigd', draining: 'Verwerkingen veilig afronden', locked: 'Verwerkingen geblokkeerd', verifying: 'Herstel gecontroleerd', blocked: 'Onderzoek nodig' }
+
+const OPERATION_COLUMNS = [
+  { key: 'description', header: 'Verzoek of verwerking', width: 245 },
+  { key: 'started_at', header: 'Begonnen', width: 175, renderCell: (row) => new Date(row.started_at).toLocaleString('nl-NL') },
+  { key: 'started_before_backend', header: 'Aanwijzing', width: 255, renderCell: (row) => (
+    row.started_before_backend
+      ? 'Vóór huidige backendstart; mogelijk achtergebleven'
+      : 'Sinds huidige backendstart; activiteit niet bewezen'
+  ) },
+]
 
 export default function PlatformMaintenancePanel() {
   const [status, setStatus] = React.useState(null)
@@ -94,7 +105,20 @@ export default function PlatformMaintenancePanel() {
       <Button variant="secondary" disabled={importBusy} onClick={loadImportPause}>Importstatus vernieuwen</Button>
     </Card>}
     {status && <>
-      <p role="status">{LABELS[status.state] || 'Onbekend — geblokkeerd'}. Lopende verwerkingen: {status.active_operations}.</p>
+      <p role="status">{LABELS[status.state] || 'Onbekend — geblokkeerd'}. Openstaande verwerkingsregistraties: {status.active_operations}.</p>
+      {Array.isArray(status.open_operation_details) && status.active_operations > 0 && <Card>
+        <h3>Welke verwerkingen staan nog open?</h3>
+        <p>Een registratie zonder eindtijd bewijst niet dat het verzoek nog draait. Ook een registratie van vóór de huidige backendstart wordt nooit automatisch afgesloten.</p>
+        <DataTable
+          dataTestId="maintenance-open-operations"
+          columns={OPERATION_COLUMNS}
+          data={status.open_operation_details}
+          getRowKey={(row, index) => `${row.started_at}-${index}`}
+          pageSize={8}
+          emptyMessage="Geen registratiegegevens beschikbaar."
+        />
+        {status.open_operation_details_truncated && <p>Niet alle openstaande registraties zijn zichtbaar. Onderhoud blijft geblokkeerd totdat ze allemaal zijn afgehandeld.</p>}
+      </Card>}
       {status.retailer_import_registrations && <p data-testid="retailer-import-maintenance-status">
         Winkelkoppelingen: {status.retailer_import_registrations.open} openstaande importregistratie(s)
         ({status.retailer_import_registrations.ah_background} AH-achtergrond,

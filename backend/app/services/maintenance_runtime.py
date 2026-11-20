@@ -22,6 +22,7 @@ from .maintenance_host_proof import read_host_proof, read_agent_availability
 
 _operation = ContextVar("inhuis_maintenance_operation", default=None)
 _BOOT_ID = str(uuid4())  # Backend instance identity, explicitly NOT a Windows boot proof.
+_INSTANCE_STARTED_AT = datetime.now(timezone.utc)  # For display only: not a liveness proof.
 
 
 def _engine():
@@ -96,6 +97,44 @@ def start_worker(*, target, args=(), name=None, daemon=True, engine=None):
     return worker
 
 
+def _operation_description(kind):
+    """Operator-facing kind; never expose raw route IDs or user-supplied paths."""
+    labels = {
+        "http:GET /api/household/profile": "Huishoudprofiel ophalen",
+        "http:POST /api/receipts/share-import": "Gedeelde kassabon importeren",
+        "call:_admitted_ah_sync": "Automatische AH-kassabonnen ophalen",
+        "worker:retailer_import_queue": "Winkelbon uit wachtrij verwerken",
+    }
+    if kind in labels:
+        return labels[kind]
+    if kind.startswith("http:"):
+        return "Overig appverzoek"
+    if kind.startswith(("worker:", "call:")):
+        return "Overige achtergrondverwerking"
+    return "Overige verwerking"
+
+
+def _open_operation_details(conn):
+    """Read-only capped view: timestamps are evidence, not a running-process test."""
+    rows = conn.execute(text("""
+        SELECT kind, started_at FROM maintenance_operations
+        WHERE finished_at IS NULL
+        ORDER BY started_at, operation_id
+        LIMIT 51
+    """)).mappings().all()
+    details = []
+    for row in rows[:50]:
+        started_at = row["started_at"]
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        details.append({
+            "description": _operation_description(str(row["kind"] or "")),
+            "started_at": started_at.isoformat(),
+            "started_before_backend": started_at < _INSTANCE_STARTED_AT,
+        })
+    return details, len(rows) > 50
+
+
 def state(conn):
     row = conn.execute(text("SELECT state,generation,cycle_id,announcement,evidence_json,locked_boot_id,updated_at FROM maintenance_control WHERE id=1")).mappings().one()
     result = {key:value for key,value in dict(row).items() if key not in {'evidence_json','locked_boot_id'}}
@@ -138,6 +177,12 @@ def state(conn):
         'processing': counts.get('processing', 0),
         'review_required': counts.get('review_required', 0),
     }
+    # Never call these registrations live processes. After a crash their
+    # finished_at remains NULL, even when the originating request is gone.
+    # A pre-backend-start time is an investigation hint, not safe-cleanup proof.
+    open_details, open_truncated = _open_operation_details(conn)
+    result["open_operation_details"] = open_details
+    result["open_operation_details_truncated"] = open_truncated
     result.update(active_operations=outstanding_operations(conn), restart_allowed=False)
     if row['state'] == 'locked' and not result['active_operations'] and not result['restart_detected']:
         try:

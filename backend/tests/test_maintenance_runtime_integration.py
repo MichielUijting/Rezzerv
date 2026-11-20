@@ -97,6 +97,39 @@ class MaintenanceRuntimeIntegration(unittest.TestCase):
         with self.engine.connect() as conn:
             self.assertEqual(state(conn)['state'], 'normal')
 
+    def test_open_operations_show_origin_without_claiming_liveness(self):
+        from datetime import timedelta
+        from backend.app.services.maintenance_runtime import _INSTANCE_STARTED_AT
+
+        before = _INSTANCE_STARTED_AT - timedelta(days=1)
+        after = _INSTANCE_STARTED_AT + timedelta(days=1)
+        with self.engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO maintenance_operations(operation_id,generation,kind,started_at)
+                VALUES (:id,0,'http:GET /api/household/profile',:started)
+            """), {"id": str(uuid4()), "started": before})
+            conn.execute(text("""
+                INSERT INTO maintenance_operations(operation_id,generation,kind,started_at)
+                VALUES (:id,0,'http:POST /api/receipts/share-import',:started)
+            """), {"id": str(uuid4()), "started": after})
+
+        with self.engine.connect() as conn:
+            result = state(conn)
+            self.assertEqual(result["active_operations"], 2)
+            details = result["open_operation_details"]
+            self.assertEqual(len(details), 2)
+            self.assertEqual(details[0]["description"], "Huishoudprofiel ophalen")
+            self.assertTrue(details[0]["started_before_backend"])
+            self.assertEqual(details[1]["description"], "Gedeelde kassabon importeren")
+            self.assertFalse(details[1]["started_before_backend"])
+            self.assertFalse(result["open_operation_details_truncated"])
+            # Merely reading the status must not complete or delete records.
+            self.assertEqual(conn.execute(text(
+                "SELECT COUNT(*) FROM maintenance_operations WHERE finished_at IS NULL"
+            )).scalar_one(), 2)
+            self.assertNotIn("operation_id", details[0])
+
+
     def test_worker_reservation_survives_http_handoff_and_drain(self):
         started, release = Event(), Event()
         def target():
