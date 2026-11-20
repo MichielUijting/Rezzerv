@@ -67,6 +67,26 @@ class WindowsDockerRestartContract(unittest.TestCase):
                     "backend_image", "postgres_id", "postgres_image"):
             self.assertIn(key, self.source)
 
+    def test_postgres_image_can_be_recognized_by_local_tags(self):
+        self.assertIn("(^|[/])postgres(:|@)", self.source)
+        self.assertIn("RepoTags", self.source)
+        self.assertIn("POSTGRES_IMAGE_NIET_HERKEND", self.source)
+
+    def test_proven_followup_diagnosis_is_read_only(self):
+        diagnosis = SCRIPT.with_name("Inhuis_PostgreSQL_Identiteit_Diagnose.cmd")
+        source = diagnosis.read_text(encoding="utf-8")
+        self.assertTrue(source.startswith("@echo off\\nCLS\\n"))
+        self.assertIn("app.maintenance.server_maintenance_host_probe", source)
+        self.assertIn("RepoTags", source)
+        self.assertIn("unless-stopped", source)
+        self.assertIn("Inhuis_PostgreSQL_Identiteit_Diagnose_Resultaat.txt", source)
+        for forbidden in (
+            "docker compose up", "docker compose down", "docker stop",
+            "docker start", "docker restart", "docker rm", "docker volume rm",
+            "Restart-Computer", "Set-ItemProperty", "git reset",
+        ):
+            self.assertNotIn(forbidden.lower(), source.lower())
+
     def test_reports_and_baseline_not_repo_files(self):
         self.assertIn("Inhuis_Docker_Windows_Herstartcontrole_Resultaat.txt", self.source)
         self.assertIn("Inhuis_Docker_Windows_Herstart_Baseline.json", self.source)
