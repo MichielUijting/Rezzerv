@@ -63,8 +63,11 @@ function receiptIdFromImport(payload) {
 }
 
 async function uploadReceiptThroughKassa(page, file) {
-  await page.goto('/kassa/nieuw')
-  await expect(page.getByTestId('kassa-add-page')).toBeVisible()
+  // This canonical JPG depicts an older purchase. A new household must
+  // retain it as history, outside the actionable Kassa projection.
+  // Upload from Kassa so that its real Bonkop remains available for correction.
+  await page.goto('/kassa')
+  await expect(page.getByTestId('kassa-table')).toBeVisible({ timeout: 30_000 })
   const fileInput = page.getByTestId('kassa-manual-file-input')
   await expect(fileInput).toHaveCount(1)
   const importResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/receipts/import' && response.request().method() === 'POST', { timeout: 180_000 })
@@ -77,6 +80,43 @@ async function uploadReceiptThroughKassa(page, file) {
   expect(payload?.duplicate).not.toBe(true)
   const receiptId = receiptIdFromImport(payload)
   expect(receiptId).not.toBe('')
+
+  // Prove that historical receipts are preserved and cannot be processed as
+  // current stock before the owner explicitly corrects the purchase date.
+  const householdResponse = await page.request.get('/api/household')
+  expect(householdResponse.ok()).toBeTruthy()
+  const household = await householdResponse.json()
+  const householdId = String(household?.active_household_id || household?.id || '')
+  expect(householdId).not.toBe('')
+  const params = new URLSearchParams({ householdId, page: '1', page_size: '10' })
+  const current = await page.request.get(`/api/kassa/receipts-page?${params.toString()}`)
+  expect(current.ok()).toBeTruthy()
+  expect((await current.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(false)
+
+  const history = await page.request.get(
+    `/api/kassa/historical-receipts-page?householdId=${encodeURIComponent(householdId)}&page=1&page_size=100`
+  )
+  expect(history.ok()).toBeTruthy()
+  expect((await history.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(true)
+
+  // The following L4 test specifically verifies a CURRENT purchase flow.
+  // Use the regular authorized Bonkop editor, not a test-only API bypass.
+  await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('tab', { name: 'Bonkop', exact: true }).click()
+  const date = page.getByLabel('Aankoopdatum', { exact: true })
+  await expect(date).toBeVisible()
+  const saved = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/receipts/${receiptId}`
+    && response.request().method() === 'PATCH'
+  ))
+  await date.fill(new Date().toISOString().slice(0, 10))
+  await date.blur()
+  expect((await saved).ok()).toBeTruthy()
+
+  // The receipt must be present in the actual Kassa server projection after
+  // reloading; the temporary optimistic upload row is not sufficient proof.
+  await page.goto('/kassa')
+  await expect(page.getByTestId(`kassa-row-${receiptId}`)).toBeVisible({ timeout: 60_000 })
   return receiptId
 }
 
