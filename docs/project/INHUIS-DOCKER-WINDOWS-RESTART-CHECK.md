@@ -10,7 +10,7 @@ De read-only V3-proef van 20 november 2026 toonde op de bestaande Inhuis 1.12.29
 
 ## Standaardcontrole
 
-De toekomstige repositorycontrole moet:
+Het officiële, éénmaal te starten controlescript is `scripts/server-maintenance/Inhuis_Docker_Windows_Herstartcontrole.cmd` (dubbelklik op de Windows-server). Het moet:
 
 1. Starten met een dubbelklik en uitsluitend lezen, zonder Windows-, Docker-, database-, versie- of onderhoudsacties.
 2. De werkelijke draaiende Inhuis-frontend, de daarvan afhankelijke backend en de fysieke PostgreSQL-container herkennen; geen historische poort, Compose-projectnaam of versie hardcoderen.
@@ -25,4 +25,6 @@ De toekomstige repositorycontrole moet:
 
 Borg in Git alleen de definitieve, generieke controle, de gerichte contracttests en deze compacte procedure. Neem de tijdelijke agentherstel-V1–V6-scripts, containerconfiguraties, lokale baselines, gebruikerspaden en diagnosebestanden **niet** op.
 
-De daadwerkelijke Windows-terugkeer moet apart op de server worden getest en vastgelegd. De repositorycode wordt niet als operationeel bewezen beschreven zonder dat bewijs.
+De gerichte broncontracttests staan in `scripts/server-maintenance/tests/test_docker_windows_restart_check.py`. Ze kunnen worden uitgevoerd met `python -m unittest discover -s scripts/server-maintenance/tests -p test_docker_windows_restart_check.py`. Ze vervangen geen Windows-runtimeproef.
+
+De daadwerkelijke Windows-terugkeer moet apart op de server worden getest en vastgelegd. De veralgemeende repositorycode is niet op deze Windows-server beproefd en wordt niet als operationeel bewezen beschreven zonder dat bewijs.
