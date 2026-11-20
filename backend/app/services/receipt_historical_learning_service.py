@@ -32,7 +32,7 @@ _UNITS = {
 _HISTORICAL_PRODUCT_LINES_SQL = """
 SELECT rt.id AS receipt_table_id, rt.purchase_at, rt.purchase_at_source,
        rt.store_name, rr.sha256_hash,
-       rtl.id AS line_id, rtl.line_type, rtl.line_role, rtl.inventory_eligible,
+       rtl.id AS line_id, rtl.line_role, rtl.inventory_eligible,
        rtl.article_match_status, rtl.matched_article_id,
        rtl.matched_global_product_id,
        COALESCE(rtl.corrected_quantity, rtl.quantity) AS quantity,
