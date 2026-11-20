@@ -24,6 +24,9 @@ from app.services.household_product_configuration_service import (
     save_wat_inhuis_configuration,
     save_waar_inhuis_configuration,
 )
+from app.services.receipt_historical_import_policy import (
+    activate_cutover_for_new_onboarding,
+)
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     ServerSessionContext,
@@ -393,6 +396,17 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     household_name=payload.household_name,
                     household_usage_mode=payload.household_usage_mode,
                 )
+                # The cutover starts when the household actually enables
+                # receipt processing, not simply on registration. Wat Inhuis
+                # may enable receipts through canonical configuration.
+                configuration = resolve_canonical_household_product_configuration(
+                    conn, household_id=household_id,
+                    primary_use_case=completed_state.primary_use_case,
+                )
+                if configuration.receipt_processing_enabled:
+                    activate_cutover_for_new_onboarding(
+                        conn, household_id=household_id,
+                    )
             except OnboardingAlreadyCompletedError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             except ValueError as exc:

@@ -12119,11 +12119,24 @@ def list_unpack_start_batches(
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN household_receipt_history_cutovers hrc
+                  ON hrc.household_id = rt.household_id
                 WHERE rt.household_id = :household_id
                   AND rt.approved_at IS NOT NULL
                   AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
+                  -- An opted-in household must not see historical or
+                  -- uncertain-date receipts as unpackable current purchases.
+                  -- No cutover row means exact legacy behavior.
+                  AND (
+                      hrc.household_id IS NULL
+                      OR (
+                          rt.purchase_at IS NOT NULL
+                          AND lower(trim(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
+                          AND CAST(rt.purchase_at AS DATE) >= hrc.first_current_purchase_date
+                      )
+                  )
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) ASC, rt.created_at ASC, rt.id ASC
                 """
             ),
@@ -12339,10 +12352,21 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
+                LEFT JOIN household_receipt_history_cutovers hrc
+                  ON hrc.household_id = rt.household_id
                 WHERE rt.household_id = :household_id
                   AND rt.approved_at IS NULL
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
+                  -- Historical receipts remain in canonical storage, but are
+                  -- not outstanding Kassa actions in opted-in new households.
+                  -- Missing/import-default dates stay reviewable.
+                  AND (
+                      hrc.household_id IS NULL
+                      OR rt.purchase_at IS NULL
+                      OR lower(trim(COALESCE(rt.purchase_at_source, ''))) = 'import_default'
+                      OR CAST(rt.purchase_at AS DATE) >= hrc.first_current_purchase_date
+                  )
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
                 """
             ),
@@ -12724,6 +12748,46 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
             values['reference'] = str(payload.reference or '').strip() or None
         if payload.notes is not None:
             values['notes'] = str(payload.notes or '').strip() or None
+
+        # A receipt that already contributed physical inventory may not be
+        # backdated across the household history cutover by editing its header.
+        # Such a correction requires the explicit inventory lifecycle path.
+        if (payload.purchase_at is not None
+                and str(values.get('purchase_at') or '') != str(current.get('purchase_at') or '')):
+            from app.services.receipt_historical_import_policy import (
+                classify_purchase_date, read_household_cutover,
+            )
+            owner = str(context.get('active_household_id') or '').strip()
+            cutover = read_household_cutover(conn, owner)
+            if cutover is not None:
+                disposition = classify_purchase_date(
+                    values.get('purchase_at'),
+                    purchase_at_source=values.get('purchase_at_source'),
+                    first_current_purchase_date=cutover,
+                )
+                if disposition in {'historical', 'review_required'}:
+                    has_processed_lines = conn.execute(text("""
+                        SELECT 1
+                        FROM purchase_import_batches pib
+                        JOIN purchase_import_lines pil ON pil.batch_id = pib.id
+                        WHERE pib.household_id = :household_id
+                          AND pib.source_type = 'receipt'
+                          AND pib.source_reference = :source_reference
+                          AND pil.processing_status = 'processed'
+                        LIMIT 1
+                    """), {
+                        'household_id': owner,
+                        'source_reference': f'receipt:{receipt_table_id}',
+                    }).scalar_one_or_none()
+                    if has_processed_lines is not None:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                'Deze kassabon is al naar voorraad verwerkt. '
+                                'Een historische aankoopdatum vereist eerst '
+                                'een gecontroleerde voorraadcorrectie.'
+                            ),
+                        )
         conn.execute(
             text("""
             UPDATE receipt_tables

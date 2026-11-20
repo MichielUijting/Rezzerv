@@ -113,6 +113,12 @@ jobs:
             beautifulsoup4==4.12.3 \
             opencv-python-headless
 
+      - name: 4a/10 Valideer historische-kassabon voorraadgrens
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m unittest backend.tests.test_receipt_historical_import_policy
+
       - name: 5-6/10 Bereid gedeelde PostgreSQL acceptance foundation voor
         uses: ./.github/actions/postgresql-acceptance-foundation
         with:
@@ -124,6 +130,28 @@ jobs:
           runtime-password: runtime-pass
           migration-mode: preflight
           evidence-file: receipt-postgresql-foundation.log
+
+      - name: 6a/10 Historische bonnen op geïsoleerd PostgreSQL valideren
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+          MIGRATION_DATABASE_URL: ''
+          REZZERV_DATASTORE_POLICY: postgresql-only
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts-history
+        run: |
+          python backend/tests/receipt_historical_postgresql_selftest.py | tee receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_100_HISTORICAL_BLOCKED_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_PRODUCTION_ROUTE_GUARD_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_KASSA_PROJECTION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_HISTORICAL_READONLY_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_MANUAL_APPROVAL_IDEMPOTENT_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_UNPACK_PROJECTION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_REIMPORT_BOUNDARY_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_BACKDATE_GUARD_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_CUTOFF_AND_MISSING_DATE_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_HOUSEHOLD_ISOLATION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_ZERO_STOCK_MUTATION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' receipt-history-postgresql.log
 
       - name: 7/10 Voer volledige productie-keten uit als DML-only PostgreSQL-runtime
         env:

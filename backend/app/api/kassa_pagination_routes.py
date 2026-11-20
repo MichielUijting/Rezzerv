@@ -61,10 +61,20 @@ JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
 LEFT JOIN active_lines lines ON lines.receipt_table_id = rt.id
+LEFT JOIN household_receipt_history_cutovers hrc
+  ON hrc.household_id = rt.household_id
 WHERE rt.household_id = :household_id
   AND rt.approved_at IS NULL
   AND rt.deleted_at IS NULL
   AND rr.deleted_at IS NULL
+  -- Opted-in new households should not review years of old receipts in Kassa.
+  -- Undated/imputed-date receipts are never silently classified as history.
+  AND (
+    hrc.household_id IS NULL
+    OR rt.purchase_at IS NULL
+    OR lower(trim(COALESCE(rt.purchase_at_source, ''))) = 'import_default'
+    OR CAST(rt.purchase_at AS DATE) >= hrc.first_current_purchase_date
+  )
 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
 """
 
@@ -261,3 +271,51 @@ def list_kassa_receipts_page(
             len(rows), len(result["items"]),
         )
     return result
+
+
+@router.get("/api/kassa/historical-receipts-page")
+def list_historical_kassa_receipts(
+    householdId: str = Query(...),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
+    authorization: str | None = Header(default=None),
+):
+    """Read-only page of retained historical receipts, never a stock action.
+
+    Household identity is derived from the authorized server context, not a
+    browser-provided flag. The receipt-status SSOT is not redefined here.
+    """
+    from app import main as legacy
+    household_id = legacy.resolve_authorized_household_id(
+        authorization, householdId, require_authorization=True,
+    )
+    where = """
+        FROM receipt_tables rt
+        JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+        JOIN household_receipt_history_cutovers hrc
+          ON hrc.household_id = rt.household_id
+        WHERE rt.household_id = :household_id
+          AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL
+          AND rt.purchase_at IS NOT NULL
+          AND lower(trim(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
+          AND CAST(rt.purchase_at AS DATE) < hrc.first_current_purchase_date
+    """
+    params = {"household_id": household_id}
+    with engine.connect() as conn:
+        total = int(conn.execute(
+            text("SELECT COUNT(*) " + where), params,
+        ).scalar_one())
+        rows = conn.execute(text("""
+            SELECT rt.id AS receipt_table_id, rt.store_name, rt.purchase_at,
+                   rt.total_amount, rt.currency, rt.line_count,
+                   rt.created_at
+        """ + where + """
+            ORDER BY rt.purchase_at DESC, rt.created_at DESC, rt.id DESC
+            LIMIT :limit OFFSET :offset
+        """), {**params, "limit": page_size, "offset": (page - 1) * page_size}).mappings().all()
+    return {
+        "items": [dict(row) for row in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }

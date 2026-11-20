@@ -77,8 +77,10 @@ function supportedEmlFixture(sourcePath) {
 
 async function uploadReceiptThroughKassa(page, sourcePath) {
   const path = supportedEmlFixture(sourcePath)
-  await page.goto('/kassa/nieuw')
-  await expect(page.getByTestId('kassa-add-page')).toBeVisible()
+  // Keep the canonical source receipt unchanged: its 2024 purchase must first
+  // be recognized as historical in a newly created household.
+  await page.goto('/kassa')
+  await expect(page.getByTestId('kassa-table')).toBeVisible({ timeout: 30_000 })
   const importResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === '/api/receipts/picnic-email-import' && response.request().method() === 'POST'
   ), { timeout: 180_000 })
@@ -91,6 +93,40 @@ async function uploadReceiptThroughKassa(page, sourcePath) {
   expect(payload?.duplicate).not.toBe(true)
   const receiptId = receiptIdFromImport(payload)
   expect(receiptId).not.toBe('')
+
+  // Old receipts are retained for history and excluded from actionable Kassa.
+  const householdResponse = await page.request.get('/api/household')
+  expect(householdResponse.ok()).toBeTruthy()
+  const household = await householdResponse.json()
+  const householdId = String(household?.active_household_id || household?.id || '')
+  expect(householdId).not.toBe('')
+  const params = new URLSearchParams({ householdId, page: '1', page_size: '10' })
+  const active = await page.request.get(`/api/kassa/receipts-page?${params.toString()}`)
+  expect(active.ok()).toBeTruthy()
+  expect((await active.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(false)
+
+  const history = await page.request.get(
+    `/api/kassa/historical-receipts-page?householdId=${encodeURIComponent(householdId)}&page=1&page_size=100`
+  )
+  expect(history.ok()).toBeTruthy()
+  expect((await history.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(true)
+
+  // Turn this historical test fixture into an explicitly CURRENT purchase,
+  // through the normal authorized browser interface. The production cutover
+  // must remain active: never bypass it or modify the source receipt fixture.
+  await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('tab', { name: 'Bonkop', exact: true }).click()
+  const purchaseDate = page.getByLabel('Aankoopdatum', { exact: true })
+  await expect(purchaseDate).toBeVisible()
+  const savePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/receipts/${receiptId}`
+    && response.request().method() === 'PATCH'
+  ))
+  await purchaseDate.fill(new Date().toISOString().slice(0, 10))
+  await purchaseDate.blur()
+  expect((await savePromise).ok()).toBeTruthy()
+  await page.goto('/kassa')
+  await expect(page.getByTestId(`kassa-row-${receiptId}`)).toBeVisible({ timeout: 60_000 })
   return receiptId
 }
 
