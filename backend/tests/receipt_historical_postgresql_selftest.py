@@ -63,20 +63,20 @@ def _seed_provider_and_connection(conn, household_id: str) -> tuple[str, str]:
 def _seed_receipt(
     conn, *, household_id: str, provider_id: str,
     connection_id: str, store: str, purchase_date: date | None,
-    purchase_at_source: str = "retailer",
+    purchase_at_source: str = "detected",
 ) -> tuple[str, str]:
     source_id, raw_id, receipt_id, batch_id = (_id() for _ in range(4))
     conn.execute(text("""
-        INSERT INTO receipt_sources (id, household_id, type, label)
-        VALUES (:id, :household_id, 'retailer_api', :label)
+        INSERT INTO receipt_sources (id, household_id, type, label, is_active)
+        VALUES (:id, :household_id, 'retailer_api', :label, TRUE)
     """), {"id": source_id, "household_id": household_id, "label": store})
     conn.execute(text("""
         INSERT INTO raw_receipts (
             id, household_id, source_id, original_filename, mime_type,
-            storage_path, sha256_hash
+            storage_path, sha256_hash, raw_status
         ) VALUES (
             :id, :household_id, :source_id, :filename, 'application/json',
-            :storage_path, :sha256_hash
+            :storage_path, :sha256_hash, 'imported'
         )
     """), {
         "id": raw_id,
@@ -89,12 +89,12 @@ def _seed_receipt(
     conn.execute(text("""
         INSERT INTO receipt_tables (
             id, raw_receipt_id, household_id, store_name,
-            purchase_at, purchase_at_source,
-            parse_status, approved_at, line_count
+            purchase_at, purchase_at_source, logical_receipt_key,
+            workflow_state, currency, parse_status, approved_at, line_count
         ) VALUES (
             :id, :raw_id, :household_id, :store,
-            :purchase_at, :purchase_at_source,
-            'approved', CURRENT_TIMESTAMP, 1
+            :purchase_at, :purchase_at_source, :logical_key,
+            'active', 'EUR', 'approved', CURRENT_TIMESTAMP, 1
         )
     """), {
         "id": receipt_id,
@@ -106,6 +106,7 @@ def _seed_receipt(
             if purchase_date else None
         ),
         "purchase_at_source": purchase_at_source,
+        "logical_key": _id(),
     })
     conn.execute(text("""
         INSERT INTO purchase_import_batches (
