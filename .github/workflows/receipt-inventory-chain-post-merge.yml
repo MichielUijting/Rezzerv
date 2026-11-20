@@ -113,6 +113,12 @@ jobs:
             beautifulsoup4==4.12.3 \
             opencv-python-headless
 
+      - name: 4a/10 Valideer historische-kassabon voorraadgrens
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m unittest backend.tests.test_receipt_historical_import_policy
+
       - name: 5-6/10 Bereid gedeelde PostgreSQL acceptance foundation voor
         uses: ./.github/actions/postgresql-acceptance-foundation
         with:

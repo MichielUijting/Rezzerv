@@ -34,6 +34,7 @@ ARTICLE_SYNONYM_LINKS_TABLE = "article_synonym_links"
 ED2_MANUAL_BARCODES_TABLE = "ed2_manual_barcodes"
 ED2_REMOVED_ARTICLES_TABLE = "ed2_removed_articles"
 ED2_RECEIPT_NAME_ALIASES_TABLE = "ed2_receipt_name_aliases"
+RECEIPT_HISTORY_CUTOVER_TABLE = "household_receipt_history_cutovers"
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
@@ -54,6 +55,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     ED2_MANUAL_BARCODES_TABLE,
     ED2_REMOVED_ARTICLES_TABLE,
     ED2_RECEIPT_NAME_ALIASES_TABLE,
+    RECEIPT_HISTORY_CUTOVER_TABLE,
     "article_classification_sync_events",  # Migration-owned audit, not immutable baseline.
     # Post-baseline classification tables are checked for schema authority below.
     "global_product_shopify_classifications",
@@ -1042,6 +1044,52 @@ def _assert_ed2_receipt_name_alias_schema(connection) -> None:
     print("ED2_RECEIPT_NAME_ALIASES_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_receipt_history_cutover_schema(connection) -> None:
+    """The new table is migration-owned and independently schema-validated."""
+    table = RECEIPT_HISTORY_CUTOVER_TABLE
+    inspector = inspect(connection)
+    if not inspector.has_table(table):
+        raise AssertionError("Historical receipt cutover table missing")
+    columns = {col["name"]: col for col in inspector.get_columns(table)}
+    if set(columns) != {
+        "household_id", "first_current_purchase_date", "created_at",
+    }:
+        raise AssertionError(f"Historical cutover columns differ: {set(columns)!r}")
+    if any(col["nullable"] for col in columns.values()):
+        raise AssertionError("Historical cutover columns cannot be NULL")
+    if tuple(inspector.get_pk_constraint(table).get("constrained_columns") or ()) != (
+        "household_id",
+    ):
+        raise AssertionError("Household cutover requires a unique household key")
+    if not isinstance(columns["first_current_purchase_date"]["type"], sa.Date):
+        raise AssertionError("Historical cutover must use a proper DATE column")
+    timestamp = columns["created_at"]["type"]
+    if not isinstance(timestamp, sa.DateTime):
+        raise AssertionError("Historical cutover created_at must be DATETIME")
+    if connection.dialect.name == "postgresql" and not timestamp.timezone:
+        raise AssertionError("Historical cutover created_at must use TIMESTAMPTZ")
+    fks = inspector.get_foreign_keys(table)
+    if (len(fks) != 1
+            or fks[0].get("constrained_columns") != ["household_id"]
+            or fks[0].get("referred_table") != "household_registry"
+            or fks[0].get("referred_columns") != ["id"]
+            or fks[0].get("options", {}).get("ondelete") != "RESTRICT"):
+        raise AssertionError(f"Historical cutover foreign-key drift: {fks!r}")
+    checks = {x.get("name") for x in inspector.get_check_constraints(table)}
+    if "ck_receipt_history_cutover_date" not in checks:
+        raise AssertionError("Historical cutover date-domain check missing")
+    if connection.dialect.name == "postgresql":
+        guard = connection.execute(text("""
+            SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname=current_schema() AND c.relname=:table
+              AND t.tgname='inhuis_maintenance_write_gate' AND NOT t.tgisinternal
+        """), {"table": table}).first()
+        if not guard:
+            raise AssertionError("Historical cutover lacks maintenance write barrier")
+    print("RECEIPT_HISTORY_CUTOVER_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -1069,6 +1117,7 @@ def main() -> None:
             _assert_ed2_manual_barcode_schema(connection)
             _assert_ed2_removed_articles_schema(connection)
             _assert_ed2_receipt_name_alias_schema(connection)
+            _assert_receipt_history_cutover_schema(connection)
             _assert_article_classification_schema(connection)
             _assert_article_classification_sync_audit_schema(connection)
             _assert_maintenance_schema(connection)

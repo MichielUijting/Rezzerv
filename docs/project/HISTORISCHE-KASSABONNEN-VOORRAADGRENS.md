@@ -60,3 +60,11 @@ Risico: nieuwe Alembic-tabel en blokkering van fysieke voorraadmutaties bij hist
   en PO-acceptatie volgen later vóór Ready/merge.
 
 Geen deployment, feature-activatie of bestaande accountwijziging hoort bij deze PR.
+
+## Datumintegriteit na voorraadverwerking
+
+Bij een geactiveerde historiegrens kan een reeds fysiek verwerkte kassabon
+niet met een gewone datumcorrectie naar een datum vóór de grens worden
+verplaatst. Een dergelijke wijziging wordt met HTTP 409 afgewezen tot
+de bestaande, expliciet gecontroleerde voorraadafhandeling heeft plaatsgevonden.
+Daarmee blijft ook de correctieroute consistent met de bronbon-/voorraadgrens.

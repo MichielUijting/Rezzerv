@@ -12737,6 +12737,46 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
             values['reference'] = str(payload.reference or '').strip() or None
         if payload.notes is not None:
             values['notes'] = str(payload.notes or '').strip() or None
+
+        # A receipt that already contributed physical inventory may not be
+        # backdated across the household history cutover by editing its header.
+        # Such a correction requires the explicit inventory lifecycle path.
+        if (payload.purchase_at is not None
+                and str(values.get('purchase_at') or '') != str(current.get('purchase_at') or '')):
+            from app.services.receipt_historical_import_policy import (
+                classify_purchase_date, read_household_cutover,
+            )
+            owner = str(context.get('active_household_id') or '').strip()
+            cutover = read_household_cutover(conn, owner)
+            if cutover is not None:
+                disposition = classify_purchase_date(
+                    values.get('purchase_at'),
+                    purchase_at_source=values.get('purchase_at_source'),
+                    first_current_purchase_date=cutover,
+                )
+                if disposition in {'historical', 'review_required'}:
+                    has_processed_lines = conn.execute(text("""
+                        SELECT 1
+                        FROM purchase_import_batches pib
+                        JOIN purchase_import_lines pil ON pil.batch_id = pib.id
+                        WHERE pib.household_id = :household_id
+                          AND pib.source_type = 'receipt'
+                          AND pib.source_reference = :source_reference
+                          AND pil.processing_status = 'processed'
+                        LIMIT 1
+                    """), {
+                        'household_id': owner,
+                        'source_reference': f'receipt:{receipt_table_id}',
+                    }).scalar_one_or_none()
+                    if has_processed_lines is not None:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                'Deze kassabon is al naar voorraad verwerkt. '
+                                'Een historische aankoopdatum vereist eerst '
+                                'een gecontroleerde voorraadcorrectie.'
+                            ),
+                        )
         conn.execute(
             text("""
             UPDATE receipt_tables
