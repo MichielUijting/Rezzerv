@@ -75,7 +75,7 @@ class WindowsDockerRestartContract(unittest.TestCase):
     def test_proven_followup_diagnosis_is_read_only(self):
         diagnosis = SCRIPT.with_name("Inhuis_PostgreSQL_Identiteit_Diagnose.cmd")
         source = diagnosis.read_text(encoding="utf-8")
-        self.assertTrue(source.startswith("@echo off\\nCLS\\n"))
+        self.assertTrue(source.startswith("@echo off\nCLS\n"))
         self.assertIn("app.maintenance.server_maintenance_host_probe", source)
         self.assertIn("RepoTags", source)
         self.assertIn("unless-stopped", source)
