@@ -118,3 +118,49 @@ def require_batch_inventory_allowed(
             status_code=409,
             detail="Controleer eerst de oorspronkelijke aankoopdatum; er is niets naar Voorraad geboekt.",
         )
+
+
+def activate_cutover_for_new_onboarding(
+    conn, *, household_id: str,
+) -> bool:
+    """Initialize a cutover during the *first* authorized onboarding completion.
+
+    Caller must have confirmed the canonical household-settings permission and
+    the ongoing initial onboarding step. This function does not expose a route
+    and cannot be invoked by a receipt payload. We do not reclassify a household
+    that already has any receipts or inventory facts: that would be unsafe.
+    The transaction is supplied by the caller, so completion and activation
+    commit or roll back as a unit.
+
+    The start is the database server's current calendar date. No timestamp
+    guesswork or client clock is used.
+    """
+    normalized = str(household_id or "").strip()
+    if not normalized or normalized == "0":
+        raise ValueError("Historische ontvangstgrens vereist een regulier huishouden")
+    existing = read_household_cutover(conn, normalized)
+    if existing is not None:
+        return False
+
+    for table in (
+        "raw_receipts",
+        "receipt_tables",
+        "purchase_import_batches",
+        "inventory_events",
+        "inventory",
+    ):
+        has_records = conn.execute(text(
+            f"SELECT 1 FROM {table} WHERE household_id = :household_id LIMIT 1"
+        ), {"household_id": normalized}).scalar_one_or_none()
+        if has_records is not None:
+            # Existing households are intentionally not backfilled or altered.
+            return False
+
+    inserted = conn.execute(text("""
+        INSERT INTO household_receipt_history_cutovers (
+            household_id, first_current_purchase_date
+        )
+        VALUES (:household_id, CURRENT_DATE)
+        ON CONFLICT (household_id) DO NOTHING
+    """), {"household_id": normalized})
+    return inserted.rowcount == 1

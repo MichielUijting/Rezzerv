@@ -25,7 +25,8 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 112  # Existing 111 canonical tables + PO-confirmed receipt-name aliases.
+EXPECTED_APPLICATION_TABLES = 113  # 112 canonical tables plus the explicit household receipt history cutover.
+REQUIRED_HISTORY_TABLES = frozenset({"household_receipt_history_cutovers"})
 REQUIRED_CBS_TABLES = frozenset({
     "cbs_ecoicop_categories",
     "global_product_cbs_classifications",
@@ -314,6 +315,11 @@ def _build_canonical_head(path: Path) -> str:
         if missing_cbs_tables:
             raise LegacyAdoptionError(
                 f"Canonical CBS authority tables missing: {sorted(missing_cbs_tables)!r}"
+            )
+        missing_history_tables = REQUIRED_HISTORY_TABLES.difference(tables)
+        if missing_history_tables:
+            raise LegacyAdoptionError(
+                f"Canonical historical receipt boundary missing: {sorted(missing_history_tables)!r}"
             )
         if len(tables) != EXPECTED_APPLICATION_TABLES:
             raise LegacyAdoptionError(

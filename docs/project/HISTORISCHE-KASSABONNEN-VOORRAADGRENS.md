@@ -27,9 +27,14 @@ Risico: nieuwe Alembic-tabel en blokkering van fysieke voorraadmutaties bij hist
 5. De gedeelde `purchase-import-batches/{id}/process`-overgang weigert historische
    bonnen en bonnen met onbetrouwbare datum wanneer een grens is ingesteld.
    Dit is tevens de extra beveiliging voor verwerking via Uitpakken.
-6. Er is nog **geen** gebruikersroute om de grens te activeren. Een toekomstige,
-   geautoriseerde onboardingstap moet dat vóór de eerste bronbonimport doen,
-   na bewijs dat het huishouden geen reeds geboekte receipts heeft.
+6. Bij de eerste bevoegde afronding van een nieuw huishouden stelt de backend
+   de grens automatisch in, uitsluitend als het huishouden nog geen bonnen,
+   voorraad, inventarisbewegingen of importbatches heeft. Dit gebeurt in dezelfde
+   transactie als de onboardingafsluiting. Is er wel bestaande data, dan blijft
+   de grens ongewijzigd en geldt het bestaande gedrag: geen stille herclassificatie.
+7. De server-side Uitpakken-lijst filtert voor huishoudens met een grens historische
+   en onbetrouwbaar gedateerde kassabonnen uit. Bronbonnen blijven leesbaar in Kassa.
+   Zonder grens blijven alle bestaande rijselecties gelijk.
 
 ## Fail-closed eisen
 
@@ -46,7 +51,7 @@ Risico: nieuwe Alembic-tabel en blokkering van fysieke voorraadmutaties bij hist
   met de verwachte volgorde gemonteerd zijn.
 - Historische bonnen na automatische goedkeuring buiten de dagelijkse Uitpakken-werkvoorraad
   houden, met een afzonderlijke leesbare historische status.
-- Bevoegde activering en tests op een **nieuw geïsoleerd testhuishouden** bouwen.
+- Integratiebewijs voor automatische cutover bij een **nieuw geïsoleerd testhuishouden** voltooien.
 - PostgreSQL integratie: historische AH/Lidl/Jumbo-bon leidt tot nul purchase-events,
   nulpunt in voorraad, zelfs na reimport, handmatige goedkeuring of bulkverwerking.
 - Datums op de grens, ontbrekende datum, 2 huishoudens, 100 identieke bronbonnen

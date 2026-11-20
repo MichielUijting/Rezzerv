@@ -12119,11 +12119,24 @@ def list_unpack_start_batches(
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN household_receipt_history_cutovers hrc
+                  ON hrc.household_id = rt.household_id
                 WHERE rt.household_id = :household_id
                   AND rt.approved_at IS NOT NULL
                   AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
+                  -- An opted-in household must not see historical or
+                  -- uncertain-date receipts as unpackable current purchases.
+                  -- No cutover row means exact legacy behavior.
+                  AND (
+                      hrc.household_id IS NULL
+                      OR (
+                          rt.purchase_at IS NOT NULL
+                          AND lower(trim(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
+                          AND CAST(rt.purchase_at AS DATE) >= hrc.first_current_purchase_date
+                      )
+                  )
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) ASC, rt.created_at ASC, rt.id ASC
                 """
             ),

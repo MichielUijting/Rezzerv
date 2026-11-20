@@ -19,8 +19,9 @@ from app.services.receipt_historical_import_policy import (
 
 
 class _Rows:
-    def __init__(self, value):
+    def __init__(self, value, rowcount=0):
         self.value = value
+        self.rowcount = rowcount
 
     def scalar_one_or_none(self):
         return self.value
@@ -33,10 +34,12 @@ class _Rows:
 
 
 class _FakeConnection:
-    def __init__(self, *, cutover=None, batch=None, receipt=None):
+    def __init__(self, *, cutover=None, batch=None, receipt=None,
+                 existing_table=None):
         self.cutover = cutover
         self.batch = batch
         self.receipt = receipt
+        self.existing_table = existing_table
         self.queries = []
 
     def execute(self, statement, params=None):
@@ -47,7 +50,15 @@ class _FakeConnection:
         if "FROM purchase_import_batches" in query:
             return _Rows(self.batch)
         if "FROM receipt_tables" in query:
+            if "SELECT 1" in query:
+                return _Rows(1 if self.existing_table == "receipt_tables" else None)
             return _Rows(self.receipt)
+        for table in ("raw_receipts", "purchase_import_batches",
+                      "inventory_events", "inventory"):
+            if f"FROM {table}" in query and "SELECT 1" in query:
+                return _Rows(1 if self.existing_table == table else None)
+        if "INSERT INTO household_receipt_history_cutovers" in query:
+            return _Rows(None, rowcount=1)
         raise AssertionError("Unexpected query")
 
 
@@ -116,6 +127,37 @@ class ReceiptHistoricalImportPolicyTest(unittest.TestCase):
         self.assertTrue(any("household_id = :household_id" in query
                             for query, _ in conn.queries
                             if "FROM receipt_tables" in query))
+
+    def test_activate_only_on_empty_new_household(self):
+        from app.services.receipt_historical_import_policy import (
+            activate_cutover_for_new_onboarding,
+        )
+        conn = _FakeConnection(cutover=None)
+        self.assertTrue(activate_cutover_for_new_onboarding(
+            conn, household_id="new-home"))
+        self.assertTrue(any(
+            "INSERT INTO household_receipt_history_cutovers" in sql
+            for sql, _ in conn.queries
+        ))
+        for table in ("raw_receipts", "receipt_tables",
+                      "purchase_import_batches", "inventory_events", "inventory"):
+            self.assertTrue(any("FROM " + table in sql for sql, _ in conn.queries))
+        self.assertTrue(all(params["household_id"] == "new-home"
+            for _, params in conn.queries))
+
+    def test_no_activation_with_existing_receipts_or_inventory(self):
+        from app.services.receipt_historical_import_policy import (
+            activate_cutover_for_new_onboarding,
+        )
+        for table in ("raw_receipts", "receipt_tables",
+                      "purchase_import_batches", "inventory_events", "inventory"):
+            conn = _FakeConnection(cutover=None, existing_table=table)
+            self.assertFalse(activate_cutover_for_new_onboarding(
+                conn, household_id="existing-home"))
+            self.assertFalse(any(
+                "INSERT INTO household_receipt_history_cutovers" in sql
+                for sql, _ in conn.queries
+            ))
 
     def test_without_cutover_old_receipt_is_not_reclassified(self):
         conn = _FakeConnection(cutover=None,
