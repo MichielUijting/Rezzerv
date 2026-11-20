@@ -94,3 +94,8 @@ biedt gepagineerde inzage in de werkelijk bewaarde historische bonnen,
 alleen voor de geautoriseerde actieve huishoudencontext. Dit is geen
 status-/voorraadmutatie en vervangt niet het canonieke receipt-statuscontract.
 Een toekomstige onboarding-UI kan deze lijst en de tellers tonen.
+
+De PostgreSQL-acceptatietoets roept daarnaast de werkelijk geregistreerde
+`purchase-import-batches/{batch_id}/process`-endpointfunctie aan voor een
+historische bon met een geautoriseerde huishoudcontext. Daarmee wordt bewezen
+dat ook directe verwerking buiten de Kassa-/Uitpakken-lijst wordt geblokkeerd.

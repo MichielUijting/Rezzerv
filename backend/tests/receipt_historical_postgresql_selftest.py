@@ -7,8 +7,12 @@ back. No schema changes or deletes of previously existing data are possible.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import os
+import time
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -184,6 +188,61 @@ def main() -> None:
                         raise AssertionError("Historische bon kan voorraad bijschrijven")
                     old_count += 1
                 assert old_count == 100
+
+                # Exercise the *registered production process endpoint* using
+                # the same real PostgreSQL transaction as the fixture. An
+                # authorized caller must be stopped before any inventory
+                # mutation, even when they bypass the ordinary list UI.
+                main = importlib.import_module("app.main")
+                for _ in range(100):
+                    if getattr(
+                        main.app.state,
+                        "purchase_import_location_policy_patch_installed",
+                        False,
+                    ):
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise AssertionError("Production inventory route patch not installed")
+                process_path = "/api/purchase-import-batches/{batch_id}/process"
+                registered = [
+                    route for route in main.app.routes
+                    if getattr(route, "path", "") == process_path
+                       and "POST" in (getattr(route, "methods", set()) or set())
+                ]
+                assert len(registered) == 1
+                assert registered[0].endpoint is main.process_purchase_import_batch
+
+                class _TransactionEngine:
+                    def begin(self):
+                        return nullcontext(conn)
+
+                with (
+                    patch.object(main, "engine", _TransactionEngine()),
+                    patch.object(
+                        main, "require_household_context",
+                        return_value={
+                            "active_household_id": new_household,
+                            "display_role": "admin",
+                        },
+                    ),
+                ):
+                    try:
+                        main.process_purchase_import_batch(
+                            batch_id,
+                            main.ProcessBatchRequest(
+                                mode="ready_only", processed_by="ci",
+                            ),
+                            "ci-authorization",
+                        )
+                    except HTTPException as exc:
+                        assert exc.status_code == 409
+                    else:
+                        raise AssertionError(
+                            "Production batch endpoint accepted historical receipt"
+                        )
+                print("RECEIPT_HISTORY_POSTGRESQL_PRODUCTION_ROUTE_GUARD_GREEN")
+
                 # These receipts are preserved but must not be presented as
                 # pending Kassa or Uitpakken work. Read-only SQL contract.
                 for operation in ("AND rt.approved_at IS NULL", "AND rt.approved_at IS NOT NULL"):
