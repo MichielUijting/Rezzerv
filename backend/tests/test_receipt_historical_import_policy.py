@@ -48,6 +48,10 @@ class _FakeConnection:
         if "FROM household_receipt_history_cutovers" in query:
             return _Rows(self.cutover)
         if "FROM purchase_import_batches" in query:
+            if "SELECT 1" in query:
+                return _Rows(
+                    1 if self.existing_table == "purchase_import_batches" else None
+                )
             return _Rows(self.batch)
         if "FROM receipt_tables" in query:
             if "SELECT 1" in query:
