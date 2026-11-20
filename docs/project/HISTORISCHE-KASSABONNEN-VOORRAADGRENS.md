@@ -99,3 +99,15 @@ De PostgreSQL-acceptatietoets roept daarnaast de werkelijk geregistreerde
 `purchase-import-batches/{batch_id}/process`-endpointfunctie aan voor een
 historische bon met een geautoriseerde huishoudcontext. Daarmee wordt bewezen
 dat ook directe verwerking buiten de Kassa-/Uitpakken-lijst wordt geblokkeerd.
+
+## Concrete routeacceptatie
+
+Een afzonderlijke CI-acceptatie binnen de bestaande tijdelijke PostgreSQL-transactie
+roept de geregistreerde goedkeuring van een historische bon aan, probeert deze
+opnieuw goed te keuren, leest de echte gepagineerde Kassa- en historische
+bonnenroutes, leest de Uitpakken-route en probeert een reeds verwerkte nieuwe
+bon terug te dateren naar de historische periode. Er worden ook nieuwe
+historische receipt-fixtures toegevoegd als herimportgrenscontrole. De
+bestaande ontvangstservice voor echte retailer-API-bonnen is geen onderdeel
+van deze gerichte test; de bestaande ontvangst-/reimportcontracten blijven
+zelfstandig verplicht. Alles wordt teruggedraaid.

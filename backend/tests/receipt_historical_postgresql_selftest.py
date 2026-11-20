@@ -68,6 +68,8 @@ def _seed_receipt(
     conn, *, household_id: str, provider_id: str,
     connection_id: str, store: str, purchase_date: date | None,
     purchase_at_source: str = "detected",
+    approved: bool = True,
+    with_line: bool = False,
 ) -> tuple[str, str]:
     source_id, raw_id, receipt_id, batch_id = (_id() for _ in range(4))
     conn.execute(text("""
@@ -98,7 +100,9 @@ def _seed_receipt(
         ) VALUES (
             :id, :raw_id, :household_id, :store,
             :purchase_at, :purchase_at_source, :logical_key,
-            'active', 'EUR', 'approved', CURRENT_TIMESTAMP, 1
+            'active', 'EUR',
+            CASE WHEN :approved THEN 'approved' ELSE 'parsed' END,
+            CASE WHEN :approved THEN CURRENT_TIMESTAMP ELSE NULL END, 1
         )
     """), {
         "id": receipt_id,
@@ -111,7 +115,18 @@ def _seed_receipt(
         ),
         "purchase_at_source": purchase_at_source,
         "logical_key": _id(),
+        "approved": approved,
     })
+    if with_line:
+        conn.execute(text("""
+            INSERT INTO receipt_table_lines (
+                id, receipt_table_id, line_index, raw_label, normalized_label,
+                quantity, unit, line_total, article_match_status, logical_line_key
+            ) VALUES (
+                :id, :receipt_id, 0, 'CI volkorenrijst', 'ci volkorenrijst',
+                1, 'stuk', 2.00, 'unmatched', :line_key
+            )
+        """), {"id": _id(), "receipt_id": receipt_id, "line_key": _id()})
     conn.execute(text("""
         INSERT INTO purchase_import_batches (
             id, household_id, store_provider_id, connection_id,
@@ -128,6 +143,187 @@ def _seed_receipt(
         "reference": "receipt:" + receipt_id,
     })
     return receipt_id, batch_id
+
+
+
+def _prove_historical_workflows(
+    conn, *, main, household_id: str, provider_id: str,
+    connection_id: str, cutover: date,
+) -> None:
+    """Exercise actual Kassa/Uitpakken projections, approval and date routes.
+
+    Only authorization/connection ownership and response serialization are
+    mocked: all receipt classification, SQL mutations and route filtering run
+    on canonical ephemeral PostgreSQL tables within the outer rollback.
+    """
+    from app.api import kassa_pagination_routes as kassa
+
+    historic_id, historic_batch = _seed_receipt(
+        conn, household_id=household_id, provider_id=provider_id,
+        connection_id=connection_id, store="Lidl",
+        purchase_date=cutover - timedelta(days=8),
+        approved=False, with_line=True,
+    )
+    fresh_id, fresh_batch = _seed_receipt(
+        conn, household_id=household_id, provider_id=provider_id,
+        connection_id=connection_id, store="Jumbo",
+        purchase_date=cutover, approved=False, with_line=True,
+    )
+    undated_id, _ = _seed_receipt(
+        conn, household_id=household_id, provider_id=provider_id,
+        connection_id=connection_id, store="Albert Heijn",
+        purchase_date=None, purchase_at_source="import_default", approved=False,
+        with_line=True,
+    )
+
+    class _TransactionEngine:
+        def begin(self):
+            return nullcontext(conn)
+
+        def connect(self):
+            return nullcontext(conn)
+
+    def _authorized_receipt(_conn, receipt_table_id, _authorization):
+        owner = _conn.execute(text("""
+            SELECT household_id FROM receipt_tables
+            WHERE id = :id
+        """), {"id": receipt_table_id}).scalar_one()
+        assert str(owner) == household_id
+        return {"active_household_id": household_id, "email": "ci@invalid.example"}
+
+    def _noop_detail(receipt_table_id, _authorization):
+        return {"receipt_table_id": receipt_table_id}
+
+    # The actual production endpoints are registered by the canonical startup.
+    approval_routes = [
+        r for r in main.app.routes
+        if getattr(r, "path", "") == "/api/receipts/{receipt_table_id}/approve"
+        and "POST" in (getattr(r, "methods", set()) or set())
+    ]
+    assert len(approval_routes) == 1
+    with (
+        patch.object(main, "engine", _TransactionEngine()),
+        patch.object(kassa, "engine", _TransactionEngine()),
+        patch.object(main, "require_receipt_write_context", side_effect=_authorized_receipt),
+        patch.object(main, "get_receipt_detail", side_effect=_noop_detail),
+        patch.object(main, "resolve_authorized_household_id", return_value=household_id),
+        patch.object(main, "ensure_default_receipt_sources"),
+        patch.object(main, "_auto_approve_pending_receipts_for_household"),
+    ):
+        original_data_count = conn.execute(text("""
+            SELECT COUNT(*) FROM receipt_tables
+            WHERE household_id=:home AND deleted_at IS NULL
+        """), {"home": household_id}).scalar_one()
+
+        kassa_before = kassa.list_kassa_receipts_page(
+            householdId=household_id, page=1, page_size=10,
+            focus_receipt_id="", winkel="", datum="", totaal="",
+            artikelen="", status="", zoek="", time_zone="UTC",
+            sort_key="date", sort_direction="desc", initialize=False,
+            authorization="ci-token",
+        )
+        active_ids = {str(x.get("receipt_table_id") or x.get("id"))
+                      for x in kassa_before["items"]}
+        assert historic_id not in active_ids
+        assert fresh_id in active_ids
+        assert undated_id in active_ids
+        print("RECEIPT_HISTORY_POSTGRESQL_KASSA_PROJECTION_GREEN")
+
+        history = kassa.list_historical_kassa_receipts(
+            householdId=household_id, page=1, page_size=100,
+            authorization="ci-token",
+        )
+        assert history["total"] >= 101
+        assert any(x["receipt_table_id"] == historic_id for x in history["items"]) or history["total"] > 100
+        assert all(x["receipt_table_id"] != fresh_id for x in history["items"])
+        assert conn.execute(text("""
+            SELECT COUNT(*) FROM receipt_tables
+            WHERE household_id=:home AND deleted_at IS NULL
+        """), {"home": household_id}).scalar_one() == original_data_count
+        print("RECEIPT_HISTORY_POSTGRESQL_HISTORICAL_READONLY_GREEN")
+
+        # Approval uses the registered production wrapper, including the real
+        # canonical approval SQL and batch synchronization. No stock mutation.
+        result = approval_routes[0].endpoint(historic_id, "ci-token")
+        assert result["approval_destination"] == "history"
+        approved_at = conn.execute(text(
+            "SELECT approved_at FROM receipt_tables WHERE id=:id"
+        ), {"id": historic_id}).scalar_one()
+        assert approved_at is not None
+        count_before = conn.execute(text("""
+            SELECT COUNT(*) FROM purchase_import_batches
+            WHERE household_id=:home AND source_reference=:ref
+        """), {"home": household_id, "ref": "receipt:" + historic_id}).scalar_one()
+        repeated = approval_routes[0].endpoint(historic_id, "ci-token")
+        assert repeated["approval_destination"] == "history"
+        count_after = conn.execute(text("""
+            SELECT COUNT(*) FROM purchase_import_batches
+            WHERE household_id=:home AND source_reference=:ref
+        """), {"home": household_id, "ref": "receipt:" + historic_id}).scalar_one()
+        assert count_before == count_after == 1
+        print("RECEIPT_HISTORY_POSTGRESQL_MANUAL_APPROVAL_IDEMPOTENT_GREEN")
+
+        unpacked = main.list_unpack_start_batches(
+            householdId=household_id, page=1, page_size=100,
+            winkel="", datum="", regels="", status="",
+            sort_key="datum", sort_direction="desc", authorization="ci-token",
+        )
+        assert all(x.get("receipt_table_id") != historic_id
+                   for x in unpacked["items"])
+        print("RECEIPT_HISTORY_POSTGRESQL_UNPACK_PROJECTION_GREEN")
+
+        # Re-importing the same physical purchase is still classified by its
+        # original purchase date. No hidden 'today' stock write is allowed.
+        duplicate_id, duplicate_batch = _seed_receipt(
+            conn, household_id=household_id, provider_id=provider_id,
+            connection_id=connection_id, store="Lidl",
+            purchase_date=cutover - timedelta(days=8), approved=False, with_line=True,
+        )
+        assert classify_receipt_for_household(
+            conn, household_id=household_id, receipt_table_id=duplicate_id,
+        ) == "historical"
+        try:
+            require_batch_inventory_allowed(
+                conn, household_id=household_id, batch_id=duplicate_batch,
+            )
+        except HTTPException as exc:
+            assert exc.status_code == 409
+        else:
+            raise AssertionError("Re-ingested historic purchase was accepted")
+        print("RECEIPT_HISTORY_POSTGRESQL_REIMPORT_BOUNDARY_GREEN")
+
+        # When a current bon has already been recorded as processed, an
+        # ordinary date edit must not silently reclassify its inventory.
+        conn.execute(text("""
+            INSERT INTO purchase_import_lines (
+                id, batch_id, external_line_ref, article_name_raw, quantity_raw,
+                review_decision, processing_status
+            ) VALUES (
+                :id, :batch_id, :ref, 'CI rijst', 1, 'selected', 'processed'
+            )
+        """), {"id": _id(), "batch_id": fresh_batch, "ref": _id()})
+        try:
+            main.update_receipt_header(
+                fresh_id, main.ReceiptHeaderUpdateRequest(
+                    purchase_at=(cutover - timedelta(days=8)).isoformat(),
+                ), "ci-token",
+            )
+        except HTTPException as exc:
+            assert exc.status_code == 409
+        else:
+            raise AssertionError("Already processed purchase backdated silently")
+        actual = conn.execute(text(
+            "SELECT CAST(purchase_at AS DATE) FROM receipt_tables WHERE id=:id"
+        ), {"id": fresh_id}).scalar_one()
+        assert actual == cutover
+        print("RECEIPT_HISTORY_POSTGRESQL_BACKDATE_GUARD_GREEN")
+
+        # The retained historical receipt and all its lines remain available,
+        # while neither first approval nor replay creates stock.
+        for name in ("inventory", "inventory_events"):
+            assert conn.execute(text(
+                f"SELECT COUNT(*) FROM {name} WHERE household_id=:home"
+            ), {"home": household_id}).scalar_one() == 0
 
 
 def main() -> None:
@@ -339,6 +535,12 @@ def main() -> None:
                 else:
                     raise AssertionError("Cross-household receipt boundary bypass")
                 print("RECEIPT_HISTORY_POSTGRESQL_HOUSEHOLD_ISOLATION_GREEN")
+
+                _prove_historical_workflows(
+                    conn, main=main, household_id=new_household,
+                    provider_id=provider, connection_id=connection,
+                    cutover=first_current,
+                )
 
                 # This proof uses real, canonical storage but does not invoke
                 # the stock API: it establishes that no stock is synthesized

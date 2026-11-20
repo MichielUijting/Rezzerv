@@ -142,6 +142,12 @@ jobs:
           python backend/tests/receipt_historical_postgresql_selftest.py | tee receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_100_HISTORICAL_BLOCKED_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_PRODUCTION_ROUTE_GUARD_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_KASSA_PROJECTION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_HISTORICAL_READONLY_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_MANUAL_APPROVAL_IDEMPOTENT_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_UNPACK_PROJECTION_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_REIMPORT_BOUNDARY_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_BACKDATE_GUARD_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_CUTOFF_AND_MISSING_DATE_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_HOUSEHOLD_ISOLATION_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_ZERO_STOCK_MUTATION_GREEN' receipt-history-postgresql.log
