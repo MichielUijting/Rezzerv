@@ -68,3 +68,13 @@ niet met een gewone datumcorrectie naar een datum vóór de grens worden
 verplaatst. Een dergelijke wijziging wordt met HTTP 409 afgewezen tot
 de bestaande, expliciet gecontroleerde voorraadafhandeling heeft plaatsgevonden.
 Daarmee blijft ook de correctieroute consistent met de bronbon-/voorraadgrens.
+
+## PostgreSQL-testbewijs
+
+De bestaande `Receipt inventory chain merge gate` voert eerst een gerichte
+unittest uit en daarna in de wegwerp-PostgreSQL CI-omgeving een DML-only
+acceptatietoets met 100 historische bonnen verdeeld over AH/Lidl/Jumbo.
+De toets verifieert de kalendergrens, onbetrouwbare datum, bestaande huishoudens,
+huishoudisolatie en nul voorraad-/inventory-events. Alle ingevoerde fixtures worden
+vóór afronding van de toets teruggedraaid. De volledige receipt→stock-keten en
+F7 Full blijven afzonderlijk verplicht; deze gerichte toets vervangt die niet.
