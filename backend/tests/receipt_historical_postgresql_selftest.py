@@ -134,7 +134,12 @@ def main() -> None:
     if not raw_url or make_url(raw_url).get_backend_name() != "postgresql":
         raise RuntimeError("Geïsoleerde PostgreSQL-runtime is verplicht")
 
-    engine = create_engine(raw_url, future=True)
+    # The canonical PostgreSQL CI installs psycopg v3, not legacy psycopg2.
+    # Convert only the SQLAlchemy driver token; preserve host, role and db.
+    url = make_url(raw_url)
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg")
+    engine = create_engine(url, future=True)
     try:
         with engine.connect() as conn:
             tx = conn.begin()
