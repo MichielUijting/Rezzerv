@@ -193,10 +193,10 @@ try{
     }
     if($pg.Count -ne 1){throw 'POSTGRES_CONTAINER_NIET_UNIEK'}
     $postgres=$pg[0]
-    $imageKnown=([string]$postgres.Config.Image -match '^postgres(:|@)')
+    $imageKnown=([string]$postgres.Config.Image -match '(^|[/])postgres(:|@)')
     if(-not $imageKnown){
         $image=@(DockerJson @('image','inspect',[string]$postgres.Image))
-        if($image.Count -eq 1){$imageKnown=@($image[0].RepoTags|Where-Object {$_ -match '^postgres:[0-9]+'}).Count -gt 0}
+        if($image.Count -eq 1){$imageKnown=@($image[0].RepoTags|Where-Object {$_ -match '(^|[/])postgres(:|@)'}).Count -gt 0}
     }
     if(-not $imageKnown){throw 'POSTGRES_IMAGE_NIET_HERKEND'}
     if(@($postgres.Mounts|Where-Object {$_.Type -in @('volume','bind')}).Count -lt 1){throw 'POSTGRES_DUURZAME_OPSLAG_NIET_HERKEND'}
