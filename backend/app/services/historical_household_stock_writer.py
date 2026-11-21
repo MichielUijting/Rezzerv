@@ -53,7 +53,8 @@ def _block_existing_business_history(conn, owner, members) -> bool:
          AND b.household_article_id = e.household_article_id
          AND b.inventory_event_id = e.id
         WHERE e.household_id = :household_id
-          AND e.household_article_id = ANY(:article_ids)
+          AND (e.household_article_id = ANY(:article_ids)
+               OR e.article_id = ANY(:article_ids))
           AND b.inventory_event_id IS NULL
         LIMIT 1
     """), {"household_id": owner, "article_ids": list(members)}).scalar_one_or_none()
