@@ -7,6 +7,8 @@ on:
       - 'backend/tests/test_ah_receipt_background_sync.py'
       - 'backend/app/api/retailer_receipt_routes.py'
       - 'backend/app/services/retailer_receipt_import_dates.py'
+      - 'backend/app/services/retailer_history_progress.py'
+      - 'backend/tests/test_retailer_history_progress.py'
       - 'backend/tests/test_retailer_receipt_import_dates.py'
       - 'backend/app/main.py'
       - 'frontend/src/features/storeConnections/receiptConnectionOverviewModel.js'
@@ -35,6 +37,7 @@ jobs:
           node frontend/tests/receipt-connection-overview.contract.mjs
           node frontend/tests/store-connections.contract.mjs
           node frontend/tests/onboarding-store-connections.contract.mjs
+          node frontend/tests/historical-import-progress.contract.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -46,5 +49,5 @@ jobs:
           DATABASE_URL: postgresql+psycopg://ci_dummy:ci_dummy@127.0.0.1/ci_unreachable
           REZZERV_DATASTORE_POLICY: postgresql-only
         run: |
-          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
-          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py
+          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/app/services/retailer_history_progress.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py
+          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py
