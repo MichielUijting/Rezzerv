@@ -157,6 +157,7 @@ jobs:
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_LEARNING_READONLY_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_AUTO_STOCK_CADENCE_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_ONE_REPEAT_CADENCE_GREEN' receipt-history-postgresql.log
 
       - name: 7/10 Voer volledige productie-keten uit als DML-only PostgreSQL-runtime
         env:
