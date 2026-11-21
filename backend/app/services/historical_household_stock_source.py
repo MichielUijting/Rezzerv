@@ -255,5 +255,6 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         "source_rows": len(source),
         "excluded_untrusted_rows": excluded,
         "confirmed_synonym_groups": len(set(groups.values())),
+        "synonym_groups": groups,
         "writes_inventory": False,
     }
