@@ -21,6 +21,9 @@ from app.services.canonical_inventory_identity_service import (
 from app.services.historical_household_stock_source import (
     load_automatic_historical_stock,
 )
+from app.services.synonym_auto_consume_identity import (
+    confirmed_household_synonym_group,
+)
 
 MAX_AUTO_STOCK_PER_ARTICLE = 1000000
 SOURCE = "historical_auto_stock"
@@ -253,44 +256,53 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
     # periodic 15-minute recovery scan, so each subsequent repeat improves
     # the average without a user decision or any additional stock booking.
     historical_days = calculated.get("purchase_days_by_article") or {}
-    article_ids = tuple(sorted(historical_days))
     cutoff = str(calculated.get("first_current_purchase_date") or "")[:10]
     source_fingerprint = str(calculated.get("source_fingerprint") or "").strip()
     if len(source_fingerprint) != 64 or not cutoff:
-        raise ValueError("Historisch koopritme mist bronfingerprint of peildatum")
+        raise ValueError("Koopritme mist de canonieke bronfingerprint of datumgrens")
 
-    live_events = []
-    if article_ids:
-        live_events = conn.execute(text("""
-            SELECT id, household_article_id,
-                   COALESCE(
-                       NULLIF(TRIM(CAST(purchase_date AS TEXT)), '')::date,
-                       CAST(created_at AS DATE)
-                   ) AS purchase_day
-            FROM inventory_events
-            WHERE household_id = :household_id
-              AND household_article_id = ANY(:article_ids)
-              AND event_type IN ('purchase', 'auto_repurchase')
-              AND COALESCE(quantity, 0) > 0
-              AND COALESCE(
-                  NULLIF(TRIM(CAST(purchase_date AS TEXT)), '')::date,
-                  CAST(created_at AS DATE)
-              ) >= CAST(:cutover AS DATE)
-            ORDER BY id
-        """), {
-            "household_id": owner, "article_ids": list(article_ids),
-            "cutover": cutoff,
-        }).mappings().all()
+    # Include owned, real current purchase events even for a new household
+    # with *no* historical bonnen. Never count a baseline, correction, or
+    # inferred article-name match as a purchase occasion. The matching key
+    # is always the exact active private household article ID.
+    live_events = conn.execute(text("""
+        SELECT e.id, e.household_article_id,
+               COALESCE(
+                   NULLIF(TRIM(CAST(e.purchase_date AS TEXT)), '')::date,
+                   CAST(e.created_at AS DATE)
+               ) AS purchase_day
+        FROM inventory_events e
+        JOIN household_articles ha
+          ON ha.id = e.household_article_id
+         AND ha.household_id = e.household_id
+         AND COALESCE(ha.status, 'active') = 'active'
+        WHERE e.household_id = :household_id
+          AND e.event_type IN ('purchase', 'auto_repurchase')
+          AND COALESCE(e.quantity, 0) > 0
+          AND COALESCE(
+              NULLIF(TRIM(CAST(e.purchase_date AS TEXT)), '')::date,
+              CAST(e.created_at AS DATE)
+          ) >= CAST(:cutover AS DATE)
+        ORDER BY e.id
+        LIMIT 20001
+    """), {
+        "household_id": owner,
+        "cutover": cutoff,
+    }).mappings().all()
+    if len(live_events) > 20000:
+        raise ValueError("Te veel actuele aankoopbewijzen voor veilige herberekening")
+
     live_by_article = {}
     live_proof = []
     for event in live_events:
         article_id = str(event["household_article_id"])
         day = str(event["purchase_day"])[:10]
-        if article_id not in historical_days or not day:
+        if not article_id or not day:
             continue
         live_by_article.setdefault(article_id, set()).add(day)
         live_proof.append((str(event["id"]), article_id, day))
 
+    article_ids = tuple(sorted(set(historical_days) | set(live_by_article)))
     combined_source_fingerprint = (
         sha256(json.dumps({
             "historical": source_fingerprint,
@@ -301,12 +313,20 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
     rows = {}
     # All members of a verified synonym component receive the same union of
     # purchase days; do not count multiple stores on one day twice.
-    groups = calculated.get("synonym_groups") or {}
+    groups = dict(calculated.get("synonym_groups") or {})
     handled = set()
     for article_id in article_ids:
         if article_id in handled:
             continue
-        members = tuple(sorted(set(groups.get(article_id) or (article_id,))))
+        # Historical groups already passed exact product/unit proof. For
+        # current-only activity use the same persisted confirmed-edge
+        # resolver; never infer synonymity from a name or a receipt label.
+        if article_id in groups:
+            members = tuple(sorted(set(groups[article_id])))
+        else:
+            members = tuple(sorted(set(
+                confirmed_household_synonym_group(conn, owner, article_id)
+            )))
         handled.update(members)
         days = sorted({
             date_text
