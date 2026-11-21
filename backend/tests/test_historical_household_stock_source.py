@@ -104,6 +104,7 @@ def test_article_override_and_consumable_precedence():
         (Conn(rows, mode="consume_all_existing_before_purchase",
               overrides={"ha-1": "always_on"}), 4),
         (Conn(rows, mode="consume_all_existing_before_purchase", consumable=0), 7),
+        (Conn(rows, mode="consume_all_existing_before_purchase", consumable=None), 4),
     ):
         result = source.load_automatic_historical_stock(case, household_id="home")
         assert result["quantities"]["ha-1"] == expected
