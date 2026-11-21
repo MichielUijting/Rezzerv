@@ -86,6 +86,25 @@ def _has_existing_stock_history(conn, household_id: str, article_id: str) -> boo
     return bool(event)
 
 
+def _safe_single_article_binding(item: dict, article: dict) -> bool:
+    article_id = str(article.get("id") or "").strip()
+    key = str(item.get("key") or "")
+    if not article_id or article_id != str(item.get("household_article_id") or "").strip():
+        return False
+    if key == "article:" + article_id:
+        return True
+    product_ids = item.get("product_ids") or []
+    if len(product_ids) != 1 or key != "product:" + str(product_ids[0]):
+        return False
+    # Every included historical source line must explicitly own the same
+    # article. Product-wide evidence from unassigned or another household
+    # is not proof of physical stock for this household article.
+    if (not item.get("source_line_count")
+            or item.get("owned_line_count") != item.get("source_line_count")):
+        return False
+    return str(article.get("global_product_id") or "") == str(product_ids[0])
+
+
 def _review_item(conn, *, household_id: str, cutoff: str | None, item: dict) -> dict:
     result = dict(item)
     article_id = str(item.get("household_article_id") or "").strip()
@@ -94,7 +113,7 @@ def _review_item(conn, *, household_id: str, cutoff: str | None, item: dict) -> 
     result["review_status"] = "identity_review_required"
     result["confirmed_quantity"] = None
     result["confirmed_at"] = None
-    if not article_id or item.get("key") != "article:" + article_id:
+    if not article_id:
         # The source may be a global product or a synonym group; its display
         # identity does not prove a single household stock identity.
         return result
@@ -103,13 +122,16 @@ def _review_item(conn, *, household_id: str, cutoff: str | None, item: dict) -> 
         return result
 
     owned = conn.execute(text("""
-        SELECT id FROM household_articles
+        SELECT id, global_product_id FROM household_articles
         WHERE household_id = :household_id AND id = :article_id
           AND COALESCE(status, 'active') = 'active'
         LIMIT 1
-    """), {"household_id": household_id, "article_id": article_id}).scalar()
+    """), {"household_id": household_id, "article_id": article_id}).mappings().first()
     if not owned:
         result["review_status"] = "article_unavailable"
+        return result
+    if not _safe_single_article_binding(item, owned):
+        result["review_status"] = "identity_review_required"
         return result
 
     prior = _decision(conn, household_id, article_id)
@@ -161,12 +183,12 @@ def confirm_opening_stock(
     revision = str(proposal_revision_value or "").strip().lower()
     if not owner or owner == "0" or not actor or not article_id:
         raise HTTPException(status_code=403, detail="Geen geldig huishouden of actor.")
-    if key != "article:" + article_id or not _REVISION_PATTERN.fullmatch(revision):
+    if not key.startswith(("article:", "product:")) or not _REVISION_PATTERN.fullmatch(revision):
         raise HTTPException(status_code=409, detail="Artikel of voorstel ongeldig; laad opnieuw.")
 
     # Serialise concurrent confirmations for this canonical household article.
     article = conn.execute(text("""
-        SELECT id, naam FROM household_articles
+        SELECT id, naam, global_product_id FROM household_articles
         WHERE id = :article_id AND household_id = :household_id
           AND COALESCE(status, 'active') = 'active'
         FOR UPDATE
@@ -192,7 +214,7 @@ def confirm_opening_stock(
     if len(matching) != 1:
         raise HTTPException(status_code=409, detail="Voorstel niet meer eenduidig; laad opnieuw.")
     item = matching[0]
-    if item.get("household_article_id") != article_id or item.get("unit") != "stuk":
+    if item.get("unit") != "stuk" or not _safe_single_article_binding(item, article):
         raise HTTPException(status_code=409, detail="Artikel of eenheid niet veilig bevestigbaar.")
     if proposal_revision(item, projection.get("first_current_purchase_date")) != revision:
         raise HTTPException(status_code=409, detail="Historische aankoopgegevens zijn gewijzigd; laad opnieuw.")
