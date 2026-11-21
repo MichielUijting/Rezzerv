@@ -118,6 +118,7 @@ jobs:
           PYTHONPATH: backend
         run: |
           python -m unittest backend.tests.test_receipt_historical_import_policy
+          python -m unittest backend.tests.test_receipt_historical_learning_service
 
       - name: 5-6/10 Bereid gedeelde PostgreSQL acceptance foundation voor
         uses: ./.github/actions/postgresql-acceptance-foundation
@@ -152,6 +153,7 @@ jobs:
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_HOUSEHOLD_ISOLATION_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_ZERO_STOCK_MUTATION_GREEN' receipt-history-postgresql.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' receipt-history-postgresql.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_LEARNING_READONLY_GREEN' receipt-history-postgresql.log
 
       - name: 7/10 Voer volledige productie-keten uit als DML-only PostgreSQL-runtime
         env:

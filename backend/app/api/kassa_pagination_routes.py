@@ -319,3 +319,27 @@ def list_historical_kassa_receipts(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.get("/api/kassa/historical-learning-page")
+def list_historical_kassa_learning(
+    householdId: str = Query(...),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    authorization: str | None = Header(default=None),
+):
+    """Read-only PR2 buying cadence and *unconfirmed* opening-stock proposals.
+
+    Uses the canonical household authorization from Kassa. No client-selected
+    start date, matching override, inventory initialization or stock mutation.
+    """
+    from app import main as legacy
+    from app.services.receipt_historical_learning_service import load_historical_learning
+
+    household_id = legacy.resolve_authorized_household_id(
+        authorization, householdId, require_authorization=True,
+    )
+    with engine.connect() as conn:
+        return load_historical_learning(
+            conn, household_id=household_id, page=page, page_size=page_size,
+        )
