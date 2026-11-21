@@ -151,9 +151,17 @@ def replay_historical_stock(
     quantities = defaultdict(int)
     last_date = {}
     purchase_cadences = {}
+    purchase_days_by_article = {}
     for members, per_day in sorted(grouped.items(), key=lambda it: it[0]):
         mode = modes[members[0]]
         dates = sorted(per_day)
+        # Every member of the verified synonym component has the same
+        # repurchase calendar. Keep the one-day evidence as well: the next
+        # *current* confirmed purchase can become its first repeat.
+        for member in members:
+            purchase_days_by_article[member] = [
+                observed.isoformat() for observed in dates
+            ]
         # A single *repeat* purchase suffices: two distinct dates.
         # Same-day receipts, even across stores and confirmed synonyms,
         # count as one occasion. Each next day updates the mean over all
@@ -215,6 +223,7 @@ def replay_historical_stock(
         "quantities": dict(sorted(quantities.items())),
         "last_purchase_dates": last_date,
         "purchase_cadences": dict(sorted(purchase_cadences.items())),
+        "purchase_days_by_article": dict(sorted(purchase_days_by_article.items())),
         "writes_inventory": False,
         "policy_modes": {
             article_id: modes[article_id]
