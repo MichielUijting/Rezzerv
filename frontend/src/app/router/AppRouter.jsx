@@ -22,6 +22,7 @@ import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFi
 import SettingsArticleGroupsPage from '../../features/settings/SettingsArticleGroupsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
+import SettingsOpeningStockPage from '../../features/onboarding/SettingsOpeningStockPage.jsx'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
 import SettingsHouseholdProfilePage from '../../features/settings/SettingsHouseholdProfilePage.jsx'
@@ -222,6 +223,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/hulp-over', element: <ProtectedSettingsRoute settingKey="help-about"><SettingsHelpAboutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettingsRoute settingKey="household-automation"><SettingsHouseholdAutomationPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/beginvoorraad', element: <ProtectedSettingsRoute settingKey="opening-stock"><SettingsOpeningStockPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelkoppelingen', element: <ProtectedSettingsRoute settingKey="store-connections"><StoreConnectionsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishoudprofiel', element: <ProtectedSettingsRoute settingKey="household-profile"><SettingsHouseholdProfilePage /></ProtectedSettingsRoute> },
