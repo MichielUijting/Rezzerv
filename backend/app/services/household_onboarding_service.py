@@ -308,6 +308,42 @@ def advance_profile_to_shared_household_minimum(
     return resolve_household_onboarding_state(conn, current.household_id)
 
 
+
+# This setting is only seeded at first onboarding completion for an empty
+# household. Live households and explicit choices remain untouched.
+NEW_HOUSEHOLD_REPURCHASE_MODE = "consume_all_existing_before_purchase"
+
+
+def ensure_new_household_repurchase_default(conn, household_id: str) -> bool:
+    owner = str(household_id or "").strip()
+    if not owner or owner == "0":
+        raise ValueError("Nieuw standaardafboekbeleid vereist regulier huishouden")
+
+    # Never change the policy of an existing household with purchasing/stock
+    # history just because it resumes an incomplete onboarding.
+    for table in ("raw_receipts", "receipt_tables", "purchase_import_batches",
+                  "inventory", "inventory_events"):
+        existing = conn.execute(text(
+            f"SELECT 1 FROM {table} WHERE household_id=:household_id LIMIT 1"
+        ), {"household_id": owner}).scalar_one_or_none()
+        if existing is not None:
+            return False
+    row = conn.execute(text("""
+        INSERT INTO household_settings (
+            id, household_id, setting_key, setting_value, updated_at
+        ) VALUES (
+            :id, :household_id, 'consumable_auto_deduction_mode',
+            :mode, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (household_id, setting_key) DO NOTHING
+    """), {
+        "id": __import__("uuid").uuid4().hex,
+        "household_id": owner,
+        "mode": NEW_HOUSEHOLD_REPURCHASE_MODE,
+    })
+    return row.rowcount == 1
+
+
 def complete_household_onboarding(
     conn,
     *,
