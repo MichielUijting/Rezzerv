@@ -44,7 +44,13 @@ async function registerHousehold(page, accountEmail, accountPassword, expectedHo
   const householdResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/shared-household-minimum') && response.request().method() === 'POST')
   await page.getByTestId('shared-household-finish').click()
   expect((await householdResponsePromise).ok()).toBeTruthy()
-  await expect(page).toHaveURL(/\/home$/)
+  // PR4 onboarding now offers store connections before completing the home flow.
+  // These unrelated full-stack authorities intentionally skip that optional
+  // step via the same visible button as an actual household administrator.
+  await expect(page).toHaveURL(new RegExp('/onboarding/winkels$'))
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await page.getByTestId('onboarding-stores-later').click()
+  await expect(page).toHaveURL(new RegExp('/home$'))
 }
 
 async function readSession(page) {

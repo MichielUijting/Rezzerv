@@ -191,6 +191,118 @@ def _verify_gpc_variant_aggregation(engine, main, client, headers, url):
     print('ALMOST_OUT_AUTOMATIC_TYPE_UNITS_ISOLATION_VISIBILITY_GREEN')
 
 
+def _verify_historical_only_cadence_over_real_postgresql(engine, main, client, headers, url):
+    """One repeat and untouched historical opening stock -> Bijna op immediately.
+
+    All inserts belong to the isolated F3 PostgreSQL acceptance database.
+    The runtime role is DML-only; no schema, credentials or production data
+    are changed. The actual authenticated HTTP API is tested, not mocked.
+    """
+    article = "f3-pr6-history-only"
+    stock_id = "f3-pr6-history-only-inventory"
+    baseline_event = "f3-pr6-history-only-baseline"
+    with engine.begin() as conn:
+        _seed_article(
+            conn, household_id=TARGET_HOUSEHOLD, article_id=article,
+            inventory_id=stock_id, name="F3 PR6 betrouwbare historische melk",
+            quantity=Decimal("1"), min_stock=Decimal("0"),
+            ideal_stock=Decimal("2"),
+        )
+        main.set_household_auto_consume_mode(
+            conn, TARGET_HOUSEHOLD, "consume_all_existing_before_purchase",
+        )
+        main.set_household_almost_out_settings(
+            conn, TARGET_HOUSEHOLD, prediction_enabled=True,
+            prediction_days=7, policy_mode="advisory",
+        )
+        conn.execute(text("""
+            INSERT INTO household_receipt_history_cutovers
+              (household_id, first_current_purchase_date)
+            VALUES (:household_id, CURRENT_DATE)
+            ON CONFLICT (household_id) DO NOTHING
+        """), {"household_id": TARGET_HOUSEHOLD})
+        conn.execute(text("""
+            INSERT INTO inventory_events (
+                id, household_id, article_id, household_article_id,
+                article_name, event_type, quantity, old_quantity, new_quantity,
+                source, created_at
+            ) VALUES (
+                :id, :household_id, :article_id, :article_id,
+                'F3 PR6 betrouwbare historische melk', 'baseline',
+                1, 0, 1, 'historical_auto_stock', CURRENT_TIMESTAMP
+            )
+        """), {
+            "id": baseline_event, "household_id": TARGET_HOUSEHOLD,
+            "article_id": article,
+        })
+        conn.execute(text("""
+            INSERT INTO household_historical_auto_stock_baselines (
+                household_id, household_article_id, inventory_id,
+                inventory_event_id, quantity, source_fingerprint,
+                first_current_purchase_date, updated_at
+            ) VALUES (
+                :household_id, :article_id, :inventory_id,
+                :event_id, 1, :fingerprint, CURRENT_DATE, CURRENT_TIMESTAMP
+            )
+        """), {
+            "household_id": TARGET_HOUSEHOLD, "article_id": article,
+            "inventory_id": stock_id, "event_id": baseline_event,
+            "fingerprint": "a" * 64,
+        })
+        conn.execute(text("""
+            INSERT INTO household_historical_purchase_cadences (
+                household_id, household_article_id,
+                average_repurchase_interval_days, purchase_day_count,
+                first_purchase_date, last_purchase_date,
+                matched_and_synonyms, source_fingerprint, updated_at
+            ) VALUES (
+                :household_id, :article_id, 10, 2,
+                CURRENT_DATE - INTERVAL '17 days',
+                CURRENT_DATE - INTERVAL '7 days',
+                :members, :fingerprint, CURRENT_TIMESTAMP
+            )
+        """), {
+            "household_id": TARGET_HOUSEHOLD, "article_id": article,
+            "members": '["f3-pr6-history-only"]', "fingerprint": "a" * 64,
+        })
+        before = int(conn.execute(text("""
+            SELECT COUNT(*) FROM inventory_events
+            WHERE household_id=:household_id AND article_id=:article_id
+        """), {"household_id": TARGET_HOUSEHOLD, "article_id": article}).scalar_one())
+        assert before == 1
+
+    first = _items_by_article_id(client.get(url, headers=headers))
+    assert article in first, first
+    row = first[article]
+    assert row["trigger_type"] == "predicted", row
+    assert row["prediction_basis"] == (
+        "confirmed_historical_replacement_and_untouched_opening_stock"
+    ), row
+    assert row["historical_repurchase_purchase_days"] == 2, row
+    assert Decimal(str(row["historical_repurchase_interval_days"])) == Decimal("10")
+    assert Decimal(str(row["current_quantity"])) == Decimal("1")
+    assert Decimal(str(row["predicted_quantity_at_horizon"])) < 0, row
+
+    # Read twice and prove no inventory/event/cadence writes or doubled stock.
+    again = _items_by_article_id(client.get(url, headers=headers))
+    assert again[article] == row
+    with engine.begin() as conn:
+        after = int(conn.execute(text("""
+            SELECT COUNT(*) FROM inventory_events
+            WHERE household_id=:household_id AND article_id=:article_id
+        """), {"household_id": TARGET_HOUSEHOLD, "article_id": article}).scalar_one())
+        quantity = conn.execute(text("""
+            SELECT aantal FROM inventory WHERE id=:inventory_id
+              AND household_id=:household_id AND household_article_id=:article_id
+        """), {
+            "inventory_id": stock_id, "household_id": TARGET_HOUSEHOLD,
+            "article_id": article,
+        }).scalar_one()
+        assert after == before
+        assert Decimal(str(quantity)) == Decimal("1")
+    print("PR6_HISTORICAL_ONLY_POSTGRESQL_API_GREEN")
+
+
 def run() -> int:
     checks: list[str] = []
     catalog = load_canonical_scenario_catalog()
@@ -350,6 +462,10 @@ def run() -> int:
             assert _decimal_field(after_consume[article_ids["below"]], "current_quantity") == Decimal(str(almost_out["below"]["quantity"]))
             checks.append("recalculation_disappears_above_threshold_and_reappears_below")
             _verify_gpc_variant_aggregation(engine, main_module, client, owner_headers, target_url)
+            _verify_historical_only_cadence_over_real_postgresql(
+                engine, main_module, client, owner_headers, target_url,
+            )
+            checks.append('historical_only_repurchase_cadence_projects_via_real_api')
 
         with engine.begin() as conn:
             target_rows = conn.execute(
@@ -374,8 +490,8 @@ def run() -> int:
 
         for check in checks:
             print(f"PASS {check}")
-        print(f"RESULT {len(checks)}/7 checks passed")
-        assert len(checks) == 7
+        print(f"RESULT {len(checks)}/8 checks passed")
+        assert len(checks) == 8
         print("ALMOST_OUT_API_PROJECTION_POSTGRESQL_GREEN")
         return 0
     finally:
