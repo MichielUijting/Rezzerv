@@ -8,6 +8,7 @@ but *any* other inventory/event history blocks retroactive stock mutation.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 from uuid import uuid4
 
@@ -246,10 +247,89 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
     sources remove only this service's own projection, not current purchase
     history or a manually configured minimum-stock threshold.
     """
-    rows = calculated.get("purchase_cadences") or {}
+    # The historical stock baseline remains anchored strictly before cutover.
+    # For the cadence ONLY, augment that history with later accepted purchase
+    # events. The existing private worker runs on receipt commits and its
+    # periodic 15-minute recovery scan, so each subsequent repeat improves
+    # the average without a user decision or any additional stock booking.
+    historical_days = calculated.get("purchase_days_by_article") or {}
+    article_ids = tuple(sorted(historical_days))
+    cutoff = str(calculated.get("first_current_purchase_date") or "")[:10]
     source_fingerprint = str(calculated.get("source_fingerprint") or "").strip()
-    if len(source_fingerprint) != 64:
-        raise ValueError("Historisch koopritme mist bronfingerprint")
+    if len(source_fingerprint) != 64 or not cutoff:
+        raise ValueError("Historisch koopritme mist bronfingerprint of peildatum")
+
+    live_events = []
+    if article_ids:
+        live_events = conn.execute(text("""
+            SELECT id, household_article_id,
+                   COALESCE(
+                       NULLIF(TRIM(CAST(purchase_date AS TEXT)), '')::date,
+                       CAST(created_at AS DATE)
+                   ) AS purchase_day
+            FROM inventory_events
+            WHERE household_id = :household_id
+              AND household_article_id = ANY(:article_ids)
+              AND event_type IN ('purchase', 'auto_repurchase')
+              AND COALESCE(quantity, 0) > 0
+              AND COALESCE(
+                  NULLIF(TRIM(CAST(purchase_date AS TEXT)), '')::date,
+                  CAST(created_at AS DATE)
+              ) >= CAST(:cutover AS DATE)
+            ORDER BY id
+        """), {
+            "household_id": owner, "article_ids": list(article_ids),
+            "cutover": cutoff,
+        }).mappings().all()
+    live_by_article = {}
+    live_proof = []
+    for event in live_events:
+        article_id = str(event["household_article_id"])
+        day = str(event["purchase_day"])[:10]
+        if article_id not in historical_days or not day:
+            continue
+        live_by_article.setdefault(article_id, set()).add(day)
+        live_proof.append((str(event["id"]), article_id, day))
+
+    combined_source_fingerprint = (
+        sha256(json.dumps({
+            "historical": source_fingerprint,
+            "current_purchase_events": sorted(live_proof),
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if live_proof else source_fingerprint
+    )
+    rows = {}
+    # All members of a verified synonym component receive the same union of
+    # purchase days; do not count multiple stores on one day twice.
+    groups = calculated.get("synonym_groups") or {}
+    handled = set()
+    for article_id in article_ids:
+        if article_id in handled:
+            continue
+        members = tuple(sorted(set(groups.get(article_id) or (article_id,))))
+        handled.update(members)
+        days = sorted({
+            date_text
+            for member in members
+            for date_text in (
+                list(historical_days.get(member) or [])
+                + list(live_by_article.get(member) or [])
+            )
+        })
+        if len(days) < 2:
+            continue
+        span = (datetime.fromisoformat(days[-1]) - datetime.fromisoformat(days[0])).days
+        if span <= 0:
+            continue
+        record = {
+            "average_repurchase_interval_days": round(span / (len(days) - 1), 3),
+            "purchase_day_count": len(days),
+            "first_purchase_date": days[0],
+            "last_purchase_date": days[-1],
+            "matched_and_synonyms": list(members),
+        }
+        for member in members:
+            rows[member] = record
     written = 0
     for article_id, result in sorted(rows.items()):
         if article_id not in (result.get("matched_and_synonyms") or []):
@@ -279,13 +359,21 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
                   IS DISTINCT FROM excluded.source_fingerprint
                OR household_historical_purchase_cadences.average_repurchase_interval_days
                   IS DISTINCT FROM excluded.average_repurchase_interval_days
+               OR household_historical_purchase_cadences.purchase_day_count
+                  IS DISTINCT FROM excluded.purchase_day_count
+               OR household_historical_purchase_cadences.last_purchase_date
+                  IS DISTINCT FROM excluded.last_purchase_date
+               OR household_historical_purchase_cadences.first_purchase_date
+                  IS DISTINCT FROM excluded.first_purchase_date
+               OR household_historical_purchase_cadences.matched_and_synonyms
+                  IS DISTINCT FROM excluded.matched_and_synonyms
         """), {
             "household_id": owner, "article_id": article_id,
             "interval": interval, "day_count": int(result["purchase_day_count"]),
             "first_day": result["first_purchase_date"],
             "last_day": result["last_purchase_date"],
             "members": json.dumps(sorted(result["matched_and_synonyms"])),
-            "fingerprint": source_fingerprint,
+            "fingerprint": combined_source_fingerprint,
         })
         written += int(affected.rowcount or 0)
     # A changed synonym link or removed historical receipt invalidates stale
