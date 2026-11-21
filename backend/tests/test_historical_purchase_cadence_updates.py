@@ -2,6 +2,8 @@
 
 No inventory mutations in these mocked storage-contract tests.
 """
+from unittest.mock import patch
+
 from app.services.historical_household_stock_writer import (
     _sync_historical_purchase_cadences,
 )
@@ -126,3 +128,53 @@ def test_one_day_with_multiple_receipts_still_has_no_interval():
     assert conn.upserts == []
     assert any("DELETE FROM household_historical_purchase_cadences" in sql
                for sql, _ in conn.commands)
+
+
+def test_two_current_purchase_days_suffice_even_without_historical_receipts():
+    projection = {
+        "first_current_purchase_date": "2026-11-20",
+        "source_fingerprint": "a" * 64,
+        "purchase_days_by_article": {},
+        "purchase_cadences": {},
+        "synonym_groups": {},
+    }
+    conn = _CadenceOnlyConn([
+        _event("first", "ha-1", "2026-11-21"),
+        _event("repeat", "ha-1", "2026-11-28"),
+    ])
+    with patch(
+        "app.services.historical_household_stock_writer.confirmed_household_synonym_group",
+        return_value=("ha-1",),
+    ) as resolver:
+        report = _sync_historical_purchase_cadences(
+            conn, owner="home1", calculated=projection,
+        )
+    resolver.assert_called_once_with(conn, "home1", "ha-1")
+    assert report["cadences_written"] == 1
+    assert conn.upserts[0]["day_count"] == 2
+    assert conn.upserts[0]["interval"] == 7.0
+
+
+def test_two_current_synonym_variants_have_one_shared_cadence():
+    projection = {
+        "first_current_purchase_date": "2026-11-20",
+        "source_fingerprint": "a" * 64,
+        "purchase_days_by_article": {},
+        "purchase_cadences": {},
+        "synonym_groups": {},
+    }
+    conn = _CadenceOnlyConn([
+        _event("first", "ha-1", "2026-11-21"),
+        _event("repeat", "ha-2", "2026-11-30"),
+    ])
+    with patch(
+        "app.services.historical_household_stock_writer.confirmed_household_synonym_group",
+        return_value=("ha-1", "ha-2"),
+    ):
+        _sync_historical_purchase_cadences(
+            conn, owner="home1", calculated=projection,
+        )
+    assert len(conn.upserts) == 2
+    assert {row["interval"] for row in conn.upserts} == {9.0}
+    assert {row["day_count"] for row in conn.upserts} == {2}
+    assert {row["article_id"] for row in conn.upserts} == {"ha-1", "ha-2"}
