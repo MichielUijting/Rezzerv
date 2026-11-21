@@ -51,10 +51,10 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   // PR4 onboarding now offers store connections before completing the home flow.
   // These unrelated full-stack authorities intentionally skip that optional
   // step via the same visible button as an actual household administrator.
-  await expect(page).toHaveURL(/\\/onboarding\\/winkels$/)
+  await expect(page).toHaveURL(new RegExp('/onboarding/winkels$'))
   await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\\/home$/)
+  await expect(page).toHaveURL(new RegExp('/home$'))
 
   const capabilitiesResponse = await page.request.get('/api/onboarding/capabilities')
   expect(capabilitiesResponse.ok()).toBeTruthy()
