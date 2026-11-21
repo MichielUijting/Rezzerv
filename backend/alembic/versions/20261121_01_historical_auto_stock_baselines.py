@@ -65,7 +65,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,
                   server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.CheckConstraint(
-            "average_repurchase_interval_days > 0 AND purchase_day_count >= 3 "
+            "average_repurchase_interval_days > 0 AND purchase_day_count >= 2 "
             "AND first_purchase_date <= last_purchase_date",
             name="ck_household_historical_purchase_cadence_evidence",
         ),
