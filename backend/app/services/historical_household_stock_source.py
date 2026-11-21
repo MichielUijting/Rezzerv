@@ -86,7 +86,12 @@ def _setting_modes(conn, owner):
 
 
 def _effective_mode(article: dict, household_mode: str, overrides: dict) -> str:
-    if not bool(article.get("consumable")):
+    # A newly matched household article may have no explicit consumable
+    # classification yet. A NULL is not a user choice to disable repurchase;
+    # trusted physical matches follow the household policy. Explicit False/0
+    # remains the canonical prohibition, as for the live receipt path.
+    consumable = article.get("consumable")
+    if consumable is not None and not bool(consumable):
         return AUTO_CONSUME_NONE
     override = str(overrides.get(str(article["id"])) or "follow_household").lower()
     if override == "always_on":
