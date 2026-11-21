@@ -62,9 +62,13 @@ matching- en bevestigde-synoniemregels toe.
   herkenningscontrole (herstelcontrole circa elke 15 minuten); meerdere
   actuele aankopen op dezelfde dag tellen als één moment.
 - Een enkele historische aankoop plus één nieuwe actuele aankoop is dus
-  al voldoende voor de eerste opgeslagen termijn. Iedere volgende
-  afzonderlijke aankoopdag verfijnt het gemiddelde; de opgeslagen
-  bronfingerprint verwerkt ook de actuele aankoopbewijzen.
+  al voldoende voor de eerste opgeslagen termijn. **Ook zonder historische
+  bonnen** geeft de eerste actuele herhaalaankoop (twee verschillende
+  aankoopdagen) onmiddellijk een berekenbare termijn, waarna de bestaande
+  achtergrondcontrole deze opslaat. De worker verwerkt nieuwe huishoudens
+  met een actieve bonverwerkingsgrens ook wanneer er geen oude bonnen zijn.
+  Iedere volgende afzonderlijke aankoopdag verfijnt het gemiddelde; de
+  opgeslagen bronfingerprint verwerkt ook de actuele aankoopbewijzen.
 - Deze doorlopende herberekening is **alleen metadata**: zij verandert
   geen actuele voorraadposities, aankoop-/verbruiksevents,
   handmatige minimale voorraad of huishoudelijke voorspeltermijn.
