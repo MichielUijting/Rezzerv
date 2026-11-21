@@ -216,17 +216,38 @@ def test_group_member_without_own_purchase_inherits_confirmed_cadence_and_zero_s
     assert result["purchase_cadences"]["h-a"] == result["purchase_cadences"]["h-b"]
 
 
-@pytest.mark.parametrize("days", [
-    ("2026-11-01", "2026-11-02", "2026-11-03"),
-    ("2026-02-01", "2026-03-01", "2026-04-01"),
-    ("2026-01-01", "2026-10-01", "2026-11-01"),
+@pytest.mark.parametrize("first,last,expected_days", [
+    ("2026-11-01", "2026-11-02", 1.0),  # one-day repeat
+    ("2026-01-01", "2026-11-01", 304.0),  # no maximum gap
+    ("2026-01-01", "2026-01-02", 1.0),  # no recent-purchase rule
 ])
-def test_no_unsupported_or_unrepresentative_cadence(days):
-    lines = [receipt(day, 1, line=str(i)) for i, day in enumerate(days)]
+def test_one_repeat_saves_interval_without_timing_gates(first, last, expected_days):
+    events = [
+        receipt(first, 1, line="first", article="h-a"),
+        receipt(last, 2, line="repeat", article="h-a"),
+    ]
+    result = replay(events, {"h-a": RESET})
+    evidence = result["purchase_cadences"]["h-a"]
+    assert evidence["purchase_day_count"] == 2
+    assert evidence["average_repurchase_interval_days"] == expected_days
+    assert evidence["first_purchase_date"] == first
+    assert evidence["last_purchase_date"] == last
+
+
+def test_first_purchase_only_has_no_repeat_interval():
+    result = replay([receipt("2026-11-01", 1, line="first")], {"h-a": RESET})
+    assert result["purchase_cadences"] == {}
+
+
+def test_multiple_receipts_same_day_are_one_purchase_moment():
+    lines = [
+        receipt("2026-10-01", 1, line="ah"),
+        receipt("2026-10-01", 2, line="lidl"),
+    ]
     assert replay(lines, {"h-a": RESET})["purchase_cadences"] == {}
 
 
-def test_group_two_distinct_purchase_days_cannot_claim_average_interval():
+def test_group_two_distinct_purchase_days_shares_average_interval():
     group = {"h-a": ("h-a", "h-b"), "h-b": ("h-a", "h-b")}
     lines = [
         receipt("2026-10-01", 1, line="1", article="h-a"),
@@ -234,4 +255,18 @@ def test_group_two_distinct_purchase_days_cannot_claim_average_interval():
     ]
     result = replay(lines, {"h-a": RESET, "h-b": RESET}, group,
                     {"h-a": 1000, "h-b": 500})
-    assert result["purchase_cadences"] == {}
+    for member in ("h-a", "h-b"):
+        cadence = result["purchase_cadences"][member]
+        assert cadence["purchase_day_count"] == 2
+        assert cadence["average_repurchase_interval_days"] == 31.0
+
+
+def test_next_repeat_improves_mean_over_all_purchase_gaps():
+    first = [receipt("2026-09-01", 1, line="1"),
+             receipt("2026-09-11", 1, line="2")]
+    initial = replay(first, {"h-a": RESET})["purchase_cadences"]["h-a"]
+    expanded = replay(first + [receipt("2026-10-01", 1, line="3")],
+                      {"h-a": RESET})["purchase_cadences"]["h-a"]
+    assert initial["average_repurchase_interval_days"] == 10.0
+    assert expanded["purchase_day_count"] == 3
+    assert expanded["average_repurchase_interval_days"] == 15.0
