@@ -327,9 +327,9 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
         { label: 'Huishoudinstelling', value: householdSettings.autoConsumeOnRepurchase ? 'Aan' : 'Uit' },
         { label: 'Effectieve automatische afboeking', value: effectiveAutomation },
         { label: 'Gemiddelde herhaalaankooptermijn', value: cadenceLabel },
-        { label: 'Historische aankoopdagen (matches en synoniemen)', value: historicalCadence
+        { label: 'Aankoopdagen (matches en synoniemen)', value: historicalCadence
           ? String(historicalCadence.purchase_day_count) : '—' },
-        { label: 'Laatste historische aankoop', value: historicalCadence
+        { label: 'Laatste aankoopmoment', value: historicalCadence
           ? formatDate(historicalCadence.last_purchase_date) : '—' },
       ],
       price: [
