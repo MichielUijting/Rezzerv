@@ -61,7 +61,7 @@ class ReadConnection:
         self.queries.append((sql, args))
         assert sql.lstrip().upper().startswith("SELECT"), sql
         if "FROM household_articles" in sql:
-            return _QueryResult("ha-1" if self.article else None)
+            return _QueryResult({"id": "ha-1", "global_product_id": "gp-1"} if self.article else None)
         if "FROM household_opening_stock_confirmations" in sql:
             return _QueryResult(self.prior)
         if "FROM inventory_events" in sql:
@@ -101,7 +101,26 @@ class OpeningStockReviewContractTests(unittest.TestCase):
                                   cutoff="2026-11-20", item=item)
             self.assertEqual(output["review_status"], "identity_review_required")
             self.assertFalse(output["can_confirm"])
-            self.assertFalse(conn.queries)
+            self.assertTrue(all(str(query[0]).lstrip().upper().startswith("SELECT") for query in conn.queries))
+
+    def test_confirmed_product_link_needs_every_source_line_owned(self):
+        fully_owned = proposal(
+            key="product:gp-1", product_ids=["gp-1"],
+            source_line_count=4, owned_line_count=4,
+        )
+        safe = _review_item(
+            ReadConnection(), household_id="house-1",
+            cutoff="2026-11-20", item=fully_owned,
+        )
+        self.assertTrue(safe["can_confirm"])
+        self.assertEqual(safe["review_status"], "awaiting_manual_confirmation")
+        unsafe = _review_item(
+            ReadConnection(), household_id="house-1",
+            cutoff="2026-11-20",
+            item={**fully_owned, "owned_line_count": 3},
+        )
+        self.assertFalse(unsafe["can_confirm"])
+        self.assertEqual(unsafe["review_status"], "identity_review_required")
 
     def test_unit_and_household_article_guards(self):
         for args, reason in (
