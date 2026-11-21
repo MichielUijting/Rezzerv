@@ -28,6 +28,7 @@ const SETTINGS_TILE_ICONS = {
   capabilities: '＋',
   'article-groups': '☷',
   locations: '⌖',
+  'opening-stock': '▤',
   'store-import': '▣',
   'store-connections': '⇄',
   'household-automation': '↻',
