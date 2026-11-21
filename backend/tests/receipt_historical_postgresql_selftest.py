@@ -628,7 +628,7 @@ def main() -> None:
                     read_historical_household_purchase_cadence,
                 )
                 conn.execute(text("""
-                    UPDATE household_articles SET consumable = TRUE
+                    UPDATE household_articles SET consumable = 1
                     WHERE household_id=:household_id AND id=:article_id
                 """), {"household_id": new_household, "article_id": article_id})
                 conn.execute(text("""
@@ -700,7 +700,7 @@ def main() -> None:
                     )
                     conn.execute(text("""
                         UPDATE household_articles
-                        SET consumable = TRUE
+                        SET consumable = 1
                         WHERE household_id=:household_id AND id=:article_id
                     """), {"household_id": new_household, "article_id": repeat_article_id})
                     historic_day = first_current - timedelta(days=25)
