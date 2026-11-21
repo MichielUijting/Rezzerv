@@ -43,6 +43,10 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   const householdResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/shared-household-minimum') && response.request().method() === 'POST')
   await page.getByTestId('shared-household-finish').click()
   expect((await householdResponsePromise).ok()).toBeTruthy()
+  // Other fullstack journeys skip the new optional store setup explicitly.
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home$/)
 }
 

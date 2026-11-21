@@ -54,6 +54,10 @@ async function registerAndCompleteWatInhuis(page, email, accountPassword, househ
   ))
   await page.getByTestId('shared-household-finish').click()
   expect((await householdResponsePromise).ok()).toBeTruthy()
+  // Other fullstack journeys skip the new optional store setup explicitly.
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home$/)
 }
 
