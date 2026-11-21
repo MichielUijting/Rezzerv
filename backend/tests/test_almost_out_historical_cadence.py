@@ -144,7 +144,10 @@ class _Conn:
         assert params["article_ids"] and set(params["article_ids"]).issubset(
             {"article-ah", "article-lidl"}
         )
-        assert "c.household_article_id IN :article_ids" in sql
+        # SQLAlchemy expanding binds compile as __[POSTCOMPILE_article_ids].
+        # Check the scoped predicate without assuming the placeholder spelling.
+        assert "c.household_article_id IN (" in sql
+        assert "article_ids" in sql
         self.queries.append(sql)
         return _Rows(self.rows)
 
