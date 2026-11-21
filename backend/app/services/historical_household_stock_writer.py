@@ -323,6 +323,10 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
         # resolver; never infer synonymity from a name or a receipt label.
         if article_id in groups:
             members = tuple(sorted(set(groups[article_id])))
+        elif article_id in historical_days:
+            # This singleton was already evaluated by the same confirmed
+            # resolver during historical source loading.
+            members = (article_id,)
         else:
             members = tuple(sorted(set(
                 confirmed_household_synonym_group(conn, owner, article_id)
