@@ -10,6 +10,7 @@ import pytest
 from app.services.almost_out_historical_cadence import (
     load_confirmed_purchase_cadences,
     prediction_from_confirmed_cadence,
+    prediction_from_untouched_historical_baseline,
 )
 
 
@@ -182,3 +183,50 @@ def test_no_cadence_query_for_legacy_or_non_postgresql_connection():
             raise AssertionError("Legacy connection must not be queried")
     assert load_confirmed_purchase_cadences(Legacy(), "household-a", [{"id": "a"}]) == {}
     assert load_confirmed_purchase_cadences(_Conn([]), "0", [{"id": "article-ah"}]) == {}
+
+
+def test_historical_only_opening_stock_forecasts_with_proven_replacement_mode():
+    group = cadence(("article-ah", "article-lidl"), interval=10, count=2,
+                    last=date(2026, 11, 10))
+    baseline = [
+        {"article_id": "article-ah", "event_type": "baseline",
+         "source": "historical_auto_stock", "quantity": 0},
+        {"article_id": "article-lidl", "event_type": "baseline",
+         "source": "historical_auto_stock", "quantity": 2},
+    ]
+    result = prediction_from_untouched_historical_baseline(
+        group, baseline, 7, current_quantity=2, minimum_stock=0,
+        member_article_ids=["article-ah", "article-lidl"],
+        replacement_policy_proven=True, now=date(2026, 11, 21),
+    )
+    assert result["prediction_available"] is True
+    assert result["prediction_triggered"] is True
+    assert result["prediction_basis"] == "confirmed_historical_replacement_and_untouched_opening_stock"
+    assert result["purchase_event_count"] == 2
+    assert result["observed_historical_last_purchase_quantity"] == 2
+    assert result["predicted_quantity_at_horizon"] == pytest.approx(-1.6)
+
+
+def test_historical_only_fails_closed_on_stock_movement_or_policy_change():
+    group = cadence(("article-ah",), interval=10, last=date(2026, 11, 10))
+    untouched = [{"article_id": "article-ah", "event_type": "baseline",
+                  "source": "historical_auto_stock", "quantity": 2}]
+    options = {
+        "current_quantity": 2, "minimum_stock": 0,
+        "member_article_ids": ["article-ah"],
+        "replacement_policy_proven": True, "now": date(2026, 11, 21),
+    }
+    def project(events, **changes):
+        return prediction_from_untouched_historical_baseline(
+            group, events, 7, **{**options, **changes},
+        )
+    assert project(untouched, replacement_policy_proven=False) is None
+    assert project(untouched, current_quantity=4) is None
+    assert project(untouched, current_quantity=0) is None
+    assert project(untouched, member_article_ids=["other"]) is None
+    assert project(untouched, now=date(2026, 11, 9)) is None
+    assert project([]) is None
+    assert project(untouched + [{"article_id": "article-ah", "event_type": "consume", "quantity": -1}]) is None
+    assert project(untouched + untouched) is None
+    assert project([{"article_id": "article-ah", "event_type": "baseline",
+                    "source": "manual", "quantity": 2}]) is None

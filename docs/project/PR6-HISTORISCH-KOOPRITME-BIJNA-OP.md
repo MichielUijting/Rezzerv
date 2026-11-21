@@ -18,7 +18,7 @@ Reden: huishoudgebonden voorraadprognose en bevestigde synoniemidentiteit, backe
 - Nooit historische bonnen als actuele kassabon goedkeuren, winkels opnieuw verbinden, importpauzes uitschakelen of bestaande voorraad/voorspelinstellingen wijzigen.
 
 ## Grenzen
-Een huishouden met *uitsluitend historische bonnen*, maar **nog geen betrouwbaar aankoopvolume uit een actuele voorraadgebeurtenis**, krijgt het bewezen koopritme wel beschikbaar als informatie. Alleen die termijn is zonder onafhankelijk volumebewijs nog onvoldoende voor een verbruiksprognose. Een verdere, veilig te bewijzen historische hoeveelheidsbron wordt niet gegokt.
+Een nieuw huishouden met **uitsluitend historische bonnen** kan direct een Bijna-op-prognose krijgen als PR3 de historische beginvoorraad duurzaam heeft vastgelegd, alle betrokken artikelen nog de modus `consume_all_existing_before_purchase` hanteren, alle oorspronkelijke `historical_auto_stock`-baseline-events aanwezig zijn, geen latere voorraadgebeurtenissen zijn uitgevoerd en de actuele voorraad exact met de baseline overeenkomt. De bewezen baselinehoeveelheid is dan de laatste vervangingsaankoop; de opgeslagen aankooptermijn levert het geschatte vervangingsritme. De schatting houdt rekening met de verstreken tijd sinds de laatste historische aankoop en de gekozen voorspeltermijn. Afwijkende huishoud-/artikelinstellingen, onzekere historische bronhoeveelheid of gemuteerde voorraad stoppen dit pad. Zonder aantoonbaar volume blijft een kooptermijn uitsluitend informatief en nooit een Bijna-op-signaal.
 
 ## Acceptatie
 - Eerste herhaalaankoop: bestaande cadence is beschikbaar na twee dagen; forecast gebruikt exact de laatst gekochte hoeveelheid.

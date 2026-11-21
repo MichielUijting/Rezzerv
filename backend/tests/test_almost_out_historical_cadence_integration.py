@@ -116,3 +116,49 @@ def test_prediction_disabled_does_not_force_history_into_almost_out():
         )
     assert row["include_in_almost_out"] is False
     assert row["prediction_available"] is False
+
+
+def test_first_use_history_only_shows_estimated_need_when_stock_baseline_is_untouched():
+    from datetime import timedelta
+    group = projection(
+        stock=1,
+        events=[
+            {"article_id": "ah", "event_type": "baseline", "quantity": 0,
+             "source": "historical_auto_stock"},
+            {"article_id": "lidl", "event_type": "baseline", "quantity": 1,
+             "source": "historical_auto_stock"},
+        ],
+    )
+    approved = {
+        **cadence(),
+        "last_date": date.today() - timedelta(days=12),
+        "first_date": date.today() - timedelta(days=22),
+    }
+    row = api.evaluate_household_article_almost_out(
+        object(), "home-1",
+        {"id": "ah", "naam": "Bewezen product", "min_stock": 0, "ideal_stock": 2},
+        household_settings={
+            "shopping_days": 0, "prediction_enabled": True,
+            "prediction_days": 7, "policy_mode": "advisory",
+        },
+        article_settings_map={}, group_projection=group,
+        purchase_cadence=approved, historical_baseline_allowed=True,
+    )
+    assert row["prediction_available"] is True
+    assert row["prediction_basis"] == "confirmed_historical_replacement_and_untouched_opening_stock"
+    assert row["prediction_triggered"] is True
+    assert row["include_in_almost_out"] is True
+    assert row["trigger_type"] == "predicted"
+
+    # An explicit disabled replacement policy cannot use opening-stock volume.
+    disabled = api.evaluate_household_article_almost_out(
+        object(), "home-1",
+        {"id": "ah", "naam": "Bewezen product", "min_stock": 0, "ideal_stock": 2},
+        household_settings={
+            "shopping_days": 0, "prediction_enabled": True,
+            "prediction_days": 7, "policy_mode": "advisory",
+        },
+        article_settings_map={}, group_projection=group,
+        purchase_cadence=approved, historical_baseline_allowed=False,
+    )
+    assert disabled["include_in_almost_out"] is False
