@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from hashlib import sha256
+import json
 from typing import Mapping, Sequence
 
 from app.services.product_day_auto_consume_service import (
@@ -96,6 +98,7 @@ def replay_historical_stock(
     unique_lines = set()
     excluded_duplicate_receipts = 0
     source_count = 0
+    source_evidence = []
 
     # Sort by actual purchase day, never by order of arrival or UI order.
     ordered = sorted(purchases, key=lambda r: (
@@ -139,6 +142,7 @@ def replay_historical_stock(
                 _factor(factors[member])
         group_key = tuple(group)
         grouped[group_key][day][article] += quantity
+        source_evidence.append((day.isoformat(), article, quantity, rid, lid, sha))
         source_count += 1
 
     quantities = defaultdict(int)
@@ -175,6 +179,13 @@ def replay_historical_stock(
         "household_id": owner,
         "first_current_purchase_date": target.isoformat(),
         "source_line_count": source_count,
+        "source_fingerprint": sha256(json.dumps({
+            "cutoff": target.isoformat(),
+            "events": source_evidence,
+            "modes": sorted((article_id, modes[article_id]) for article_id in modes),
+            "groups": sorted((aid, group) for aid, group in canonical_groups.items()),
+            "sizes": sorted((aid, str(_factor(size))) for aid, size in factors.items()),
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
         "excluded_duplicate_receipt_lines": excluded_duplicate_receipts,
         "quantities": dict(sorted(quantities.items())),
         "last_purchase_dates": last_date,
