@@ -26,7 +26,7 @@ class _Conn:
         statement = str(stmt)
         self.commands.append((statement, params))
         if statement.strip().startswith("SELECT 1"):
-            return _Result(value=1 if self.existing_table in statement else None)
+            return _Result(value=1 if self.existing_table and self.existing_table in statement else None)
         if "INSERT INTO household_settings" in statement:
             assert params["mode"] == "consume_all_existing_before_purchase"
             assert "ON CONFLICT" in statement
