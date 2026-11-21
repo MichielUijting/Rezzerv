@@ -23,6 +23,11 @@ from app.services.product_day_auto_consume_service import (
 MODES = frozenset((AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY,
                    AUTO_CONSUME_ALL_EXISTING))
 MAX_HISTORICAL_PURCHASE_LINES = 20000
+# Match PR2's conservative evidence threshold for an interpretable cadence.
+MIN_PURCHASE_DAYS = 3
+MIN_OBSERVED_SPAN_DAYS = 28
+MAX_PURCHASE_GAP_DAYS = 90
+MAX_LAST_PURCHASE_AGE_DAYS = 90
 
 
 def _day(value) -> date:
@@ -147,8 +152,33 @@ def replay_historical_stock(
 
     quantities = defaultdict(int)
     last_date = {}
+    purchase_cadences = {}
     for members, per_day in sorted(grouped.items(), key=lambda it: it[0]):
         mode = modes[members[0]]
+        dates = sorted(per_day)
+        # One purchase day counts once, even across retailers and synonyms.
+        # Only attach a cadence when longitudinal source evidence suffices.
+        span = (dates[-1] - dates[0]).days
+        gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+        age = (target - dates[-1]).days
+        if (len(dates) >= MIN_PURCHASE_DAYS
+                and span >= MIN_OBSERVED_SPAN_DAYS
+                and age <= MAX_LAST_PURCHASE_AGE_DAYS
+                and all(0 < gap <= MAX_PURCHASE_GAP_DAYS for gap in gaps)):
+            evidence = {
+                "average_repurchase_interval_days": round(span / (len(dates) - 1), 3),
+                "purchase_day_count": len(dates),
+                "first_purchase_date": dates[0].isoformat(),
+                "last_purchase_date": dates[-1].isoformat(),
+                "basis": "historical_confirmed_identity",
+                "matched_and_synonyms": list(members),
+            }
+            for member in members:
+                purchase_cadences[member] = evidence.copy()
+        # Every member of a confirmed component is a potential stock identity;
+        # a prior variant replaced by the last purchase can legitimately be 0.
+        for member in members:
+            quantities.setdefault(member, 0)
         sizes = {
             member: (_factor(factors[member]) if len(members) > 1 else Decimal("1"))
             for member in members
@@ -189,6 +219,7 @@ def replay_historical_stock(
         "excluded_duplicate_receipt_lines": excluded_duplicate_receipts,
         "quantities": dict(sorted(quantities.items())),
         "last_purchase_dates": last_date,
+        "purchase_cadences": dict(sorted(purchase_cadences.items())),
         "writes_inventory": False,
         "policy_modes": {
             article_id: modes[article_id]
