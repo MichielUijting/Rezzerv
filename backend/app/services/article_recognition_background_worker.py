@@ -62,8 +62,55 @@ def perform_recognition_pass(conn) -> dict:
     linked = int(family.get("linked") or 0) + int(names.get("linked") or 0)
     if linked < 0:
         raise RuntimeError("Ongeldige herkenningssamenvatting.")
+
+    # Historical receipts are not ordinary Kassa approvals: after confirmed
+    # identity matching, replay them asynchronously against canonical
+    # household repurchase settings. Each household is its own savepoint so
+    # a failed/untrusted stock projection cannot roll back identity matching.
+    from app.services.historical_household_stock_writer import (
+        refresh_automatic_historical_stock,
+    )
+    historic_households = conn.execute(text("""
+        SELECT hrc.household_id
+        FROM household_receipt_history_cutovers hrc
+        WHERE EXISTS (
+            SELECT 1
+            FROM receipt_tables rt
+            WHERE rt.household_id = hrc.household_id
+              AND rt.deleted_at IS NULL
+              AND rt.purchase_at IS NOT NULL
+              AND CAST(rt.purchase_at AS DATE) < hrc.first_current_purchase_date
+        )
+        ORDER BY hrc.household_id
+        LIMIT 201
+    """)).scalars().all()
+    historical = {"processed": 0, "created": 0, "revised": 0,
+                  "skipped": 0, "failed": 0}
+    if len(historic_households) > 200:
+        # Never silently materialize an arbitrary first subset. A future
+        # bulk worker may use a persistent cursor for larger installations.
+        historical["status"] = "household_limit_reached"
+    else:
+        historical["status"] = "checked"
+        for household_id in historic_households:
+            savepoint = conn.begin_nested()
+            try:
+                report = refresh_automatic_historical_stock(
+                    conn, household_id=str(household_id),
+                )
+                savepoint.commit()
+                historical["processed"] += 1
+                for key in ("created", "revised", "skipped"):
+                    historical[key] += int(report.get(key) or 0)
+            except Exception as error:
+                savepoint.rollback()
+                historical["failed"] += 1
+                # Never log receipt content or household identifiers.
+                LOG.warning("Automatische historische voorraad niet afgerond (%s)", type(error).__name__)
+
     return {"status": "applied", "linked": linked,
-            "limit_reached": bool(family.get("limit_reached") or names.get("limit_reached"))}
+            "limit_reached": bool(family.get("limit_reached") or names.get("limit_reached")),
+            "historical_auto_stock": historical}
 
 
 def run_one_recognition_pass(engine: Engine) -> dict:
