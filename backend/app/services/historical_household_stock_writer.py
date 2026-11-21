@@ -255,7 +255,7 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
         if article_id not in (result.get("matched_and_synonyms") or []):
             raise ValueError("Koopritme hoort niet bij het gekoppelde huishoudartikel")
         interval = result["average_repurchase_interval_days"]
-        if not (0 < float(interval) <= 3650 and int(result["purchase_day_count"]) >= 3):
+        if not (0 < float(interval) and int(result["purchase_day_count"]) >= 2):
             raise ValueError("Onvoldoende koopritmebewijs")
         affected = conn.execute(text("""
             INSERT INTO household_historical_purchase_cadences (
