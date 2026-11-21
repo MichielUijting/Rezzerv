@@ -13,6 +13,11 @@ def read_historical_household_purchase_cadence(
     article_id = str(household_article_id or "").strip()
     if not owner or not article_id:
         raise ValueError("Huishouden en huishoudartikel zijn verplicht")
+    # Production schema is PostgreSQL-only. Legacy isolated SQLite/unit
+    # fixtures have no Alembic-owned cadence table and must not receive an
+    # invented value; a missing table on PostgreSQL still fails visibly.
+    if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
+        return None
     row = conn.execute(text("""
         SELECT average_repurchase_interval_days, purchase_day_count,
                first_purchase_date, last_purchase_date,
