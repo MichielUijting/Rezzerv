@@ -23,11 +23,9 @@ from app.services.product_day_auto_consume_service import (
 MODES = frozenset((AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY,
                    AUTO_CONSUME_ALL_EXISTING))
 MAX_HISTORICAL_PURCHASE_LINES = 20000
-# Match PR2's conservative evidence threshold for an interpretable cadence.
-MIN_PURCHASE_DAYS = 3
-MIN_OBSERVED_SPAN_DAYS = 28
-MAX_PURCHASE_GAP_DAYS = 90
-MAX_LAST_PURCHASE_AGE_DAYS = 90
+# One repeat purchase means two distinct purchase dates. There are no
+# minimum observation spans, recency requirements, or gap thresholds.
+MIN_PURCHASE_DAYS = 2
 
 
 def _day(value) -> date:
@@ -156,15 +154,12 @@ def replay_historical_stock(
     for members, per_day in sorted(grouped.items(), key=lambda it: it[0]):
         mode = modes[members[0]]
         dates = sorted(per_day)
-        # One purchase day counts once, even across retailers and synonyms.
-        # Only attach a cadence when longitudinal source evidence suffices.
-        span = (dates[-1] - dates[0]).days
-        gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
-        age = (target - dates[-1]).days
-        if (len(dates) >= MIN_PURCHASE_DAYS
-                and span >= MIN_OBSERVED_SPAN_DAYS
-                and age <= MAX_LAST_PURCHASE_AGE_DAYS
-                and all(0 < gap <= MAX_PURCHASE_GAP_DAYS for gap in gaps)):
+        # A single *repeat* purchase suffices: two distinct dates.
+        # Same-day receipts, even across stores and confirmed synonyms,
+        # count as one occasion. Each next day updates the mean over all
+        # consecutive intervals, without imposing recency or span filters.
+        if len(dates) >= MIN_PURCHASE_DAYS:
+            span = (dates[-1] - dates[0]).days
             evidence = {
                 "average_repurchase_interval_days": round(span / (len(dates) - 1), 3),
                 "purchase_day_count": len(dates),
