@@ -81,6 +81,14 @@ def perform_recognition_pass(conn) -> dict:
               AND rt.purchase_at IS NOT NULL
               AND CAST(rt.purchase_at AS DATE) < hrc.first_current_purchase_date
         )
+        OR EXISTS (
+            SELECT 1
+            FROM inventory_events e
+            WHERE e.household_id = hrc.household_id
+              AND e.household_article_id IS NOT NULL
+              AND e.event_type IN ('purchase', 'auto_repurchase')
+              AND COALESCE(e.quantity, 0) > 0
+        )
         ORDER BY hrc.household_id
         LIMIT 201
     """)).scalars().all()
