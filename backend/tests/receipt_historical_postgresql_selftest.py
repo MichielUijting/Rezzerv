@@ -614,6 +614,231 @@ def main() -> None:
                     ), {"household_id": new_household}).scalar_one()
                     assert count == 0, f"Historical receipts mutated {table}"
                 print("RECEIPT_HISTORY_POSTGRESQL_ZERO_STOCK_MUTATION_GREEN")
+
+                # PR3: the automatic projection is invoked explicitly inside
+                # this *isolated CI rollback transaction*, never in a user's
+                # existing local or server database. No approval UI exists.
+                from app.services.historical_household_stock_source import (
+                    load_automatic_historical_stock,
+                )
+                from app.services.historical_household_stock_writer import (
+                    refresh_automatic_historical_stock,
+                )
+                from app.services.historical_household_purchase_cadence import (
+                    read_historical_household_purchase_cadence,
+                )
+                conn.execute(text("""
+                    UPDATE household_articles SET consumable = 1
+                    WHERE household_id=:household_id AND id=:article_id
+                """), {"household_id": new_household, "article_id": article_id})
+                conn.execute(text("""
+                    INSERT INTO household_settings (
+                        id, household_id, setting_key, setting_value, updated_at
+                    ) VALUES (
+                        :id, :household_id, 'consumable_auto_deduction_mode',
+                        'consume_all_existing_before_purchase', CURRENT_TIMESTAMP
+                    ) ON CONFLICT(household_id, setting_key) DO UPDATE
+                    SET setting_value=excluded.setting_value
+                """), {"id": _id(), "household_id": new_household})
+                calculated = load_automatic_historical_stock(
+                    conn, household_id=new_household,
+                )
+                assert calculated["status"] == "calculated", calculated
+                assert calculated["quantities"] == {article_id: 1}, calculated
+                assert calculated["purchase_cadences"][article_id]["purchase_day_count"] == 4
+                assert calculated["purchase_cadences"][article_id]["average_repurchase_interval_days"] > 0
+                before_count = conn.execute(text("""
+                    SELECT COUNT(*) FROM inventory
+                    WHERE household_id=:household_id
+                """), {"household_id": new_household}).scalar_one()
+                assert before_count == 0
+                first_applied = refresh_automatic_historical_stock(
+                    conn, household_id=new_household,
+                )
+                assert first_applied["status"] == "applied", first_applied
+                assert first_applied["created"] == 1, first_applied
+                assert first_applied["cadences_written"] == 1, first_applied
+                stored = conn.execute(text("""
+                    SELECT aantal, space_id, sublocation_id FROM inventory
+                    WHERE household_id=:household_id AND household_article_id=:article_id
+                """), {"household_id": new_household, "article_id": article_id}).mappings().all()
+                assert len(stored) == 1 and int(stored[0]["aantal"]) == 1, stored
+                assert stored[0]["space_id"] is None and stored[0]["sublocation_id"] is None
+                source_event = conn.execute(text("""
+                    SELECT event_type, source, quantity FROM inventory_events
+                    WHERE household_id=:household_id AND household_article_id=:article_id
+                """), {"household_id": new_household, "article_id": article_id}).mappings().all()
+                assert len(source_event) == 1 and source_event[0]["source"] == "historical_auto_stock", source_event
+                assert source_event[0]["event_type"] == "baseline" and int(source_event[0]["quantity"]) == 1
+                cadence = read_historical_household_purchase_cadence(
+                    conn, household_id=new_household, household_article_id=article_id,
+                )
+                assert cadence and cadence["purchase_day_count"] == 4
+                assert read_historical_household_purchase_cadence(
+                    conn, household_id=other_household, household_article_id=article_id,
+                ) is None
+                second = refresh_automatic_historical_stock(
+                    conn, household_id=new_household,
+                )
+                assert second["created"] == second["revised"] == second["cadences_written"] == 0, second
+                for table in ("inventory", "inventory_events",
+                              "household_historical_auto_stock_baselines",
+                              "household_historical_purchase_cadences"):
+                    count = conn.execute(text(
+                        f"SELECT COUNT(*) FROM {table} WHERE household_id=:household_id"
+                    ), {"household_id": new_household}).scalar_one()
+                    assert count == 1, (table, count)
+                print("RECEIPT_HISTORY_POSTGRESQL_AUTO_STOCK_CADENCE_GREEN")
+
+                # PR3: one historical purchase followed by one *current*
+                # purchase suffices for a saved cadence; subsequent purchases
+                # recompute it without changing any established stock.
+                # This savepoint rolls back before the outer CI rollback.
+                with conn.begin_nested() as repeat_savepoint:
+                    repeat_article_id = main.ensure_household_article(
+                        conn, new_household, "Historische CI eerste herhaalaankoop",
+                    )
+                    conn.execute(text("""
+                        UPDATE household_articles
+                        SET consumable = 1
+                        WHERE household_id=:household_id AND id=:article_id
+                    """), {"household_id": new_household, "article_id": repeat_article_id})
+                    historic_day = first_current - timedelta(days=25)
+                    historic_id, _ = _seed_receipt(
+                        conn, household_id=new_household,
+                        provider_id=provider, connection_id=connection,
+                        store="Lidl", purchase_date=historic_day,
+                        approved=False, with_line=True,
+                    )
+                    conn.execute(text("""
+                        UPDATE receipt_table_lines
+                        SET line_role='product', inventory_eligible=1,
+                            matched_article_id=:article_id,
+                            article_match_status='matched'
+                        WHERE receipt_table_id=:receipt_id
+                    """), {"article_id": repeat_article_id, "receipt_id": historic_id})
+                    initial = load_automatic_historical_stock(
+                        conn, household_id=new_household,
+                    )
+                    assert repeat_article_id in initial["purchase_days_by_article"]
+                    assert repeat_article_id not in initial["purchase_cadences"]
+
+                    def add_current_purchase(days_after, label):
+                        purchase_day = first_current + timedelta(days=days_after)
+                        conn.execute(text("""
+                            INSERT INTO inventory_events (
+                                id, household_id, article_id, household_article_id,
+                                article_name, location_id, location_label,
+                                event_type, quantity, old_quantity, new_quantity,
+                                source, note, purchase_date,
+                                effective_at, recorded_at,
+                                effective_at_precision, event_priority, created_at
+                            ) VALUES (
+                                :id, :household_id, :article_id, :article_id,
+                                'Historische CI eerste herhaalaankoop', NULL, NULL,
+                                'purchase', 1, 0, 1, 'ci_purchase', :label,
+                                :purchase_date, :effective_at, CURRENT_TIMESTAMP,
+                                'date', 10, CURRENT_TIMESTAMP
+                            )
+                        """), {
+                            "id": _id(), "household_id": new_household,
+                            "article_id": repeat_article_id, "label": label,
+                            "purchase_date": purchase_day.isoformat(),
+                            "effective_at": purchase_day.isoformat() + "T00:00:00+00:00",
+                        })
+
+                    add_current_purchase(2, "Eerste herhaalaankoop")
+                    first_repeat = refresh_automatic_historical_stock(
+                        conn, household_id=new_household,
+                    )
+                    assert first_repeat["status"] == "applied", first_repeat
+                    result = read_historical_household_purchase_cadence(
+                        conn, household_id=new_household,
+                        household_article_id=repeat_article_id,
+                    )
+                    assert result is not None, first_repeat
+                    assert result["purchase_day_count"] == 2, result
+                    assert result["average_repurchase_interval_days"] == 27.0, result
+                    # Existing live purchase event proves the new baseline
+                    # must not create/overwrite current stock for this article.
+                    assert conn.execute(text("""
+                        SELECT COUNT(*) FROM household_historical_auto_stock_baselines
+                        WHERE household_id=:household_id
+                          AND household_article_id=:article_id
+                    """), {"household_id": new_household,
+                           "article_id": repeat_article_id}).scalar_one() == 0
+
+                    add_current_purchase(12, "Volgende herhaalaankoop")
+                    add_current_purchase(12, "Zelfde dag, tweede winkel")
+                    second_repeat = refresh_automatic_historical_stock(
+                        conn, household_id=new_household,
+                    )
+                    result = read_historical_household_purchase_cadence(
+                        conn, household_id=new_household,
+                        household_article_id=repeat_article_id,
+                    )
+                    assert second_repeat["cadences_written"] >= 1, second_repeat
+                    assert result["purchase_day_count"] == 3, result
+                    assert result["average_repurchase_interval_days"] == 18.5, result
+                    repeat_savepoint.rollback()
+                print("RECEIPT_HISTORY_POSTGRESQL_ONE_REPEAT_CADENCE_GREEN")
+
+                # No historical receipts at all: a household still learns
+                # after one live repeat, while no initial stock baseline is
+                # fabricated from already-processed current purchase events.
+                with conn.begin_nested() as current_only_savepoint:
+                    current_home = _seed_household(conn)
+                    assert activate_cutover_for_new_onboarding(
+                        conn, household_id=current_home,
+                    )
+                    current_cutover = read_household_cutover(conn, current_home)
+                    current_article = main.ensure_household_article(
+                        conn, current_home, "CI alleen actuele aankopen",
+                    )
+                    for index, offset in enumerate((1, 15)):
+                        day = current_cutover + timedelta(days=offset)
+                        conn.execute(text("""
+                            INSERT INTO inventory_events (
+                                id, household_id, article_id, household_article_id,
+                                article_name, location_id, location_label,
+                                event_type, quantity, old_quantity, new_quantity,
+                                source, note, purchase_date,
+                                effective_at, recorded_at,
+                                effective_at_precision, event_priority, created_at
+                            ) VALUES (
+                                :id, :household_id, :article_id, :article_id,
+                                'CI alleen actuele aankopen', NULL, NULL,
+                                'purchase', 1, 0, 1, 'ci_purchase', :note,
+                                :purchase_date, :effective_at, CURRENT_TIMESTAMP,
+                                'date', 10, CURRENT_TIMESTAMP
+                            )
+                        """), {
+                            "id": _id(), "household_id": current_home,
+                            "article_id": current_article,
+                            "note": "CI live " + str(index),
+                            "purchase_date": day.isoformat(),
+                            "effective_at": day.isoformat() + "T00:00:00+00:00",
+                        })
+                    current_report = refresh_automatic_historical_stock(
+                        conn, household_id=current_home,
+                    )
+                    assert current_report["status"] == "no_trusted_matches", current_report
+                    assert current_report["cadences_written"] == 1, current_report
+                    current_interval = read_historical_household_purchase_cadence(
+                        conn, household_id=current_home,
+                        household_article_id=current_article,
+                    )
+                    assert current_interval["purchase_day_count"] == 2, current_interval
+                    assert current_interval["average_repurchase_interval_days"] == 14.0, current_interval
+                    for table in ("household_historical_auto_stock_baselines", "inventory"):
+                        assert conn.execute(text(
+                            f"SELECT COUNT(*) FROM {table} WHERE household_id=:household_id"
+                        ), {"household_id": current_home}).scalar_one() == 0, table
+                    current_only_savepoint.rollback()
+                print("RECEIPT_HISTORY_POSTGRESQL_CURRENT_ONLY_CADENCE_GREEN")
+
+
+
             finally:
                 tx.rollback()
     finally:

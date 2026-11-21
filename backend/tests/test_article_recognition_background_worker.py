@@ -22,6 +22,12 @@ class Result:
     def scalar_one(self):
         return self.value
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.value
+
 
 class Conn:
     dialect = SimpleNamespace(name="postgresql")
@@ -37,6 +43,9 @@ class Conn:
             return Result(self.state)
         if "pg_try_advisory_xact_lock" in query:
             return Result(self.locked)
+        if "FROM household_receipt_history_cutovers" in query:
+            assert "WHERE EXISTS" in query and "inventory_events" in query
+            return Result([])
         raise AssertionError("Unexpected database query")
 
 
@@ -93,7 +102,13 @@ def test_matching_uses_only_private_service_actor_and_existing_authorities(monke
     monkeypatch.setattr(curated, "automatically_match_curated_receipts", family)
     monkeypatch.setattr(exact, "automatically_match_proven_exact_names", names)
     outcome = worker.perform_recognition_pass(Conn())
-    assert outcome == {"status": "applied", "linked": 3, "limit_reached": False}
+    assert outcome == {
+        "status": "applied", "linked": 3, "limit_reached": False,
+        "historical_auto_stock": {
+            "processed": 0, "created": 0, "revised": 0,
+            "skipped": 0, "failed": 0, "status": "checked",
+        },
+    }
     assert calls == [
         ("curated", SERVICE_ACTOR_ID, "system_service"),
         ("exact", SERVICE_ACTOR_ID, "system_service"),

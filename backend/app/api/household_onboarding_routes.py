@@ -13,6 +13,7 @@ from app.services.household_onboarding_service import (
     OnboardingAlreadyCompletedError,
     advance_profile_to_shared_household_minimum,
     complete_household_onboarding,
+    ensure_new_household_repurchase_default,
     public_household_onboarding_payload,
     resolve_household_onboarding_state,
     select_primary_use_case,
@@ -396,6 +397,11 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     household_name=payload.household_name,
                     household_usage_mode=payload.household_usage_mode,
                 )
+                # An empty newly onboarded household starts with automatic
+                # replacement of old matched/synonym stock at repurchase.
+                # Explicit household settings and existing historical/current
+                # stock are never changed by this initial default.
+                ensure_new_household_repurchase_default(conn, household_id)
                 # The cutover starts when the household actually enables
                 # receipt processing, not simply on registration. Wat Inhuis
                 # may enable receipts through canonical configuration.

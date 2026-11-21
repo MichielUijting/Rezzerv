@@ -287,6 +287,13 @@ def _strip_migration_extensions(schema: str) -> str:
         # PR681 adds a separate, Alembic-owned exact receipt identity table.
         # Its schema is checked separately, never added to the frozen baseline.
         | {"ed2_receipt_family_links"}
+        # PR710 creates two new Alembic-owned historical household
+        # projections; neither is part of the frozen SQLite baseline.
+        # Their schema remains subject to the normal Alembic-head checks.
+        | {
+            "household_historical_auto_stock_baselines",
+            "household_historical_purchase_cadences",
+        }
         # PR642 adds a separate, version-pinned CBS classification authority.
         # These new reference/decision/audit tables are not part of the
         # immutable pre-Alembic SQLite baseline.

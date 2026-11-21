@@ -25,8 +25,12 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 113  # 112 canonical tables plus the explicit household receipt history cutover.
-REQUIRED_HISTORY_TABLES = frozenset({"household_receipt_history_cutovers"})
+EXPECTED_APPLICATION_TABLES = 115  # PR2 cutover plus PR3 automatic stock and cadence tables.
+REQUIRED_HISTORY_TABLES = frozenset({
+    "household_receipt_history_cutovers",
+    "household_historical_auto_stock_baselines",
+    "household_historical_purchase_cadences",
+})
 REQUIRED_CBS_TABLES = frozenset({
     "cbs_ecoicop_categories",
     "global_product_cbs_classifications",

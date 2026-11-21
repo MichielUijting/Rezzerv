@@ -4053,6 +4053,13 @@ def build_household_article_detail_service(conn, household_id: str, household_ar
     events_done = perf_counter()
     settings_payload = get_household_article_settings(conn, household_id, resolved_household_article_id)
     settings_done = perf_counter()
+    from app.services.historical_household_purchase_cadence import (
+        read_historical_household_purchase_cadence,
+    )
+    purchase_cadence = read_historical_household_purchase_cadence(
+        conn, household_id=household_id,
+        household_article_id=resolved_household_article_id,
+    )
     price_summary = build_household_article_price_summary(conn, household_id, resolved_household_article_id, details.get("global_product_id"))
     completed = perf_counter()
     if completed - started >= 0.5:
@@ -4075,6 +4082,7 @@ def build_household_article_detail_service(conn, household_id: str, household_ar
         "events": event_rows,
         "product": details.get("product_details") or {},
         "settings": settings_payload.get("settings") or {},
+        "historical_purchase_cadence": purchase_cadence,
         "price_history": price_summary.get("price_history") or [],
         "price_summary": {key: value for key, value in price_summary.items() if key != "price_history"},
     }
