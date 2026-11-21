@@ -4339,7 +4339,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
         'current_quantity_at_evaluation': float(round(current_quantity, 6)),
     }
 
-def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None, individual_projection: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_household_article_almost_out(conn, household_id: str, article_row: Mapping[str, Any], household_settings: dict[str, Any] | None = None, article_settings_map: dict[str, Any] | None = None, group_projection: dict[str, Any] | None = None, individual_projection: dict[str, Any] | None = None, purchase_cadence: dict[str, Any] | None = None, historical_baseline_allowed: bool = False) -> dict[str, Any]:
     household_article_id = str(article_row.get('id') or '').strip()
     article_name = str(article_row.get('naam') or '').strip()
     global_product_id = str(article_row.get('global_product_id') or '').strip()
@@ -4421,6 +4421,51 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
                 event_rows, effective_prediction_days, current_quantity=current_quantity,
                 minimum_stock=prediction_minimum,
             )
+        # PR6: when the ordinary purchase-volume forecast is unavailable,
+        # use the PR3-confirmed cadence only with a real latest-day purchase
+        # quantity and the same exact household-article/synonym identities.
+        # The purchase calendar alone is never consumption proof.
+        cadence_members = (
+            group_projection.get('member_article_ids', [])
+            if group_projection else [household_article_id]
+        )
+        if prediction_payload is None and purchase_cadence is not None:
+            from app.services.almost_out_historical_cadence import prediction_from_confirmed_cadence
+            source_purchases = (
+                event_rows if group_projection else
+                individual_projection['purchase_rows'] if individual_projection is not None
+                else event_rows
+            )
+            prediction_payload = prediction_from_confirmed_cadence(
+                purchase_cadence, source_purchases, effective_prediction_days,
+                current_quantity=current_quantity, minimum_stock=prediction_minimum,
+                member_article_ids=cadence_members,
+            )
+            if prediction_payload is None and historical_baseline_allowed:
+                # The first use of a new household may have only historical
+                # receipts, with no recent purchase event. PR3's untouched
+                # quantity baseline is trusted only for the verified
+                # replace-all mode and complete article/synonym ownership.
+                from app.services.almost_out_historical_cadence import (
+                    prediction_from_untouched_historical_baseline,
+                )
+                prediction_payload = prediction_from_untouched_historical_baseline(
+                    purchase_cadence, event_rows, effective_prediction_days,
+                    current_quantity=current_quantity,
+                    minimum_stock=prediction_minimum,
+                    member_article_ids=cadence_members,
+                    replacement_policy_proven=True,
+                )
+            if prediction_payload is not None:
+                prediction_payload = {
+                    **prediction_payload,
+                    'prediction_scope': (
+                        group_projection.get('aggregation_scope')
+                        if group_projection else
+                        'global_product' if global_product_id else 'household_article'
+                    ),
+                    'current_quantity_at_evaluation': float(round(current_quantity, 6)),
+                }
         # The historical purchase calendar alone must never produce a Bijna op
         # signal. Only stock projected at the horizon below the household
         # minimum provides actionable forecast evidence.
@@ -4545,6 +4590,19 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
         item_payload['verpakkingseenheid'] = item_payload['packaging_unit']
         item_payload['packaging_quantity'] = 1
         item_payload['verpakkingshoeveelheid'] = 1
+    # Read-only provenance is available even when an article is already below
+    # minimum stock. Avoid misrepresenting a cadence for a partial synonym group.
+    cadence_members = (
+        group_projection.get('member_article_ids', [])
+        if group_projection else [household_article_id]
+    )
+    if (purchase_cadence is not None
+            and set(purchase_cadence.get('members') or []) == set(cadence_members)):
+        item_payload.update({
+            'historical_repurchase_interval_days': purchase_cadence['interval_days'],
+            'historical_repurchase_purchase_days': purchase_cadence['purchase_day_count'],
+            'historical_repurchase_last_purchase_date': purchase_cadence['last_date'].isoformat(),
+        })
     if prediction_payload:
         item_payload.update(prediction_payload)
     else:
@@ -4573,7 +4631,7 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         text(
             """
             SELECT ha.id, ha.household_id, ha.naam, ha.custom_name, ha.min_stock, ha.ideal_stock, ha.favorite_store, ha.status,
-                   ha.global_product_id, ha.barcode,
+                   ha.global_product_id, ha.barcode, ha.consumable, ha.default_inventory_handling,
                    COALESCE(gp.name, '') AS product_name,
                    COALESCE(gp.image_url, '') AS image_url
             FROM household_articles ha
@@ -4595,6 +4653,24 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     eligible_count = len(article_rows)
     hidden_count = 0
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
+    # The PR3 purchase-cadence writer is the authority. One bounded query
+    # prefetches confirmed, household-owned cadence without altering stock.
+    from app.services.almost_out_historical_cadence import load_confirmed_purchase_cadences
+    purchase_cadences = load_confirmed_purchase_cadences(conn, household_id, article_rows)
+    # A historical opening baseline can be used as replacement-volume evidence
+    # only if every member *still* uses the original replace-all behavior.
+    # Reuse PR3's effective mode rules; never guess from article names.
+    historical_baseline_allowed_ids = set()
+    if purchase_cadences:
+        from app.services.historical_household_stock_source import _setting_modes, _effective_mode
+        mode, overrides = _setting_modes(conn, str(household_id))
+        for article in article_rows:
+            article_id = str(article['id'])
+            if (article_id in purchase_cadences
+                    and str(article.get('default_inventory_handling') or 'STOCK').upper() == 'STOCK'
+                    and _effective_mode(dict(article), mode, overrides)
+                        == ARTICLE_AUTO_CONSUME_ALL_EXISTING):
+                historical_baseline_allowed_ids.add(article_id)
     # Classification is presentation-only. Enrich the *visible* signals
     # after evaluation, not every household article before the first row.
     settings_map_by_article: dict[str, dict[str, Any]] = {}
@@ -4683,6 +4759,11 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
                 article_settings_map=settings_map_by_article.get(article_id, {}),
                 group_projection=projection,
                 individual_projection=individual_projections.get(article_id) if not grouped else None,
+                purchase_cadence=purchase_cadences.get(article_id),
+                historical_baseline_allowed=all(
+                    str(member['id']) in historical_baseline_allowed_ids
+                    for member in members
+                ),
             )
             if evaluation.get('include_in_almost_out'):
                 items.append(evaluation)
