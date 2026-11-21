@@ -8,9 +8,10 @@ but *any* other inventory/event history blocks retroactive stock mutation.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from uuid import uuid4
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.services.canonical_inventory_identity_service import (
     apply_inventory_purchase_by_identity,
@@ -238,6 +239,73 @@ def _revise_baseline(conn, *, owner, article_id, qty, baseline, fingerprint, cut
         raise ValueError("Historische voorraadregistratie kon niet worden bijgewerkt")
 
 
+def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) -> dict:
+    """Store trusted cadence per matched article, including all synonym members.
+
+    The cadence is metadata, never an inventory event. Invalidated historic
+    sources remove only this service's own projection, not current purchase
+    history or a manually configured minimum-stock threshold.
+    """
+    rows = calculated.get("purchase_cadences") or {}
+    source_fingerprint = str(calculated.get("source_fingerprint") or "").strip()
+    if len(source_fingerprint) != 64:
+        raise ValueError("Historisch koopritme mist bronfingerprint")
+    written = 0
+    for article_id, result in sorted(rows.items()):
+        if article_id not in (result.get("matched_and_synonyms") or []):
+            raise ValueError("Koopritme hoort niet bij het gekoppelde huishoudartikel")
+        interval = result["average_repurchase_interval_days"]
+        if not (0 < float(interval) <= 3650 and int(result["purchase_day_count"]) >= 3):
+            raise ValueError("Onvoldoende koopritmebewijs")
+        affected = conn.execute(text("""
+            INSERT INTO household_historical_purchase_cadences (
+                household_id, household_article_id, average_repurchase_interval_days,
+                purchase_day_count, first_purchase_date, last_purchase_date,
+                matched_and_synonyms, source_fingerprint, updated_at
+            ) VALUES (
+                :household_id, :article_id, :interval,
+                :day_count, :first_day, :last_day,
+                :members, :fingerprint, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (household_id, household_article_id) DO UPDATE
+            SET average_repurchase_interval_days=excluded.average_repurchase_interval_days,
+                purchase_day_count=excluded.purchase_day_count,
+                first_purchase_date=excluded.first_purchase_date,
+                last_purchase_date=excluded.last_purchase_date,
+                matched_and_synonyms=excluded.matched_and_synonyms,
+                source_fingerprint=excluded.source_fingerprint,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE household_historical_purchase_cadences.source_fingerprint
+                  IS DISTINCT FROM excluded.source_fingerprint
+               OR household_historical_purchase_cadences.average_repurchase_interval_days
+                  IS DISTINCT FROM excluded.average_repurchase_interval_days
+        """), {
+            "household_id": owner, "article_id": article_id,
+            "interval": interval, "day_count": int(result["purchase_day_count"]),
+            "first_day": result["first_purchase_date"],
+            "last_day": result["last_purchase_date"],
+            "members": json.dumps(sorted(result["matched_and_synonyms"])),
+            "fingerprint": source_fingerprint,
+        })
+        written += int(affected.rowcount or 0)
+    # A changed synonym link or removed historical receipt invalidates stale
+    # projections: remove solely our derived cadence rows for this household.
+    if rows:
+        removed = conn.execute(text("""
+            DELETE FROM household_historical_purchase_cadences
+            WHERE household_id=:household_id
+              AND household_article_id NOT IN :article_ids
+        """).bindparams(bindparam("article_ids", expanding=True)), {
+            "household_id": owner, "article_ids": list(rows),
+        })
+    else:
+        removed = conn.execute(text("""
+            DELETE FROM household_historical_purchase_cadences
+            WHERE household_id=:household_id
+        """), {"household_id": owner})
+    return {"cadences_written": written, "cadences_expired": int(removed.rowcount or 0)}
+
+
 def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     """ONE writer-operation transaction. No global session or browser identity.
 
@@ -257,8 +325,12 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         return {"status": "not_ready", "created": 0, "revised": 0, "skipped": 0}
     quantities = calculated["quantities"]
     if not quantities:
+        cadence = _sync_historical_purchase_cadences(
+            conn, owner=owner, calculated=calculated,
+        )
         return {"status": "no_trusted_matches", "created": 0, "revised": 0,
-                "skipped": 0, "excluded_rows": calculated.get("excluded_untrusted_rows", 0)}
+                "skipped": 0, "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+                **cadence}
 
     baseline = _owned_baselines(conn, owner)
     group_by_article = calculated.get("synonym_groups") or {}
@@ -303,8 +375,12 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
                     baseline=current, fingerprint=fingerprint, cutoff=cutoff,
                 )
                 revised += 1
+    cadence = _sync_historical_purchase_cadences(
+        conn, owner=owner, calculated=calculated,
+    )
     return {
         "status": "applied", "created": created, "revised": revised,
         "unchanged": unchanged, "skipped": skipped,
         "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+        **cadence,
     }
