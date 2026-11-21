@@ -136,6 +136,8 @@ jobs:
           grep -F 'PASS repeated_projection_read_is_idempotent' almost-out-api-projection.log
           grep -F 'PASS recalculation_disappears_above_threshold_and_reappears_below' almost-out-api-projection.log
           grep -F 'PASS postgresql_end_state_preserves_projection_source_and_household_isolation' almost-out-api-projection.log
+          grep -F 'PASS historical_only_repurchase_cadence_projects_via_real_api' almost-out-api-projection.log
+          grep -F 'PR6_HISTORICAL_ONLY_POSTGRESQL_API_GREEN' almost-out-api-projection.log
           grep -F 'ALMOST_OUT_AUTOMATIC_TYPE_UNITS_ISOLATION_VISIBILITY_GREEN' almost-out-api-projection.log
           grep -F 'ALMOST_OUT_API_PROJECTION_POSTGRESQL_GREEN' almost-out-api-projection.log
 
