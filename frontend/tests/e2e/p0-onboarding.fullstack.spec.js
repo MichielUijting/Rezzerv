@@ -82,6 +82,24 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
     await expect(page.getByTestId('receipt-connection-action-' + retailer)).toBeVisible()
   }
   await expect(page.getByTestId('receipt-connection-action-aldi')).toHaveCount(0)
+
+  // PR5: new household history is read-only and scoped to the active session.
+  // Validate the real PostgreSQL summary before allowing the user to leave.
+  await expect(page.getByTestId('historical-import-progress')).toBeVisible()
+  const historyResponse = await page.request.get('/api/receipts/retailers/history-progress')
+  expect(historyResponse.ok()).toBeTruthy()
+  const history = await historyResponse.json()
+  expect(history.history_cutover_enabled).toBe(true)
+  expect(history.complete_retailer_history_known).toBe(false)
+  expect(history.providers.map(row => row.code)).toEqual(['ah', 'lidl', 'jumbo'])
+  for (const row of history.providers) {
+    expect(row.kassa_receipts).toBe(0)
+    expect(row.historical_receipts).toBe(0)
+    expect(row.queue_pending).toBe(0)
+    expect(row.queue_processing).toBe(0)
+  }
+  await page.getByTestId('historical-import-refresh').click()
+  await expect(page.getByTestId('historical-import-stores')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
 
   // Skipping store setup preserves the completed household and existing Home flow.

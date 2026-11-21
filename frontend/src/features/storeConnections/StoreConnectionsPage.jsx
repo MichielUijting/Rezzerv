@@ -26,6 +26,8 @@ import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate }
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
+import HistoricalImportProgress from './HistoricalImportProgress.jsx'
+import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
 import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
 import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConnections.js'
@@ -36,6 +38,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
   const [latestImportDates, setLatestImportDates] = useState({})
+  const [historySummary, setHistorySummary] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [setupHelpStore, setSetupHelpStore] = useState('')
   const ahSyncPageMountedRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
@@ -211,6 +216,20 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     },
   ], [isLoading, isSaving])
 
+  async function refreshHistoricalProgress() {
+    setHistoryLoading(true)
+    try {
+      const overview = await fetchJson('/api/receipts/retailers/history-progress')
+      setHistorySummary(overview)
+      setHistoryError('')
+    } catch {
+      // Keep any last known counts; never present a failed refresh as zero.
+      setHistoryError('De actuele importstatus kon niet worden opgehaald. Probeer Vernieuwen.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
     setAhConnection(data || { connected: false, persistence: 'encrypted_database' })
@@ -359,7 +378,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
   useEffect(() => {
     loadPageData()
+    void refreshHistoricalProgress()
   }, [])
+
+  const pendingHistoryWork = hasPendingHistoryWork(historySummary)
+  useEffect(() => {
+    if (!pendingHistoryWork) return undefined
+    const timer = window.setInterval(() => { void refreshHistoricalProgress() }, 10000)
+    return () => window.clearInterval(timer)
+  }, [pendingHistoryWork])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -540,6 +567,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           }
         }
         setLidlCountsView({ ...lidlCounts })
+        void refreshHistoricalProgress()
         setLidlPhase(lidlCounts.failed ? 'failed' : lidlCounts.queued ? 'queued' : 'completed')
         const summary = 'Lidl: ' + lidlCounts.queued
           + ' bonnen veilig ontvangen, ' + lidlCounts.failed
@@ -650,6 +678,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         + 'automatisch zodra onderhoud dat toestaat. Dit is nog geen bevestiging van verwerking in Kassa.'
       setJumboProgress(null)
       setJumboPhase('queued')
+      void refreshHistoricalProgress()
       setJumboPocProgress(message)
       setJumboImportCandidate(null)
       setJumboPocResult(null)
@@ -764,6 +793,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           : processed ? 'De nieuwe bonnen staan nu in Kassa.' : 'Er waren geen nieuwe bonnen om te verwerken.',
       })
       await loadAhStatus()
+      await refreshHistoricalProgress()
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
       setAhPhase('failed')
@@ -925,6 +955,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 counts={lidlCountsView} testId="lidl-web-progress" />
             ) : null}
           </div>
+        </Card>
+
+        <Card>
+          <HistoricalImportProgress
+            summary={historySummary}
+            loading={historyLoading}
+            error={historyError}
+            onRefresh={refreshHistoricalProgress}
+          />
         </Card>
 
         {activeProvider ? <div data-testid="receipt-connection-details" /> : null}
