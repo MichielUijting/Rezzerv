@@ -165,3 +165,73 @@ def test_chronological_order_is_invariant():
         receipt("2026-10-29", 6, line="2"),
     ]
     assert replay(lines, {"h-a": MATCH}) == replay(list(reversed(lines)), {"h-a": MATCH})
+
+
+def test_three_purchase_days_provide_average_repurchase_interval():
+    lines = [
+        receipt("2026-09-01", 2, line="lidl-1"),
+        receipt("2026-10-01", 1, line="ah-2"),
+        receipt("2026-11-01", 3, line="jumbo-3"),
+        receipt("2026-11-01", 2, line="ah-4"),
+    ]
+    result = replay(list(reversed(lines)), {"h-a": RESET})
+    evidence = result["purchase_cadences"]["h-a"]
+    assert evidence["purchase_day_count"] == 3
+    assert evidence["average_repurchase_interval_days"] == 30.5
+    assert evidence["first_purchase_date"] == "2026-09-01"
+    assert evidence["last_purchase_date"] == "2026-11-01"
+    assert result["quantities"]["h-a"] == 5
+    assert result["source_fingerprint"] == replay(lines, {"h-a": RESET})["source_fingerprint"]
+
+
+def test_confirmed_synonyms_share_same_purchase_interval_without_duplicate_days():
+    group = {"h-a": ("h-a", "h-b"), "h-b": ("h-a", "h-b")}
+    lines = [
+        receipt("2026-09-01", 1, line="1", article="h-a"),
+        receipt("2026-10-01", 2, line="2", article="h-b"),
+        receipt("2026-11-01", 1, line="3", article="h-a"),
+        receipt("2026-11-01", 2, line="4", article="h-b"),
+    ]
+    result = replay(lines, {"h-a": RESET, "h-b": RESET}, group,
+                    {"h-a": 1000, "h-b": 500})
+    assert result["quantities"] == {"h-a": 1, "h-b": 2}
+    a = result["purchase_cadences"]["h-a"]
+    b = result["purchase_cadences"]["h-b"]
+    assert a == b
+    assert a["purchase_day_count"] == 3
+    assert a["average_repurchase_interval_days"] == 30.5
+    assert a["matched_and_synonyms"] == ["h-a", "h-b"]
+
+
+def test_group_member_without_own_purchase_inherits_confirmed_cadence_and_zero_stock():
+    group = {"h-a": ("h-a", "h-b"), "h-b": ("h-a", "h-b")}
+    lines = [
+        receipt("2026-09-01", 1, line="1"),
+        receipt("2026-10-01", 1, line="2"),
+        receipt("2026-11-01", 1, line="3"),
+    ]
+    result = replay(lines, {"h-a": RESET, "h-b": RESET}, group,
+                    {"h-a": 1000, "h-b": 500})
+    assert result["quantities"] == {"h-a": 1, "h-b": 0}
+    assert result["purchase_cadences"]["h-a"] == result["purchase_cadences"]["h-b"]
+
+
+@pytest.mark.parametrize("days", [
+    ("2026-11-01", "2026-11-02", "2026-11-03"),
+    ("2026-02-01", "2026-03-01", "2026-04-01"),
+    ("2026-01-01", "2026-10-01", "2026-11-01"),
+])
+def test_no_unsupported_or_unrepresentative_cadence(days):
+    lines = [receipt(day, 1, line=str(i)) for i, day in enumerate(days)]
+    assert replay(lines, {"h-a": RESET})["purchase_cadences"] == {}
+
+
+def test_group_two_distinct_purchase_days_cannot_claim_average_interval():
+    group = {"h-a": ("h-a", "h-b"), "h-b": ("h-a", "h-b")}
+    lines = [
+        receipt("2026-10-01", 1, line="1", article="h-a"),
+        receipt("2026-11-01", 1, line="2", article="h-b"),
+    ]
+    result = replay(lines, {"h-a": RESET, "h-b": RESET}, group,
+                    {"h-a": 1000, "h-b": 500})
+    assert result["purchase_cadences"] == {}
