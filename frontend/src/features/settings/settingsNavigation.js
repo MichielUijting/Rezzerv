@@ -122,6 +122,18 @@ const SETTINGS_TILES = [
     allowViewer: false,
   },
   {
+    key: 'opening-stock',
+    title: 'Beginvoorraad beoordelen',
+    description: 'Geschatte voorraad uit historische aankopen handmatig controleren en bevestigen',
+    to: '/instellingen/beginvoorraad',
+    permission: 'household_settings.manage',
+    relevance: 'always',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: HOUSEHOLD_SETTINGS_CONTEXTS,
+    allowViewer: false,
+  },
+  {
     key: 'store-import',
     title: 'Winkelimport',
     description: 'Vereenvoudigingsniveau voor het huishouden',
