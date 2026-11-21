@@ -55,10 +55,21 @@ matching- en bevestigde-synoniemregels toe.
   twee verschillende betrouwbare aankoopmomenten wordt
   'Nog onvoldoende betrouwbare herhaalaankopen' getoond.
 - Bij later ingelezen historische bonnen of gewijzigde bewezen relaties
-  wordt het gemiddelde opnieuw berekend, met een bronfingerprint;
-  verouderde afgeleide waarden worden verwijderd. Dit bewerkt geen
-  handmatige minimale voorraad, actuele aankoop-/verbruiksevents
-  of reeds ingestelde huishoudvoorspeltermijn.
+  wordt het gemiddelde opnieuw berekend. Ook **actuele aankopen** met
+  een bestaande bewezen huishoudartikelidentiteit worden na de
+  historische peildatum toegevoegd aan hetzelfde aankoopdagoverzicht.
+  Dit gebeurt automatisch bij een bonimportsignaal of de periodieke
+  herkenningscontrole (herstelcontrole circa elke 15 minuten); meerdere
+  actuele aankopen op dezelfde dag tellen als één moment.
+- Een enkele historische aankoop plus één nieuwe actuele aankoop is dus
+  al voldoende voor de eerste opgeslagen termijn. Iedere volgende
+  afzonderlijke aankoopdag verfijnt het gemiddelde; de opgeslagen
+  bronfingerprint verwerkt ook de actuele aankoopbewijzen.
+- Deze doorlopende herberekening is **alleen metadata**: zij verandert
+  geen actuele voorraadposities, aankoop-/verbruiksevents,
+  handmatige minimale voorraad of huishoudelijke voorspeltermijn.
+  Bij gewijzigde/ongeldige matches vervallen uitsluitend de eigen
+  afgeleide koopritmegegevens.
 - De historische termijn is koopgedrag, geen zekerheid over werkelijk
   verbruik en niet zelfstandig een Bijna-op-signaal.
 
