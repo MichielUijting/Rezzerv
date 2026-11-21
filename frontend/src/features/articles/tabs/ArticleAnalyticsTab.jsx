@@ -313,11 +313,24 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
             ? 'Actief via huishoudinstelling'
             : 'Uit via huishoudinstelling'
 
+    const historicalCadence = articleData?.historical_purchase_cadence || null
+    const averageRepurchaseInterval = historicalCadence?.average_repurchase_interval_days
+    const cadenceLabel = Number.isFinite(Number(averageRepurchaseInterval)) &&
+      Number(averageRepurchaseInterval) > 0
+      ? new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 1 })
+          .format(Number(averageRepurchaseInterval)) + ' dagen'
+      : 'Nog onvoldoende betrouwbare herhaalaankopen'
+
     return {
       automation: [
         { label: 'Artikeloverride', value: getAutoConsumeModeLabel(articleMode) },
         { label: 'Huishoudinstelling', value: householdSettings.autoConsumeOnRepurchase ? 'Aan' : 'Uit' },
         { label: 'Effectieve automatische afboeking', value: effectiveAutomation },
+        { label: 'Gemiddelde herhaalaankooptermijn', value: cadenceLabel },
+        { label: 'Historische aankoopdagen (matches en synoniemen)', value: historicalCadence
+          ? String(historicalCadence.purchase_day_count) : '—' },
+        { label: 'Laatste historische aankoop', value: historicalCadence
+          ? formatDate(historicalCadence.last_purchase_date) : '—' },
       ],
       price: [
         { label: 'Laagste bekende prijs', value: priceInsights.lowestPrice },
