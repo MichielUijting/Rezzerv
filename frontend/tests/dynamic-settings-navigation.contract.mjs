@@ -22,7 +22,7 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 16)
+assert.equal(SETTINGS_TILES.length, 17)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
@@ -49,6 +49,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
+    'opening-stock',
     'store-import',
     'store-connections',
     'household-profile',
@@ -65,7 +66,8 @@ for (const tile of SETTINGS_TILES) {
       'capabilities',
       'article-groups',
       'locations',
-      'store-import',
+      'opening-stock',
+    'store-import',
       'store-connections',
       'household-automation',
       'almost-out',
@@ -96,6 +98,7 @@ for (const tile of SETTINGS_TILES) {
     'article-details',
     'article-groups',
     'privacy-data-sharing',
+    'opening-stock',
     'store-import',
     'store-connections',
     'household-profile',
@@ -108,7 +111,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(sectionKeys(navigation), {
     account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
     household: ['my-households', 'household-profile', 'household', 'authorizations'],
-    usage: ['capabilities', 'article-groups', 'store-import', 'store-connections', 'household-automation', 'almost-out'],
+    usage: ['capabilities', 'article-groups', 'opening-stock', 'store-import', 'store-connections', 'household-automation', 'almost-out'],
     help: ['help-about'],
   })
 }
@@ -132,6 +135,7 @@ for (const tile of SETTINGS_TILES) {
     'my-households',
     'capabilities',
     'privacy-data-sharing',
+    'opening-stock',
     'store-import',
     'store-connections',
     'household-profile',
@@ -163,6 +167,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
+    'opening-stock',
     'household-profile',
     'household',
     'authorizations',
@@ -195,6 +200,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
+    'opening-stock',
     'store-import',
     'store-connections',
     'household-profile',
