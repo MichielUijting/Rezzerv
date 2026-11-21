@@ -226,8 +226,8 @@ export default function SettingsOpeningStockPage() {
                 </>
               ) : null}
               <p>
-                Producten zonder één bewezen huishoudartikel, synoniemgroepen of hoeveelheden
-                in kilogram/liter kunnen hier nog niet worden geboekt. Dit voorkomt
+                Producten zonder één bewezen huishoudartikel, onbewezen productkoppelingen,
+                synoniemgroepen of hoeveelheden in kilogram/liter kunnen hier nog niet worden geboekt. Dit voorkomt
                 verkeerde artikelkoppelingen en onbedoelde eenheidsconversies.
               </p>
             </>
