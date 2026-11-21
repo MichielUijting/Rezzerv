@@ -13,6 +13,45 @@ vullen of per artikel goed te keuren. De bestaande huishoudinstelling
 van historische aankopen. De programmatuur past de bestaande
 matching- en bevestigde-synoniemregels toe.
 
+## Nieuwe standaard bij eerste huishoudstart
+
+- Nieuwe, nog lege huishoudens krijgen bij het **eenmalig afronden van de
+  onboarding** de standaard `consume_all_existing_before_purchase`. Bij een
+  volgende bewezen herhaalaankoop wordt de oude voorraad op nul gezet en
+  blijft de nieuwe aankoop als voorraad over.
+- De bestaande huishoudaanpassing en eventuele artikelafwijkingen blijven
+  wijzigbaar; een al expliciet ingestelde keuze wordt nooit vervangen.
+- Huishoudens met bestaande kassabonnen, voorraad of voorraad-events worden
+  niet achteraf aangepast. De standaard wordt niet bij iedere appstart
+  opnieuw weggeschreven.
+- De gewone winkel-/bonverwerking gebruikt dezelfde bestaande huishoudmodus;
+  de historische replay respecteert daarnaast `consumable` en
+  `DIRECT_CONSUMPTION`.
+
+## Gemiddeld herhaalaankoopinterval
+
+- Per afzonderlijke kassabondatum telt de gezamenlijke aankoop van een
+  canoniek huishoudartikel en zijn **bevestigde** Catalogussynoniemen als
+  één aankoopmoment, ongeacht winkelketen of aantal bonregels die dag.
+- Alleen bij minimaal 3 verschillende aankoopdagen, minimaal 28 dagen
+  waarneming, geen tussenpoos boven 90 dagen en een laatste aankoop
+  maximaal 90 dagen voor de startdatum krijgt het huishoudartikel een
+  betrouwbaar gemiddelde: (laatste dag - eerste dag) / (aantal dagen - 1).
+- Bij een bevestigde synoniemcomponent wordt dezelfde termijn bij ieder
+  betrokken huishoudartikel opgeslagen, ook als een variant zelf niet
+  afzonderlijk werd gekocht. Dit betreft *huishoudspecifieke metadata*,
+  geen globale Catalogusmutatie.
+- Het tabblad **Analyse → Automatisering** toont de gemiddelde termijn en
+  het aantal aankoopdagen op desktop en mobiel. Bij te weinig bewijs
+  meldt Inhuis dat er nog onvoldoende betrouwbare herhaalaankopen zijn.
+- Bij later ingelezen historische bonnen of gewijzigde bewezen relaties
+  wordt het gemiddelde opnieuw berekend, met een bronfingerprint;
+  verouderde afgeleide waarden worden verwijderd. Dit bewerkt geen
+  handmatige minimale voorraad, actuele aankoop-/verbruiksevents
+  of reeds ingestelde huishoudvoorspeltermijn.
+- De historische termijn is koopgedrag, geen zekerheid over werkelijk
+  verbruik en niet zelfstandig een Bijna-op-signaal.
+
 ## Canonieke verwerkingsmodi
 
 Aankopen worden per huishouden, bewezen huishoudartikel/synoniemgroep en
