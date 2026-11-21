@@ -230,7 +230,7 @@ export default function SharedHouseholdMinimumPage({
       ) : null}
 
       <p style={{ marginBottom: 0 }}>
-        <strong>Na afronden ga je direct naar Home. Daar zie je de acties die passen bij jouw inrichting.</strong>
+        <strong>Na afronden kun je, als je kassabonnen gebruikt, direct je winkels aansluiten. Anders ga je naar Home.</strong>
       </p>
 
       <Button

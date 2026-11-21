@@ -80,7 +80,7 @@ const checks = [
   [shared.includes("if (finishError) showFeedback({ variant: 'error', message: finishError })"), 'final household completion validation uses the central OK-only error overlay'],
   [!shared.includes('data-testid="shared-household-finish-validation"'), 'final household step must not show inline error feedback'],
   [shared.includes('disabled={saving || inviteSaving}'), 'final completion remains clickable so missing choices can produce feedback'],
-  [shared.includes('Na afronden ga je direct naar Home.'), 'final household step explains successful navigation to Home'],
+  [shared.includes('Na afronden kun je, als je kassabonnen gebruikt, direct je winkels aansluiten.'), 'final household step explains the optional retailer setup'],
   [shared.includes('createHouseholdInvitation'), 'Samen reuses canonical invitation service'],
   [shared.includes('revokeHouseholdInvitation'), 'switching from Samen to Alleen can revoke invitations made in onboarding'],
   [shared.includes('onboardingInvitations'), 'onboarding tracks invitations created before final household choice'],

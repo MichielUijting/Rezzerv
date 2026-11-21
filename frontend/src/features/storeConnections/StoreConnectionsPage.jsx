@@ -28,9 +28,10 @@ import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
 import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
+import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConnections.js'
 import './receiptConnectionCompact.css'
 
-export default function StoreConnectionsPage() {
+export default function StoreConnectionsPage({ onboardingMode = false, onFinish = null }) {
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
@@ -84,11 +85,12 @@ export default function StoreConnectionsPage() {
       queued: 'Veilig ontvangen',
       completed: 'Afgerond', failed: 'Controle nodig',
     }
-    return deriveReceiptConnectionOverview(rows, ahConnection, latestImportDates).map(row => ({
+    const overview = deriveReceiptConnectionOverview(rows, ahConnection, latestImportDates).map(row => ({
       ...row,
       statusLabel: phaseLabels[phases[row.providerCode]] || row.statusLabel,
     }))
-  }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase])
+    return onboardingMode ? filterOnboardingReceiptStores(overview) : overview
+  }, [rows, ahConnection, latestImportDates, ahPhase, jumboPhase, lidlPhase, onboardingMode])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlPeriodUnsaved = Boolean(lidlWindow) && (
     lidlFrom !== (lidlWindow.configured_from_date || lidlWindow.from_date || '') ||
@@ -668,7 +670,7 @@ export default function StoreConnectionsPage() {
   async function startAhLogin() {
     setAhBusy(true)
     try {
-      const returnTo = window.location.origin + '/instellingen/winkelkoppelingen'
+      const returnTo = window.location.origin + (onboardingMode ? '/onboarding/winkels' : '/instellingen/winkelkoppelingen')
       const data = await fetchJson(
         '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo),
       )
@@ -871,7 +873,7 @@ export default function StoreConnectionsPage() {
   }
 
   return (
-    <AppShell title="Winkelkoppelingen" showExit={false}>
+    <AppShell title={onboardingMode ? 'Winkels aansluiten' : 'Winkelkoppelingen'} showExit={false}>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1fr)',
@@ -882,6 +884,13 @@ export default function StoreConnectionsPage() {
         margin: '0 auto',
       }} data-testid="store-connections-page">
         <Card>
+          {onboardingMode ? (
+            <div data-testid="onboarding-stores-step" style={{ display: 'grid', rowGap: '8px', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0 }}>Winkels aansluiten</h2>
+              <p style={{ margin: 0 }}>Kies Albert Heijn, Lidl of Jumbo om je digitale kassabonnen op te halen. Je mag meerdere winkels gebruiken.</p>
+              <p style={{ margin: 0 }}>Albert Heijn kan na het koppelen automatisch nieuwe bonnen ophalen. Voor Lidl en Jumbo gebruik je voorlopig een browserfavoriet; niet elke mobiele browser ondersteunt dit. Er wordt geen automatische koppeling beloofd.</p>
+            </div>
+          ) : null}
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
 
@@ -1076,6 +1085,22 @@ export default function StoreConnectionsPage() {
         ) : null}
 
         {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
+
+        {onboardingMode ? (
+          <Card>
+            <div data-testid="onboarding-stores-finish-step" style={{ display: 'grid', rowGap: '12px' }}>
+              <p style={{ margin: 0 }}>Je hoeft niet alle winkels nu aan te sluiten. Je kunt dit later doen via Instellingen → Winkelkoppelingen. Wacht bij een lopende bonoverdracht eerst op de bevestiging dat de bonnen veilig ontvangen zijn.</p>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <Button type="button" variant="primary" data-testid="onboarding-stores-continue" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+                  Naar Inhuis
+                </Button>
+                <Button type="button" variant="secondary" data-testid="onboarding-stores-later" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+                  Winkels later koppelen
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : null}
 
 
       </div>

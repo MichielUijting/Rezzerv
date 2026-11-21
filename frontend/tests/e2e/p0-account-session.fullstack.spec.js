@@ -40,6 +40,10 @@ async function completeInitialRegistrationAndOnboarding(page, accountEmail, acco
   await page.getByTestId('shared-household-usage-alone').check()
   await page.getByTestId('shared-household-finish').click()
 
+  // Other fullstack journeys skip the new optional store setup explicitly.
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
 }

@@ -117,7 +117,7 @@ def _safe_return_to(request: Request, return_to: str | None) -> str:
             parsed.scheme in {"http", "https"}
             and parsed.hostname
             and parsed.hostname.lower() == request_hostname
-            and parsed.path == "/instellingen/winkelkoppelingen"
+            and parsed.path in {"/instellingen/winkelkoppelingen", "/onboarding/winkels"}
         ):
             return candidate
     app_origin = str(os.getenv("REZZERV_APP_BASE_URL", "http://localhost:5174") or "").strip().rstrip("/")
