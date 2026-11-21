@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -37,6 +39,17 @@ from app.services.server_session_service import (
 )
 
 HOUSEHOLD_ONBOARDING_MANAGE_PERMISSION = "household_settings.manage"
+
+
+class OpeningStockConfirmationRequest(BaseModel):
+    """Only a signed revision of a real server-side proposal may be confirmed."""
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_key: str = Field(min_length=1, max_length=256)
+    proposal_revision: str = Field(min_length=64, max_length=64)
+    household_article_id: str = Field(min_length=1, max_length=256)
+    confirmed_quantity: int = Field(ge=0, le=10000, strict=True)
+    explicitly_confirmed: Literal[True]
 
 
 def _normalize_household_name(value: str) -> str:
@@ -416,6 +429,42 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 conn,
                 completed_state,
                 can_manage=True,
+            )
+
+    @router.get("/api/onboarding/opening-stock")
+    def list_opening_stock(request: Request, page: int = 1, page_size: int = 10):
+        from app.services.household_opening_stock_review_service import (
+            list_opening_stock_reviews,
+        )
+        if page < 1 or not 1 <= page_size <= 100:
+            raise HTTPException(status_code=422, detail="Ongeldige paginering.")
+        with engine.connect() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            return list_opening_stock_reviews(
+                conn, household_id=str(context.active_household_id),
+                page=page, page_size=page_size,
+            )
+
+    @router.post("/api/onboarding/opening-stock/confirm")
+    def confirm_opening_stock_for_household(
+        payload: OpeningStockConfirmationRequest, request: Request,
+    ):
+        from app.services.household_opening_stock_review_service import (
+            confirm_opening_stock,
+        )
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            return confirm_opening_stock(
+                conn,
+                household_id=str(context.active_household_id),
+                actor_user_id=str(context.user_id),
+                proposal_key=payload.proposal_key,
+                proposal_revision_value=payload.proposal_revision,
+                household_article_id=payload.household_article_id,
+                confirmed_quantity=payload.confirmed_quantity,
+                explicitly_confirmed=payload.explicitly_confirmed,
             )
 
     return router
