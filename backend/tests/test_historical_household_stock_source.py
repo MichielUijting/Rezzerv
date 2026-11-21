@@ -40,7 +40,12 @@ class Conn:
     def execute(self, stmt, args=None):
         sql = str(stmt)
         self.queries.append((sql, args))
-        assert sql.lstrip().upper().startswith("SELECT"), sql
+        assert sql.lstrip().upper().startswith(("SELECT", "WITH RECURSIVE")), sql
+        if sql.lstrip().upper().startswith("WITH RECURSIVE"):
+            # One central product has no confirmed synonym edge. The live
+            # resolver conservatively returns the single household article.
+            return Rows([{"product_id": "gp-1", "existing_product_id": "gp-1",
+                          "catalog_status": "active"}])
         if "FROM household_receipt_history_cutovers" in sql:
             return Rows(value=CUTOFF)
         if "FROM receipt_tables rt" in sql:
@@ -88,7 +93,7 @@ def test_unapproved_parsed_historical_receipts_are_usable_without_kassa_approval
     assert result["status"] == "calculated"
     assert result["quantities"] == {"ha-1": 5}
     assert result["writes_inventory"] is False
-    assert all(query.startswith("SELECT") for query, _ in conn.queries)
+    assert all(query.lstrip().upper().startswith(("SELECT", "WITH RECURSIVE")) for query, _ in conn.queries)
     assert conn.queries[1][1]["household_id"] == "home"
 
 
