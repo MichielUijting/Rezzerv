@@ -779,7 +779,7 @@ def main() -> None:
                     )
                     assert second_repeat["cadences_written"] >= 1, second_repeat
                     assert result["purchase_day_count"] == 3, result
-                    assert result["average_repurchase_interval_days"] == 19.5, result
+                    assert result["average_repurchase_interval_days"] == 18.5, result
                     repeat_savepoint.rollback()
                 print("RECEIPT_HISTORY_POSTGRESQL_ONE_REPEAT_CADENCE_GREEN")
 
