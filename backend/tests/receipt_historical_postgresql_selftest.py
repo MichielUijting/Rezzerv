@@ -614,6 +614,118 @@ def main() -> None:
                     ), {"household_id": new_household}).scalar_one()
                     assert count == 0, f"Historical receipts mutated {table}"
                 print("RECEIPT_HISTORY_POSTGRESQL_ZERO_STOCK_MUTATION_GREEN")
+
+                # PR3: real PostgreSQL DML-only, transactional stock baseline.
+                # A nested SAVEPOINT prevents this acceptance fixture from
+                # changing the outer receipt-history invariants.
+                from app.services.household_opening_stock_review_service import (
+                    list_opening_stock_reviews, confirm_opening_stock,
+                )
+                first_review = list_opening_stock_reviews(
+                    conn, household_id=new_household, page=1, page_size=10,
+                )
+                assert first_review["total"] == 1, first_review
+                proposal = first_review["items"][0]
+                assert proposal["can_confirm"] is True, proposal
+                assert proposal["key"] == "article:" + article_id, proposal
+                assert proposal["unit"] == "stuk", proposal
+                assert len(proposal["proposal_revision"]) == 64, proposal
+                assert len(proposal["source_fingerprint"]) == 64, proposal
+                assert list_opening_stock_reviews(
+                    conn, household_id=other_household,
+                )["status"] == "legacy_not_enabled"
+
+                zero_savepoint = conn.begin_nested()
+                try:
+                    zero_confirmed = confirm_opening_stock(
+                        conn, household_id=new_household, actor_user_id="ci-actor",
+                        proposal_key=proposal["key"],
+                        proposal_revision_value=proposal["proposal_revision"],
+                        household_article_id=article_id, confirmed_quantity=0,
+                        explicitly_confirmed=True,
+                    )
+                    assert zero_confirmed["status"] == "confirmed", zero_confirmed
+                    for table in ("inventory", "inventory_events"):
+                        assert conn.execute(text(
+                            f"SELECT COUNT(*) FROM {table} WHERE household_id=:household_id"
+                        ), {"household_id": new_household}).scalar_one() == 0, table
+                    assert conn.execute(text("""
+                        SELECT confirmed_quantity FROM household_opening_stock_confirmations
+                        WHERE household_id=:household_id AND household_article_id=:article_id
+                    """), {"household_id": new_household, "article_id": article_id}).scalar_one() == 0
+                finally:
+                    zero_savepoint.rollback()
+
+                positive_savepoint = conn.begin_nested()
+                try:
+                    outcome = confirm_opening_stock(
+                        conn, household_id=new_household, actor_user_id="ci-actor",
+                        proposal_key=proposal["key"],
+                        proposal_revision_value=proposal["proposal_revision"],
+                        household_article_id=article_id, confirmed_quantity=2,
+                        explicitly_confirmed=True,
+                    )
+                    assert outcome["status"] == "confirmed", outcome
+                    assert outcome["inventory_created"] is True, outcome
+                    saved = conn.execute(text("""
+                        SELECT aantal, space_id, sublocation_id FROM inventory
+                        WHERE household_id=:household_id AND household_article_id=:article_id
+                    """), {"household_id": new_household, "article_id": article_id}).mappings().all()
+                    assert len(saved) == 1 and saved[0]["aantal"] == 2, saved
+                    assert saved[0]["space_id"] is None and saved[0]["sublocation_id"] is None, saved
+                    ev = conn.execute(text("""
+                        SELECT event_type, source, quantity, location_id
+                        FROM inventory_events
+                        WHERE household_id=:household_id AND household_article_id=:article_id
+                    """), {"household_id": new_household, "article_id": article_id}).mappings().all()
+                    assert len(ev) == 1 and ev[0]["event_type"] == "baseline", ev
+                    assert ev[0]["source"] == "historical_opening_stock_confirmation", ev
+                    assert ev[0]["quantity"] == 2 and ev[0]["location_id"] is None, ev
+                    assert confirm_opening_stock(
+                        conn, household_id=new_household, actor_user_id="ci-actor",
+                        proposal_key=proposal["key"],
+                        proposal_revision_value=proposal["proposal_revision"],
+                        household_article_id=article_id, confirmed_quantity=2,
+                        explicitly_confirmed=True,
+                    )["status"] == "already_confirmed"
+                    for table in ("inventory", "inventory_events",
+                                  "household_opening_stock_confirmations"):
+                        assert conn.execute(text(
+                            f"SELECT COUNT(*) FROM {table} WHERE household_id=:household_id"
+                        ), {"household_id": new_household}).scalar_one() == 1, table
+                    after_review = list_opening_stock_reviews(
+                        conn, household_id=new_household, page=1, page_size=10,
+                    )
+                    assert after_review["items"][0]["review_status"] == "confirmed"
+                    assert after_review["items"][0]["confirmed_quantity"] == 2
+                    try:
+                        confirm_opening_stock(
+                            conn, household_id=new_household, actor_user_id="ci-actor",
+                            proposal_key=proposal["key"],
+                            proposal_revision_value=proposal["proposal_revision"],
+                            household_article_id=article_id, confirmed_quantity=3,
+                            explicitly_confirmed=True,
+                        )
+                    except HTTPException as exc:
+                        assert exc.status_code == 409
+                    else:
+                        raise AssertionError("Changed second confirmation was accepted")
+                    try:
+                        confirm_opening_stock(
+                            conn, household_id=other_household, actor_user_id="ci-actor",
+                            proposal_key=proposal["key"],
+                            proposal_revision_value=proposal["proposal_revision"],
+                            household_article_id=article_id, confirmed_quantity=2,
+                            explicitly_confirmed=True,
+                        )
+                    except HTTPException as exc:
+                        assert exc.status_code == 409
+                    else:
+                        raise AssertionError("Foreign-household opening stock was accepted")
+                finally:
+                    positive_savepoint.rollback()
+                print("RECEIPT_HISTORY_POSTGRESQL_OPENING_STOCK_CONFIRM_GREEN")
+
             finally:
                 tx.rollback()
     finally:
