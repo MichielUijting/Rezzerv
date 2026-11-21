@@ -783,6 +783,61 @@ def main() -> None:
                     repeat_savepoint.rollback()
                 print("RECEIPT_HISTORY_POSTGRESQL_ONE_REPEAT_CADENCE_GREEN")
 
+                # No historical receipts at all: a household still learns
+                # after one live repeat, while no initial stock baseline is
+                # fabricated from already-processed current purchase events.
+                with conn.begin_nested() as current_only_savepoint:
+                    current_home = _seed_household(conn)
+                    assert activate_cutover_for_new_onboarding(
+                        conn, household_id=current_home,
+                    )
+                    current_cutover = read_household_cutover(conn, current_home)
+                    current_article = main.ensure_household_article(
+                        conn, current_home, "CI alleen actuele aankopen",
+                    )
+                    for index, offset in enumerate((1, 15)):
+                        day = current_cutover + timedelta(days=offset)
+                        conn.execute(text("""
+                            INSERT INTO inventory_events (
+                                id, household_id, article_id, household_article_id,
+                                article_name, location_id, location_label,
+                                event_type, quantity, old_quantity, new_quantity,
+                                source, note, purchase_date,
+                                effective_at, recorded_at,
+                                effective_at_precision, event_priority, created_at
+                            ) VALUES (
+                                :id, :household_id, :article_id, :article_id,
+                                'CI alleen actuele aankopen', NULL, NULL,
+                                'purchase', 1, 0, 1, 'ci_purchase', :note,
+                                :purchase_date, :effective_at, CURRENT_TIMESTAMP,
+                                'date', 10, CURRENT_TIMESTAMP
+                            )
+                        """), {
+                            "id": _id(), "household_id": current_home,
+                            "article_id": current_article,
+                            "note": "CI live " + str(index),
+                            "purchase_date": day.isoformat(),
+                            "effective_at": day.isoformat() + "T00:00:00+00:00",
+                        })
+                    current_report = refresh_automatic_historical_stock(
+                        conn, household_id=current_home,
+                    )
+                    assert current_report["status"] == "no_trusted_matches", current_report
+                    assert current_report["cadences_written"] == 1, current_report
+                    current_interval = read_historical_household_purchase_cadence(
+                        conn, household_id=current_home,
+                        household_article_id=current_article,
+                    )
+                    assert current_interval["purchase_day_count"] == 2, current_interval
+                    assert current_interval["average_repurchase_interval_days"] == 14.0, current_interval
+                    for table in ("household_historical_auto_stock_baselines", "inventory"):
+                        assert conn.execute(text(
+                            f"SELECT COUNT(*) FROM {table} WHERE household_id=:household_id"
+                        ), {"household_id": current_home}).scalar_one() == 0, table
+                    current_only_savepoint.rollback()
+                print("RECEIPT_HISTORY_POSTGRESQL_CURRENT_ONLY_CADENCE_GREEN")
+
+
 
             finally:
                 tx.rollback()
