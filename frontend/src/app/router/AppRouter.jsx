@@ -10,6 +10,7 @@ import HomePage from '../../features/home/HomePage'
 import DashboardDetailPage from '../../features/home/DashboardDetailPage.jsx'
 import MobileMorePage from '../../features/home/MobileMorePage.jsx'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
+import { shouldOfferStoreConnectionOnboarding } from '../../features/onboarding/onboardingStoreConnections.js'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
 import IpOwnerSuperusersPage from '../../features/platform/IpOwnerSuperusersPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
@@ -80,10 +81,15 @@ function RegisterRoute() {
 
 function OnboardingRoute() {
   const navigate = useNavigate()
-  function handleUseCaseSelected() {
-    navigate('/home', { replace: true })
+  function handleUseCaseSelected(completedOnboarding) {
+    navigate(shouldOfferStoreConnectionOnboarding(completedOnboarding) ? '/onboarding/winkels' : '/home', { replace: true })
   }
   return <OnboardingPage onUseCaseSelected={handleUseCaseSelected} />
+}
+
+function OnboardingStoresRoute() {
+  const navigate = useNavigate()
+  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home', { replace: true })} />
 }
 
 function ResetSessionRoute() {
@@ -177,6 +183,7 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
+  { path: '/onboarding/winkels', element: <ProtectedPermission permission="household_settings.manage" message="Alleen de beheerder kan winkels aansluiten."><OnboardingStoresRoute /></ProtectedPermission> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
   { path: '/ip-eigenaar/superusers', element: <ProtectedPermission permission="platform.special_roles.manage" allowNone message="Alleen de IP-eigenaar kan Superusers beheren."><IpOwnerSuperusersPage /></ProtectedPermission> },
   { path: '/dashboard/:metric', element: <Protected><DashboardDetailPage /></Protected> },

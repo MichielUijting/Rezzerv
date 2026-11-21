@@ -58,6 +58,29 @@ def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) 
     )
 
 
+def test_onboarding_return_url_is_same_host_and_exact_path(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
+    request = _request(host="inhuis.local")
+
+    accepted = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="http://inhuis.local:5174/onboarding/winkels",
+    )
+    assert accepted.return_to == "http://inhuis.local:5174/onboarding/winkels"
+    assert oauth._return_with_status(accepted, "connected").endswith("/onboarding/winkels?ah=connected")
+
+    for unsafe_url in (
+        "https://attacker.example/onboarding/winkels",
+        "http://inhuis.local:5174/onboarding/winkels/extra",
+        "javascript:alert(1)",
+    ):
+        rejected = oauth.create_ah_oauth_flow(
+            request, household_id="household-1", return_to=unsafe_url,
+        )
+        assert rejected.return_to == "http://localhost:5174/instellingen/winkelkoppelingen"
+
+
 def test_cross_host_return_url_is_rejected(monkeypatch) -> None:
     oauth.reset_ah_oauth_flows_for_tests()
     monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")

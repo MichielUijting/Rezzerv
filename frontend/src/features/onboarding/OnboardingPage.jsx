@@ -156,7 +156,7 @@ export default function OnboardingPage({ onUseCaseSelected }) {
       const updated = await completeSharedHouseholdMinimum(context, preferences)
       setOnboarding(updated)
       await fetchAuthContext({ force: true })
-      onUseCaseSelected?.()
+      onUseCaseSelected?.(updated)
     } catch (err) {
       setError(err?.message || 'Huishouden afronden mislukt.')
     } finally {

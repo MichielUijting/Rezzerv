@@ -75,7 +75,16 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
   const householdResponse = await householdResponsePromise
   expect(householdResponse.ok()).toBeTruthy()
 
-  // Valid completion returns the user to Home with context-appropriate actions.
+  // Receipt-enabled households can connect stores before opening Home.
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  for (const retailer of ['ah', 'jumbo', 'lidl']) {
+    await expect(page.getByTestId('receipt-connection-action-' + retailer)).toBeVisible()
+  }
+  await expect(page.getByTestId('receipt-connection-action-aldi')).toHaveCount(0)
+  await page.getByTestId('onboarding-stores-later').click()
+
+  // Skipping store setup preserves the completed household and existing Home flow.
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()

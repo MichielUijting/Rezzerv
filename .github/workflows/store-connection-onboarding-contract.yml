@@ -34,6 +34,7 @@ jobs:
         run: |
           node frontend/tests/receipt-connection-overview.contract.mjs
           node frontend/tests/store-connections.contract.mjs
+          node frontend/tests/onboarding-store-connections.contract.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
