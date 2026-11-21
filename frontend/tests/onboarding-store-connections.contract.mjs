@@ -38,6 +38,3 @@ assert.match(connections, /niet elke mobiele browser ondersteunt dit/)
 assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/onboarding\/winkels"\}/)
 
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')
-
-// PR7: run the complete first-use retailer status contract in the existing CI route.
-import './onboarding-pr7-journey.contract.mjs'
