@@ -33,17 +33,27 @@ matching- en bevestigde-synoniemregels toe.
 - Per afzonderlijke kassabondatum telt de gezamenlijke aankoop van een
   canoniek huishoudartikel en zijn **bevestigde** Catalogussynoniemen als
   één aankoopmoment, ongeacht winkelketen of aantal bonregels die dag.
-- Alleen bij minimaal 3 verschillende aankoopdagen, minimaal 28 dagen
-  waarneming, geen tussenpoos boven 90 dagen en een laatste aankoop
-  maximaal 90 dagen voor de startdatum krijgt het huishoudartikel een
-  betrouwbaar gemiddelde: (laatste dag - eerste dag) / (aantal dagen - 1).
+- **Vanaf één herhaalaankoop** (dus twee verschillende aankoopdagen)
+  wordt de herhaalaankooptermijn direct berekend en opgeslagen. Er geldt
+  **geen** extra minimumwaarnemingsduur, maximumaankoopinterval of
+  recentheidseis. De eerste herhaalaankoop geeft simpelweg het verschil
+  tussen de twee aankoopdata in dagen.
+- Na een volgende herhaalaankoop wordt het gemiddelde herberekend over
+  alle waargenomen tussenpozen:
+  (laatste aankoopdag - eerste aankoopdag) / (aantal unieke aankoopdagen - 1).
+  Historische kassabonnen worden chronologisch geordend, ongeacht importvolgorde.
+  Eenzelfde dag levert geen extra interval op.
+- Behoud de vereiste **bewezen match/synoniemidentiteit** en betrouwbare
+  aankoopdata: een enkele aankoopdatum of onzekere identiteit kan
+  nog geen herhaalaankooptermijn opleveren.
 - Bij een bevestigde synoniemcomponent wordt dezelfde termijn bij ieder
   betrokken huishoudartikel opgeslagen, ook als een variant zelf niet
   afzonderlijk werd gekocht. Dit betreft *huishoudspecifieke metadata*,
   geen globale Catalogusmutatie.
 - Het tabblad **Analyse → Automatisering** toont de gemiddelde termijn en
-  het aantal aankoopdagen op desktop en mobiel. Bij te weinig bewijs
-  meldt Inhuis dat er nog onvoldoende betrouwbare herhaalaankopen zijn.
+  het aantal aankoopdagen op desktop en mobiel. Pas bij minder dan
+  twee verschillende betrouwbare aankoopmomenten wordt
+  'Nog onvoldoende betrouwbare herhaalaankopen' getoond.
 - Bij later ingelezen historische bonnen of gewijzigde bewezen relaties
   wordt het gemiddelde opnieuw berekend, met een bronfingerprint;
   verouderde afgeleide waarden worden verwijderd. Dit bewerkt geen
