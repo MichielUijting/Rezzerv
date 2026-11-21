@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from hashlib import sha256
+import json
 import math
 
 from sqlalchemy import text
@@ -119,7 +121,9 @@ def project_historical_learning(rows, *, cutoff, synonym_factors=None):
     factors = synonym_factors or {}
     grouped = defaultdict(lambda: {"days": defaultdict(float),
                                    "receipts": set(), "products": set(),
-                                   "article_ids": set(), "label": ""})
+                                   "article_ids": set(), "label": "",
+                                   "evidence": [], "source_line_count": 0,
+                                   "owned_line_count": 0})
     excluded = 0
     source_hash_owner = {}
     unit_sets = defaultdict(set)
@@ -195,6 +199,17 @@ def project_historical_learning(rows, *, cutoff, synonym_factors=None):
         key = (identity, unit)
         bucket = grouped[key]
         bucket["days"][observed] += amount
+        bucket["source_line_count"] += 1
+        if household_article_id:
+            bucket["owned_line_count"] += 1
+        # Digests reflect contributing lines, not only rounded aggregates.
+        bucket["evidence"].append([
+            receipt_id, str(line.get("line_id") or ""), sha,
+            observed.isoformat(), str(line.get("quantity")),
+            str(line.get("unit") or ""), requested_article_id,
+            household_article_id, product_id, article_product_id,
+            unit, repr(amount),
+        ])
         bucket["receipts"].add(receipt_id)
         if product_id:
             bucket["products"].add(product_id)
@@ -235,6 +250,11 @@ def project_historical_learning(rows, *, cutoff, synonym_factors=None):
             "product_ids": sorted(bucket["products"]),
             "household_article_id": article_ids[0] if len(article_ids) == 1 else None,
             "source_receipt_count": len(bucket["receipts"]),
+            "source_line_count": bucket["source_line_count"],
+            "owned_line_count": bucket["owned_line_count"],
+            "source_fingerprint": sha256(json.dumps(
+                sorted(bucket["evidence"]), separators=(",", ":"),
+            ).encode("utf-8")).hexdigest(),
             "purchase_day_count": len(days),
             "first_purchase_date": first.isoformat(),
             "last_purchase_date": last.isoformat(),
