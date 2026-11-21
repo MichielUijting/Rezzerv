@@ -120,7 +120,7 @@ jobs:
         run: |
           python -m unittest backend.tests.test_receipt_historical_import_policy
           python -m unittest backend.tests.test_receipt_historical_learning_service
-          python -m pytest -q backend/tests/test_historical_household_stock_replay.py backend/tests/test_historical_household_stock_source.py backend/tests/test_new_household_repurchase_default.py
+          python -m pytest -q backend/tests/test_historical_household_stock_replay.py backend/tests/test_historical_household_stock_source.py backend/tests/test_new_household_repurchase_default.py backend/tests/test_historical_purchase_cadence_updates.py
 
       - name: 5-6/10 Bereid gedeelde PostgreSQL acceptance foundation voor
         uses: ./.github/actions/postgresql-acceptance-foundation
