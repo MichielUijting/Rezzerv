@@ -179,3 +179,94 @@ def prediction_from_confirmed_cadence(
         "prediction_triggered": projected <= minimum,
         "purchase_event_count": count,
     }
+
+
+def prediction_from_untouched_historical_baseline(
+    cadence, inventory_events, prediction_days, *, current_quantity,
+    minimum_stock=0, member_article_ids=(), replacement_policy_proven=False,
+    now=None,
+):
+    """Estimate depletion from historical opening stock *only* when verified.
+
+    PR3's automatic stock writer persisted a special 'baseline' event for each
+    proven household article. In the all-existing-replacement mode that baseline
+    is the quantity bought on the latest historical product day. This may be
+    used as an estimated replacement volume ONLY when:
+      * Every confirmed synonym member has its original baseline event;
+      * No later inventory/event mutation exists for the group;
+      * Summed, converted baseline quantity agrees with the current stock;
+      * The original household/article replacement policy is still proven.
+    No such proof means no forecast. The purchase cadence alone is never enough.
+    """
+    if not cadence or not replacement_policy_proven:
+        return None
+    try:
+        interval = float(cadence["interval_days"])
+        count = int(cadence["purchase_day_count"])
+        stock = float(current_quantity)
+        minimum = float(minimum_stock)
+        horizon = int(prediction_days)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    members = set(cadence.get("members") or [])
+    selected = set(str(value) for value in member_article_ids if str(value))
+    last = _date(cadence.get("last_date"))
+    today = _date(now) if now is not None else datetime.now(timezone.utc).date()
+    if (count < 2 or not math.isfinite(interval) or interval <= 0
+            or not all(math.isfinite(value) for value in (stock, minimum))
+            or stock <= 0 or minimum < 0 or horizon <= 0
+            or not selected or members != selected or last is None
+            or today is None or last > today):
+        return None
+
+    observed_by_article = {}
+    for event in inventory_events:
+        article = str(event.get("article_id") or "")
+        if article not in selected:
+            continue
+        if (event.get("event_type") != "baseline"
+                or event.get("source") != "historical_auto_stock"
+                or article in observed_by_article):
+            # An intervening purchase, consume, correction or second baseline
+            # invalidates the assumption that current stock still is opening stock.
+            return None
+        try:
+            quantity = float(event.get("quantity"))
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(quantity) or quantity < 0:
+            return None
+        observed_by_article[article] = quantity
+    if set(observed_by_article) != selected:
+        return None
+    last_replacement = sum(observed_by_article.values())
+    if (last_replacement <= 0 or not math.isfinite(last_replacement)
+            or not math.isclose(last_replacement, stock, abs_tol=1e-6, rel_tol=0)):
+        return None
+    rate = last_replacement / interval
+    elapsed = (today - last).days
+    remaining = max((stock - minimum) / rate - elapsed, 0.0)
+    predicted = stock - rate * (elapsed + horizon)
+    if not all(math.isfinite(value) for value in (remaining, predicted)):
+        return None
+    try:
+        depletion = datetime.combine(today, time.min, tzinfo=timezone.utc) + timedelta(days=remaining)
+    except (ValueError, OverflowError):
+        return None
+    return {
+        "prediction_available": True,
+        "prediction_basis": "confirmed_historical_replacement_and_untouched_opening_stock",
+        "average_purchase_interval_days": round(interval, 3),
+        "average_purchase_quantity": None,
+        "observed_historical_last_purchase_quantity": round(last_replacement, 3),
+        "last_purchase_at": last.isoformat() + "T00:00:00+00:00",
+        "days_since_last_purchase": elapsed,
+        "estimated_consumption_per_day": rate,
+        "predicted_quantity_at_horizon": predicted,
+        "predicted_days_until_depletion": round(remaining, 3),
+        "predicted_depletion_date": depletion.date().isoformat(),
+        "predicted_depletion_at": depletion.isoformat(),
+        "prediction_threshold_days": horizon,
+        "prediction_triggered": predicted <= minimum,
+        "purchase_event_count": count,
+    }
