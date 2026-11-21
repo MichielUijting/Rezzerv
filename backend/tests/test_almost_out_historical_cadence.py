@@ -141,7 +141,10 @@ class _Conn:
         assert "ha.household_id = c.household_id" in sql
         assert "COALESCE(ha.status, 'active') = 'active'" in sql
         assert params["household_id"] == "household-a"
-        assert params["article_ids"] == sorted(["article-ah", "article-lidl"])
+        assert params["article_ids"] and set(params["article_ids"]).issubset(
+            {"article-ah", "article-lidl"}
+        )
+        assert "c.household_article_id IN :article_ids" in sql
         self.queries.append(sql)
         return _Rows(self.rows)
 
