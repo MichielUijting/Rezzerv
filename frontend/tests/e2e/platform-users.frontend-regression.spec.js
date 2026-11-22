@@ -545,8 +545,14 @@ test('users panel bulk buttons wrap within panel on narrow screens', async ({ pa
   const selectorBox = await panel.getByTestId('platform-users-select-all').boundingBox()
   expect(panelBox).not.toBeNull()
   expect(selectorBox.x + selectorBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 2)
-  for (const button of await panel.locator('.rz-data-table-actions button').all()) {
+  // Inhuis contract: Exporteren is desktop-only (theme.css), so it must not
+  // contribute to mobile geometry assertions or be made visible by this page.
+  await expect(panel.getByRole('button', { name: 'Exporteren', includeHidden: true })).toBeHidden()
+  for (const label of ['Schorsen', 'Schorsing annuleren', 'Gebruiker verwijderen']) {
+    const button = panel.getByRole('button', { name: label, exact: true })
+    await expect(button).toBeVisible()
     const box = await button.boundingBox()
+    expect(box).not.toBeNull()
     expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 2)
   }
 })
