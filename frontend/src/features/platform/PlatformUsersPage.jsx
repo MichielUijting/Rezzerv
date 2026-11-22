@@ -39,6 +39,7 @@ const USER_COLUMNS = [
 export default function PlatformUsersPage() {
   const [users, setUsers] = React.useState([])
   const [canDelete, setCanDelete] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
   const [page, setPage] = React.useState(1)
   const [selectedIds, setSelectedIds] = React.useState([])
   const [pageRows, setPageRows] = React.useState([])
@@ -77,7 +78,6 @@ export default function PlatformUsersPage() {
     ...USER_COLUMNS.slice(1),
   ], [allPageSelected, selectablePageIds.join('|'), loading])
 
-  const [loading, setLoading] = React.useState(true)
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const previewTokenRef = React.useRef(0)
   React.useEffect(() => () => {
