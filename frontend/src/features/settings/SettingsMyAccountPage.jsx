@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import AppShell from '../../app/AppShell'
+import AccountDeletionPanel from './AccountDeletionPanel.jsx'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
@@ -218,6 +219,7 @@ export default function SettingsMyAccountPage() {
           </section>
         </div>
       </Card>
+      <AccountDeletionPanel />
     </AppShell>
   )
 }

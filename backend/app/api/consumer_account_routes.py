@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import text
 
 from app.db import engine
+from app.services.consumer_account_deletion_service import (
+    AccountDeletionConflictError,
+    AccountDeletionPasswordError,
+    delete_consumer_account,
+    deletion_preview,
+)
+from app.services.server_session_service import SESSION_COOKIE_NAME
 from app.services.consumer_account_management_service import (
     ConsumerAccountNotFoundError,
     ConsumerCurrentPasswordMismatchError,
@@ -187,6 +194,57 @@ def update_account_password(payload: ConsumerPasswordChangeRequest) -> dict:
         "message": "Wachtwoord gewijzigd. Andere actieve sessies zijn ingetrokken.",
         "context_type": context.context_type,
     }
+
+
+class ConsumerAccountDeleteRequest(BaseModel):
+    current_password: str
+    confirmation: str
+
+    @field_validator("current_password")
+    @classmethod
+    def valid_password(cls, value: str) -> str:
+        if not value or len(value) > 256:
+            raise ValueError("Een geldig huidig wachtwoord is verplicht.")
+        return value
+
+
+@router.get("/api/account/deletion-preview")
+def get_account_deletion_preview() -> dict:
+    context = _require_regular_consumer_session()
+    try:
+        with engine.begin() as conn:
+            return deletion_preview(conn, user_id=context.user_id)
+    except AccountDeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/api/account")
+def permanently_delete_my_account(payload: ConsumerAccountDeleteRequest, response: Response) -> dict:
+    context = _require_regular_consumer_session()
+    try:
+        with engine.begin() as conn:
+            outcome = delete_consumer_account(
+                conn,
+                user_id=context.user_id,
+                current_password=payload.current_password,
+                confirmation=payload.confirmation,
+            )
+    except AccountDeletionPasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AccountDeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # Clear only after the deletion transaction committed successfully.
+    from app.api.server_session_routes import session_api_configuration_from_environment
+    configuration = session_api_configuration_from_environment()
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=True,
+        secure=configuration.cookie_secure,
+        samesite=configuration.cookie_samesite,
+        path=configuration.cookie_path,
+    )
+    return {**outcome, "message": "Je account is definitief verwijderd."}
 
 
 @router.post(
