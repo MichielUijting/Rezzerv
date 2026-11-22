@@ -357,3 +357,92 @@ test('rejected deletion preview shows central error overlay and never deletes an
   expect(deletionCalls).toBe(0)
   await expect(page.getByTestId('platform-user-target-user').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
 })
+
+test('table has filtered and current-page selections and paginates eight rows', async ({ page }) => {
+  await mockSession(page, noneSession)
+  const rows = [users[0], ...Array.from({ length: 9 }, (_, i) => ({
+    user_id: 'user-' + i, email: 'user-' + i + '@example.test',
+    account_status: 'active', suspended_at: null, active_session_count: 0,
+    is_current: false,
+  }))]
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: rows, can_delete: true }),
+  }))
+  await page.goto('/platform/gebruikers')
+  await expect(page.getByTestId('platform-users-table')).toBeVisible()
+  await expect(page.getByTestId('platform-users-table').getByRole('row')).toHaveCount(10) // header + filters + 8
+  await expect(page.getByRole('button', { name: 'Schorsen', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Gebruiker verwijderen', exact: true })).toBeDisabled()
+
+  await page.getByRole('checkbox', { name: 'Alle rijen op deze pagina' }).check()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 7')
+  await expect(page.getByRole('button', { name: 'Gebruiker verwijderen', exact: true })).toBeDisabled()
+  const paging = page.getByRole('navigation', { name: 'Paginering' })
+  await paging.getByRole('button', { name: '+', exact: true }).click()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 7')
+  await page.getByRole('checkbox', { name: 'Alle rijen in de tabel' }).check()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 9')
+  await expect(page.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeChecked()
+  await paging.getByRole('button', { name: '1', exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: 'Selecteer platform-users@example.test' })).toBeDisabled()
+  await expect(page.getByRole('checkbox', { name: 'Alle rijen op deze pagina' })).toBeChecked()
+  await page.getByRole('checkbox', { name: 'Alle rijen in de tabel' }).uncheck()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 0')
+})
+
+test('bulk selection acts only on applicable statuses and retains failures without deleting other accounts', async ({ page }) => {
+  await mockSession(page, noneSession)
+  const second = { ...users[1], user_id: 'target-two', email: 'target-two@example.test', active_session_count: 1 }
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: [...users, second], can_delete: true }),
+  }))
+  const requests = []
+  await page.route('**/api/platform/users/*/suspend', route => {
+    const request = route.request()
+    requests.push({ url: request.url(), method: request.method() })
+    const failed = request.url().includes('/target-two/')
+    return route.fulfill({
+      status: failed ? 409 : 200, contentType: 'application/json',
+      body: JSON.stringify(failed
+        ? { detail: 'Dit account mag niet worden geschorst.' }
+        : { item: { suspended_at: '2026-08-24T20:00:00+00:00', active_sessions_revoked: 2 } }),
+    })
+  })
+  await page.goto('/platform/gebruikers')
+  await page.getByRole('checkbox', { name: 'Selecteer target-user@example.test' }).check()
+  await page.getByRole('checkbox', { name: 'Selecteer target-two@example.test' }).check()
+  await expect(page.getByRole('button', { name: 'Gebruiker verwijderen' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Schorsen', exact: true }).click()
+  await expect(page.getByTestId('platform-user-suspend-confirmation')).toContainText('2 geselecteerde actieve gebruikers')
+  expect(requests).toHaveLength(0)
+  await page.getByRole('button', { name: 'Definitief schorsen' }).click()
+  await expect.poll(() => requests.length).toBe(2)
+  await expect(page.getByTestId('app-feedback-error')).toContainText('1 geschorst; 1 niet verwerkt')
+  await expect(page.getByTestId('platform-user-target-user').getByRole('cell', { name: 'Geschorst', exact: true })).toBeVisible()
+  await expect(page.getByTestId('platform-user-target-two').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: 'Selecteer target-user@example.test' })).not.toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Selecteer target-two@example.test' })).toBeChecked()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 1')
+})
+
+test('exporter downloads only selected users without invoking any account mutation', async ({ page }) => {
+  await mockSession(page, noneSession)
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: users }),
+  }))
+  let mutations = 0
+  await page.route('**/api/platform/users/*/suspend', route => {
+    mutations += 1
+    return route.fulfill({ status: 500, body: '{}' })
+  })
+  await page.goto('/platform/gebruikers')
+  await expect(page.getByRole('button', { name: 'Exporteren' })).toBeDisabled()
+  await page.getByRole('checkbox', { name: 'Selecteer target-user@example.test' }).check()
+  const downloading = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Exporteren' }).click()
+  const download = await downloading
+  expect(download.suggestedFilename()).toBe('Inhuis_Platformgebruikers.csv')
+  expect(mutations).toBe(0)
+  await expect(page.getByTestId('app-feedback-success')).toContainText('1 geselecteerde gebruiker(s) geëxporteerd')
+})
