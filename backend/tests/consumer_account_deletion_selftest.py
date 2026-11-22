@@ -51,7 +51,7 @@ def run() -> int:
             for uid, email in zip(users, emails):
                 seed_user(conn, user_id=uid, email=email, password="TestPassword123!")
             for uid, date in zip(users, ["2026-11-20", "2023-01-02", "2025-09-11", "2022-01-01"]):
-                conn.execute(text("UPDATE app_users SET created_at=:created_at WHERE id=:uid"), {
+                conn.execute(text("UPDATE app_users SET created_at=CAST(:created_at AS TIMESTAMP) WHERE id=:uid"), {
                     "uid": uid, "created_at": date + " 12:00:00",
                 })
             seed_membership(conn, membership_id=departed_membership, household_id=shared,

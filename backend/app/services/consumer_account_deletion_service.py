@@ -77,9 +77,7 @@ def _memberships(conn: Connection, uid: str, email: str) -> list[dict[str, Any]]
 def _remaining(conn: Connection, household_id: str, email: str) -> list[dict[str, Any]]:
     _required_columns(conn, "app_users", {"id", "email", "created_at"})
     cols = _required_columns(conn, "household_memberships", {"id", "household_id", "role", "user_id", "user_email"})
-    active = " AND hm.status='active'" if "status" in cols else ""
-    if "active" in cols:
-        active += " AND hm.active IS TRUE"
+    active = " AND lower(trim(COALESCE(hm.status, 'active')))='active'" if "status" in cols else ""
     rows = conn.execute(text(f"""
         SELECT hm.id AS membership_id, u.id AS user_id, u.created_at AS account_created_at
         FROM household_memberships hm
@@ -168,6 +166,20 @@ def _promote_successor(conn: Connection, hid: str, membership_id: str | None) ->
 
 
 def _delete_sole_household(conn: Connection, hid: str) -> None:
+    # Database reset alone does not remove persisted receipt images/files.
+    # Never claim complete removal while untracked on-disk receipt material exists.
+    raw_cols = _columns(conn, "raw_receipts")
+    if {"household_id", "storage_path"}.issubset(raw_cols):
+        if conn.execute(text("""
+            SELECT 1 FROM raw_receipts
+            WHERE CAST(household_id AS TEXT)=:hid
+              AND storage_path IS NOT NULL AND trim(storage_path)<>''
+            LIMIT 1
+        """), {"hid": hid}).first():
+            raise AccountDeletionConflictError(
+                "Dit huishouden bevat nog fysieke kassabonbestanden; volledige verwijdering "
+                "is nog niet veilig ondersteund. Er is niets verwijderd."
+            )
     reset_household_data(conn, hid, confirmation=f"RESET {hid}")
     conn.execute(text("""
         UPDATE server_sessions SET active_household_id=NULL
