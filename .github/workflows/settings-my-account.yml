@@ -9,12 +9,16 @@ on:
       - 'backend/app/api/consumer_account_routes.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/consumer_account_management_service.py'
+      - 'backend/app/services/consumer_account_deletion_service.py'
+      - 'backend/app/services/consumer_account_file_deletion_service.py'
       - 'backend/app/services/password_service.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/tests/consumer_account_management_selftest.py'
       - 'backend/tests/consumer_account_route_policy_selftest.py'
+      - 'backend/tests/consumer_account_deletion_route_selftest.py'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/src/features/settings/SettingsMyAccountPage.jsx'
+      - 'frontend/src/features/settings/AccountDeletionPanel.jsx'
       - 'frontend/src/features/settings/settingsNavigation.js'
       - 'frontend/tests/dynamic-settings-navigation.contract.mjs'
       - 'frontend/tests/settings-v2-information-architecture.contract.mjs'
@@ -52,8 +56,11 @@ jobs:
           PYTHONPATH=. python -m py_compile \
             app/api/consumer_account_routes.py \
             app/services/consumer_account_management_service.py \
+            app/services/consumer_account_deletion_service.py \
+            app/services/consumer_account_file_deletion_service.py \
             tests/consumer_account_management_selftest.py \
-            tests/consumer_account_route_policy_selftest.py
+            tests/consumer_account_route_policy_selftest.py \
+            tests/consumer_account_deletion_route_selftest.py
 
       - name: Prepare existing compatibility data directory
         run: |
@@ -66,6 +73,7 @@ jobs:
         run: |
           python tests/consumer_account_management_selftest.py
           python tests/consumer_account_route_policy_selftest.py
+          python tests/consumer_account_deletion_route_selftest.py
 
       - uses: actions/setup-node@v4
         with:

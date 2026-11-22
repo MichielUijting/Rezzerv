@@ -10,8 +10,12 @@ on:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/tests/test_authorization_membership_routes.py'
+      - 'backend/tests/consumer_account_deletion_selftest.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/consumer_account_deletion_service.py'
+      - 'backend/app/services/consumer_account_file_deletion_service.py'
+      - 'backend/app/api/consumer_account_routes.py'
       - 'backend/app/services/roles_v2_schema_foundation.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/app/services/frontteam_household_provisioning.py'
@@ -124,3 +128,11 @@ jobs:
             tests/test_external_database_route_authorization.py \
             tests/test_server_session_runtime_membership_schema.py \
             tests/test_session_request_context.py
+
+      - name: Verify account deletion and household preservation in isolated PostgreSQL
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = "true"
+          test "${TEST_POSTGRES_DB:-}" = "rezzerv_authorization_membership_ci"
+          PYTHONPATH=. python tests/consumer_account_deletion_selftest.py
+          echo ACCOUNT_DELETION_POSTGRESQL_GREEN
