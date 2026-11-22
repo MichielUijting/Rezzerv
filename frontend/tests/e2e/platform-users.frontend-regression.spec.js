@@ -446,3 +446,38 @@ test('exporter downloads only selected users without invoking any account mutati
   expect(mutations).toBe(0)
   await expect(page.getByTestId('app-feedback-success')).toContainText('1 geselecteerde gebruiker(s) geëxporteerd')
 })
+
+test('bulk cancellation of suspensions uses only suspended accounts and preserves other selections', async ({ page }) => {
+  await mockSession(page, noneSession)
+  const secondSuspended = {
+    ...users[2], user_id: 'suspended-two', email: 'suspended-two@example.test',
+  }
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: [...users, secondSuspended], can_delete: true }),
+  }))
+  const requests = []
+  await page.route('**/api/platform/users/*/unsuspend', route => {
+    requests.push({ url: route.request().url(), method: route.request().method() })
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ item: { account_status: 'active', suspended_at: null, active_sessions_restored: 0 } }),
+    })
+  })
+  await page.goto('/platform/gebruikers')
+  await page.getByRole('checkbox', { name: 'Selecteer target-user@example.test' }).check()
+  await page.getByRole('checkbox', { name: 'Selecteer already-suspended@example.test' }).check()
+  await page.getByRole('checkbox', { name: 'Selecteer suspended-two@example.test' }).check()
+  await expect(page.getByRole('button', { name: 'Gebruiker verwijderen' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Schorsing annuleren', exact: true }).click()
+  await expect(page.getByTestId('platform-user-unsuspend-confirmation')).toContainText('2 geselecteerde geschorste gebruikers')
+  expect(requests).toHaveLength(0)
+  await page.getByRole('button', { name: 'Schorsing annuleren bevestigen' }).click()
+  await expect.poll(() => requests.length).toBe(2)
+  expect(requests.every((request) => request.method === 'POST')).toBe(true)
+  expect(requests.some((request) => request.url.includes('/target-user/'))).toBe(false)
+  await expect(page.getByTestId('platform-user-already-suspended').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
+  await expect(page.getByTestId('platform-user-suspended-two').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
+  await expect(page.getByTestId('platform-user-target-user').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
+  await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 1')
+})
