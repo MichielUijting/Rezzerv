@@ -223,6 +223,53 @@ def suspend_platform_user(
     }
 
 
+
+def unsuspend_platform_user(
+    conn: Connection,
+    user_id: str,
+    *,
+    actor_user_id: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Reactivate an account without restoring its previously revoked sessions."""
+    validate_user_account_status_schema(conn)
+    target_user_id = str(user_id or "").strip()
+    actor_user_id = str(actor_user_id or "").strip()
+    if not target_user_id:
+        raise PlatformUserNotFoundError("Gebruiker bestaat niet")
+    if target_user_id == actor_user_id:
+        raise PlatformUserConflictError("Je kunt je eigen beheeraccount hier niet wijzigen.")
+
+    locking = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+    row = conn.execute(text("""
+        SELECT id, email, account_status FROM app_users
+        WHERE id=:user_id
+        LIMIT 1
+    """ + locking), {"user_id": target_user_id}).mappings().first()
+    if row is None:
+        raise PlatformUserNotFoundError("Gebruiker bestaat niet")
+    if _normalize_status(row.get("account_status")) != SUSPENDED_ACCOUNT_STATUS:
+        raise PlatformUserConflictError("Account is niet geschorst")
+
+    current = (now or utc_now()).astimezone(timezone.utc)
+    columns = {str(c["name"]).lower() for c in inspect(conn).get_columns("app_users")}
+    updated_at_sql = ", updated_at=:now" if "updated_at" in columns else ""
+    result = conn.execute(text(f"""
+        UPDATE app_users
+        SET account_status='active', suspended_at=NULL{updated_at_sql}
+        WHERE id=:user_id AND account_status='suspended'
+    """), {"user_id": target_user_id, "now": current})
+    if int(result.rowcount or 0) != 1:
+        raise PlatformUserConflictError("Accountstatus is gewijzigd; probeer opnieuw.")
+    return {
+        "user_id": target_user_id,
+        "email": str(row.get("email") or ""),
+        "account_status": ACTIVE_ACCOUNT_STATUS,
+        "suspended_at": None,
+        "active_sessions_restored": 0,
+    }
+
+
 def install_server_session_suspension_guard() -> None:
     """Make account suspension authoritative for new cookie-session login.
 

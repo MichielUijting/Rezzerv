@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import StaticPool
 
-from app.api.platform_users_routes import PLATFORM_USERS_SUSPEND_PERMISSION
+from app.api.platform_users_routes import PLATFORM_USERS_SUSPEND_PERMISSION, PLATFORM_USERS_DELETE_PERMISSION
 from app.services.authorization_foundation_service import ROLE_PERMISSIONS
 from app.services.platform_user_suspension_service import (
     PlatformUserConflictError,
@@ -14,6 +14,7 @@ from app.services.platform_user_suspension_service import (
     list_platform_users,
     require_user_account_active,
     suspend_platform_user,
+    unsuspend_platform_user,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
 
@@ -75,6 +76,10 @@ def _insert_active_session(conn, *, record_id: str, user_id: str, now: datetime)
 
 def test_platform_users_permission_matrix_is_existing_canonical_matrix():
     assert PLATFORM_USERS_SUSPEND_PERMISSION == "platform.users.suspend"
+    assert PLATFORM_USERS_DELETE_PERMISSION == "platform.users.delete"
+    assert PLATFORM_USERS_DELETE_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
+    for restricted in ("platform.ip_owner", "platform.superuser", "platform.frontteam", "household.admin", "household.owner"):
+        assert PLATFORM_USERS_DELETE_PERMISSION not in ROLE_PERMISSIONS[restricted]
     assert PLATFORM_USERS_SUSPEND_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
@@ -235,3 +240,89 @@ def test_installed_login_guard_rejects_valid_suspended_identity(monkeypatch):
             )
         assert denied.value.status_code == 401
         assert "geschorst" in str(denied.value.detail).lower()
+
+
+def test_unsuspend_is_atomic_and_never_restores_revoked_sessions():
+    engine = _engine()
+    now = datetime(2026, 11, 22, 17, 0, tzinfo=timezone.utc)
+    with engine.begin() as conn:
+        _create_canonical_users(conn)
+        _insert_user(conn, "actor", "actor@example.test")
+        _insert_user(conn, "target", "target@example.test")
+        ensure_user_account_status_schema(conn)
+        create_server_session_contract_schema(conn)
+        _insert_active_session(conn, record_id="session-target", user_id="target", now=now)
+        suspend_platform_user(conn, "target", actor_user_id="actor", now=now)
+        with pytest.raises(PlatformUserConflictError, match="niet geschorst"):
+            unsuspend_platform_user(conn, "actor", actor_user_id="target", now=now)
+        restored = unsuspend_platform_user(conn, "target", actor_user_id="actor", now=now)
+        assert restored["account_status"] == "active"
+        assert restored["suspended_at"] is None
+        assert restored["active_sessions_restored"] == 0
+        assert require_user_account_active(conn, "target") is None
+        assert conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions
+            WHERE user_id='target' AND revoked_at IS NOT NULL
+        """)).scalar_one() == 1
+        assert conn.execute(text("""
+            SELECT account_status FROM app_users WHERE id='target'
+        """)).scalar_one() == "active"
+        with pytest.raises(PlatformUserConflictError, match="niet geschorst"):
+            unsuspend_platform_user(conn, "target", actor_user_id="actor", now=now)
+        with pytest.raises(PlatformUserConflictError, match="eigen beheeraccount"):
+            unsuspend_platform_user(conn, "actor", actor_user_id="actor", now=now)
+
+
+def test_platform_deletion_route_permission_and_server_derived_actor(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from app.api import platform_users_routes as routes
+
+    calls = []
+    actor = SimpleNamespace(user_id="admin-actor", context_type="none")
+    def require(permission):
+        calls.append(("permission", permission))
+        return actor
+    class Stage:
+        def restore(self):
+            calls.append(("restore",))
+        def finalize(self):
+            calls.append(("finalize",))
+    monkeypatch.setattr(routes, "require_platform_permission_from_session", require)
+    monkeypatch.setattr(routes, "engine", SimpleNamespace(
+        connect=lambda: nullcontext(object()), begin=lambda: nullcontext(object())
+    ))
+    monkeypatch.setattr(routes, "HouseholdFileStage", Stage)
+    monkeypatch.setattr(routes, "deletion_preview", lambda conn, *, user_id: (
+        calls.append(("preview", user_id)) or {"households_to_keep": 1}
+    ))
+    monkeypatch.setattr(routes, "delete_platform_managed_account", lambda conn, **kwargs: (
+        calls.append(("delete", kwargs)) or {"deleted": True}
+    ))
+
+    preview = routes.get_platform_user_deletion_preview("target-user")
+    assert preview["user_id"] == "target-user"
+    assert ("permission", PLATFORM_USERS_DELETE_PERMISSION) in calls
+    assert ("preview", "target-user") in calls
+    with pytest.raises(HTTPException) as denied:
+        routes.get_platform_user_deletion_preview("admin-actor")
+    assert denied.value.status_code == 409
+
+    payload = routes.PlatformUserDeleteRequest(confirmation="VERWIJDER target@example.test")
+    result = routes.delete_platform_user("target-user", payload)
+    assert result["deleted"] is True
+    assert result["household_context_used"] is False
+    deletion_args = next(entry[1] for entry in calls if entry[0] == "delete")
+    assert deletion_args["actor_user_id"] == "admin-actor"
+    assert deletion_args["user_id"] == "target-user"
+    assert deletion_args["confirmation"] == "VERWIJDER target@example.test"
+    assert ("finalize",) in calls
+    assert ("restore",) not in calls
+
+    def forbidden(permission):
+        raise HTTPException(status_code=403, detail="Geen bevoegdheid")
+    monkeypatch.setattr(routes, "require_platform_permission_from_session", forbidden)
+    with pytest.raises(HTTPException) as denied:
+        routes.delete_platform_user("target-user", payload)
+    assert denied.value.status_code == 403
+    assert len([entry for entry in calls if entry[0] == "delete"]) == 1

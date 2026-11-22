@@ -326,10 +326,12 @@ def _purge_personal_references(conn: Connection, uid: str, email: str) -> None:
                     )
 
 
+
 def delete_consumer_account(
     conn: Connection, *, user_id: str, current_password: str, confirmation: str,
     file_stage: HouseholdFileStage | None = None,
 ) -> dict[str, int | bool]:
+    """Self-service deletion: current password and fixed confirmation required."""
     if confirmation != CONFIRMATION:
         raise AccountDeletionConflictError(f"Typ ter bevestiging exact: {CONFIRMATION}")
     if conn.dialect.name != "postgresql":
@@ -338,6 +340,33 @@ def delete_consumer_account(
     user = _account(conn, uid, lock=True)
     if not verify_password(user["password"], current_password, stored_password_hash=user["password_hash"]):
         raise AccountDeletionPasswordError("Het huidige wachtwoord is onjuist.")
+    return _delete_after_authorization(conn, uid=uid, user=user, file_stage=file_stage)
+
+
+def delete_platform_managed_account(
+    conn: Connection, *, user_id: str, actor_user_id: str, confirmation: str,
+    file_stage: HouseholdFileStage | None = None,
+) -> dict[str, int | bool]:
+    """Platformbeheer: only delete other regular accounts, with typed identity."""
+    if conn.dialect.name != "postgresql":
+        raise AccountDeletionConflictError("Accountverwijdering vereist PostgreSQL.")
+    uid = str(user_id or "").strip()
+    actor = str(actor_user_id or "").strip()
+    if not uid or not actor or uid == actor:
+        raise AccountDeletionConflictError("Je kunt je eigen beheeraccount niet verwijderen.")
+    if "platform.platform_admin" not in resolve_active_platform_role_keys(conn, actor):
+        raise AccountDeletionConflictError("Alleen een actieve Platformbeheerder mag accounts verwijderen.")
+    user = _account(conn, uid, lock=True)
+    expected = f"VERWIJDER {str(user['email']).strip().lower()}"
+    if confirmation != expected:
+        raise AccountDeletionConflictError(f"Typ ter bevestiging exact: {expected}")
+    return _delete_after_authorization(conn, uid=uid, user=user, file_stage=file_stage)
+
+
+def _delete_after_authorization(
+    conn: Connection, *, uid: str, user: dict[str, Any],
+    file_stage: HouseholdFileStage | None = None,
+) -> dict[str, int | bool]:
     plan = deletion_preview(conn, user_id=uid)
     email = str(user["email"]).strip().lower()
 

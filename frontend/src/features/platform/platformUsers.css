@@ -1,0 +1,37 @@
+/* Platformbeheer Gebruikers: selector, table and controls share one bounded column.
+   The shared DataTable and Pagination components retain their canonical styling. */
+.rz-platform-users-table-panel {
+  width: min(100%, 930px);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.rz-platform-users-table-panel .rz-mobile-table-select-row {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.rz-platform-users-table-panel .rz-data-table-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.rz-platform-users-table-panel .rz-data-table-controls > [aria-hidden='true'] {
+  display: none;
+}
+
+.rz-platform-users-table-panel .rz-data-table-controls > .rz-pagination {
+  align-self: center;
+}
+
+.rz-platform-users-table-panel .rz-data-table-actions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}

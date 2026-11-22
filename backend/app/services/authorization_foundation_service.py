@@ -65,6 +65,7 @@ PLATFORM_PERMISSIONS = (
     "platform.support_access.read",
     "platform.support_access.mutate",
     "platform.users.suspend",
+    "platform.users.delete",
     "platform.sessions.revoke",
     "platform.audit.view",
     "platform.permissions.manage",
@@ -191,6 +192,7 @@ PLATFORM_ADMIN_PERMISSIONS = {
     "platform.test_fixtures.manage",
     "platform.sessions.revoke",
     "platform.users.suspend",
+    "platform.users.delete",
     "platform.permissions.manage",
     "platform.feature_flags.manage",
 }

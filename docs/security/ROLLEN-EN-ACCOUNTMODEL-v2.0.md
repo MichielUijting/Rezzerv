@@ -154,6 +154,19 @@ Platformbeheerder is een speciaal technisch platformaccount.
 - De reset verleent geen leesrecht op huishoudinhoud: het doel wordt uitsluitend
   via een expliciet household ID gekozen, systeemhuishouden 0 is uitgesloten en
   de operatie wordt fail-closed en transactioneel uitgevoerd.
+- Platformbeheer → Gebruikers kan reguliere accounts schorsen en schorsingen opheffen met
+  `platform.users.suspend`. Schorsen trekt actieve sessies in. Opheffen herstelt
+  uitsluitend de accountstatus; eerdere sessies blijven ingetrokken en opnieuw
+  inloggen is vereist.
+- Een Platformbeheerder kan met de afzonderlijke bevoegdheid
+  `platform.users.delete` een **ander** regulier account definitief verwijderen
+  na het tonen van de gevolgen en het exact intypen van
+  `VERWIJDER <e-mailadres>`. Het eigen beheeraccount en accounts met een actieve
+  platformrol zijn uitgesloten. De bestaande fail-closed accountverwijdering
+  beschermt gedeelde huishoudgegevens, draagt bij vertrek van een Beheerder
+  de rol over aan het oudste overblijvende account en verwijdert alleen de
+  huishoudgegevens van een huishouden zonder andere leden. De operatie geeft
+  geen extra leesrecht op huishoudinhoud.
 - Deze technische functies vormen bij livegang een uitbreidbare basisset.
 - Krijgt alleen vanwege de technische rol geen toegang tot de inhoud van
   reguliere huishoudens.

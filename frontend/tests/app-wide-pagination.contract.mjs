@@ -50,7 +50,8 @@ const newlyCovered = [
   ['Authorization', '../src/features/settings/SettingsAuthorizationPage.jsx', ['visibleRows.map(', 'pageCount > 1 ? <Pagination']],
   ['Platform audit', '../src/features/platform/PlatformAuditPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
   ['Platform logs', '../src/features/platform/PlatformLogsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
-  ['Platform users', '../src/features/platform/PlatformUsersPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
+  // Platform users delegates sorting and paging to the canonical DataTable instead
+  // of maintaining an independent visibleItems.slice + Pagination implementation.
   ['Platform sessions', '../src/features/platform/PlatformSessionsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
   ['Platform integrations', '../src/features/platform/PlatformIntegrationsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
   ['Platform flags', '../src/features/platform/PlatformFeatureFlagsPage.jsx', ['visibleItems.map(', 'pageCount > 1 ? <Pagination']],
@@ -61,6 +62,27 @@ for (const [label, path, expectations] of newlyCovered) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
   for (const expected of expectations) assert.ok(source.includes(expected), label + ': missing ' + expected)
 }
+
+const platformUsers = readFileSync(new URL('../src/features/platform/PlatformUsersPage.jsx', import.meta.url), 'utf8')
+// Platform users must not silently lose pagination, row selection, or bulk actions
+// when moving from bespoke cards to the reusable DataTable.
+for (const marker of [
+  '<DataTable',
+  'dataTestId="platform-users-table"',
+  'data={users}',
+  'pageSize={8}',
+  'pageState={page}',
+  'onPageChange={setPage}',
+  'renderRow={(user)',
+  'onPageRowsChange={onPageRowsChange}',
+  'onFilteredRowsChange={onFilteredRowsChange}',
+  'paginationActions={<>',
+  'getRowKey={(user) => user.user_id}',
+  'selectedIds',
+  'Alle rijen in de tabel',
+  'Alle rijen op deze pagina',
+]) assert.ok(platformUsers.includes(marker), 'Platform users DataTable pagination/selection: missing ' + marker)
+assert.doesNotMatch(platformUsers, /visibleItems\.map\(/)
 
 const dashboardDetail = readFileSync(new URL('../src/features/home/DashboardDetailPage.jsx', import.meta.url), 'utf8')
 for (const expected of [
@@ -122,7 +144,7 @@ const retainedRows = [
   ['../src/features/catalog/MobileCatalogPage.jsx', 'items.length > 0 ? (', 'aria-busy={isLoading}'],
   ['../src/features/platform/PlatformAuditPage.jsx', '!error && items.length > 0 ?', 'aria-busy={loading}'],
   ['../src/features/platform/PlatformLogsPage.jsx', '!error && items.length > 0 ?', 'aria-busy={loading}'],
-  ['../src/features/platform/PlatformUsersPage.jsx', 'visibleItems.map((user)', 'setLoading(true)'],
+  ['../src/features/platform/PlatformUsersPage.jsx', 'renderRow={(user)', 'setLoading(true)'],
   ['../src/features/platform/PlatformSessionsPage.jsx', 'visibleItems.map((session)', 'setLoading(true)'],
   ['../src/features/stores/StoresPage.jsx', 'batchItems.length === 0 ?', 'aria-busy={isLoading}'],
   ['../src/features/shopping/MobileShopping.jsx', '(list.items || []).length > 0 ?', 'aria-busy={loading}'],
