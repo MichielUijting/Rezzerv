@@ -112,8 +112,11 @@ test('users page suspends only after explicit confirmation and never exposes cre
 
   await page.goto('/platform/gebruikers')
   await expect(page.getByTestId('platform-users-page')).toBeVisible()
-  await expect(page.getByText(/nooit een fallback naar huishouden 0/i)).toBeVisible()
-  await expect(page.getByText(/wachtwoorden, password-hashes, sessietokens en token-hashes worden niet getoond/i)).toBeVisible()
+  await expect(page.getByTestId('platform-users-panel')).toBeVisible()
+  await expect(page.getByTestId('platform-users-table')).toBeVisible()
+  await expect(page.getByTestId('platform-users-table')
+    .getByRole('columnheader', { name: 'Gebruiker-ID' })).toHaveCount(0)
+  await expect(page.getByTestId('platform-users-page').locator('.rz-card')).toHaveCount(0)
 
   const current = page.getByTestId('platform-user-platform-users-actor')
   const target = page.getByTestId('platform-user-target-user')
@@ -480,4 +483,70 @@ test('bulk cancellation of suspensions uses only suspended accounts and preserve
   await expect(page.getByTestId('platform-user-suspended-two').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
   await expect(page.getByTestId('platform-user-target-user').getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
   await expect(page.getByTestId('platform-users-selection-count')).toContainText('Geselecteerd: 1')
+})
+
+test('users panel contains header selector, table, paging and actions within the same width', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await mockSession(page, noneSession)
+  const manyUsers = [users[0], ...Array.from({ length: 10 }, (_, i) => ({
+    user_id: 'alignment-user-' + i, email: 'alignment-' + i + '@example.test',
+    account_status: 'active', suspended_at: null, active_session_count: 0, is_current: false,
+  }))]
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: manyUsers, can_delete: true }),
+  }))
+  await page.goto('/platform/gebruikers')
+  const panel = page.getByTestId('platform-users-panel')
+  const table = panel.getByTestId('platform-users-table')
+  const selector = panel.getByTestId('platform-users-select-all')
+  const actions = panel.locator('.rz-data-table-actions')
+  const paging = panel.getByRole('navigation', { name: 'Paginering' })
+  await expect(table).toBeVisible()
+  await expect(panel.getByRole('columnheader', { name: 'Gebruiker-ID' })).toHaveCount(0)
+  await expect(page.getByText(/platform\.users\.suspend/)).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Exporteren' })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Schorsen', exact: true })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Schorsing annuleren' })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Gebruiker verwijderen' })).toBeVisible()
+  const panelBox = await panel.boundingBox()
+  const tableBox = await table.boundingBox()
+  const selectorBox = await selector.boundingBox()
+  const actionsBox = await actions.boundingBox()
+  const pagingBox = await paging.boundingBox()
+  expect(panelBox).not.toBeNull()
+  expect(tableBox).not.toBeNull()
+  expect(selectorBox).not.toBeNull()
+  expect(actionsBox).not.toBeNull()
+  expect(pagingBox).not.toBeNull()
+  const right = panelBox.x + panelBox.width
+  expect(tableBox.x).toBeGreaterThanOrEqual(panelBox.x - 1)
+  expect(tableBox.x + tableBox.width).toBeLessThanOrEqual(right + 2)
+  expect(selectorBox.x + selectorBox.width).toBeLessThanOrEqual(right + 2)
+  expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(right + 2)
+  expect(actionsBox.y).toBeGreaterThan(pagingBox.y)
+  for (const button of await actions.getByRole('button').all()) {
+    const box = await button.boundingBox()
+    expect(box.x + box.width).toBeLessThanOrEqual(right + 2)
+  }
+})
+
+test('users panel bulk buttons wrap within panel on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 820 })
+  await mockSession(page, noneSession)
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: users, can_delete: true }),
+  }))
+  await page.goto('/platform/gebruikers')
+  const panel = page.getByTestId('platform-users-panel')
+  await expect(panel).toBeVisible()
+  const panelBox = await panel.boundingBox()
+  const selectorBox = await panel.getByTestId('platform-users-select-all').boundingBox()
+  expect(panelBox).not.toBeNull()
+  expect(selectorBox.x + selectorBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 2)
+  for (const button of await panel.locator('.rz-data-table-actions button').all()) {
+    const box = await button.boundingBox()
+    expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 2)
+  }
 })
