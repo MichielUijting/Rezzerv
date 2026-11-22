@@ -2,7 +2,7 @@ import React from 'react'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
-import Pagination from '../../ui/Pagination.jsx'
+import DataTable from '../../ui/DataTable.jsx'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
 
@@ -16,14 +16,67 @@ function formatDateTime(value) {
   }).format(date)
 }
 
+function csvCell(value) {
+  const content = String(value ?? '')
+  const safe = /^\s*[=+@-]/.test(content) ? `'${content}` : content
+  return `"${safe.replaceAll('"', '""')}"`
+}
+
+const USER_COLUMNS = [
+  { key: 'select', width: 65 },
+  { key: 'email', label: 'E-mailadres', width: 270, sortable: true, filterable: true },
+  { key: 'user_id', label: 'Gebruiker-ID', width: 290, sortable: true, filterable: true },
+  { key: 'account_status', label: 'Status', width: 135, sortable: true, filterable: true,
+    getFilterValue: (user) => user.account_status === 'suspended' ? 'Geschorst' : 'Actief',
+    getSortValue: (user) => user.account_status === 'suspended' ? 'Geschorst' : 'Actief' },
+  { key: 'active_session_count', label: 'Actieve sessies', width: 140,
+    sortable: true, filterable: true, align: 'right' },
+  { key: 'suspended_at', label: 'Geschorst op', width: 205, sortable: true, filterable: true,
+    getFilterValue: (user) => user.suspended_at ? formatDateTime(user.suspended_at) : '',
+    getSortValue: (user) => user.suspended_at || '' },
+]
+
 export default function PlatformUsersPage() {
   const [users, setUsers] = React.useState([])
   const [canDelete, setCanDelete] = React.useState(false)
   const [page, setPage] = React.useState(1)
-  const pageCount = Math.max(1, Math.ceil(users.length / 10))
-  const currentPage = Math.min(page, pageCount)
-  const visibleItems = users.slice((currentPage - 1) * 10, currentPage * 10)
-  React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+  const [selectedIds, setSelectedIds] = React.useState([])
+  const [pageRows, setPageRows] = React.useState([])
+  const [filteredRows, setFilteredRows] = React.useState([])
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
+  const selectedRows = React.useMemo(() => users.filter((user) => (
+    !user.is_current && selectedSet.has(user.user_id)
+  )), [users, selectedSet])
+  const activeTargets = selectedRows.filter((user) => user.account_status !== 'suspended')
+  const suspendedTargets = selectedRows.filter((user) => user.account_status === 'suspended')
+  const selectablePageIds = pageRows.filter((user) => !user.is_current).map((user) => user.user_id)
+  const selectableFilteredIds = filteredRows.filter((user) => !user.is_current).map((user) => user.user_id)
+  const allPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedSet.has(id))
+  const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every((id) => selectedSet.has(id))
+
+  const onPageRowsChange = React.useCallback((rows) => {
+    setPageRows((previous) => previous.length === rows.length
+      && previous.every((user, index) => user.user_id === rows[index].user_id) ? previous : rows)
+  }, [])
+  const onFilteredRowsChange = React.useCallback((rows) => {
+    setFilteredRows((previous) => previous.length === rows.length
+      && previous.every((user, index) => user.user_id === rows[index].user_id) ? previous : rows)
+  }, [])
+  function toggleSelection(ids, allSelected) {
+    setSelectedIds((previous) => allSelected
+      ? previous.filter((id) => !ids.includes(id))
+      : [...new Set([...previous, ...ids])])
+  }
+
+  const columns = React.useMemo(() => [
+    { ...USER_COLUMNS[0], renderFilter: () => (
+      <input type="checkbox" aria-label="Alle rijen op deze pagina"
+        checked={allPageSelected} disabled={!selectablePageIds.length || loading}
+        onChange={() => toggleSelection(selectablePageIds, allPageSelected)} />
+    ) },
+    ...USER_COLUMNS.slice(1),
+  ], [allPageSelected, selectablePageIds.join('|'), loading])
+
   const [loading, setLoading] = React.useState(true)
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const previewTokenRef = React.useRef(0)
@@ -47,6 +100,7 @@ export default function PlatformUsersPage() {
       const payload = await response.json()
       setUsers(Array.isArray(payload?.items) ? payload.items : [])
       setCanDelete(payload?.can_delete === true)
+      setSelectedIds([])
       setPage(1)
     } catch (err) {
       showFeedback({ variant: 'error', key: 'platform-users-action', dedupeMs: 0,
@@ -84,22 +138,45 @@ export default function PlatformUsersPage() {
             suspended_at: item.suspended_at || new Date().toISOString(), active_session_count: 0 }
         : entry
     )))
-    showAction(`${user.email} is geschorst. ${Number(item.active_sessions_revoked || 0)} actieve sessie(s) zijn ingetrokken.`)
+    setSelectedIds((current) => current.filter((id) => id !== user.user_id))
+    return Number(item.active_sessions_revoked || 0)
   }
 
-  function openSuspend(user) {
+  function openSuspend(targets) {
+    if (!targets.length) return
     showFeedback({
-      key: 'platform-users-action',
-      dedupeMs: 0,
-      variant: 'warning',
-      testId: 'platform-user-suspend-confirmation',
-      title: 'Gebruiker schorsen?',
-      message: `Je staat op het punt ${user.email} te schorsen. Alle actieve sessies worden ingetrokken en aanmelden wordt geblokkeerd.`,
-      detail: 'Platformrollen en huishoudlidmaatschappen worden niet gewijzigd.',
+      key: 'platform-users-action', dedupeMs: 0,
+      variant: 'warning', testId: 'platform-user-suspend-confirmation',
+      title: targets.length === 1 ? 'Gebruiker schorsen?' : 'Gebruikers schorsen?',
+      message: targets.length === 1
+        ? `Je staat op het punt ${targets[0].email} te schorsen.`
+        : `Je staat op het punt ${targets.length} geselecteerde actieve gebruikers te schorsen.`,
+      detail: 'Actieve sessies worden ingetrokken. Aanmelden wordt geblokkeerd. Platformrollen en huishoudlidmaatschappen blijven bestaan.',
       dismissMode: 'ok-only',
       primaryActionLabel: 'Definitief schorsen',
       secondaryActionLabel: 'Annuleren',
-      onPrimaryAction: () => suspendUser(user),
+      onPrimaryAction: async () => {
+        let completed = 0
+        let revoked = 0
+        const failures = []
+        for (const user of targets) {
+          try {
+            revoked += await suspendUser(user)
+            completed += 1
+          } catch (error) {
+            failures.push(`${user.email}: ${error?.message || 'niet uitgevoerd'}`)
+          }
+        }
+        if (failures.length && !completed) throw new Error(failures.join(' | '))
+        if (failures.length) {
+          showFeedback({ key: 'platform-users-action', dedupeMs: 0, variant: 'error',
+            title: 'Niet alle gebruikers geschorst',
+            message: `${completed} geschorst; ${failures.length} niet verwerkt. De niet-verwerkte accounts blijven geselecteerd.`,
+            detail: failures.join(' | ') })
+        } else {
+          showAction(`${completed} gebruiker(s) geschorst. ${revoked} actieve sessie(s) ingetrokken.`)
+        }
+      },
     })
   }
 
@@ -115,22 +192,43 @@ export default function PlatformUsersPage() {
         ? { ...entry, account_status: 'active', suspended_at: null, active_session_count: 0 }
         : entry
     )))
-    showAction(`De schorsing van ${user.email} is opgeheven. Eerdere sessies blijven ingetrokken.`)
+    setSelectedIds((current) => current.filter((id) => id !== user.user_id))
   }
 
-  function openUnsuspend(user) {
+  function openUnsuspend(targets) {
+    if (!targets.length) return
     showFeedback({
-      key: 'platform-users-action',
-      dedupeMs: 0,
-      variant: 'warning',
-      testId: 'platform-user-unsuspend-confirmation',
-      title: 'Schorsing opheffen?',
-      message: `De toegang van ${user.email} wordt hersteld.`,
-      detail: 'Eerder ingetrokken sessies blijven ongeldig; de gebruiker moet opnieuw inloggen.',
+      key: 'platform-users-action', dedupeMs: 0,
+      variant: 'warning', testId: 'platform-user-unsuspend-confirmation',
+      title: 'Schorsing annuleren?',
+      message: targets.length === 1
+        ? `De toegang van ${targets[0].email} wordt hersteld.`
+        : `De toegang van ${targets.length} geselecteerde geschorste gebruikers wordt hersteld.`,
+      detail: 'Eerder ingetrokken sessies blijven ongeldig. Gebruikers moeten opnieuw inloggen.',
       dismissMode: 'ok-only',
-      primaryActionLabel: 'Schorsing opheffen bevestigen',
+      primaryActionLabel: 'Schorsing annuleren bevestigen',
       secondaryActionLabel: 'Annuleren',
-      onPrimaryAction: () => unsuspendUser(user),
+      onPrimaryAction: async () => {
+        let completed = 0
+        const failures = []
+        for (const user of targets) {
+          try {
+            await unsuspendUser(user)
+            completed += 1
+          } catch (error) {
+            failures.push(`${user.email}: ${error?.message || 'niet uitgevoerd'}`)
+          }
+        }
+        if (failures.length && !completed) throw new Error(failures.join(' | '))
+        if (failures.length) {
+          showFeedback({ key: 'platform-users-action', dedupeMs: 0, variant: 'error',
+            title: 'Niet alle schorsingen geannuleerd',
+            message: `${completed} hersteld; ${failures.length} niet verwerkt. De niet-verwerkte accounts blijven geselecteerd.`,
+            detail: failures.join(' | ') })
+        } else {
+          showAction(`${completed} schorsing(en) geannuleerd. Eerdere sessies blijven ingetrokken.`)
+        }
+      },
     })
   }
 
@@ -151,6 +249,7 @@ export default function PlatformUsersPage() {
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(payload?.detail || 'Gebruiker verwijderen mislukt.')
     setUsers((current) => current.filter((entry) => entry.user_id !== user.user_id))
+    setSelectedIds((current) => current.filter((id) => id !== user.user_id))
     previewTokenRef.current += 1
     showAction(`${user.email} is definitief verwijderd. ${payload.households_preserved} huishouden(s) behouden.`)
   }
@@ -210,63 +309,91 @@ export default function PlatformUsersPage() {
     }
   }
 
+  function exportSelected() {
+    if (!selectedRows.length) return
+    const header = ['E-mailadres', 'Gebruiker-ID', 'Status', 'Actieve sessies', 'Geschorst op']
+    const body = selectedRows.map((user) => [
+      user.email, user.user_id,
+      user.account_status === 'suspended' ? 'Geschorst' : 'Actief',
+      Number(user.active_session_count || 0),
+      user.suspended_at ? formatDateTime(user.suspended_at) : '',
+    ])
+    const csv = [header, ...body].map((line) => line.map(csvCell).join(';')).join('\r\n')
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'Inhuis_Platformgebruikers.csv'
+    document.body.appendChild(anchor)
+    try { anchor.click() } finally {
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+    showAction(`${selectedRows.length} geselecteerde gebruiker(s) geëxporteerd.`)
+  }
+
   return (
     <div data-testid="platform-users-page">
-      <Header title="Gebruikers" subtitle="Schors gebruikers, hef schorsingen op of verwijder een regulier account." />
-
+      <Header title="Gebruikers" subtitle="Schors gebruikers, annuleer schorsingen of verwijder één regulier account." />
       <Card>
         <p>
-          Schorsen en opheffen gebruiken <strong>platform.users.suspend</strong>. Definitief verwijderen
-          vereist daarnaast de afzonderlijke bevoegdheid <strong>platform.users.delete</strong>. Er is geen actief
-          huishouden nodig en er is nooit een fallback naar huishouden 0.
+          Schorsen en schorsingen annuleren gebruiken <strong>platform.users.suspend</strong>.
+          Verwijderen vereist <strong>platform.users.delete</strong> en is uitsluitend mogelijk voor één geselecteerd
+          regulier account. Er is geen actief huishouden nodig en er is nooit een fallback naar huishouden 0.
         </p>
         <p>
-          Wachtwoorden, password-hashes, sessietokens en token-hashes worden niet getoond. Schorsen trekt actieve
-          sessies in; opheffen herstelt geen oude sessies. Verwijderen is onomkeerbaar en behoudt
-          gedeelde huishoudgegevens en draagt zo nodig de beheerdersrol over. Platformaccounts zijn uitgesloten.
+          Wachtwoorden, password-hashes, sessietokens en token-hashes worden niet getoond.
+          Schorsen trekt actieve sessies in; annuleren herstelt geen oude sessies.
+          Bij verwijderen blijven gedeelde huishoudgegevens behouden en wordt zo nodig de beheerdersrol overgedragen.
         </p>
       </Card>
 
+      {loading ? <Card><p>Gebruikers laden…</p></Card> : null}
 
-
-      {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
-
-      {!loading && !users.length ? (
-        <Card><p>Er zijn geen gebruikers gevonden.</p></Card>
-      ) : null}
-
-      {visibleItems.map((user) => {
-        const suspended = user.account_status === 'suspended'
-        return (
-          <Card key={user.user_id}>
-            <div data-testid={`platform-user-${user.user_id}`}>
-              <h3>{user.email}</h3>
-              <p>Gebruiker-ID: {user.user_id}</p>
-              <p>Status: {suspended ? 'Geschorst' : 'Actief'}</p>
-              <p>Actieve sessies: {Number(user.active_session_count || 0)}</p>
-              {suspended ? <p>Geschorst op: {formatDateTime(user.suspended_at)}</p> : null}
-              {user.is_current ? (
-                <p>Huidig beheeraccount — dit account kan zichzelf hier niet schorsen of verwijderen.</p>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {suspended ? (
-                    <Button type="button" onClick={() => openUnsuspend(user)}>Schorsing opheffen</Button>
-                  ) : (
-                    <Button type="button" onClick={() => openSuspend(user)}>Gebruiker schorsen</Button>
-                  )}
-                  {canDelete ? (
-                    <Button type="button" variant="secondary" onClick={() => openDelete(user)}>Gebruiker verwijderen</Button>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </Card>
-        )
-      })}
-
-      {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
-
-
+      <div className="rz-mobile-table-select-row" data-testid="platform-users-select-all">
+        <label><input type="checkbox" aria-label="Alle rijen in de tabel"
+          checked={allFilteredSelected} disabled={loading || !selectableFilteredIds.length}
+          onChange={() => toggleSelection(selectableFilteredIds, allFilteredSelected)} />
+          Alle rijen in de tabel
+        </label>
+      </div>
+      <DataTable
+        dataTestId="platform-users-table"
+        columns={columns}
+        data={users}
+        getRowKey={(user) => user.user_id}
+        pageSize={8}
+        pageState={page}
+        onPageChange={setPage}
+        onPageRowsChange={onPageRowsChange}
+        onFilteredRowsChange={onFilteredRowsChange}
+        emptyMessage={loading ? 'Gebruikers laden…' : 'Geen gebruikers gevonden.'}
+        paginationActions={<>
+          <span data-testid="platform-users-selection-count">Geselecteerd: {selectedRows.length}</span>
+          <Button type="button" variant="secondary" onClick={exportSelected}
+            disabled={!selectedRows.length || loading}>Exporteren</Button>
+          <Button type="button" onClick={() => openSuspend(activeTargets)}
+            disabled={!activeTargets.length || loading}>Schorsen</Button>
+          <Button type="button" onClick={() => openUnsuspend(suspendedTargets)}
+            disabled={!suspendedTargets.length || loading}>Schorsing annuleren</Button>
+          {canDelete ? <Button type="button" variant="secondary"
+            disabled={selectedRows.length !== 1 || loading}
+            onClick={() => openDelete(selectedRows[0])}>Gebruiker verwijderen</Button> : null}
+        </>}
+        renderRow={(user) => (
+          <tr key={user.user_id} data-testid={`platform-user-${user.user_id}`}
+            aria-selected={selectedSet.has(user.user_id)}>
+            <td><input type="checkbox" aria-label={`Selecteer ${user.email}`}
+              checked={selectedSet.has(user.user_id)}
+              disabled={user.is_current || loading}
+              onChange={() => toggleSelection([user.user_id], selectedSet.has(user.user_id))} /></td>
+            <td>{user.email}{user.is_current ? <span> — Huidig beheeraccount (niet selecteerbaar)</span> : null}</td>
+            <td>{user.user_id}</td>
+            <td>{user.account_status === 'suspended' ? 'Geschorst' : 'Actief'}</td>
+            <td className="rz-num">{Number(user.active_session_count || 0)}</td>
+            <td>{user.suspended_at ? formatDateTime(user.suspended_at) : '—'}</td>
+          </tr>
+        )}
+      />
     </div>
   )
 }
