@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.consumer_account_file_deletion_service import (
     HouseholdFileStage,
@@ -147,6 +147,25 @@ def run() -> int:
         shared_probe = receipt_root / shared / "shared-receipt.txt"
         shared_probe.parent.mkdir(parents=True, exist_ok=True)
         shared_probe.write_text("keep shared household data", encoding="utf-8")
+        # Real receipt rows as well as physical files must remain for shared
+        # households, while sole-household receipt rows are deleted.
+        with engine.begin() as conn:
+            for hid, file_path, raw_id, digest in (
+                (shared, shared_probe, _id("raw-shared"), "a" * 64),
+                (solo, staged_probe, _id("raw-sole"), "b" * 64),
+            ):
+                conn.execute(text("""
+                    INSERT INTO raw_receipts(
+                        id, household_id, source_id, original_filename,
+                        mime_type, storage_path, sha256_hash, raw_status
+                    ) VALUES(
+                        :id, :hid, NULL, :filename,
+                        'text/plain', :storage_path, :sha, 'failed'
+                    )
+                """), {
+                    "id": raw_id, "hid": hid, "filename": file_path.name,
+                    "storage_path": str(file_path), "sha": digest,
+                })
         stage = HouseholdFileStage()
         try:
             with engine.begin() as conn:
@@ -189,6 +208,8 @@ def run() -> int:
             assert _count(conn, "household_memberships", "lower(trim(user_email))=:email", {"email": emails[0]}) == 0
             assert _count(conn, "household_registry", "id=:hid", {"hid": solo}) == 0
             assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 0
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": solo}) == 0
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
             assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
             assert _count(conn, "spaces", "household_id=:hid", {"hid": shared}) == 1
             assert _count(conn, "household_registry", "id=:hid", {"hid": unrelated}) == 1
@@ -227,9 +248,12 @@ def run() -> int:
                             user_id=legacy_user, email=legacy_email, role="advanced_member")
             seed_membership(conn, membership_id=successor_mid, household_id=legacy_household,
                             user_id=legacy_successor, email=successor_email, role="member")
-            conn.execute(text(
-                "UPDATE household_memberships SET status='accepted' WHERE id=:mid"
-            ), {"mid": successor_mid})
+            # Historical schemas may have status; canonical ones do not.
+            member_cols = {item["name"] for item in inspect(conn).get_columns("household_memberships")}
+            if "status" in member_cols:
+                conn.execute(text(
+                    "UPDATE household_memberships SET status='accepted' WHERE id=:mid"
+                ), {"mid": successor_mid})
         with engine.begin() as conn:
             legacy_result = delete_consumer_account(
                 conn, user_id=legacy_user, current_password="TestPassword123!",
@@ -242,7 +266,7 @@ def run() -> int:
                 WHERE household_id=:hid AND membership_id=:mid
             """), {"hid": legacy_household, "mid": successor_mid}).scalar_one()
             assert role == "household.admin"
-        checks.append("legacy_beheerder_and_accepted_member_succession")
+        checks.append("legacy_beheerder_succession_with_optional_status_column")
 
     finally:
         engine.dispose()

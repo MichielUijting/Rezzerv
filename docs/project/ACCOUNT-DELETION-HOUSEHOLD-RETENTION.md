@@ -21,6 +21,35 @@ Per huishoudlidmaatschap:
 - Bij onbekende persoonsgerelateerde tabel- of bestandsrelaties de operatie **niet** gedeeltelijk uitvoeren. Dat heeft voorrang boven een succesmelding.
 - Fysieke bijlagen, backups, externe winkelaccounts en ongestructureerde velden vergen expliciete lifecycle-controle; als volledige verwijdering daar niet gegarandeerd kan worden, mag de praktijkacceptatie niet groen zijn.
 
+## Bestanden bij accountverwijdering
+
+Voor huishoudens **zonder overblijvende leden** gebruikt de accountverwijdering een
+transactionele bestandsstaging van de huishoudgebonden mappen onder de bestaande
+`RECEIPT_STORAGE_ROOT`-configuratie:
+
+- `raw/<huishouden-id>`: oorspronkelijke kassabonbestanden;
+- `sources/<huishouden-id>`: lokale import-/bronbestanden;
+- `debug/<huishouden-id>`: technische bonanalysebestanden.
+
+De database wordt pas aangepast nadat de bestandsmappen afzonderlijk zijn gecontroleerd
+en veilig op hetzelfde volume apart zijn gezet. Bij een databasefout worden de
+bestanden hersteld. Na de commit worden de mappen definitief opgeruimd. Een
+onderbroken operatie bewaart een verwijderjournal; bij herstart beslist de
+daadwerkelijke huishoudidentiteit in PostgreSQL of herstel dan wel voltooiing
+nodig is. Buiten deze drie huishoudspecifieke mappen wordt niets verwijderd.
+Symlinks, padtraversal, onbekende absolute bestandspaden en een onveilig
+verwijderjournal zijn blokkades, geen aanleiding voor een generieke wisactie.
+
+Bij een huishouden met andere leden blijven kassabonbestanden én huishouddata
+onaangetast. De eigen accountidentiteit, sessies en persoonlijke toegangsrechten
+verdwijnen wel. Dit mechanisme wijzigt niets aan bestaande database-/Docker-back-ups;
+hun levenscyclus volgt afzonderlijke bewaartermijnen. Extern beheerde
+winkelaccounts en door gebruikers buiten Inhuis opgeslagen bronbestanden worden
+niet op afstand verwijderd.
+
+Dit is een **veiligheids- en herstelcontract**; alleen groene PostgreSQL- en
+filesystem-acceptatie op de definitieve kandidaat geven bewijs voor Ready.
+
 ## Acceptatie
 
 1. Wachtwoord fout, bevestiging fout, sessie ontbreekt => niets gewijzigd.
