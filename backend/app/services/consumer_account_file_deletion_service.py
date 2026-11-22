@@ -184,6 +184,7 @@ def reconcile_household_file_staging(engine: Engine) -> int:
         if folder.is_symlink() or not folder.is_dir():
             raise AccountFileDeletionConflict("Onbekend object in accountverwijderjournal.")
         ids = _read_manifest(folder)
+        _check_tree(folder)
         with engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT CAST(id AS TEXT) FROM household_registry

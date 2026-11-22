@@ -6,6 +6,10 @@ import uuid
 from pathlib import Path
 from sqlalchemy import text
 
+from app.services.consumer_account_file_deletion_service import (
+    HouseholdFileStage,
+    reconcile_household_file_staging,
+)
 from app.services.consumer_account_deletion_service import (
     AccountDeletionConflictError,
     AccountDeletionPasswordError,
@@ -123,16 +127,50 @@ def run() -> int:
             probe.unlink()
         checks.append("unindexed_receipt_file_blocks_all_deletion_without_mutation")
 
+        # Before commit, household files can be staged. A crash/rollback must
+        # restore the original content without affecting shared households.
+        staged_probe = receipt_root / solo / "2026" / "11" / "raw-receipt.txt"
+        staged_probe.parent.mkdir(parents=True, exist_ok=True)
+        staged_probe.write_text("private-sole-household-file", encoding="utf-8")
+        source_probe = receipt_root.parent / "sources" / solo / "scan-folder" / "source.pdf"
+        source_probe.parent.mkdir(parents=True, exist_ok=True)
+        source_probe.write_bytes(b"%PDF-1.4\nsole user\n")
+        shared_probe = receipt_root / shared / "shared-receipt.txt"
+        shared_probe.parent.mkdir(parents=True, exist_ok=True)
+        shared_probe.write_text("keep shared household data", encoding="utf-8")
+        stage = HouseholdFileStage()
+        try:
+            with engine.begin() as conn:
+                stage.stage(conn, [solo])
+                assert not staged_probe.exists()
+                assert not source_probe.exists()
+                raise RuntimeError("deliberate before-commit failure")
+        except RuntimeError as exc:
+            assert str(exc) == "deliberate before-commit failure"
+        # Simulate process restart: consult committed SQL identity to restore.
+        assert reconcile_household_file_staging(engine) == 1
+        assert staged_probe.read_text(encoding="utf-8") == "private-sole-household-file"
+        assert source_probe.read_bytes().startswith(b"%PDF-1.4")
+        assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
+        checks.append("staged_receipts_and_source_folders_recovered_after_rollback")
+
+        stage = HouseholdFileStage()
         with engine.begin() as conn:
             result = delete_consumer_account(
                 conn, user_id=users[0], current_password="TestPassword123!",
-                confirmation=CONFIRMATION,
+                confirmation=CONFIRMATION, file_stage=stage,
             )
             assert result["deleted"] is True
             assert result["households_deleted"] == 1
             assert result["households_preserved"] == 1
             assert result["admins_transferred"] == 1
+        stage.finalize()
+        assert not staged_probe.exists()
+        assert not source_probe.exists()
+        assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
         checks.append("multi_household_deletion_transaction_committed")
+        checks.append("sole_household_receipt_and_source_files_removed_after_commit")
+        checks.append("shared_household_receipt_file_preserved")
 
         with engine.begin() as conn:
             assert _count(conn, "app_users", "id=:uid", {"uid": users[0]}) == 0

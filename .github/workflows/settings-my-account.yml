@@ -10,6 +10,7 @@ on:
       - 'backend/app/api/router.py'
       - 'backend/app/services/consumer_account_management_service.py'
       - 'backend/app/services/consumer_account_deletion_service.py'
+      - 'backend/app/services/consumer_account_file_deletion_service.py'
       - 'backend/app/services/password_service.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/tests/consumer_account_management_selftest.py'
@@ -56,6 +57,7 @@ jobs:
             app/api/consumer_account_routes.py \
             app/services/consumer_account_management_service.py \
             app/services/consumer_account_deletion_service.py \
+            app/services/consumer_account_file_deletion_service.py \
             tests/consumer_account_management_selftest.py \
             tests/consumer_account_route_policy_selftest.py \
             tests/consumer_account_deletion_route_selftest.py
