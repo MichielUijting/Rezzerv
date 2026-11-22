@@ -206,7 +206,7 @@ export default function PlatformUsersPage() {
           huishouden nodig en er is nooit een fallback naar huishouden 0.
         </p>
         <p>
-          Wachtwoorden, password-hashes en sessietokens worden niet getoond. Schorsen trekt actieve
+          Wachtwoorden, password-hashes, sessietokens en token-hashes worden niet getoond. Schorsen trekt actieve
           sessies in; opheffen herstelt geen oude sessies. Verwijderen is onomkeerbaar en behoudt
           gedeelde huishoudgegevens en draagt zo nodig de beheerdersrol over. Platformaccounts zijn uitgesloten.
         </p>
