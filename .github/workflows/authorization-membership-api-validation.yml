@@ -133,5 +133,5 @@ jobs:
           set -euo pipefail
           test "${GITHUB_ACTIONS:-}" = "true"
           test "${TEST_POSTGRES_DB:-}" = "rezzerv_authorization_membership_ci"
-          python tests/consumer_account_deletion_selftest.py
+          PYTHONPATH=. python tests/consumer_account_deletion_selftest.py
           echo ACCOUNT_DELETION_POSTGRESQL_GREEN
