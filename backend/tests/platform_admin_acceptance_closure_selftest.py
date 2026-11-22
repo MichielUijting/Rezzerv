@@ -34,7 +34,7 @@ EXPECTED_CAPABILITIES = (
 
 EXPECTED_PLATFORM_ADMIN_PERMISSIONS = frozenset(
     {item[1] for item in EXPECTED_CAPABILITIES if item[0] != "functional-features"}
-    | {"platform.support_access.mutate"}
+    | {"platform.support_access.mutate", "platform.users.delete"}
 )
 
 EXPECTED_REGRESSION_SPECS = (
