@@ -141,6 +141,9 @@ def run() -> int:
         source_probe = receipt_root.parent / "sources" / solo / "scan-folder" / "source.pdf"
         source_probe.parent.mkdir(parents=True, exist_ok=True)
         source_probe.write_bytes(b"%PDF-1.4\nsole user\n")
+        debug_probe = receipt_root.parent / "debug" / solo / "2026" / "11" / "debug.json"
+        debug_probe.parent.mkdir(parents=True, exist_ok=True)
+        debug_probe.write_text('{"personal":"test-only"}', encoding="utf-8")
         shared_probe = receipt_root / shared / "shared-receipt.txt"
         shared_probe.parent.mkdir(parents=True, exist_ok=True)
         shared_probe.write_text("keep shared household data", encoding="utf-8")
@@ -150,6 +153,7 @@ def run() -> int:
                 stage.stage(conn, [solo])
                 assert not staged_probe.exists()
                 assert not source_probe.exists()
+                assert not debug_probe.exists()
                 raise RuntimeError("deliberate before-commit failure")
         except RuntimeError as exc:
             assert str(exc) == "deliberate before-commit failure"
@@ -157,6 +161,7 @@ def run() -> int:
         assert reconcile_household_file_staging(engine) == 1
         assert staged_probe.read_text(encoding="utf-8") == "private-sole-household-file"
         assert source_probe.read_bytes().startswith(b"%PDF-1.4")
+        assert debug_probe.read_text(encoding="utf-8").startswith("{")
         assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
         checks.append("staged_receipts_and_source_folders_recovered_after_rollback")
 
@@ -173,9 +178,10 @@ def run() -> int:
         stage.finalize()
         assert not staged_probe.exists()
         assert not source_probe.exists()
+        assert not debug_probe.exists()
         assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
         checks.append("multi_household_deletion_transaction_committed")
-        checks.append("sole_household_receipt_and_source_files_removed_after_commit")
+        checks.append("sole_household_receipt_source_debug_files_removed_after_commit")
         checks.append("shared_household_receipt_file_preserved")
 
         with engine.begin() as conn:

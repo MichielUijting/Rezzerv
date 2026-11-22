@@ -31,8 +31,12 @@ def _safe_household_id(hid: str) -> str:
     return value
 
 
-def _paths(root: Path, hid: str) -> tuple[Path, Path]:
-    return root / hid, root.parent / "sources" / hid
+CATEGORIES = ("raw", "sources", "debug")
+
+
+def _paths(root: Path, hid: str) -> tuple[Path, Path, Path]:
+    # The ingestion debug artifact store contains household-specific JSON too.
+    return root / hid, root.parent / "sources" / hid, root.parent / "debug" / hid
 
 
 def _check_tree(path: Path) -> None:
@@ -52,7 +56,7 @@ def _check_tree(path: Path) -> None:
 
 def _root() -> Path:
     raw = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
-    if not raw.is_absolute() or ".." in raw.parts or raw.is_symlink() or raw.parent.is_symlink() or (raw.parent / "sources").is_symlink():
+    if not raw.is_absolute() or ".." in raw.parts or raw.is_symlink() or raw.parent.is_symlink() or (raw.parent / "sources").is_symlink() or (raw.parent / "debug").is_symlink():
         raise AccountFileDeletionConflict("De kassabonopslag heeft geen veilige absolute map.")
     return raw
 
@@ -141,7 +145,7 @@ class HouseholdFileStage:
         _write_manifest(folder, ids)
         try:
             for hid in ids:
-                for category, source in zip(("raw", "sources"), _paths(self.raw_root, hid)):
+                for category, source in zip(CATEGORIES, _paths(self.raw_root, hid)):
                     if source.exists():
                         destination = folder / category / hid
                         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +159,7 @@ class HouseholdFileStage:
             return
         folder = self.folder
         for hid in sorted(self.household_ids):
-            for category, target in zip(("raw", "sources"), _paths(self.raw_root, hid)):
+            for category, target in zip(CATEGORIES, _paths(self.raw_root, hid)):
                 source = folder / category / hid
                 if source.exists():
                     if target.exists() or target.is_symlink():
