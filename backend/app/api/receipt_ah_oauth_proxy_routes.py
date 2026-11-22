@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from ipaddress import AddressValueError, IPv4Address
 import logging
 import os
 import secrets
@@ -85,6 +86,21 @@ def _format_host(hostname: str) -> str:
     return f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
 
 
+def _ah_login_hostname(browser_hostname: str) -> str:
+    """Use a DNS hostname for hCaptcha while keeping the browser's reachable IP.
+
+    The browser might be on another device (LAN/Tailscale). Pointing it at the
+    development laptop's 127.0.0.1 would instead point to the phone itself.
+    Explicit REZZERV_BACKEND_PUBLIC_URL values still take precedence.
+    """
+    ip_text = "127.0.0.1" if browser_hostname.lower() == "localhost" else browser_hostname
+    try:
+        address = IPv4Address(ip_text)
+    except AddressValueError:
+        return browser_hostname
+    return f"ah-login.{str(address).replace('.', '-')}.sslip.io"
+
+
 def resolve_backend_public_origin(request: Request) -> str:
     configured = str(os.getenv("REZZERV_BACKEND_PUBLIC_URL", "") or "").strip().rstrip("/")
     if configured:
@@ -104,7 +120,7 @@ def resolve_backend_public_origin(request: Request) -> str:
     public_port = str(os.getenv("REZZERV_BACKEND_PUBLIC_PORT", _DEFAULT_BACKEND_PUBLIC_PORT) or "").strip()
     if not public_port.isdigit():
         raise RuntimeError("REZZERV_BACKEND_PUBLIC_PORT is ongeldig")
-    return f"{scheme}://{_format_host(hostname)}:{public_port}"
+    return f"{scheme}://{_format_host(_ah_login_hostname(hostname))}:{public_port}"
 
 
 def _safe_return_to(request: Request, return_to: str | None) -> str:
