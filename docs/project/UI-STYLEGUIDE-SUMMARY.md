@@ -431,6 +431,14 @@ Voor de nieuwe Voorraadbaseline blijven de generieke toegankelijkheidscontracten
 
 De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Schermen maken geen eigen tijdelijke succes-, info-, waarschuwing- of foutbalk wanneer deze centrale component het patroon afdekt.
 
+### Platformbeheer → Gebruikers: centrale actiebevestigingen (22 november 2026)
+
+- **Gebruiker schorsen**, **Schorsing opheffen** en **Gebruiker definitief verwijderen** openen elk de bestaande centrale interactieve `AppFeedbackProvider`-overlay, nooit een losse bevestigingskaart onder de gebruikerslijst.
+- Het bevestigingsvenster is ondoorzichtig, modaal en blijft open tot **Annuleren** of expliciete bevestiging. Klikken buiten het venster mag geen accountactie uitvoeren. Tijdens verwerking is een herhaalde bevestiging geblokkeerd.
+- Verwijderen toont de gevolgen en een apart invoerveld **binnen dezelfde overlay**. De centrale melding ondersteunt een optionele exacte invoerwaarde (`matchValue`): de definitieve actie blijft uitgeschakeld totdat de tekst exact klopt. Serverautorisatie en bevestigingsvalidatie blijven verplicht.
+- Laden en controleren, succes, fouten en geweigerde acties lopen eveneens via de centrale feedbackcomponent. Een mislukte actie verandert geen weergegeven accountstatus; de fout blijft bij de bevestiging zichtbaar of wordt als centrale foutmelding met **OK** getoond. Lege lijsten en gewone statusvelden blijven normale scherminhoud.
+
+
 **Bindend PO-besluit 6 november 2026 — applicatiebreed:** status-, succes-, waarschuwing- en foutmeldingen staan nooit als dynamische melding tussen de inhoud van een scherm. Alleen een centrale overlay of de centrale vaste balk onderin is toegestaan. Een **foutmelding** is altijd een centrale, blokkerende melding met expliciete **OK**-knop, ook op mobiel: zij verdwijnt **niet** na een timer, niet bij klikken op de melding en niet bij klikken buiten de overlay. Onderliggende functionele leegstand-, veldlabel- en voortgangsmetadata zijn geen tijdelijke meldingen. Schermen implementeren geen eigen `rz-inline-feedback`-meldingsblokken of fout-dismisstimers.
 
 ### Desktop: ondoorzichtige resultaatmeldingen bij Uitpakken (8 november 2026)
