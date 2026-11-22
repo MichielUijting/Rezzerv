@@ -5,6 +5,7 @@ import Button from '../../ui/Button'
 import DataTable from '../../ui/DataTable.jsx'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
+import './platformUsers.css'
 
 function formatDateTime(value) {
   if (!value) return 'Niet geschorst'
@@ -23,15 +24,14 @@ function csvCell(value) {
 }
 
 const USER_COLUMNS = [
-  { key: 'select', width: 65 },
-  { key: 'email', label: 'E-mailadres', width: 270, sortable: true, filterable: true },
-  { key: 'user_id', label: 'Gebruiker-ID', width: 290, sortable: true, filterable: true },
-  { key: 'account_status', label: 'Status', width: 135, sortable: true, filterable: true,
+  { key: 'select', width: 60 },
+  { key: 'email', label: 'E-mailadres', width: 350, sortable: true, filterable: true },
+  { key: 'account_status', label: 'Status', width: 145, sortable: true, filterable: true,
     getFilterValue: (user) => user.account_status === 'suspended' ? 'Geschorst' : 'Actief',
     getSortValue: (user) => user.account_status === 'suspended' ? 'Geschorst' : 'Actief' },
-  { key: 'active_session_count', label: 'Actieve sessies', width: 140,
+  { key: 'active_session_count', label: 'Actieve sessies', width: 160,
     sortable: true, filterable: true, align: 'right' },
-  { key: 'suspended_at', label: 'Geschorst op', width: 205, sortable: true, filterable: true,
+  { key: 'suspended_at', label: 'Geschorst op', width: 215, sortable: true, filterable: true,
     getFilterValue: (user) => user.suspended_at ? formatDateTime(user.suspended_at) : '',
     getSortValue: (user) => user.suspended_at || '' },
 ]
@@ -311,10 +311,9 @@ export default function PlatformUsersPage() {
 
   function exportSelected() {
     if (!selectedRows.length) return
-    const header = ['E-mailadres', 'Gebruiker-ID', 'Status', 'Actieve sessies', 'Geschorst op']
+    const header = ['E-mailadres', 'Status', 'Actieve sessies', 'Geschorst op']
     const body = selectedRows.map((user) => [
-      user.email, user.user_id,
-      user.account_status === 'suspended' ? 'Geschorst' : 'Actief',
+      user.email, user.account_status === 'suspended' ? 'Geschorst' : 'Actief',
       Number(user.active_session_count || 0),
       user.suspended_at ? formatDateTime(user.suspended_at) : '',
     ])
@@ -333,23 +332,11 @@ export default function PlatformUsersPage() {
 
   return (
     <div data-testid="platform-users-page">
-      <Header title="Gebruikers" subtitle="Schors gebruikers, annuleer schorsingen of verwijder één regulier account." />
-      <Card>
-        <p>
-          Schorsen en schorsingen annuleren gebruiken <strong>platform.users.suspend</strong>.
-          Verwijderen vereist <strong>platform.users.delete</strong> en is uitsluitend mogelijk voor één geselecteerd
-          regulier account. Er is geen actief huishouden nodig en er is nooit een fallback naar huishouden 0.
-        </p>
-        <p>
-          Wachtwoorden, password-hashes, sessietokens en token-hashes worden niet getoond.
-          Schorsen trekt actieve sessies in; annuleren herstelt geen oude sessies.
-          Bij verwijderen blijven gedeelde huishoudgegevens behouden en wordt zo nodig de beheerdersrol overgedragen.
-        </p>
-      </Card>
+      <Header title="Gebruikers" />
 
-      {loading ? <Card><p>Gebruikers laden…</p></Card> : null}
-
-      <div className="rz-mobile-table-select-row" data-testid="platform-users-select-all">
+      <section className="rz-platform-users-table-panel" data-testid="platform-users-panel" aria-label="Gebruikersoverzicht">
+        {loading ? <Card><p>Gebruikers laden…</p></Card> : null}
+        <div className="rz-mobile-table-select-row" data-testid="platform-users-select-all">
         <label><input type="checkbox" aria-label="Alle rijen in de tabel"
           checked={allFilteredSelected} disabled={loading || !selectableFilteredIds.length}
           onChange={() => toggleSelection(selectableFilteredIds, allFilteredSelected)} />
@@ -387,13 +374,13 @@ export default function PlatformUsersPage() {
               disabled={user.is_current || loading}
               onChange={() => toggleSelection([user.user_id], selectedSet.has(user.user_id))} /></td>
             <td>{user.email}{user.is_current ? <span> — Huidig beheeraccount (niet selecteerbaar)</span> : null}</td>
-            <td>{user.user_id}</td>
             <td>{user.account_status === 'suspended' ? 'Geschorst' : 'Actief'}</td>
             <td className="rz-num">{Number(user.active_session_count || 0)}</td>
             <td>{user.suspended_at ? formatDateTime(user.suspended_at) : '—'}</td>
           </tr>
         )}
       />
+      </section>
     </div>
   )
 }
