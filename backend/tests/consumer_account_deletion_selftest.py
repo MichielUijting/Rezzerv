@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from pathlib import Path
 from sqlalchemy import text
 
 from app.services.consumer_account_deletion_service import (
@@ -97,6 +98,27 @@ def run() -> int:
             assert _count(conn, "spaces", "household_id=:hid", {"hid": shared}) == 1
             assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 1
         checks.append("invalid_credentials_or_confirmation_changes_nothing")
+
+        # Files without matching DB metadata must never be silently orphaned.
+        # The dedicated CI database guard above prevents any PO-runtime mutation.
+        receipt_root = Path(os.environ["RECEIPT_STORAGE_ROOT"])
+        probe = receipt_root / solo / "unknown-unindexed-receipt.txt"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text("isolated-file-probe", encoding="utf-8")
+        try:
+            with engine.begin() as conn:
+                try:
+                    deletion_preview(conn, user_id=users[0])
+                except AccountDeletionConflictError:
+                    pass
+                else:
+                    raise AssertionError("Preview allowed orphaning an unindexed receipt file")
+            with engine.begin() as conn:
+                assert _count(conn, "app_users", "id=:uid", {"uid": users[0]}) == 1
+                assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 1
+        finally:
+            probe.unlink()
+        checks.append("unindexed_receipt_file_blocks_all_deletion_without_mutation")
 
         with engine.begin() as conn:
             result = delete_consumer_account(

@@ -5,6 +5,9 @@ The caller owns the transaction. Unknown identity references abort the deletion.
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
+import hashlib
+import os
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
@@ -124,6 +127,8 @@ def deletion_preview(conn: Connection, *, user_id: str) -> dict[str, Any]:
         if not registry or str(registry.get("context_type") or "regular").lower() != "regular":
             raise AccountDeletionConflictError("Geen geldig regulier huishouden gevonden.")
         remaining = _remaining(conn, hid, str(user["email"]).strip().lower())
+        if not remaining:
+            _guard_sole_household_files(conn, hid)
         role = resolve_effective_household_role(
             conn, household_id=hid, membership_id=str(member["id"]), legacy_role=member["role"]
         )
@@ -165,9 +170,24 @@ def _promote_successor(conn: Connection, hid: str, membership_id: str | None) ->
         raise AccountDeletionConflictError("Overdracht van Beheerder is niet geslaagd.")
 
 
-def _delete_sole_household(conn: Connection, hid: str) -> None:
-    # Database reset alone does not remove persisted receipt images/files.
-    # Never claim complete removal while untracked on-disk receipt material exists.
+def _guard_sole_household_files(conn: Connection, hid: str) -> None:
+    """Fail closed if any persisted receipt content would outlive the account."""
+    if not hid or Path(hid).name != hid or hid in {".", "..", "0"}:
+        raise AccountDeletionConflictError("Ongeldige huishoudenidentiteit bij bestandscontrole.")
+    receipt_root = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
+    dirs = (receipt_root / hid, receipt_root.parent / "sources" / hid)
+    for directory in dirs:
+        try:
+            if directory.exists() and any(path.is_file() for path in directory.rglob("*")):
+                raise AccountDeletionConflictError(
+                    "Dit huishouden bevat nog kassabon- of bronbestanden; volledige "
+                    "bestandsverwijdering moet eerst veilig worden afgehandeld."
+                )
+        except OSError as exc:
+            raise AccountDeletionConflictError(
+                "Bestandsopslag kon niet volledig worden gecontroleerd; verwijderen gestopt."
+            ) from exc
+    # Unknown paths in the receipts table are also unsafe even when not on disk.
     raw_cols = _columns(conn, "raw_receipts")
     if {"household_id", "storage_path"}.issubset(raw_cols):
         if conn.execute(text("""
@@ -180,6 +200,11 @@ def _delete_sole_household(conn: Connection, hid: str) -> None:
                 "Dit huishouden bevat nog fysieke kassabonbestanden; volledige verwijdering "
                 "is nog niet veilig ondersteund. Er is niets verwijderd."
             )
+
+
+
+def _delete_sole_household(conn: Connection, hid: str) -> None:
+    _guard_sole_household_files(conn, hid)
     reset_household_data(conn, hid, confirmation=f"RESET {hid}")
     conn.execute(text("""
         UPDATE server_sessions SET active_household_id=NULL
@@ -222,6 +247,14 @@ def _purge_personal_references(conn: Connection, uid: str, email: str) -> None:
             conn.execute(text(
                 f"UPDATE {qt} SET {quote(name_column)}='Verwijderde gebruiker' WHERE {qc}=:deleted"
             ), params)
+
+    # Requests for unknown/legacy addresses may have a null user_id, but
+    # still retain a deterministic hash of this account's email address.
+    if "account_password_reset_tokens" in tables:
+        conn.execute(text("""
+            DELETE FROM account_password_reset_tokens
+            WHERE request_email_hash=:email_hash
+        """), {"email_hash": hashlib.sha256(email.encode("utf-8")).hexdigest()})
 
     for table, column in (
         ("account_password_reset_tokens", "user_id"),
