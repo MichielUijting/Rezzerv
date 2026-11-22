@@ -205,3 +205,86 @@ test('pagination supports eleven users across two pages', async ({ page }) => {
   await expect(pageIndicator).toHaveAttribute('aria-label', 'Pagina 2 van 2')
   await expect(page.locator('[data-testid^="platform-user-page-user-"]')).toHaveCount(1)
 })
+
+test('a suspended user can be reactivated only after confirmation without restoring sessions', async ({ page }) => {
+  await mockSession(page, noneSession)
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: users, can_delete: false }),
+  }))
+  const reactivations = []
+  await page.route('**/api/platform/users/already-suspended/unsuspend', async route => {
+    reactivations.push({ method: route.request().method(), body: route.request().postData() })
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ item: { account_status: 'active', suspended_at: null, active_sessions_restored: 0 } }),
+    })
+  })
+
+  await page.goto('/platform/gebruikers')
+  const user = page.getByTestId('platform-user-already-suspended')
+  await user.getByRole('button', { name: 'Schorsing opheffen', exact: true }).click()
+  await expect(page.getByTestId('platform-user-unsuspend-confirmation')).toBeVisible()
+  expect(reactivations).toHaveLength(0)
+  await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
+  expect(reactivations).toHaveLength(0)
+  await user.getByRole('button', { name: 'Schorsing opheffen', exact: true }).click()
+  await page.getByRole('button', { name: 'Schorsing opheffen bevestigen' }).click()
+  await expect.poll(() => reactivations.length).toBe(1)
+  expect(reactivations[0]).toEqual({ method: 'POST', body: null })
+  await expect(user).toContainText('Status: Actief')
+  await expect(user).toContainText('Actieve sessies: 0')
+  await expect(page.getByTestId('app-feedback-success')).toContainText('Eerdere sessies blijven ingetrokken')
+})
+
+test('platformbeheerder deletion requires preview and typed exact email and preserves shared household', async ({ page }) => {
+  await mockSession(page, {
+    ...noneSession,
+    permissions: { [USERS_PERMISSION]: true, 'platform.users.delete': true },
+    supported_permissions: [USERS_PERMISSION, 'platform.users.delete'],
+  })
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: users, can_delete: true }),
+  }))
+  let previews = 0
+  const deletes = []
+  await page.route('**/api/platform/users/target-user/deletion-preview', async route => {
+    previews += 1
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        user_id: 'target-user', households_to_keep: 1, households_to_delete: 0,
+      }),
+    })
+  })
+  await page.route('**/api/platform/users/target-user', async route => {
+    deletes.push({ method: route.request().method(), body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ deleted: true, households_preserved: 1, households_deleted: 0 }),
+    })
+  })
+  await page.goto('/platform/gebruikers')
+  const actor = page.getByTestId('platform-user-platform-users-actor')
+  const target = page.getByTestId('platform-user-target-user')
+  await expect(actor.getByRole('button', { name: 'Gebruiker verwijderen' })).toHaveCount(0)
+  await target.getByRole('button', { name: 'Gebruiker verwijderen' }).click()
+  await expect(page.getByTestId('platform-user-delete-preview')).toContainText('1 gedeelde huishouden(s)')
+  expect(previews).toBe(1)
+  expect(deletes).toHaveLength(0)
+  const confirm = page.getByTestId('platform-user-delete-typed-confirmation')
+  await confirm.fill('VERWIJDER onjuist@example.test')
+  await expect(page.getByRole('button', { name: 'Gebruiker definitief verwijderen' })).toBeDisabled()
+  expect(deletes).toHaveLength(0)
+  await confirm.fill('VERWIJDER target-user@example.test')
+  await page.getByRole('button', { name: 'Gebruiker definitief verwijderen' }).click()
+  await expect.poll(() => deletes.length).toBe(1)
+  expect(deletes[0]).toEqual({
+    method: 'DELETE',
+    body: { confirmation: 'VERWIJDER target-user@example.test' },
+  })
+  await expect(page.getByTestId('platform-user-target-user')).toHaveCount(0)
+  await expect(page.getByTestId('app-feedback-success')).toContainText('definitief verwijderd')
+})
