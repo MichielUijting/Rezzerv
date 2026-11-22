@@ -9,8 +9,10 @@ if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"
 if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"
 if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=300"
 if not defined REZZERV_APP_BASE_URL set "REZZERV_APP_BASE_URL=http://localhost:%REZZERV_FRONTEND_PORT%"
-if not defined REZZERV_AH_OAUTH_HOST set "REZZERV_AH_OAUTH_HOST=ah-login.127-0-0-1.sslip.io"
-if not defined REZZERV_BACKEND_PUBLIC_URL set "REZZERV_BACKEND_PUBLIC_URL=http://%REZZERV_AH_OAUTH_HOST%:%REZZERV_BACKEND_PORT%"
+rem No fixed 127.0.0.1 AH login host: Android must reach the same laptop as Inhuis.
+rem The backend derives the browser-reachable host from the proxied Inhuis request.
+rem Preserve an explicitly configured public URL or legacy custom AH hostname.
+if not defined REZZERV_BACKEND_PUBLIC_URL if defined REZZERV_AH_OAUTH_HOST set "REZZERV_BACKEND_PUBLIC_URL=http://%REZZERV_AH_OAUTH_HOST%:%REZZERV_BACKEND_PORT%"
 set "FRONTEND_PORT=%REZZERV_FRONTEND_PORT%"
 set "BACKEND_PORT=%REZZERV_BACKEND_PORT%"
 set "STARTUP_WAIT_SECONDS=%REZZERV_STARTUP_WAIT_SECONDS%"

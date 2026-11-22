@@ -58,6 +58,43 @@ def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) 
     )
 
 
+def test_mobile_ipv4_browser_uses_reachable_ah_login_hostname(monkeypatch) -> None:
+    """A phone must never receive the laptop's loopback-only AH proxy URL."""
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("REZZERV_BACKEND_PUBLIC_PORT", "8011")
+
+    for host, expected in (
+        ("localhost", "ah-login.127-0-0-1.sslip.io"),
+        ("127.0.0.1", "ah-login.127-0-0-1.sslip.io"),
+        ("192.168.1.15", "ah-login.192-168-1-15.sslip.io"),
+        ("100.64.10.20", "ah-login.100-64-10-20.sslip.io"),
+    ):
+        return_to = f"http://{host}:5174/onboarding/winkels"
+        flow = oauth.create_ah_oauth_flow(
+            _request(host=host),
+            household_id="household-1",
+            return_to=return_to,
+        )
+        assert flow.backend_origin == f"http://{expected}:8011"
+        assert flow.return_to == return_to
+        assert oauth.build_ah_oauth_launch_url(flow).startswith(
+            f"http://{expected}:8011/ah-oauth/launch/"
+        )
+        assert oauth._return_with_status(flow, "connected") == return_to + "?ah=connected"
+
+
+def test_explicit_ah_public_url_still_takes_precedence(monkeypatch) -> None:
+    monkeypatch.setenv("REZZERV_BACKEND_PUBLIC_URL", "https://login.inhuis.example")
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="100.64.10.20"),
+        household_id="household-1",
+        return_to="http://100.64.10.20:5174/onboarding/winkels",
+    )
+    assert flow.backend_origin == "https://login.inhuis.example"
+    assert flow.return_to == "http://100.64.10.20:5174/onboarding/winkels"
+
+
 def test_onboarding_return_url_is_same_host_and_exact_path(monkeypatch) -> None:
     oauth.reset_ah_oauth_flows_for_tests()
     monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
