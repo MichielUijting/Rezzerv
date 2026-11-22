@@ -108,11 +108,14 @@ def run() -> int:
         try:
             with engine.begin() as conn:
                 try:
-                    deletion_preview(conn, user_id=users[0])
+                    delete_consumer_account(
+                        conn, user_id=users[0], current_password="TestPassword123!",
+                        confirmation=CONFIRMATION,
+                    )
                 except AccountDeletionConflictError:
                     pass
                 else:
-                    raise AssertionError("Preview allowed orphaning an unindexed receipt file")
+                    raise AssertionError("Account deletion without a file stage orphaned an unindexed receipt file")
             with engine.begin() as conn:
                 assert _count(conn, "app_users", "id=:uid", {"uid": users[0]}) == 1
                 assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 1

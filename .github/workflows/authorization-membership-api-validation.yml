@@ -14,6 +14,7 @@ on:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/services/consumer_account_deletion_service.py'
+      - 'backend/app/services/consumer_account_file_deletion_service.py'
       - 'backend/app/api/consumer_account_routes.py'
       - 'backend/app/services/roles_v2_schema_foundation.py'
       - 'backend/app/services/server_session_service.py'

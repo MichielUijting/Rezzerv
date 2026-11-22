@@ -15,6 +15,7 @@ from sqlalchemy.engine import Connection
 from app.services.authorization_foundation_service import resolve_active_platform_role_keys
 from app.services.authorization_membership_service import resolve_effective_household_role
 from app.services.household_reset_service import reset_household_data
+from app.services.consumer_account_file_deletion_service import HouseholdFileStage, AccountFileDeletionConflict
 from app.services.password_service import verify_password
 
 CONFIRMATION = "VERWIJDER MIJN ACCOUNT"
@@ -137,8 +138,6 @@ def deletion_preview(conn: Connection, *, user_id: str) -> dict[str, Any]:
         if not registry or str(registry.get("context_type") or "regular").lower() != "regular":
             raise AccountDeletionConflictError("Geen geldig regulier huishouden gevonden.")
         remaining = _remaining(conn, hid, str(user["email"]).strip().lower())
-        if not remaining:
-            _guard_sole_household_files(conn, hid)
         role = resolve_effective_household_role(
             conn, household_id=hid, membership_id=str(member["id"]), legacy_role=member["role"]
         )
@@ -213,8 +212,9 @@ def _guard_sole_household_files(conn: Connection, hid: str) -> None:
 
 
 
-def _delete_sole_household(conn: Connection, hid: str) -> None:
-    _guard_sole_household_files(conn, hid)
+def _delete_sole_household(conn: Connection, hid: str, *, staged_files: frozenset[str]) -> None:
+    if hid not in staged_files:
+        _guard_sole_household_files(conn, hid)
     reset_household_data(conn, hid, confirmation=f"RESET {hid}")
     conn.execute(text("""
         UPDATE server_sessions SET active_household_id=NULL
@@ -319,7 +319,8 @@ def _purge_personal_references(conn: Connection, uid: str, email: str) -> None:
 
 
 def delete_consumer_account(
-    conn: Connection, *, user_id: str, current_password: str, confirmation: str
+    conn: Connection, *, user_id: str, current_password: str, confirmation: str,
+    file_stage: HouseholdFileStage | None = None,
 ) -> dict[str, int | bool]:
     if confirmation != CONFIRMATION:
         raise AccountDeletionConflictError(f"Typ ter bevestiging exact: {CONFIRMATION}")
@@ -340,10 +341,14 @@ def delete_consumer_account(
     if deletion_preview(conn, user_id=uid) != plan:
         raise AccountDeletionConflictError("Huishoudleden veranderden tijdens het verzoek.")
 
+    sole_ids = [str(item["household_id"]) for item in plan["households"] if item["delete_household"]]
+    if file_stage is not None:
+        file_stage.stage(conn, sole_ids)
+    staged_files = file_stage.household_ids if file_stage is not None else frozenset()
     for item in plan["households"]:
         hid, mid = item["household_id"], item["membership_id"]
         if item["delete_household"]:
-            _delete_sole_household(conn, hid)
+            _delete_sole_household(conn, hid, staged_files=staged_files)
         else:
             _promote_successor(conn, hid, item["successor_membership_id"])
             for table in ("auth_membership_permission_overrides", "auth_membership_roles"):

@@ -12,6 +12,10 @@ from app.services.consumer_account_deletion_service import (
     deletion_preview,
 )
 from app.services.server_session_service import SESSION_COOKIE_NAME
+from app.services.consumer_account_file_deletion_service import (
+    HouseholdFileStage, AccountFileDeletionConflict,
+    reconcile_household_file_staging,
+)
 from app.services.consumer_account_management_service import (
     ConsumerAccountNotFoundError,
     ConsumerCurrentPasswordMismatchError,
@@ -222,19 +226,28 @@ def get_account_deletion_preview() -> dict:
 def permanently_delete_my_account(payload: ConsumerAccountDeleteRequest, response: Response) -> dict:
     context = _require_regular_consumer_session()
     try:
-        with engine.begin() as conn:
-            outcome = delete_consumer_account(
-                conn,
-                user_id=context.user_id,
-                current_password=payload.current_password,
-                confirmation=payload.confirmation,
-            )
+        stage = HouseholdFileStage()
+        try:
+            with engine.begin() as conn:
+                outcome = delete_consumer_account(
+                    conn,
+                    user_id=context.user_id,
+                    current_password=payload.current_password,
+                    confirmation=payload.confirmation,
+                    file_stage=stage,
+                )
+        except Exception:
+            # Database transaction rolled back; put any staged files back.
+            stage.restore()
+            raise
+        # Do not report success until the staged files are actually gone.
+        stage.finalize()
     except AccountDeletionPasswordError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except AccountDeletionConflictError as exc:
+    except (AccountDeletionConflictError, AccountFileDeletionConflict) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    # Clear only after the deletion transaction committed successfully.
+    # Clear only after the transaction and file purge have completed.
     from app.api.server_session_routes import session_api_configuration_from_environment
     configuration = session_api_configuration_from_environment()
     response.delete_cookie(
@@ -300,3 +313,10 @@ def confirm_forgotten_password(
             "Log opnieuw in met je nieuwe wachtwoord."
         )
     }
+
+
+@router.on_event("startup")
+def recover_interrupted_account_file_deletion() -> None:
+    # Reconcile only the dedicated account-deletion quarantine, never arbitrary
+    # receipt folders. The database decides whether SQL committed or rolled back.
+    reconcile_household_file_staging(engine)
