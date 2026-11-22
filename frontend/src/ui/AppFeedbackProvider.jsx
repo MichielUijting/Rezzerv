@@ -96,6 +96,8 @@ function normalizeFeedback(input) {
             label: String(option?.label || ''),
           })).filter((option) => option.value && option.label) : [],
           required: Boolean(field?.required),
+          // Optional exact-match gate for irreversible confirmations. Other inputs keep their existing behavior.
+          matchValue: typeof field?.matchValue === 'string' ? field.matchValue : null,
           autoFocus: Boolean(field?.autoFocus),
         }))
         .filter((field) => field.name && field.label)
@@ -205,6 +207,15 @@ export function AppFeedbackProvider({ children }) {
             return
           }
 
+          const unmatchedField = (feedback.inputFields || []).find(
+            (field) => field.matchValue !== null
+              && String(fieldValues[field.name] ?? '') !== field.matchValue,
+          )
+          if (unmatchedField) {
+            setActionError(`Typ de bevestiging bij ${unmatchedField.label.toLowerCase()} exact over.`)
+            return
+          }
+
           setIsActionPending(true)
           setActionError('')
 
@@ -283,6 +294,10 @@ function AppFeedbackDialog({
   const interactiveDialog = !mobileTransient || variant === 'error' || Boolean(hasPrimaryAction || feedback.onSecondaryAction || inputFields?.length)
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = variant !== 'error' && dismissMode === 'outside-or-ok'
+  const hasUnmatchedConfirmation = (inputFields || []).some(
+    (field) => field.matchValue !== null
+      && String(fieldValues[field.name] ?? '') !== field.matchValue,
+  )
 
   function dismiss() {
     if (dismissMode === 'blocked') return
@@ -556,7 +571,7 @@ function AppFeedbackDialog({
               type="button"
               variant="primary"
               onClick={onPrimaryAction}
-              disabled={isActionPending}
+              disabled={isActionPending || hasUnmatchedConfirmation}
               data-testid={`${testId}-primary-button`}
               style={{
                 minHeight: '44px',
