@@ -59,14 +59,20 @@ def _account(conn: Connection, user_id: str, *, lock: bool) -> dict[str, Any]:
 
 
 def _memberships(conn: Connection, uid: str, email: str) -> list[dict[str, Any]]:
-    _required_columns(
-        conn, "household_memberships",
-        {"id", "household_id", "role", "user_id", "user_email"},
+    # Canonical PostgreSQL membership rows identify the account by email;
+    # the optional legacy user_id column is NOT part of the schema contract.
+    columns = _required_columns(
+        conn, "household_memberships", {"id", "household_id", "role", "user_email"}
     )
-    rows = conn.execute(text("""
-        SELECT id, household_id, role, user_id, user_email
+    user_id_sql = "user_id" if "user_id" in columns else "NULL"
+    identity_predicate = (
+        "CAST(user_id AS TEXT)=:uid OR lower(trim(user_email))=:email"
+        if "user_id" in columns else "lower(trim(user_email))=:email"
+    )
+    rows = conn.execute(text(f"""
+        SELECT id, household_id, role, {user_id_sql} AS user_id, user_email
         FROM household_memberships
-        WHERE CAST(user_id AS TEXT)=:uid OR lower(trim(user_email))=:email
+        WHERE {identity_predicate}
         ORDER BY CAST(household_id AS TEXT), CAST(id AS TEXT)
     """), {"uid": uid, "email": email}).mappings().all()
     for row in rows:
@@ -79,14 +85,18 @@ def _memberships(conn: Connection, uid: str, email: str) -> list[dict[str, Any]]
 
 def _remaining(conn: Connection, household_id: str, email: str) -> list[dict[str, Any]]:
     _required_columns(conn, "app_users", {"id", "email", "created_at"})
-    cols = _required_columns(conn, "household_memberships", {"id", "household_id", "role", "user_id", "user_email"})
+    cols = _required_columns(conn, "household_memberships", {"id", "household_id", "role", "user_email"})
     active = " AND lower(trim(COALESCE(hm.status, 'active')))='active'" if "status" in cols else ""
+    optional_user_join = (
+        " AND (hm.user_id IS NULL OR trim(CAST(hm.user_id AS TEXT))='' "
+        "OR CAST(u.id AS TEXT)=CAST(hm.user_id AS TEXT))"
+        if "user_id" in cols else ""
+    )
     rows = conn.execute(text(f"""
         SELECT hm.id AS membership_id, u.id AS user_id, u.created_at AS account_created_at
         FROM household_memberships hm
         JOIN app_users u ON lower(trim(u.email))=lower(trim(hm.user_email))
-                        AND (hm.user_id IS NULL OR trim(CAST(hm.user_id AS TEXT))=''
-                             OR CAST(u.id AS TEXT)=CAST(hm.user_id AS TEXT))
+                        {optional_user_join}
         WHERE CAST(hm.household_id AS TEXT)=:hid
           AND lower(trim(hm.user_email))<>:email {active}
         ORDER BY u.created_at ASC NULLS LAST, CAST(u.id AS TEXT), CAST(hm.id AS TEXT)
@@ -345,9 +355,11 @@ def delete_consumer_account(
             """), {"hid": hid, "mid": mid}).rowcount != 1:
                 raise AccountDeletionConflictError("Lidmaatschap kon niet worden verwijderd.")
     _purge_personal_references(conn, uid, email)
-    if conn.execute(text("""
+    member_cols = _required_columns(conn, "household_memberships", {"user_email"})
+    member_predicate = ("CAST(user_id AS TEXT)=:uid OR " if "user_id" in member_cols else "") + "lower(trim(user_email))=:email"
+    if conn.execute(text(f"""
         SELECT 1 FROM household_memberships
-        WHERE CAST(user_id AS TEXT)=:uid OR lower(trim(user_email))=:email LIMIT 1
+        WHERE {member_predicate} LIMIT 1
     """), {"uid": uid, "email": email}).first():
         raise AccountDeletionConflictError("Er zijn nog lidmaatschappen aan dit account gekoppeld.")
     if conn.execute(text("DELETE FROM app_users WHERE id=:uid"), {"uid": uid}).rowcount != 1:
