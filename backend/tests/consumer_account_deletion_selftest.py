@@ -110,19 +110,25 @@ def run() -> int:
         probe.parent.mkdir(parents=True, exist_ok=True)
         probe.write_text("isolated-file-probe", encoding="utf-8")
         try:
-            with engine.begin() as conn:
-                try:
+            # The exception MUST exit engine.begin() so SQLAlchemy rolls back
+            # all earlier household changes, including admin promotion.
+            try:
+                with engine.begin() as conn:
                     delete_consumer_account(
                         conn, user_id=users[0], current_password="TestPassword123!",
                         confirmation=CONFIRMATION,
                     )
-                except AccountDeletionConflictError:
-                    pass
-                else:
-                    raise AssertionError("Account deletion without a file stage orphaned an unindexed receipt file")
+            except AccountDeletionConflictError:
+                pass
+            else:
+                raise AssertionError("Account deletion without a file stage orphaned an unindexed receipt file")
             with engine.begin() as conn:
                 assert _count(conn, "app_users", "id=:uid", {"uid": users[0]}) == 1
                 assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 1
+                assert _count(conn, "household_memberships",
+                              "household_id=:hid", {"hid": shared}) == 3
+                assert _count(conn, "household_memberships",
+                              "household_id=:hid", {"hid": solo}) == 1
         finally:
             probe.unlink()
         checks.append("unindexed_receipt_file_blocks_all_deletion_without_mutation")
