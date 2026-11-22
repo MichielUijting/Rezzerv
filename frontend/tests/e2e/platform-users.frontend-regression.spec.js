@@ -135,6 +135,9 @@ test('users page suspends only after explicit confirmation and never exposes cre
 
   await target.getByRole('button', { name: 'Gebruiker schorsen', exact: true }).click()
   await expect(page.getByTestId('platform-user-suspend-confirmation')).toBeVisible()
+  await expect(page.getByTestId('platform-user-suspend-confirmation')).toHaveAttribute('aria-modal', 'true')
+  await expect(page.getByTestId('platform-user-suspend-confirmation-overlay')).toBeVisible()
+  await expect(page.getByTestId('platform-users-page').getByTestId('platform-user-suspend-confirmation')).toHaveCount(0)
   expect(suspends).toHaveLength(0)
 
   await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
@@ -225,6 +228,9 @@ test('a suspended user can be reactivated only after confirmation without restor
   const user = page.getByTestId('platform-user-already-suspended')
   await user.getByRole('button', { name: 'Schorsing opheffen', exact: true }).click()
   await expect(page.getByTestId('platform-user-unsuspend-confirmation')).toBeVisible()
+  await expect(page.getByTestId('platform-user-unsuspend-confirmation')).toHaveAttribute('aria-modal', 'true')
+  await expect(page.getByTestId('platform-user-unsuspend-confirmation-overlay')).toBeVisible()
+  await expect(page.getByTestId('platform-users-page').getByTestId('platform-user-unsuspend-confirmation')).toHaveCount(0)
   expect(reactivations).toHaveLength(0)
   await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
   expect(reactivations).toHaveLength(0)
@@ -271,10 +277,13 @@ test('platformbeheerder deletion requires preview and typed exact email and pres
   const target = page.getByTestId('platform-user-target-user')
   await expect(actor.getByRole('button', { name: 'Gebruiker verwijderen' })).toHaveCount(0)
   await target.getByRole('button', { name: 'Gebruiker verwijderen' }).click()
-  await expect(page.getByTestId('platform-user-delete-preview')).toContainText('1 gedeelde huishouden(s)')
+  await expect(page.getByTestId('platform-user-delete-confirmation')).toContainText('1 gedeelde huishouden(s)')
+  await expect(page.getByTestId('platform-user-delete-confirmation')).toHaveAttribute('aria-modal', 'true')
+  await expect(page.getByTestId('platform-user-delete-confirmation-overlay')).toBeVisible()
+  await expect(page.getByTestId('platform-users-page').getByTestId('platform-user-delete-confirmation')).toHaveCount(0)
   expect(previews).toBe(1)
   expect(deletes).toHaveLength(0)
-  const confirm = page.getByTestId('platform-user-delete-typed-confirmation')
+  const confirm = page.getByTestId('platform-user-delete-confirmation-field-confirmation')
   await confirm.fill('VERWIJDER onjuist@example.test')
   await expect(page.getByRole('button', { name: 'Gebruiker definitief verwijderen' })).toBeDisabled()
   expect(deletes).toHaveLength(0)
@@ -287,4 +296,57 @@ test('platformbeheerder deletion requires preview and typed exact email and pres
   })
   await expect(page.getByTestId('platform-user-target-user')).toHaveCount(0)
   await expect(page.getByTestId('app-feedback-success')).toContainText('definitief verwijderd')
+})
+
+test('failed suspend remains in standard overlay with an actionable error and no state change', async ({ page }) => {
+  await mockSession(page, noneSession)
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: users }),
+  }))
+  let attempts = 0
+  await page.route(USER_SUSPEND_ENDPOINT, route => {
+    attempts += 1
+    return route.fulfill({
+      status: 409, contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Schorsing is momenteel niet toegestaan.' }),
+    })
+  })
+  await page.goto('/platform/gebruikers')
+  const target = page.getByTestId('platform-user-target-user')
+  await target.getByRole('button', { name: 'Gebruiker schorsen' }).click()
+  await page.getByRole('button', { name: 'Definitief schorsen' }).click()
+  await expect(page.getByTestId('platform-user-suspend-confirmation-action-error'))
+    .toContainText('Schorsing is momenteel niet toegestaan.')
+  expect(attempts).toBe(1)
+  await expect(target).toContainText('Status: Actief')
+  await expect(page.getByTestId('platform-user-suspend-confirmation')).toBeVisible()
+  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await expect(page.getByTestId('platform-user-suspend-confirmation')).toHaveCount(0)
+})
+
+test('rejected deletion preview shows central error overlay and never deletes an account', async ({ page }) => {
+  await mockSession(page, {
+    ...noneSession,
+    permissions: { [USERS_PERMISSION]: true, 'platform.users.delete': true },
+    supported_permissions: [USERS_PERMISSION, 'platform.users.delete'],
+  })
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: users, can_delete: true }),
+  }))
+  let deletionCalls = 0
+  await page.route('**/api/platform/users/target-user/deletion-preview', route => route.fulfill({
+    status: 403, contentType: 'application/json',
+    body: JSON.stringify({ detail: 'Dit platformaccount is beschermd.' }),
+  }))
+  await page.route('**/api/platform/users/target-user', route => {
+    deletionCalls += 1
+    return route.fulfill({ status: 200, body: '{}' })
+  })
+  await page.goto('/platform/gebruikers')
+  await page.getByTestId('platform-user-target-user').getByRole('button', { name: 'Gebruiker verwijderen' }).click()
+  await expect(page.getByTestId('app-feedback-error')).toContainText('Dit platformaccount is beschermd.')
+  await expect(page.getByTestId('app-feedback-error')).toHaveAttribute('aria-modal', 'true')
+  expect(deletionCalls).toBe(0)
+  await expect(page.getByTestId('platform-user-target-user')).toContainText('Status: Actief')
 })
