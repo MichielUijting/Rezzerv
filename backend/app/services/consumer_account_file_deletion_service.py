@@ -52,7 +52,7 @@ def _check_tree(path: Path) -> None:
 
 def _root() -> Path:
     raw = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
-    if not raw.is_absolute() or raw.is_symlink():
+    if not raw.is_absolute() or ".." in raw.parts or raw.is_symlink() or raw.parent.is_symlink() or (raw.parent / "sources").is_symlink():
         raise AccountFileDeletionConflict("De kassabonopslag heeft geen veilige absolute map.")
     return raw
 
@@ -81,7 +81,7 @@ def _read_manifest(folder: Path) -> list[str]:
         if data["format"] != 1 or not isinstance(ids, list):
             raise ValueError("unknown journal format")
         normalized = [_safe_household_id(x) for x in ids]
-        if len(normalized) != len(set(normalized)):
+        if not normalized or len(normalized) != len(set(normalized)):
             raise ValueError("duplicate household")
         return normalized
     except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -114,8 +114,8 @@ class HouseholdFileStage:
                 if not filename:
                     continue
                 candidate = Path(filename)
-                if not candidate.is_absolute():
-                    raise AccountFileDeletionConflict("Relatief kassabonpad kan niet veilig worden verwijderd.")
+                if not candidate.is_absolute() or ".." in candidate.parts:
+                    raise AccountFileDeletionConflict("Ongeldig kassabonpad kan niet veilig worden verwijderd.")
                 # Lexical containment (no following symlinks); check the actual tree separately.
                 if not any(candidate == base or base in candidate.parents for base in allowed):
                     raise AccountFileDeletionConflict("Kassabonbestand buiten de eigen huishoudmap aangetroffen.")

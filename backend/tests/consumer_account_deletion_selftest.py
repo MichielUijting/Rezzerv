@@ -207,6 +207,37 @@ def run() -> int:
         checks.append("sole_household_and_only_its_data_deleted")
         checks.append("other_user_and_household_untouched")
 
+        # A legacy advanced_member is user-visible as a Beheerder; an accepted
+        # membership remains a real member when choosing an admin successor.
+        legacy_household = _id("legacy-shared")
+        legacy_user, legacy_successor = _id("legacy-admin"), _id("legacy-successor")
+        legacy_email, successor_email = legacy_user + "@example.test", legacy_successor + "@example.test"
+        successor_mid = _id("membership")
+        with engine.begin() as conn:
+            seed_household(conn, household_id=legacy_household, name="Legacy shared")
+            seed_user(conn, user_id=legacy_user, email=legacy_email, password="TestPassword123!")
+            seed_user(conn, user_id=legacy_successor, email=successor_email, password="TestPassword123!")
+            seed_membership(conn, membership_id=_id("membership"), household_id=legacy_household,
+                            user_id=legacy_user, email=legacy_email, role="advanced_member")
+            seed_membership(conn, membership_id=successor_mid, household_id=legacy_household,
+                            user_id=legacy_successor, email=successor_email, role="member")
+            conn.execute(text(
+                "UPDATE household_memberships SET status='accepted' WHERE id=:mid"
+            ), {"mid": successor_mid})
+        with engine.begin() as conn:
+            legacy_result = delete_consumer_account(
+                conn, user_id=legacy_user, current_password="TestPassword123!",
+                confirmation=CONFIRMATION,
+            )
+            assert legacy_result["admins_transferred"] == 1
+            assert legacy_result["households_preserved"] == 1
+            role = conn.execute(text("""
+                SELECT role_key FROM auth_membership_roles
+                WHERE household_id=:hid AND membership_id=:mid
+            """), {"hid": legacy_household, "mid": successor_mid}).scalar_one()
+            assert role == "household.admin"
+        checks.append("legacy_beheerder_and_accepted_member_succession")
+
     finally:
         engine.dispose()
         reset_postgresql_test_database()

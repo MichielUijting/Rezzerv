@@ -87,7 +87,11 @@ def _memberships(conn: Connection, uid: str, email: str) -> list[dict[str, Any]]
 def _remaining(conn: Connection, household_id: str, email: str) -> list[dict[str, Any]]:
     _required_columns(conn, "app_users", {"id", "email", "created_at"})
     cols = _required_columns(conn, "household_memberships", {"id", "household_id", "role", "user_email"})
-    active = " AND lower(trim(COALESCE(hm.status, 'active')))='active'" if "status" in cols else ""
+    active = (
+        " AND lower(trim(COALESCE(hm.status, 'active'))) "
+        "IN ('active','actief','accepted','geaccepteerd')"
+        if "status" in cols else ""
+    )
     optional_user_join = (
         " AND (hm.user_id IS NULL OR trim(CAST(hm.user_id AS TEXT))='' "
         "OR CAST(u.id AS TEXT)=CAST(hm.user_id AS TEXT))"
@@ -143,7 +147,11 @@ def deletion_preview(conn: Connection, *, user_id: str) -> dict[str, Any]:
         )
         if role not in {"household.admin", "household.member", "household.viewer", "household.advanced_member"}:
             raise AccountDeletionConflictError("Onbekende huishoudrol; verwijderen gestopt.")
-        oldest = remaining[0] if remaining and role == "household.admin" else None
+        oldest = (
+            remaining[0]
+            if remaining and role in {"household.admin", "household.advanced_member"}
+            else None
+        )
         plans.append({
             "household_id": hid,
             "membership_id": str(member["id"]),
