@@ -328,7 +328,7 @@ test('failed suspend remains in standard overlay with an actionable error and no
   expect(attempts).toBe(1)
   await expect(target.getByRole('cell', { name: 'Actief', exact: true })).toBeVisible()
   await expect(page.getByTestId('platform-user-suspend-confirmation')).toBeVisible()
-  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await page.getByTestId('platform-user-suspend-confirmation-secondary-button').click()
   await expect(page.getByTestId('platform-user-suspend-confirmation')).toHaveCount(0)
 })
 
