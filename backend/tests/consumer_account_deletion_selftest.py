@@ -15,6 +15,7 @@ from app.services.consumer_account_deletion_service import (
     AccountDeletionPasswordError,
     CONFIRMATION,
     delete_consumer_account,
+    delete_platform_managed_account,
     deletion_preview,
 )
 from app.testing.postgresql_acceptance_foundation import (
@@ -267,6 +268,73 @@ def run() -> int:
             """), {"hid": legacy_household, "mid": successor_mid}).scalar_one()
             assert role == "household.admin"
         checks.append("legacy_beheerder_succession_with_optional_status_column")
+
+
+        # Platformbeheer invokes the identical protected deletion engine.
+        # A suspended household Beheerder can be removed, while shared receipts
+        # and ownership are retained and passed to the remaining member.
+        platform_actor = _id("platform-admin")
+        platform_actor_email = platform_actor + "@example.test"
+        with engine.begin() as conn:
+            seed_user(conn, user_id=platform_actor, email=platform_actor_email, password="TestPassword123!")
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES (:uid, 'platform.platform_admin', TRUE)
+            """), {"uid": platform_actor})
+            conn.execute(text("""
+                UPDATE app_users SET account_status='suspended', suspended_at=CURRENT_TIMESTAMP
+                WHERE id=:uid
+            """), {"uid": users[1]})
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES (:uid, 'platform.frontteam', TRUE)
+            """), {"uid": users[3]})
+        checks.append("platform_admin_and_protected_targets_seeded")
+
+        def expect_conflict(*, actor, target, confirmation):
+            try:
+                with engine.begin() as conn:
+                    delete_platform_managed_account(
+                        conn, actor_user_id=actor, user_id=target, confirmation=confirmation,
+                    )
+            except AccountDeletionConflictError:
+                return
+            raise AssertionError("Unauthorized or unconfirmed account deletion was accepted")
+
+        expect_conflict(actor=users[3], target=users[1], confirmation="VERWIJDER " + emails[1])
+        expect_conflict(actor=platform_actor, target=platform_actor,
+                        confirmation="VERWIJDER " + platform_actor_email)
+        expect_conflict(actor=platform_actor, target=users[1], confirmation="WRONG")
+        expect_conflict(actor=platform_actor, target=users[3], confirmation="VERWIJDER " + emails[3])
+        with engine.begin() as conn:
+            assert _count(conn, "app_users", "id=:uid", {"uid": users[1]}) == 1
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "household_memberships", "household_id=:hid", {"hid": shared}) == 2
+        checks.append("platform_delete_denies_nonadmin_self_protected_and_wrong_confirmation")
+
+        stage = HouseholdFileStage()
+        with engine.begin() as conn:
+            outcome = delete_platform_managed_account(
+                conn, actor_user_id=platform_actor, user_id=users[1],
+                confirmation="VERWIJDER " + emails[1], file_stage=stage,
+            )
+            assert outcome["deleted"] is True
+            assert outcome["households_deleted"] == 0
+            assert outcome["households_preserved"] == 1
+            assert outcome["admins_transferred"] == 1
+        stage.finalize()
+        with engine.begin() as conn:
+            assert _count(conn, "app_users", "id=:uid", {"uid": users[1]}) == 0
+            assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "app_users", "id=:uid", {"uid": users[2]}) == 1
+            assert _count(conn, "app_users", "id=:uid", {"uid": platform_actor}) == 1
+            assert conn.execute(text("""
+                SELECT role_key FROM auth_membership_roles
+                WHERE household_id=:hid AND membership_id=:mid
+            """), {"hid": shared, "mid": newest_membership}).scalar_one() == "household.admin"
+        assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
+        checks.append("platform_delete_suspended_admin_preserves_shared_receipts_and_promotes_successor")
 
     finally:
         engine.dispose()
