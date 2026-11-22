@@ -83,3 +83,6 @@ assert.ok(lidlBridge.includes("product.lineType !== 'deposit'"))
 assert.ok(lidlBridge.includes("product.lineType === 'deposit'"))
 
 console.log('STORE_CONNECTIONS_AH_TABLE_GREEN')
+
+// PR7 tests run through the existing store-connection workflow path contract.
+import './onboarding-pr7-journey.contract.mjs'
