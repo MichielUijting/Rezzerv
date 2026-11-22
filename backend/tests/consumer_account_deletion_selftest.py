@@ -1,6 +1,7 @@
 """Account deletion acceptance on isolated PostgreSQL, not the PO's runtime."""
 from __future__ import annotations
 
+import os
 import uuid
 from sqlalchemy import text
 
@@ -33,7 +34,12 @@ def _count(conn, table, where, params):
 
 def run() -> int:
     checks = []
+    # This test performs a full reset: strictly GitHub's short-lived test service.
+    if os.getenv("GITHUB_ACTIONS") != "true" or os.getenv("TEST_POSTGRES_DB") != "rezzerv_authorization_membership_ci":
+        raise RuntimeError("Account deletion acceptance requires the isolated GitHub PostgreSQL test database.")
     snap = postgresql_acceptance_snapshot()
+    if snap["database"] != "rezzerv_authorization_membership_ci":
+        raise RuntimeError("Unexpected database; refusing destructive test reset.")
     assert snap["datastore"] == "postgresql"
     assert snap["runtime_create"] is False
     checks.append("isolated_postgresql_dml_only")

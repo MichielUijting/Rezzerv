@@ -91,7 +91,7 @@ def _remaining(conn: Connection, household_id: str, email: str) -> list[dict[str
     other_count = int(conn.execute(text("""
         SELECT COUNT(*) FROM household_memberships
         WHERE CAST(household_id AS TEXT)=:hid
-          AND lower(trim(user_email))<>:email
+          AND (user_email IS NULL OR lower(trim(user_email))<>:email)
     """), {"hid": household_id, "email": email}).scalar() or 0)
     if other_count != len(rows):
         raise AccountDeletionConflictError(
@@ -129,7 +129,7 @@ def deletion_preview(conn: Connection, *, user_id: str) -> dict[str, Any]:
         )
         if role not in {"household.admin", "household.member", "household.viewer", "household.advanced_member"}:
             raise AccountDeletionConflictError("Onbekende huishoudrol; verwijderen gestopt.")
-        oldest = remaining[0] if remaining and role in {"household.admin", "household.advanced_member"} else None
+        oldest = remaining[0] if remaining and role == "household.admin" else None
         plans.append({
             "household_id": hid,
             "membership_id": str(member["id"]),
@@ -185,6 +185,9 @@ def _delete_sole_household(conn: Connection, hid: str) -> None:
         UPDATE server_sessions SET active_household_id=NULL
         WHERE CAST(active_household_id AS TEXT)=:hid
     """), {"hid": hid})
+    conn.execute(text(
+        "DELETE FROM auth_membership_permission_overrides WHERE CAST(household_id AS TEXT)=:hid"
+    ), {"hid": hid})
     for table in ("auth_membership_roles", "household_memberships"):
         conn.execute(text(f"DELETE FROM {table} WHERE CAST(household_id AS TEXT)=:hid"), {"hid": hid})
     if conn.execute(text("DELETE FROM household_registry WHERE CAST(id AS TEXT)=:hid"), {"hid": hid}).rowcount != 1:
@@ -224,6 +227,7 @@ def _purge_personal_references(conn: Connection, uid: str, email: str) -> None:
         ("account_password_reset_tokens", "user_id"),
         ("server_sessions", "user_id"),
         ("auth_platform_user_roles", "user_id"),
+        ("frontteam_memberships", "user_id"),
         ("auth_support_access_grants", "support_user_id"),
         ("support_recipients", "admin_user_id"),
         ("household_notifications", "recipient_user_id"),
@@ -235,6 +239,7 @@ def _purge_personal_references(conn: Connection, uid: str, email: str) -> None:
     change("support_messages", "sender_user_id", "redact", "sender_name")
     change("household_invitations", "created_by_user_id", "redact")
     change("household_invitations", "accepted_by_user_id", "redact")
+    change("household_invitations", "last_delivery_actor_user_id", "redact")
     change("auth_audit_log", "actor_user_id", "redact")
 
     if "household_invitations" in tables:
