@@ -1,0 +1,117 @@
+name: Account deletion PostgreSQL household preservation
+# draft-ci-router: routed
+
+on:
+  pull_request:
+    types:
+      - ready_for_review
+    paths:
+      - 'backend/app/services/consumer_account_deletion_service.py'
+      - 'backend/app/api/consumer_account_routes.py'
+      - 'backend/tests/consumer_account_deletion_selftest.py'
+      - 'backend/tests/consumer_account_deletion_route_selftest.py'
+      - '.github/workflows/account-deletion-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-account-deletion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_account_deletion_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_account_deletion_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_account_deletion_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_account_deletion_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      RECEIPT_STORAGE_ROOT: /tmp/inhuis-account-deletion-test/receipts/raw
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python and PostgreSQL requirements
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Prepare strictly isolated test database and separate roles
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          set -euo pipefail
+          test -n "$GITHUB_RUN_ID"
+          test "$GITHUB_ACTIONS" = "true"
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_account_deletion_ci TO rezzerv_migrator;
+          GRANT CONNECT ON DATABASE rezzerv_account_deletion_ci TO rezzerv_app;
+          ALTER DATABASE rezzerv_account_deletion_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_account_deletion_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize account-deletion test schema through Alembic
+        run: python -m alembic upgrade head
+
+      - name: Fail closed on unexpected database
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+          assert os.environ.get("GITHUB_ACTIONS") == "true"
+          for key in ("DATABASE_URL", "MIGRATION_DATABASE_URL"):
+              url = os.environ[key]
+              assert "127.0.0.1:55432/rezzerv_account_deletion_ci" in url, key
+              engine = create_engine(url)
+              with engine.connect() as conn:
+                  assert conn.execute(text("SELECT current_database()")).scalar_one() == "rezzerv_account_deletion_ci"
+              engine.dispose()
+          print("ACCOUNT_DELETION_ISOLATED_DATABASE_GREEN")
+          PY
+
+      - name: Run account deletion, household preservation and admin succession
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m py_compile app/services/consumer_account_deletion_service.py tests/consumer_account_deletion_selftest.py
+          python tests/consumer_account_deletion_selftest.py
+          echo ACCOUNT_DELETION_POSTGRESQL_GREEN
