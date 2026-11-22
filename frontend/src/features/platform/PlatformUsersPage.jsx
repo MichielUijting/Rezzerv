@@ -3,7 +3,6 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
 import Pagination from '../../ui/Pagination.jsx'
-import Input from '../../ui/Input'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
 
@@ -26,22 +25,15 @@ export default function PlatformUsersPage() {
   const visibleItems = users.slice((currentPage - 1) * 10, currentPage * 10)
   React.useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState('')
-  const { showFeedback } = useAppFeedback()
-  React.useEffect(() => { if (error) showFeedback({ variant: 'error', message: error }) }, [error, showFeedback])
-  const [result, setResult] = React.useState('')
-  React.useEffect(() => { if (result) showFeedback({ variant: 'success', message: result }) }, [result, showFeedback])
-  const [pendingUser, setPendingUser] = React.useState(null)
-  const [pendingUnsuspend, setPendingUnsuspend] = React.useState(null)
-  const [pendingDelete, setPendingDelete] = React.useState(null)
-  const [deletePreview, setDeletePreview] = React.useState(null)
-  const [deleteConfirmation, setDeleteConfirmation] = React.useState('')
+  const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const previewTokenRef = React.useRef(0)
-  const [submitting, setSubmitting] = React.useState(false)
+  React.useEffect(() => () => {
+    previewTokenRef.current += 1
+    dismissFeedbackIfKey('platform-users-action')
+  }, [dismissFeedbackIfKey])
 
   const loadUsers = React.useCallback(async () => {
     setLoading(true)
-    setError('')
     try {
       const response = await fetch(`${API_BASE_URL}/api/platform/users`, {
         method: 'GET',
@@ -57,141 +49,164 @@ export default function PlatformUsersPage() {
       setCanDelete(payload?.can_delete === true)
       setPage(1)
     } catch (err) {
-      setError(err?.message || 'Gebruikers ophalen mislukt.')
+      showFeedback({ variant: 'error', key: 'platform-users-action', dedupeMs: 0,
+        message: err?.message || 'Gebruikers ophalen mislukt.' })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showFeedback])
 
   React.useEffect(() => {
     loadUsers()
   }, [loadUsers])
 
-  async function confirmSuspend() {
-    if (!pendingUser || submitting) return
-    setSubmitting(true)
-    setError('')
-    setResult('')
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/platform/users/${encodeURIComponent(pendingUser.user_id)}/suspend`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { Accept: 'application/json' },
-        },
-      )
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(payload?.detail || `Gebruiker schorsen mislukt (${response.status})`)
-      }
-      const payload = await response.json()
-      const item = payload?.item || {}
-      setUsers((current) => current.map((user) => (
-        user.user_id === pendingUser.user_id
-          ? {
-              ...user,
-              account_status: 'suspended',
-              suspended_at: item.suspended_at || new Date().toISOString(),
-              active_session_count: 0,
-            }
-          : user
-      )))
-      setResult(
-        `${pendingUser.email} is geschorst. ${Number(item.active_sessions_revoked || 0)} actieve sessie(s) zijn ingetrokken.`,
-      )
-      setPendingUser(null)
-    } catch (err) {
-      setError(err?.message || 'Gebruiker schorsen mislukt.')
-    } finally {
-      setSubmitting(false)
-    }
+
+  function showAction(message) {
+    showFeedback({
+      key: 'platform-users-action',
+      dedupeMs: 0,
+      variant: 'success',
+      message,
+    })
   }
 
+  async function suspendUser(user) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/platform/users/${encodeURIComponent(user.user_id)}/suspend`,
+      { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } },
+    )
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload?.detail || `Gebruiker schorsen mislukt (${response.status})`)
+    const item = payload?.item || {}
+    setUsers((current) => current.map((entry) => (
+      entry.user_id === user.user_id
+        ? { ...entry, account_status: 'suspended',
+            suspended_at: item.suspended_at || new Date().toISOString(), active_session_count: 0 }
+        : entry
+    )))
+    showAction(`${user.email} is geschorst. ${Number(item.active_sessions_revoked || 0)} actieve sessie(s) zijn ingetrokken.`)
+  }
 
-  async function confirmUnsuspend() {
-    if (!pendingUnsuspend || submitting) return
-    setSubmitting(true)
-    setError('')
-    setResult('')
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/platform/users/${encodeURIComponent(pendingUnsuspend.user_id)}/unsuspend`,
-        { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } },
-      )
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Schorsing opheffen mislukt.')
-      setUsers((current) => current.map((user) => (
-        user.user_id === pendingUnsuspend.user_id
-          ? { ...user, account_status: 'active', suspended_at: null, active_session_count: 0 }
-          : user
-      )))
-      setResult(`De schorsing van ${pendingUnsuspend.email} is opgeheven. Eerdere sessies blijven ingetrokken.`)
-      setPendingUnsuspend(null)
-    } catch (err) {
-      setError(err?.message || 'Schorsing opheffen mislukt.')
-    } finally {
-      setSubmitting(false)
+  function openSuspend(user) {
+    showFeedback({
+      key: 'platform-users-action',
+      dedupeMs: 0,
+      variant: 'warning',
+      testId: 'platform-user-suspend-confirmation',
+      title: 'Gebruiker schorsen?',
+      message: `Je staat op het punt ${user.email} te schorsen. Alle actieve sessies worden ingetrokken en aanmelden wordt geblokkeerd.`,
+      detail: 'Platformrollen en huishoudlidmaatschappen worden niet gewijzigd.',
+      dismissMode: 'ok-only',
+      primaryActionLabel: 'Definitief schorsen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: () => suspendUser(user),
+    })
+  }
+
+  async function unsuspendUser(user) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/platform/users/${encodeURIComponent(user.user_id)}/unsuspend`,
+      { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } },
+    )
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload?.detail || 'Schorsing opheffen mislukt.')
+    setUsers((current) => current.map((entry) => (
+      entry.user_id === user.user_id
+        ? { ...entry, account_status: 'active', suspended_at: null, active_session_count: 0 }
+        : entry
+    )))
+    showAction(`De schorsing van ${user.email} is opgeheven. Eerdere sessies blijven ingetrokken.`)
+  }
+
+  function openUnsuspend(user) {
+    showFeedback({
+      key: 'platform-users-action',
+      dedupeMs: 0,
+      variant: 'warning',
+      testId: 'platform-user-unsuspend-confirmation',
+      title: 'Schorsing opheffen?',
+      message: `De toegang van ${user.email} wordt hersteld.`,
+      detail: 'Eerder ingetrokken sessies blijven ongeldig; de gebruiker moet opnieuw inloggen.',
+      dismissMode: 'ok-only',
+      primaryActionLabel: 'Schorsing opheffen bevestigen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: () => unsuspendUser(user),
+    })
+  }
+
+  async function deleteUser(user, preview, confirmation) {
+    const expected = `VERWIJDER ${user.email.toLowerCase()}`
+    if (confirmation !== expected || preview.user_id !== user.user_id) {
+      throw new Error('De bevestiging hoort niet bij deze gebruiker.')
     }
+    const response = await fetch(
+      `${API_BASE_URL}/api/platform/users/${encodeURIComponent(user.user_id)}`,
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation }),
+      },
+    )
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload?.detail || 'Gebruiker verwijderen mislukt.')
+    setUsers((current) => current.filter((entry) => entry.user_id !== user.user_id))
+    previewTokenRef.current += 1
+    showAction(`${user.email} is definitief verwijderd. ${payload.households_preserved} huishouden(s) behouden.`)
   }
 
   async function openDelete(user) {
-    if (!canDelete || submitting) return
+    if (!canDelete) return
     const token = ++previewTokenRef.current
-    setPendingDelete(user)
-    setDeletePreview(null)
-    setDeleteConfirmation('')
-    setError('')
-    setResult('')
+    showFeedback({
+      key: 'platform-users-action',
+      dedupeMs: 0,
+      variant: 'progress',
+      title: 'Gevolgen van verwijdering controleren',
+      message: `De gevolgen voor ${user.email} worden gecontroleerd.`,
+      dismissMode: 'blocked',
+    })
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/platform/users/${encodeURIComponent(user.user_id)}/deletion-preview`,
         { credentials: 'include', headers: { Accept: 'application/json' } },
       )
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Verwijdervoorbeeld laden mislukt.')
-      if (previewTokenRef.current === token) {
-        if (payload.user_id !== user.user_id) throw new Error('Verwijdervoorbeeld hoort bij een andere gebruiker.')
-        setDeletePreview(payload)
-      }
+      const preview = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(preview?.detail || 'Verwijdervoorbeeld laden mislukt.')
+      if (preview.user_id !== user.user_id) throw new Error('Verwijdervoorbeeld hoort bij een andere gebruiker.')
+      if (previewTokenRef.current !== token) return
+      const expected = `VERWIJDER ${user.email.toLowerCase()}`
+      showFeedback({
+        key: 'platform-users-action',
+        dedupeMs: 0,
+        variant: 'warning',
+        testId: 'platform-user-delete-confirmation',
+        title: 'Gebruiker definitief verwijderen?',
+        message: `Het account van ${user.email} wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.`,
+        detail: `${preview.households_to_keep} gedeelde huishouden(s) blijven met hun gegevens behouden. ${preview.households_to_delete} huishouden(s) zonder andere leden worden met hun gegevens verwijderd. Zo nodig wordt de beheerdersrol overgedragen.`,
+        inputFields: [{
+          name: 'confirmation',
+          label: `Typ exact: ${expected}`,
+          value: '',
+          required: true,
+          matchValue: expected,
+          autoFocus: true,
+        }],
+        dismissMode: 'ok-only',
+        primaryActionLabel: 'Gebruiker definitief verwijderen',
+        secondaryActionLabel: 'Annuleren',
+        onPrimaryAction: ({ confirmation }) => deleteUser(user, preview, confirmation),
+        onSecondaryAction: () => { previewTokenRef.current += 1 },
+      })
     } catch (err) {
       if (previewTokenRef.current === token) {
-        setError(err?.message || 'Gebruiker kan niet veilig worden verwijderd.')
-        setPendingDelete(null)
+        showFeedback({
+          key: 'platform-users-action',
+          dedupeMs: 0,
+          variant: 'error',
+          message: err?.message || 'Gebruiker kan niet veilig worden verwijderd.',
+        })
       }
-    }
-  }
-
-  async function confirmDelete(event) {
-    event.preventDefault()
-    if (!pendingDelete || !deletePreview || submitting || !canDelete) return
-    const expected = `VERWIJDER ${pendingDelete.email.toLowerCase()}`
-    if (deleteConfirmation !== expected || deletePreview.user_id !== pendingDelete.user_id) return
-    setSubmitting(true)
-    setError('')
-    setResult('')
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/platform/users/${encodeURIComponent(pendingDelete.user_id)}`,
-        {
-          method: 'DELETE',
-          credentials: 'include',
-          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confirmation: deleteConfirmation }),
-        },
-      )
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Gebruiker verwijderen mislukt.')
-      setUsers((current) => current.filter((user) => user.user_id !== pendingDelete.user_id))
-      setResult(`${pendingDelete.email} is definitief verwijderd. ${payload.households_preserved} huishouden(s) behouden.`)
-      previewTokenRef.current += 1
-      setPendingDelete(null)
-      setDeletePreview(null)
-      setDeleteConfirmation('')
-    } catch (err) {
-      setError(err?.message || 'Gebruiker verwijderen mislukt.')
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -235,28 +250,12 @@ export default function PlatformUsersPage() {
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                   {suspended ? (
-                    <Button type="button" onClick={() => {
-                      setPendingUser(null)
-                      setPendingDelete(null)
-                      previewTokenRef.current += 1
-                      setPendingUnsuspend(user)
-                      setResult('')
-                    }}>Schorsing opheffen</Button>
+                    <Button type="button" onClick={() => openUnsuspend(user)}>Schorsing opheffen</Button>
                   ) : (
-                    <Button type="button" onClick={() => {
-                      setPendingUnsuspend(null)
-                      setPendingDelete(null)
-                      previewTokenRef.current += 1
-                      setPendingUser(user)
-                      setResult('')
-                    }}>Gebruiker schorsen</Button>
+                    <Button type="button" onClick={() => openSuspend(user)}>Gebruiker schorsen</Button>
                   )}
                   {canDelete ? (
-                    <Button type="button" variant="secondary" onClick={() => {
-                      setPendingUser(null)
-                      setPendingUnsuspend(null)
-                      openDelete(user)
-                    }}>Gebruiker verwijderen</Button>
+                    <Button type="button" variant="secondary" onClick={() => openDelete(user)}>Gebruiker verwijderen</Button>
                   ) : null}
                 </div>
               )}
@@ -267,92 +266,7 @@ export default function PlatformUsersPage() {
 
       {pageCount > 1 ? <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
 
-      {pendingUser ? (
-        <Card>
-          <div data-testid="platform-user-suspend-confirmation">
-            <h3>Gebruiker definitief schorsen?</h3>
-            <p>
-              Je staat op het punt <strong>{pendingUser.email}</strong> te schorsen. Alle actieve sessies van
-              dit account worden direct ingetrokken en een nieuwe login wordt geblokkeerd.
-            </p>
-            <p>
-              Platformrollen en household-memberships worden niet verwijderd of aangepast.
-            </p>
-            <div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={submitting}
-                onClick={() => setPendingUser(null)}
-              >
-                Annuleren
-              </Button>
-              <Button
-                type="button"
-                disabled={submitting}
-                onClick={confirmSuspend}
-              >
-                {submitting ? 'Schorsen...' : 'Definitief schorsen'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
 
-      {pendingUnsuspend ? (
-        <Card>
-          <div data-testid="platform-user-unsuspend-confirmation">
-            <h3>Schorsing opheffen?</h3>
-            <p>De toegang van <strong>{pendingUnsuspend.email}</strong> wordt hersteld.
-              Eerder ingetrokken sessies blijven ongeldig; de gebruiker moet opnieuw inloggen.</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              <Button type="button" variant="secondary" disabled={submitting}
-                onClick={() => setPendingUnsuspend(null)}>Annuleren</Button>
-              <Button type="button" disabled={submitting} onClick={confirmUnsuspend}>
-                {submitting ? 'Opheffen…' : 'Schorsing opheffen bevestigen'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
-
-      {pendingDelete ? (
-        <Card>
-          <form onSubmit={confirmDelete} data-testid="platform-user-delete-confirmation"
-            style={{ display: 'grid', gap: 12 }}>
-            <h3>Gebruiker definitief verwijderen?</h3>
-            <p>Je staat op het punt <strong>{pendingDelete.email}</strong> definitief te verwijderen.
-              Het account en de toegang verdwijnen. Dit kan niet ongedaan worden gemaakt.</p>
-            {deletePreview ? (
-              <p data-testid="platform-user-delete-preview">
-                {deletePreview.households_to_keep} gedeelde huishouden(s) blijven met hun gegevens behouden.
-                {deletePreview.households_to_delete} huishouden(s) zonder andere leden worden met hun
-                gegevens verwijderd. Zo nodig wordt de beheerdersrol overgedragen.
-              </p>
-            ) : <p>Gevolgen van verwijdering controleren…</p>}
-            <Input
-              label={`Typ exact: VERWIJDER ${pendingDelete.email.toLowerCase()}`}
-              value={deleteConfirmation}
-              onChange={(event) => setDeleteConfirmation(event.target.value)}
-              disabled={!deletePreview || submitting}
-              autoComplete="off"
-              data-testid="platform-user-delete-typed-confirmation"
-            />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              <Button type="button" variant="secondary" disabled={submitting} onClick={() => {
-                previewTokenRef.current += 1
-                setPendingDelete(null)
-                setDeletePreview(null)
-                setDeleteConfirmation('')
-              }}>Annuleren</Button>
-              <Button type="submit" disabled={
-                !deletePreview || submitting ||
-                deleteConfirmation !== `VERWIJDER ${pendingDelete.email.toLowerCase()}`
-              }> {submitting ? 'Verwijderen…' : 'Gebruiker definitief verwijderen'} </Button>
-            </div>
-          </form>
-        </Card>
-      ) : null}
     </div>
   )
 }
