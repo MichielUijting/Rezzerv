@@ -43,6 +43,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [historyError, setHistoryError] = useState('')
   const [setupHelpStore, setSetupHelpStore] = useState('')
   const ahSyncPageMountedRef = useRef(false)
+  const ahLoginNavigatingRef = useRef(false)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
@@ -381,6 +382,32 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     void refreshHistoricalProgress()
   }, [])
 
+  // Android can leave the Inhuis page alive while opening AH in a browser tab.
+  // Coming back must not preserve the 'AH-login openen…' busy state forever.
+  // Only the household-scoped status endpoint can confirm a real connection.
+  useEffect(() => {
+    function resumeAhLogin() {
+      if (!ahLoginNavigatingRef.current || document.visibilityState === 'hidden') return
+      ahLoginNavigatingRef.current = false
+      setAhBusy(false)
+      void loadAhStatus().catch(() => {
+        showFeedback({
+          variant: 'warning',
+          title: 'Albert Heijn koppelen',
+          message: 'De AH-koppelstatus kon niet worden gecontroleerd. Vernieuw Winkelkoppelingen.',
+        })
+      })
+    }
+    window.addEventListener('pageshow', resumeAhLogin)
+    window.addEventListener('focus', resumeAhLogin)
+    document.addEventListener('visibilitychange', resumeAhLogin)
+    return () => {
+      window.removeEventListener('pageshow', resumeAhLogin)
+      window.removeEventListener('focus', resumeAhLogin)
+      document.removeEventListener('visibilitychange', resumeAhLogin)
+    }
+  }, [showFeedback])
+
   const pendingHistoryWork = hasPendingHistoryWork(historySummary)
   useEffect(() => {
     if (!pendingHistoryWork) return undefined
@@ -704,8 +731,10 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
+      ahLoginNavigatingRef.current = true
       window.location.assign(data.login_url)
     } catch (err) {
+      ahLoginNavigatingRef.current = false
       setAhBusy(false)
       showFeedback({
         variant: 'error',
