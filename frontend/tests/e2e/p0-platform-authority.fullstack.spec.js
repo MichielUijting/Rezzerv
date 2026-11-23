@@ -112,7 +112,9 @@ test('L4-07 platform admin revokes a household session without gaining household
     .filter({ hasText: householdUserEmail })
     .first()
   await expect(targetSessionCard).toBeVisible({ timeout: 30_000 })
-  await expect(targetSessionCard).toContainText('Andere actieve sessie')
+  // Valid session cookies and recent visible frontend activity are separate facts.
+  await expect(targetSessionCard).toContainText('Andere geldige sessie')
+  await expect(targetSessionCard).toContainText('Frontend recent actief')
   await targetSessionCard.getByRole('button', { name: 'Sessie intrekken' }).click()
 
   const confirmation = platformPage.getByTestId('platform-session-confirmation')
