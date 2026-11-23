@@ -73,8 +73,10 @@ function LoginRoute() {
 
 function RegisterRoute() {
   const navigate = useNavigate()
-  function handleRegistered(completedOnboarding) {
-    navigate(shouldOfferStoreConnectionOnboarding(completedOnboarding) ? '/onboarding/winkels' : '/home', { replace: true })
+  function handleRegistered() {
+    // A successful new registration always uses the household/receipt defaults.
+    // Never silently fall back to Home because optional response fields are absent.
+    navigate('/onboarding/winkels', { replace: true })
   }
   return <RegisterPage onRegistered={handleRegistered} />
 }

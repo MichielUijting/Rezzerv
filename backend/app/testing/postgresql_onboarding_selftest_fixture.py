@@ -13,7 +13,11 @@ from sqlalchemy.engine import Engine
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import create_canonical_membership_role
-from app.services.household_onboarding_service import ensure_household_onboarding_foundation
+from app.services.household_onboarding_service import (
+    ensure_household_onboarding_foundation,
+    resolve_household_onboarding_state,
+    start_new_household_onboarding,
+)
 from app.testing.onboarding_request_schema_fixture import backfill_completed_household_onboarding
 from app.testing.postgresql_acceptance_foundation import (
     create_postgresql_runtime_test_engine,
@@ -251,3 +255,23 @@ def seed_completed_legacy_household(
         seed_household(conn, household_id=household_id, name=household_name)
         backfill_completed_household_onboarding(conn)
         ensure_household_onboarding_foundation(conn)
+
+
+def seed_preexisting_unfinished_onboarding(engine: Engine, household_id: str) -> None:
+    """Isolated CI fixture for a household begun before quick registration.
+
+    New consumer registration is always completed. Existing legacy onboarding
+    API contracts are tested against an explicitly recreated unfinished state
+    *only inside the disposable PostgreSQL acceptance database*.
+    """
+    with engine.begin() as conn:
+        current = resolve_household_onboarding_state(conn, household_id)
+        if current.onboarding_status != "completed":
+            raise AssertionError("Expected the new account to be initialized first")
+        conn.execute(
+            text("DELETE FROM household_product_configuration WHERE household_id = :household_id"),
+            {"household_id": household_id},
+        )
+        created = start_new_household_onboarding(conn, household_id)
+        if created.onboarding_status != "not_started":
+            raise AssertionError("Legacy onboarding test fixture was not initialized")
