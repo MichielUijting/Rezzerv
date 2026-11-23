@@ -24,7 +24,9 @@ for (const { state, source } of scenarios) {
       const request = route.request()
       const url = new URL(request.url())
       const path = url.pathname
-      if (request.method() !== 'GET') writes.push(path)
+      // Frontend session-presence pings are not Kassa import mutations.
+      // Keep every other write visible to the duplicate-receipt assertion.
+      if (request.method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
       let body = { items: [] }
       if (path === '/api/session') body = session
       if (path === '/api/household') body = { ...session, id: 'duplicate-household' }

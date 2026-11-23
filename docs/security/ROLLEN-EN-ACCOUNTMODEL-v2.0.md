@@ -154,10 +154,15 @@ Platformbeheerder is een speciaal technisch platformaccount.
 - De reset verleent geen leesrecht op huishoudinhoud: het doel wordt uitsluitend
   via een expliciet household ID gekozen, systeemhuishouden 0 is uitgesloten en
   de operatie wordt fail-closed en transactioneel uitgevoerd.
-- Platformbeheer → Gebruikers kan reguliere accounts schorsen en schorsingen opheffen met
-  `platform.users.suspend`. Schorsen trekt actieve sessies in. Opheffen herstelt
-  uitsluitend de accountstatus; eerdere sessies blijven ingetrokken en opnieuw
-  inloggen is vereist.
+- Platformbeheer → Gebruikers kan uitsluitend niet-beschermde reguliere accounts schorsen
+  en schorsingen opheffen met `platform.users.suspend`. Accounts met de actieve
+  rol `platform.ip_owner` (IP-eigenaar) of `platform.superuser` (Superuser,
+  ook wanneer gestapeld met Platformbeheerder) kunnen door Platformbeheerder
+  **niet worden geschorst of verwijderd**. Dit geldt server-side voor directe
+  API-verzoeken en de frontend markeert zulke accounts als beschermd en niet
+  selecteerbaar. Schorsen van reguliere accounts trekt actieve sessies in.
+  Opheffen herstelt uitsluitend de accountstatus; eerdere sessies blijven
+  ingetrokken en opnieuw inloggen is vereist.
 - Een Platformbeheerder kan met de afzonderlijke bevoegdheid
   `platform.users.delete` een **ander** regulier account definitief verwijderen
   na het tonen van de gevolgen en het exact intypen van
@@ -167,6 +172,15 @@ Platformbeheerder is een speciaal technisch platformaccount.
   de rol over aan het oudste overblijvende account en verwijdert alleen de
   huishoudgegevens van een huishouden zonder andere leden. De operatie geeft
   geen extra leesrecht op huishoudinhoud.
+- Platformbeheer → Sessies onderscheidt geldige servercookies (maximaal 12 uur,
+  tenzij eerder ingetrokken) van recente frontendactiviteit. Een zichtbare,
+  geauthenticeerde frontend meldt zich iedere 30 seconden via een server-side
+  gecontroleerde heartbeat; twee minuten zonder dat signaal betekent
+  **geen recente frontendactiviteit**, niet automatisch een ingetrokken cookie.
+  Ook niet-recente geldige cookies blijven zichtbaar en intrekbaar. Bij
+  succesvolle wisseling naar een ander account in dezelfde browser wordt de
+  vorige server-side sessie atomair ingetrokken; een mislukte aanmelding
+  mag de bestaande sessie niet beëindigen.
 - Deze technische functies vormen bij livegang een uitbreidbare basisset.
 - Krijgt alleen vanwege de technische rol geen toegang tot de inhoud van
   reguliere huishoudens.

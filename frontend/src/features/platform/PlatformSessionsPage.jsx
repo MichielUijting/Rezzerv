@@ -91,7 +91,7 @@ export default function PlatformSessionsPage() {
 
   return (
     <div data-testid="platform-sessions-page">
-      <Header title="Sessies" subtitle="Bekijk je actieve Inhuis-sessies en beëindig een andere sessie." />
+      <Header title="Sessies" subtitle="Bekijk geldige sessies, recente frontendactiviteit en beëindig een andere sessie." />
 
       <Card>
         <p>
@@ -99,7 +99,9 @@ export default function PlatformSessionsPage() {
           huishouden nodig en er is nooit een fallback naar huishouden 0.
         </p>
         <p>
-          Sessietokens en token-hashes worden niet getoond. Je huidige beheersessie kan hier niet worden
+          Sessietokens en token-hashes worden niet getoond. Alleen recente zichtbare frontendactiviteit telt als actief. Een gesloten of slapende frontend
+          wordt na twee minuten niet meer actief genoemd; de bijbehorende cookie kan nog geldig
+          zijn en blijft daarom intrekbaar. Je huidige beheersessie kan hier niet worden
           ingetrokken; gebruik daarvoor Uitloggen.
         </p>
       </Card>
@@ -109,7 +111,7 @@ export default function PlatformSessionsPage() {
       {loading ? <Card><p>Nieuwe gegevens laden…</p></Card> : null}
 
       {!loading && !sessions.length ? (
-        <Card><p>Er zijn geen actieve sessies om te beheren.</p></Card>
+        <Card><p>Er zijn geen geldige sessies om te beheren.</p></Card>
       ) : null}
 
       {visibleItems.map((session) => (
@@ -119,7 +121,9 @@ export default function PlatformSessionsPage() {
             <p>Gebruiker-ID: {session.user_id}</p>
             <p>Uitgegeven: {formatDateTime(session.issued_at)}</p>
             <p>Verloopt: {formatDateTime(session.expires_at)}</p>
-            <p>{session.is_current ? 'Huidige sessie' : 'Andere actieve sessie'}</p>
+          <p>Laatste frontendactiviteit: {formatDateTime(session.last_seen_at)}</p>
+          <p>{session.frontend_active ? 'Frontend recent actief' : 'Geen recente frontendactiviteit — sessie blijft geldig tot intrekking of verloop'}</p>
+            <p>{session.is_current ? 'Huidige sessie' : 'Andere geldige sessie'}</p>
             {session.is_current ? (
               <p>Deze sessie blijft actief. Gebruik Uitloggen om je eigen sessie te beëindigen.</p>
             ) : (

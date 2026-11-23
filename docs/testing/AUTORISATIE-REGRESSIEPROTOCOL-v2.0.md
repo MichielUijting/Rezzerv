@@ -35,7 +35,10 @@ Iedere relevante regressie moet waar van toepassing bewijzen:
 - normale household rolmutatie kan alleen Lid en Beheerder toekennen;
 - legacy viewer/advanced-member data blijft non-destructief compatible maar is geen nieuw toewijsbare productrol;
 - `platform.special_roles.manage` is uitsluitend IP-owner;
-- de functionele Superuser-UI-boundary volgt de canonical Superuser-system-capability en verleent de IP-owner geen functionele Superusertoegang.
+- de functionele Superuser-UI-boundary volgt de canonical Superuser-system-capability en verleent de IP-owner geen functionele Superusertoegang;
+- Platformbeheerder kan accounts met actieve IP-owner- of Superuser-rol niet schorsen of verwijderen, ook niet via directe API-calls of bij Superuser+Platformbeheerder stacking; de gebruikerslijst toont hun beschermde status;
+- een nieuwe login in dezelfde browser trekt na succesvolle authenticatie de oude accountcookie in (ook over verschillende gebruikers heen); een mislukte login behoudt de oude sessie;
+- een geldige servercookie betekent niet automatisch een zichtbare actieve frontend: een heartbeat elke 30 seconden en een venster van twee minuten bepalen de aanwezigheid; slapende sessies blijven intrekbaar, maar tellen niet als actieve frontend.
 
 ## 4. Permission-partition
 
@@ -92,7 +95,8 @@ Deze gate draait minimaal:
 - `test_roles_v2_acceptance_closure.py`;
 - `test_authorization_role_matrix.py`;
 - roles-v2 foundation;
-- server session service;
+- server session service en cookie-vervanging bij accountwissel;
+- frontend heartbeat, statusprojectie en beschermd gebruikersbeheer;
 - special-role management;
 - Superuser+Platformbeheerder stacking;
 - Frontteam personal household;

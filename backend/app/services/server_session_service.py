@@ -38,6 +38,7 @@ from app.services.system_superuser_session_provisioning import (
 
 SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
+FRONTEND_ACTIVITY_GRACE = timedelta(minutes=2)
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
 SESSION_CONTEXT_TYPES = frozenset({"none", "regular", "system"})
 SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser"})
@@ -703,6 +704,24 @@ def resolve_server_session(
         expires_at=expires_at,
         is_frontteam=is_frontteam,
     )
+
+
+def mark_session_frontend_alive(
+    conn: Connection,
+    *,
+    session_id: str,
+    now: datetime | None = None,
+) -> None:
+    """Refresh frontend presence only for a still-valid canonical session."""
+    current = (now or utc_now()).astimezone(timezone.utc)
+    result = conn.execute(text("""
+        UPDATE server_sessions SET updated_at = :now
+        WHERE id = :session_id
+          AND revoked_at IS NULL
+          AND expires_at > :now
+    """), {"session_id": str(session_id), "now": current})
+    if result.rowcount != 1:
+        raise HTTPException(status_code=401, detail="Sessie is ongeldig")
 
 
 def revoke_server_session(conn: Connection, raw_session_id: str | None, *, now: datetime | None = None) -> None:

@@ -8,11 +8,27 @@ from fastapi import HTTPException
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
-from app.services.server_session_service import ensure_server_session_schema
+from app.services.authorization_foundation_service import resolve_active_platform_role_keys
+from app.services.server_session_service import FRONTEND_ACTIVITY_GRACE, ensure_server_session_schema
 
 
 ACTIVE_ACCOUNT_STATUS = "active"
 SUSPENDED_ACCOUNT_STATUS = "suspended"
+PROTECTED_PLATFORM_ROLES = frozenset({"platform.ip_owner", "platform.superuser"})
+PROTECTED_ROLE_LABELS = {
+    "platform.ip_owner": "IP-eigenaar",
+    "platform.superuser": "Superuser",
+}
+
+
+def protected_platform_role(conn: Connection, user_id: str) -> str | None:
+    """Protect active IP-owner and Superuser roles, including stacked accounts."""
+    roles = resolve_active_platform_role_keys(conn, str(user_id or "").strip())
+    for role in ("platform.ip_owner", "platform.superuser"):
+        if role in roles:
+            return role
+    return None
+
 
 
 class PlatformUserNotFoundError(LookupError):
@@ -108,6 +124,7 @@ def _safe_user_item(
     *,
     current_user_id: str,
     active_session_count: int,
+    protected_role: str | None = None,
 ) -> dict[str, Any]:
     status = _normalize_status(row.get("account_status"))
     if status not in {ACTIVE_ACCOUNT_STATUS, SUSPENDED_ACCOUNT_STATUS}:
@@ -120,6 +137,8 @@ def _safe_user_item(
         "suspended_at": _iso_datetime(row.get("suspended_at")),
         "active_session_count": int(active_session_count or 0),
         "is_current": user_id == str(current_user_id or ""),
+        "is_protected": bool(protected_role),
+        "protection_reason": PROTECTED_ROLE_LABELS.get(protected_role),
     }
 
 
@@ -131,18 +150,33 @@ def list_platform_users(
 ) -> list[dict[str, Any]]:
     current = now or utc_now()
     session_counts: dict[str, int] = {}
+    frontend_seen_after = current - FRONTEND_ACTIVITY_GRACE
     if inspect(conn).has_table("server_sessions"):
         rows = conn.execute(text("""
             SELECT user_id, COUNT(*) AS active_session_count
             FROM server_sessions
             WHERE revoked_at IS NULL AND expires_at > :now
+              AND updated_at >= :seen_after
             GROUP BY user_id
-        """), {"now": current}).mappings().all()
+        """), {"now": current, "seen_after": frontend_seen_after}).mappings().all()
         session_counts = {
             str(row.get("user_id") or ""): int(row.get("active_session_count") or 0)
             for row in rows
         }
 
+    protected_rows = conn.execute(text("""
+        SELECT ur.user_id, ur.role_key
+        FROM auth_platform_user_roles ur
+        JOIN auth_roles r ON r.role_key = ur.role_key
+        WHERE ur.active IS TRUE AND r.active IS TRUE
+          AND r.scope = 'platform'
+          AND ur.role_key IN ('platform.ip_owner', 'platform.superuser')
+        ORDER BY ur.user_id, ur.role_key
+    """)).mappings().all()
+    protected_by_user: dict[str, str] = {}
+    for role_row in protected_rows:
+        uid = str(role_row["user_id"])
+        protected_by_user.setdefault(uid, str(role_row["role_key"]))
     users = conn.execute(text("""
         SELECT id, email, account_status, suspended_at
         FROM app_users
@@ -153,6 +187,7 @@ def list_platform_users(
             row,
             current_user_id=current_user_id,
             active_session_count=session_counts.get(str(row.get("id") or ""), 0),
+            protected_role=protected_by_user.get(str(row.get("id") or "")),
         )
         for row in users
     ]
@@ -185,6 +220,10 @@ def suspend_platform_user(
     """), {"user_id": target_user_id}).mappings().first()
     if row is None:
         raise PlatformUserNotFoundError("Gebruiker bestaat niet")
+    if protected_platform_role(conn, target_user_id):
+        raise PlatformUserConflictError(
+            "IP-eigenaar en Superuser kunnen niet door Platformbeheer worden geschorst."
+        )
     if not _is_active_status(row.get("account_status")):
         raise PlatformUserConflictError("Account is al geschorst")
 

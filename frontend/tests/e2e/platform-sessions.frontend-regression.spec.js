@@ -27,6 +27,8 @@ const activeSessions = [
     issued_at: '2026-08-24T18:00:00+00:00',
     expires_at: '2026-08-25T06:00:00+00:00',
     is_current: true,
+    frontend_active: true,
+    last_seen_at: '2026-08-24T18:01:00+00:00',
   },
   {
     session_id: 'session-target-active',
@@ -35,6 +37,8 @@ const activeSessions = [
     issued_at: '2026-08-24T18:10:00+00:00',
     expires_at: '2026-08-25T06:10:00+00:00',
     is_current: false,
+    frontend_active: false,
+    last_seen_at: '2026-08-24T18:10:00+00:00',
   },
 ]
 
@@ -112,6 +116,8 @@ test('sessions page lists safe active sessions and revokes only after explicit c
   await expect(current).toContainText('Huidige sessie')
   await expect(current.getByRole('button', { name: 'Sessie intrekken', exact: true })).toHaveCount(0)
   await expect(target).toContainText('target-user@example.test')
+  await expect(target).toContainText('Geen recente frontendactiviteit')
+  await expect(current).toContainText('Frontend recent actief')
 
   expect(reads).toHaveLength(1)
   expect(reads[0].method).toBe('GET')

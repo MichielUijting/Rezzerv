@@ -22,7 +22,9 @@ function mountMockBackend(page, { frontteam = false, invalidClassPage = false } 
   return page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
-    requests.push({ path, method })
+    // Preserve every domain request in the read-only gate; omit only
+    // the separate server-session presence ping.
+    if (path !== '/api/session/heartbeat') requests.push({ path, method })
     if (path === '/api/session') return route.fulfill({ json: {
       user_id: 'queue-test-user', active_household_id: frontteam ? 'family-1' : '0',
       context_type: frontteam ? 'regular' : 'system', role: 'admin',

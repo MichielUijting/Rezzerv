@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from http.cookies import SimpleCookie
 
-from fastapi import HTTPException, Response
+from fastapi import HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import text
 
@@ -22,6 +22,11 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
     seed_household,
     seed_user_membership,
 )
+
+
+def _empty_request() -> Request:
+    """Direct-route contract checks have no previous browser cookie."""
+    return Request({"type": "http", "method": "POST", "headers": []})
 
 
 def _route(router, path: str, method: str):
@@ -94,6 +99,7 @@ def run() -> int:
                 email="  Nieuwe.Gebruiker@Example.com ",
                 password="SterkWachtwoord123!",
             ),
+            _empty_request(),
             registration_response,
         )
         assert payload["email"] == "nieuwe.gebruiker@example.com"
@@ -171,6 +177,7 @@ def run() -> int:
                 household_name="Alleen thuis",
                 quick_start=True,
             ),
+            _empty_request(),
             quick_registration_response,
         )
         quick_onboarding = quick_payload["onboarding"]
@@ -213,6 +220,7 @@ def run() -> int:
                 email="nieuwe.gebruiker@example.com",
                 password="SterkWachtwoord123!",
             ),
+            _empty_request(),
             new_login_response,
         )
         assert new_login_payload["role"] == "admin"
@@ -224,6 +232,7 @@ def run() -> int:
                     email="nieuwe.gebruiker@example.com",
                     password="VerkeerdWachtwoord123!",
                 ),
+                _empty_request(),
                 Response(),
             ),
         )
@@ -234,6 +243,7 @@ def run() -> int:
                 email="legacy@rezzerv.local",
                 password="LegacyPass123",
             ),
+            _empty_request(),
             Response(),
         )
         assert legacy_login_payload["active_household_id"] == "legacy-household"
@@ -247,6 +257,7 @@ def run() -> int:
                     email="NIEUWE.GEBRUIKER@example.com",
                     password="AndereSterkePass123!",
                 ),
+                _empty_request(),
                 Response(),
             ),
         )
@@ -286,6 +297,7 @@ def run() -> int:
                     email=SUPERGEBRUIKER_EMAIL,
                     password="SterkWachtwoord123!",
                 ),
+                _empty_request(),
                 Response(),
             ),
         )

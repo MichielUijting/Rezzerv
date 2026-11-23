@@ -33,6 +33,25 @@ export default function AuthGuard({ children, allowNone = false }) {
     return () => { active = false }
   }, [location.pathname])
 
+  useEffect(() => {
+    if (status !== 'ready') return undefined
+    const signalFrontendPresence = () => {
+      if (document.visibilityState === 'hidden') return
+      void fetch('/api/session/heartbeat', {
+        method: 'POST', credentials: 'include', cache: 'no-store',
+      }).catch(() => {
+        // Offline does not prove that the session is invalid.
+      })
+    }
+    signalFrontendPresence()
+    const interval = window.setInterval(signalFrontendPresence, 30_000)
+    document.addEventListener('visibilitychange', signalFrontendPresence)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', signalFrontendPresence)
+    }
+  }, [status])
+
   if (status === 'invalid') return <Navigate to="/login" replace />
   if (status !== 'ready') return <div className="rz-screen"><div className="rz-content"><div className="rz-content-inner">Sessie controleren…</div></div></div>
 

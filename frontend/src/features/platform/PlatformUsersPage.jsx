@@ -46,12 +46,12 @@ export default function PlatformUsersPage() {
   const [filteredRows, setFilteredRows] = React.useState([])
   const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedRows = React.useMemo(() => users.filter((user) => (
-    !user.is_current && selectedSet.has(user.user_id)
+    !user.is_current && !user.is_protected && selectedSet.has(user.user_id)
   )), [users, selectedSet])
   const activeTargets = selectedRows.filter((user) => user.account_status !== 'suspended')
   const suspendedTargets = selectedRows.filter((user) => user.account_status === 'suspended')
-  const selectablePageIds = pageRows.filter((user) => !user.is_current).map((user) => user.user_id)
-  const selectableFilteredIds = filteredRows.filter((user) => !user.is_current).map((user) => user.user_id)
+  const selectablePageIds = pageRows.filter((user) => !user.is_current && !user.is_protected).map((user) => user.user_id)
+  const selectableFilteredIds = filteredRows.filter((user) => !user.is_current && !user.is_protected).map((user) => user.user_id)
   const allPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedSet.has(id))
   const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every((id) => selectedSet.has(id))
 
@@ -143,6 +143,7 @@ export default function PlatformUsersPage() {
   }
 
   function openSuspend(targets) {
+    targets = targets.filter((user) => !user.is_protected && !user.is_current)
     if (!targets.length) return
     showFeedback({
       key: 'platform-users-action', dedupeMs: 0,
@@ -255,7 +256,7 @@ export default function PlatformUsersPage() {
   }
 
   async function openDelete(user) {
-    if (!canDelete) return
+    if (!canDelete || user?.is_protected) return
     const token = ++previewTokenRef.current
     showFeedback({
       key: 'platform-users-action',
@@ -363,7 +364,7 @@ export default function PlatformUsersPage() {
           <Button type="button" onClick={() => openUnsuspend(suspendedTargets)}
             disabled={!suspendedTargets.length || loading}>Schorsing annuleren</Button>
           {canDelete ? <Button type="button" variant="secondary"
-            disabled={selectedRows.length !== 1 || loading}
+            disabled={selectedRows.length !== 1 || selectedRows[0]?.is_protected || loading}
             onClick={() => openDelete(selectedRows[0])}>Gebruiker verwijderen</Button> : null}
         </>}
         renderRow={(user) => (
@@ -371,9 +372,9 @@ export default function PlatformUsersPage() {
             aria-selected={selectedSet.has(user.user_id)}>
             <td><input type="checkbox" aria-label={`Selecteer ${user.email}`}
               checked={selectedSet.has(user.user_id)}
-              disabled={user.is_current || loading}
+              disabled={user.is_current || user.is_protected || loading}
               onChange={() => toggleSelection([user.user_id], selectedSet.has(user.user_id))} /></td>
-            <td>{user.email}{user.is_current ? <span> — Huidig beheeraccount (niet selecteerbaar)</span> : null}</td>
+            <td>{user.email}{user.is_current ? <span> — Huidig beheeraccount (niet selecteerbaar)</span> : null}{user.is_protected ? <span> — Beschermd: {user.protection_reason} (niet selecteerbaar)</span> : null}</td>
             <td>{user.account_status === 'suspended' ? 'Geschorst' : 'Actief'}</td>
             <td className="rz-num">{Number(user.active_session_count || 0)}</td>
             <td>{user.suspended_at ? formatDateTime(user.suspended_at) : '—'}</td>

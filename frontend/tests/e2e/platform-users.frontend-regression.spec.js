@@ -562,3 +562,37 @@ test('users panel bulk buttons wrap within panel on narrow screens', async ({ pa
     expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 2)
   }
 })
+
+
+
+test('IP-eigenaar and Superuser are visible but cannot be suspended or deleted by Platformbeheer', async ({ page }) => {
+  await mockSession(page, {
+    ...noneSession,
+    permissions: { [USERS_PERMISSION]: true, 'platform.users.delete': true },
+    supported_permissions: [USERS_PERMISSION, 'platform.users.delete'],
+  })
+  const protectedAccounts = [
+    { user_id: 'owner', email: 'owner@example.test', account_status: 'active',
+      active_session_count: 1, is_protected: true, protection_reason: 'IP-eigenaar' },
+    { user_id: 'super', email: 'super@example.test', account_status: 'active',
+      active_session_count: 1, is_protected: true, protection_reason: 'Superuser' },
+  ]
+  await page.route(USERS_ENDPOINT, route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ items: [users[0], ...protectedAccounts], can_delete: true }),
+  }))
+  let writes = 0
+  await page.route('**/api/platform/users/*', route => {
+    writes += 1
+    return route.fulfill({ status: 409, contentType: 'application/json', body: '{}' })
+  })
+  await page.goto('/platform/gebruikers')
+  for (const account of protectedAccounts) {
+    const row = page.getByTestId(`platform-user-${account.user_id}`)
+    await expect(row).toContainText(`Beschermd: ${account.protection_reason}`)
+    await expect(row.getByRole('checkbox', { name: `Selecteer ${account.email}` })).toBeDisabled()
+  }
+  await expect(page.getByRole('button', { name: 'Schorsen', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Gebruiker verwijderen' })).toBeDisabled()
+  expect(writes).toBe(0)
+})
