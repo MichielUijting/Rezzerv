@@ -73,16 +73,19 @@ def _configuration(conn, household_id: str):
 
 def verify_onboarding_rollback(conn) -> dict:
     email = os.environ["F6_04_ONBOARDING_EMAIL"].strip().lower()
-    household_id = _household_for_email(conn, email)
-    onboarding = _onboarding(conn, household_id)
-    config = _configuration(conn, household_id)
-    assert onboarding["onboarding_status"] == "in_progress", onboarding
-    assert onboarding["primary_use_case"] == "wat_inhuis", onboarding
-    assert onboarding["onboarding_step"] == "profile_follow_up", onboarding
-    assert onboarding["household_usage_mode"] is None, onboarding
-    assert onboarding["onboarding_completed_at"] is None, onboarding
-    assert config is None, config
-    return {"email": email, "household_id": household_id, "step": "profile_follow_up", "configuration_rows": 0}
+    # New one-screen onboarding commits account + household + configuration in
+    # the SAME transaction. An interruption cannot leave an incomplete account.
+    account_rows = conn.execute(
+        text("SELECT COUNT(*) FROM app_users WHERE lower(trim(email))=:email"),
+        {"email": email},
+    ).scalar_one()
+    memberships = conn.execute(
+        text("SELECT COUNT(*) FROM household_memberships WHERE lower(trim(user_email))=:email"),
+        {"email": email},
+    ).scalar_one()
+    assert int(account_rows) == 0, account_rows
+    assert int(memberships) == 0, memberships
+    return {"email": email, "account_rows": 0, "memberships": 0}
 
 
 def verify_onboarding_success(conn) -> dict:
@@ -90,20 +93,28 @@ def verify_onboarding_success(conn) -> dict:
     household_id = _household_for_email(conn, email)
     onboarding = _onboarding(conn, household_id)
     config = _configuration(conn, household_id)
-    assert onboarding["onboarding_status"] == "in_progress", onboarding
+    assert onboarding["onboarding_status"] == "completed", onboarding
     assert onboarding["primary_use_case"] == "wat_inhuis", onboarding
-    assert onboarding["onboarding_step"] == "shared_household_minimum", onboarding
+    assert onboarding["onboarding_step"] is None, onboarding
+    assert onboarding["household_usage_mode"] == "alone", onboarding
+    assert onboarding["onboarding_completed_at"] is not None, onboarding
     assert config is not None, config
     assert config["inventory_tracking_level"] == "quantity", config
     assert config["location_tracking_level"] == "none", config
     assert bool(config["shopping_enabled"]) is True, config
     assert bool(config["almost_out_enabled"]) is True, config
+    assert bool(config["receipt_processing_enabled"]) is True, config
     additional = conn.execute(
         text("SELECT COUNT(*) FROM household_product_use_cases WHERE household_id = :household_id"),
         {"household_id": household_id},
     ).scalar_one()
     assert int(additional) == 0, additional
-    return {"email": email, "household_id": household_id, "step": "shared_household_minimum", "configuration_rows": 1}
+    memberships = conn.execute(
+        text("SELECT COUNT(*) FROM household_memberships WHERE lower(trim(user_email))=:email"),
+        {"email": email},
+    ).scalar_one()
+    assert int(memberships) == 1, memberships
+    return {"email": email, "household_id": household_id, "onboarding_status": "completed", "configuration_rows": 1}
 
 
 def verify_settings_rollback(conn) -> dict:
