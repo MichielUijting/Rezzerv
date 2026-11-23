@@ -32,11 +32,31 @@ def _safe_household_id(hid: str) -> str:
 
 
 CATEGORIES = ("raw", "sources", "debug")
+RETAILER_CATEGORIES = ("retailer_raw", "retailer_sources", "retailer_debug")
 
 
-def _paths(root: Path, hid: str) -> tuple[Path, Path, Path]:
-    # The ingestion debug artifact store contains household-specific JSON too.
-    return root / hid, root.parent / "sources" / hid, root.parent / "debug" / hid
+def _paths(root: Path, hid: str) -> tuple[Path, ...]:
+    # Digital retailer receipts use RETAILER_RECEIPT_STORAGE_ROOT, a *different*
+    # canonical root from manual/photo receipts. Both contain household data.
+    primary = (root / hid, root.parent / "sources" / hid, root.parent / "debug" / hid)
+    retailer = _retailer_root()
+    if retailer == root:
+        return primary
+    if (retailer.parent == root.parent or retailer in root.parents or root in retailer.parents):
+        raise AccountFileDeletionConflict("Overlappende kassabonopslagmappen; niets verwijderd.")
+    return primary + (
+        retailer / hid, retailer.parent / "sources" / hid,
+        retailer.parent / "debug" / hid,
+    )
+
+
+def _categories(root: Path) -> tuple[str, ...]:
+    return CATEGORIES if _retailer_root() == root else CATEGORIES + RETAILER_CATEGORIES
+
+
+def household_file_paths(hid: str) -> tuple[Path, ...]:
+    """All permitted receipt storage paths for one household, across both roots."""
+    return _paths(_root(), _safe_household_id(hid))
 
 
 def _check_tree(path: Path) -> None:
@@ -54,11 +74,23 @@ def _check_tree(path: Path) -> None:
         raise AccountFileDeletionConflict("Kassabonbestanden konden niet veilig worden gecontroleerd.") from exc
 
 
-def _root() -> Path:
-    raw = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
-    if not raw.is_absolute() or ".." in raw.parts or raw.is_symlink() or raw.parent.is_symlink() or (raw.parent / "sources").is_symlink() or (raw.parent / "debug").is_symlink():
+def _checked_storage_root(env_name: str, default: str) -> Path:
+    raw = Path(os.getenv(env_name, default))
+    if not raw.is_absolute() or ".." in raw.parts:
         raise AccountFileDeletionConflict("De kassabonopslag heeft geen veilige absolute map.")
+    # Refuse symlink roots, parents and sibling storage trees. Never follow
+    # links while deleting household-owned files.
+    if any(p.is_symlink() for p in (raw, *raw.parents, raw.parent / "sources", raw.parent / "debug")):
+        raise AccountFileDeletionConflict("Symbolische koppeling in kassabonopslag; niets verwijderd.")
     return raw
+
+
+def _root() -> Path:
+    return _checked_storage_root("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw")
+
+
+def _retailer_root() -> Path:
+    return _checked_storage_root("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw")
 
 
 def _staging_base(raw_root: Path) -> Path:
@@ -97,6 +129,8 @@ class HouseholdFileStage:
 
     def __init__(self) -> None:
         self.raw_root = _root()
+        # Validate both independent roots before any staging or mutation.
+        _paths(self.raw_root, "_storage-root-validation")
         self.household_ids: frozenset[str] = frozenset()
         self.folder: Path | None = None
 
@@ -145,7 +179,7 @@ class HouseholdFileStage:
         _write_manifest(folder, ids)
         try:
             for hid in ids:
-                for category, source in zip(CATEGORIES, _paths(self.raw_root, hid)):
+                for category, source in zip(_categories(self.raw_root), _paths(self.raw_root, hid)):
                     if source.exists():
                         destination = folder / category / hid
                         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -159,7 +193,7 @@ class HouseholdFileStage:
             return
         folder = self.folder
         for hid in sorted(self.household_ids):
-            for category, target in zip(CATEGORIES, _paths(self.raw_root, hid)):
+            for category, target in zip(_categories(self.raw_root), _paths(self.raw_root, hid)):
                 source = folder / category / hid
                 if source.exists():
                     if target.exists() or target.is_symlink():
