@@ -317,7 +317,9 @@ async def launch_ah_oauth(flow_id: str):
     flow = get_ah_oauth_flow(flow_id)
     if flow is None:
         raise HTTPException(status_code=410, detail="AH-login is verlopen. Start de koppeling opnieuw.")
-    response = RedirectResponse(url=f"/login?{_login_query()}", status_code=302)
+    # Enter the mobile OAuth authorize route first; AH needs the per-flow
+    # installation identifier on that request to issue an authorization code.
+    response = RedirectResponse(url=f"/secure/oauth/authorize?{_login_query()}", status_code=302)
     response.set_cookie(
         _FLOW_COOKIE,
         flow.flow_id,
