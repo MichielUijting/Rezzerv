@@ -4,6 +4,7 @@
   width: min(100%, 930px);
   max-width: 100%;
   min-width: 0;
+  margin-inline: auto;
 }
 
 .rz-platform-users-table-panel .rz-mobile-table-select-row {

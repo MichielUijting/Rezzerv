@@ -14,6 +14,12 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Tabelcentrering: Platformbeheer → Gebruikers — 23 november 2026
+
+Als een tabelgroep smaller is dan de beschikbare hoofdinhoud, wordt deze in beginsel **horizontaal gecentreerd**. Een bewust schermvullende tabel of tabel met horizontale scrollruimte behoudt de benodigde breedte en bediening; deze regel veroorzaakt geen globale wijziging aan `Table` of `DataTable`.
+
+In **Platformbeheer → Gebruikers** heeft de tabelgroep maximaal 930 px breedte en staat deze met `margin-inline: auto` gecentreerd in de scherminhoud. Selectie van alle rijen, tabel, paginering en bulkacties blijven samen in dezelfde breedte. Op smalle schermen blijft de groep 100% van de beschikbare breedte gebruiken. Kolomuitlijning, filters, sortering, permissies, gegevens en gebruikersacties veranderen niet. De uitlijning wordt in de bestaande Playwright-test zowel op 1440 px als 390 px gecontroleerd.
+
 ## Snelle onboarding op één scherm — 23 november 2026
 
 Voor nieuwe reguliere accounts toont **Account maken** uitsluitend de invoervelden **E-mailadres**, **Wachtwoord** en **Huishouden** (vooraf ingevuld: Mijn huishouden), één korte informatieve regel **Wat Inhuis · Aantallen · Alleen** en één primaire actie **Start Inhuis**. Het gebruiksprofiel en de aantallen worden standaard toegepast; de gebruiker hoeft daarvoor geen radioknoppen te bedienen. Geen afzonderlijke wachtwoordherhaling of verklarende kaarten. Na voltooide account- en huishoudinrichting volgt afzonderlijk **Winkels koppelen**, met de bestaande optie **Later**. De interactie blijft binnen de SPA zonder volledige paginaverversing.
