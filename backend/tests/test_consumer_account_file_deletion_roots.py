@@ -43,13 +43,12 @@ def test_retailer_and_standard_receipts_stage_restore_and_finalize(tmp_path, mon
                 "INSERT INTO raw_receipts(household_id, storage_path) "
                 "VALUES (:hid, :path)"
             ), {"hid": hid, "path": str(item)})
-    assert b in household_file_paths("sole")[3].parents or (
-        household_file_paths("sole")[3] == retailer / "sole"
-    )
+    assert household_file_paths("sole")[3] == retailer / "sole"
     stage = HouseholdFileStage()
     with engine.begin() as conn:
         stage.stage(conn, ["sole"])
     assert not a.exists() and not b.exists()
+    assert len(stage._staged) == 2  # independent volume-local journals
     assert other.is_file()
     stage.restore()
     assert a.is_file() and b.is_file() and other.is_file()
@@ -88,7 +87,7 @@ def test_symlinks_are_not_followed_in_retailer_root(tmp_path, monkeypatch):
     household.mkdir(parents=True)
     (household / "alias").symlink_to(external, target_is_directory=True)
     with engine.begin() as conn:
-        with pytest.raises(AccountFileDeletionConflict, match="Symbolische koppeling"):
+        with pytest.raises(AccountFileDeletionConflict, match="gekoppeld|Symbolische koppeling"):
             HouseholdFileStage().stage(conn, ["sole"])
     assert (external / "keep.txt").is_file()
     engine.dispose()
