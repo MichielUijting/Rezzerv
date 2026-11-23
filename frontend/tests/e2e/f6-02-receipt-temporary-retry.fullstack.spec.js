@@ -91,6 +91,40 @@ async function uploadReceiptThroughKassa(page, file) {
   expect(payload?.duplicate).not.toBe(true)
   const receiptId = receiptIdFromImport(payload)
   expect(receiptId).not.toBe('')
+
+  // This canonical receipt predates the fresh household cutover. Do not
+  // bypass the historical-receipt policy: prove history-only first and
+  // correct the purchase date through the real Bonkop UI for this CURRENT
+  // receipt retry scenario.
+  const householdResponse = await page.request.get('/api/household')
+  expect(householdResponse.ok()).toBeTruthy()
+  const household = await householdResponse.json()
+  const householdId = String(household?.active_household_id || household?.id || '')
+  expect(householdId).not.toBe('')
+  const params = new URLSearchParams({ householdId, page: '1', page_size: '10' })
+  const current = await page.request.get(`/api/kassa/receipts-page?${params.toString()}`)
+  expect(current.ok()).toBeTruthy()
+  expect((await current.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(false)
+
+  const history = await page.request.get(
+    `/api/kassa/historical-receipts-page?householdId=${encodeURIComponent(householdId)}&page=1&page_size=100`
+  )
+  expect(history.ok()).toBeTruthy()
+  expect((await history.json()).items.some((row) => String(row.receipt_table_id) === receiptId)).toBe(true)
+
+  await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('tab', { name: 'Bonkop', exact: true }).click()
+  const date = page.getByLabel('Aankoopdatum', { exact: true })
+  await expect(date).toBeVisible()
+  const saved = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/receipts/${receiptId}`
+    && response.request().method() === 'PATCH'
+  ))
+  await date.fill(new Date().toISOString().slice(0, 10))
+  await date.blur()
+  expect((await saved).ok()).toBeTruthy()
+  await page.goto('/kassa')
+  await expect(page.getByTestId(`kassa-row-${receiptId}`)).toBeVisible({ timeout: 60_000 })
   return receiptId
 }
 
