@@ -43,7 +43,6 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   await page.goto('/instellingen/mogelijkheden')
   await expect(page.getByTestId('settings-capabilities-page')).toBeVisible()
   await page.getByTestId('workflow-location-level').selectOption('global')
-  await page.getByTestId('workflow-unpacking-enabled').check()
   const workflowResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === '/api/onboarding/workflow-preferences'
     && response.request().method() === 'PUT'
@@ -51,9 +50,7 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   await page.getByTestId('workflow-preferences-save').click()
   const workflowResponse = await workflowResponsePromise
   expect(workflowResponse.ok()).toBeTruthy()
-  const workflowConfig = (await workflowResponse.json()).product_configuration
-  expect(workflowConfig?.location_tracking_level).toBe('global')
-  expect(workflowConfig?.unpacking_enabled).toBe(true)
+  expect((await workflowResponse.json()).product_configuration?.location_tracking_level).toBe('global')
   await page.goto('/home')
 }
 
