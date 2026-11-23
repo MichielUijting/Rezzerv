@@ -149,12 +149,23 @@ def run() -> int:
         shared_probe = receipt_root / shared / "shared-receipt.txt"
         shared_probe.parent.mkdir(parents=True, exist_ok=True)
         shared_probe.write_text("keep shared household data", encoding="utf-8")
+        # Digital AH/Lidl/Jumbo receipts are stored under an independent root.
+        # The previous deletion guard rejected their valid storage_path outright.
+        retailer_root = Path(os.environ["RETAILER_RECEIPT_STORAGE_ROOT"])
+        retailer_probe = retailer_root / solo / "2026" / "11" / "ah-receipt.json"
+        retailer_probe.parent.mkdir(parents=True, exist_ok=True)
+        retailer_probe.write_text('{"provider":"ah","fixture":true}', encoding="utf-8")
+        retailer_shared = retailer_root / shared / "2026" / "11" / "keep.json"
+        retailer_shared.parent.mkdir(parents=True, exist_ok=True)
+        retailer_shared.write_text('{"provider":"ah","shared":true}', encoding="utf-8")
         # Real receipt rows as well as physical files must remain for shared
         # households, while sole-household receipt rows are deleted.
         with engine.begin() as conn:
             for hid, file_path, raw_id, digest in (
                 (shared, shared_probe, _id("raw-shared"), "a" * 64),
                 (solo, staged_probe, _id("raw-sole"), "b" * 64),
+                (solo, retailer_probe, _id("raw-sole-retailer"), "e" * 64),
+                (shared, retailer_shared, _id("raw-shared-retailer"), "f" * 64),
             ):
                 conn.execute(text("""
                     INSERT INTO raw_receipts(
@@ -175,14 +186,18 @@ def run() -> int:
                 assert not staged_probe.exists()
                 assert not source_probe.exists()
                 assert not debug_probe.exists()
+                assert not retailer_probe.exists()
+                assert retailer_shared.exists()
                 raise RuntimeError("deliberate before-commit failure")
         except RuntimeError as exc:
             assert str(exc) == "deliberate before-commit failure"
         # Simulate process restart: consult committed SQL identity to restore.
-        assert reconcile_household_file_staging(engine) == 1
+        assert reconcile_household_file_staging(engine) == 4
         assert staged_probe.read_text(encoding="utf-8") == "private-sole-household-file"
         assert source_probe.read_bytes().startswith(b"%PDF-1.4")
         assert debug_probe.read_text(encoding="utf-8").startswith("{")
+        assert retailer_probe.read_text(encoding="utf-8").startswith('{"provider":"ah"')
+        assert retailer_shared.exists()
         assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
         checks.append("staged_receipts_and_source_folders_recovered_after_rollback")
 
@@ -200,7 +215,10 @@ def run() -> int:
         assert not staged_probe.exists()
         assert not source_probe.exists()
         assert not debug_probe.exists()
+        assert not retailer_probe.exists()
+        assert retailer_shared.read_text(encoding="utf-8").startswith('{"provider":"ah"')
         assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
+        checks.append("digital_retailer_receipt_removed_only_for_deleted_household")
         checks.append("multi_household_deletion_transaction_committed")
         checks.append("sole_household_receipt_source_debug_files_removed_after_commit")
         checks.append("shared_household_receipt_file_preserved")
@@ -211,7 +229,7 @@ def run() -> int:
             assert _count(conn, "household_registry", "id=:hid", {"hid": solo}) == 0
             assert _count(conn, "spaces", "household_id=:hid", {"hid": solo}) == 0
             assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": solo}) == 0
-            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 2
             assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
             assert _count(conn, "spaces", "household_id=:hid", {"hid": shared}) == 1
             assert _count(conn, "household_registry", "id=:hid", {"hid": unrelated}) == 1
@@ -309,7 +327,7 @@ def run() -> int:
         expect_conflict(actor=platform_actor, target=users[3], confirmation="VERWIJDER " + emails[3])
         with engine.begin() as conn:
             assert _count(conn, "app_users", "id=:uid", {"uid": users[1]}) == 1
-            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 2
             assert _count(conn, "household_memberships", "household_id=:hid", {"hid": shared}) == 2
         checks.append("platform_delete_denies_nonadmin_self_protected_and_wrong_confirmation")
 
@@ -327,7 +345,7 @@ def run() -> int:
         with engine.begin() as conn:
             assert _count(conn, "app_users", "id=:uid", {"uid": users[1]}) == 0
             assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
-            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 1
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": shared}) == 2
             assert _count(conn, "app_users", "id=:uid", {"uid": users[2]}) == 1
             assert _count(conn, "app_users", "id=:uid", {"uid": platform_actor}) == 1
             assert conn.execute(text("""
@@ -403,7 +421,9 @@ def run() -> int:
         except Exception:
             solo_stage.restore()
             raise
-        solo_stage.finalize()
+        # Simulate a crash after SQL commit but before file finalization.
+        # Reconciliation must finish the purge from the committed DB identity.
+        assert reconcile_household_file_staging(engine) == 1
         assert not solo_platform_file.exists()
         with engine.connect() as conn:
             assert _count(conn, "app_users", "id=:uid", {"uid": solo_platform_user}) == 0
