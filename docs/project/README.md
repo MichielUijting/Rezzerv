@@ -22,6 +22,8 @@ Deze map is de leesbare ingang voor product, ontwikkeling, kwaliteit, release en
    implementatiestap 9.1 de huidige runtime- en regressiebaseline.
 10. [Wijzigingsrisico en testniveaus S/M/L](CHANGE-RISK-AND-TEST-LEVELS.md) —
     bindende fail-closed classificatie voor de vereiste regressiezwaarte.
+11. [Toekomstarchitectuur: hosting, Android/iOS en winkelkoppelingen](TOEKOMSTARCHITECTUUR-HOSTING-MOBIELE-APPS-WINKELKOPPELINGEN.md) —
+    uitsluitend ontwerp voor later; huidige Docker/Tailscale-oplossing blijft ongewijzigd.
 
 ## Bestaande formele kwaliteitsdocumenten
 
