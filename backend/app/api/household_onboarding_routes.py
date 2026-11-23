@@ -28,6 +28,7 @@ from app.services.household_product_configuration_service import (
 from app.services.receipt_historical_import_policy import (
     activate_cutover_for_new_onboarding,
 )
+from app.services.quick_start_onboarding_service import complete_default_wat_inhuis_onboarding
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     ServerSessionContext,
@@ -95,6 +96,16 @@ class WatInhuisOnboardingRequest(BaseModel):
         if normalized not in {"presence", "quantity"}:
             raise ValueError("Kies aanwezigheid of aantallen")
         return normalized
+
+
+class QuickStartHouseholdRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    household_name: str
+
+    @field_validator("household_name")
+    @classmethod
+    def validate_household_name(cls, value: str) -> str:
+        return _normalize_household_name(value)
 
 
 class WaarInhuisOnboardingRequest(BaseModel):
@@ -236,6 +247,28 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 state,
                 can_manage=can_manage,
             )
+
+    @router.post("/api/onboarding/quick-start")
+    def quick_start_household(payload: QuickStartHouseholdRequest, request: Request):
+        # Quick-start deliberately accepts the same validated household name,
+        # but the usage mode is fixed to Alleen on the server.
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            try:
+                state, configuration = complete_default_wat_inhuis_onboarding(
+                    conn,
+                    household_id=str(context.active_household_id),
+                    household_name=payload.household_name,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            return {
+                **public_household_onboarding_payload(state, can_manage=True),
+                "product_configuration": public_household_product_configuration_payload(
+                    configuration
+                ),
+            }
 
     @router.post("/api/onboarding/primary-use-case")
     def choose_primary_use_case(

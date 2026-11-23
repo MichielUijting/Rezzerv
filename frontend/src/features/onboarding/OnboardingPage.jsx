@@ -7,10 +7,12 @@ import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
 import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
 import WaarInhuisOnboardingPage from './WaarInhuisOnboardingPage.jsx'
 import SharedHouseholdMinimumPage from './SharedHouseholdMinimumPage.jsx'
+import QuickStartOnboardingPage from './QuickStartOnboardingPage.jsx'
 import { ChoiceSummary, RadioChoices } from './OnboardingChoiceControls.jsx'
 import {
   completeInhuisHalenOnboarding,
   completeSharedHouseholdMinimum,
+  completeQuickStartHousehold,
   completeWatInhuisOnboarding,
   completeWaarInhuisOnboarding,
   isInhuisHalenFollowUp,
@@ -164,6 +166,22 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     }
   }
 
+  async function completeQuickStart(preferences) {
+    setError('')
+    setSavingProfile(true)
+    try {
+      const updated = await completeQuickStartHousehold(context, preferences)
+      setOnboarding(updated)
+      await fetchAuthContext({ force: true })
+      onUseCaseSelected?.(updated)
+    } catch (err) {
+      setError(err?.message || 'Inhuis starten mislukt.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const showQuickStart = onboarding?.onboarding_status === 'not_started' && onboarding?.can_manage === true
   const showInhuisHalenFollowUp = isInhuisHalenFollowUp(onboarding)
   const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
   const showWaarInhuisFollowUp = isWaarInhuisFollowUp(onboarding)
@@ -176,7 +194,14 @@ export default function OnboardingPage({ onUseCaseSelected }) {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card>
-            {showInhuisHalenFollowUp ? (
+            {showQuickStart ? (
+              <QuickStartOnboardingPage
+                initialHouseholdName={onboarding?.household_name}
+                onSubmit={completeQuickStart}
+                saving={savingProfile}
+                error={error}
+              />
+            ) : showInhuisHalenFollowUp ? (
               <InhuisHalenOnboardingPage
                 onSubmit={completeInhuisHalen}
                 saving={savingProfile}

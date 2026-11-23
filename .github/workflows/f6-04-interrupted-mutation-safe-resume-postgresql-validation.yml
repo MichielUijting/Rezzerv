@@ -76,7 +76,7 @@ jobs:
             echo 'F6-04 authority mag kernmutaties niet mocken of via browserrequest uitvoeren.' >&2
             exit 1
           fi
-          grep -F "getByTestId('wat-inhuis-finish').click()" "$spec"
+          grep -F "getByTestId('register-submit').click()" "$spec"
           grep -F "getByTestId('capability-expansion-submit').click()" "$spec"
           grep -F "name: 'Opslaan', exact: true" "$spec"
           grep -F 'F6_04_ONBOARDING_INTERRUPTED_BROWSER_GREEN' "$spec"
@@ -95,6 +95,7 @@ jobs:
             backend/app/services/f6_interrupted_mutation_injection.py \
             backend/app/services/f6_failure_injection.py \
             backend/tests/f6_04_interrupted_mutation_verify.py \
+            backend/tests/f6_04_quick_start_settings_fixture.py \
             backend/tests/f6_inventory_controlled_5xx_fixture.py
           node --check frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js
           node --check frontend/playwright.fullstack.config.js
@@ -223,6 +224,18 @@ jobs:
             python -u /app/tests/f6_04_interrupted_mutation_verify.py onboarding_success \
             | tee f6-04-onboarding-success.log
           grep -F 'F6_04_ONBOARDING_SUCCESS_GREEN' f6-04-onboarding-success.log
+
+      - name: Prepare distinct Inhuis halen household for Settings projection authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_04_SETTINGS_EMAIL="$PLAYWRIGHT_F6_04_SETTINGS_EMAIL" \
+            -e F6_04_SETTINGS_PASSWORD="$PLAYWRIGHT_F6_04_SETTINGS_PASSWORD" \
+            -e F6_04_SETTINGS_HOUSEHOLD="$PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD" \
+            backend python -u /app/tests/f6_04_quick_start_settings_fixture.py \
+            | tee f6-04-settings-fixture.log
+          grep -F 'F6_04_SETTINGS_FIXTURE_GREEN' f6-04-settings-fixture.log
 
       - name: Run Settings projection interruption through real browser UI
         shell: bash

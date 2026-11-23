@@ -9,17 +9,29 @@ function required(name, value) {
   return String(value).trim()
 }
 
-test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable app', async ({ page }) => {
+test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable app', async ({ page }) => {
   const accountEmail = required('PLAYWRIGHT_L4_ONBOARDING_EMAIL', email)
   const accountPassword = required('PLAYWRIGHT_L4_ONBOARDING_PASSWORD', password)
   const expectedHouseholdName = required('PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD', householdName)
 
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen')
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
+  await expect(page.getByTestId('register-household-name')).toHaveValue('Mijn huishouden')
 
+  // The user enters only account credentials and optionally changes the household name.
+  // Inhuis does not navigate through separate onboarding forms or reload the document.
+  await page.evaluate(() => { window.__l4RegistrationDocumentMarker = 'single-page-registration' })
+  const followUpPosts = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/onboarding\//.test(request.url())) {
+      followUpPosts.push(request.url())
+    }
+  })
   await page.getByTestId('register-email').fill(accountEmail)
   await page.getByTestId('register-password').fill(accountPassword)
-  await page.getByTestId('register-password-repeat').fill(accountPassword)
+  await page.getByTestId('register-household-name').fill(expectedHouseholdName)
 
   const registrationResponsePromise = page.waitForResponse((response) => (
     response.url().includes('/api/auth/register')
@@ -28,52 +40,22 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
   await page.getByTestId('register-submit').click()
   const registrationResponse = await registrationResponsePromise
   expect(registrationResponse.status()).toBe(201)
+  const registration = await registrationResponse.json()
+  expect(registration.onboarding?.onboarding_status).toBe('completed')
+  expect(registration.onboarding?.primary_use_case).toBe('wat_inhuis')
+  expect(registration.onboarding?.household_usage_mode).toBe('alone')
+  expect(registration.onboarding?.household_name).toBe(expectedHouseholdName)
+  expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
+  expect(registration.onboarding?.product_configuration?.receipt_processing_enabled).toBe(true)
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  expect(await page.evaluate(() => window.__l4RegistrationDocumentMarker)).toBe('single-page-registration')
+  expect(followUpPosts).toEqual([])
 
-  await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
-
-  const primaryUseCaseResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/primary-use-case')
-    && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('onboarding-primary-continue').click()
-  const primaryUseCaseResponse = await primaryUseCaseResponsePromise
-  expect(primaryUseCaseResponse.ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-no').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
-
-  const watInhuisResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/wat-inhuis')
-    && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('wat-inhuis-finish').click()
-  const watInhuisResponse = await watInhuisResponsePromise
-  expect(watInhuisResponse.ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
-  await page.getByTestId('shared-household-name').fill(expectedHouseholdName)
-
-  // PO-01 regression: an incomplete final step must never fail silently.
-  await expect(page.getByTestId('shared-household-finish')).toBeEnabled()
-  await page.getByTestId('shared-household-finish').click()
-  await expect(page.getByTestId('app-feedback-error')).toContainText('Kies eerst of je Inhuis alleen of samen gebruikt.')
-  await page.getByTestId('app-feedback-error').getByRole('button', { name: 'OK', exact: true }).click()
-  await expect(page).toHaveURL(/\/onboarding$/)
-
-  await page.getByTestId('shared-household-usage-alone').check()
-  await expect(page.getByTestId('shared-household-finish-validation')).toHaveCount(0)
-
-  const householdResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/shared-household-minimum')
-    && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('shared-household-finish').click()
-  const householdResponse = await householdResponsePromise
-  expect(householdResponse.ok()).toBeTruthy()
+  const onboardingResponse = await page.request.get('/api/onboarding')
+  expect(onboardingResponse.ok()).toBeTruthy()
+  const initial = await onboardingResponse.json()
+  expect(initial.onboarding_status).toBe('completed')
+  expect(initial.household_usage_mode).toBe('alone')
 
   // Receipt-enabled households can connect stores before opening Home.
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)

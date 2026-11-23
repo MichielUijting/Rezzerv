@@ -206,7 +206,9 @@ jobs:
 
       - name: Validate onboarding choice visibility UX
         working-directory: frontend
-        run: node tests/onboarding-choice-visibility.contract.mjs
+        run: |
+          node tests/onboarding-choice-visibility.contract.mjs
+          node tests/onboarding-quick-start.contract.mjs
 
       - name: Validate I.2/I.4 frontend invitation contracts
         working-directory: frontend

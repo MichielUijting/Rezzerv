@@ -13,8 +13,12 @@ from sqlalchemy.engine import Engine
 from app.api.household_onboarding_routes import create_household_onboarding_router
 from app.services.consumer_account_provisioning import (
     ConsumerAccountExistsError,
+    DEFAULT_CONSUMER_HOUSEHOLD_NAME,
     provision_new_consumer_account,
 )
+from app.services.quick_start_onboarding_service import complete_default_wat_inhuis_onboarding
+from app.services.household_onboarding_service import public_household_onboarding_payload
+from app.services.household_product_configuration_service import public_household_product_configuration_payload
 from app.services.password_service import verify_password
 from app.services.maintenance_state_contract import MaintenanceState
 from app.services.server_session_service import (
@@ -73,6 +77,16 @@ class SessionLoginRequest(BaseModel):
 class SessionRegisterRequest(BaseModel):
     email: str
     password: str
+    household_name: str = DEFAULT_CONSUMER_HOUSEHOLD_NAME
+    quick_start: bool = False
+
+    @field_validator("household_name")
+    @classmethod
+    def validate_household_name(cls, value: str) -> str:
+        normalized = " ".join(str(value or "").strip().split())
+        if not normalized or len(normalized) > 120:
+            raise ValueError("Huishoudnaam moet tussen 1 en 120 tekens bevatten")
+        return normalized
 
     @field_validator("email")
     @classmethod
@@ -395,7 +409,16 @@ def create_server_session_router(
                     conn,
                     email=payload.email,
                     password=payload.password,
+                    household_name=payload.household_name,
                 )
+                quick_start_state = None
+                if payload.quick_start:
+                    # All product/household defaults are stored in this same
+                    # registration transaction, before issuing the session.
+                    quick_start_state = complete_default_wat_inhuis_onboarding(
+                        conn, household_id=account.household_id,
+                        household_name=payload.household_name,
+                    )
                 raw_session_id, context = create_server_session(
                     conn,
                     user_id=account.user_id,
@@ -403,6 +426,14 @@ def create_server_session_router(
                     replace_existing=True,
                 )
                 session_payload = _public_session_payload_with_live_household_name(conn, context)
+                if quick_start_state is not None:
+                    state, product_configuration = quick_start_state
+                    session_payload["onboarding"] = {
+                        **public_household_onboarding_payload(state, can_manage=True),
+                        "product_configuration": public_household_product_configuration_payload(
+                            product_configuration
+                        ),
+                    }
         except ConsumerAccountExistsError as exc:
             raise HTTPException(
                 status_code=409,

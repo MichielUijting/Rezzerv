@@ -182,30 +182,48 @@ test('Wat Inhuis global locations keep the full standard management UX without s
   await expect(page).toHaveURL(/\/instellingen$/)
 })
 
-test('Waar Inhuis onboarding defers all location entry to Settings', async ({ page }) => {
+test('Quick Start onboarding asks for no locations and preserves Wat Inhuis defaults in Settings', async ({ page }) => {
   await page.context().clearCookies()
   const registration = await page.request.post('/api/auth/register', {
     data: {
-      email: uniqueEmail('waar-inhuis-no-location-frame'),
+      email: uniqueEmail('no-location-onboarding'),
       password: 'SterkWachtwoord123!',
     },
   })
   expect(registration.status()).toBe(201)
 
   await page.goto('/onboarding')
-  await page.getByTestId('onboarding-choice-waar_inhuis').check()
-  await page.getByTestId('onboarding-primary-continue').click()
-
-  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toBeVisible()
-  await expect(page.getByTestId('waar-inhuis-locations-settings-hint')).toContainText('Instellingen → Locaties')
+  await expect(page.getByTestId('onboarding-quick-start')).toBeVisible()
+  await expect(page.getByTestId('onboarding-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen.')
+  await expect(page.getByTestId('onboarding-choice-waar_inhuis')).toHaveCount(0)
+  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toHaveCount(0)
   await expect(page.getByText('Welke hoofdlocaties wil je gebruiken?')).toHaveCount(0)
   await expect(page.getByText('Locaties nu al verfijnen?')).toHaveCount(0)
   await expect(page.getByTestId('waar-inhuis-custom-location-input')).toHaveCount(0)
   await expect(page.getByTestId('waar-inhuis-refine-locations')).toHaveCount(0)
   await expect(page.getByTestId('waar-inhuis-sublocation-add')).toHaveCount(0)
 
-  await page.getByTestId('waar-inhuis-finish').click()
-  await expect(page.getByText('Jouw volledige inrichting')).toBeVisible()
+  await page.getByTestId('onboarding-quick-start-household').fill('Wat Inhuis zonder locatiewizard')
+  await page.getByTestId('onboarding-quick-start-submit').click()
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+
+  const onboardingResponse = await page.request.get('/api/onboarding')
+  expect(onboardingResponse.ok()).toBeTruthy()
+  const onboarding = await onboardingResponse.json()
+  expect(onboarding).toMatchObject({
+    onboarding_status: 'completed',
+    primary_use_case: 'wat_inhuis',
+    household_usage_mode: 'alone',
+    household_name: 'Wat Inhuis zonder locatiewizard',
+  })
+  expect(onboarding.product_configuration.inventory_tracking_level).toBe('quantity')
+  expect(onboarding.product_configuration.location_tracking_level).toBe('none')
+
+  await page.getByTestId('onboarding-stores-later').click()
+  await page.goto('/instellingen')
+  await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
+  await expect(page.getByTestId('settings-active-profile')).toContainText('Wat Inhuis')
+  await expect(page.getByTestId('settings-tile-locations')).toHaveCount(0)
 })
 
 test('Waar Inhuis exact locations keep full main-location and sublocation management working', async ({ page }) => {

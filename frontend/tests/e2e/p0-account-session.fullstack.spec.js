@@ -10,42 +10,32 @@ function required(name, value) {
 }
 
 async function completeInitialRegistrationAndOnboarding(page, accountEmail, accountPassword, expectedHouseholdName) {
+  // The one-screen quick start creates account and configured household atomically.
+  // Preserve this P0 journey after the optional store-connection step.
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
+  await expect(page.getByTestId('register-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen')
   await page.getByTestId('register-email').fill(accountEmail)
   await page.getByTestId('register-password').fill(accountPassword)
-  await page.getByTestId('register-password-repeat').fill(accountPassword)
-
-  const registrationResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/auth/register')
+  await page.getByTestId('register-household-name').fill(expectedHouseholdName)
+  const responsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/auth/register'
     && response.request().method() === 'POST'
   ))
   await page.getByTestId('register-submit').click()
-  const registrationResponse = await registrationResponsePromise
-  expect(registrationResponse.status()).toBe(201)
-
-  await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
-  await page.getByTestId('onboarding-primary-continue').click()
-
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-no').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
-  await page.getByTestId('wat-inhuis-finish').click()
-
-  await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
-  await page.getByTestId('shared-household-name').fill(expectedHouseholdName)
-  await page.getByTestId('shared-household-usage-alone').check()
-  await page.getByTestId('shared-household-finish').click()
-
-  // Other fullstack journeys skip the new optional store setup explicitly.
+  const response = await responsePromise
+  expect(response.status()).toBe(201)
+  const registration = await response.json()
+  expect(registration.onboarding?.onboarding_status).toBe('completed')
+  expect(registration.onboarding?.primary_use_case).toBe('wat_inhuis')
+  expect(registration.onboarding?.household_usage_mode).toBe('alone')
+  expect(registration.onboarding?.household_name).toBe(expectedHouseholdName)
+  expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
   await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home$/)
-  await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
 }
 
 async function logoutThroughMyAccount(page) {
