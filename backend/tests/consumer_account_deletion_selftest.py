@@ -421,7 +421,9 @@ def run() -> int:
         except Exception:
             solo_stage.restore()
             raise
-        solo_stage.finalize()
+        # Simulate a crash after SQL commit but before file finalization.
+        # Reconciliation must finish the purge from the committed DB identity.
+        assert reconcile_household_file_staging(engine) == 1
         assert not solo_platform_file.exists()
         with engine.connect() as conn:
             assert _count(conn, "app_users", "id=:uid", {"uid": solo_platform_user}) == 0
