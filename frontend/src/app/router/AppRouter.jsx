@@ -73,8 +73,8 @@ function LoginRoute() {
 
 function RegisterRoute() {
   const navigate = useNavigate()
-  function handleRegistered() {
-    navigate('/home', { replace: true })
+  function handleRegistered(completedOnboarding) {
+    navigate(shouldOfferStoreConnectionOnboarding(completedOnboarding) ? '/onboarding/winkels' : '/home', { replace: true })
   }
   return <RegisterPage onRegistered={handleRegistered} />
 }

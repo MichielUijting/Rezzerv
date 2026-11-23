@@ -119,6 +119,15 @@ export function completeWaarInhuisOnboarding(context, preferences) {
   )
 }
 
+export function completeQuickStartHousehold(context, preferences) {
+  return completeProfileOnboarding(
+    context,
+    '/api/onboarding/quick-start',
+    preferences,
+    'Inhuis starten mislukt.',
+  )
+}
+
 export function completeSharedHouseholdMinimum(context, preferences) {
   return completeProfileOnboarding(
     context,
