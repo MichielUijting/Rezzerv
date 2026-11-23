@@ -13,42 +13,53 @@ function required(name, value) {
 }
 
 async function registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName) {
+  // New registration always starts Wat Inhuis, quantities and Alleen.
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
   await page.getByTestId('register-email').fill(accountEmail)
   await page.getByTestId('register-password').fill(accountPassword)
-  await page.getByTestId('register-password-repeat').fill(accountPassword)
-  const registrationResponsePromise = page.waitForResponse((response) => response.url().includes('/api/auth/register') && response.request().method() === 'POST')
+  await page.getByTestId('register-household-name').fill(expectedHouseholdName)
+  const registrationResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/auth/register'
+    && response.request().method() === 'POST'
+  ))
   await page.getByTestId('register-submit').click()
-  expect((await registrationResponsePromise).status()).toBe(201)
-
-  await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-waar_inhuis').check()
-  const primaryResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/primary-use-case') && response.request().method() === 'POST')
-  await page.getByTestId('onboarding-primary-continue').click()
-  expect((await primaryResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('waar-inhuis-unpacking-yes').check()
-  await page.getByTestId('waar-inhuis-receipts-yes').check()
-  const productResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/waar-inhuis') && response.request().method() === 'POST')
-  await page.getByTestId('waar-inhuis-finish').click()
-  expect((await productResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
-  await page.getByTestId('shared-household-name').fill(expectedHouseholdName)
-  await page.getByTestId('shared-household-usage-alone').check()
-  const householdResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/shared-household-minimum') && response.request().method() === 'POST')
-  await page.getByTestId('shared-household-finish').click()
-  expect((await householdResponsePromise).ok()).toBeTruthy()
+  const response = await registrationResponsePromise
+  expect(response.status()).toBe(201)
+  const registration = await response.json()
+  expect(registration.onboarding?.onboarding_status).toBe('completed')
+  expect(registration.onboarding?.primary_use_case).toBe('wat_inhuis')
+  expect(registration.onboarding?.household_usage_mode).toBe('alone')
+  expect(registration.onboarding?.household_name).toBe(expectedHouseholdName)
+  expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home$/)
 
-  const capabilitiesResponse = await page.request.get('/api/onboarding/capabilities')
-  expect(capabilitiesResponse.ok()).toBeTruthy()
-  const capabilities = await capabilitiesResponse.json()
-  expect(capabilities.primary_use_case).toBe('waar_inhuis')
-  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
-  expect(capabilities.product_configuration.receipt_processing_enabled).toBe(true)
+  // This dedicated Uitpakken authority deliberately adds Waar Inhuis afterwards
+  // through the normal user-visible Settings flow; onboarding never asks this.
+  await page.goto('/instellingen/mogelijkheden')
+  await expect(page.getByTestId('settings-capabilities-page')).toBeVisible()
+  await page.getByTestId('capability-add-waar_inhuis').click()
+  const expansionForm = page.getByTestId('capability-expansion-form-waar_inhuis')
+  await expect(expansionForm).toBeVisible()
+  await page.getByTestId('capability-waar-unpacking').check()
+  const expansionResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/onboarding/expand/waar-inhuis'
+    && response.request().method() === 'POST'
+  ))
+  await page.getByTestId('capability-expansion-submit').click()
+  const expansionResponse = await expansionResponsePromise
+  expect(expansionResponse.ok()).toBeTruthy()
+  const capabilities = await expansionResponse.json()
+  expect(capabilities.primary_use_case).toBe('wat_inhuis')
+  expect(capabilities.active_use_cases).toContain('waar_inhuis')
+  expect(capabilities.product_configuration?.location_tracking_level).toBe('exact')
+  expect(capabilities.product_configuration?.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration?.receipt_processing_enabled).toBe(true)
+  await page.goto('/home')
 }
 
 async function readSession(page) {
