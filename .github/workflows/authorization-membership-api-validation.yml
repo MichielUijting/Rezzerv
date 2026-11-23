@@ -11,6 +11,9 @@ on:
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/tests/test_authorization_membership_routes.py'
       - 'backend/tests/consumer_account_deletion_selftest.py'
+      - 'backend/tests/test_platform_household_reset_contract.py'
+      - 'backend/app/services/household_reset_service.py'
+      - 'backend/alembic/versions/20261123_01_scoped_direct_household_reset.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/services/consumer_account_deletion_service.py'
@@ -136,3 +139,7 @@ jobs:
           test "${TEST_POSTGRES_DB:-}" = "rezzerv_authorization_membership_ci"
           PYTHONPATH=. python tests/consumer_account_deletion_selftest.py
           echo ACCOUNT_DELETION_POSTGRESQL_GREEN
+
+      - name: Verify platform household reset preserves immutable Direct except for full reset
+        run: |
+          PYTHONPATH=. python -m pytest -q tests/test_platform_household_reset_contract.py
