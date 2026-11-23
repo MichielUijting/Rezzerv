@@ -35,6 +35,16 @@ assert.match(connections, /onboardingMode \? '\/onboarding\/winkels' : '\/instel
 assert.match(connections, /data-testid="onboarding-stores-later"/)
 assert.match(connections, /data-testid="onboarding-stores-continue"/)
 assert.match(connections, /niet elke mobiele browser ondersteunt dit/)
+
+// Returning from an Android external browser must not strand the AH connect button.
+// A successful AH connection is confirmed only through the backend status call.
+assert.match(connections, /const ahLoginNavigatingRef = useRef\(false\)/)
+assert.match(connections, /ahLoginNavigatingRef\.current = true\s+window\.location\.assign\(data\.login_url\)/)
+assert.match(connections, /window\.addEventListener\('pageshow', resumeAhLogin\)/)
+assert.match(connections, /window\.addEventListener\('focus', resumeAhLogin\)/)
+assert.match(connections, /document\.addEventListener\('visibilitychange', resumeAhLogin\)/)
+assert.match(connections, /ahLoginNavigatingRef\.current = false\s+setAhBusy\(false\)\s+void loadAhStatus\(\)/)
+assert.match(connections, /document\.visibilityState === 'hidden'/)
 assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/onboarding\/winkels"\}/)
 
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')

@@ -34,7 +34,10 @@ def _request(
         "client": ("127.0.0.1", 50000),
         "server": (host, port),
     }
-    return Request(scope)
+    async def empty_http_body():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    return Request(scope, receive=empty_http_body)
 
 
 def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) -> None:
@@ -140,7 +143,7 @@ def test_launch_sets_short_lived_httponly_flow_cookie(monkeypatch) -> None:
     response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id))
 
     assert response.status_code == 302
-    assert response.headers["location"].startswith("/login?")
+    assert response.headers["location"].startswith("/secure/oauth/authorize?")
     query = parse_qs(urlparse(response.headers["location"]).query)
     assert query["client_id"] == ["appie-ios"]
     assert query["redirect_uri"] == ["appie://login-exit"]
@@ -211,6 +214,132 @@ def test_proxy_preserves_browser_headers_needed_by_login_controls() -> None:
     assert "accept-encoding" not in headers
     assert "content-length" not in headers
     assert "inhuis_ah_oauth_flow" not in headers["cookie"]
+
+
+def test_ah_mobile_authorize_uses_trusted_per_flow_installation_id(monkeypatch) -> None:
+    """AH must receive a fresh installation ID, never a spoofed browser value."""
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    first = oauth.create_ah_oauth_flow(_request(host="100.64.10.20"), household_id="household-1")
+    second = oauth.create_ah_oauth_flow(_request(host="100.64.10.20"), household_id="household-2")
+
+    from uuid import UUID
+
+    assert UUID(first.installation_id).version == 4
+    assert first.installation_id == first.installation_id.upper()
+    assert first.installation_id != second.installation_id
+
+    spoofed = _request(
+        host="100.64.10.20",
+        extra_headers={"x-fraud-detection-installation-id": "untrusted-client-value"},
+    )
+    normal = oauth.build_ah_forward_headers(
+        spoofed, backend_origin=first.backend_origin, flow=first, upstream_path="/login",
+    )
+    assert "x-fraud-detection-installation-id" not in normal
+    authorized = oauth.build_ah_forward_headers(
+        spoofed, backend_origin=first.backend_origin,
+        flow=first, upstream_path="/secure/oauth/authorize",
+    )
+    assert authorized["x-fraud-detection-installation-id"] == first.installation_id
+    other = oauth.build_ah_forward_headers(
+        spoofed, backend_origin=second.backend_origin,
+        flow=second, upstream_path="/secure/oauth/authorize",
+    )
+    assert other["x-fraud-detection-installation-id"] == second.installation_id
+
+
+def test_nextjs_rsc_redirect_rewrites_native_app_scheme() -> None:
+    origin = "http://ah-login.100-64-10-20.sslip.io:8011"
+    for encoded in (
+        b'1:"NEXT_REDIRECT;replace;appie://login-exit?code=synthetic;307;"',
+        b'1:"NEXT_REDIRECT;replace;appie:\\/\\/login-exit?code=synthetic;307;"',
+    ):
+        result = oauth.rewrite_ah_oauth_body(encoded, backend_origin=origin)
+        assert b"appie:" not in result
+        assert b"ah-oauth" in result
+        assert b"callback" in result
+        assert b"synthetic" in result
+
+
+def test_proxy_sends_installation_id_to_authorize_only(monkeypatch) -> None:
+    import httpx
+
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="100.64.10.20"), household_id="household-bound",
+    )
+    observed = {}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, url, headers, content):
+            observed["url"] = url
+            observed["headers"] = headers
+            return httpx.Response(
+                status_code=302, headers={"location": "/login"}, content=b"",
+            )
+
+    monkeypatch.setattr(oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    request = _request(
+        host="100.64.10.20", port=8011,
+        cookie=f"inhuis_ah_oauth_flow={flow.flow_id}",
+        extra_headers={"x-fraud-detection-installation-id": "untrusted-client-value"},
+    )
+    result = asyncio.run(oauth.proxy_ah_login("secure/oauth/authorize", request))
+    assert result.status_code == 302
+    assert result.headers["location"] == "/login"
+    assert observed["url"] == "https://login.ah.nl/secure/oauth/authorize"
+    assert observed["headers"]["x-fraud-detection-installation-id"] == flow.installation_id
+
+
+def test_proxy_rewrites_nextjs_rsc_and_preserves_flow_cookie(monkeypatch) -> None:
+    import httpx
+
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="100.64.10.20"), household_id="household-bound",
+    )
+    payload = b'1:"NEXT_REDIRECT;replace;appie://login-exit?code=synthetic;307;"'
+    upstream_response = httpx.Response(
+        status_code=200,
+        headers={"content-type": "text/x-component"},
+        content=payload,
+    )
+    observed = {}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, url, headers, content):
+            observed["method"] = method
+            observed["url"] = url
+            observed["headers"] = headers
+            return upstream_response
+
+    monkeypatch.setattr(oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    request = _request(
+        host="100.64.10.20", port=8011,
+        cookie=f"inhuis_ah_oauth_flow={flow.flow_id}; ah_session=synthetic-cookie",
+    )
+    result = asyncio.run(oauth.proxy_ah_login("login/ingelogd", request))
+    assert result.status_code == 200
+    assert b"appie://" not in result.body
+    assert b"ah-oauth/callback?code=synthetic" in result.body
+    assert observed["url"] == "https://login.ah.nl/login/ingelogd"
+    assert observed["headers"]["cookie"] == "ah_session=synthetic-cookie"
+    assert "inhuis_ah_oauth_flow" not in observed["headers"]["cookie"]
 
 
 def test_proxy_rewrites_appie_callback_and_sanitizes_login_cookie() -> None:

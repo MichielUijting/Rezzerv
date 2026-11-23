@@ -21,6 +21,7 @@ import os
 import secrets
 from threading import RLock
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -62,6 +63,7 @@ _DEFAULT_BACKEND_PUBLIC_PORT = "8011"
 @dataclass(frozen=True)
 class AHOAuthFlow:
     flow_id: str
+    installation_id: str
     household_id: str
     backend_origin: str
     return_to: str
@@ -149,6 +151,7 @@ def create_ah_oauth_flow(
     _clean_expired_flows()
     flow = AHOAuthFlow(
         flow_id=secrets.token_urlsafe(32),
+        installation_id=str(uuid4()).upper(),
         household_id=str(household_id),
         backend_origin=resolve_backend_public_origin(request),
         return_to=_safe_return_to(request, return_to),
@@ -208,8 +211,16 @@ def sanitize_ah_set_cookie(value: str) -> str:
 
 
 def rewrite_ah_oauth_body(body: bytes, *, backend_origin: str) -> bytes:
+    """Keep AH's native redirect inside the short-lived, household-bound flow.
+
+    Next.js can deliver NEXT_REDIRECT in a React Server Component response;
+    JSON-escaped slashes must be rewritten as well as ordinary appie:// URLs.
+    """
+    callback = f"{backend_origin}/ah-oauth/callback".encode("utf-8")
+    escaped_callback = callback.replace(b"/", b"\\/")
     return (
-        body.replace(AH_REDIRECT_URI.encode("utf-8"), f"{backend_origin}/ah-oauth/callback".encode("utf-8"))
+        body.replace(b"appie:\\/\\/login-exit", escaped_callback)
+        .replace(AH_REDIRECT_URI.encode("utf-8"), callback)
         .replace(AH_LOGIN_BASE_URL.encode("utf-8"), backend_origin.encode("utf-8"))
     )
 
@@ -250,10 +261,14 @@ _REQUEST_HEADER_EXCLUDE = {
     "upgrade",
     "accept-encoding",
     "cookie",
+    "x-fraud-detection-installation-id",
 }
 
 
-def build_ah_forward_headers(request: Request, *, backend_origin: str) -> dict[str, str]:
+def build_ah_forward_headers(
+    request: Request, *, backend_origin: str,
+    flow: AHOAuthFlow | None = None, upstream_path: str = "",
+) -> dict[str, str]:
     # Keep the browser request as intact as possible. AH's login page includes
     # anti-bot/captcha requests whose browser/client-hint headers matter. This
     # mirrors the proven ah-mcp reverse-proxy behaviour: only transport-specific
@@ -280,6 +295,13 @@ def build_ah_forward_headers(request: Request, *, backend_origin: str) -> dict[s
             referer = AH_LOGIN_BASE_URL + "/"
         headers["referer"] = referer
 
+    # AH's mobile app authorisation requires a per-installation identifier.
+    # Never trust a browser-supplied value, and never attach it to unrelated paths.
+    if upstream_path == "/secure/oauth/authorize":
+        if flow is None:
+            raise RuntimeError("AH OAuth-flow ontbreekt voor autorisatieaanvraag")
+        headers["x-fraud-detection-installation-id"] = flow.installation_id
+
     return headers
 
 
@@ -295,7 +317,9 @@ async def launch_ah_oauth(flow_id: str):
     flow = get_ah_oauth_flow(flow_id)
     if flow is None:
         raise HTTPException(status_code=410, detail="AH-login is verlopen. Start de koppeling opnieuw.")
-    response = RedirectResponse(url=f"/login?{_login_query()}", status_code=302)
+    # Enter the mobile OAuth authorize route first; AH needs the per-flow
+    # installation identifier on that request to issue an authorization code.
+    response = RedirectResponse(url=f"/secure/oauth/authorize?{_login_query()}", status_code=302)
     response.set_cookie(
         _FLOW_COOKIE,
         flow.flow_id,
@@ -352,7 +376,9 @@ async def proxy_ah_login(path: str, request: Request):
     if query:
         upstream_url += f"?{query}"
 
-    headers = build_ah_forward_headers(request, backend_origin=flow.backend_origin)
+    headers = build_ah_forward_headers(
+        request, backend_origin=flow.backend_origin, flow=flow, upstream_path=f"/{path}",
+    )
 
     body = await request.body()
     try:
@@ -387,7 +413,7 @@ async def proxy_ah_login(path: str, request: Request):
         location_summary,
     )
     payload = upstream.content
-    if any(marker in content_type.lower() for marker in ("text/html", "javascript", "json")):
+    if any(marker in content_type.lower() for marker in ("text/html", "javascript", "json", "text/x-component")):
         payload = rewrite_ah_oauth_body(payload, backend_origin=flow.backend_origin)
 
     response = Response(content=payload, status_code=upstream.status_code)
