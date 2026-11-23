@@ -16,6 +16,7 @@ const household = {
   product_configuration: { receipt_processing_enabled: true },
 }
 assert.equal(shouldOfferStoreConnectionOnboarding(household), true)
+assert.equal(shouldOfferStoreConnectionOnboarding({ ...household, product_configuration: undefined }), true)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...household, can_manage: false }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({
   ...household, product_configuration: { receipt_processing_enabled: false },
