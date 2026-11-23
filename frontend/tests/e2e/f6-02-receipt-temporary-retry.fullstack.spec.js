@@ -79,8 +79,8 @@ function receiptIdFromImport(payload) {
 }
 
 async function uploadReceiptThroughKassa(page, file) {
-  await page.goto('/kassa/nieuw')
-  await expect(page.getByTestId('kassa-add-page')).toBeVisible()
+  await page.goto('/kassa')
+  await expect(page.getByTestId('kassa-table')).toBeVisible({ timeout: 30_000 })
   const importResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/receipts/import' && response.request().method() === 'POST', { timeout: 180_000 })
   await page.getByTestId('kassa-manual-file-input').setInputFiles(file)
   const response = await importResponsePromise
