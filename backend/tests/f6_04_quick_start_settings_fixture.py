@@ -6,6 +6,14 @@ Only this deterministic starting household is provisioned in the database.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# CLI test fixture runs under /app/tests, so make /app importable explicitly.
+APP_ROOT = Path(__file__).resolve().parents[1]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
 from app.db import engine
 from app.services.consumer_account_provisioning import provision_new_consumer_account
 from app.services.household_onboarding_service import (

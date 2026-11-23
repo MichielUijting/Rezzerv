@@ -79,7 +79,7 @@ async function submitInventoryCorrection(page, inventoryId, targetQuantity, note
   return response
 }
 
-test('F6-04 Onboarding interrupted mutation leaves profile step intact', async ({ page }) => {
+test('F6-04 Onboarding interrupted mutation rolls back atomic registration', async ({ page }) => {
   test.setTimeout(180_000)
   const email = required('PLAYWRIGHT_F6_04_ONBOARDING_EMAIL').toLowerCase()
   const password = required('PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD')
@@ -105,7 +105,7 @@ test('F6-04 Onboarding resumes through a new visible user action', async ({ page
   expect(payload.onboarding?.household_usage_mode).toBe('alone')
   expect(payload.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
   await expect(page).toHaveURL(/\/onboarding\/winkels$/, { timeout: 30_000 })
-  writeFileSync('f6-04-onboarding-resume-browser-proof.json', JSON.stringify({ email, responseStatus: 200 }, null, 2))
+  writeFileSync('f6-04-onboarding-resume-browser-proof.json', JSON.stringify({ email, responseStatus: 201 }, null, 2))
   console.log('F6_04_ONBOARDING_SAFE_RESUME_BROWSER_GREEN')
 })
 
