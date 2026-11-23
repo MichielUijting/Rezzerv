@@ -140,7 +140,7 @@ def test_launch_sets_short_lived_httponly_flow_cookie(monkeypatch) -> None:
     response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id))
 
     assert response.status_code == 302
-    assert response.headers["location"].startswith("/login?")
+    assert response.headers["location"].startswith("/secure/oauth/authorize?")
     query = parse_qs(urlparse(response.headers["location"]).query)
     assert query["client_id"] == ["appie-ios"]
     assert query["redirect_uri"] == ["appie://login-exit"]
@@ -257,6 +257,43 @@ def test_nextjs_rsc_redirect_rewrites_native_app_scheme() -> None:
         assert b"ah-oauth" in result
         assert b"callback" in result
         assert b"synthetic" in result
+
+
+def test_proxy_sends_installation_id_to_authorize_only(monkeypatch) -> None:
+    import httpx
+
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="100.64.10.20"), household_id="household-bound",
+    )
+    observed = {}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, url, headers, content):
+            observed["url"] = url
+            observed["headers"] = headers
+            return httpx.Response(
+                status_code=302, headers={"location": "/login"}, content=b"",
+            )
+
+    monkeypatch.setattr(oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    request = _request(
+        host="100.64.10.20", port=8011,
+        cookie=f"inhuis_ah_oauth_flow={flow.flow_id}",
+        extra_headers={"x-fraud-detection-installation-id": "untrusted-client-value"},
+    )
+    result = asyncio.run(oauth.proxy_ah_login("secure/oauth/authorize", request))
+    assert result.status_code == 302
+    assert result.headers["location"] == "/login"
+    assert observed["url"] == "https://login.ah.nl/secure/oauth/authorize"
+    assert observed["headers"]["x-fraud-detection-installation-id"] == flow.installation_id
 
 
 def test_proxy_rewrites_nextjs_rsc_and_preserves_flow_cookie(monkeypatch) -> None:
