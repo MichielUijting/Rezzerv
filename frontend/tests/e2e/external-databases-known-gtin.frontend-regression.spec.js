@@ -5,6 +5,8 @@ import {
   expectRouteLoads,
 } from './helpers/rezzervAssertions.js';
 
+// Session presence pings update cookie liveness only. They are not ED2
+// business writes; every other non-GET request stays under the same checks.
 test.use({ storageState: 'playwright/.auth/superuser.json' })
 
 test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
@@ -14,7 +16,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
     const startPath = '/api/catalog/ed2/bonnamen-matchen/progress/start'
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname
-      if (route.request().method() !== 'GET') writes.push(path)
+      if (route.request().method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
       if (path === '/api/session') return route.fulfill({ json: {
         user_id: 'ed2-automatic-test', active_household_id: '0',
         context_type: 'system', role: 'owner', is_platform_superuser: true,
@@ -290,7 +292,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
             ...Array.from({ length: 13 }, (_, index) => ({ gtin: String(80000000 + index), product_name: `Aanvullende suggestie ${String(index).padStart(2, '0')}`, source: 'Jumbo', evidence_label: 'Winkelproduct; suggestie op naam', score: .7 })),
           ] } })
         }
-        if (request.method() !== 'GET') unexpectedWrites.push(path)
+        if (request.method() !== 'GET' && path !== '/api/session/heartbeat') unexpectedWrites.push(path)
         if (path === '/api/session') return route.fulfill({ json: {
           user_id: 'off-panel-test', email: 'off-panel@example.test', active_household_id: '0',
           context_type: 'system', role: 'owner', is_platform_superuser: true,
@@ -448,7 +450,7 @@ test.describe('Externe databases 2: overzicht en OFF-kandidaten', () => {
       await page.route('**/api/**', async (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname
-        if (request.method() !== 'GET') writes.push(path)
+        if (request.method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
         if (path === '/api/session') return route.fulfill({ json: {
           user_id: 'external-overview-test', email: 'overview@example.test',
           active_household_id: '0', context_type: 'system', role: 'owner',
