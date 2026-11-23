@@ -336,6 +336,63 @@ def run() -> int:
         assert shared_probe.read_text(encoding="utf-8") == "keep shared household data"
         checks.append("platform_delete_suspended_admin_preserves_shared_receipts_and_promotes_successor")
 
+        # Platform-managed deletion of a *sole-member* household is the precise
+        # product path that failed in the local PO test. Use the real PostgreSQL
+        # runtime role, a receipt row and a staged private file, never PO data.
+        solo_platform_user = _id("platform-solo-user")
+        solo_platform_email = solo_platform_user + "@example.test"
+        solo_platform_household = _id("platform-solo-household")
+        solo_platform_file = receipt_root / solo_platform_household / "test-receipt.txt"
+        solo_platform_file.parent.mkdir(parents=True, exist_ok=True)
+        solo_platform_file.write_text("isolated-platform-deletion-fixture", encoding="utf-8")
+        with engine.begin() as conn:
+            seed_household(conn, household_id=solo_platform_household, name="Sole member for platform deletion")
+            seed_user(conn, user_id=solo_platform_user, email=solo_platform_email,
+                      password="TestPassword123!")
+            seed_membership(conn, membership_id=_id("membership"),
+                            household_id=solo_platform_household, user_id=solo_platform_user,
+                            email=solo_platform_email, role="admin")
+            conn.execute(text("""
+                INSERT INTO raw_receipts(
+                    id, household_id, source_id, original_filename,
+                    mime_type, storage_path, sha256_hash, raw_status
+                ) VALUES(
+                    :id, :hid, NULL, :filename,
+                    'text/plain', :storage_path, :sha, 'failed'
+                )
+            """), {
+                "id": _id("raw-sole-platform"),
+                "hid": solo_platform_household,
+                "filename": solo_platform_file.name,
+                "storage_path": str(solo_platform_file),
+                "sha": "c" * 64,
+            })
+            assert deletion_preview(conn, user_id=solo_platform_user)["households_to_delete"] == 1
+
+        solo_stage = HouseholdFileStage()
+        try:
+            with engine.begin() as conn:
+                solo_result = delete_platform_managed_account(
+                    conn, actor_user_id=platform_actor, user_id=solo_platform_user,
+                    confirmation="VERWIJDER " + solo_platform_email,
+                    file_stage=solo_stage,
+                )
+                assert solo_result["deleted"] is True
+                assert solo_result["households_deleted"] == 1
+                assert solo_result["households_preserved"] == 0
+        except Exception:
+            solo_stage.restore()
+            raise
+        solo_stage.finalize()
+        assert not solo_platform_file.exists()
+        with engine.connect() as conn:
+            assert _count(conn, "app_users", "id=:uid", {"uid": solo_platform_user}) == 0
+            assert _count(conn, "household_registry", "id=:hid", {"hid": solo_platform_household}) == 0
+            assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": solo_platform_household}) == 0
+            assert _count(conn, "app_users", "id=:uid", {"uid": platform_actor}) == 1
+            assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
+        checks.append("platform_delete_sole_household_with_receipt_atomic_postgresql")
+
     finally:
         engine.dispose()
         reset_postgresql_test_database()
