@@ -163,6 +163,50 @@ def run() -> int:
         checks.append("new_password_hashed_not_plaintext")
         checks.append("registration_session_resolves_server_side")
 
+        quick_registration_response = Response()
+        quick_payload = register(
+            SessionRegisterRequest(
+                email="snel@example.com",
+                password="SterkSnelWachtwoord123!",
+                household_name="Alleen thuis",
+                quick_start=True,
+            ),
+            quick_registration_response,
+        )
+        quick_onboarding = quick_payload["onboarding"]
+        assert quick_onboarding["household_name"] == "Alleen thuis"
+        assert quick_onboarding["primary_use_case"] == "wat_inhuis"
+        assert quick_onboarding["onboarding_status"] == "completed"
+        assert quick_onboarding["household_usage_mode"] == "alone"
+        assert quick_onboarding["can_manage"] is True
+        assert quick_onboarding["product_configuration"]["inventory_tracking_level"] == "quantity"
+        assert quick_onboarding["product_configuration"]["location_tracking_level"] == "none"
+        assert quick_onboarding["product_configuration"]["shopping_enabled"] is True
+        assert quick_onboarding["product_configuration"]["almost_out_enabled"] is True
+        assert quick_onboarding["product_configuration"]["receipt_processing_enabled"] is True
+        _cookie_value(quick_registration_response, SESSION_COOKIE_NAME)
+        with engine.begin() as conn:
+            state = conn.execute(text("""
+                SELECT onboarding_status, primary_use_case, household_usage_mode,
+                       onboarding_completed_at
+                FROM household_onboarding WHERE household_id=:household_id
+            """), {"household_id": quick_payload["active_household_id"]}).mappings().one()
+            assert state["onboarding_status"] == "completed"
+            assert state["primary_use_case"] == "wat_inhuis"
+            assert state["household_usage_mode"] == "alone"
+            assert state["onboarding_completed_at"] is not None
+            product = conn.execute(text("""
+                SELECT inventory_tracking_level, location_tracking_level,
+                       shopping_enabled, almost_out_enabled, receipt_processing_enabled
+                FROM household_product_configuration WHERE household_id=:household_id
+            """), {"household_id": quick_payload["active_household_id"]}).mappings().one()
+            assert product["inventory_tracking_level"] == "quantity"
+            assert product["location_tracking_level"] == "none"
+            assert bool(product["shopping_enabled"])
+            assert bool(product["almost_out_enabled"])
+            assert bool(product["receipt_processing_enabled"])
+        checks.append("one_transaction_quick_start_wat_quantity_alone_then_stores")
+
         new_login_response = Response()
         new_login_payload = login(
             SessionLoginRequest(

@@ -916,9 +916,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         <Card>
           {onboardingMode ? (
             <div data-testid="onboarding-stores-step" style={{ display: 'grid', rowGap: '8px', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0 }}>Winkels aansluiten</h2>
-              <p style={{ margin: 0 }}>Kies Albert Heijn, Lidl of Jumbo om je digitale kassabonnen op te halen. Je mag meerdere winkels gebruiken.</p>
-              <p style={{ margin: 0 }}>Albert Heijn kan na het koppelen automatisch nieuwe bonnen ophalen. Voor Lidl en Jumbo gebruik je voorlopig een browserfavoriet; niet elke mobiele browser ondersteunt dit. Er wordt geen automatische koppeling beloofd.</p>
+              <h2 style={{ margin: 0 }}>Winkels koppelen</h2>
+              <p style={{ margin: 0 }}>Koppel Albert Heijn, Lidl of Jumbo, of doe dit later.</p>
+              <p style={{ margin: 0 }}>AH kan automatisch ophalen; Lidl en Jumbo werken via browserfavoriet. niet elke mobiele browser ondersteunt dit.</p>
             </div>
           ) : null}
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
