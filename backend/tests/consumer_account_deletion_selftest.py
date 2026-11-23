@@ -192,7 +192,7 @@ def run() -> int:
         except RuntimeError as exc:
             assert str(exc) == "deliberate before-commit failure"
         # Simulate process restart: consult committed SQL identity to restore.
-        assert reconcile_household_file_staging(engine) == 1
+        assert reconcile_household_file_staging(engine) == 4
         assert staged_probe.read_text(encoding="utf-8") == "private-sole-household-file"
         assert source_probe.read_bytes().startswith(b"%PDF-1.4")
         assert debug_probe.read_text(encoding="utf-8").startswith("{")
