@@ -34,7 +34,10 @@ def _request(
         "client": ("127.0.0.1", 50000),
         "server": (host, port),
     }
-    return Request(scope)
+    async def empty_http_body():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    return Request(scope, receive=empty_http_body)
 
 
 def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) -> None:
