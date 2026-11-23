@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+import logging
 
 from app.db import engine
 from app.services.consumer_account_deletion_service import (
@@ -15,6 +17,10 @@ from app.services.server_session_service import SESSION_COOKIE_NAME
 from app.services.consumer_account_file_deletion_service import (
     HouseholdFileStage, AccountFileDeletionConflict,
     reconcile_household_file_staging,
+)
+from app.services.household_reset_service import (
+    HouseholdResetConflictError,
+    HouseholdResetNotFoundError,
 )
 from app.services.consumer_account_management_service import (
     ConsumerAccountNotFoundError,
@@ -37,6 +43,7 @@ from app.services.session_request_context import resolve_current_server_session
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ConsumerProfileUpdateRequest(BaseModel):
@@ -244,8 +251,22 @@ def permanently_delete_my_account(payload: ConsumerAccountDeleteRequest, respons
         stage.finalize()
     except AccountDeletionPasswordError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except (AccountDeletionConflictError, AccountFileDeletionConflict) as exc:
+    except (
+        AccountDeletionConflictError,
+        AccountFileDeletionConflict,
+        HouseholdResetConflictError,
+        HouseholdResetNotFoundError,
+    ) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        logger.exception("ACCOUNT_DELETE_REFERENTIAL_INTEGRITY_BLOCKED")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Accountverwijdering gestopt door gekoppelde databasegegevens. "
+                "Er is niets verwijderd; huishoudgegevens blijven behouden."
+            ),
+        ) from exc
 
     # Clear only after the transaction and file purge have completed.
     from app.api.server_session_routes import session_api_configuration_from_environment

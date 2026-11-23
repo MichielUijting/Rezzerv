@@ -7,6 +7,7 @@ import uuid
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.services import session_request_context
 from app.services.authorization_foundation_service import PLATFORM_ADMIN_PERMISSIONS
@@ -186,6 +187,7 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
     target_email = f"{target_user_id}@example.test"
     target_membership_id = f"membership-{uuid.uuid4().hex}"
     target_space = f"space-{uuid.uuid4().hex}"
+    target_direct_space = f"direct-{uuid.uuid4().hex}"
     target_sublocation = f"sublocation-{uuid.uuid4().hex}"
     other_space = f"space-{uuid.uuid4().hex}"
     other_sublocation = f"sublocation-{uuid.uuid4().hex}"
@@ -269,6 +271,10 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
                 ),
                 {"id": target_sublocation, "space_id": target_space},
             )
+            conn.execute(text("""
+                INSERT INTO spaces(id, naam, household_id, active, is_direct)
+                VALUES (:id, 'Direct', :hid, TRUE, 1)
+            """), {"id": target_direct_space, "hid": target})
             conn.execute(
                 text(
                     """
@@ -311,6 +317,17 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
                 },
             )
 
+        # The Direct trigger remains protective for ordinary deletion.
+        with pytest.raises(DBAPIError, match="Direct is een vaste locatie"):
+            with auth_engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM spaces WHERE id=:id"), {"id": target_direct_space}
+                )
+        with auth_engine.connect() as conn:
+            assert conn.execute(text(
+                "SELECT COUNT(*) FROM spaces WHERE id=:id"
+            ), {"id": target_direct_space}).scalar_one() == 1
+
         with auth_engine.begin() as conn:
             result = reset_household_data(
                 conn,
@@ -320,7 +337,7 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
             assert result["household_id"] == target
             assert result["preserved_member_count"] == 1
             assert result["sessions_revoked"] == 1
-            assert result["deleted_by_table"]["spaces"] == 1
+            assert result["deleted_by_table"]["spaces"] == 2
             assert result["deleted_by_table"]["sublocations"] == 1
 
         with auth_engine.connect() as conn:
@@ -331,6 +348,10 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
             assert conn.execute(
                 text("SELECT COUNT(*) FROM sublocations WHERE id=:id"),
                 {"id": target_sublocation},
+            ).scalar_one() == 0
+            assert conn.execute(
+                text("SELECT COUNT(*) FROM spaces WHERE id=:id"),
+                {"id": target_direct_space},
             ).scalar_one() == 0
 
             assert conn.execute(

@@ -399,3 +399,85 @@ def test_stale_cookie_is_not_counted_as_active_frontend():
         assert conn.execute(text("""
             SELECT revoked_at FROM server_sessions WHERE id='stale'
         """)).scalar_one() is None
+
+
+def test_account_deletion_routes_fail_closed_on_household_reset_and_database_integrity_errors(monkeypatch):
+    """A late sole-household conflict must be a safe 409, not an opaque API 500."""
+    from types import SimpleNamespace
+    from app.api import platform_users_routes as platform_routes
+    from app.api import consumer_account_routes as consumer_routes
+    from app.services.household_reset_service import (
+        HouseholdResetConflictError, HouseholdResetNotFoundError,
+    )
+    from sqlalchemy.exc import IntegrityError
+    from fastapi import Response
+
+    for error, expected_message in (
+        (HouseholdResetConflictError("Onveilige huishoudreset"), "Onveilige huishoudreset"),
+        (HouseholdResetNotFoundError("Huishouden ontbreekt"), "Huishouden ontbreekt"),
+        (
+            IntegrityError("DELETE", {}, Exception("Foreign key constraint details must remain private")),
+            "Accountverwijdering gestopt door gekoppelde databasegegevens.",
+        ),
+    ):
+        for routes, endpoint, payload in (
+            (
+                platform_routes, platform_routes.delete_platform_user,
+                platform_routes.PlatformUserDeleteRequest(confirmation="VERWIJDER target@example.test"),
+            ),
+            (
+                consumer_routes, consumer_routes.permanently_delete_my_account,
+                consumer_routes.ConsumerAccountDeleteRequest(
+                    current_password="CorrectPassword123!",
+                    confirmation="VERWIJDER MIJN ACCOUNT",
+                ),
+            ),
+        ):
+            events = []
+
+            class Transaction:
+                def __enter__(self):
+                    events.append("begin")
+                    return object()
+
+                def __exit__(self, error_type, _error_value, _traceback):
+                    events.append("rollback" if error_type else "commit")
+                    return False
+
+            class Stage:
+                def restore(self):
+                    events.append("restore")
+
+                def finalize(self):
+                    events.append("finalize")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(routes, "engine", SimpleNamespace(begin=lambda: Transaction()))
+                patch.setattr(routes, "HouseholdFileStage", Stage)
+                if routes is platform_routes:
+                    patch.setattr(
+                        routes, "require_platform_permission_from_session",
+                        lambda _permission: SimpleNamespace(user_id="platform-actor", context_type="none"),
+                    )
+                    patch.setattr(
+                        routes, "delete_platform_managed_account",
+                        lambda _conn, **_kwargs: (_ for _ in ()).throw(error),
+                    )
+                    invoke = lambda: endpoint("target-user", payload)
+                else:
+                    patch.setattr(
+                        routes, "resolve_current_server_session",
+                        lambda: SimpleNamespace(user_id="target-user", context_type="regular"),
+                    )
+                    patch.setattr(
+                        routes, "delete_consumer_account",
+                        lambda _conn, **_kwargs: (_ for _ in ()).throw(error),
+                    )
+                    invoke = lambda: endpoint(payload, Response())
+
+                with pytest.raises(HTTPException) as caught:
+                    invoke()
+                assert caught.value.status_code == 409
+                assert expected_message in caught.value.detail
+                assert "Foreign key constraint details" not in caught.value.detail
+                assert events == ["begin", "rollback", "restore"]
