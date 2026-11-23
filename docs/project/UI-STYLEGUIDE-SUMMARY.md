@@ -14,6 +14,12 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Tabelcentrering: Platformbeheer → Gebruikers — 23 november 2026
+
+Als een tabelgroep smaller is dan de beschikbare hoofdinhoud, wordt deze in beginsel **horizontaal gecentreerd**. Een bewust schermvullende tabel of tabel met horizontale scrollruimte behoudt de benodigde breedte en bediening; deze regel veroorzaakt geen globale wijziging aan `Table` of `DataTable`.
+
+In **Platformbeheer → Gebruikers** heeft de tabelgroep maximaal 930 px breedte en staat deze met `margin-inline: auto` gecentreerd in de scherminhoud. Selectie van alle rijen, tabel, paginering en bulkacties blijven samen in dezelfde breedte. Op smalle schermen blijft de groep 100% van de beschikbare breedte gebruiken. Kolomuitlijning, filters, sortering, permissies, gegevens en gebruikersacties veranderen niet. De uitlijning wordt in de bestaande Playwright-test zowel op 1440 px als 390 px gecontroleerd.
+
 ## Artikelbeheer: centrale classificatie- en synoniemacties — 19 november 2026
 
 Catalogus heeft op desktop én mobiel geen aparte bulkknoppen meer voor **Artikelclassificaties toekennen** en **Synoniemenanalyse**. De Cataloguslijst en detailnavigatie blijven ongewijzigd; beveiligde diepe links blijven bereikbaar voor bestaande verwijzingen.
