@@ -11,6 +11,7 @@ on:
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/tests/test_authorization_membership_routes.py'
       - 'backend/tests/consumer_account_deletion_selftest.py'
+      - 'backend/tests/test_consumer_account_file_deletion_roots.py'
       - 'backend/tests/test_platform_household_reset_contract.py'
       - 'backend/app/services/household_reset_service.py'
       - 'backend/alembic/versions/20261123_01_scoped_direct_household_reset.py'
@@ -59,6 +60,7 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_authorization_membership_ci
       REZZERV_DATASTORE_POLICY: postgresql-only
       RECEIPT_STORAGE_ROOT: /tmp/rezzerv-authorization-membership-receipts/raw
+      RETAILER_RECEIPT_STORAGE_ROOT: /tmp/rezzerv-authorization-membership-retailer-receipts/raw
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
     defaults:
       run:
@@ -131,6 +133,9 @@ jobs:
             tests/test_external_database_route_authorization.py \
             tests/test_server_session_runtime_membership_schema.py \
             tests/test_session_request_context.py
+
+      - name: Verify account file deletion isolates both storage roots
+        run: python -m pytest -q tests/test_consumer_account_file_deletion_roots.py
 
       - name: Verify account deletion and household preservation in isolated PostgreSQL
         run: |
