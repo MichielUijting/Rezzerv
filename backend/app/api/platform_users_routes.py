@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+import logging
+
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
 
 from app.db import engine
@@ -13,6 +16,10 @@ from app.services.consumer_account_deletion_service import (
 from app.services.consumer_account_file_deletion_service import (
     HouseholdFileStage,
     AccountFileDeletionConflict,
+)
+from app.services.household_reset_service import (
+    HouseholdResetConflictError,
+    HouseholdResetNotFoundError,
 )
 from app.services.platform_user_suspension_service import (
     PlatformUserConflictError,
@@ -28,6 +35,7 @@ PLATFORM_USERS_SUSPEND_PERMISSION = "platform.users.suspend"
 PLATFORM_USERS_DELETE_PERMISSION = "platform.users.delete"
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class PlatformUserDeleteRequest(BaseModel):
@@ -146,8 +154,26 @@ def delete_platform_user(user_id: str, payload: PlatformUserDeleteRequest) -> di
             stage.restore()
             raise
         stage.finalize()
-    except (AccountDeletionConflictError, AccountFileDeletionConflict) as exc:
+    except (
+        AccountDeletionConflictError,
+        AccountFileDeletionConflict,
+        HouseholdResetConflictError,
+        HouseholdResetNotFoundError,
+    ) as exc:
+        # A household reset can be safely refused after preview. It is a
+        # conflict, not an unexplained server crash or a partial deletion.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        # A legacy/database-only reference may reject the final DELETE. The
+        # transaction is rolled back and staged files are restored above.
+        logger.exception("ACCOUNT_DELETE_REFERENTIAL_INTEGRITY_BLOCKED")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Accountverwijdering gestopt door gekoppelde databasegegevens. "
+                "Er is niets verwijderd; huishoudgegevens blijven behouden."
+            ),
+        ) from exc
     return {
         **outcome, "message": "Gebruiker definitief verwijderd.",
         "household_context_used": False, "context_type": context.context_type,
