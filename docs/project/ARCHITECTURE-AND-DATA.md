@@ -4,6 +4,8 @@
 
 Rezzerv bestaat uit een React/Vite-frontend, FastAPI-backend, PostgreSQL 17, Docker Compose-runtime en GitHub Actions-gates.
 
+**Toekomstontwerp, niet huidig gedrag:** [centrale hosting, mobiele apps en winkelkoppelingen](TOEKOMSTARCHITECTUUR-HOSTING-MOBIELE-APPS-WINKELKOPPELINGEN.md). De huidige lokale Docker-/Tailscale-werkwijze, gegevensopslag en winkelkoppelingen worden hierdoor niet gewijzigd.
+
 Normale lokale runtime wordt gestart via `start.bat` en gebruikt gezamenlijk `docker-compose.yml`, `docker-compose.postgresql.yml` en Compose-profile `postgresql`.
 
 Standaard lokale bindings:
