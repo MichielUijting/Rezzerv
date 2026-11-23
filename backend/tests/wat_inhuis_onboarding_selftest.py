@@ -97,6 +97,8 @@ def run() -> int:
                 json=_profile_payload(),
             )
             assert forged.status_code == 401
+            anonymous_quick = anonymous.post("/api/onboarding/quick-start", json={"household_name": "Fout"})
+            assert anonymous_quick.status_code == 401
         checks.append("forged_bearer_cannot_complete_wat_inhuis")
 
         with TestClient(app) as member:
@@ -107,6 +109,8 @@ def run() -> int:
             assert login.status_code == 200
             forbidden = member.post("/api/onboarding/wat-inhuis", json=_profile_payload())
             assert forbidden.status_code == 403
+            forbidden_quick = member.post("/api/onboarding/quick-start", json={"household_name": "Fout"})
+            assert forbidden_quick.status_code == 403
         checks.append("member_cannot_change_wat_inhuis_configuration")
 
         with TestClient(app) as consumer:
@@ -209,6 +213,46 @@ def run() -> int:
             duplicate = returning.post("/api/onboarding/wat-inhuis", json=_profile_payload())
             assert duplicate.status_code == 409
         checks.append("completed_wat_inhuis_survives_login_and_cannot_restart")
+
+        with TestClient(app) as fast_household:
+            reg = fast_household.post(
+                "/api/auth/register",
+                json={"email": "snel-huishouden@example.com", "password": "SterkWachtwoord123!"},
+            )
+            assert reg.status_code == 201, reg.text
+            quick_id = str(reg.json()["active_household_id"])
+            # The server dictates Alleen: client cannot smuggle 'together'.
+            forged_mode = fast_household.post(
+                "/api/onboarding/quick-start",
+                json={"household_name": "Klein huishouden", "household_usage_mode": "together"},
+            )
+            assert forged_mode.status_code == 422
+            before = fast_household.get("/api/onboarding")
+            assert before.status_code == 200
+            assert before.json()["onboarding_status"] == "not_started"
+            completed = fast_household.post(
+                "/api/onboarding/quick-start",
+                json={"household_name": "Klein huishouden"},
+            )
+            assert completed.status_code == 200, completed.text
+            quick = completed.json()
+            assert quick["onboarding_status"] == "completed"
+            assert quick["primary_use_case"] == "wat_inhuis"
+            assert quick["household_usage_mode"] == "alone"
+            assert quick["household_name"] == "Klein huishouden"
+            assert quick["product_configuration"]["inventory_tracking_level"] == "quantity"
+            assert quick["product_configuration"]["location_tracking_level"] == "none"
+            assert quick["product_configuration"]["receipt_processing_enabled"] is True
+            repeated = fast_household.post(
+                "/api/onboarding/quick-start",
+                json={"household_name": "Overnamepoging"},
+            )
+            assert repeated.status_code == 409
+            with engine.begin() as conn:
+                stored = resolve_household_onboarding_state(conn, quick_id)
+                assert stored.household_name == "Klein huishouden"
+                assert stored.household_usage_mode == "alone"
+        checks.append("quick_start_is_authorized_atomic_and_cannot_override_or_replay")
 
         with TestClient(app) as other_profile:
             registration = other_profile.post(
