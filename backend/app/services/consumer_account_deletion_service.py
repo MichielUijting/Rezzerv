@@ -15,7 +15,9 @@ from sqlalchemy.engine import Connection
 from app.services.authorization_foundation_service import resolve_active_platform_role_keys
 from app.services.authorization_membership_service import resolve_effective_household_role
 from app.services.household_reset_service import reset_household_data
-from app.services.consumer_account_file_deletion_service import HouseholdFileStage, AccountFileDeletionConflict
+from app.services.consumer_account_file_deletion_service import (
+    HouseholdFileStage, AccountFileDeletionConflict, household_file_paths,
+)
 from app.services.password_service import verify_password
 
 CONFIRMATION = "VERWIJDER MIJN ACCOUNT"
@@ -191,8 +193,9 @@ def _guard_sole_household_files(conn: Connection, hid: str) -> None:
     """Fail closed if any persisted receipt content would outlive the account."""
     if not hid or Path(hid).name != hid or hid in {".", "..", "0"}:
         raise AccountDeletionConflictError("Ongeldige huishoudenidentiteit bij bestandscontrole.")
-    receipt_root = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
-    dirs = (receipt_root / hid, receipt_root.parent / "sources" / hid)
+    # The same policy as staged deletion applies even to callers that don't
+    # supply a file stage; otherwise retailer receipts could be orphaned.
+    dirs = household_file_paths(hid)
     for directory in dirs:
         try:
             if directory.exists() and any(path.is_file() for path in directory.rglob("*")):
