@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { buildArticleRelationshipGraph } from '../../src/features/externalDatabases/articleRelationshipModel.js'
 
+// Presence heartbeats refresh only cookie liveness; they are not Catalogus
+// writes. All other non-GET API requests remain subject to mutation assertions.
+
 test.use({ storageState: { cookies: [], origins: [] } })
 
 // Mock the asynchronous, authenticated background-job contract. These tests
@@ -621,7 +624,7 @@ test('Matchen voert bewezen bonnamen automatisch bij toegang uit tot geen matche
   let finished = false
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
-    if (route.request().method() !== 'GET') writes.push(path)
+    if (route.request().method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
     if (path === '/api/catalog/ed2/bonnamen-matchen/progress')
       return route.fulfill({ json: finished ? matchingJob({ matched: 1, pass: 2 })
         : { ok: false, state: 'not_started' } })
@@ -705,7 +708,7 @@ test('Matchen: serverfout blokkeert de handmatige lijst en kan opnieuw controler
   let previews = 0
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
-    if (route.request().method() !== 'GET') writes.push(path)
+    if (route.request().method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
     if (path === '/api/catalog/ed2/bonnamen-matchen/progress/start') {
       if (failFirst) {
         failFirst = false
@@ -761,7 +764,9 @@ test('AH HV MELK: geblokkeerde varianten hebben per bonartikel een blijvende uit
   ]
   const writes = []
   await page.route('**/api/**', (route) => {
-    if (route.request().method() !== 'GET') writes.push(route.request().url())
+    if (route.request().method() !== 'GET' && new URL(route.request().url()).pathname !== '/api/session/heartbeat') {
+      writes.push(route.request().url())
+    }
     return bootstrap(route, rows, [], (request) => request.fulfill({ json: {} }))
   })
   await page.goto('/externe-databases-2')
@@ -932,7 +937,7 @@ test('Overzicht: echte Catalogusmatches, directe synoniemen en onbewezen namen b
   const writes = []
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
-    if (route.request().method() !== 'GET') writes.push(path)
+    if (route.request().method() !== 'GET' && path !== '/api/session/heartbeat') writes.push(path)
     if (path === '/api/external-databases/article-synonyms/analysis') {
       return route.fulfill({ json: { items: relationshipProducts } })
     }
