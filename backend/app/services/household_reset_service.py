@@ -368,6 +368,15 @@ def reset_household_data(
         )
         if not predicate:
             continue
+        # The normal Direct-location DELETE trigger must remain immutable.
+        # Only the explicit, server-authorized complete household reset may
+        # remove the Direct location, scoped to this one SQL statement and
+        # household. A failed statement rolls back the transaction-local GUC.
+        direct_reset = table_name == "spaces" and conn.dialect.name == "postgresql"
+        if direct_reset:
+            conn.execute(text(
+                "SELECT set_config('inhuis.household_reset_target', :household_id, true)"
+            ), {"household_id": target})
         result = conn.execute(
             text(
                 f"DELETE FROM {_quote(conn, table_name)} AS target "
@@ -375,6 +384,10 @@ def reset_household_data(
             ),
             {"household_id": target},
         )
+        if direct_reset:
+            conn.execute(text(
+                "SELECT set_config('inhuis.household_reset_target', '', true)"
+            ))
         if int(result.rowcount or 0):
             deleted_by_table[table_name] = int(result.rowcount or 0)
 

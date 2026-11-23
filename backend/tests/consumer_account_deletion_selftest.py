@@ -5,6 +5,7 @@ import os
 import uuid
 from pathlib import Path
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import DBAPIError
 
 from app.services.consumer_account_file_deletion_service import (
     HouseholdFileStage,
@@ -342,6 +343,7 @@ def run() -> int:
         solo_platform_user = _id("platform-solo-user")
         solo_platform_email = solo_platform_user + "@example.test"
         solo_platform_household = _id("platform-solo-household")
+        solo_direct_space = _id("direct-space")
         solo_platform_file = receipt_root / solo_platform_household / "test-receipt.txt"
         solo_platform_file.parent.mkdir(parents=True, exist_ok=True)
         solo_platform_file.write_text("isolated-platform-deletion-fixture", encoding="utf-8")
@@ -352,6 +354,12 @@ def run() -> int:
             seed_membership(conn, membership_id=_id("membership"),
                             household_id=solo_platform_household, user_id=solo_platform_user,
                             email=solo_platform_email, role="admin")
+            # Canonical Direct exists in real onboarded households. The
+            # ordinary DELETE trigger forbids removing this location.
+            conn.execute(text("""
+                INSERT INTO spaces(id, naam, household_id, active, is_direct)
+                VALUES (:id, 'Direct', :hid, TRUE, 1)
+            """), {"id": solo_direct_space, "hid": solo_platform_household})
             conn.execute(text("""
                 INSERT INTO raw_receipts(
                     id, household_id, source_id, original_filename,
@@ -368,6 +376,18 @@ def run() -> int:
                 "sha": "c" * 64,
             })
             assert deletion_preview(conn, user_id=solo_platform_user)["households_to_delete"] == 1
+
+        # Outside a full household reset, deleting Direct must still fail.
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("DELETE FROM spaces WHERE id=:id"), {"id": solo_direct_space})
+        except DBAPIError as exc:
+            assert "Direct is een vaste locatie" in str(exc)
+        else:
+            raise AssertionError("Ordinary Direct DELETE bypassed canonical immutable trigger")
+        with engine.connect() as conn:
+            assert _count(conn, "spaces", "id=:id", {"id": solo_direct_space}) == 1
+        checks.append("canonical_direct_location_immutable_outside_full_reset")
 
         solo_stage = HouseholdFileStage()
         try:
@@ -389,9 +409,10 @@ def run() -> int:
             assert _count(conn, "app_users", "id=:uid", {"uid": solo_platform_user}) == 0
             assert _count(conn, "household_registry", "id=:hid", {"hid": solo_platform_household}) == 0
             assert _count(conn, "raw_receipts", "household_id=:hid", {"hid": solo_platform_household}) == 0
+            assert _count(conn, "spaces", "id=:id", {"id": solo_direct_space}) == 0
             assert _count(conn, "app_users", "id=:uid", {"uid": platform_actor}) == 1
             assert _count(conn, "household_registry", "id=:hid", {"hid": shared}) == 1
-        checks.append("platform_delete_sole_household_with_receipt_atomic_postgresql")
+        checks.append("platform_delete_sole_household_with_direct_and_receipt_atomic_postgresql")
 
     finally:
         engine.dispose()
