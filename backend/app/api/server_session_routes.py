@@ -30,6 +30,7 @@ from app.services.server_session_service import (
     membership_active_condition,
     membership_id_expression,
     membership_user_join_condition,
+    mark_session_frontend_alive,
     public_session_payload,
     resolve_server_session,
     revoke_server_session,
@@ -402,7 +403,7 @@ def create_server_session_router(
     router = APIRouter()
 
     @router.post("/api/auth/register", status_code=201)
-    def register(payload: SessionRegisterRequest, response: Response):
+    def register(payload: SessionRegisterRequest, request: Request, response: Response):
         try:
             with engine.begin() as conn:
                 account = provision_new_consumer_account(
@@ -434,6 +435,8 @@ def create_server_session_router(
                             product_configuration
                         ),
                     }
+                # A browser has one cookie identity, even during registration.
+                revoke_server_session(conn, request.cookies.get(SESSION_COOKIE_NAME))
         except ConsumerAccountExistsError as exc:
             raise HTTPException(
                 status_code=409,
@@ -443,7 +446,7 @@ def create_server_session_router(
         return session_payload
 
     @router.post("/api/auth/login")
-    def login(payload: SessionLoginRequest, response: Response):
+    def login(payload: SessionLoginRequest, request: Request, response: Response):
         with engine.begin() as conn:
             identity = _resolve_login_identity(conn, payload.email, payload.password)
             if identity.get("platform_system_context"):
@@ -466,8 +469,18 @@ def create_server_session_router(
                     replace_existing=True,
                 )
             session_payload = _public_session_payload_with_live_household_name(conn, context)
+            # Only after valid credentials and new session: retire prior account
+            # identity when the browser switches from IP-owner to Platformbeheer.
+            revoke_server_session(conn, request.cookies.get(SESSION_COOKIE_NAME))
         _set_session_cookie(response, raw_session_id, configuration)
         return session_payload
+
+    @router.post("/api/session/heartbeat", status_code=204)
+    def heartbeat(request: Request):
+        with engine.begin() as conn:
+            context = resolve_server_session(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            mark_session_frontend_alive(conn, session_id=context.session_id)
+        return Response(status_code=204)
 
     @router.get("/api/session")
     def get_session(request: Request):

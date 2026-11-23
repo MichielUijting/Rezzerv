@@ -203,6 +203,8 @@ def test_platform_admin_lists_only_active_sessions_with_safe_projection(
             "email",
             "issued_at",
             "expires_at",
+            "last_seen_at",
+            "frontend_active",
             "is_current",
         }
         serialized = repr(item)
@@ -213,6 +215,7 @@ def test_platform_admin_lists_only_active_sessions_with_safe_projection(
 
     current = next(item for item in payload["items"] if item["is_current"])
     assert current["session_id"] == "session-platform-admin"
+    assert current["frontend_active"] is True
 
 
 def test_platform_admin_revokes_target_by_internal_id_without_touching_current_session(
@@ -329,3 +332,27 @@ def test_invalid_server_session_remains_401(monkeypatch, auth_engine):
         platform_sessions_routes.get_platform_sessions()
     assert exc.value.status_code == 401
     assert exc.value.detail == "Ongeldige of verlopen sessie"
+
+
+def test_stale_frontend_is_visible_as_inactive_but_remains_revocable(
+    monkeypatch, auth_engine,
+):
+    _bind_context(monkeypatch, auth_engine, "platform-admin")
+    with auth_engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE server_sessions SET updated_at=:stale
+            WHERE id='session-target-active'
+        """), {"stale": datetime.now(timezone.utc) - timedelta(minutes=5)})
+
+    payload = platform_sessions_routes.get_platform_sessions()
+    stale = next(item for item in payload["items"]
+                 if item["session_id"] == "session-target-active")
+    assert stale["frontend_active"] is False
+    assert stale["last_seen_at"]
+    assert stale["is_current"] is False
+    revoked = platform_sessions_routes.revoke_platform_session("session-target-active")
+    assert revoked["item"]["revoked_at"]
+    assert {item["session_id"] for item in
+            platform_sessions_routes.get_platform_sessions()["items"]} == {
+        "session-platform-admin"
+    }

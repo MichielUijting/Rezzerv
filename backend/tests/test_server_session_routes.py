@@ -18,7 +18,7 @@ from app.services.frontteam_household_provisioning import (
     frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
-from app.services.server_session_service import resolve_server_session
+from app.services.server_session_service import resolve_server_session, hash_session_id
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
@@ -538,5 +538,45 @@ def test_secure_cookie_can_be_enabled_for_non_local_runtime():
         assert "secure" in set_cookie
         assert "httponly" in set_cookie
         assert "samesite=strict" in set_cookie
+    finally:
+        engine.dispose()
+
+
+
+def test_switching_from_ip_owner_to_platform_admin_retires_previous_browser_session():
+    client, engine = build_client()
+    try:
+        owner = client.post("/api/auth/login", json={
+            "email": "ip-owner@example.test", "password": "Rezzerv123",
+        })
+        assert owner.status_code == 200
+        assert owner.json()["context_type"] == "none"
+        old_cookie = owner.cookies.get("rezzerv_session")
+        assert old_cookie
+        assert client.post("/api/session/heartbeat").status_code == 204
+
+        bad = client.post("/api/auth/login", json={
+            "email": "platform@example.test", "password": "wrong-password",
+        })
+        assert bad.status_code == 401
+        assert client.get("/api/session").json()["user_id"] == "u-ip-owner"
+
+        admin = client.post("/api/auth/login", json={
+            "email": "platform@example.test", "password": "Rezzerv123",
+        })
+        assert admin.status_code == 200
+        assert admin.json()["user_id"] == "u-platform"
+        assert admin.cookies.get("rezzerv_session") != old_cookie
+        assert client.post("/api/session/heartbeat").status_code == 204
+        with engine.connect() as conn:
+            stale = conn.execute(text("""
+                SELECT user_id, revoked_at FROM server_sessions
+                WHERE session_token_hash=:token_hash
+            """), {"token_hash": hash_session_id(old_cookie)}).mappings().one()
+            assert stale["user_id"] == "u-ip-owner"
+            assert stale["revoked_at"] is not None
+        assert client.get("/api/session").json()["user_id"] == "u-platform"
+        assert client.post("/api/auth/logout").status_code == 204
+        assert client.post("/api/session/heartbeat").status_code == 401
     finally:
         engine.dispose()

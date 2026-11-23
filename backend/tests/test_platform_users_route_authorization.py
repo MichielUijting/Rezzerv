@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import StaticPool
 
 from app.api.platform_users_routes import PLATFORM_USERS_SUSPEND_PERMISSION, PLATFORM_USERS_DELETE_PERMISSION
-from app.services.authorization_foundation_service import ROLE_PERMISSIONS
+from app.services.authorization_foundation_service import ROLE_PERMISSIONS, ensure_authorization_foundation
 from app.services.platform_user_suspension_service import (
     PlatformUserConflictError,
     ensure_user_account_status_schema,
@@ -17,6 +17,8 @@ from app.services.platform_user_suspension_service import (
     unsuspend_platform_user,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.authorization_schema_fixture import install_authorization_schema
+from app.services.consumer_account_deletion_service import AccountDeletionConflictError, deletion_preview
 
 
 def _engine():
@@ -40,6 +42,8 @@ def _create_canonical_users(conn):
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     """))
+    install_authorization_schema(conn)
+    ensure_authorization_foundation(conn)
 
 
 def _insert_user(conn, user_id: str, email: str):
@@ -129,6 +133,8 @@ def test_user_inventory_is_read_only_safe_projection():
         assert target["is_current"] is False
         assert target["active_session_count"] == 1
         assert target["account_status"] == "active"
+        assert target["is_protected"] is False
+        assert target["protection_reason"] is None
         assert set(target) == {
             "user_id",
             "email",
@@ -136,6 +142,8 @@ def test_user_inventory_is_read_only_safe_projection():
             "suspended_at",
             "active_session_count",
             "is_current",
+            "is_protected",
+            "protection_reason",
         }
         rendered = repr(items).lower()
         assert "secret-password-value" not in rendered
@@ -326,3 +334,68 @@ def test_platform_deletion_route_permission_and_server_derived_actor(monkeypatch
         routes.delete_platform_user("target-user", payload)
     assert denied.value.status_code == 403
     assert len([entry for entry in calls if entry[0] == "delete"]) == 1
+
+
+
+@pytest.mark.parametrize("roles,reason", [
+    (("platform.ip_owner",), "IP-eigenaar"),
+    (("platform.superuser",), "Superuser"),
+    (("platform.superuser", "platform.platform_admin"), "Superuser"),
+])
+def test_protected_platform_accounts_cannot_be_suspended_or_deleted(roles, reason):
+    engine = _engine()
+    now = datetime(2026, 11, 23, 13, 0, tzinfo=timezone.utc)
+    with engine.begin() as conn:
+        _create_canonical_users(conn)
+        _insert_user(conn, "actor", "actor@example.test")
+        _insert_user(conn, "protected", "protected@example.test")
+        create_server_session_contract_schema(conn)
+        _insert_active_session(conn, record_id="protected-session", user_id="protected", now=now)
+        for role in roles:
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('protected', :role, TRUE)
+            """), {"role": role})
+        before = conn.execute(text("""
+            SELECT account_status, suspended_at FROM app_users WHERE id='protected'
+        """)).mappings().one()
+        items = list_platform_users(conn, current_user_id="actor", now=now)
+        protected = next(item for item in items if item["user_id"] == "protected")
+        assert protected["is_protected"] is True
+        assert protected["protection_reason"] == reason
+        assert protected["active_session_count"] == 1
+
+        with pytest.raises(PlatformUserConflictError, match="IP-eigenaar en Superuser"):
+            suspend_platform_user(conn, "protected", actor_user_id="actor", now=now)
+        with pytest.raises(AccountDeletionConflictError, match="actieve platformrol"):
+            deletion_preview(conn, user_id="protected")
+
+        after = conn.execute(text("""
+            SELECT account_status, suspended_at FROM app_users WHERE id='protected'
+        """)).mappings().one()
+        assert dict(before) == dict(after)
+        assert conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions
+            WHERE user_id='protected' AND revoked_at IS NULL
+        """)).scalar_one() == 1
+
+
+def test_stale_cookie_is_not_counted_as_active_frontend():
+    engine = _engine()
+    now = datetime(2026, 11, 23, 13, 0, tzinfo=timezone.utc)
+    with engine.begin() as conn:
+        _create_canonical_users(conn)
+        _insert_user(conn, "actor", "actor@example.test")
+        _insert_user(conn, "target", "target@example.test")
+        create_server_session_contract_schema(conn)
+        _insert_active_session(conn, record_id="stale", user_id="target", now=now)
+        conn.execute(text("""
+            UPDATE server_sessions SET updated_at=:stale
+            WHERE id='stale'
+        """), {"stale": now - timedelta(minutes=5)})
+        item = next(x for x in list_platform_users(conn, current_user_id="actor", now=now)
+                    if x["user_id"] == "target")
+        assert item["active_session_count"] == 0
+        assert conn.execute(text("""
+            SELECT revoked_at FROM server_sessions WHERE id='stale'
+        """)).scalar_one() is None

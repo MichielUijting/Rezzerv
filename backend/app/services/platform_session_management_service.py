@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+
+from app.services.server_session_service import FRONTEND_ACTIVITY_GRACE
 from typing import Any
 
 from sqlalchemy import text
@@ -36,13 +38,15 @@ def _iso_datetime(value: Any) -> str:
     return _normalize_datetime(value).isoformat()
 
 
-def _safe_session_item(row: Any, *, current_session_id: str) -> dict:
+def _safe_session_item(row: Any, *, current_session_id: str, seen_after: datetime) -> dict:
     return {
         "session_id": str(row["id"]),
         "user_id": str(row["user_id"]),
         "email": str(row["email"]),
         "issued_at": _iso_datetime(row["issued_at"]),
         "expires_at": _iso_datetime(row["expires_at"]),
+        "last_seen_at": _iso_datetime(row["updated_at"]),
+        "frontend_active": _normalize_datetime(row["updated_at"]) >= seen_after,
         "is_current": str(row["id"]) == str(current_session_id),
     }
 
@@ -54,9 +58,10 @@ def list_platform_sessions(
     now: datetime | None = None,
 ) -> list[dict]:
     current = now or utc_now()
+    seen_after = current - FRONTEND_ACTIVITY_GRACE
     rows = conn.execute(
         text("""
-            SELECT s.id, s.user_id, u.email, s.issued_at, s.expires_at
+            SELECT s.id, s.user_id, u.email, s.issued_at, s.expires_at, s.updated_at
             FROM server_sessions s
             JOIN app_users u ON u.id = s.user_id
             WHERE s.revoked_at IS NULL
@@ -66,7 +71,7 @@ def list_platform_sessions(
         {"now": current},
     ).mappings().all()
     return [
-        _safe_session_item(row, current_session_id=current_session_id)
+        _safe_session_item(row, current_session_id=current_session_id, seen_after=seen_after)
         for row in rows
     ]
 
