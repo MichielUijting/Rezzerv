@@ -11,7 +11,8 @@ for (const width of [390, 1280]) {
       const url = new URL(route.request().url())
       const path = url.pathname
       requests.push(path)
-      if (!['GET', 'HEAD'].includes(route.request().method())) writes.push(path)
+      // A session presence ping is not a classification mutation.
+      if (!['GET', 'HEAD'].includes(route.request().method()) && path !== '/api/session/heartbeat') writes.push(path)
       if (path === '/api/session') return route.fulfill({ json: {
         user_id: 'workqueue-user', active_household_id: '0', context_type: 'system',
         role: 'owner', is_platform_superuser: true, permissions: { 'gpc.update': true },
