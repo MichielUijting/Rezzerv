@@ -9,7 +9,7 @@ function required(name, value) {
   return String(value).trim()
 }
 
-test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable app', async ({ page }) => {
+test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable app', async ({ page }) => {
   const accountEmail = required('PLAYWRIGHT_L4_ONBOARDING_EMAIL', email)
   const accountPassword = required('PLAYWRIGHT_L4_ONBOARDING_PASSWORD', password)
   const expectedHouseholdName = required('PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD', householdName)

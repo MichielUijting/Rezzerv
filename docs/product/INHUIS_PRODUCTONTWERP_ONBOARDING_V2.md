@@ -11,6 +11,21 @@
 
 ---
 
+## PO-besluit 23 november 2026 — snelle onboarding voor nieuwe gebruikers
+
+Dit besluit is **nieuwer dan** de oorspronkelijke vragenwizard in hoofdstuk 4, 5 en 7 en vervangt die vragen voor de standaardinstroom van een nieuwe gebruiker.
+
+- Het eerste scherm combineert **e-mailadres**, één **wachtwoord** (minimaal 10 tekens) en een vooraf ingevulde, aanpasbare **huishoudnaam** (standaard `Mijn huishouden`). Er is één primaire actie: **Start Inhuis**. Geen afzonderlijke wachtwoordherhaling of vervolgwizard.
+- Het **startprofiel is standaard Wat Inhuis**, met **voorraad inclusief aantallen**. De gebruiker hoeft geen startprofiel en geen voorraadregistratieniveau te kiezen.
+- Het huishouden begint **Alleen**. Samen gebruiken en iemand uitnodigen blijft mogelijk via de bestaande huishoudinstellingen, niet als voorwaarde bij de eerste start.
+- Bijna op, Winkelen en Kassa/bonverwerking worden met de standaardconfiguratie beschikbaar gemaakt, zonder extra onboardingvragen. Er zijn geen verplichte locaties/sublocaties.
+- Registratie en de standaardinrichting gebeuren in **één servertransactie**. De pagina ververst niet en verschijnt niet als reeks losse formulieren.
+- **Pas ná** het afronden van account en huishouden verschijnt de bestaande, optionele stap **Winkels koppelen** voor Albert Heijn, Lidl en Jumbo, met **Later**. Nooit vóór het huishouden.
+- Alleen nieuwe, nog niet ingerichte huishoudens gebruiken deze snelle standaardroute. Reeds begonnen alternatieve profieltrajecten kunnen hun bestaande stap afronden; bestaande gebruikers/huishoudens en specifieke uitnodigingsregistratie worden niet opnieuw ingesteld.
+- Gebruikers kunnen later vanuit Instellingen hun huishouden, mogelijkheden en locatiegedrag aanpassen. Autorisatie blijft volledig gescheiden van gebruiksprofiel.
+
+De tekst op het beginscherm is bewust minimaal: veldlabels, één korte regel over de defaults en de hoofdactie. Extra verklarende blokken en keuzeoverzichten zijn geen onderdeel van deze standaardinstroom.
+
 ## 1. Productuitgangspunt
 
 Inhuis wordt **geen brede app die iedere gebruiker standaard alle functies aanbiedt**.

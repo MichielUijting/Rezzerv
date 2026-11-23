@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+function read(relative) {
+  return readFileSync(new URL('../' + relative, import.meta.url), 'utf8')
+}
+const registration = read('src/features/auth/RegisterPage.jsx')
+const quickView = read('src/features/onboarding/QuickStartOnboardingPage.jsx')
+const onboarding = read('src/features/onboarding/OnboardingPage.jsx')
+const state = read('src/features/onboarding/onboardingState.js')
+const router = read('src/app/router/AppRouter.jsx')
+const backend = read('../backend/app/api/server_session_routes.py')
+const defaultService = read('../backend/app/services/quick_start_onboarding_service.py')
+const receiptStep = read('src/features/storeConnections/StoreConnectionsPage.jsx')
+
+assert.match(registration, /data-testid="quick-start-registration"/)
+for (const field of ['register-email', 'register-password', 'register-household-name']) {
+  assert.ok(registration.includes('data-testid="' + field + '"'), 'Missing one-screen field: ' + field)
+}
+assert.doesNotMatch(registration, /register-password-repeat|setPasswordRepeat/)
+assert.match(registration, /quick_start: true/)
+assert.match(registration, /data-testid="register-quick-start-defaults"/)
+assert.match(registration, /Start Inhuis/)
+assert.match(registration, /householdName.*useState\('Mijn huishouden'\)/)
+assert.match(backend, /quick_start: bool = False/)
+assert.match(backend, /complete_default_wat_inhuis_onboarding/)
+assert.match(defaultService, /primary_use_case="wat_inhuis"/)
+assert.match(defaultService, /inventory_tracking_level="quantity"/)
+assert.match(defaultService, /household_usage_mode="alone"/)
+assert.match(defaultService, /global_locations_enabled=False/)
+assert.match(defaultService, /almost_out_enabled=True/)
+assert.match(defaultService, /shopping_enabled=True/)
+assert.match(router, /shouldOfferStoreConnectionOnboarding\(completedOnboarding\)/)
+assert.match(onboarding, /data-testid="onboarding-use-case-page"/)
+assert.match(onboarding, /showQuickStart \?/)
+assert.match(quickView, /data-testid="onboarding-quick-start-submit"/)
+assert.match(state, /'\/api\/onboarding\/quick-start'/)
+assert.match(receiptStep, /data-testid="onboarding-stores-step"/)
+assert.match(receiptStep, /data-testid="onboarding-stores-later"/)
+console.log('ONBOARDING_QUICK_START_ONE_SCREEN_CONTRACT_GREEN')

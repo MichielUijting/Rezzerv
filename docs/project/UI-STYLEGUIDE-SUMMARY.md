@@ -14,6 +14,12 @@ Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
 
+## Snelle onboarding op één scherm — 23 november 2026
+
+Voor nieuwe reguliere accounts toont **Account maken** uitsluitend de invoervelden **E-mailadres**, **Wachtwoord** en **Huishouden** (vooraf ingevuld: Mijn huishouden), één korte informatieve regel **Wat Inhuis · Aantallen · Alleen** en één primaire actie **Start Inhuis**. Het gebruiksprofiel en de aantallen worden standaard toegepast; de gebruiker hoeft daarvoor geen radioknoppen te bedienen. Geen afzonderlijke wachtwoordherhaling of verklarende kaarten. Na voltooide account- en huishoudinrichting volgt afzonderlijk **Winkels koppelen**, met de bestaande optie **Later**. De interactie blijft binnen de SPA zonder volledige paginaverversing.
+
+De bestaande gecentreerde Inhuis-invoerkaart, centrale invoer- en knopcomponenten, kleur- en focusregels blijven leidend. Geen nieuw component voor de algemene vormgevingsbasis. Uitnodigingsregistratie en reeds begonnen profieltrajecten behouden hun eigen afhandeling.
+
 ## Artikelbeheer: centrale classificatie- en synoniemacties — 19 november 2026
 
 Catalogus heeft op desktop én mobiel geen aparte bulkknoppen meer voor **Artikelclassificaties toekennen** en **Synoniemenanalyse**. De Cataloguslijst en detailnavigatie blijven ongewijzigd; beveiligde diepe links blijven bereikbaar voor bestaande verwijzingen.
