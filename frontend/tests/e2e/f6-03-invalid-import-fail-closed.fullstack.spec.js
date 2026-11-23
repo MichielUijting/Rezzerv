@@ -14,43 +14,45 @@ function required(name, value) {
 }
 
 async function registerHousehold(page, accountEmail, accountPassword, expectedHouseholdName) {
+  // Standard consumer onboarding is one atomic registration request.
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
   await page.getByTestId('register-email').fill(accountEmail)
   await page.getByTestId('register-password').fill(accountPassword)
-  await page.getByTestId('register-password-repeat').fill(accountPassword)
-  const registrationResponsePromise = page.waitForResponse((response) => response.url().includes('/api/auth/register') && response.request().method() === 'POST')
+  await page.getByTestId('register-household-name').fill(expectedHouseholdName)
+  const registrationResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/auth/register'
+    && response.request().method() === 'POST'
+  ))
   await page.getByTestId('register-submit').click()
-  expect((await registrationResponsePromise).status()).toBe(201)
-
-  await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
-  const primaryResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/primary-use-case') && response.request().method() === 'POST')
-  await page.getByTestId('onboarding-primary-continue').click()
-  expect((await primaryResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-yes').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
-  const productResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/wat-inhuis') && response.request().method() === 'POST')
-  await page.getByTestId('wat-inhuis-finish').click()
-  expect((await productResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
-  await page.getByTestId('shared-household-name').fill(expectedHouseholdName)
-  await page.getByTestId('shared-household-usage-alone').check()
-  const householdResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/shared-household-minimum') && response.request().method() === 'POST')
-  await page.getByTestId('shared-household-finish').click()
-  expect((await householdResponsePromise).ok()).toBeTruthy()
-  // PR4 onboarding now offers store connections before completing the home flow.
-  // These unrelated full-stack authorities intentionally skip that optional
-  // step via the same visible button as an actual household administrator.
-  await expect(page).toHaveURL(new RegExp('/onboarding/winkels$'))
+  const response = await registrationResponsePromise
+  expect(response.status()).toBe(201)
+  const result = await response.json()
+  expect(result.onboarding?.onboarding_status).toBe('completed')
+  expect(result.onboarding?.primary_use_case).toBe('wat_inhuis')
+  expect(result.onboarding?.household_usage_mode).toBe('alone')
+  expect(result.onboarding?.household_name).toBe(expectedHouseholdName)
+  expect(result.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
   await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(new RegExp('/home$'))
+  await expect(page).toHaveURL(/\/home$/)
+
+  // Locations are now an explicit post-onboarding preference, not a first-use question.
+  // Keep this existing receipt/inventory authority's global-location scenario.
+  await page.goto('/instellingen/mogelijkheden')
+  await expect(page.getByTestId('settings-capabilities-page')).toBeVisible()
+  await page.getByTestId('workflow-location-level').selectOption('global')
+  const workflowResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/onboarding/workflow-preferences'
+    && response.request().method() === 'PUT'
+  ))
+  await page.getByTestId('workflow-preferences-save').click()
+  const workflowResponse = await workflowResponsePromise
+  expect(workflowResponse.ok()).toBeTruthy()
+  expect((await workflowResponse.json()).product_configuration?.location_tracking_level).toBe('global')
+  await page.goto('/home')
 }
 
 async function readSession(page) {
