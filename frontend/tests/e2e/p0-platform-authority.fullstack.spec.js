@@ -22,46 +22,28 @@ function required(name, value) {
 }
 
 async function registerRegularHousehold(page, email, password, householdName) {
+  // The one-screen quick start creates account and configured household atomically.
+  // Preserve this P0 journey after the optional store-connection step.
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
+  await expect(page.getByTestId('register-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen')
   await page.getByTestId('register-email').fill(email)
   await page.getByTestId('register-password').fill(password)
-  await page.getByTestId('register-password-repeat').fill(password)
-
-  const registrationResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/auth/register') && response.request().method() === 'POST'
+  await page.getByTestId('register-household-name').fill(householdName)
+  const responsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/auth/register'
+    && response.request().method() === 'POST'
   ))
   await page.getByTestId('register-submit').click()
-  expect((await registrationResponsePromise).status()).toBe(201)
-
-  await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
-  const primaryResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/primary-use-case') && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('onboarding-primary-continue').click()
-  expect((await primaryResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-no').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
-  const productResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/wat-inhuis') && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('wat-inhuis-finish').click()
-  expect((await productResponsePromise).ok()).toBeTruthy()
-
-  await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
-  await page.getByTestId('shared-household-name').fill(householdName)
-  await page.getByTestId('shared-household-usage-alone').check()
-  const householdResponsePromise = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/shared-household-minimum') && response.request().method() === 'POST'
-  ))
-  await page.getByTestId('shared-household-finish').click()
-  expect((await householdResponsePromise).ok()).toBeTruthy()
-  // Other fullstack journeys skip the new optional store setup explicitly.
+  const response = await responsePromise
+  expect(response.status()).toBe(201)
+  const registration = await response.json()
+  expect(registration.onboarding?.onboarding_status).toBe('completed')
+  expect(registration.onboarding?.primary_use_case).toBe('wat_inhuis')
+  expect(registration.onboarding?.household_usage_mode).toBe('alone')
+  expect(registration.onboarding?.household_name).toBe(householdName)
+  expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
   await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
