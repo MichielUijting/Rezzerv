@@ -110,6 +110,15 @@ def run() -> int:
         assert payload["is_platform_superuser"] is False
         assert payload["is_frontteam"] is False
         assert payload["can_manage_members"] is True
+        # Older Android builds omit quick_start. Registration must still
+        # complete all new household defaults in the same transaction.
+        default_onboarding = payload["onboarding"]
+        assert default_onboarding["onboarding_status"] == "completed"
+        assert default_onboarding["primary_use_case"] == "wat_inhuis"
+        assert default_onboarding["household_usage_mode"] == "alone"
+        assert default_onboarding["product_configuration"]["inventory_tracking_level"] == "quantity"
+        assert default_onboarding["product_configuration"]["location_tracking_level"] == "none"
+        assert default_onboarding["product_configuration"]["receipt_processing_enabled"] is True
         raw_session = _cookie_value(registration_response, SESSION_COOKIE_NAME)
         checks.append("new_consumer_registered_and_logged_in")
 
@@ -168,6 +177,25 @@ def run() -> int:
         checks.append("atomic_regular_household_canonical_admin_no_platform_grant")
         checks.append("new_password_hashed_not_plaintext")
         checks.append("registration_session_resolves_server_side")
+        checks.append("old_android_without_flag_gets_completed_quick_start")
+
+        explicitly_legacy_response = Response()
+        explicitly_legacy = register(
+            SessionRegisterRequest(
+                email="oud-client@example.com",
+                password="SterkOudClientWachtwoord123!",
+                household_name="Oud toestel",
+                quick_start=False,
+            ),
+            _empty_request(),
+            explicitly_legacy_response,
+        )
+        assert explicitly_legacy["onboarding"]["onboarding_status"] == "completed"
+        assert explicitly_legacy["onboarding"]["primary_use_case"] == "wat_inhuis"
+        assert explicitly_legacy["onboarding"]["household_usage_mode"] == "alone"
+        assert explicitly_legacy["onboarding"]["product_configuration"]["inventory_tracking_level"] == "quantity"
+        _cookie_value(explicitly_legacy_response, SESSION_COOKIE_NAME)
+        checks.append("old_android_explicit_false_cannot_open_legacy_choices")
 
         quick_registration_response = Response()
         quick_payload = register(
