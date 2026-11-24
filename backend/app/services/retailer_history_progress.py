@@ -27,6 +27,13 @@ _RECEIPT_COUNTS_SQL = text("""
            COUNT(DISTINCT rr.id) AS saved_receipts,
            COUNT(DISTINCT rt.id) AS kassa_receipts,
            COUNT(DISTINCT CASE
+               WHEN rt.approved_at IS NULL
+                AND (:cutover_enabled = 0
+                     OR rt.purchase_at IS NULL
+                     OR LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) = 'import_default'
+                     OR CAST(rt.purchase_at AS DATE) >= :cutoff_date)
+               THEN rt.id END) AS kassa_inbox_receipts,
+           COUNT(DISTINCT CASE
                WHEN :cutover_enabled = 1
                 AND rt.purchase_at IS NOT NULL
                 AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
@@ -50,6 +57,30 @@ _RECEIPT_COUNTS_SQL = text("""
       AND rr.source_id IN (:ah_source, :lidl_source, :jumbo_source)
     GROUP BY rr.source_id
 """)
+
+_RECEIPT_EVIDENCE_SQL = text("""
+    SELECT rt.purchase_at,
+           rt.purchase_at_source,
+           rt.created_at,
+           rt.parse_status,
+           rt.approved_at,
+           (SELECT COUNT(*)
+              FROM receipt_table_lines rtl
+             WHERE rtl.receipt_table_id = rt.id
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE) AS line_count
+    FROM raw_receipts rr
+    JOIN receipt_tables rt
+      ON rt.raw_receipt_id = rr.id
+     AND rt.household_id = :household_id
+     AND rt.deleted_at IS NULL
+    WHERE rr.household_id = :household_id
+      AND rr.source_id = :source_id
+      AND rr.deleted_at IS NULL
+      AND rr.duplicate_of_raw_receipt_id IS NULL
+    ORDER BY rt.created_at DESC, rt.id DESC
+    LIMIT :limit
+""")
+
 
 _QUEUE_COUNTS_SQL = text("""
     SELECT provider, status, COUNT(*) AS item_count
@@ -76,6 +107,7 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
             "household_id": owner,
             "cutover_enabled": int(cutoff is not None),
             "cutoff_datetime": datetime.combine(cutoff, time.min) if cutoff else None,
+            "cutoff_date": cutoff,
             **{f"{code}_source": f"{owner}-retailer-{code}" for code, _ in _PROVIDERS},
         }
         receipts = {
@@ -100,6 +132,7 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
             "name": name,
             "saved_receipts": int(row.get("saved_receipts") or 0),
             "kassa_receipts": int(row.get("kassa_receipts") or 0),
+            "kassa_inbox_receipts": int(row.get("kassa_inbox_receipts") or 0),
             # Null means no cutover, NOT "zero historical purchases".
             "historical_receipts": int(row.get("historical_receipts") or 0) if cutoff else None,
             "review_receipts": int(row.get("review_receipts") or 0) if cutoff else None,
@@ -114,4 +147,43 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
         "auto_import_paused": auto_import_paused,
         "complete_retailer_history_known": False,
         "providers": providers,
+    }
+
+
+def load_retailer_history_evidence(
+    engine: Engine, *, household_id: str, provider: str, limit: int = 10,
+) -> dict:
+    """Show only minimal, read-only provenance for a household's saved receipts.
+
+    Never return receipt contents, external references, raw IDs, loyalty data,
+    OAuth credentials or data from a client-supplied household.
+    """
+    owner = str(household_id or "").strip()
+    code = str(provider or "").strip().lower()
+    if not owner:
+        raise ValueError("Actief huishouden ontbreekt")
+    if code not in {key for key, _ in _PROVIDERS}:
+        raise ValueError("Winkel niet ondersteund")
+    bounded = min(max(int(limit), 1), 10)
+    source_id = f"{owner}-retailer-{code}"
+
+    def date_part(value):
+        return str(value)[:10] if value is not None else None
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            _RECEIPT_EVIDENCE_SQL,
+            {"household_id": owner, "source_id": source_id, "limit": bounded},
+        ).mappings().all()
+    return {
+        "provider": code,
+        "coverage": "most_recent_persisted_receipt_records_only",
+        "items": [{
+            "purchase_date": date_part(row.get("purchase_at")),
+            "received_date": date_part(row.get("created_at")),
+            "purchase_date_source": str(row.get("purchase_at_source") or ""),
+            "parse_status": str(row.get("parse_status") or ""),
+            "line_count": int(row.get("line_count") or 0),
+            "approved": row.get("approved_at") is not None,
+        } for row in rows],
     }

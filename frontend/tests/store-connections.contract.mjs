@@ -68,7 +68,7 @@ assert.match(page, /dataTestId="receipt-connections-overview-table"/)
 assert.match(page, /tableClassName="rz-store-review-table rz-receipt-connection-compact-table"/)
 const receiptColumns = page.slice(page.indexOf("const receiptConnectionColumns"), page.indexOf("const storeConnectionColumns"))
 assert.deepEqual([...receiptColumns.matchAll(/header: '([^']+)'/g)].map(match => match[1]),
-  ['Winkel', 'Laatst bijgewerkt', 'Status'])
+  ['Winkel', 'Status', 'Laatst bijgewerkt'])
 assert.match(receiptColumns, /data-testid={`receipt-connection-action-/)
 assert.match(receiptColumns, /width: isMobileViewport/)
 assert.doesNotMatch(receiptColumns, /header: 'Bonnen ophalen'/)

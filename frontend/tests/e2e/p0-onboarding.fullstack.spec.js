@@ -59,7 +59,7 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
 
   // Receipt-enabled households can connect stores before opening Home.
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await expect(page.getByTestId('receipt-connections-overview-table')).toBeVisible()
   for (const retailer of ['ah', 'jumbo', 'lidl']) {
     await expect(page.getByTestId('receipt-connection-action-' + retailer)).toBeVisible()
   }
@@ -80,11 +80,19 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     expect(row.queue_pending).toBe(0)
     expect(row.queue_processing).toBe(0)
   }
-  await page.getByTestId('historical-import-refresh').click()
   await expect(page.getByTestId('historical-import-stores')).toBeVisible()
-  await page.getByTestId('onboarding-stores-later').click()
+  const arrow = page.getByTestId('onboarding-store-arrow')
+  for (const retailer of ['ah', 'jumbo', 'lidl']) {
+    await expect(arrow).toHaveAttribute('data-store', retailer)
+    await expect(arrow).toContainText('Nu winkel(s) koppelen!')
+    await page.keyboard.press('ArrowRight')
+  }
 
-  // Skipping store setup preserves the completed household and existing Home flow.
+  // Completing all three guidance steps preserves the household and opens Home.
+  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()

@@ -57,6 +57,10 @@ class _ReadOnlyConnection:
             assert "rr.duplicate_of_raw_receipt_id IS NULL" in sql
             assert "rt.purchase_at < :cutoff_datetime" in sql
             assert "rt.purchase_at_source" in sql
+            assert "rt.approved_at IS NULL" in sql
+            assert "AS kassa_inbox_receipts" in sql
+            assert "CAST(rt.purchase_at AS DATE) >= :cutoff_date" in sql
+            assert arguments["cutoff_date"] == self.cutoff
             assert "'import_default'" in sql
             assert "('parsed', 'approved')" in sql
             assert arguments["ah_source"] == self.household + "-retailer-ah"
@@ -117,7 +121,7 @@ def test_uses_server_household_original_date_and_durable_queue_only():
     result, db = _read(
         receipts=[
             {"source_id": "home-a-retailer-ah", "saved_receipts": 3,
-             "kassa_receipts": 3, "historical_receipts": 1, "review_receipts": 1},
+             "kassa_receipts": 3, "kassa_inbox_receipts": 1, "historical_receipts": 1, "review_receipts": 1},
             {"source_id": "home-a-retailer-jumbo", "saved_receipts": 1,
              "kassa_receipts": 1, "historical_receipts": 0, "review_receipts": 1},
         ],
@@ -134,6 +138,7 @@ def test_uses_server_household_original_date_and_durable_queue_only():
     assert result["auto_import_paused"] is False
     assert [row["code"] for row in result["providers"]] == ["ah", "lidl", "jumbo"]
     assert _store(result, "ah")["kassa_receipts"] == 3
+    assert _store(result, "ah")["kassa_inbox_receipts"] == 1
     assert _store(result, "ah")["historical_receipts"] == 1
     assert _store(result, "ah")["review_receipts"] == 1
     assert _store(result, "lidl")["queue_pending"] == 2

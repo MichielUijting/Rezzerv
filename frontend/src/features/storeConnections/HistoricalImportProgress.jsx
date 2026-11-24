@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import Button from '../../ui/Button'
+import { fetchJson } from '../stores/storeImportShared.jsx'
 import {
   historyCount, historicalStoreRows,
 } from './historicalImportStatusModel.js'
@@ -9,6 +11,21 @@ import {
  */
 export default function HistoricalImportProgress({ summary, loading, error, onRefresh }) {
   const rows = historicalStoreRows(summary)
+  const [evidence, setEvidence] = useState({ provider: '', loading: false, items: [], error: '' })
+  async function showEvidence(provider) {
+    if (evidence.provider === provider && !evidence.loading) {
+      setEvidence({ provider: '', loading: false, items: [], error: '' })
+      return
+    }
+    setEvidence({ provider, loading: true, items: [], error: '' })
+    try {
+      const data = await fetchJson('/api/receipts/retailers/history-evidence?provider=' + encodeURIComponent(provider))
+      setEvidence({ provider, loading: false, items: Array.isArray(data?.items) ? data.items : [], error: '' })
+    } catch {
+      setEvidence({ provider, loading: false, items: [], error: 'De brongegevens konden niet worden opgehaald. Probeer opnieuw.' })
+    }
+  }
+  const receiptLabel = (value) => historyCount(value) + (value === 1 ? ' bon' : ' bonnen')
   return (
     <section data-testid="historical-import-progress" aria-labelledby="historical-import-title"
       style={{ display: 'grid', rowGap: '12px', minWidth: 0 }}>
@@ -20,9 +37,11 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
         </Button>
       </div>
       <p style={{ margin: 0 }}>
-        Dit zijn de bonnen die Inhuis echt heeft opgeslagen. De winkel bepaalt hoeveel
-        oudere bonnen beschikbaar zijn; daarom tonen we geen onbevestigd totaal of percentage.
-        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa.
+        Dit zijn bonnen die Inhuis als opgeslagen registreert, ook als ze niet zichtbaar zijn
+        in de gewone Kassa-lijst. De winkel bepaalt hoeveel oudere bonnen beschikbaar zijn;
+        daarom tonen we geen onbevestigd totaal of percentage.
+        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa. Via 'Welke bonnen?'
+        controleer je welke opgeslagen records meetellen.
       </p>
       {summary && summary.history_cutover_enabled === false ? (
         <p data-testid="historical-import-no-cutover" style={{ margin: 0 }}>
@@ -50,12 +69,49 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
             <div role="listitem" key={row.code} data-testid={'historical-import-' + row.code}
               style={{ display: 'grid', rowGap: '4px', paddingBottom: '12px', borderBottom: '1px solid var(--color-border, #d9dfe3)' }}>
               <strong>{row.name}</strong>
-              <span>In Kassa: {historyCount(row.kassa_receipts)} bonnen</span>
+              <span>Opgeslagen bonnen (niet noodzakelijk in Kassa): {receiptLabel(row.kassa_receipts)}</span>
+              <span>Waarvan nog in Kassa te behandelen: {receiptLabel(row.kassa_inbox_receipts)}</span>
               <span>Historische bonnen bruikbaar voor analyse: {historyCount(row.historical_receipts)}</span>
               <span>Ontvangen, nog in wachtrij: {historyCount(row.queue_pending)}
                 {' · '}Bezig met verwerken: {historyCount(row.queue_processing)}</span>
               <span>Controle nodig: {historyCount(row.queue_review_required)}
                 {' · '}Opgeslagen bonnen met onzekere datum of verwerking: {historyCount(row.review_receipts)}</span>
+              <div>
+                <Button type="button" variant="secondary"
+                  data-testid={'historical-import-evidence-' + row.code}
+                  aria-expanded={evidence.provider === row.code}
+                  disabled={evidence.loading && evidence.provider === row.code}
+                  onClick={() => { void showEvidence(row.code) }}>
+                  {evidence.provider === row.code && evidence.loading ? 'Bron controleren…' : 'Welke bonnen?'}
+                </Button>
+              </div>
+              {evidence.provider === row.code && !evidence.loading ? (
+                <div data-testid={'historical-import-evidence-panel-' + row.code}
+                  style={{ display: 'grid', rowGap: '8px', minWidth: 0 }}>
+                  <strong>Opgeslagen bongegevens van {row.name}</strong>
+                  <p style={{ margin: 0 }}>De nieuwste bewaarde bonrecords, niet noodzakelijk
+                    alle bonnen van de winkel.</p>
+                  {evidence.error ? <p role="status">{evidence.error}</p> : null}
+                  {!evidence.error && evidence.items.length === 0 ? (
+                    <p style={{ margin: 0 }}>Geen verwerkt bonrecord gevonden.
+                      Er kan wel een ontvangen bronrecord bestaan.</p>
+                  ) : null}
+                  {!evidence.error ? (
+                    <ol style={{ margin: 0, paddingLeft: '24px' }}>
+                      {evidence.items.map((item, index) => (
+                        <li key={index}>
+                          Aankoopdatum: {item.purchase_date || 'onbekend'};
+                          ontvangen: {item.received_date || 'onbekend'};
+                          artikelregels: {historyCount(item.line_count)};
+                          verwerking: {item.approved ? 'goedgekeurd' : item.parse_status || 'onbekend'}.
+                          {item.purchase_date_source === 'import_default'
+                            ? ' Aankoopdatum is niet bevestigd.' : ''}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>

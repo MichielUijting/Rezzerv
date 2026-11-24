@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -20,6 +20,7 @@ import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileHomePage from './MobileHomePage.jsx'
+import FirstUseDashboardGuide from '../onboarding/FirstUseDashboardGuide.jsx'
 
 const TILE_ROUTES = {
   berichten: '/meldingen', meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
@@ -40,6 +41,9 @@ function visibilityFromContext(context) {
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const showFirstUseGuide = new URLSearchParams(location.search).get('wegwijs') === '1'
+  const closeFirstUseGuide = () => navigate('/home', { replace: true })
   const isMobileViewport = useMobileAppViewport()
   const initialContext = readStoredAuthContext()
   const [context, setContext] = useState(initialContext)
@@ -199,7 +203,10 @@ export default function HomePage() {
   }
 
   if (isMobileViewport) {
-    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} />
+    return <>
+      <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} />
+      {showFirstUseGuide ? <FirstUseDashboardGuide onClose={closeFirstUseGuide} /> : null}
+    </>
   }
 
   return (
@@ -233,6 +240,7 @@ export default function HomePage() {
           )}
         </Card>
       </div></div>
+      {showFirstUseGuide ? <FirstUseDashboardGuide onClose={closeFirstUseGuide} /> : null}
     </div>
   )
 }

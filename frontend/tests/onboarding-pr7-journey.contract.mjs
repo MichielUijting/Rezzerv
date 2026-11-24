@@ -75,4 +75,5 @@ assert.match(progressView, /Bonnen uit de wachtrij zijn nog niet verwerkt in Kas
 assert.match(progressView, /geen onbevestigd totaal of percentage/)
 assert.doesNotMatch(progressView, /<progress\b/)
 
+assert.match(progressView, /Welke bonnen\?/)
 console.log('ONBOARDING_PR7_JOURNEY_CONTRACT_GREEN')

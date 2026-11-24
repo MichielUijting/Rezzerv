@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -26,6 +27,7 @@ import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate }
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
+import StoreConnectionWalkthrough, { completeStoreConnectionGuidance } from '../onboarding/StoreConnectionWalkthrough.jsx'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
@@ -34,9 +36,11 @@ import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConn
 import './receiptConnectionCompact.css'
 
 export default function StoreConnectionsPage({ onboardingMode = false, onFinish = null }) {
+  const navigate = useNavigate()
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
+  const [connectionHelpOpen, setConnectionHelpOpen] = useState(() => new URLSearchParams(window.location.search).has('ah'))
   const [latestImportDates, setLatestImportDates] = useState({})
   const [historySummary, setHistorySummary] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -123,25 +127,14 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     {
       key: 'providerName',
       header: 'Winkel',
+      cellClassName: 'rz-receipt-store-cell',
       width: isMobileViewport ? 90 : 190,
       renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
     },
     {
-      key: 'lastSyncLabel',
-      header: 'Laatst bijgewerkt',
-      width: isMobileViewport ? 115 : 180,
-      renderCell: row => (
-        <span
-          data-testid={`receipt-connection-updated-${row.providerCode}`}
-          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
-        >
-          {row.lastSyncLabel}
-        </span>
-      ),
-    },
-    {
       key: 'action',
       header: 'Status',
+      cellClassName: 'rz-receipt-status-cell',
       width: isMobileViewport ? 175 : 230,
       renderCell: row => (
         <span data-testid={`receipt-connection-status-${row.providerCode}`}>
@@ -162,6 +155,20 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               {row.actionLabel}
             </Button>
           )}
+        </span>
+      ),
+    },
+    {
+      key: 'lastSyncLabel',
+      header: 'Laatst bijgewerkt',
+      cellClassName: 'rz-receipt-updated-cell',
+      width: isMobileViewport ? 115 : 180,
+      renderCell: row => (
+        <span
+          data-testid={`receipt-connection-updated-${row.providerCode}`}
+          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
+        >
+          {row.lastSyncLabel}
         </span>
       ),
     },
@@ -959,6 +966,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
+  function finishGuidance() {
+    completeStoreConnectionGuidance(household?.id)
+    onFinish?.()
+  }
+
   return (
     <AppShell title={onboardingMode ? 'Winkels aansluiten' : 'Winkelkoppelingen'} showExit={false}>
       <div style={{
@@ -970,22 +982,40 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         minWidth: 0,
         margin: '0 auto',
       }} data-testid="store-connections-page">
+        {!onboardingMode ? (
+          <Card>
+            <details data-testid="store-connections-help" open={connectionHelpOpen}
+              onToggle={(event) => setConnectionHelpOpen(event.currentTarget.open)}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Uitleg: winkels koppelen en bonnen ophalen</summary>
+              <div style={{ display: 'grid', rowGap: '8px', marginTop: '10px' }}>
+                <p style={{ margin: 0 }}>1. Kies een winkel in het overzicht. Albert Heijn vraagt om een
+                  aanmelding bij Mijn AH; daarna keer je terug naar Winkelkoppelingen.
+                  Lidl en Jumbo gebruiken een browserfavoriet, dat niet op iedere telefoon werkt.</p>
+                <p style={{ margin: 0 }}>2. Controleer of AH gekoppeld is en tik op Nu synchroniseren als je
+                  bonnen wilt ophalen. Geen gevonden bonnen kan correct zijn. Historische aankopen
+                  toont opgeslagen bonrecords en verwerkingen, niet het totaal bij de winkel.</p>
+                <p style={{ margin: 0 }}>3. Inhuis kun je via Terug of het dashboard verder gebruiken.
+                  Boodschappen, Kassa en Voorraad vind je via de actiebalk;
+                  onder Meer staan andere functies en Instellingen.</p>
+                <div>
+                  <Button type="button" variant="secondary" onClick={() => navigate('/home?wegwijs=1')}
+                    data-testid="store-connections-guide-dashboard">
+                    Bekijk dashboard met uitleg
+                  </Button>
+                </div>
+              </div>
+            </details>
+          </Card>
+        ) : null}
         <Card>
-          {onboardingMode ? (
-            <div data-testid="onboarding-stores-step" style={{ display: 'grid', rowGap: '8px', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0 }}>Winkels koppelen</h2>
-              <p style={{ margin: 0 }}>Koppel Albert Heijn, Lidl of Jumbo, of doe dit later.</p>
-              <p style={{ margin: 0 }}>AH kan automatisch ophalen; Lidl en Jumbo werken via browserfavoriet. niet elke mobiele browser ondersteunt dit.</p>
-            </div>
-          ) : null}
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
 
             {isMobileViewport ? (
               <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" role="group" aria-label="Kolommen winkelkoppelingen">
                 <span>Winkel</span>
-                <span>Laatst bijgewerkt</span>
                 <span>Status</span>
+                <span>Laatst bijgewerkt</span>
               </div>
             ) : null}
             <DataTable
@@ -994,6 +1024,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               getRowKey={row => row.providerCode}
               dataTestId="receipt-connections-overview-table"
               tableClassName="rz-store-review-table rz-receipt-connection-compact-table"
+              wrapperClassName={isMobileViewport ? 'rz-receipt-connections-mobile' : ''}
               emptyMessage="Geen winkelkoppelingen beschikbaar."
               stickyHeader={false}
               stickyFilters={false}
@@ -1183,19 +1214,25 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
 
         {onboardingMode ? (
-          <Card>
-            <div data-testid="onboarding-stores-finish-step" style={{ display: 'grid', rowGap: '12px' }}>
-              <p style={{ margin: 0 }}>Je hoeft niet alle winkels nu aan te sluiten. Je kunt dit later doen via Instellingen → Winkelkoppelingen. Wacht bij een lopende bonoverdracht eerst op de bevestiging dat de bonnen veilig ontvangen zijn.</p>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" variant="primary" data-testid="onboarding-stores-continue" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-                  Naar Inhuis
-                </Button>
-                <Button type="button" variant="secondary" data-testid="onboarding-stores-later" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-                  Winkels later koppelen
-                </Button>
-              </div>
-            </div>
-          </Card>
+          <div data-testid="onboarding-stores-finish-step"
+            style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '2px 4px' }}>
+            <Button type="button" variant="secondary" data-testid="onboarding-stores-continue"
+              onClick={finishGuidance} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              Naar dashboard
+            </Button>
+            <Button type="button" variant="secondary" data-testid="onboarding-stores-later"
+              onClick={finishGuidance} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              Uitleg overslaan
+            </Button>
+          </div>
+        ) : null}
+        {onboardingMode && household?.id && !isLoading ? (
+          <StoreConnectionWalkthrough
+            key={household.id}
+            householdId={household.id}
+            ready={!ahBusy && !jumboImportBusy && !lidlWindowSaving}
+            onFinish={finishGuidance}
+          />
         ) : null}
 
 

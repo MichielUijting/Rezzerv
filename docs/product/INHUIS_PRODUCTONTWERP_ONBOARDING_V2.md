@@ -838,3 +838,23 @@ Gebruik daarbij dit principe:
 | Datum | Versie | Wijziging |
 |---|---|---|
 | 2026-08-23 | 2.0 | Eerste canonieke versie. Doel-first onboarding, drie startprofielen, circulaire uitbreiding, inventarisatie van huidige repository en implementatievolgorde vastgelegd. |
+
+## 2026-11-24 — Begeleide eerste gebruikersreis na de vaste snelle start
+
+De snelle registratie blijft ongewijzigd: **Wat Inhuis**, voorraad **met aantallen**, **Alleen**, geen verplichte locaties of extra vragen. De winkelstap volgt daarna direct en is optioneel.
+
+**PO-correctie 24 november 2026:** de eerdere grote uitlegkaart met drie tekststappen wordt uit het scherm gehaald. In de onboarding is de bestaande tabel direct zichtbaar. Een grote **oranje pijl** (`#D97706`, bestaande Inhuis-accentkleur) is als transparante overlay boven de gewone interface geplaatst, zonder dimmen/verkleuren van de rest van het scherm. De drie achtereenvolgende doelen zijn de actieknoppen bij **Albert Heijn → Jumbo → Lidl**. De tekst bij de pijl blijft zeer kort. Bij een tik/klik ergens op het scherm verdwijnt de huidige pijl en volgt de volgende; de onderliggende knop blijft gewoon bruikbaar. Na de derde aanwijzing gaat de gebruiker automatisch naar het dashboard. Ook bij een externe AH-aanmelding mag de gewone koppellogica niet worden doorkruist; het niet-gevoelige aanwijzingsstadium blijft per huishouden behouden.
+
+De aanwijzing krijgt alleen voor de betreffende winkelknop een tijdelijke licht variërende oranje nadruk. Er verschijnt geen gekleurd vlak over de pagina. Een alternatieve optie om de uitleg over te slaan blijft beschikbaar.
+
+Bij de eerste doorgeleiding naar het dashboard verschijnt een **enkele compacte oranje overlay bij de mobiele actiebalk**, met een korte aanwijzing over de beschikbare of recent gebruikte actieknoppen en **Meer**. Die overlay mag niet de pagina dimmen, verhindert geen handelingen en verdwijnt bij een tik ergens op het scherm. De normale dynamische actiebalk wordt niet gewijzigd.
+
+Bij terugkeer uit een AH-browseraanmelding via de reguliere instelling Winkelkoppelingen biedt Inhuis ook daar de contextuele uitleg `Uitleg: winkels koppelen en bonnen ophalen`. De uitleg schakelt geen import in en wijzigt geen huishoudinstellingen. Een knop `Winkels later koppelen` blijft beschikbaar.
+
+De onderste mobiele actiebalk is op basis van actieve/recent gebruikte acties **dynamisch**, dus uitleg noemt de werking van de knoppen en **Meer**, maar belooft geen vaste knopvolgorde. Uitpakken wordt uitsluitend toegelicht als optie wanneer ingeschakeld; het dashboard kan bij een leeg huishouden nog leeg zijn.
+
+In de sectie historische aankopen wordt **nooit** een record dat in de database is opgeslagen automatisch als `in Kassa zichtbaar` voorgesteld. Een reeds bewaard record kan buiten de Kassa-inbox vallen (bijvoorbeeld historisch of goedgekeurd). Om een onverwachte telling veilig te kunnen beoordelen, is een huishoudgebonden, read-only inzage in een beperkt aantal recente bonrecords beschikbaar: alleen aankoop-/ontvangstdatum, verwerkingsstatus, bevestigde datumbron en aantal artikelregels. Geen persoonsgegevens, bonregels, tokens, interne IDs of winkelcredentials en geen automatische verwijdering/correctie. Dat een opgeslagen bronrecord bestaat, bewijst op zichzelf **niet** dat de winkel op dat moment nog een digitale bon toont.
+
+Een onverklaard AH-bonrecord wordt pas na objectief onderzoek van de actuele lokale database gecorrigeerd. Tellers worden niet kunstmatig op nul gezet en import- of accountgegevens worden niet automatisch aangepast.
+
+**Aanvullende PO-correctie 24 november 2026:** de aanwijzing toont uitsluitend **Nu winkel(s) koppelen!**, zonder stapnummer. De pijlspits volgt de echte winkelactieknop; op mobiel staan winkelnaam, actie en datum naast elkaar in hun eigen kolommen. De drie aanwijzingen en dashboardroute blijven behouden.

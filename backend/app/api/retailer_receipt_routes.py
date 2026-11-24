@@ -38,7 +38,10 @@ from app.services.picnic_account_secure_store import (
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 from app.services.retailer_import_queue import stage_confirmed_receipts
 from app.services.retailer_receipt_import_dates import latest_retailer_import_dates
-from app.services.retailer_history_progress import load_retailer_history_progress
+from app.services.retailer_history_progress import (
+    load_retailer_history_progress,
+    load_retailer_history_evidence,
+)
 from app.services.lidl_import_window_service import get_window, save_window, complete_import
 from app.api.household_profile_routes import _context_and_membership
 from app.services.authorization_foundation_service import evaluate_household_permission
@@ -119,6 +122,20 @@ def get_retailer_history_progress(authorization: Optional[str] = Header(None)):
     """Observed Kassa/queue history for the authorized active household only."""
     household_id = _authorized_household_id(authorization)
     return load_retailer_history_progress(engine, household_id=household_id)
+
+
+@router.get("/history-evidence")
+def get_retailer_history_evidence(
+    provider: str,
+    authorization: Optional[str] = Header(None),
+):
+    """Minimal receipt provenance for the authorized active household only."""
+    household_id = _authorized_household_id(authorization)
+    if provider not in {"ah", "lidl", "jumbo"}:
+        raise HTTPException(status_code=400, detail="Winkel niet ondersteund")
+    return load_retailer_history_evidence(
+        engine, household_id=household_id, provider=provider,
+    )
 
 
 @router.get("/last-updated")

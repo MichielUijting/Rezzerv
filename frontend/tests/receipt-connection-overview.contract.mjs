@@ -158,7 +158,7 @@ const mobileCompact = readFileSync(
 )
 assert.match(mobileCompact, /@media \(max-width: 720px\)/)
 assert.match(mobileCompact, /rz-receipt-connection-mobile-heading/)
-assert.match(mobileCompact, /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1.2fr\) minmax\(0, 1.5fr\)/)
+assert.match(mobileCompact, /grid-template-columns: minmax\(0, .9fr\) minmax\(0, 1.35fr\) minmax\(0, 1.1fr\)/)
 assert.match(mobileCompact, /rz-receipt-connection-compact-table tbody tr/)
 assert.match(mobileCompact, /min-height: 44px !important/)
 assert.match(mobileCompact, /tbody td\[data-mobile-label\]::before/)
@@ -168,7 +168,7 @@ assert.doesNotMatch(mobileCompact, /(?:^|\n)\s*\.rz-table tbody tr\b/)
 
 const columns = page.slice(page.indexOf('const receiptConnectionColumns'), page.indexOf('const storeConnectionColumns'))
 assert.deepEqual([...columns.matchAll(/header: '([^']+)'/g)].map(match => match[1]),
-  ['Winkel', 'Laatst bijgewerkt', 'Status'])
+  ['Winkel', 'Status', 'Laatst bijgewerkt'])
 assert.doesNotMatch(columns, /header: 'Bonnen ophalen'/)
 assert.doesNotMatch(columns, /header: 'Actie'/)
 assert.match(columns, /data-testid={`receipt-connection-status-/)
