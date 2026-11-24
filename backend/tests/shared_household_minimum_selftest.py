@@ -17,6 +17,7 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     seed_admin_member_household,
     seed_completed_legacy_household,
+    seed_preexisting_unfinished_onboarding,
 )
 
 
@@ -52,13 +53,14 @@ def _application(engine) -> FastAPI:
     return app
 
 
-def _register_select_and_profile(client: TestClient, *, email: str) -> str:
+def _register_select_and_profile(client: TestClient, engine, *, email: str) -> str:
     registration = client.post(
         "/api/auth/register",
         json={"email": email, "password": "SterkWachtwoord123!"},
     )
     assert registration.status_code == 201, registration.text
     household_id = str(registration.json()["active_household_id"])
+    seed_preexisting_unfinished_onboarding(engine, household_id)
     selected = client.post(
         "/api/onboarding/primary-use-case",
         json={"primary_use_case": "inhuis_halen"},
@@ -126,7 +128,7 @@ def run() -> int:
 
         with TestClient(app) as consumer:
             household_id = _register_select_and_profile(
-                consumer,
+                consumer, engine,
                 email="shared-minimum-alone@example.com",
             )
             state = consumer.get("/api/onboarding")
@@ -192,7 +194,7 @@ def run() -> int:
         invitations_before = _invitation_count(engine)
         with TestClient(app) as together:
             together_household_id = _register_select_and_profile(
-                together,
+                together, engine,
                 email="shared-minimum-together@example.com",
             )
             with engine.begin() as conn:

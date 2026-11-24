@@ -16,6 +16,7 @@ from app.services.household_product_configuration_service import resolve_househo
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     seed_admin_member_household,
+    seed_preexisting_unfinished_onboarding,
 )
 
 
@@ -46,13 +47,14 @@ def _application(engine) -> FastAPI:
     return app
 
 
-def _register_and_select(client: TestClient, *, email: str) -> str:
+def _register_and_select(client: TestClient, engine, *, email: str) -> str:
     registration = client.post(
         "/api/auth/register",
         json={"email": email, "password": "SterkWachtwoord123!"},
     )
     assert registration.status_code == 201, registration.text
     household_id = str(registration.json()["active_household_id"])
+    seed_preexisting_unfinished_onboarding(engine, household_id)
     selected = client.post(
         "/api/onboarding/primary-use-case",
         json={"primary_use_case": "wat_inhuis"},
@@ -114,7 +116,7 @@ def run() -> int:
         checks.append("member_cannot_change_wat_inhuis_configuration")
 
         with TestClient(app) as consumer:
-            household_id = _register_and_select(consumer, email="wat-presence@example.com")
+            household_id = _register_and_select(consumer, engine, email="wat-presence@example.com")
             invalid_level = consumer.post(
                 "/api/onboarding/wat-inhuis",
                 json=_profile_payload(inventory_tracking_level="exact"),
@@ -174,7 +176,7 @@ def run() -> int:
         checks.append("wat_inhuis_configuration_and_shared_minimum_persist_server_side")
 
         with TestClient(app) as detailed:
-            detailed_household_id = _register_and_select(detailed, email="wat-quantity@example.com")
+            detailed_household_id = _register_and_select(detailed, engine, email="wat-quantity@example.com")
             profile = detailed.post(
                 "/api/onboarding/wat-inhuis",
                 json=_profile_payload(
@@ -221,6 +223,8 @@ def run() -> int:
             )
             assert reg.status_code == 201, reg.text
             quick_id = str(reg.json()["active_household_id"])
+            # An existing unfinished account still supports the separate quick-start endpoint.
+            seed_preexisting_unfinished_onboarding(engine, quick_id)
             # The server dictates Alleen: client cannot smuggle 'together'.
             forged_mode = fast_household.post(
                 "/api/onboarding/quick-start",
@@ -261,6 +265,7 @@ def run() -> int:
             )
             assert registration.status_code == 201
             other_household_id = str(registration.json()["active_household_id"])
+            seed_preexisting_unfinished_onboarding(engine, other_household_id)
             selected = other_profile.post(
                 "/api/onboarding/primary-use-case",
                 json={"primary_use_case": "waar_inhuis"},

@@ -11,6 +11,7 @@ function read(path) {
 
 const base = { onboarding_status: 'completed', can_manage: true, product_configuration: { receipt_processing_enabled: true } }
 assert.equal(shouldOfferStoreConnectionOnboarding(base), true)
+assert.equal(shouldOfferStoreConnectionOnboarding({ onboarding_status: 'completed', can_manage: true }), true, 'missing optional settings do not redirect to dashboard')
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, onboarding_status: 'in_progress' }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, can_manage: false }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, product_configuration: { receipt_processing_enabled: false } }), false)
