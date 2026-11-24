@@ -140,7 +140,7 @@ def test_launch_sets_short_lived_httponly_flow_cookie(monkeypatch) -> None:
     monkeypatch.setenv("REZZERV_BACKEND_PUBLIC_PORT", "8011")
     flow = oauth.create_ah_oauth_flow(_request(), household_id="household-1")
 
-    response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id))
+    response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id, _request(host="laptop-michiel.tailfad4a7.ts.net")))
 
     assert response.status_code == 302
     assert response.headers["location"].startswith("/secure/oauth/authorize?")
@@ -405,3 +405,166 @@ def test_callback_exchanges_code_and_persists_session_for_bound_household(monkey
     assert seen["closed"] is True
     assert oauth.get_ah_oauth_flow(flow.flow_id) is None
     assert "inhuis_ah_oauth_flow=" in response.headers["set-cookie"].lower()
+
+
+def test_android_callback_missing_cookie_fails_closed_and_returns_to_inhuis(monkeypatch, caplog) -> None:
+    """Do not claim AH connection; never show raw 410 or forward the OAuth code."""
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    monkeypatch.setenv("REZZERV_FRONTEND_PORT", "5174")
+    request = _request(
+        host="laptop-michiel.tailfad4a7.ts.net",
+        port=8011,
+        cookie="inhuis_ah_oauth_return_mode=onboarding",
+    )
+    response = asyncio.run(oauth.ah_oauth_callback(request, code="synthetic-private-code"))
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "http://laptop-michiel.tailfad4a7.ts.net:5174/onboarding/winkels?ah=error"
+    )
+    assert "synthetic-private-code" not in response.headers["location"]
+    assert "synthetic-private-code" not in caplog.text
+    assert "missing_flow_cookie" in caplog.text
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+
+
+def test_android_expired_cookie_is_diagnosed_without_binding_household(monkeypatch, caplog) -> None:
+    from dataclasses import replace
+    from datetime import datetime, timedelta, timezone
+
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="laptop-michiel.tailfad4a7.ts.net"),
+        household_id="private-household",
+        return_to="http://laptop-michiel.tailfad4a7.ts.net:5174/onboarding/winkels",
+    )
+    with oauth._flow_lock:
+        oauth._flows[flow.flow_id] = replace(
+            flow, expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+    request = _request(
+        host="laptop-michiel.tailfad4a7.ts.net",
+        port=8011,
+        cookie=(
+            f"inhuis_ah_oauth_flow={flow.flow_id}; "
+            "inhuis_ah_oauth_return_mode=onboarding"
+        ),
+    )
+    response = asyncio.run(oauth.ah_oauth_callback(request, code="synthetic-private-code"))
+    assert response.status_code == 302
+    assert response.headers["location"].endswith("/onboarding/winkels?ah=error")
+    assert "flow_expired" in caplog.text
+    assert flow.flow_id not in caplog.text
+    assert "synthetic-private-code" not in caplog.text
+    assert oauth.get_ah_oauth_flow(flow.flow_id) is None
+
+
+def test_ah_callback_missing_code_clears_flow_and_returns_without_exchange(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="laptop-michiel.tailfad4a7.ts.net"),
+        household_id="household-bound",
+    )
+    request = _request(
+        host="laptop-michiel.tailfad4a7.ts.net",
+        port=8011,
+        cookie=f"inhuis_ah_oauth_flow={flow.flow_id}",
+    )
+    response = asyncio.run(oauth.ah_oauth_callback(request))
+    assert response.status_code == 302
+    assert response.headers["location"].endswith(
+        "/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert oauth.get_ah_oauth_flow(flow.flow_id) is None
+
+
+def test_invalid_flow_does_not_redirect_to_callback_query_or_foreign_host(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    for hostname, expected in (
+        ("ah-login.100-64-10-20.sslip.io", "100.64.10.20"),
+        ("laptop-michiel.tailfad4a7.ts.net", "laptop-michiel.tailfad4a7.ts.net"),
+    ):
+        request = _request(
+            host=hostname,
+            port=8011,
+            cookie="inhuis_ah_oauth_return_mode=https://attacker.example",
+        )
+        response = asyncio.run(oauth.ah_oauth_callback(request, code="secret-code"))
+        assert response.status_code == 302
+        assert urlparse(response.headers["location"]).hostname == expected
+        assert response.headers["location"].endswith(
+            "/instellingen/winkelkoppelingen?ah=error"
+        )
+        assert "secret-code" not in response.headers["location"]
+
+
+def test_ah_launch_persists_only_safe_return_mode_for_error_recovery(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="laptop-michiel.tailfad4a7.ts.net"),
+        household_id="household-bound",
+        return_to="http://laptop-michiel.tailfad4a7.ts.net:5174/onboarding/winkels",
+    )
+    response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id, _request(host="laptop-michiel.tailfad4a7.ts.net")))
+    cookies = [
+        value.decode("latin1")
+        for name, value in response.raw_headers if name.lower() == b"set-cookie"
+    ]
+    assert any("inhuis_ah_oauth_flow=" in item for item in cookies)
+    assert any("inhuis_ah_oauth_return_mode=onboarding" in item for item in cookies)
+    assert all(flow.household_id not in item for item in cookies)
+
+
+
+def test_expired_launch_returns_to_store_connections_without_raw_json(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    response = asyncio.run(oauth.launch_ah_oauth(
+        "not-a-valid-login",
+        _request(host="laptop-michiel.tailfad4a7.ts.net", port=8011),
+    ))
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "http://laptop-michiel.tailfad4a7.ts.net:5174"
+        "/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_callback_from_untrusted_host_does_not_become_open_redirect(monkeypatch) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    request = _request(host="untrusted.example", port=8011)
+    response = asyncio.run(oauth.ah_oauth_callback(request, code="do-not-leak"))
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "http://localhost:5174/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert "do-not-leak" not in response.headers["location"]
+
+
+def test_callback_after_backend_restart_returns_and_logs_safe_category(monkeypatch, caplog) -> None:
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.delenv("REZZERV_APP_BASE_URL", raising=False)
+    flow = oauth.create_ah_oauth_flow(
+        _request(host="laptop-michiel.tailfad4a7.ts.net"),
+        household_id="household-bound",
+    )
+    oauth.reset_ah_oauth_flows_for_tests()  # Simulate process-local registry being lost.
+    request = _request(
+        host="laptop-michiel.tailfad4a7.ts.net", port=8011,
+        cookie=f"inhuis_ah_oauth_flow={flow.flow_id}",
+    )
+    response = asyncio.run(oauth.ah_oauth_callback(request, code="one-time-code"))
+    assert response.status_code == 302
+    assert response.headers["location"].endswith(
+        "/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert "flow_missing_or_backend_restarted" in caplog.text
+    assert flow.flow_id not in caplog.text
+    assert "one-time-code" not in caplog.text
