@@ -837,3 +837,18 @@ Gebruik daarbij dit principe:
 | Datum | Versie | Wijziging |
 |---|---|---|
 | 2026-08-23 | 2.0 | Eerste canonieke versie. Doel-first onboarding, drie startprofielen, circulaire uitbreiding, inventarisatie van huidige repository en implementatievolgorde vastgelegd. |
+
+
+## 2026-11-24 — Begeleide eerste gebruikersreis na de vaste snelle start
+
+De snelle registratie blijft ongewijzigd: **Wat Inhuis**, voorraad **met aantallen**, **Alleen**, geen verplichte locaties of extra vragen. De winkelstap volgt daarna direct en is optioneel.
+
+De winkelstap heeft een korte, te doorlopen uitleg met drie onderwerpen: (1) winkels aansluiten en de verschillen tussen AH en Lidl/Jumbo, (2) bonnen ophalen en de interpretatie van 0, wachtende en opgeslagen bonnen, (3) wat het dashboard en de mobiele actiebalk doen. Na `Naar Inhuis` volgt één over te slaan rondleiding op het dashboard, alleen voor dit door de nieuwe gebruiker gekozen pad, niet als pop-up voor alle bestaande gebruikers.
+
+Bij terugkeer uit een AH-browseraanmelding via de reguliere instelling Winkelkoppelingen biedt Inhuis ook daar de contextuele uitleg `Uitleg: winkels koppelen en bonnen ophalen`. De uitleg schakelt geen import in en wijzigt geen huishoudinstellingen. Een knop `Winkels later koppelen` blijft beschikbaar.
+
+De onderste mobiele actiebalk is op basis van actieve/recent gebruikte acties **dynamisch**, dus uitleg noemt de werking van de knoppen en **Meer**, maar belooft geen vaste knopvolgorde. Uitpakken wordt uitsluitend toegelicht als optie wanneer ingeschakeld; het dashboard kan bij een leeg huishouden nog leeg zijn.
+
+In de sectie historische aankopen wordt **nooit** een record dat in de database is opgeslagen automatisch als `in Kassa zichtbaar` voorgesteld. Een reeds bewaard record kan buiten de Kassa-inbox vallen (bijvoorbeeld historisch of goedgekeurd). Om een onverwachte telling veilig te kunnen beoordelen, is een huishoudgebonden, read-only inzage in een beperkt aantal recente bonrecords beschikbaar: alleen aankoop-/ontvangstdatum, verwerkingsstatus, bevestigde datumbron en aantal artikelregels. Geen persoonsgegevens, bonregels, tokens, interne IDs of winkelcredentials en geen automatische verwijdering/correctie. Dat een opgeslagen bronrecord bestaat, bewijst op zichzelf **niet** dat de winkel op dat moment nog een digitale bon toont.
+
+Een onverklaard AH-bonrecord wordt pas na objectief onderzoek van de actuele lokale database gecorrigeerd. Tellers worden niet kunstmatig op nul gezet en import- of accountgegevens worden niet automatisch aangepast.

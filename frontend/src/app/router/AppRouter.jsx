@@ -89,7 +89,7 @@ function OnboardingRoute() {
 
 function OnboardingStoresRoute() {
   const navigate = useNavigate()
-  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home', { replace: true })} />
+  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home?wegwijs=1', { replace: true })} />
 }
 
 function ResetSessionRoute() {

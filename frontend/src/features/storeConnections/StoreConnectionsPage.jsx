@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -26,6 +27,7 @@ import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate }
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
+import StoreConnectionWalkthrough from '../onboarding/StoreConnectionWalkthrough.jsx'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
@@ -34,9 +36,12 @@ import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConn
 import './receiptConnectionCompact.css'
 
 export default function StoreConnectionsPage({ onboardingMode = false, onFinish = null }) {
+  const navigate = useNavigate()
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
+  const [guideStep, setGuideStep] = useState(0)
+  const [connectionHelpOpen, setConnectionHelpOpen] = useState(() => new URLSearchParams(window.location.search).has('ah'))
   const [latestImportDates, setLatestImportDates] = useState({})
   const [historySummary, setHistorySummary] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -942,14 +947,44 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         minWidth: 0,
         margin: '0 auto',
       }} data-testid="store-connections-page">
-        <Card>
-          {onboardingMode ? (
-            <div data-testid="onboarding-stores-step" style={{ display: 'grid', rowGap: '8px', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0 }}>Winkels koppelen</h2>
-              <p style={{ margin: 0 }}>Koppel Albert Heijn, Lidl of Jumbo, of doe dit later.</p>
-              <p style={{ margin: 0 }}>AH kan automatisch ophalen; Lidl en Jumbo werken via browserfavoriet. niet elke mobiele browser ondersteunt dit.</p>
+        {onboardingMode ? (
+          <Card>
+            <div data-testid="onboarding-stores-step">
+              <StoreConnectionWalkthrough
+                step={guideStep}
+                onStepChange={setGuideStep}
+                onFinish={onFinish}
+                ahConnected={ahConnection?.connected === true}
+                disabled={ahBusy || jumboImportBusy || lidlWindowSaving}
+              />
             </div>
-          ) : null}
+          </Card>
+        ) : (
+          <Card>
+            <details data-testid="store-connections-help" open={connectionHelpOpen}
+              onToggle={(event) => setConnectionHelpOpen(event.currentTarget.open)}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Uitleg: winkels koppelen en bonnen ophalen</summary>
+              <div style={{ display: 'grid', rowGap: '8px', marginTop: '10px' }}>
+                <p style={{ margin: 0 }}>1. Kies een winkel in het overzicht. Albert Heijn vraagt om een
+                  aanmelding bij Mijn AH; daarna keer je terug naar Winkelkoppelingen.
+                  Lidl en Jumbo gebruiken een browserfavoriet, dat niet op iedere telefoon werkt.</p>
+                <p style={{ margin: 0 }}>2. Controleer of AH gekoppeld is en tik op Nu synchroniseren als je
+                  bonnen wilt ophalen. Geen gevonden bonnen kan correct zijn. Historische aankopen
+                  toont opgeslagen bonrecords en verwerkingen, niet het totaal bij de winkel.</p>
+                <p style={{ margin: 0 }}>3. Inhuis kun je via Terug of het dashboard verder gebruiken.
+                  Boodschappen, Kassa en Voorraad vind je via de actiebalk;
+                  onder Meer staan andere functies en Instellingen.</p>
+                <div>
+                  <Button type="button" variant="secondary" onClick={() => navigate('/home?wegwijs=1')}
+                    data-testid="store-connections-guide-dashboard">
+                    Bekijk dashboard met uitleg
+                  </Button>
+                </div>
+              </div>
+            </details>
+          </Card>
+        )}
+        <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
 
@@ -1160,7 +1195,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               <p style={{ margin: 0 }}>Je hoeft niet alle winkels nu aan te sluiten. Je kunt dit later doen via Instellingen → Winkelkoppelingen. Wacht bij een lopende bonoverdracht eerst op de bevestiging dat de bonnen veilig ontvangen zijn.</p>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" variant="primary" data-testid="onboarding-stores-continue" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-                  Naar Inhuis
+                  Bekijk dashboard met uitleg
                 </Button>
                 <Button type="button" variant="secondary" data-testid="onboarding-stores-later" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
                   Winkels later koppelen

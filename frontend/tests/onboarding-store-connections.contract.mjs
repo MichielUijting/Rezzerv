@@ -24,6 +24,9 @@ assert.deepEqual(filterOnboardingReceiptStores(null), [])
 const router = read('../src/app/router/AppRouter.jsx')
 const onboarding = read('../src/features/onboarding/OnboardingPage.jsx')
 const connections = read('../src/features/storeConnections/StoreConnectionsPage.jsx')
+const storeGuide = read('../src/features/onboarding/StoreConnectionWalkthrough.jsx')
+const dashboardGuide = read('../src/features/onboarding/FirstUseDashboardGuide.jsx')
+const home = read('../src/features/home/HomePage.jsx')
 const oauth = read('../../backend/app/api/receipt_ah_oauth_proxy_routes.py')
 
 assert.match(router, /shouldOfferStoreConnectionOnboarding\(completedOnboarding\)/)
@@ -34,7 +37,17 @@ assert.match(connections, /onboardingMode \? filterOnboardingReceiptStores\(over
 assert.match(connections, /onboardingMode \? '\/onboarding\/winkels' : '\/instellingen\/winkelkoppelingen'/)
 assert.match(connections, /data-testid="onboarding-stores-later"/)
 assert.match(connections, /data-testid="onboarding-stores-continue"/)
-assert.match(connections, /niet elke mobiele browser ondersteunt dit/)
+assert.match(storeGuide, /niet beschikbaar/)
+assert.match(storeGuide, /Stap \{index \+ 1\} van 3/)
+assert.match(storeGuide, /onFinish\?\.\(\)/)
+assert.match(connections, /<StoreConnectionWalkthrough/)
+assert.match(connections, /data-testid="store-connections-help"/)
+assert.match(connections, /data-testid="store-connections-guide-dashboard"/)
+assert.match(router, /navigate\('\/home\?wegwijs=1'/)
+assert.match(home, /<FirstUseDashboardGuide/)
+assert.match(dashboardGuide, /De exacte knoppen kunnen veranderen/)
+assert.match(dashboardGuide, /Uitleg overslaan/)
+assert.match(dashboardGuide, /Instellingen → Winkelkoppelingen/)
 
 // Returning from an Android external browser must not strand the AH connect button.
 // A successful AH connection is confirmed only through the backend status call.

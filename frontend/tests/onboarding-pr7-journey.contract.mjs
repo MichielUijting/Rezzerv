@@ -72,6 +72,7 @@ const progressView = readFileSync(new URL('../src/features/storeConnections/Hist
 assert.match(progressView, /historical-import-paused/)
 assert.match(progressView, /Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa/)
 assert.match(progressView, /geen onbevestigd totaal of percentage/)
+assert.match(progressView, /Welke bonnen\?/)
 assert.doesNotMatch(progressView, /<progress\b/)
 
 console.log('ONBOARDING_PR7_JOURNEY_CONTRACT_GREEN')
