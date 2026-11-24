@@ -11,6 +11,7 @@ function read(path) {
 
 const base = { onboarding_status: 'completed', can_manage: true, product_configuration: { receipt_processing_enabled: true } }
 assert.equal(shouldOfferStoreConnectionOnboarding(base), true)
+assert.equal(shouldOfferStoreConnectionOnboarding({ onboarding_status: 'completed', can_manage: true }), true, 'missing optional settings do not redirect to dashboard')
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, onboarding_status: 'in_progress' }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, can_manage: false }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...base, product_configuration: { receipt_processing_enabled: false } }), false)
@@ -92,4 +93,10 @@ assert.match(connections, /ahLoginNavigatingRef\.current = false\s+setAhBusy\(fa
 assert.match(connections, /document\.visibilityState === 'hidden'/)
 assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/onboarding\/winkels"\}/)
 
+assert.match(connections, /const confirmation = await loadAhStatus\(\)/)
+assert.match(connections, /ahReturnOutcomeRef\.current = fromUrl/)
+assert.match(connections, /ahReturnOutcomeRef\.current = null/)
+assert.match(connections, /if \(confirmation\?\.connected === true\)/)
+assert.match(connections, /De AH-login is niet voltooid of verlopen/)
+assert.doesNotMatch(connections, /if \(ahResult === 'connected'\) \{\s*setActiveProvider\('ah'\)/)
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')

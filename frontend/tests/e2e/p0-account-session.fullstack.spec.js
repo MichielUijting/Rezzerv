@@ -33,8 +33,12 @@ async function completeInitialRegistrationAndOnboarding(page, accountEmail, acco
   expect(registration.onboarding?.household_name).toBe(expectedHouseholdName)
   expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('onboarding-stores-step')).toBeVisible()
+  await expect(page.getByTestId('receipt-connections-overview-table')).toBeVisible()
   await page.getByTestId('onboarding-stores-later').click()
+  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   await expect(page).toHaveURL(/\/home$/)
 }
 

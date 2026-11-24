@@ -17,6 +17,7 @@ from app.services.household_product_configuration_service import resolve_househo
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     seed_admin_member_household,
+    seed_preexisting_unfinished_onboarding,
 )
 
 
@@ -100,6 +101,7 @@ def run() -> int:
             )
             assert registration.status_code == 201, registration.text
             household_id = str(registration.json()["active_household_id"])
+            seed_preexisting_unfinished_onboarding(engine, household_id)
             selected = consumer.post(
                 "/api/onboarding/primary-use-case",
                 json={"primary_use_case": "waar_inhuis"},
@@ -221,6 +223,7 @@ def run() -> int:
             )
             assert registration.status_code == 201
             other_household_id = str(registration.json()["active_household_id"])
+            seed_preexisting_unfinished_onboarding(engine, other_household_id)
             selected = other_profile.post(
                 "/api/onboarding/primary-use-case",
                 json={"primary_use_case": "wat_inhuis"},

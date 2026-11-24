@@ -79,7 +79,8 @@ class SessionRegisterRequest(BaseModel):
     email: str
     password: str
     household_name: str = DEFAULT_CONSUMER_HOUSEHOLD_NAME
-    quick_start: bool = False
+    # Accepted for compatibility; every new regular account uses quick start.
+    quick_start: bool = True
 
     @field_validator("household_name")
     @classmethod
@@ -412,14 +413,13 @@ def create_server_session_router(
                     password=payload.password,
                     household_name=payload.household_name,
                 )
-                quick_start_state = None
-                if payload.quick_start:
-                    # All product/household defaults are stored in this same
-                    # registration transaction, before issuing the session.
-                    quick_start_state = complete_default_wat_inhuis_onboarding(
-                        conn, household_id=account.household_id,
-                        household_name=payload.household_name,
-                    )
+                # Always create the Wat Inhuis / quantity / alone defaults
+                # in the registration transaction, even for older Android clients
+                # that omit quick_start or explicitly send false.
+                state, product_configuration = complete_default_wat_inhuis_onboarding(
+                    conn, household_id=account.household_id,
+                    household_name=payload.household_name,
+                )
                 raw_session_id, context = create_server_session(
                     conn,
                     user_id=account.user_id,
@@ -427,14 +427,12 @@ def create_server_session_router(
                     replace_existing=True,
                 )
                 session_payload = _public_session_payload_with_live_household_name(conn, context)
-                if quick_start_state is not None:
-                    state, product_configuration = quick_start_state
-                    session_payload["onboarding"] = {
-                        **public_household_onboarding_payload(state, can_manage=True),
-                        "product_configuration": public_household_product_configuration_payload(
-                            product_configuration
-                        ),
-                    }
+                session_payload["onboarding"] = {
+                    **public_household_onboarding_payload(state, can_manage=True),
+                    "product_configuration": public_household_product_configuration_payload(
+                        product_configuration
+                    ),
+                }
                 # A browser has one cookie identity, even during registration.
                 revoke_server_session(conn, request.cookies.get(SESSION_COOKIE_NAME))
         except ConsumerAccountExistsError as exc:

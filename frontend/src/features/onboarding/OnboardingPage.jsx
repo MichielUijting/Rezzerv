@@ -8,7 +8,6 @@ import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
 import WaarInhuisOnboardingPage from './WaarInhuisOnboardingPage.jsx'
 import SharedHouseholdMinimumPage from './SharedHouseholdMinimumPage.jsx'
 import QuickStartOnboardingPage from './QuickStartOnboardingPage.jsx'
-import { ChoiceSummary, RadioChoices } from './OnboardingChoiceControls.jsx'
 import {
   completeInhuisHalenOnboarding,
   completeSharedHouseholdMinimum,
@@ -20,7 +19,6 @@ import {
   isWatInhuisFollowUp,
   isWaarInhuisFollowUp,
   readHouseholdOnboarding,
-  selectPrimaryUseCase,
 } from './onboardingState.js'
 
 const OPTIONS = [
@@ -90,27 +88,8 @@ export default function OnboardingPage({ onUseCaseSelected }) {
   const context = readStoredAuthContext()
   const initialOnboarding = readHouseholdOnboarding(context)
   const [onboarding, setOnboarding] = useState(() => initialOnboarding)
-  const [selectedPrimaryUseCase, setSelectedPrimaryUseCase] = useState(
-    () => String(initialOnboarding?.primary_use_case || ''),
-  )
-  const [savingKey, setSavingKey] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [error, setError] = useState('')
-
-  async function choose(primaryUseCase = selectedPrimaryUseCase) {
-    if (!primaryUseCase) return
-    setError('')
-    setSavingKey(primaryUseCase)
-    try {
-      const updated = await selectPrimaryUseCase(context, primaryUseCase)
-      setOnboarding(updated)
-      setSelectedPrimaryUseCase(primaryUseCase)
-    } catch (err) {
-      setError(err?.message || 'Gebruiksdoel opslaan mislukt.')
-    } finally {
-      setSavingKey('')
-    }
-  }
 
   async function completeInhuisHalen(preferences) {
     setError('')
@@ -186,7 +165,7 @@ export default function OnboardingPage({ onUseCaseSelected }) {
   const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
   const showWaarInhuisFollowUp = isWaarInhuisFollowUp(onboarding)
   const showSharedHouseholdMinimum = isSharedHouseholdMinimum(onboarding)
-  const primaryUseCaseTitle = optionTitle(onboarding?.primary_use_case || selectedPrimaryUseCase)
+  const primaryUseCaseTitle = optionTitle(onboarding?.primary_use_case)
 
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
@@ -229,48 +208,10 @@ export default function OnboardingPage({ onUseCaseSelected }) {
                 error={error}
               />
             ) : (
-              <div className="rz-form">
-                <div>
-                  <h1 style={{ marginTop: 0 }}>Waar wil je Inhuis mee beginnen?</h1>
-                  <p>
-                    Kies wat je nu het meest helpt. De keuze wordt pas opgeslagen als je op Verder drukt.
-                  </p>
-                </div>
-
-                <ChoiceSummary
-                  items={[
-                    { label: 'Start met', value: optionTitle(selectedPrimaryUseCase) || 'Nog niet gekozen' },
-                  ]}
-                />
-
-                <RadioChoices
-                  name="Waar wil je Inhuis mee beginnen"
-                  value={selectedPrimaryUseCase}
-                  onChange={setSelectedPrimaryUseCase}
-                  disabled={Boolean(savingKey)}
-                  testId="onboarding-choice"
-                  options={OPTIONS.map((option) => ({
-                    value: option.key,
-                    label: option.title,
-                    description: `${option.question} ${option.description}`,
-                    testId: `onboarding-choice-${option.key}`,
-                  }))}
-                />
-
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={!selectedPrimaryUseCase || Boolean(savingKey)}
-                  onClick={() => choose()}
-                  data-testid="onboarding-primary-continue"
-                >
-                  {savingKey ? 'Opslaan…' : 'Verder'}
-                </Button>
-
-                <p style={{ marginBottom: 0 }}>
-                  <strong>Je kunt vóór Verder altijd een andere radioknop kiezen.</strong>
-                </p>
-
+              <div className="rz-form" data-testid="onboarding-unavailable">
+                <h1 style={{ marginTop: 0 }}>Inrichting niet beschikbaar</h1>
+                <p>Inhuis kon de inrichting van dit huishouden niet vaststellen.
+                  Ververs de pagina of meld je opnieuw aan. Bestaande gegevens blijven behouden.</p>
                 {error ? <div className="rz-alert">{error}</div> : null}
               </div>
             )}

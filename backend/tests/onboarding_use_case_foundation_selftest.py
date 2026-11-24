@@ -18,6 +18,7 @@ from app.services.household_onboarding_service import (
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     seed_admin_member_household,
+    seed_preexisting_unfinished_onboarding,
 )
 
 
@@ -88,18 +89,31 @@ def run() -> int:
             assert onboarding.status_code == 200, onboarding.text
             state = onboarding.json()
             assert state["household_id"] == household_id
-            assert state["onboarding_status"] == ONBOARDING_STATUS_NOT_STARTED
+            assert state["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
             assert state["onboarding_version"] == 2
-            assert state["primary_use_case"] is None
-            assert state["initial_choice_required"] is True
+            assert state["primary_use_case"] == "wat_inhuis"
+            assert state["household_usage_mode"] == "alone"
+            assert state["initial_choice_required"] is False
             assert state["can_manage"] is True
-        checks.append("new_household_requires_initial_use_case")
+            assert state["product_configuration"]["inventory_tracking_level"] == "quantity"
+        checks.append("new_consumer_receives_completed_wat_inhuis_without_profile_choice")
 
         with engine.begin() as conn:
             database_state = resolve_household_onboarding_state(conn, household_id)
-            assert database_state.onboarding_status == ONBOARDING_STATUS_NOT_STARTED
-            assert database_state.initial_choice_required is True
-        checks.append("new_household_state_persisted_server_side")
+            assert database_state.onboarding_status == ONBOARDING_STATUS_COMPLETED
+            assert database_state.initial_choice_required is False
+        checks.append("quick_start_state_persisted_server_side")
+
+        # The older multi-step use-case API remains available for households
+        # which had begun that process before the new registration default.
+        # Seed this state explicitly in the disposable test database; a normal
+        # consumer registration must never create an unfinished state.
+        seed_preexisting_unfinished_onboarding(engine, household_id)
+        with engine.begin() as conn:
+            legacy_state = resolve_household_onboarding_state(conn, household_id)
+            assert legacy_state.onboarding_status == ONBOARDING_STATUS_NOT_STARTED
+            assert legacy_state.initial_choice_required is True
+        checks.append("preexisting_unfinished_household_can_resume_legacy_process")
 
         with TestClient(app) as existing_admin:
             login = existing_admin.post(

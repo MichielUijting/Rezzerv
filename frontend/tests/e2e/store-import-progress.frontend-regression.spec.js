@@ -193,7 +193,7 @@ for (const width of [1280, 896, 390]) {
     const overview = page.getByTestId('receipt-connections-overview-table')
     await expect(overview).toBeVisible()
     await expect(page.getByTestId('receipt-connection-summary')).toHaveCount(0)
-    await expect(overview.locator('thead th')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
+    await expect(overview.locator('thead th')).toHaveText(['Winkel', 'Status', 'Laatst bijgewerkt'])
     await expect(page.getByTestId('receipt-connection-updated-ah')).not.toBeEmpty()
     await expect(page.getByTestId('receipt-connection-updated-jumbo')).toHaveText('19-10-2026')
     await expect(page.getByTestId('receipt-connection-updated-lidl')).toHaveText('21-10-2026')
@@ -483,7 +483,7 @@ for (const width of [390, 500, 896]) {
     const mobileHeader = page.getByTestId('receipt-connection-mobile-heading')
     if (width <= 720) {
       await expect(mobileHeader).toBeVisible()
-      await expect(mobileHeader.locator('span')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
+      await expect(mobileHeader.locator('span')).toHaveText(['Winkel', 'Status', 'Laatst bijgewerkt'])
       const metrics = await table.evaluate(element => {
         const rowElements = [...element.querySelectorAll('tbody tr')]
         return {
@@ -495,12 +495,16 @@ for (const width of [390, 500, 896]) {
         }
       })
       expect(metrics.rowDisplays.every(display => display === 'grid')).toBe(true)
+      for (const code of ['ah', 'jumbo', 'lidl']) {
+        const action = page.getByTestId('receipt-connection-action-' + code)
+        await expect(action.locator('xpath=ancestor::td[1]')).toHaveCSS('grid-column-start', '2')
+      }
       expect(metrics.maxHeight).toBeLessThan(80)
       expect(metrics.firstLabel).toBe('none')
       expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.width + 2)
     } else {
       await expect(mobileHeader).toHaveCount(0)
-      await expect(table.locator('thead th')).toHaveText(['Winkel', 'Laatst bijgewerkt', 'Status'])
+      await expect(table.locator('thead th')).toHaveText(['Winkel', 'Status', 'Laatst bijgewerkt'])
       await expect(items.first()).toHaveCSS('display', 'table-row')
     }
     await expect(page.getByTestId('receipt-connection-unavailable-aldi')).toHaveText('Geen koppeling mogelijk')

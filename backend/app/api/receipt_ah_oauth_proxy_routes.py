@@ -56,7 +56,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _FLOW_COOKIE = "inhuis_ah_oauth_flow"
+# Recovery navigation only; never authorizes AH access.
+_FLOW_RETURN_COOKIE = "inhuis_ah_oauth_return_mode"
 _FLOW_TTL = timedelta(minutes=5)
+_FLOW_RETURN_TTL_SECONDS = 3600
 _DEFAULT_BACKEND_PUBLIC_PORT = "8011"
 
 
@@ -180,6 +183,67 @@ def consume_ah_oauth_flow(flow_id: str) -> AHOAuthFlow | None:
     if flow is None or flow.expired():
         return None
     return flow
+
+
+
+def _flow_failure_reason(flow_id: str | None) -> str:
+    """Only safe diagnostic categories, never OAuth codes or flow identifiers."""
+    if not flow_id:
+        return "missing_flow_cookie"
+    with _flow_lock:
+        candidate = _flows.get(str(flow_id).strip())
+        if candidate is not None and candidate.expired():
+            return "flow_expired"
+    return "flow_missing_or_backend_restarted"
+
+
+def _safe_failure_return_url(request: Request) -> str:
+    """Route to Inhuis, never to an untrusted URL from an OAuth callback."""
+    mode = request.cookies.get(_FLOW_RETURN_COOKIE)
+    path = "/onboarding/winkels" if mode == "onboarding" else "/instellingen/winkelkoppelingen"
+    configured = str(os.getenv("REZZERV_APP_BASE_URL", "") or "").strip().rstrip("/")
+    parsed_config = urlparse(configured)
+    if (
+        parsed_config.scheme in {"http", "https"}
+        and parsed_config.hostname
+        and parsed_config.hostname.lower() not in {"localhost", "127.0.0.1"}
+    ):
+        return f"{configured}{path}?ah=error"
+
+    host = str(request.url.hostname or "").lower()
+    if host.startswith("ah-login.") and host.endswith(".sslip.io"):
+        token = host[len("ah-login."):-len(".sslip.io")]
+        parts = token.split("-")
+        if len(parts) == 4 and all(part.isdecimal() for part in parts):
+            try:
+                host = str(IPv4Address(".".join(parts)))
+            except AddressValueError:
+                pass
+    # Never derive a redirect from an arbitrary Host header. Limit mobile
+    # recovery to Tailscale, literal IPv4, local and numeric sslip.io routes.
+    trusted = host == "localhost" or host.endswith(".ts.net")
+    if not trusted:
+        try:
+            IPv4Address(host)
+            trusted = True
+        except AddressValueError:
+            trusted = False
+    if not trusted:
+        return f"{configured or 'http://localhost:5174'}{path}?ah=error"
+    port = str(os.getenv("REZZERV_FRONTEND_PORT", "5174") or "").strip()
+    if not port.isdigit():
+        port = "5174"
+    scheme = request.url.scheme if request.url.scheme in {"http", "https"} else "http"
+    return f"{scheme}://{_format_host(host)}:{port}{path}?ah=error"
+
+
+def _redirect_failed_ah_login(request: Request) -> RedirectResponse:
+    response = RedirectResponse(url=_safe_failure_return_url(request), status_code=302)
+    response.delete_cookie(_FLOW_COOKIE, path="/")
+    response.delete_cookie(_FLOW_RETURN_COOKIE, path="/")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 def build_ah_oauth_launch_url(flow: AHOAuthFlow) -> str:
@@ -313,10 +377,11 @@ def _return_with_status(flow: AHOAuthFlow, status: str) -> str:
 
 
 @router.get("/ah-oauth/launch/{flow_id}", include_in_schema=False)
-async def launch_ah_oauth(flow_id: str):
+async def launch_ah_oauth(flow_id: str, request: Request):
     flow = get_ah_oauth_flow(flow_id)
     if flow is None:
-        raise HTTPException(status_code=410, detail="AH-login is verlopen. Start de koppeling opnieuw.")
+        logger.warning("AH OAuth launch could not start: reason=flow_expired_or_missing")
+        return _redirect_failed_ah_login(request)
     # Enter the mobile OAuth authorize route first; AH needs the per-flow
     # installation identifier on that request to issue an authorization code.
     response = RedirectResponse(url=f"/secure/oauth/authorize?{_login_query()}", status_code=302)
@@ -329,17 +394,30 @@ async def launch_ah_oauth(flow_id: str):
         secure=flow.backend_origin.startswith("https://"),
         path="/",
     )
+    response.set_cookie(
+        _FLOW_RETURN_COOKIE,
+        "onboarding" if urlparse(flow.return_to).path == "/onboarding/winkels" else "settings",
+        max_age=_FLOW_RETURN_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=flow.backend_origin.startswith("https://"),
+        path="/",
+    )
     return response
 
 
 @router.get("/ah-oauth/callback", include_in_schema=False)
 async def ah_oauth_callback(request: Request, code: str | None = None):
     flow_id = request.cookies.get(_FLOW_COOKIE)
+    reason = _flow_failure_reason(flow_id)
     flow = get_ah_oauth_flow(flow_id)
     if flow is None:
-        raise HTTPException(status_code=410, detail="AH-login is verlopen. Start de koppeling opnieuw.")
+        logger.warning("AH OAuth callback could not complete: reason=%s", reason)
+        return _redirect_failed_ah_login(request)
     if not str(code or "").strip():
-        raise HTTPException(status_code=400, detail="AH-login gaf geen autorisatiecode terug")
+        logger.warning("AH OAuth callback could not complete: reason=missing_authorization_code")
+        consume_ah_oauth_flow(flow.flow_id)
+        return _redirect_failed_ah_login(request)
 
     client = AHReceiptClient()
     try:
@@ -348,11 +426,17 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "connected"), status_code=302)
         response.delete_cookie(_FLOW_COOKIE, path="/")
+        response.delete_cookie(_FLOW_RETURN_COOKIE, path="/")
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
     except (httpx.HTTPError, ValueError):
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "error"), status_code=302)
         response.delete_cookie(_FLOW_COOKIE, path="/")
+        response.delete_cookie(_FLOW_RETURN_COOKIE, path="/")
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
     finally:
         client.close()

@@ -20,6 +20,7 @@ Dit besluit is **nieuwer dan** de oorspronkelijke vragenwizard in hoofdstuk 4, 5
 - Het huishouden begint **Alleen**. Samen gebruiken en iemand uitnodigen blijft mogelijk via de bestaande huishoudinstellingen, niet als voorwaarde bij de eerste start.
 - Bijna op, Winkelen en Kassa/bonverwerking worden met de standaardconfiguratie beschikbaar gemaakt, zonder extra onboardingvragen. Er zijn geen verplichte locaties/sublocaties.
 - Registratie en de standaardinrichting gebeuren in **één servertransactie**. De pagina ververst niet en verschijnt niet als reeks losse formulieren.
+- De backend past deze standaard bij **ieder nieuw regulier account** toe, ook wanneer een oudere Android-/browserclient de optionele `quick_start`-vlag niet meestuurt of expliciet `false` doorgeeft. Het oude profielenkeuzescherm wordt dan niet aangeboden. Een reeds begonnen inrichting van een bestaand huishouden wordt hiermee niet automatisch gewijzigd.
 - **Pas ná** het afronden van account en huishouden verschijnt de bestaande, optionele stap **Winkels koppelen** voor Albert Heijn, Lidl en Jumbo, met **Later**. Nooit vóór het huishouden.
 - Alleen nieuwe, nog niet ingerichte huishoudens gebruiken deze snelle standaardroute. Reeds begonnen alternatieve profieltrajecten kunnen hun bestaande stap afronden; bestaande gebruikers/huishoudens en specifieke uitnodigingsregistratie worden niet opnieuw ingesteld.
 - Gebruikers kunnen later vanuit Instellingen hun huishouden, mogelijkheden en locatiegedrag aanpassen. Autorisatie blijft volledig gescheiden van gebruiksprofiel.
@@ -837,7 +838,6 @@ Gebruik daarbij dit principe:
 | Datum | Versie | Wijziging |
 |---|---|---|
 | 2026-08-23 | 2.0 | Eerste canonieke versie. Doel-first onboarding, drie startprofielen, circulaire uitbreiding, inventarisatie van huidige repository en implementatievolgorde vastgelegd. |
-
 
 ## 2026-11-24 — Begeleide eerste gebruikersreis na de vaste snelle start
 

@@ -48,6 +48,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [setupHelpStore, setSetupHelpStore] = useState('')
   const ahSyncPageMountedRef = useRef(false)
   const ahLoginNavigatingRef = useRef(false)
+  const ahReturnOutcomeRef = useRef(null)
   const lidlImportPageMountedRef = useRef(false)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
@@ -424,25 +425,52 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const ahResult = params.get('ah')
-    if (!ahResult) return
-    if (ahResult === 'connected') {
-      setActiveProvider('ah')
-      showFeedback({
-        variant: 'success',
-        title: 'Albert Heijn gekoppeld',
-        message: 'De koppeling is veilig opgeslagen. Nieuwe digitale AH-bonnen kunnen nu rechtstreeks in Inhuis worden opgehaald.',
-      })
-    } else if (ahResult === 'error') {
-      showFeedback({
-        variant: 'error',
-        title: 'Albert Heijn koppelen',
-        message: 'De AH-login kon niet worden afgerond. Probeer de koppeling opnieuw.',
-      })
+    const fromUrl = params.get('ah')
+    if (fromUrl) {
+      // Retain this one-time outcome across React StrictMode effect replays.
+      ahReturnOutcomeRef.current = fromUrl
+      params.delete('ah')
+      const query = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash)
     }
-    params.delete('ah')
-    const query = params.toString()
-    window.history.replaceState(null, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash)
+    const ahResult = ahReturnOutcomeRef.current
+    if (ahResult !== 'connected' && ahResult !== 'error') return
+
+    // A redirect query only reports a browser outcome, not an established AH
+    // connection. Check the household-scoped backend before claiming success.
+    let cancelled = false
+    async function confirmAhLogin() {
+      try {
+        const confirmation = await loadAhStatus()
+        if (cancelled) return
+        ahReturnOutcomeRef.current = null
+        if (confirmation?.connected === true) {
+          setActiveProvider('ah')
+          showFeedback({
+            variant: 'success',
+            title: 'Albert Heijn gekoppeld',
+            message: 'De koppeling is veilig opgeslagen. Nieuwe digitale AH-bonnen kunnen nu rechtstreeks in Inhuis worden opgehaald.',
+          })
+        } else {
+          showFeedback({
+            variant: 'error',
+            title: 'Albert Heijn koppelen',
+            message: 'De AH-login is niet voltooid of verlopen. Probeer de koppeling opnieuw.',
+          })
+        }
+      } catch {
+        if (!cancelled) {
+          ahReturnOutcomeRef.current = null
+          showFeedback({
+            variant: 'warning',
+            title: 'Albert Heijn koppelen',
+            message: 'De AH-koppelstatus kon niet worden gecontroleerd. Vernieuw Winkelkoppelingen.',
+          })
+        }
+      }
+    }
+    void confirmAhLogin()
+    return () => { cancelled = true }
   }, [showFeedback])
 
   useEffect(() => {

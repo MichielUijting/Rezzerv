@@ -16,6 +16,7 @@ const household = {
   product_configuration: { receipt_processing_enabled: true },
 }
 assert.equal(shouldOfferStoreConnectionOnboarding(household), true)
+assert.equal(shouldOfferStoreConnectionOnboarding({ ...household, product_configuration: undefined }), true)
 assert.equal(shouldOfferStoreConnectionOnboarding({ ...household, can_manage: false }), false)
 assert.equal(shouldOfferStoreConnectionOnboarding({
   ...household, product_configuration: { receipt_processing_enabled: false },
@@ -72,7 +73,7 @@ const progressView = readFileSync(new URL('../src/features/storeConnections/Hist
 assert.match(progressView, /historical-import-paused/)
 assert.match(progressView, /Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa/)
 assert.match(progressView, /geen onbevestigd totaal of percentage/)
-assert.match(progressView, /Welke bonnen\?/)
 assert.doesNotMatch(progressView, /<progress\b/)
 
+assert.match(progressView, /Welke bonnen\?/)
 console.log('ONBOARDING_PR7_JOURNEY_CONTRACT_GREEN')

@@ -5,7 +5,9 @@ const ONBOARDING_RECEIPT_STORES = new Set(['ah', 'lidl', 'jumbo'])
 export function shouldOfferStoreConnectionOnboarding(onboarding) {
   return onboarding?.onboarding_status === 'completed'
     && onboarding?.can_manage === true
-    && onboarding?.product_configuration?.receipt_processing_enabled === true
+    // Older completed onboarding responses can omit the optional configuration.
+    // Absence is not an explicit decision to disable receipts.
+    && onboarding?.product_configuration?.receipt_processing_enabled !== false
 }
 
 export function filterOnboardingReceiptStores(rows) {
