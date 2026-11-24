@@ -27,7 +27,7 @@ import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate }
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
-import StoreConnectionWalkthrough from '../onboarding/StoreConnectionWalkthrough.jsx'
+import StoreConnectionWalkthrough, { completeStoreConnectionGuidance } from '../onboarding/StoreConnectionWalkthrough.jsx'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
@@ -935,6 +935,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
+  function finishGuidance() {
+    completeStoreConnectionGuidance(household?.id)
+    onFinish?.()
+  }
+
   return (
     <AppShell title={onboardingMode ? 'Winkels aansluiten' : 'Winkelkoppelingen'} showExit={false}>
       <div style={{
@@ -1180,11 +1185,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <div data-testid="onboarding-stores-finish-step"
             style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '2px 4px' }}>
             <Button type="button" variant="secondary" data-testid="onboarding-stores-continue"
-              onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              onClick={finishGuidance} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
               Naar dashboard
             </Button>
             <Button type="button" variant="secondary" data-testid="onboarding-stores-later"
-              onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              onClick={finishGuidance} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
               Uitleg overslaan
             </Button>
           </div>
@@ -1194,7 +1199,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             key={household.id}
             householdId={household.id}
             ready={!ahBusy && !jumboImportBusy && !lidlWindowSaving}
-            onFinish={onFinish}
+            onFinish={finishGuidance}
           />
         ) : null}
 

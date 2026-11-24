@@ -6,12 +6,18 @@ const STORES = [
   { code: 'lidl', name: 'Lidl' },
 ]
 const TARGET_CLASS = 'rz-receipt-connection-guide-target'
+const GUIDE_FINISHED = STORES.length + 1
 const storageKey = (householdId) => 'inhuis:onboarding:store-arrows:' + householdId
+
+export function completeStoreConnectionGuidance(householdId) {
+  if (!householdId) return
+  try { window.localStorage.setItem(storageKey(householdId), String(GUIDE_FINISHED)) } catch {}
+}
 
 function readStep(householdId) {
   try {
     const raw = Number(window.localStorage.getItem(storageKey(householdId)))
-    return Number.isInteger(raw) && raw >= 0 && raw <= STORES.length ? raw : 0
+    return Number.isInteger(raw) && raw >= 0 && raw <= GUIDE_FINISHED ? raw : 0
   } catch {
     return 0
   }
@@ -95,7 +101,10 @@ export default function StoreConnectionWalkthrough({ householdId, ready, onFinis
     if (!ready || !householdId || step !== STORES.length || finishedRef.current) return
     finishedRef.current = true
     // Let any actual store-button click complete before changing the route.
-    const timer = window.setTimeout(() => finishRef.current?.(), 250)
+    const timer = window.setTimeout(() => {
+      completeStoreConnectionGuidance(householdId)
+      finishRef.current?.()
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [householdId, ready, step])
 
