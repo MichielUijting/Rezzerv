@@ -970,7 +970,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               </div>
             </details>
           </Card>
-        )}
+        ) : null}
         <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Mijn winkelkoppelingen</h3>
