@@ -46,5 +46,11 @@ assert.match(connections, /document\.addEventListener\('visibilitychange', resum
 assert.match(connections, /ahLoginNavigatingRef\.current = false\s+setAhBusy\(false\)\s+void loadAhStatus\(\)/)
 assert.match(connections, /document\.visibilityState === 'hidden'/)
 assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/onboarding\/winkels"\}/)
+assert.match(connections, /const confirmation = await loadAhStatus\(\)/)
+assert.match(connections, /ahReturnOutcomeRef\.current = fromUrl/)
+assert.match(connections, /ahReturnOutcomeRef\.current = null/)
+assert.match(connections, /if \(confirmation\?\.connected === true\)/)
+assert.match(connections, /De AH-login is niet voltooid of verlopen/)
+assert.doesNotMatch(connections, /if \(ahResult === 'connected'\) \{\s*setActiveProvider\('ah'\)/)
 
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')
