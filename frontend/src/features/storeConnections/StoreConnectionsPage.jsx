@@ -40,7 +40,6 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
-  const [guideStep, setGuideStep] = useState(0)
   const [connectionHelpOpen, setConnectionHelpOpen] = useState(() => new URLSearchParams(window.location.search).has('ah'))
   const [latestImportDates, setLatestImportDates] = useState({})
   const [historySummary, setHistorySummary] = useState(null)
@@ -131,19 +130,6 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
     },
     {
-      key: 'lastSyncLabel',
-      header: 'Laatst bijgewerkt',
-      width: isMobileViewport ? 115 : 180,
-      renderCell: row => (
-        <span
-          data-testid={`receipt-connection-updated-${row.providerCode}`}
-          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
-        >
-          {row.lastSyncLabel}
-        </span>
-      ),
-    },
-    {
       key: 'action',
       header: 'Status',
       width: isMobileViewport ? 175 : 230,
@@ -166,6 +152,19 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               {row.actionLabel}
             </Button>
           )}
+        </span>
+      ),
+    },
+    {
+      key: 'lastSyncLabel',
+      header: 'Laatst bijgewerkt',
+      width: isMobileViewport ? 115 : 180,
+      renderCell: row => (
+        <span
+          data-testid={`receipt-connection-updated-${row.providerCode}`}
+          title={row.isDefaultImportDate ? 'Nog geen bonnen verwerkt. Startdatum voor de eerste keer ophalen.' : undefined}
+        >
+          {row.lastSyncLabel}
         </span>
       ),
     },
@@ -947,19 +946,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         minWidth: 0,
         margin: '0 auto',
       }} data-testid="store-connections-page">
-        {onboardingMode ? (
-          <Card>
-            <div data-testid="onboarding-stores-step">
-              <StoreConnectionWalkthrough
-                step={guideStep}
-                onStepChange={setGuideStep}
-                onFinish={onFinish}
-                ahConnected={ahConnection?.connected === true}
-                disabled={ahBusy || jumboImportBusy || lidlWindowSaving}
-              />
-            </div>
-          </Card>
-        ) : (
+        {!onboardingMode ? (
           <Card>
             <details data-testid="store-connections-help" open={connectionHelpOpen}
               onToggle={(event) => setConnectionHelpOpen(event.currentTarget.open)}>
@@ -991,8 +978,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             {isMobileViewport ? (
               <div className="rz-receipt-connection-mobile-heading" data-testid="receipt-connection-mobile-heading" role="group" aria-label="Kolommen winkelkoppelingen">
                 <span>Winkel</span>
-                <span>Laatst bijgewerkt</span>
                 <span>Status</span>
+                <span>Laatst bijgewerkt</span>
               </div>
             ) : null}
             <DataTable
@@ -1190,19 +1177,25 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         {activeProvider === 'picnic' ? <PicnicAccountResearchPanel /> : null}
 
         {onboardingMode ? (
-          <Card>
-            <div data-testid="onboarding-stores-finish-step" style={{ display: 'grid', rowGap: '12px' }}>
-              <p style={{ margin: 0 }}>Je hoeft niet alle winkels nu aan te sluiten. Je kunt dit later doen via Instellingen → Winkelkoppelingen. Wacht bij een lopende bonoverdracht eerst op de bevestiging dat de bonnen veilig ontvangen zijn.</p>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" variant="primary" data-testid="onboarding-stores-continue" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-                  Bekijk dashboard met uitleg
-                </Button>
-                <Button type="button" variant="secondary" data-testid="onboarding-stores-later" onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-                  Winkels later koppelen
-                </Button>
-              </div>
-            </div>
-          </Card>
+          <div data-testid="onboarding-stores-finish-step"
+            style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '2px 4px' }}>
+            <Button type="button" variant="secondary" data-testid="onboarding-stores-continue"
+              onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              Naar dashboard
+            </Button>
+            <Button type="button" variant="secondary" data-testid="onboarding-stores-later"
+              onClick={() => onFinish?.()} disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
+              Uitleg overslaan
+            </Button>
+          </div>
+        ) : null}
+        {onboardingMode && household?.id && !isLoading ? (
+          <StoreConnectionWalkthrough
+            key={household.id}
+            householdId={household.id}
+            ready={!ahBusy && !jumboImportBusy && !lidlWindowSaving}
+            onFinish={onFinish}
+          />
         ) : null}
 
 

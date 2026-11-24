@@ -1,85 +1,122 @@
-import Button from '../../ui/Button.jsx'
+import { useEffect, useRef, useState } from 'react'
 
-const INSTRUCTIONS = [
-  {
-    title: 'Kies de winkels die je gebruikt',
-    description: 'Je hoeft geen winkel te koppelen om Inhuis te gebruiken. Kies in Mijn winkelkoppelingen een winkel en volg de uitleg.',
-    next: 'Volgende: aankopen',
-  },
-  {
-    title: 'Laat Inhuis je aankopen controleren',
-    description: 'Na een geslaagde AH-koppeling kun je Nu synchroniseren gebruiken. Inhuis controleert welke digitale bonnen beschikbaar zijn; als er geen bonnen zijn, is 0 een normaal resultaat.',
-    next: 'Volgende: Inhuis gebruiken',
-  },
-  {
-    title: 'Ontdek het dashboard en de actiebalk',
-    description: 'Het dashboard geeft overzicht zodra Inhuis gegevens heeft. Onderaan je telefoon staan snelkoppelingen; via Meer vind je andere functies en Instellingen. Je krijgt zo meteen een korte rondleiding.',
-    next: 'Bekijk dashboard met uitleg',
-  },
+const STORES = [
+  { code: 'ah', name: 'Albert Heijn' },
+  { code: 'jumbo', name: 'Jumbo' },
+  { code: 'lidl', name: 'Lidl' },
 ]
+const TARGET_CLASS = 'rz-receipt-connection-guide-target'
+const storageKey = (householdId) => 'inhuis:onboarding:store-arrows:' + householdId
+
+function readStep(householdId) {
+  try {
+    const raw = Number(window.localStorage.getItem(storageKey(householdId)))
+    return Number.isInteger(raw) && raw >= 0 && raw <= STORES.length ? raw : 0
+  } catch {
+    return 0
+  }
+}
 
 /**
- * Guidance is advisory: it never blocks registration, enables an import,
- * marks an AH connection, or guesses the number of retailer receipts.
+ * Pointer-only guidance: never paints/dims the background or intercepts
+ * any retailer action. Progress is household-scoped and survives external
+ * AH browser handoff; it contains no accounts, receipts or credentials.
  */
-export default function StoreConnectionWalkthrough({
-  step = 0, onStepChange, onFinish, ahConnected = false, disabled = false,
-}) {
-  const index = Math.min(Math.max(Number(step) || 0, 0), INSTRUCTIONS.length - 1)
-  const current = INSTRUCTIONS[index]
+export default function StoreConnectionWalkthrough({ householdId, ready, onFinish }) {
+  const [step, setStep] = useState(() => readStep(householdId))
+  const [position, setPosition] = useState(null)
+  const finishedRef = useRef(false)
+  const finishRef = useRef(onFinish)
+  useEffect(() => { finishRef.current = onFinish }, [onFinish])
+
+  useEffect(() => {
+    if (!ready || !householdId || step >= STORES.length) return
+    const store = STORES[step]
+    const button = document.querySelector('[data-testid="receipt-connection-action-' + store.code + '"]')
+    if (!button) return
+    button.classList.add(TARGET_CLASS)
+    button.setAttribute('data-onboarding-arrow-target', store.code)
+    button.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' })
+
+    let frame = null
+    function locate() {
+      if (!button.isConnected) return
+      const rect = button.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      const below = rect.top < 150
+      const center = rect.left + rect.width / 2
+      const left = Math.max(6, Math.min(window.innerWidth - 220, center - 108))
+      const top = below ? Math.min(window.innerHeight - 134, rect.bottom + 8) : Math.max(8, rect.top - 133)
+      setPosition({ left, top, below })
+    }
+    function measure() {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(locate)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      button.classList.remove(TARGET_CLASS)
+      button.removeAttribute('data-onboarding-arrow-target')
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [householdId, ready, step])
+
+  useEffect(() => {
+    if (!ready || !householdId || step >= STORES.length) return
+    let advanced = false
+    function advance() {
+      if (advanced) return
+      advanced = true
+      const next = step + 1
+      try { window.localStorage.setItem(storageKey(householdId), String(next)) } catch {}
+      setPosition(null)
+      setStep(next)
+    }
+    function keyDown(event) {
+      if (event.key === 'ArrowRight') advance()
+      if (event.key === 'Escape') {
+        try { window.localStorage.setItem(storageKey(householdId), String(STORES.length)) } catch {}
+        setStep(STORES.length)
+      }
+    }
+    window.addEventListener('click', advance, true)
+    window.addEventListener('keydown', keyDown)
+    return () => {
+      window.removeEventListener('click', advance, true)
+      window.removeEventListener('keydown', keyDown)
+    }
+  }, [householdId, ready, step])
+
+  useEffect(() => {
+    if (!ready || !householdId || step !== STORES.length || finishedRef.current) return
+    finishedRef.current = true
+    // Let any actual store-button click complete before changing the route.
+    const timer = window.setTimeout(() => finishRef.current?.(), 250)
+    return () => window.clearTimeout(timer)
+  }, [householdId, ready, step])
+
+  if (!ready || !householdId || step >= STORES.length || !position) return null
+
   return (
-    <section data-testid="onboarding-store-walkthrough" aria-labelledby="onboarding-guide-title"
-      style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
-      <h2 id="onboarding-guide-title" style={{ margin: 0 }}>Zo start je met Inhuis</h2>
-      <p style={{ margin: 0 }}>We helpen je in drie korte stappen. Je kunt altijd een winkel overslaan of later koppelen.</p>
-      <p style={{ margin: 0, fontWeight: 700 }} data-testid="onboarding-guide-progress">
-        Stap {index + 1} van 3
-      </p>
-      <h3 style={{ margin: 0 }}>{current.title}</h3>
-      <p style={{ margin: 0 }}>{current.description}</p>
-      {index === 0 ? (
-        <p style={{ margin: 0 }}>
-          <strong>Albert Heijn:</strong> meld je aan bij Mijn AH en keer terug naar Inhuis.
-          <strong> Lidl en Jumbo:</strong> deze werken met een browserfavoriet; dit is op sommige
-          Android-browsers niet beschikbaar. Gebruik die koppelingen eventueel later op een computer.
-        </p>
-      ) : null}
-      {index === 0 && ahConnected ? (
-        <p style={{ margin: 0 }} role="status" data-testid="onboarding-guide-ah-connected">
-          Albert Heijn is gekoppeld. Je kunt doorgaan naar de volgende stap.
-        </p>
-      ) : null}
-      {index === 1 ? (
-        <p style={{ margin: 0 }}>
-          In <strong>Historische aankopen</strong> zie je wat Inhuis daadwerkelijk heeft opgeslagen,
-          wat nog in verwerking is en wat aandacht nodig heeft. Een opgeslagen bon is niet automatisch
-          zichtbaar in de gewone Kassa-lijst. Zonder bruikbare aankoopgegevens zijn voorraad en
-          voorspellingen nog niet volledig opgebouwd.
-        </p>
-      ) : null}
-      {index === 2 ? (
-        <p style={{ margin: 0 }}>
-          <strong>Voorraad</strong> toont wat je hebt, <strong>Kassa</strong> verwerkt bonnen,
-          <strong>Boodschappen</strong> helpt bij het winkelen en <strong>Bijna op</strong> geeft
-          aanvulsuggesties als er voldoende gegevens zijn. Uitpakken verschijnt wanneer het is
-          ingeschakeld. De onderste knoppen kunnen per gebruiker veranderen.
-        </p>
-      ) : null}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-        {index > 0 ? (
-          <Button type="button" variant="secondary" onClick={() => onStepChange?.(index - 1)}
-            disabled={disabled} data-testid="onboarding-guide-back">Vorige</Button>
-        ) : null}
-        <Button type="button" variant="primary"
-          onClick={() => index === 2 ? onFinish?.() : onStepChange?.(index + 1)}
-          disabled={disabled} data-testid="onboarding-guide-next">
-          {current.next}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => onFinish?.()}
-          disabled={disabled} data-testid="onboarding-guide-skip">
-          Winkels later koppelen
-        </Button>
-      </div>
-    </section>
+    <aside
+      className={'rz-onboarding-arrow-overlay' + (position.below ? ' rz-onboarding-arrow-overlay--below' : '')}
+      data-testid="onboarding-store-arrow"
+      data-store={STORES[step].code}
+      role="status"
+      aria-live="polite"
+      style={{ left: position.left, top: position.top }}
+    >
+      <span className="rz-onboarding-arrow-label" data-testid="onboarding-arrow-step">
+        {step + 1}/3 · {STORES[step].name}: tik op de knop
+      </span>
+      <svg className="rz-onboarding-arrow-shape" viewBox="0 0 116 82" aria-hidden="true">
+        <path d="M22 5 C36 23 62 20 62 68" />
+        <path d="M43 51 L62 72 L82 52" />
+      </svg>
+    </aside>
   )
 }

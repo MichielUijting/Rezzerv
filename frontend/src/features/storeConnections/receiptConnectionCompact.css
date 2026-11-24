@@ -1,13 +1,136 @@
-/* Compact exception to the Settings mobile card layout.
- * The central DataTable, native table cells and accessibility labels are kept.
- * Only the receipt-connection overview uses one horizontal row per retailer.
+/* Inhuis Winkelkoppelingen: local compact layout and visual onboarding.
+ * Do not modify the shared DataTable, global Card or app bar.
  */
+[data-testid="store-connections-page"] .rz-receipt-connection-compact-table th,
+[data-testid="store-connections-page"] .rz-receipt-connection-compact-table td {
+  padding: 5px 6px;
+}
+
+.rz-onboarding-arrow-overlay {
+  position: fixed;
+  z-index: 4000;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.rz-onboarding-arrow-label {
+  max-width: 210px;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #D97706;
+  color: #171717;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(15, 20, 15, .22);
+}
+
+.rz-onboarding-arrow-shape {
+  display: block;
+  width: 116px;
+  height: 82px;
+  fill: none;
+  stroke: #D97706;
+  stroke-width: 8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25));
+}
+
+.rz-onboarding-arrow-overlay--below {
+  flex-direction: column-reverse;
+}
+
+.rz-onboarding-arrow-overlay--below .rz-onboarding-arrow-shape {
+  transform: rotate(180deg);
+}
+
+[data-testid="store-connections-page"] .rz-receipt-connection-compact-table button.rz-receipt-connection-guide-target {
+  background: #D97706;
+  border-color: #A65A07 !important;
+  color: #171717 !important;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, .30), 0 4px 13px rgba(95, 54, 9, .38) !important;
+  animation: rz-store-guide-button-pulse 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes rz-store-guide-button-pulse {
+  from { background: #D97706; box-shadow: 0 0 0 2px rgba(217, 119, 6, .27); }
+  to { background: #F0A54A; box-shadow: 0 0 0 5px rgba(217, 119, 6, .39); }
+}
+
+.rz-first-use-action-hint {
+  position: fixed;
+  z-index: 4000;
+  left: 50%;
+  bottom: calc(101px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(355px, calc(100vw - 28px));
+  padding: 11px 14px;
+  border: 2px solid #A65A07;
+  border-radius: 12px;
+  background: #D97706;
+  color: #171717;
+  display: grid;
+  gap: 5px;
+  font-size: 14px;
+  line-height: 1.3;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
+  pointer-events: none;
+}
+
+.rz-first-use-action-hint strong {
+  font-size: 17px;
+}
+
+.rz-first-use-action-hint svg {
+  position: absolute;
+  left: 50%;
+  bottom: -45px;
+  width: 100px;
+  height: 50px;
+  transform: translateX(-50%);
+  fill: none;
+  stroke: #D97706;
+  stroke-width: 7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25));
+}
+
 @media (max-width: 720px) {
+  /* Both onboarding and Settings use the same local compact table geometry. */
+  .rz-screen:has([data-testid="store-connections-page"]) > .rz-content {
+    padding: 9px 5px 104px !important;
+  }
+
+  [data-testid="store-connections-page"] {
+    max-width: 100% !important;
+    gap: 9px !important;
+  }
+
+  [data-testid="store-connections-page"] > .rz-card {
+    padding: 9px 8px !important;
+  }
+
+  [data-testid="receipt-connections-overview"] {
+    gap: 7px !important;
+  }
+
+  [data-testid="receipt-connections-overview"] > h3 {
+    margin: 1px 0 4px !important;
+  }
+
   .rz-receipt-connection-mobile-heading {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr);
-    column-gap: 6px;
-    padding: 7px 6px;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(0, 1.1fr);
+    column-gap: 4px;
+    padding: 6px 3px;
     background: var(--color-ui-primary);
     color: var(--color-text-inverse);
     font-size: 12px;
@@ -15,54 +138,60 @@
     line-height: 1.2;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody {
     gap: 0;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody tr {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr);
-    column-gap: 6px;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(0, 1.1fr);
+    column-gap: 4px;
     align-items: center;
     min-height: 44px !important;
-    padding: 4px 6px;
+    padding: 4px 3px;
     border: 0;
     border-bottom: 1px solid var(--color-table-grid);
     border-radius: 0;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody td {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody td {
     display: block;
     min-height: 0 !important;
     height: auto !important;
-    padding: 0 !important;
+    padding: 0 1px !important;
     border: 0;
     overflow: visible;
     white-space: normal !important;
     overflow-wrap: anywhere;
-    line-height: 1.25 !important;
+    line-height: 1.2 !important;
     font-size: 12px;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody td[data-mobile-label]::before {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody td[data-mobile-label]::before {
     display: none;
     content: none;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody td:first-child {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody td:first-child {
     font-weight: 600;
   }
 
-  .rz-settings-shell .rz-table.rz-receipt-connection-compact-table tbody td button {
+  [data-testid="store-connections-page"] .rz-table.rz-receipt-connection-compact-table tbody td button {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     min-height: 40px;
-    padding: 5px 4px;
+    padding: 5px 3px;
     white-space: normal;
-    line-height: 1.2;
+    line-height: 1.15;
     font-size: 12px;
     font-weight: 400;
     justify-self: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="store-connections-page"] .rz-receipt-connection-compact-table button.rz-receipt-connection-guide-target {
+    animation: none;
   }
 }

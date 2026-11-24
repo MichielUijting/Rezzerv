@@ -2121,3 +2121,14 @@ opgehaald en verschijnen pas wanneer de volledige telling beschikbaar is;
 een gedeeltelijke pagina telt nooit ten onrechte als het volledige totaal.
 Verzoeken met ongeldige artikelidentiteiten of conflicterende aantallen
 stoppen fail-closed met de bestaande centrale meldings-overlay.
+
+
+## Visuele onboarding Winkelkoppelingen — 24 november 2026
+
+De nieuwe-account-default en de routering naar Winkelkoppelingen blijven ongewijzigd. De eerder ontworpen grote tekstkaart in de onboarding is **vervallen**. De tabel met winkels is onmiddellijk zichtbaar; alleen een **grote oranje pijl** als overlay wijst naar de bestaande winkelknop. De pijl gebruikt de Inhuis-oranje accentkleur `#D97706` (ook in de mobiele actiebalk). Er komt **geen** dimlaag of gewijzigde achtergrond over de rest van het scherm. De betreffende knop krijgt tijdelijk een duidelijk zichtbare, licht variërende oranje nadruk, met een rustig alternatief bij een verminderde-bewegingvoorkeur.
+
+De pijlen worden achtereenvolgens getoond voor **Albert Heijn → Jumbo → Lidl**; hun echte actieknoppen mogen niet worden geblokkeerd. Een tik of klik op het scherm laat de huidige pijl verdwijnen en de volgende verschijnen. De drie pijlen zijn instructie, **geen verificatie van de koppeling**, geen verplichting om een winkel te gebruiken en geen initiatie van een kassabonimport. Na de derde pijl volgt automatisch het dashboard; optioneel overslaan blijft mogelijk. Een onderbroken browserwissel mag de begeleidingsvolgorde niet laten terugvallen naar de eerste pijl en mag geen gebruikers- of bongegevens aanpassen.
+
+Bij de eerste doorgang naar het dashboard verschijnt uitsluitend een **compacte oranje overlay dicht bij de mobiele actiebalk**. De korte tekst legt de dynamische snelknoppen en **Meer** uit. Het dashboard wordt niet van kleur veranderd en onderliggende navigatie blijft bedienbaar; een tik verwijdert de uitleg. Geen tekstzware dialoog of drietrapswizard.
+
+In **Mijn winkelkoppelingen** komt `Status` vóór `Laatst bijgewerkt` op desktop en mobiel. Alleen dit scherm krijgt compactere panelmarges, buitenpadding, tabelcelpadding en kolomtussenruimtes voor betere zichtbaarheid op Android. De gedeelde `DataTable`-implementatie en andere schermen blijven ongewijzigd. Korte teksten, voldoende contrast en een afgebakende visuele aanwijzing blijven leidend.
