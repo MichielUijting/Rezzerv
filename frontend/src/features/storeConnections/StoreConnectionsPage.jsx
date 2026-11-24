@@ -126,12 +126,14 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     {
       key: 'providerName',
       header: 'Winkel',
+      cellClassName: 'rz-receipt-store-cell',
       width: isMobileViewport ? 90 : 190,
       renderCell: row => <span data-testid={`receipt-connection-name-${row.providerCode}`}>{row.providerName}</span>,
     },
     {
       key: 'action',
       header: 'Status',
+      cellClassName: 'rz-receipt-status-cell',
       width: isMobileViewport ? 175 : 230,
       renderCell: row => (
         <span data-testid={`receipt-connection-status-${row.providerCode}`}>
@@ -158,6 +160,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     {
       key: 'lastSyncLabel',
       header: 'Laatst bijgewerkt',
+      cellClassName: 'rz-receipt-updated-cell',
       width: isMobileViewport ? 115 : 180,
       renderCell: row => (
         <span
@@ -993,6 +996,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               getRowKey={row => row.providerCode}
               dataTestId="receipt-connections-overview-table"
               tableClassName="rz-store-review-table rz-receipt-connection-compact-table"
+              wrapperClassName={isMobileViewport ? 'rz-receipt-connections-mobile' : ''}
               emptyMessage="Geen winkelkoppelingen beschikbaar."
               stickyHeader={false}
               stickyFilters={false}

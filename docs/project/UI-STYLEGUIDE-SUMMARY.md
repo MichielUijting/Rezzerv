@@ -2132,3 +2132,6 @@ De pijlen worden achtereenvolgens getoond voor **Albert Heijn → Jumbo → Lidl
 Bij de eerste doorgang naar het dashboard verschijnt uitsluitend een **compacte oranje overlay dicht bij de mobiele actiebalk**. De korte tekst legt de dynamische snelknoppen en **Meer** uit. Het dashboard wordt niet van kleur veranderd en onderliggende navigatie blijft bedienbaar; een tik verwijdert de uitleg. Geen tekstzware dialoog of drietrapswizard.
 
 In **Mijn winkelkoppelingen** komt `Status` vóór `Laatst bijgewerkt` op desktop en mobiel. Alleen dit scherm krijgt compactere panelmarges, buitenpadding, tabelcelpadding en kolomtussenruimtes voor betere zichtbaarheid op Android. De gedeelde `DataTable`-implementatie en andere schermen blijven ongewijzigd. Korte teksten, voldoende contrast en een afgebakende visuele aanwijzing blijven leidend.
+
+
+**PO-correctie 24 november 2026:** op mobiel staan de winkelnaam, echte winkelactie en datum expliciet in respectievelijk kolom 1, 2 (Status) en 3, ook bij liggende telefoon. De oranje aanwijzing bevat uitsluitend **Nu winkel(s) koppelen!**, zonder stapnummer of winkelnaam. De pijlspits wijst naar het midden van de boven- of onderrand van de werkelijke actieknop. De gewone winkelactieknoppen en hun teksten blijven functioneel ongewijzigd.

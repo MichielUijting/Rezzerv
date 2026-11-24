@@ -9,17 +9,21 @@
 .rz-onboarding-arrow-overlay {
   position: fixed;
   z-index: 4000;
-  width: 210px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  width: 0;
+  height: 0;
   pointer-events: none;
   background: transparent;
   color: var(--color-text-primary);
 }
 
 .rz-onboarding-arrow-label {
-  max-width: 210px;
+  position: absolute;
+  left: var(--rz-guide-label-offset, 0px);
+  bottom: 82px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(210px, calc(100vw - 16px));
+  box-sizing: border-box;
   border-radius: 8px;
   padding: 7px 9px;
   background: #D97706;
@@ -32,6 +36,9 @@
 }
 
 .rz-onboarding-arrow-shape {
+  position: absolute;
+  left: -58px;
+  bottom: 0;
   display: block;
   width: 116px;
   height: 82px;
@@ -43,11 +50,14 @@
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25));
 }
 
-.rz-onboarding-arrow-overlay--below {
-  flex-direction: column-reverse;
+.rz-onboarding-arrow-overlay--below .rz-onboarding-arrow-label {
+  bottom: auto;
+  top: 82px;
 }
 
 .rz-onboarding-arrow-overlay--below .rz-onboarding-arrow-shape {
+  bottom: auto;
+  top: 0;
   transform: rotate(180deg);
 }
 
@@ -194,4 +204,64 @@
   [data-testid="store-connections-page"] .rz-receipt-connection-compact-table button.rz-receipt-connection-guide-target {
     animation: none;
   }
+}
+
+/* Keep the actual DataTable cells in the same three columns as the mobile header,
+ * including touch landscape and the onboarding route (not only Settings). */
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table colgroup,
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table thead {
+  display: none !important;
+}
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table tbody {
+  display: grid !important;
+  width: 100%;
+  gap: 0;
+}
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table tbody tr {
+  display: grid !important;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(0, 1.1fr) !important;
+  column-gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 3px;
+  height: auto !important;
+  min-height: 44px !important;
+}
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table tbody td {
+  display: block !important;
+  grid-row: 1 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  padding: 0 1px !important;
+  text-align: left !important;
+  height: auto !important;
+  min-height: 0 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table td.rz-receipt-store-cell { grid-column: 1 !important; }
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table td.rz-receipt-status-cell { grid-column: 2 !important; }
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table td.rz-receipt-updated-cell { grid-column: 3 !important; }
+.rz-receipt-connections-mobile .rz-receipt-connection-compact-table tbody td::before { display: none !important; content: none !important; }
+.rz-receipt-connections-mobile .rz-receipt-status-cell > span { display: block; min-width: 0; }
+.rz-receipt-connections-mobile .rz-receipt-status-cell button { width: 100% !important; min-width: 0; max-width: 100%; white-space: normal; }
+.rz-receipt-connection-mobile-heading {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(0, 1.1fr);
+  column-gap: 4px;
+  padding: 6px 3px;
+  box-sizing: border-box;
+  background: var(--color-ui-primary);
+  color: var(--color-text-inverse);
+  font-size: 12px;
+  font-weight: 600;
 }

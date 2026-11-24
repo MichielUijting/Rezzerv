@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const STORES = [
   { code: 'ah', name: 'Albert Heijn' },
@@ -49,21 +50,28 @@ export default function StoreConnectionWalkthrough({ householdId, ready, onFinis
       if (!button.isConnected) return
       const rect = button.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) return
-      const below = rect.top < 150
+      const below = rect.top < 130 && window.innerHeight - rect.bottom > rect.top
       const center = rect.left + rect.width / 2
-      const left = Math.max(6, Math.min(window.innerWidth - 220, center - 108))
-      const top = below ? Math.min(window.innerHeight - 134, rect.bottom + 8) : Math.max(8, rect.top - 133)
-      setPosition({ left, top, below })
+      const labelHalf = Math.min(105, (window.innerWidth - 16) / 2)
+      const labelCenter = Math.max(8 + labelHalf, Math.min(window.innerWidth - 8 - labelHalf, center))
+      // The SVG tip is exactly at the origin of this fixed-position portal.
+      // Only the label is clamped; never shift the arrow away from its target.
+      setPosition({ left: center, top: below ? rect.bottom + 2 : rect.top - 2, below, labelOffset: labelCenter - center })
     }
     function measure() {
       if (frame !== null) cancelAnimationFrame(frame)
       frame = requestAnimationFrame(locate)
     }
     measure()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    observer?.observe(button)
+    window.visualViewport?.addEventListener('resize', measure)
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
     return () => {
       if (frame !== null) cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.visualViewport?.removeEventListener('resize', measure)
       button.classList.remove(TARGET_CLASS)
       button.removeAttribute('data-onboarding-arrow-target')
       window.removeEventListener('resize', measure)
@@ -110,22 +118,23 @@ export default function StoreConnectionWalkthrough({ householdId, ready, onFinis
 
   if (!ready || !householdId || step >= STORES.length || !position) return null
 
-  return (
+  return createPortal(
     <aside
       className={'rz-onboarding-arrow-overlay' + (position.below ? ' rz-onboarding-arrow-overlay--below' : '')}
       data-testid="onboarding-store-arrow"
       data-store={STORES[step].code}
       role="status"
       aria-live="polite"
-      style={{ left: position.left, top: position.top }}
+      style={{ left: position.left, top: position.top, '--rz-guide-label-offset': `${position.labelOffset}px` }}
     >
       <span className="rz-onboarding-arrow-label" data-testid="onboarding-arrow-step">
-        {step + 1}/3 · {STORES[step].name}: tik op de knop
+        Nu winkel(s) koppelen!
       </span>
       <svg className="rz-onboarding-arrow-shape" viewBox="0 0 116 82" aria-hidden="true">
-        <path d="M22 5 C36 23 62 20 62 68" />
-        <path d="M43 51 L62 72 L82 52" />
+        <path d="M18 5 C32 28 58 24 58 74" />
+        <path d="M39 55 L58 78 L77 55" />
       </svg>
-    </aside>
+    </aside>,
+    document.body,
   )
 }
