@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -426,14 +427,47 @@ def cleanup() -> dict:
     }
 
 
+def prepare_legacy_onboarding() -> dict:
+    """Only for the disposable PR253 PostgreSQL CI runtime; no reset or API bypass."""
+    if os.getenv("CI") != "true" or os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO") != "1":
+        raise RuntimeError("Legacy onboarding fixtures require explicit CI test provisioning")
+    password = os.environ["PLAYWRIGHT_LEGACY_ONBOARDING_PASSWORD"]
+    if len(password) < 24 or main.engine.dialect.name != "postgresql":
+        raise RuntimeError("Expected temporary CI credentials and PostgreSQL")
+    from app.services.consumer_account_provisioning import provision_new_consumer_account
+    from app.services.household_onboarding_service import resolve_household_onboarding_state
+
+    prefixes = (
+        "dynamic-settings-inhuis-halen",
+        "dynamic-settings-wat-inhuis",
+        "dynamic-settings-waar-inhuis",
+        "dynamic-settings-store-connections",
+    )
+    with main.engine.begin() as conn:
+        for prefix in prefixes:
+            for retry in range(3):
+                account = provision_new_consumer_account(
+                    conn,
+                    email=f"{prefix}-retry{retry}@example.test",
+                    password=password,
+                    household_name="PR253 legacy onboarding fixture",
+                )
+                state = resolve_household_onboarding_state(conn, account.household_id)
+                if state.onboarding_status != "not_started" or not state.initial_choice_required:
+                    raise RuntimeError("Legacy fixture must start with unfinished onboarding")
+    return {"status": "ok", "mode": "prepare-legacy-onboarding", "accounts": len(prefixes) * 3}
+
+
 def main_entry() -> int:
     mode = str(sys.argv[1] if len(sys.argv) > 1 else "").strip().lower()
     if mode == "prepare":
         result = prepare()
     elif mode == "cleanup":
         result = cleanup()
+    elif mode == "prepare-legacy-onboarding":
+        result = prepare_legacy_onboarding()
     else:
-        raise RuntimeError("Gebruik: household_zero_regression_fixture.py prepare|cleanup")
+        raise RuntimeError("Gebruik: household_zero_regression_fixture.py prepare|cleanup|prepare-legacy-onboarding")
 
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, default=str))
     print(f"HOUSEHOLD_ZERO_FIXTURE_{mode.upper()}=PASS")

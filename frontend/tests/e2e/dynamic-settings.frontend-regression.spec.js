@@ -4,20 +4,31 @@ function uniqueEmail(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`
 }
 
-async function registerAndComplete(page, { prefix, useCase, profile, householdName }) {
+async function registerAndComplete(page, { prefix, useCase, profile, householdName }, retry) {
   // The canonical full-regression project starts each test with the shared system
   // fixture cookie. Drop it only from this fresh browser context so these tests
   // can create their own regular consumer account without revoking the shared
   // server session used by the rest of the regression suite.
   await page.context().clearCookies()
 
-  const registration = await page.request.post('/api/auth/register', {
-    data: {
-      email: uniqueEmail(prefix),
-      password: 'SterkWachtwoord123!',
-    },
+  // These accounts represent households whose onboarding began before the
+  // mandatory quick registration. The CI-only fixture provisions one per retry.
+  // All profile transitions below still run against the real authenticated API.
+  const password = process.env.PLAYWRIGHT_LEGACY_ONBOARDING_PASSWORD
+  expect(password, 'PR253 must provision isolated legacy onboarding fixtures').toBeTruthy()
+  const login = await page.request.post('/api/auth/login', {
+    data: { email: `${prefix}-retry${retry}@example.test`, password },
   })
-  expect(registration.status()).toBe(201)
+  expect(login.status()).toBe(200)
+  const session = await login.json()
+  expect(session.context_type).toBe('regular')
+  const before = await page.request.get('/api/onboarding')
+  expect(before.status()).toBe(200)
+  expect(await before.json()).toMatchObject({
+    onboarding_status: 'not_started',
+    initial_choice_required: true,
+    can_manage: true,
+  })
 
   const selected = await page.request.post('/api/onboarding/primary-use-case', {
     data: { primary_use_case: useCase },
@@ -35,8 +46,15 @@ async function registerAndComplete(page, { prefix, useCase, profile, householdNa
       household_usage_mode: 'alone',
     },
   })
-  expect(completed.ok()).toBeTruthy()
-  return completed.json()
+  expect(completed.status()).toBe(200)
+  const state = await completed.json()
+  expect(state).toMatchObject({
+    onboarding_status: 'completed',
+    primary_use_case: useCase,
+    household_name: householdName,
+    household_usage_mode: 'alone',
+  })
+  return state
 }
 
 async function dismissFeedback(page) {
@@ -59,7 +77,7 @@ test('system context keeps personal Settings while Frontteambeheer lives under S
   await expect(page.getByTestId('settings-tile-frontteam')).toHaveCount(0)
 })
 
-test('Inhuis halen shows grouped product-relevant settings while keeping general household settings', async ({ page }) => {
+test('Inhuis halen shows grouped product-relevant settings while keeping general household settings', async ({ page }, testInfo) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-inhuis-halen',
     useCase: 'inhuis_halen',
@@ -70,7 +88,7 @@ test('Inhuis halen shows grouped product-relevant settings while keeping general
       receipt_processing_enabled: true,
       recipes_enabled: false,
     },
-  })
+  }, testInfo.retry)
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
@@ -98,7 +116,7 @@ test('Inhuis halen shows grouped product-relevant settings while keeping general
   await expect(page.getByTestId('settings-tile-locations')).toHaveCount(0)
 })
 
-test('Wat Inhuis global locations keep the full standard management UX without sublocations', async ({ page }) => {
+test('Wat Inhuis global locations keep the full standard management UX without sublocations', async ({ page }, testInfo) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-wat-inhuis',
     useCase: 'wat_inhuis',
@@ -109,7 +127,7 @@ test('Wat Inhuis global locations keep the full standard management UX without s
       almost_out_enabled: false,
       shopping_enabled: false,
     },
-  })
+  }, testInfo.retry)
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
@@ -184,17 +202,11 @@ test('Wat Inhuis global locations keep the full standard management UX without s
 
 test('Quick Start onboarding asks for no locations and preserves Wat Inhuis defaults in Settings', async ({ page }) => {
   await page.context().clearCookies()
-  const registration = await page.request.post('/api/auth/register', {
-    data: {
-      email: uniqueEmail('no-location-onboarding'),
-      password: 'SterkWachtwoord123!',
-    },
-  })
-  expect(registration.status()).toBe(201)
-
-  await page.goto('/onboarding')
-  await expect(page.getByTestId('onboarding-quick-start')).toBeVisible()
-  await expect(page.getByTestId('onboarding-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen.')
+  await page.goto('/registreren')
+  await expect(page.getByTestId('register-page')).toBeVisible()
+  await expect(page.getByTestId('register-quick-start-defaults')).toContainText('Wat Inhuis · Aantallen · Alleen.')
+  await expect(page.getByTestId('register-password-repeat')).toHaveCount(0)
+  await expect(page.getByTestId('onboarding-quick-start')).toHaveCount(0)
   await expect(page.getByTestId('onboarding-choice-waar_inhuis')).toHaveCount(0)
   await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toHaveCount(0)
   await expect(page.getByText('Welke hoofdlocaties wil je gebruiken?')).toHaveCount(0)
@@ -203,9 +215,24 @@ test('Quick Start onboarding asks for no locations and preserves Wat Inhuis defa
   await expect(page.getByTestId('waar-inhuis-refine-locations')).toHaveCount(0)
   await expect(page.getByTestId('waar-inhuis-sublocation-add')).toHaveCount(0)
 
-  await page.getByTestId('onboarding-quick-start-household').fill('Wat Inhuis zonder locatiewizard')
-  await page.getByTestId('onboarding-quick-start-submit').click()
+  await page.getByTestId('register-email').fill(uniqueEmail('no-location-onboarding'))
+  await page.getByTestId('register-password').fill('SterkWachtwoord123!')
+  await page.getByTestId('register-household-name').fill('Wat Inhuis zonder locatiewizard')
+  const registrationPromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/auth/register' && response.request().method() === 'POST')
+  await page.getByTestId('register-submit').click()
+  const registration = await registrationPromise
+  expect(registration.status()).toBe(201)
+  expect((await registration.json()).onboarding).toMatchObject({
+    onboarding_status: 'completed',
+    primary_use_case: 'wat_inhuis',
+    household_usage_mode: 'alone',
+    household_name: 'Wat Inhuis zonder locatiewizard',
+    product_configuration: { inventory_tracking_level: 'quantity', location_tracking_level: 'none' },
+  })
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
+  await expect(page.getByTestId('receipt-connections-overview')).toBeVisible()
+  await expect(page.getByTestId('onboarding-choice-waar_inhuis')).toHaveCount(0)
 
   const onboardingResponse = await page.request.get('/api/onboarding')
   expect(onboardingResponse.ok()).toBeTruthy()
@@ -226,7 +253,7 @@ test('Quick Start onboarding asks for no locations and preserves Wat Inhuis defa
   await expect(page.getByTestId('settings-tile-locations')).toHaveCount(0)
 })
 
-test('Waar Inhuis exact locations keep full main-location and sublocation management working', async ({ page }) => {
+test('Waar Inhuis exact locations keep full main-location and sublocation management working', async ({ page }, testInfo) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-waar-inhuis',
     useCase: 'waar_inhuis',
@@ -236,7 +263,7 @@ test('Waar Inhuis exact locations keep full main-location and sublocation manage
       receipt_processing_enabled: true,
       almost_out_enabled: false,
     },
-  })
+  }, testInfo.retry)
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-tile-locations')).toBeVisible()
@@ -271,7 +298,7 @@ test('Waar Inhuis exact locations keep full main-location and sublocation manage
 })
 
 
-test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile route content', async ({ page }) => {
+test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile route content', async ({ page }, testInfo) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-store-connections',
     useCase: 'inhuis_halen',
@@ -282,7 +309,7 @@ test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile
       almost_out_notifications_enabled: false,
       recipes_enabled: false,
     },
-  })
+  }, testInfo.retry)
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-tile-store-connections')).toBeVisible()
