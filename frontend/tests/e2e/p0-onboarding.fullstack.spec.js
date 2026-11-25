@@ -154,10 +154,16 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
 
   // Touch-sized Android Chrome onboarding uses the retailer's actual import
   // bookmarklet, not the desktop drag-to-favorites control or a fake login.
-  await page.addInitScript(() => Object.defineProperty(navigator, 'userAgent', {
-    configurable: true,
-    get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36',
-  }))
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36',
+    })
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async value => { window.__inhuisCopiedBookmarklet = value } },
+    })
+  })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/onboarding/winkels')
   await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
@@ -165,8 +171,11 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
   await page.getByTestId('onboarding-stores-start').click()
   await expect(page.getByTestId('lidl-mobile-setup')).toHaveAttribute('data-browser', 'chrome')
-  await expect(page.getByTestId('lidl-mobile-copy')).toBeVisible()
   await expect(page.getByTestId('lidl-mobile-open-store')).toBeVisible()
+  await expect(page.getByTestId('lidl-mobile-copy')).toHaveCount(0)
+  await expect(page.getByTestId('lidl-mobile-setup')).toContainText('Adres gekopieerd')
+  expect(await page.evaluate(() => window.__inhuisCopiedBookmarklet?.startsWith('javascript:'))).toBe(true)
+  await expect(page.getByTestId('lidl-mobile-setup')).not.toContainText('Stap 3 van 3')
   await expect(page.getByTestId('lidl-web-bookmarklet')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2)).toBe(true)
   await page.getByTestId('lidl-mobile-skip').click()

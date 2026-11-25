@@ -108,8 +108,11 @@ assert.doesNotMatch(router, /wegwijs=1/)
 assert.doesNotMatch(home, /FirstUseDashboardGuide|first-use-dashboard-guide|wegwijs/)
 assert.doesNotMatch(compactStyle, /rz-first-use-action-hint/)
 assert.match(compactStyle, /rz-onboarding-arrow-overlay/)
-assert.match(mobileHelp, /Kopieer script/)
-assert.match(mobileHelp, /Stap 3 van 3/)
+assert.match(mobileHelp, /Kopieer adres/)
+assert.doesNotMatch(mobileHelp, /Stap [123] van 3/)
+assert.match(mobileHelp, /document.title = universalBookmarklet/)
+assert.match(connections, /promise: copyRetailerBookmarklet\(value\)/)
+assert.match(connections, /jumboReturningRef\.current = true/)
 assert.match(mobileHelp, /onOpenStore/)
 assert.match(connections, /skipCurrentOnboardingStore/)
 assert.match(connections, /saveStoreOnboardingSelection\(skipStoreForOnboarding/)
@@ -145,3 +148,40 @@ assert.match(router, /function SettingsStoreConnectionsRoute/)
 assert.match(router, /progress\.results\?\.ah !== 'success'/)
 assert.match(connections, /event\.source !== expectedLidlWindowRef\.current/)
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')
+
+import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, rememberMobileBookmarkletSetup, copyRetailerBookmarklet } from '../src/features/storeConnections/universalRetailerBookmarklet.js'
+import { buildJumboPocBookmarklet } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
+import { buildLidlWebBookmarklet } from '../src/features/storeConnections/lidlWebReceiptBridge.js'
+import vm from 'node:vm'
+const universal = buildUniversalRetailerBookmarklet(
+  buildJumboPocBookmarklet('https://inhuis.example/onboarding/winkels', { from_date: '2026-10-01', to_date: '2026-11-25' }),
+  buildLidlWebBookmarklet('https://inhuis.example'))
+assert.doesNotThrow(() => new Function(decodeURIComponent(universal.slice(11))))
+assert.ok(!/[\r\n\t]/.test(universal))
+const routing = decodeURIComponent(buildUniversalRetailerBookmarklet(
+  'javascript:' + encodeURIComponent('(()=>{globalThis.selected="jumbo"})()'),
+  'javascript:(()=>{globalThis.selected="lidl"})()').slice(11))
+for (const [origin, selected] of [['https://www.jumbo.com','jumbo'],['https://www.lidl.nl','lidl'],['https://example.com',''],['https://www.jumbo.com.example.com','']]) {
+  const ctx = { location: { origin }, selected: '', alert: () => {} }
+  vm.runInNewContext(routing, ctx)
+  assert.equal(ctx.selected, selected)
+}
+const keys = mobileBookmarkletSetupKeys('/onboarding/winkels', '2026-10-01', '2026-11-25')
+const changed = mobileBookmarkletSetupKeys('/onboarding/winkels', '2026-10-02', '2026-11-25')
+const storage = new Map()
+const mockStorage = {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)}
+assert.equal(hasMobileBookmarkletSetup(keys.jumbo, mockStorage), false)
+rememberMobileBookmarkletSetup(keys, mockStorage)
+assert.equal(hasMobileBookmarkletSetup(keys.lidl, mockStorage), true)
+assert.equal(hasMobileBookmarkletSetup(changed.jumbo, mockStorage), false)
+assert.equal(hasMobileBookmarkletSetup(changed.lidl, mockStorage), true)
+rememberMobileBookmarkletSetup(changed, mockStorage)
+assert.equal(hasMobileBookmarkletSetup(keys.jumbo, mockStorage), false)
+assert.equal(hasMobileBookmarkletSetup(changed.jumbo, mockStorage), true)
+let copied = ''
+assert.equal(await copyRetailerBookmarklet(universal, {clipboard: {writeText: value => {copied = value; return Promise.resolve()}}}, {}), true)
+assert.equal(copied, universal)
+assert.equal(await copyRetailerBookmarklet(universal, {clipboard: {writeText: () => Promise.reject(new Error('blocked'))}}, {}), false)
+assert.equal(await copyRetailerBookmarklet(universal, {}, {}), false)
+assert.equal(detectMobileRetailerEnvironment({userAgent:'Mozilla/5.0 (Linux; Android 14; wv) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36'}).browser,'other')
+console.log('UNIVERSAL_MOBILE_BOOKMARKLET_CONTRACT_GREEN')

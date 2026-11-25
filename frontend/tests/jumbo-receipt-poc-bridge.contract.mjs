@@ -160,7 +160,8 @@ const setupModalSource = fs.readFileSync(
 assert.match(setupModalSource, /provider \+ '-bookmarklet-help'/)
 assert.match(setupModalSource, /data-testid={linkTestId}/)
 assert.match(setupModalSource, /onClick={onClose}/)
-assert.ok(!storeConnectionsSource.includes('window.location.assign(JUMBO_ORDERS_URL)'))
+// The mobile guide launches only after its explicit Open Jumbo action.
+assert.match(storeConnectionsSource, /onOpenStore=\{\(\) => \{ setSetupHelpStore\(''\); window\.location\.assign\(JUMBO_ORDERS_URL\) \}\}/)
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 // The Lidl bridge legitimately uses postMessage; isolate the Jumbo redirect handler.

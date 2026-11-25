@@ -2162,3 +2162,7 @@ In **Mijn winkelkoppelingen** komt `Status` vóór `Laatst bijgewerkt` op deskto
 
 
 **PO-correctie 24 november 2026:** op mobiel staan de winkelnaam, echte winkelactie en datum expliciet in respectievelijk kolom 1, 2 (Status) en 3, ook bij liggende telefoon. De oranje aanwijzing bevat uitsluitend **Nu winkel(s) koppelen!**, zonder stapnummer of winkelnaam. De pijlspits wijst naar het midden van de boven- of onderrand van de werkelijke actieknop. De gewone winkelactieknoppen en hun teksten blijven functioneel ongewijzigd.
+
+
+### Mobiele winkelonboarding: minimale handelingen (25 november 2026)
+Na de bestaande winkelkeuze toont Inhuis alleen de noodzakelijke handeling. De mobiele bladwijzernaam wordt via de paginatitel voorbereid; bij de start wordt kopieren geprobeerd binnen de gebruikersklik. Bij weigering blijft handmatig kopieren beschikbaar. Een gecombineerde bladwijzer kiest uitsluitend de exacte Jumbo- of Lidl-origin en behoudt de bestaande importbevestiging. Een browsersessiehint mag installatie-instructies overslaan, maar is geen koppelbewijs. De Jumbo-periode blijft vooralsnog in de bladwijzer vastgelegd; bij een periodewijziging moet deze opnieuw worden ingesteld. Desktop blijft ongewijzigd.

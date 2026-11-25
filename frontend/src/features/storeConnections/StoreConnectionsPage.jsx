@@ -20,6 +20,7 @@ import {
   JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
+import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, copyRetailerBookmarklet } from './universalRetailerBookmarklet.js'
 import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
@@ -57,6 +58,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [setupHelpStore, setSetupHelpStore] = useState('')
+  const [preparedCopy, setPreparedCopy] = useState(null)
+  const jumboReturningRef = useRef(String(window.location.hash || '').startsWith(JUMBO_POC_FRAGMENT_PREFIX))
   const ahSyncPageMountedRef = useRef(false)
   const ahLoginNavigatingRef = useRef(false)
   const ahReturnOutcomeRef = useRef(null)
@@ -133,6 +136,16 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       : '',
     [jumboFrom, jumboTo, jumboPeriodValid],
   )
+
+  const universalBookmarklet = useMemo(() => jumboPocBookmarklet
+    ? buildUniversalRetailerBookmarklet(jumboPocBookmarklet, lidlBookmarklet) : '',
+    [jumboPocBookmarklet, lidlBookmarklet])
+  const setupKeys = useMemo(() => mobileBookmarkletSetupKeys(window.location.pathname, jumboFrom, jumboTo), [jumboFrom, jumboTo])
+  const setupBrowserUrl = useMemo(() => {
+    const url = new URL(window.location.pathname, window.location.origin)
+    if (onboardingMode && ['jumbo', 'lidl'].includes(activeProvider)) url.searchParams.set('inhuis_setup', activeProvider)
+    return url.href
+  }, [activeProvider, onboardingMode])
 
   const receiptConnectionColumns = useMemo(() => [
     {
@@ -370,10 +383,24 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  // Open the appropriate touch guide as soon as the active mobile retailer
-  // is chosen. Site navigation alone is never marked as a successful import.
+  // A browser launch from a standalone PWA may require the normal browser.
+  // Resume only a selected, unfinished store, never a connection result.
   useEffect(() => {
-    if (onboardingMode && mobileRetailer && (activeProvider === 'jumbo' || activeProvider === 'lidl')) {
+    if (!onboardingMode || isLoading || !storeOnboarding?.available) return
+    const url = new URL(window.location.href)
+    const provider = url.searchParams.get('inhuis_setup')
+    if (!provider) return
+    url.searchParams.delete('inhuis_setup')
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
+    if (['jumbo', 'lidl'].includes(provider) && storeOnboarding.selected.includes(provider) &&
+        storeOnboarding.results[provider] !== 'success') setActiveProvider(provider)
+  }, [onboardingMode, isLoading, storeOnboarding])
+
+  // No second start screen after selecting stores. Do not cover a returned
+  // Jumbo import preview with the installation guide.
+  useEffect(() => {
+    if (onboardingMode && mobileRetailer && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
+        !(activeProvider === 'jumbo' && jumboReturningRef.current)) {
       setSetupHelpStore(activeProvider)
     }
   }, [activeProvider, onboardingMode, mobileRetailer])
@@ -394,6 +421,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         void startAhLogin()
       }
       return
+    }
+    jumboReturningRef.current = false
+    if (mobileRetailer) {
+      const value = universalBookmarklet || (code === 'lidl' ? lidlBookmarklet : jumboPocBookmarklet)
+      if (value && !(universalBookmarklet && hasMobileBookmarkletSetup(setupKeys[code]))) {
+        // Start copying in the original selection click, before React effects.
+        setPreparedCopy({ value, promise: copyRetailerBookmarklet(value) })
+      } else setPreparedCopy(null)
+      setSetupHelpStore(code)
     }
     setActiveProvider(code)
   }
@@ -475,6 +511,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       }
       expectedLidlWindowRef.current = lidlTab
       lidlTab.location.replace(LIDL_HISTORY_URL)
+      return true
     } catch (err) {
       if (!lidlTab.closed) lidlTab.close()
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
@@ -608,6 +645,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (data.type === 'inhuis:lidl-handshake') {
         if (onboardingMode && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
         lidlOnboardingQueueIdRef.current = null
+        setSetupHelpStore('')
         setActiveProvider('lidl')
         lidlCounts = { queued: 0, failed: 0 }
         setLidlCountsView(null)
@@ -803,6 +841,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   useEffect(() => {
     const hash = String(window.location.hash || '')
     if (!hash.startsWith(JUMBO_POC_FRAGMENT_PREFIX)) return
+    jumboReturningRef.current = true
+    setSetupHelpStore('')
     setActiveProvider('jumbo')
 
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
@@ -1295,6 +1335,10 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'jumbo'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={jumboPocBookmarklet}
+                universalBookmarklet={onboardingMode ? universalBookmarklet : ''}
+                setupKeys={setupKeys}
+                preparedCopy={onboardingMode ? preparedCopy : null}
+                browserUrl={setupBrowserUrl}
                 valid={jumboPeriodValid}
                 onOpenStore={() => { setSetupHelpStore(''); window.location.assign(JUMBO_ORDERS_URL) }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
@@ -1357,7 +1401,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'lidl'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={lidlBookmarklet}
-                onOpenStore={() => { setSetupHelpStore(''); void openLidlWithSavedPeriod() }}
+                universalBookmarklet={onboardingMode ? universalBookmarklet : ''}
+                setupKeys={setupKeys}
+                preparedCopy={onboardingMode ? preparedCopy : null}
+                browserUrl={setupBrowserUrl}
+                onOpenStore={() => { void openLidlWithSavedPeriod().then(opened => { if (opened) setSetupHelpStore('') }) }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('lidl') } : null}
                 instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
                   opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
