@@ -1,28 +1,53 @@
 import { JUMBO_BOOKMARKLET_VERSION } from './jumboReceiptPocBridge.js'
 import { LIDL_BOOKMARKLET_VERSION } from './lidlWebReceiptBridge.js'
 
-// Reuse the two existing import programs verbatim. Dispatch only on exact
-// retailer origins; never run either on Inhuis or an unrelated website.
-export function buildUniversalRetailerBookmarklet(jumbo, lidl) {
-  if (!jumbo.startsWith('javascript:') || !lidl.startsWith('javascript:')) {
-    throw new Error('Ongeldige winkelbladwijzer')
+// The installed favorite never contains dates, household information or a
+// callback path. Jumbo gets its period from the Inhuis tab that opened it.
+export function buildUniversalRetailerBookmarklet(inhuisOrigin, lidl) {
+  let origin
+  try {
+    const url = new URL(inhuisOrigin)
+    if (!['https:', 'http:'].includes(url.protocol) || url.origin !== inhuisOrigin ||
+        url.username || url.password) throw new Error('invalid')
+    origin = url.origin
+  } catch {
+    throw new Error('Ongeldige Inhuis-herkomst voor winkelbladwijzer')
   }
-  const jumboSource = decodeURIComponent(jumbo.slice('javascript:'.length))
+  if (typeof lidl !== 'string' || !lidl.startsWith('javascript:')) {
+    throw new Error('Ongeldige Lidl-bladwijzer')
+  }
   const lidlSource = lidl.slice('javascript:'.length)
+  const jumboSource = [
+    '(function(){',
+    'const O=' + JSON.stringify(origin) + ';',
+    'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';',
+    'const R=window.opener;',
+    'if(!R){alert("Open Jumbo eerst via Bonnen ophalen in Inhuis en laat dat tabblad open.");return;}',
+    'const Q=String(Date.now())+"-"+Math.random().toString(36).slice(2);',
+    'let active=true;',
+    'const stop=()=>{active=false;window.removeEventListener("message",receive);window.clearTimeout(timer);};',
+    'function receive(e){',
+    'if(!active||e.origin!==O||e.source!==R||!e.data||e.data.type!=="inhuis:jumbo-script"||e.data.request_id!==Q)return;',
+    'stop();',
+    'if(e.data.bookmarklet_version!==V||typeof e.data.script!=="string"||e.data.script.length>250000||!e.data.script.startsWith("(async()=>{")){alert("Inhuis kon de Jumbo-importperiode niet veilig voorbereiden.");return;}',
+    'try{new Function(e.data.script)();}catch(err){alert("Jumbo-import kon niet starten.");}',
+    '}',
+    'window.addEventListener("message",receive);',
+    'const timer=window.setTimeout(()=>{if(active){stop();alert("Inhuis heeft de Jumbo-importperiode niet bevestigd. Probeer opnieuw via Inhuis.");}},30000);',
+    'R.postMessage({type:"inhuis:jumbo-handshake",bookmarklet_version:V,request_id:Q},O);',
+    '})()',
+  ].join('')
   const source = '(function(){if(location.origin==="https://www.jumbo.com"){void (' + jumboSource +
     ');}else if(location.origin==="https://www.lidl.nl"){void (' + lidlSource +
     ');}else{alert("Open eerst Jumbo of Lidl via Inhuis.");}})()'
   return 'javascript:' + encodeURIComponent(source)
 }
 
-// A browser-session hint only. It never proves installation or a connection.
-// Jumbo's existing v14 script has a fixed date range and callback route.
-// Lidl's existing v2 script gets its current date range from Inhuis.
-export function mobileBookmarkletSetupKeys(path, from, to) {
-  return {
-    jumbo: 'jumbo:' + JUMBO_BOOKMARKLET_VERSION + ':' + LIDL_BOOKMARKLET_VERSION + ':' + path + ':' + from + ':' + to,
-    lidl: 'lidl:' + LIDL_BOOKMARKLET_VERSION,
-  }
+// A browser-session hint only. One permanent favorite for both retailers;
+// neither dates nor the current onboarding/settings path invalidate the hint.
+export function mobileBookmarkletSetupKeys() {
+  const signature = 'universal:' + JUMBO_BOOKMARKLET_VERSION + ':' + LIDL_BOOKMARKLET_VERSION + ':live-period-v1'
+  return { jumbo: signature, lidl: signature }
 }
 
 function hintKey(signature) {
