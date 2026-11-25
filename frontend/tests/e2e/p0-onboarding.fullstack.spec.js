@@ -57,17 +57,34 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   expect(initial.onboarding_status).toBe('completed')
   expect(initial.household_usage_mode).toBe('alone')
 
-  // Receipt-enabled households can connect stores before opening Home.
-  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('receipt-connections-overview-table')).toBeVisible()
+  // The new, separate choice screen keeps an independently persisted decision
+  // for each available retailer; it does not reuse the settings overview.
+  await expect(page).toHaveURL(/\\/onboarding\\/winkels$/)
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
+  await expect(page.getByTestId('receipt-connections-overview-table')).toHaveCount(0)
+  await expect(page.getByTestId('onboarding-store-arrow')).toHaveCount(0)
   for (const retailer of ['ah', 'jumbo', 'lidl']) {
-    await expect(page.getByTestId('receipt-connection-action-' + retailer)).toBeVisible()
+    await expect(page.getByTestId('onboarding-select-' + retailer)).toBeVisible()
+    await expect(page.getByTestId('onboarding-store-row-' + retailer)).toHaveAttribute('data-result', 'neutral')
   }
-  await expect(page.getByTestId('receipt-connection-action-aldi')).toHaveCount(0)
+  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
+  await page.getByTestId('onboarding-select-ah').check()
+  await page.getByTestId('onboarding-select-lidl').check()
+  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
+  const selectionResponse = await page.request.get('/api/onboarding/stores')
+  expect(selectionResponse.status()).toBe(200)
+  expect(await selectionResponse.json()).toMatchObject({
+    available: true, selected: ['ah', 'lidl'], results: {},
+  })
+  await page.reload()
+  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
 
-  // PR5: new household history is read-only and scoped to the active session.
-  // Validate the real PostgreSQL summary before allowing the user to leave.
-  await expect(page.getByTestId('historical-import-progress')).toBeVisible()
+  // Historical receipt counts remain an independent, scoped read-only source;
+  // queued browser transfers are never represented as automatically connected.
   const historyResponse = await page.request.get('/api/receipts/retailers/history-progress')
   expect(historyResponse.ok()).toBeTruthy()
   const history = await historyResponse.json()
@@ -80,16 +97,9 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     expect(row.queue_pending).toBe(0)
     expect(row.queue_processing).toBe(0)
   }
-  await expect(page.getByTestId('historical-import-stores')).toBeVisible()
-  const arrow = page.getByTestId('onboarding-store-arrow')
-  for (const retailer of ['ah', 'jumbo', 'lidl']) {
-    await expect(arrow).toHaveAttribute('data-store', retailer)
-    await expect(arrow).toContainText('Nu winkel(s) koppelen!')
-    await page.keyboard.press('ArrowRight')
-  }
-
-  // Completing all three guidance steps preserves the household and opens Home.
-  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
+  // Later never blocks Home, even when stores remain selected.
+  await page.getByTestId('onboarding-stores-later').click()
+  await expect(page).toHaveURL(/\\/home\\?wegwijs=1$/)
   await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
