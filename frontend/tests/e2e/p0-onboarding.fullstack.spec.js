@@ -68,8 +68,8 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     await expect(page.getByTestId('onboarding-store-row-' + retailer)).toHaveAttribute('data-result', 'neutral')
   }
   await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
-  await page.getByTestId('onboarding-select-ah').check()
-  await page.getByTestId('onboarding-select-lidl').check()
+  await page.getByTestId('onboarding-store-row-ah').locator('label').click()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
   await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()

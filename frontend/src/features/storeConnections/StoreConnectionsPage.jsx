@@ -278,7 +278,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       await loadAhStatus()
       if (onboardingMode) {
         const progress = await fetchStoreOnboardingProgress()
-        setStoreOnboarding(progress)
+        // Keep a newer OAuth/browser result when the initial fetch races it.
+        setStoreOnboarding(previous => previous ?? progress)
       }
       const windowData = await fetchJson('/api/receipts/retailers/lidl/import-window')
       setLidlWindow(windowData)

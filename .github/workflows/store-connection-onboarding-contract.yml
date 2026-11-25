@@ -3,6 +3,10 @@ name: Winkelkoppelingen onboarding en AH auto-import contract
 on:
   pull_request:
     paths:
+      - 'backend/app/services/store_onboarding_progress_service.py'
+      - 'backend/app/services/quick_start_onboarding_service.py'
+      - 'backend/app/api/household_onboarding_routes.py'
+      - 'backend/tests/test_store_onboarding_progress.py'
       - 'backend/app/services/ah_receipt_background_sync.py'
       - 'backend/tests/test_ah_receipt_background_sync.py'
       - 'backend/app/api/retailer_receipt_routes.py'
@@ -13,6 +17,10 @@ on:
       - 'backend/tests/test_retailer_history_progress.py'
       - 'backend/tests/test_retailer_receipt_import_dates.py'
       - 'backend/app/main.py'
+      - 'frontend/src/features/onboarding/StoreOnboardingSelection.jsx'
+      - 'frontend/src/features/onboarding/onboardingStoreConnections.js'
+      - 'frontend/src/features/onboarding/storeOnboardingSelection.css'
+      - 'frontend/tests/onboarding-quick-start.contract.mjs'
       - 'frontend/src/features/storeConnections/receiptConnectionOverviewModel.js'
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
       - 'frontend/src/features/kassa/KassaPage.jsx'
@@ -40,6 +48,7 @@ jobs:
           node frontend/tests/receipt-connection-overview.contract.mjs
           node frontend/tests/store-connections.contract.mjs
           node frontend/tests/onboarding-store-connections.contract.mjs
+          node frontend/tests/onboarding-quick-start.contract.mjs
           node frontend/tests/historical-import-progress.contract.mjs
       - uses: actions/setup-python@v5
         with:
@@ -52,5 +61,5 @@ jobs:
           DATABASE_URL: postgresql+psycopg://ci_dummy:ci_dummy@127.0.0.1/ci_unreachable
           REZZERV_DATASTORE_POLICY: postgresql-only
         run: |
-          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/app/services/retailer_history_progress.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py backend/tests/test_retailer_history_evidence.py backend/app/api/receipt_ah_oauth_proxy_routes.py backend/tests/test_kassa_ah_oauth_proxy.py
-          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py backend/tests/test_retailer_history_evidence.py backend/tests/test_kassa_ah_oauth_proxy.py
+          python -m py_compile backend/app/services/ah_receipt_background_sync.py backend/app/services/retailer_receipt_import_dates.py backend/app/services/retailer_history_progress.py backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py backend/tests/test_retailer_history_evidence.py backend/app/api/receipt_ah_oauth_proxy_routes.py backend/tests/test_kassa_ah_oauth_proxy.py backend/app/services/store_onboarding_progress_service.py backend/tests/test_store_onboarding_progress.py backend/app/api/household_onboarding_routes.py
+          python -m pytest -q backend/tests/test_ah_receipt_background_sync.py backend/tests/test_retailer_receipt_import_dates.py backend/tests/test_retailer_history_progress.py backend/tests/test_retailer_history_evidence.py backend/tests/test_kassa_ah_oauth_proxy.py backend/tests/test_store_onboarding_progress.py
