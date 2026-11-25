@@ -24,7 +24,12 @@ export default function RetailerBookmarkletHelp({
     if (!open) return undefined
     const previousFocus = document.activeElement
     const dialog = dialogRef.current
-    dialog?.querySelector('[data-testid="' + provider + '-help-ok"]')?.focus()
+    if (mobile) {
+      dialog?.focus()
+      if (dialog) dialog.scrollTop = 0
+    } else {
+      dialog?.querySelector('[data-testid="' + provider + '-help-ok"]')?.focus()
+    }
     const keepDialogOpen = (event) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); return }
       if (event.key !== 'Tab' || !dialog) return
@@ -69,7 +74,7 @@ export default function RetailerBookmarkletHelp({
   const savedName = 'Inhuis ' + retailer + '-bonnen'
   return createPortal(
     <div data-testid={provider + '-bookmarklet-help'} className="rz-retailer-help-backdrop">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}
         data-testid={provider + '-bookmarklet-dialog'} className="rz-retailer-help-dialog">
         <h3 id={titleId} style={{ margin: 0 }}>
           {mobile ? 'Koppel ' + retailer : 'Eerste keer koppelen met ' + retailer + '?'}
