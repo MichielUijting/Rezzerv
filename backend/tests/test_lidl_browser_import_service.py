@@ -83,7 +83,8 @@ class Engine:
 def _begin(conn, owner="house-a"):
     with patch("app.services.lidl_browser_import_service.get_window", return_value={
         "from_date": "2025-01-01", "to_date": "2026-11-25",
-    }):
+    }), patch("app.services.lidl_browser_import_service.latest_retailer_import_dates",
+             return_value={"lidl": None, "jumbo": None}):
         return begin_lidl_browser_import(Engine(conn), owner)
 
 
@@ -142,3 +143,44 @@ def test_acknowledged_queue_not_equal_processed_queue():
     assert conn.state["house-a"]["queue_ids"] == [q]
     assert all(params.get("household_id", params.get("id")) == "house-a"
                for _, params in conn.statements)
+
+
+def test_unfinished_older_period_is_not_skipped_after_reconnect():
+    conn = Conn()
+    first = _begin(conn)
+    with patch("app.services.lidl_browser_import_service.get_window", return_value={
+        "from_date": "2026-08-01", "to_date": "2026-11-25",
+        "last_imported_date": "2026-08-01",
+    }), patch("app.services.lidl_browser_import_service.latest_retailer_import_dates",
+             return_value={"lidl": "2026-08-01", "jumbo": None}):
+        resumed = begin_lidl_browser_import(Engine(conn), "house-a")
+    assert resumed["from_date"] == first["from_date"] == "2025-01-01"
+    assert resumed["run_id"] != first["run_id"]
+
+
+def test_staged_unprocessed_receipt_retains_period_until_completed():
+    conn = Conn()
+    first = _begin(conn)
+    q = "00000000-0000-4000-8000-000000000001"
+    conn.queues.add(q)
+    conn.statuses[q] = "pending"
+    _complete(conn, first, [q])
+
+    def retry():
+        with patch("app.services.lidl_browser_import_service.get_window", return_value={
+            "from_date": "2026-08-01", "to_date": "2026-11-25",
+            "last_imported_date": "2026-08-01",
+        }), patch("app.services.lidl_browser_import_service.latest_retailer_import_dates",
+                 return_value={"lidl": "2026-08-01", "jumbo": None}):
+            return begin_lidl_browser_import(Engine(conn), "house-a")
+
+    pending = retry()
+    assert pending["from_date"] == "2025-01-01"
+
+    # A new completed run with only already processed items may then move
+    # to the next reliable purchase date. Never based on staging alone.
+    conn.state["house-a"]["scan_complete"] = True
+    conn.state["house-a"]["queue_ids"] = [q]
+    conn.statuses[q] = "completed"
+    advanced = retry()
+    assert advanced["from_date"] == "2026-08-01"
