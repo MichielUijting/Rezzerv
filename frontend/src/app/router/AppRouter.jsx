@@ -10,7 +10,11 @@ import HomePage from '../../features/home/HomePage'
 import DashboardDetailPage from '../../features/home/DashboardDetailPage.jsx'
 import MobileMorePage from '../../features/home/MobileMorePage.jsx'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
-import { shouldOfferStoreConnectionOnboarding } from '../../features/onboarding/onboardingStoreConnections.js'
+import {
+  shouldOfferStoreConnectionOnboarding,
+  fetchStoreOnboardingProgress,
+  hasStoreOnboardingToResume,
+} from '../../features/onboarding/onboardingStoreConnections.js'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
 import IpOwnerSuperusersPage from '../../features/platform/IpOwnerSuperusersPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
@@ -65,8 +69,16 @@ import MobileAppChrome from '../MobileAppChrome.jsx'
 
 function LoginRoute() {
   const navigate = useNavigate()
-  function handleLogin() {
-    navigate('/home', { replace: false })
+  async function handleLogin() {
+    // Only unfinished selections seeded for new households are resumed.
+    // Existing households and users without store-management permission
+    // retain their normal dashboard route.
+    try {
+      const progress = await fetchStoreOnboardingProgress()
+      navigate(hasStoreOnboardingToResume(progress) ? '/onboarding/winkels' : '/home', { replace: true })
+    } catch {
+      navigate('/home', { replace: true })
+    }
   }
   return <LoginPage onLoggedIn={handleLogin} />
 }

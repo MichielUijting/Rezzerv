@@ -20,6 +20,31 @@ Als een tabelgroep smaller is dan de beschikbare hoofdinhoud, wordt deze in begi
 
 In **Platformbeheer → Gebruikers** heeft de tabelgroep maximaal 930 px breedte en staat deze met `margin-inline: auto` gecentreerd in de scherminhoud. Selectie van alle rijen, tabel, paginering en bulkacties blijven samen in dezelfde breedte. Op smalle schermen blijft de groep 100% van de beschikbare breedte gebruiken. Kolomuitlijning, filters, sortering, permissies, gegevens en gebruikersacties veranderen niet. De uitlijning wordt in de bestaande Playwright-test zowel op 1440 px als 390 px gecontroleerd.
 
+## Afzonderlijke winkelonboarding — 25 november 2026
+
+Na het aanmaken en inrichten van een nieuw huishouden toont Inhuis een zelfstandige
+keuzetabel met **Albert Heijn**, **Jumbo** en **Lidl**, zonder hergebruik van de
+reguliere pagina Instellingen → Winkelkoppelingen. Boven de tabel staat één vraag:
+**Met welke winkels wil je koppelen om je kassabonnen op te halen?**
+
+- De kolom **Ja** bevat per winkel een afzonderlijk rond selectievakje in de
+  centrale primaire kleur (standaard `#005F6A`), met een wit vinkje. Meerdere
+  winkels kunnen tegelijk worden gekozen.
+- **Resultaat** gebruikt dezelfde winkelnamen, met verticaal gecentreerd
+  statusicoon en label. Uitsluitend door Inhuis bevestigde resultaten krijgen
+  lichtgroene (geslaagd) of lichtoranje (mislukt) rij-arcering. Een geopende
+  website of onvoltooide browserstap blijft neutraal.
+- De gekozen winkels volgen hun **bestaande** AH-aanmeldroute en
+  Jumbo/Lidl-browseroverdracht; de gewone instellingen blijven ongewijzigd.
+  Herhaald openen van een gekoppelde winkel is geen verplichte onboardingstap.
+- Winkelkeuzes en resultaten worden duurzaam per actief huishouden bewaard via
+  de beveiligde Inhuis-backend. Alleen een beheerder met
+  `household_settings.manage` kan ze aanpassen. Een onvoltooide keuze wordt
+  na opnieuw aanmelden aangeboden; **Later koppelen** laat het dashboard vrij.
+- De eerste dashboarduitleg blijft de bestaande korte actiebarhint, zonder
+  schermverduistering. De eerdere drie oranje winkelpijlen zijn **niet** meer
+  van toepassing op de eerste winkelonboarding.
+
 ## Snelle onboarding op één scherm — 23 november 2026
 
 Voor nieuwe reguliere accounts toont **Account maken** uitsluitend de invoervelden **E-mailadres**, **Wachtwoord** en **Huishouden** (vooraf ingevuld: Mijn huishouden), één korte informatieve regel **Wat Inhuis · Aantallen · Alleen** en één primaire actie **Start Inhuis**. Het gebruiksprofiel en de aantallen worden standaard toegepast; de gebruiker hoeft daarvoor geen radioknoppen te bedienen. Geen afzonderlijke wachtwoordherhaling of verklarende kaarten. Na voltooide account- en huishoudinrichting volgt afzonderlijk **Winkels koppelen**, met de bestaande optie **Later**. De interactie blijft binnen de SPA zonder volledige paginaverversing.

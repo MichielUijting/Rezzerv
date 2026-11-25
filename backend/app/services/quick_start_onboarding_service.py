@@ -14,6 +14,7 @@ from app.services.household_onboarding_service import (
 )
 from app.services.household_product_configuration_service import save_wat_inhuis_configuration
 from app.services.receipt_historical_import_policy import activate_cutover_for_new_onboarding
+from app.services.store_onboarding_progress_service import seed_store_onboarding
 
 
 def complete_default_wat_inhuis_onboarding(conn, *, household_id: str, household_name: str):
@@ -42,6 +43,7 @@ def complete_default_wat_inhuis_onboarding(conn, *, household_id: str, household
         household_usage_mode="alone",
     )
     ensure_new_household_repurchase_default(conn, household_id)
+    seed_store_onboarding(conn, household_id)
     if configuration.receipt_processing_enabled:
         activate_cutover_for_new_onboarding(conn, household_id=household_id)
     return state, configuration

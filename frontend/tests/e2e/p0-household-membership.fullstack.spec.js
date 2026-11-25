@@ -38,27 +38,21 @@ async function registerAndCompleteWatInhuis(page, email, accountPassword, househ
   expect(registration.onboarding?.household_name).toBe(householdName)
   expect(registration.onboarding?.product_configuration?.inventory_tracking_level).toBe('quantity')
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('receipt-connections-overview')).toBeVisible()
-  await expect(page.getByTestId('onboarding-store-arrow')).toHaveAttribute('data-store', 'ah')
-  await expect(page.getByTestId('onboarding-arrow-step')).toHaveText('Nu winkel(s) koppelen!')
+  // The household journey must use the PO-approved independent store choice
+  // instead of the now-retired three-arrow/settings overview walkthrough.
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
+  await expect(page.getByTestId('receipt-connections-overview')).toHaveCount(0)
+  await expect(page.getByTestId('onboarding-store-arrow')).toHaveCount(0)
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByTestId('receipt-connection-mobile-heading')).toBeVisible()
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
   for (const store of ['ah', 'jumbo', 'lidl']) {
-    const row = page.getByTestId(`receipt-connection-action-${store}`).locator('xpath=ancestor::tr')
-    const cells = row.locator('td')
-    await expect(cells.nth(1).getByTestId(`receipt-connection-action-${store}`)).toBeVisible()
-    await expect.poll(async () => {
-      const boxes = await Promise.all([0, 1, 2].map(index => cells.nth(index).boundingBox()))
-      return boxes.every(Boolean) && boxes[0].x < boxes[1].x && boxes[1].x < boxes[2].x
-        && Math.abs((boxes[0].y + boxes[0].height / 2) - (boxes[1].y + boxes[1].height / 2)) < 3
-    }).toBe(true)
+    const row = page.getByTestId(`onboarding-store-row-${store}`)
+    await expect(row).toBeVisible()
+    await expect(row).toHaveAttribute('data-result', 'neutral')
+    await expect(page.getByTestId(`onboarding-select-${store}`)).not.toBeChecked()
+    // The store name is the semantic row header (th); two data cells follow.
+    await expect(row.locator('th, td')).toHaveCount(3)
   }
-  await expect.poll(async () => {
-    const button = await page.getByTestId('receipt-connection-action-ah').boundingBox()
-    const arrow = await page.getByTestId('onboarding-store-arrow').boundingBox()
-    return Boolean(button && arrow && Math.abs(arrow.x - (button.x + button.width / 2)) < 3
-      && Math.min(Math.abs(arrow.y - button.y), Math.abs(arrow.y - button.y - button.height)) < 5)
-  }).toBe(true)
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
