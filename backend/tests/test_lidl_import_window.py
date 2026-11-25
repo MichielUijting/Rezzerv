@@ -71,3 +71,16 @@ def test_historical_manual_backfill_does_not_advance_auto_cursor():
     engine = _engine({"from_date": date(2024, 3, 1), "to_date": date(2024, 3, 31)})
     complete_import(engine, "h", date(2024, 3, 11), date(2024, 3, 1), date(2024, 3, 31))
     engine.begin.assert_not_called()
+
+
+def test_mobile_auto_window_ignores_saved_desktop_dates():
+    manual = {"from_date": date(2024, 1, 1),
+              "to_date": date(2024, 2, 1),
+              "last_imported_date": date(2026, 10, 1)}
+    mobile = get_window(_engine(manual), "household-1", force_automatic=True)
+    desktop = get_window(_engine(manual), "household-1")
+    assert mobile["from_date"] == "2026-10-01"
+    assert mobile["automatic_from"] is True
+    assert mobile["automatic_to"] is True
+    assert desktop["from_date"] == "2024-01-01"
+    assert desktop["automatic_from"] is False

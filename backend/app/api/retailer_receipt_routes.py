@@ -60,14 +60,14 @@ class LidlImportWindowRequest(BaseModel):
 
 
 @router.get("/lidl/import-window")
-def get_lidl_import_window():
+def get_lidl_import_window(automatic: bool = Query(default=False)):
     with engine.connect() as conn:
         context, membership_id = _context_and_membership(conn)
         decision = evaluate_household_permission(
             conn, household_id=str(context.active_household_id),
             membership_id=membership_id, permission_key="household_settings.manage",
         )
-    return {**get_window(engine, str(context.active_household_id)), "can_manage": bool(decision.allowed)}
+    return {**get_window(engine, str(context.active_household_id), force_automatic=automatic), "can_manage": bool(decision.allowed)}
 
 
 @router.put("/lidl/import-window")

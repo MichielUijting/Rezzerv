@@ -130,7 +130,7 @@ console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
 const storeConnectionScreen = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(storeConnectionScreen, /const lidlPeriodUnsaved =/)
 assert.match(storeConnectionScreen, /lidlFrom !== \(lidlWindow\.configured_from_date/)
-assert.match(storeConnectionScreen, /const needsSave = lidlPeriodUnsaved/)
+assert.match(storeConnectionScreen, /const needsSave = !mobileRetailer && lidlPeriodUnsaved/)
 assert.match(storeConnectionScreen, /data\?\.configured_from_date !== lidlFrom/)
 const lidlLaunch = storeConnectionScreen.slice(
   storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()'),
@@ -140,3 +140,8 @@ assert.match(lidlLaunch, /lidlTab\.location\.replace\(LIDL_HISTORY_URL\)/)
 assert.ok(lidlLaunch.indexOf("method: 'PUT'") < lidlLaunch.indexOf('lidlTab.location.replace'),
   'Lidl must not open before the household-scoped period is saved')
 console.log('LIDL_SAVED_PERIOD_GUARD_GREEN')
+
+const mobileLidlSource = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
+assert.match(mobileLidlSource, /\(mobileRetailer \? '\\?automatic=true' : ''\)/)
+assert.match(mobileLidlSource, /hideDates=\{mobileRetailer\}/)
+console.log('LIDL_MOBILE_AUTOMATIC_WINDOW_GREEN')

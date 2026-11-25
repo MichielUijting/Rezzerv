@@ -490,7 +490,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
   async function openLidlWithSavedPeriod() {
     if (lidlWindowSaving) return
-    if (!lidlWindow || !lidlFrom || (lidlTo && lidlFrom > lidlTo)) {
+    if (!lidlWindow || (!mobileRetailer && (!lidlFrom || (lidlTo && lidlFrom > lidlTo)))) {
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
@@ -502,7 +502,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
     // Lidl's browser favorite reads the household-scoped, confirmed window.
     // Save changed dates before visiting Lidl; never run with a stale period.
-    const needsSave = lidlPeriodUnsaved
+    const needsSave = !mobileRetailer && lidlPeriodUnsaved
     if (needsSave && !lidlWindow.can_manage) {
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
@@ -901,7 +901,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlPhase('fetching')
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         try {
-          const period = await fetchJson('/api/receipts/retailers/lidl/import-window')
+          const period = await fetchJson('/api/receipts/retailers/lidl/import-window' +
+            (mobileRetailer ? '?automatic=true' : ''))
           if (cancelled) return
           setLidlWindow(period)
           setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
@@ -1617,6 +1618,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             testId="lidl-digital-receipts"
             dateRangeTestId="lidl-import-window"
             isMobileViewport={isMobileViewport}
+            hideDates={mobileRetailer}
             from={lidlFrom}
             to={lidlTo || lidlWindow?.to_date || ''}
             fromTestId="lidl-from-date"
