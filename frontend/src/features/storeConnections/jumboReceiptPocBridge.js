@@ -533,6 +533,10 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
     throw new Error('Jumbo-automatisering mist een geldige Inhuis-handshake.')
   }
 
+  const retSource = automatic
+    ? 'const ret=o=>{if(window.opener)window.opener.postMessage({type:"inhuis:jumbo-error",request_id:Q,version:V,source_origin:location.origin,error:String(o.error||"Jumbo-import afgebroken.")},O);};'
+    : 'const ret=o=>{show("Resultaat gereed; terug naar Inhuis…");if(encodeURIComponent(JSON.stringify(o)).length>48000)o={version:V,ok:false,source_origin:location.origin,error:"Te veel bongegevens voor veilige overdracht. Kies een kortere Jumbo-periode."};location.href=C+P+encodeURIComponent(JSON.stringify(o));};'
+
   const bookmarkletSource = (
     '(async()=>{' +
     'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';' +
@@ -553,7 +557,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
     'let box=document.getElementById(ID);' +
     'if(!box){box=document.createElement("div");box.id=ID;box.style.cssText="position:fixed;z-index:2147483647;right:12px;bottom:12px;max-width:520px;padding:12px 14px;background:#fff;border:2px solid currentColor;color:#111;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.25);white-space:pre-wrap";document.documentElement.appendChild(box);}' +
     'const show=m=>{box.textContent="Inhuis Jumbo receipt-POC\\n"+m;try{console.info("[Inhuis Jumbo receipt-POC]",m);}catch{}};' +
-    'const ret=o=>{if(AUTO){if(window.opener)window.opener.postMessage({type:"inhuis:jumbo-error",request_id:Q,version:V,source_origin:location.origin,error:String(o.error||"Jumbo-import afgebroken.")},O);return;}show("Resultaat gereed; terug naar Inhuis…");if(encodeURIComponent(JSON.stringify(o)).length>48000)o={version:V,ok:false,source_origin:location.origin,error:"Te veel bongegevens voor veilige overdracht. Kies een kortere Jumbo-periode."};location.href=C+P+encodeURIComponent(JSON.stringify(o));};' +
+    retSource +
     'const gql=async(operationName,query,variables)=>{' +
     'const r=await fetch("/api/graphql",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json","apollographql-client-name":"JUMBO_WEB-orders","apollographql-client-version":"master-v29.2.0-web","x-source":"JUMBO_WEB-orders"},body:JSON.stringify({operationName,query,variables})});' +
     'const j=await r.json().catch(()=>null);' +
