@@ -59,7 +59,7 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
 
   // The new, separate choice screen keeps an independently persisted decision
   // for each available retailer; it does not reuse the settings overview.
-  await expect(page).toHaveURL(/\\/onboarding\\/winkels$/)
+  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
   await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
   await expect(page.getByTestId('receipt-connections-overview-table')).toHaveCount(0)
   await expect(page.getByTestId('onboarding-store-arrow')).toHaveCount(0)
@@ -99,7 +99,7 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   }
   // Later never blocks Home, even when stores remain selected.
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\\/home\\?wegwijs=1$/)
+  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
   await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
