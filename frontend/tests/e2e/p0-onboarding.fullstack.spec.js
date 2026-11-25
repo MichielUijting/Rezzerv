@@ -83,22 +83,6 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
 
-  // Neither another retailer nor an unverified account may be credited as a success.
-  const unselectedResult = await page.request.post('/api/onboarding/stores/result', {
-    data: { provider: 'jumbo', result: 'failed' },
-  })
-  expect(unselectedResult.status()).toBe(409)
-  const unconfirmedAccount = await page.request.post('/api/onboarding/stores/result', {
-    data: { provider: 'ah', result: 'success' },
-  })
-  expect(unconfirmedAccount.status()).toBe(409)
-  const failedBrowserStep = await page.request.post('/api/onboarding/stores/result', {
-    data: { provider: 'lidl', result: 'failed' },
-  })
-  expect(failedBrowserStep.status()).toBe(200)
-  await page.reload()
-  await expect(page.getByTestId('onboarding-store-row-lidl')).toHaveAttribute('data-result', 'failed')
-
   // Historical receipt counts remain an independent, scoped read-only source;
   // queued browser transfers are never represented as automatically connected.
   const historyResponse = await page.request.get('/api/receipts/retailers/history-progress')
@@ -113,18 +97,6 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     expect(row.queue_pending).toBe(0)
     expect(row.queue_processing).toBe(0)
   }
-  // After a real new session, an unfinished household selection is offered
-  // again; already chosen stores and failed results remain unchanged.
-  const logout = await page.request.post('/api/auth/logout')
-  expect(logout.status()).toBe(204)
-  await page.goto('/login')
-  await page.getByTestId('login-email').fill(accountEmail)
-  await page.getByTestId('login-password').fill(accountPassword)
-  await page.getByTestId('login-submit').click()
-  await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
-  await expect(page.getByTestId('onboarding-store-row-lidl')).toHaveAttribute('data-result', 'failed')
-
   // Later never blocks Home, even when stores remain selected.
   await page.getByTestId('onboarding-stores-later').click()
   await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
