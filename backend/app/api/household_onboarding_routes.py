@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -29,6 +30,9 @@ from app.services.receipt_historical_import_policy import (
     activate_cutover_for_new_onboarding,
 )
 from app.services.quick_start_onboarding_service import complete_default_wat_inhuis_onboarding
+from app.services.store_onboarding_progress_service import (
+    read_store_onboarding, record_store_result, update_store_selection,
+)
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     ServerSessionContext,
@@ -48,6 +52,19 @@ def _normalize_household_name(value: str) -> str:
     if len(normalized) > 120:
         raise ValueError("Naam huishouden mag maximaal 120 tekens bevatten")
     return normalized
+
+
+
+class StoreOnboardingSelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selected: list[Literal["ah", "jumbo", "lidl"]]
+
+
+class StoreOnboardingResultRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: Literal["ah", "jumbo", "lidl"]
+    result: Literal["success", "failed"]
+    queue_id: str | None = None
 
 
 class PrimaryUseCaseSelectionRequest(BaseModel):
@@ -232,6 +249,44 @@ def _public_onboarding_with_product_configuration(conn, state, *, can_manage: bo
 
 def create_household_onboarding_router(engine: Engine) -> APIRouter:
     router = APIRouter()
+
+
+    @router.get("/api/onboarding/stores")
+    def get_store_onboarding(request: Request):
+        with engine.connect() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            return read_store_onboarding(conn, str(context.active_household_id))
+
+    @router.put("/api/onboarding/stores/selection")
+    def save_store_onboarding_selection(
+        payload: StoreOnboardingSelectionRequest, request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            try:
+                return update_store_selection(
+                    conn, str(context.active_household_id), payload.selected,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post("/api/onboarding/stores/result")
+    def save_store_onboarding_result(
+        payload: StoreOnboardingResultRequest, request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            try:
+                return record_store_result(
+                    conn, str(context.active_household_id),
+                    provider=payload.provider, result=payload.result,
+                    queue_id=payload.queue_id,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @router.get("/api/onboarding")
     def get_household_onboarding(request: Request):
