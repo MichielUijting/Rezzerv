@@ -306,7 +306,16 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     try {
       const confirmed = await saveStoreOnboardingResult(provider, result, queueId)
       setStoreOnboarding(confirmed)
-      if (result === 'success') setActiveProvider('')
+      if (result === 'success') {
+        const next = confirmed.selected.find(code => confirmed.results[code] == null)
+        if (next) {
+          lastStoreAttemptRef.current = next
+          setActiveProvider(next)
+        } else {
+          setActiveProvider('')
+          if (confirmed.selected.every(code => confirmed.results[code] === 'success')) onFinish?.()
+        }
+      }
     } catch (err) {
       showFeedback({
         variant: 'error', title: 'Winkelonboarding',
@@ -521,6 +530,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         if (confirmation?.connected === true) {
           if (onboardingMode) await markOnboardingStoreResult('ah', 'success')
           else setActiveProvider('ah')
+          if (onboardingMode) return
           showFeedback({
             variant: 'success',
             title: 'Albert Heijn gekoppeld',

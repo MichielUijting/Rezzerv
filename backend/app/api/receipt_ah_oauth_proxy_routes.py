@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import AddressValueError, IPv4Address
 import logging
 import os
+from pathlib import Path
 import secrets
 from threading import RLock
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -25,6 +26,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from starlette.background import BackgroundTask
 from fastapi.responses import RedirectResponse, Response
 from starlette.convertors import Convertor, register_url_convertor
 
@@ -36,6 +38,7 @@ from app.integrations.retailer_accounts.ah import (
     AHReceiptClient,
 )
 from app.services.retailer_account_secure_store import save_ah_session
+from app.services.ah_receipt_background_sync import sync_due_ah_households
 
 class _AHProxyPathConvertor(Convertor):
     # The OAuth proxy is intentionally root-relative for AH login assets, but it
@@ -425,6 +428,12 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
         save_ah_session(engine, flow.household_id, session)
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "connected"), status_code=302)
+        if urlparse(flow.return_to).path == "/onboarding/winkels":
+            response.background = BackgroundTask(
+                sync_due_ah_households, engine,
+                Path(os.getenv("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw")),
+                only_household_id=flow.household_id,
+            )
         response.delete_cookie(_FLOW_COOKIE, path="/")
         response.delete_cookie(_FLOW_RETURN_COOKIE, path="/")
         response.headers["Cache-Control"] = "no-store"

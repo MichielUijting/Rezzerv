@@ -34,7 +34,7 @@ def _imports_allowed(engine: Engine) -> bool:
         value = conn.execute(text(
             "SELECT state FROM maintenance_control WHERE id=1"
         )).scalar_one_or_none()
-    return value in {"normal", "announced"} and is_platform_feature_enabled(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT)
+        return value in {"normal", "announced"} and is_platform_feature_enabled(conn, FEATURE_FLAG_RETAILER_AUTO_IMPORT)
 
 
 def _lock_key(household_id: str) -> int:
@@ -77,6 +77,7 @@ def _admitted_ah_sync(engine: Engine, receipt_root: Path, household_id: str) -> 
 
 def sync_due_ah_households(
     engine: Engine, receipt_root: Path, stop_requested: Callable[[], bool] | None = None,
+    *, only_household_id: str | None = None,
 ) -> dict[str, int]:
     """One safe iteration; PostgreSQL session locks protect multiple API workers."""
     result = {"due": 0, "completed": 0, "failed": 0, "locked": 0}
@@ -101,6 +102,8 @@ def sync_due_ah_households(
         if (stop_requested is not None and stop_requested()) or not _imports_allowed(engine):
             break
         household_id = str(row.get("household_id") or "").strip()
+        if only_household_id is not None and household_id != only_household_id:
+            continue
         if not household_id or not _due(row.get("last_sync_at"), now):
             continue
         result["due"] += 1
