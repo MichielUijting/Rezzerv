@@ -18,6 +18,7 @@ export default function RetailerReceiptPanel({
   toTestId,
   dateRangeTestId,
   datesDisabled = false,
+  hideDates = false,
   onFromChange,
   onToChange,
   openHref,
@@ -60,11 +61,11 @@ export default function RetailerReceiptPanel({
           </p>
         ) : null}
         <p style={{ margin: '6px 0 0' }}>
-          Kies de periode en haal je kassabonnen op.
+          {hideDates ? 'Inhuis bepaalt bij iedere import de actuele periode.' : 'Kies de periode en haal je kassabonnen op.'}
         </p>
       </div>
 
-      <div
+      {!hideDates && <div
         data-testid={dateRangeTestId || 'retailer-receipt-date-range'}
         style={{ display: 'flex', columnGap: '12px', rowGap: '12px', flexWrap: 'wrap' }}
       >
@@ -84,7 +85,7 @@ export default function RetailerReceiptPanel({
           disabled={datesDisabled}
           data-testid={toTestId}
         />
-      </div>
+      </div>}
 
 
       <div
