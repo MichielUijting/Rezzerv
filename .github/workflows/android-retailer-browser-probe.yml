@@ -27,10 +27,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Resolve pinned direct dependencies and build
+      - name: Install only locked dependencies and audit security
         run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --no-audit --no-fund
+          npm audit --audit-level=high
+      - name: Build isolated web bundle and Android project
+        run: |
           npm run build
           npx --no-install cap add android
           npx --no-install cap sync android
@@ -38,11 +40,17 @@ jobs:
         run: |
           cd android
           ./gradlew --no-daemon assembleDebug
+      - name: Verify APK and create SHA-256 proof
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/app-debug.apk.sha256
+          cat android/app/build/outputs/apk/debug/app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: inhuis-browserprobe-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             packaging/mobile-browser-probe/android/app/build/outputs/apk/debug/app-debug.apk
+            packaging/mobile-browser-probe/android/app/build/outputs/apk/debug/app-debug.apk.sha256
             packaging/mobile-browser-probe/package-lock.json
           if-no-files-found: error
           retention-days: 7

@@ -20,11 +20,14 @@ function finish(run, failure = false) {
   clearInterval(run.timer);
   active = null;
   busy(false);
-  const label = run.store.name + ': ';
-  if (failure) report(label + 'browser kon niet worden geopend of gecontroleerd. Geen koppeling uitgevoerd.');
-  else if (run.evidence?.markers) report(label + 'historyroute en herkenbare historie-elementen ontvangen. Controleer of echte bonnen zichtbaar waren. Geen bonnen geïmporteerd.');
-  else if (run.evidence?.history) report(label + 'historyroute en browsercommunicatie bewezen; bonnen nog niet aangetoond.');
-  else report(label + 'geen bevestigd historiesignaal ontvangen. Aanmelding of browsercommunicatie nog niet bewezen.');
+  report([
+    run.store.name + ' — resultaten',
+    'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
+    'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
+    'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
+    'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
+    'Een historiescherm bewijst geen volledige bonimport.'
+  ].join(String.fromCharCode(10)));
 }
 async function initialize() {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
@@ -60,6 +63,7 @@ async function open(store) {
     const {id} = await InAppBrowser.openWebView({
       url:store.url, javascriptBridgeOrigins:[store.origin],
       allowScreenshotsFromWebPage:false, preventDeeplink:true,
+      persistWebViewData:false,
       visibleTitle:true, openBlankTargetInWebView:true
     });
     if (typeof id !== 'string' || !id) throw Error('Missing native id');
