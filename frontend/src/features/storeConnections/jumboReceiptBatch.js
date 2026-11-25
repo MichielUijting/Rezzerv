@@ -1,6 +1,6 @@
 // Deterministic Jumbo batch rules. No account credentials or database operations here.
 export const JUMBO_BATCH_LIMIT = 10
-export const JUMBO_MAX_PAGES = 30
+export const JUMBO_MAX_PAGES = 200
 
 export function jumboDay(value) {
   if (typeof value !== 'string') return ''
@@ -75,6 +75,38 @@ export function selectJumboHistory(receipts, from, to, max = JUMBO_BATCH_LIMIT) 
     throw new Error('Meer dan ' + max + ' Jumbo-bonnen in deze periode. Kies een kleinere periode.')
   }
   return selected
+}
+
+// Validate every source entry before scheduling chronological, bounded batches.
+// Same-day receipts are split by identity, not discarded at a date boundary.
+export function planJumboHistoricalBatches(receipts, from, to) {
+  jumboDateWindow(from, to)
+  if (!Array.isArray(receipts) || receipts.length > JUMBO_MAX_PAGES * 10) {
+    throw new Error('Jumbo-historie is groter dan de aantoonbaar volledig opgehaalde bron.')
+  }
+  const selected = []
+  const seen = new Set()
+  for (let index = 0; index < receipts.length; index += JUMBO_BATCH_LIMIT) {
+    const checked = selectJumboHistory(receipts.slice(index, index + JUMBO_BATCH_LIMIT), from, to)
+    for (const receipt of checked) {
+      if (seen.has(receipt.transactionId)) throw new Error('Dubbel Jumbo-bonnummer in verschillende historiepagina’s.')
+      seen.add(receipt.transactionId)
+      selected.push(receipt)
+    }
+  }
+  selected.sort((a, b) => jumboDay(a.purchaseEndOn).localeCompare(jumboDay(b.purchaseEndOn)) ||
+    a.transactionId.localeCompare(b.transactionId))
+  const batches = []
+  for (const receipt of selected) {
+    const month = jumboDay(receipt.purchaseEndOn).slice(0, 7)
+    const current = batches[batches.length - 1]
+    if (!current || current.month !== month || current.receipts.length === JUMBO_BATCH_LIMIT) {
+      batches.push({ month, receipts: [receipt] })
+    } else {
+      current.receipts.push(receipt)
+    }
+  }
+  return batches
 }
 
 export function jumboImportResult(result) {
