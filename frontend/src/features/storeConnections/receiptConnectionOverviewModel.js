@@ -1,3 +1,5 @@
+import { jumboDateWindow } from './jumboReceiptBatch.js'
+
 // Digital receipt availability is not the same thing as a loyalty card connection.
 // Never infer a retailer login, installed browser bookmarklet, or background sync
 // from an existing customer-card reference.
@@ -22,6 +24,20 @@ export function safeImportDate(value, now = new Date()) {
   if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) return null
   const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
   return value <= today ? value : null
+}
+
+// The last reliably imported PURCHASE date is inclusive; receipt upload time
+// must never be treated as a purchase checkpoint. A missing checkpoint starts
+// on 1 January of the preceding calendar year.
+export function currentJumboImportPeriod(latestPurchaseDate, now = new Date()) {
+  if (!(now instanceof Date) || Number.isNaN(now.valueOf())) {
+    throw new Error('Ongeldige huidige datum voor Jumbo-import.')
+  }
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
+  const noCheckpoint = latestPurchaseDate === null || latestPurchaseDate === undefined || latestPurchaseDate === ''
+  const from = noCheckpoint ? firstImportDate(now) : safeImportDate(latestPurchaseDate, now)
+  if (!from) throw new Error('Ongeldige laatst bevestigde Jumbo-aankoopdatum.')
+  return jumboDateWindow(from, today)
 }
 
 export function displayedImportDate(value, now = new Date()) {
