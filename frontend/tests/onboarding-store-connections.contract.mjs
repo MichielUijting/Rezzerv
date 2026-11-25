@@ -150,38 +150,122 @@ assert.match(connections, /event\.source !== expectedLidlWindowRef\.current/)
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')
 
 import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, rememberMobileBookmarkletSetup, copyRetailerBookmarklet } from '../src/features/storeConnections/universalRetailerBookmarklet.js'
-import { buildJumboPocBookmarklet } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
+import { JUMBO_BOOKMARKLET_VERSION } from '../src/features/storeConnections/jumboReceiptPocBridge.js'
 import { buildLidlWebBookmarklet } from '../src/features/storeConnections/lidlWebReceiptBridge.js'
 import vm from 'node:vm'
-const universal = buildUniversalRetailerBookmarklet(
-  buildJumboPocBookmarklet('https://inhuis.example/onboarding/winkels', { from_date: '2026-10-01', to_date: '2026-11-25' }),
-  buildLidlWebBookmarklet('https://inhuis.example'))
+
+const lidl = buildLidlWebBookmarklet('https://inhuis.example')
+const universal = buildUniversalRetailerBookmarklet('https://inhuis.example', lidl)
 assert.doesNotThrow(() => new Function(decodeURIComponent(universal.slice(11))))
 assert.ok(!/[\r\n\t]/.test(universal))
+const payload = decodeURIComponent(universal.slice('javascript:'.length))
+assert.match(payload, /inhuis:jumbo-handshake/)
+assert.match(payload, /inhuis:jumbo-script/)
+assert.match(payload, /inhuis:lidl-handshake/)
+assert.doesNotMatch(payload, /2026-10-01|2026-11-25|from_date|to_date/)
+assert.equal(universal, buildUniversalRetailerBookmarklet('https://inhuis.example', lidl),
+  'No date, path or browser session is baked into the permanent favorite')
+assert.throws(() => buildUniversalRetailerBookmarklet('javascript:alert(1)', lidl), /Ongeldige/)
+assert.throws(() => buildUniversalRetailerBookmarklet('https://evil.example', 'about:blank'), /Ongeldige/)
+
+// Exact origin dispatch; never run either importer on an unrelated website.
 const routing = decodeURIComponent(buildUniversalRetailerBookmarklet(
-  'javascript:' + encodeURIComponent('(()=>{globalThis.selected="jumbo"})()'),
-  'javascript:(()=>{globalThis.selected="lidl"})()').slice(11))
-for (const [origin, selected] of [['https://www.jumbo.com','jumbo'],['https://www.lidl.nl','lidl'],['https://example.com',''],['https://www.jumbo.com.example.com','']]) {
+  'https://inhuis.example', 'javascript:(()=>{globalThis.selected="lidl"})()').slice(11))
+for (const origin of ['https://example.com', 'https://www.jumbo.com.example.com', 'https://inhuis.example']) {
   const ctx = { location: { origin }, selected: '', alert: () => {} }
   vm.runInNewContext(routing, ctx)
-  assert.equal(ctx.selected, selected)
+  assert.equal(ctx.selected, '', origin + ' must not execute a retailer script')
 }
+const lidlCtx = { location: { origin: 'https://www.lidl.nl' }, selected: '', alert: () => {} }
+vm.runInNewContext(routing, lidlCtx)
+assert.equal(lidlCtx.selected, 'lidl')
+
+// Jumbo must request the current period from the exact opener. A forged
+// response or a missing opener may not execute an import.
+{
+  const alerts = []
+  const ctx = { location: { origin: 'https://www.jumbo.com' }, alert: message => alerts.push(message) }
+  vm.runInNewContext(routing, ctx)
+  assert.match(alerts[0], /Open Jumbo eerst via/)
+}
+{
+  let listener = null
+  let executed = false
+  let receiverRemoved = false
+  const outbound = []
+  const opener = { postMessage: (message, origin) => outbound.push({ message, origin }) }
+  const ctx = {
+    location: { origin: 'https://www.jumbo.com' },
+    alert: () => { throw Error('Unexpected Jumbo error') },
+    window: {
+      opener,
+      addEventListener: (_kind, fn) => { listener = fn },
+      removeEventListener: () => { receiverRemoved = true },
+      setTimeout: () => 1,
+      clearTimeout: () => {},
+    },
+    selected: '',
+  }
+  ctx.window.window = ctx.window
+  vm.runInNewContext(routing, ctx)
+  assert.equal(outbound.length, 1)
+  assert.equal(outbound[0].origin, 'https://inhuis.example')
+  assert.equal(outbound[0].message.type, 'inhuis:jumbo-handshake')
+  assert.equal(outbound[0].message.bookmarklet_version, JUMBO_BOOKMARKLET_VERSION)
+  const response = {
+    type: 'inhuis:jumbo-script',
+    bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
+    request_id: outbound[0].message.request_id,
+    script: '(async()=>{globalThis.selected="jumbo"})()',
+  }
+  listener({ origin: 'https://evil.example', source: opener, data: response })
+  listener({ origin: 'https://inhuis.example', source: {}, data: response })
+  listener({ origin: 'https://inhuis.example', source: opener, data: { ...response, request_id: 'wrong' } })
+  assert.equal(ctx.selected, '')
+  listener({ origin: 'https://inhuis.example', source: opener, data: response })
+  // new Function executes in the retailer's own context
+  assert.equal(ctx.selected, 'jumbo')
+  assert.equal(receiverRemoved, true)
+  listener({ origin: 'https://inhuis.example', source: opener, data: response })
+  assert.equal(ctx.selected, 'jumbo', 'Only one authorized execution per request')
+}
+
+// A single setup hint is shared, independent of dates and onboarding/settings.
 const keys = mobileBookmarkletSetupKeys('/onboarding/winkels', '2026-10-01', '2026-11-25')
-const changed = mobileBookmarkletSetupKeys('/onboarding/winkels', '2026-10-02', '2026-11-25')
+const changed = mobileBookmarkletSetupKeys('/instellingen/winkelkoppelingen', '2027-01-01', '2027-12-31')
+assert.deepEqual(keys, changed)
+assert.equal(keys.jumbo, keys.lidl)
 const storage = new Map()
-const mockStorage = {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)}
+const mockStorage = { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) }
 assert.equal(hasMobileBookmarkletSetup(keys.jumbo, mockStorage), false)
 rememberMobileBookmarkletSetup(keys, mockStorage)
-assert.equal(hasMobileBookmarkletSetup(keys.lidl, mockStorage), true)
-assert.equal(hasMobileBookmarkletSetup(changed.jumbo, mockStorage), false)
-assert.equal(hasMobileBookmarkletSetup(changed.lidl, mockStorage), true)
-rememberMobileBookmarkletSetup(changed, mockStorage)
-assert.equal(hasMobileBookmarkletSetup(keys.jumbo, mockStorage), false)
 assert.equal(hasMobileBookmarkletSetup(changed.jumbo, mockStorage), true)
+assert.equal(hasMobileBookmarkletSetup(changed.lidl, mockStorage), true)
 let copied = ''
-assert.equal(await copyRetailerBookmarklet(universal, {clipboard: {writeText: value => {copied = value; return Promise.resolve()}}}, {}), true)
+assert.equal(await copyRetailerBookmarklet(universal, { clipboard: { writeText: value => { copied = value; return Promise.resolve() } } }, {}), true)
 assert.equal(copied, universal)
-assert.equal(await copyRetailerBookmarklet(universal, {clipboard: {writeText: () => Promise.reject(new Error('blocked'))}}, {}), false)
+assert.equal(await copyRetailerBookmarklet(universal, { clipboard: { writeText: () => Promise.reject(new Error('blocked')) } }, {}), false)
 assert.equal(await copyRetailerBookmarklet(universal, {}, {}), false)
-assert.equal(detectMobileRetailerEnvironment({userAgent:'Mozilla/5.0 (Linux; Android 14; wv) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36'}).browser,'other')
+assert.equal(detectMobileRetailerEnvironment({ userAgent: 'Mozilla/5.0 (Linux; Android 14; wv) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36' }).browser, 'other')
+
+// Selection changes are purely local; only confirmation persists once and then
+// starts an AH/Jumbo/Lidl flow. A failed PUT leaves the pending state intact.
+const selectHandler = connections.slice(
+  connections.indexOf('function chooseOnboardingStore('),
+  connections.indexOf('async function skipCurrentOnboardingStore('))
+assert.match(selectHandler, /setPendingStoreSelection/)
+assert.doesNotMatch(selectHandler, /saveStoreOnboardingSelection|fetchJson|setStoreOnboardingBusy|window\.location|navigate\(|setActiveProvider/)
+const startHandler = connections.slice(
+  connections.indexOf('async function startOnboardingStore('),
+  connections.indexOf('function openJumboFromInhuis('))
+assert.match(startHandler, /await saveStoreOnboardingSelection\(selected\)/)
+assert.ok(startHandler.indexOf('await saveStoreOnboardingSelection(selected)') <
+  startHandler.indexOf('launchConfirmedOnboardingStore(confirmed, preparedPromise)'))
+assert.match(startHandler, /setPendingStoreSelection\(null\)/)
+assert.match(connections, /currentJumboImportPeriod\(response\.dates\.jumbo\)/)
+assert.match(connections, /event\.origin !== JUMBO_WEB_ORIGIN/)
+assert.match(connections, /event\.source !== expectedJumboWindowRef\.current/)
+assert.match(connections, /sourceWindow\.postMessage\(/)
+assert.match(connections, /openJumboFromInhuis\(\)/)
+assert.match(connections, /universalBookmarklet=\{universalBookmarklet\}/)
 console.log('UNIVERSAL_MOBILE_BOOKMARKLET_CONTRACT_GREEN')
