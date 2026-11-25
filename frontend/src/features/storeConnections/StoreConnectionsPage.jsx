@@ -21,10 +21,10 @@ import {
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
 import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, copyRetailerBookmarklet } from './universalRetailerBookmarklet.js'
-import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
+import { JUMBO_WEB_ORIGIN, buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
-import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate } from './receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
@@ -48,7 +48,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const mobileRetailer = detectMobileRetailerEnvironment().device !== 'desktop'
   const [activeProvider, setActiveProvider] = useState('')
   const expectedLidlWindowRef = useRef(null)
+  const expectedJumboWindowRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
+  const [pendingStoreSelection, setPendingStoreSelection] = useState(null)
   const [storeOnboardingBusy, setStoreOnboardingBusy] = useState(false)
   const lidlOnboardingQueueIdRef = useRef(null)
   const lastStoreAttemptRef = useRef('')
@@ -137,10 +139,14 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     [jumboFrom, jumboTo, jumboPeriodValid],
   )
 
-  const universalBookmarklet = useMemo(() => jumboPocBookmarklet
-    ? buildUniversalRetailerBookmarklet(jumboPocBookmarklet, lidlBookmarklet) : '',
-    [jumboPocBookmarklet, lidlBookmarklet])
-  const setupKeys = useMemo(() => mobileBookmarkletSetupKeys(window.location.pathname, jumboFrom, jumboTo), [jumboFrom, jumboTo])
+  // Permanent across periods, dates and both entry routes. Desktop retains
+  // its existing date-specific Jumbo bookmarklet and drag-to-favorites flow.
+  const universalBookmarklet = useMemo(
+    () => buildUniversalRetailerBookmarklet(window.location.origin, lidlBookmarklet),
+    [lidlBookmarklet],
+  )
+  const setupKeys = useMemo(() => mobileBookmarkletSetupKeys(), [])
+  const visibleOnboardingSelection = pendingStoreSelection ?? storeOnboarding?.selected ?? []
   const setupBrowserUrl = useMemo(() => {
     const url = new URL(window.location.pathname, window.location.origin)
     if (onboardingMode && ['jumbo', 'lidl'].includes(activeProvider)) url.searchParams.set('inhuis_setup', activeProvider)
@@ -341,23 +347,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function chooseOnboardingStore(provider, checked) {
-    if (!storeOnboarding?.available || storeOnboardingBusy) return
-    const selected = checked
-      ? [...storeOnboarding.selected, provider]
-      : storeOnboarding.selected.filter(code => code !== provider)
-    setStoreOnboardingBusy(true)
-    try {
-      const saved = await saveStoreOnboardingSelection(selected)
-      setStoreOnboarding(saved)
-    } catch (err) {
-      showFeedback({
-        variant: 'error', title: 'Winkelkeuze',
-        message: normalizeErrorMessage(err?.message) || 'De winkelkeuze kon niet worden bewaard.',
-      })
-    } finally {
-      setStoreOnboardingBusy(false)
-    }
+  // Checkbox clicks never call the backend, open a browser or navigate.
+  function chooseOnboardingStore(provider, checked) {
+    if (!storeOnboarding?.available || storeOnboardingBusy ||
+        storeOnboarding.results?.[provider] === 'success') return
+    setPendingStoreSelection(previous => {
+      const current = previous ?? storeOnboarding.selected
+      return ['ah', 'jumbo', 'lidl'].filter(code =>
+        code === provider ? checked : current.includes(code))
+    })
   }
 
   async function skipCurrentOnboardingStore(provider) {
@@ -405,16 +403,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }, [activeProvider, onboardingMode, mobileRetailer])
 
-  function startOnboardingStore() {
+  function launchConfirmedOnboardingStore(confirmed, preparedPromise = null) {
     const code = nextStoreForOnboarding(
-      storeOnboarding?.selected, storeOnboarding?.results,
-      lastStoreAttemptRef.current,
+      confirmed.selected, confirmed.results, lastStoreAttemptRef.current,
     )
     if (!code) return
     lastStoreAttemptRef.current = code
     if (code === 'ah') {
-      // Directly start the existing OAuth route from the selection table.
-      // Never expose a second AH button or scroll into a settings pane.
       if (ahConnection?.connected === true) {
         void markOnboardingStoreResult('ah', 'success')
       } else {
@@ -424,14 +419,72 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
     jumboReturningRef.current = false
     if (mobileRetailer) {
-      const value = universalBookmarklet || (code === 'lidl' ? lidlBookmarklet : jumboPocBookmarklet)
-      if (value && !(universalBookmarklet && hasMobileBookmarkletSetup(setupKeys[code]))) {
-        // Start copying in the original selection click, before React effects.
-        setPreparedCopy({ value, promise: copyRetailerBookmarklet(value) })
+      const value = universalBookmarklet
+      if (value && !hasMobileBookmarkletSetup(setupKeys[code])) {
+        setPreparedCopy(preparedPromise ? { value, promise: preparedPromise } : null)
       } else setPreparedCopy(null)
       setSetupHelpStore(code)
     }
     setActiveProvider(code)
+  }
+
+  async function startOnboardingStore() {
+    if (!storeOnboarding?.available || storeOnboardingBusy) return
+    const selected = visibleOnboardingSelection
+    const code = nextStoreForOnboarding(selected, storeOnboarding.results, lastStoreAttemptRef.current)
+    if (!code) return
+    // Clipboard activation runs during the click, not after an awaited PUT.
+    // Copying only prepares a favorite: it never starts retailer login/import.
+    const preparedPromise = mobileRetailer && ['jumbo', 'lidl'].includes(code) &&
+      !hasMobileBookmarkletSetup(setupKeys[code])
+      ? copyRetailerBookmarklet(universalBookmarklet) : null
+    setStoreOnboardingBusy(true)
+    try {
+      const confirmed = await saveStoreOnboardingSelection(selected)
+      setStoreOnboarding(confirmed)
+      setPendingStoreSelection(null)
+      launchConfirmedOnboardingStore(confirmed, preparedPromise)
+    } catch (err) {
+      // Retain every local checkbox for an explicit retry of the same selection.
+      showFeedback({
+        variant: 'error', title: 'Winkelkeuze',
+        message: normalizeErrorMessage(err?.message) || 'De winkelkeuze kon niet worden bewaard. Probeer opnieuw.',
+      })
+    } finally {
+      setStoreOnboardingBusy(false)
+    }
+  }
+
+  // Open the retailer window synchronously within its user click. Jumbo's
+  // favorite will request a fresh window from THIS authenticated opener.
+  function openJumboFromInhuis() {
+    if (!mobileRetailer) {
+      window.location.assign(JUMBO_ORDERS_URL)
+      return true
+    }
+    let tab = null
+    try { tab = window.open('about:blank', '_blank') } catch { /* blocked */ }
+    if (!tab) {
+      showFeedback({
+        variant: 'error', title: 'Jumbo openen',
+        message: 'De browser heeft het Jumbo-tabblad geblokkeerd. Sta pop-ups voor Inhuis toe en probeer opnieuw.',
+      })
+      return false
+    }
+    expectedJumboWindowRef.current = tab
+    try {
+      if (tab.document?.body) {
+        tab.document.title = 'Inhuis - Jumbo'
+        tab.document.body.textContent = 'Openen van Jumbo…'
+      }
+      tab.location.replace(JUMBO_ORDERS_URL)
+      return true
+    } catch {
+      expectedJumboWindowRef.current = null
+      try { tab.close() } catch { /* noop */ }
+      showFeedback({ variant: 'error', title: 'Jumbo openen', message: 'Jumbo kon niet veilig worden geopend.' })
+      return false
+    }
   }
 
   async function openLidlWithSavedPeriod() {
