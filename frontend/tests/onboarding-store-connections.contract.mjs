@@ -4,6 +4,7 @@ import {
   shouldOfferStoreConnectionOnboarding,
   filterOnboardingReceiptStores,
   hasStoreOnboardingToResume,
+  nextStoreForOnboarding,
 } from '../src/features/onboarding/onboardingStoreConnections.js'
 
 function read(path) {
@@ -31,6 +32,14 @@ assert.equal(hasStoreOnboardingToResume({ available: true, selected: [], results
 assert.equal(hasStoreOnboardingToResume({ available: true, selected: ['ah', 'lidl'], results: { ah: 'success', lidl: 'failed' } }), true)
 assert.equal(hasStoreOnboardingToResume({ available: true, selected: ['ah'], results: { ah: 'success' } }), false)
 assert.equal(hasStoreOnboardingToResume({ available: true, selected: ['jumbo'], results: {} }), true)
+
+
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], {}, ''), 'ah')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed' }, 'ah'), 'jumbo')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed', jumbo: 'success' }, 'jumbo'), 'lidl')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'success', jumbo: 'success' }, 'lidl'), 'lidl')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo'], { ah: 'success', jumbo: 'success' }, 'ah'), '')
+assert.equal(nextStoreForOnboarding(['lidl'], {}, ''), 'lidl')
 
 const router = read('../src/app/router/AppRouter.jsx')
 const onboarding = read('../src/features/onboarding/OnboardingPage.jsx')

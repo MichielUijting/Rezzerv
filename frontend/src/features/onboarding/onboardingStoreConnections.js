@@ -47,3 +47,14 @@ export function hasStoreOnboardingToResume(state) {
     && Array.isArray(state.selected)
     && state.selected.some(code => state?.results?.[code] !== 'success')
 }
+
+
+/** Cycle through every selected retailer without letting a failed store block
+ * the others. Successful transfers are never attempted again automatically. */
+export function nextStoreForOnboarding(selected, results = {}, previous = '') {
+  if (!Array.isArray(selected)) return ''
+  const valid = selected.filter(code => ['ah', 'jumbo', 'lidl'].includes(code))
+  const start = valid.indexOf(previous)
+  const order = [...valid.slice(start + 1), ...valid.slice(0, start + 1)]
+  return order.find(code => results?.[code] !== 'success') || ''
+}

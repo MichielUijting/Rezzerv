@@ -30,7 +30,7 @@ import ImportProgress from './ImportProgress.jsx'
 import StoreOnboardingSelection from '../onboarding/StoreOnboardingSelection.jsx'
 import {
   fetchStoreOnboardingProgress, saveStoreOnboardingSelection,
-  saveStoreOnboardingResult,
+  saveStoreOnboardingResult, nextStoreForOnboarding,
 } from '../onboarding/onboardingStoreConnections.js'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
@@ -47,6 +47,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [storeOnboarding, setStoreOnboarding] = useState(null)
   const [storeOnboardingBusy, setStoreOnboardingBusy] = useState(false)
   const lidlOnboardingQueueIdRef = useRef(null)
+  const lastStoreAttemptRef = useRef('')
   const [connectionHelpOpen, setConnectionHelpOpen] = useState(() => new URLSearchParams(window.location.search).has('ah'))
   const [latestImportDates, setLatestImportDates] = useState({})
   const [historySummary, setHistorySummary] = useState(null)
@@ -334,10 +335,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   }
 
   function startOnboardingStore() {
-    const remaining = (storeOnboarding?.selected || [])
-      .filter(code => storeOnboarding?.results?.[code] !== 'success')
-    const code = remaining.find(item => item !== activeProvider) || remaining[0]
+    const code = nextStoreForOnboarding(
+      storeOnboarding?.selected, storeOnboarding?.results,
+      lastStoreAttemptRef.current,
+    )
     if (!code) return
+    lastStoreAttemptRef.current = code
     if (code === 'ah') {
       // Directly start the existing OAuth route from the selection table.
       // Never expose a second AH button or scroll into a settings pane.
