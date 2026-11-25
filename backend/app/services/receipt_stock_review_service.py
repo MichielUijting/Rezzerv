@@ -90,12 +90,14 @@ def resolve_stock_household_article(
     conn, *,
     main_module, household_id: str, line, store_provider_code: str,
     allow_new_receipt_article: bool = False,
+    allow_historical_bootstrap: bool = False,
 ) -> str | None:
     """Resolve one canonical household ID for either purchase-import path.
 
     Explicit saved selections, confirmed household memory, and catalog-linked
     global products take precedence. Creating a genuinely NEW household
-    article is permitted only for an approved Kassa receipt. If a similarly
+    article is permitted for an approved Kassa receipt or a server-validated
+    historical onboarding source. If a similarly
     named article already exists WITHOUT a confirmed link, refuse to assume
     it is the same physical article.
     """
@@ -139,7 +141,7 @@ def resolve_stock_household_article(
         return main_module.ensure_household_article_for_global_product(
             conn, household_id, global_id,
             article_name_hint=line.get("article_name_raw"),
-            barcode=line.get("external_article_code"),
+            barcode=line.get("barcode") if allow_historical_bootstrap else line.get("external_article_code"),
             brand=line.get("brand_raw"),
         )
 
@@ -151,7 +153,7 @@ def resolve_stock_household_article(
     )
     if remembered:
         return remembered
-    if not allow_new_receipt_article:
+    if not (allow_new_receipt_article or allow_historical_bootstrap):
         return None
 
     name = main_module.normalize_household_article_name(line.get("article_name_raw"))

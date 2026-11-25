@@ -409,6 +409,18 @@ def _notification_count(conn: Connection, household_id: str, user_id: str) -> in
 
 def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     receipt_rows = _active_receipt_rows(conn, household_id, approved_only=False)
+    from app.services.receipt_historical_import_policy import classify_purchase_date
+
+    cutovers = _household_rows(conn, "household_receipt_history_cutovers", household_id)
+    cutoff = cutovers[0].get("first_current_purchase_date") if cutovers else None
+    receipt_rows = [row for row in receipt_rows if classify_purchase_date(
+        row.get("purchase_at"), purchase_at_source=row.get("purchase_at_source"),
+        first_current_purchase_date=cutoff,
+    ) != "historical"]
+    if "raw_receipts" in _tables(conn):
+        active_raw_ids = {str(row["id"]) for row in _household_rows(conn, "raw_receipts", household_id)
+                          if row.get("deleted_at") is None}
+        receipt_rows = [row for row in receipt_rows if str(row.get("raw_receipt_id") or "") in active_raw_ids]
     receipt_ids = {str(row.get("id") or "") for row in receipt_rows}
     if not receipt_ids:
         return 0, 0
@@ -432,11 +444,16 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
                 if receipt_id in receipt_ids:
                     receipt_batch_by_receipt[receipt_id] = str(batch.get("id") or "")
 
-    kassa_receipt_ids = {
-        receipt_id
-        for receipt_id in eligible_receipt_ids
-        if receipt_id not in receipt_batch_by_receipt
-    }
+    if {"raw_receipts", "receipt_sources", "receipt_email_messages",
+        "household_receipt_history_cutovers"}.issubset(_tables(conn)):
+        # Same unfiltered and deduplicated inbox as desktop/mobile Kassa.
+        from app.api.kassa_pagination_routes import _KASSA_SUMMARIES_SQL, _deduped_receipts
+        rows = conn.execute(text(_KASSA_SUMMARIES_SQL), {"household_id": household_id}).mappings().all()
+        kassa_receipt_ids = {str(row["receipt_table_id"]) for row in _deduped_receipts(rows)}
+    else:
+        # Compatibility for lightweight legacy schema projections.
+        kassa_receipt_ids = {receipt_id for receipt_id in eligible_receipt_ids
+                             if receipt_id not in receipt_batch_by_receipt}
 
     if not receipt_batch_by_receipt or "purchase_import_lines" not in _tables(conn):
         return len(kassa_receipt_ids), 0

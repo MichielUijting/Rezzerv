@@ -36,6 +36,19 @@ from app.services.synonym_auto_consume_service import _verified_household_packag
 _HISTORICAL_AUTO_SOURCE_SQL = _HISTORICAL_PRODUCT_LINES_SQL.replace(
     "  AND rt.approved_at IS NOT NULL\n",
     "  AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')\n",
+).replace(
+    "rt.store_name, rr.sha256_hash,",
+    "rt.store_name, rr.sha256_hash, rs.type AS source_type, rs.source_path AS source_provider, "
+    "rtl.raw_label, rtl.corrected_raw_label, rtl.external_article_code, rtl.barcode,",
+).replace(
+    "JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id",
+    "JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id AND rr.household_id = rt.household_id "
+    "LEFT JOIN receipt_sources rs ON rs.id = rr.source_id AND rs.household_id = rt.household_id",
+).replace(
+    "AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL",
+    "AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL "
+    "AND rr.duplicate_of_raw_receipt_id IS NULL "
+    "AND COALESCE(rt.workflow_state, 'active') = 'active'",
 )
 
 _CANONICAL_MODE = {
@@ -44,8 +57,9 @@ _CANONICAL_MODE = {
 _UNITS_PIECES = frozenset(("stuk", "stuks", "st"))
 
 
-def _stock_units(value, unit) -> int | None:
-    if str(unit or "").strip().lower() not in _UNITS_PIECES:
+def _stock_units(value, unit, *, digital_receipt=False) -> int | None:
+    normalized = str(unit or "").strip().lower()
+    if normalized not in _UNITS_PIECES and not (digital_receipt and not normalized):
         return None
     if isinstance(value, bool):
         return None
@@ -56,6 +70,10 @@ def _stock_units(value, unit) -> int | None:
     if not amount.is_finite() or amount < 1 or amount > 10000 or amount != amount.to_integral_value():
         return None
     return int(amount)
+
+
+def _is_digital_purchase(row):
+    return row.get("source_type") == "retailer_api" and row.get("source_provider") in {"ah", "jumbo", "lidl"}
 
 
 def _setting_modes(conn, owner):
@@ -221,7 +239,8 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         if semantics.get("line_role") != "product" or not semantics.get("inventory_eligible"):
             excluded += 1
             continue
-        quantity = _stock_units(row.get("quantity"), row.get("unit"))
+        quantity = _stock_units(row.get("quantity"), row.get("unit"),
+                                digital_receipt=_is_digital_purchase(row))
         if quantity is None:
             excluded += 1
             continue

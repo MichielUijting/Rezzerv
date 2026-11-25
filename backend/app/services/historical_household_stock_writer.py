@@ -418,6 +418,77 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
     return {"cadences_written": written, "cadences_expired": int(removed.rowcount or 0)}
 
 
+def _prepare_historical_article_links(conn, owner, cutoff):
+    """Materialize private article identities, never invent a Catalogus match.
+
+    Runs under the cutover lock, after the existing recognition authorities.
+    Previously saved selections are retained. The existing receipt-to-stock
+    resolver refuses ambiguous same-name items and foreign article IDs.
+    """
+    from datetime import timedelta
+    from app import main as legacy
+    from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+    from app.services.historical_household_stock_source import (
+        _HISTORICAL_AUTO_SOURCE_SQL, _is_digital_purchase, _stock_units,
+        MAX_HISTORICAL_PURCHASE_LINES, OBSERVATION_DAYS,
+    )
+    from app.services.receipt_stock_review_service import resolve_stock_household_article
+
+    rows = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
+        "household_id": owner,
+        "earliest_date": cutoff - timedelta(days=OBSERVATION_DAYS),
+        "row_limit": MAX_HISTORICAL_PURCHASE_LINES + 1,
+    }).mappings().all()
+    if len(rows) > MAX_HISTORICAL_PURCHASE_LINES:
+        return
+    for row in rows:
+        if row.get("matched_article_id") or not _is_digital_purchase(row):
+            continue
+        if not row.get("sha256_hash") or not _stock_units(
+            row.get("quantity"), row.get("unit"), digital_receipt=True,
+        ):
+            continue
+        semantics = derive_receipt_line_semantics(dict(row))
+        if semantics.get("line_role") != "product" or not semantics.get("inventory_eligible"):
+            continue
+        if row.get("matched_global_product_id") and (
+            row.get("product_status") != "active"
+            or row.get("article_match_status") not in {"matched", "product_matched"}
+        ):
+            continue
+        name = str(row.get("corrected_raw_label") or row.get("raw_label") or "").strip()
+        if not name:
+            continue
+        # Do not let a retailer SKU masquerade as a GTIN. No new central
+        # product is created for a private, unidentified household article.
+        article_id = resolve_stock_household_article(
+            conn, main_module=legacy, household_id=owner,
+            line={
+                "article_name_raw": name,
+                "matched_global_product_id": row.get("matched_global_product_id"),
+                "barcode": row.get("barcode"),
+            },
+            store_provider_code=row["source_provider"],
+            allow_historical_bootstrap=True,
+        )
+        if not article_id:
+            continue
+        conn.execute(text("""
+            UPDATE receipt_table_lines
+            SET matched_article_id = :article_id,
+                article_match_status = 'matched'
+            WHERE id = :line_id AND receipt_table_id = :receipt_id
+              AND matched_article_id IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM receipt_tables rt
+                  WHERE rt.id = :receipt_id AND rt.household_id = :household_id
+              )
+        """), {
+            "article_id": article_id, "line_id": row["line_id"],
+            "receipt_id": row["receipt_table_id"], "household_id": owner,
+        })
+
+
 def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     """ONE writer-operation transaction. No global session or browser identity.
 
@@ -432,6 +503,7 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     if cutoff is None:
         return {"status": "legacy_untouched", "created": 0, "revised": 0, "skipped": 0}
 
+    _prepare_historical_article_links(conn, owner, cutoff)
     calculated = load_automatic_historical_stock(conn, household_id=owner)
     if calculated.get("status") != "calculated":
         return {"status": "not_ready", "created": 0, "revised": 0, "skipped": 0}

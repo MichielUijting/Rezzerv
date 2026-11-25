@@ -145,3 +145,19 @@ def test_unknown_household_or_cross_household_not_resolved():
     else:
         raise AssertionError("System household must never inherit stock")
     assert conn.queries == []
+
+
+def test_missing_digital_unit_is_not_a_fractional_or_unknown_quantity():
+    assert source._stock_units("1", None, digital_receipt=True) == 1
+    assert source._stock_units("2", "", digital_receipt=True) == 2
+    assert source._stock_units("0.5", None, digital_receipt=True) is None
+    assert source._stock_units("1", None) is None
+    assert source._stock_units(None, None, digital_receipt=True) is None
+
+
+def test_digital_historical_line_with_private_article_and_no_unit_replays():
+    row = line("2026-11-01", "a", 1, product=None, unit=None)
+    row.update(source_type="retailer_api", source_provider="ah")
+    result = source.load_automatic_historical_stock(Conn([row]), household_id="home")
+    assert result["quantities"] == {"ha-1": 1}
+    assert result["excluded_untrusted_rows"] == 0
