@@ -1442,8 +1442,34 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  function finishGuidance() {
-    onFinish?.()
+  async function finishGuidance() {
+    if (!onboardingMode || !storeOnboarding?.available) {
+      onFinish?.()
+      return
+    }
+    if (storeOnboardingBusy) return
+    // "Later koppelen" must persist an intentional opt-out: an unfinished
+    // selection must not force the user back to onboarding at next login.
+    // Previously confirmed stores stay intact; settings can reconnect others.
+    const completed = storeOnboarding.selected.filter(code =>
+      ['success', 'empty'].includes(storeOnboarding.results?.[code]))
+    if (completed.length === storeOnboarding.selected.length) {
+      onFinish?.()
+      return
+    }
+    setStoreOnboardingBusy(true)
+    try {
+      const confirmed = await saveStoreOnboardingSelection(completed)
+      setStoreOnboarding(confirmed)
+      setPendingStoreSelection(null)
+      onFinish?.()
+    } catch (error) {
+      showFeedback({ variant: 'error', title: 'Winkels later koppelen',
+        message: normalizeErrorMessage(error?.message) ||
+          'De keuze kon niet worden opgeslagen. Probeer opnieuw.' })
+    } finally {
+      setStoreOnboardingBusy(false)
+    }
   }
 
   return (
