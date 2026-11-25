@@ -1409,7 +1409,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Jumbo"
             testId="jumbo-receipt-poc"
-            datesDisabled={mobileRetailer}
+            hideDates={mobileRetailer}
             isMobileViewport={isMobileViewport}
             from={jumboFrom}
             to={jumboTo}
