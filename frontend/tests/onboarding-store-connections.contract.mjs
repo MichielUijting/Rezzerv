@@ -36,6 +36,9 @@ assert.equal(hasStoreOnboardingToResume({ available: true, selected: ['jumbo'], 
 
 assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], {}, ''), 'ah')
 assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed' }, 'ah'), 'jumbo')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed' }, ''), 'jumbo',
+  'An AH OAuth redirect remount must not restart failed AH before untouched stores')
+assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed', jumbo: 'failed' }, ''), 'lidl')
 assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'failed', jumbo: 'success' }, 'jumbo'), 'lidl')
 assert.equal(nextStoreForOnboarding(['ah', 'jumbo', 'lidl'], { ah: 'success', jumbo: 'success' }, 'lidl'), 'lidl')
 assert.equal(nextStoreForOnboarding(['ah', 'jumbo'], { ah: 'success', jumbo: 'success' }, 'ah'), '')

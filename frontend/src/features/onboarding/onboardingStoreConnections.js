@@ -56,5 +56,10 @@ export function nextStoreForOnboarding(selected, results = {}, previous = '') {
   const valid = selected.filter(code => ['ah', 'jumbo', 'lidl'].includes(code))
   const start = valid.indexOf(previous)
   const order = [...valid.slice(start + 1), ...valid.slice(0, start + 1)]
-  return order.find(code => results?.[code] !== 'success') || ''
+  // OAuth redirects remount the page and clear the previous-attempt ref.
+  // Durable failed results therefore come after untouched selections, even
+  // when there is no in-memory previous retailer.
+  return order.find(code => results?.[code] == null)
+    || order.find(code => results?.[code] === 'failed')
+    || ''
 }

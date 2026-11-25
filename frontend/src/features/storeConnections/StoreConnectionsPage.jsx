@@ -357,6 +357,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   async function openLidlWithSavedPeriod() {
     if (lidlWindowSaving) return
     if (!lidlWindow || !lidlFrom || (lidlTo && lidlFrom > lidlTo)) {
+      if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
         title: 'Lidl openen',
@@ -369,6 +370,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     // Save changed dates before visiting Lidl; never run with a stale period.
     const needsSave = lidlPeriodUnsaved
     if (needsSave && !lidlWindow.can_manage) {
+      if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
         title: 'Lidl openen',
@@ -388,6 +390,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       lidlTab = null
     }
     if (!lidlTab) {
+      if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
         title: 'Lidl openen',
@@ -429,6 +432,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       lidlTab.location.replace(LIDL_HISTORY_URL)
     } catch (err) {
       if (!lidlTab.closed) lidlTab.close()
+      if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
         title: 'Lidl openen',
@@ -588,6 +592,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
           setLidlPhase('failed')
+          if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
           setLidlWebProgress('Lidl-import afgebroken: importperiode kon niet worden geladen.')
           showFeedback({ variant: 'error', title: 'Lidl-importperiode', message: normalizeErrorMessage(err?.message) || 'Importperiode ophalen mislukt.' })
         }
@@ -611,6 +616,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           lidlCounts.failed += 1
           setLidlCountsView({ ...lidlCounts })
           setLidlPhase('failed')
+          if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
           setLidlWebProgress('Lidl-bon bevat geen geldig bonnummer of artikelregels.')
           event.source?.postMessage({
             type: 'inhuis:lidl-ack',
