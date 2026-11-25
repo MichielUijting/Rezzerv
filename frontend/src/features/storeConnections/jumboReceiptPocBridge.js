@@ -506,6 +506,7 @@ for(let index=0;index<batches.length;index++){
 }
 opener.postMessage({type:"inhuis:jumbo-complete",request_id:Q,version:V,
  source_origin:location.origin,date_range:RANGE,count:imported,batches:batches.length},O);
+try{opener.focus();}catch{}
 show("Jumbo: "+String(imported)+" bonnen veilig aangeboden; Inhuis controleert verwerking.");
 `
 

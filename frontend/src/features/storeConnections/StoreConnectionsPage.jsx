@@ -327,7 +327,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   async function markOnboardingStoreResult(provider, result, queueId = null, runId = null) {
     if (!onboardingMode) return
     try {
-      // Only a household-bound server run or AH credential may finish a store.
+      // Only a household-bound import-run confirmation or AH credential finishes a store.
       if (provider === 'ah' && result === 'success') {
         // A confirmed AH account is not proof that its historical receipts
         // were successfully synchronized. Attempt the initial sync now.
@@ -733,7 +733,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           throw new Error('Jumbo-herstelperiode kon niet veilig worden vastgelegd.')
         }
         // Only this trusted, already opened Jumbo tab receives the script.
-        // The server retains an older unfinished start even if newer receipts
+        // The import service retains an older unfinished start even if newer receipts
         // have meanwhile appeared in Kassa.
         const script = decodeURIComponent(buildJumboPocBookmarklet(
           window.location.origin + window.location.pathname, period,
@@ -838,7 +838,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         } finally {
           run.busy = false
           try { event.source?.postMessage(response, JUMBO_WEB_ORIGIN) }
-          catch { /* Missing ACK leaves the pending server range intact. */ }
+          catch { /* Missing ACK leaves the pending import range intact. */ }
         }
         return
       }
@@ -1189,7 +1189,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   }, [showFeedback])
 
   async function confirmJumboImport() {
-    if (!jumboImportCandidate || jumboImportBusy) return
+    // Desktop onboarding uses the current automatic run; old URL fragments
+    // are not authorized to stage an unbound receipt or finish onboarding.
+    if (onboardingMode || !jumboImportCandidate || jumboImportBusy) return
     setJumboImportBusy(true)
     setJumboPhase('validating')
     setJumboProgress(null)
@@ -1642,7 +1644,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               />
             }
           >
-            {jumboPocResult ? (
+            {!onboardingMode && jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: '10px' }}>
                 {jumboPocResult.details.length ? (
                   <>

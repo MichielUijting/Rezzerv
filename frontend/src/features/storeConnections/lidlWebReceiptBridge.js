@@ -406,10 +406,16 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
             anchors = doc ? [...doc.querySelectorAll('a[href*="/mre/purchase-detail"]')] : []
             if (anchors.length) break
             // Explicit retailer empty-state, not an unloaded or unauthenticated page.
-            const empty = doc?.querySelector('[data-testid="purchase-history-empty"], [data-testid="purchase-history-no-results"]')
-            const emptyLabel = String(empty?.textContent || '').trim()
-            if (doc?.readyState === 'complete' && empty &&
-                /(geen|no|keine).{0,80}(kassabon|bon|receipt|purchase|aankop)/i.test(emptyLabel)) {
+            const empty = doc?.querySelector('[data-testid="purchase-history-empty"], [data-testid="purchase-history-no-results"], [data-testid="history-empty-state"]')
+            const main = doc?.querySelector('main')
+            const explicitEmpty = String(empty?.textContent || main?.textContent || '').trim()
+            const historyView = doc?.querySelector('[data-testid="purchase-history-page"]') ||
+              /(?:digitale\s*)?kassabonnen|aankoopgeschiedenis|purchase\s*history/i.test(
+                String(doc?.querySelector('h1,h2')?.textContent || ''))
+            const emptyMessage = /(?:geen|no|keine).{0,80}(?:kassabonnen?|bonnen?|receipts?|purchases?|aankopen?|aankoopgeschiedenis)/i.test(explicitEmpty)
+            const hasLogin = Boolean(doc?.querySelector('input[type="password"], form[action*="login"]'))
+            if (doc?.readyState === 'complete' && historyView && emptyMessage &&
+                (empty || main) && !hasLogin) {
               if (pageNumber === 1) return []
               break
             }
@@ -473,6 +479,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       if (!entries.length) {
         post({ type: 'inhuis:lidl-complete', count: 0, mode: 'history',
           last_imported_date: null, from_date: fromDate, to_date: toDate })
+        target.focus()
         return
       }
 
