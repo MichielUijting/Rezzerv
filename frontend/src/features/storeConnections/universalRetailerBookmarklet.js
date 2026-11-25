@@ -43,7 +43,8 @@ export function buildUniversalRetailerBookmarklet(inhuisOrigin, lidl) {
   return 'javascript:' + encodeURIComponent(source)
 }
 
-// A browser-session hint only. One permanent favorite for both retailers;
+// A persistent browser hint only, never evidence of installation or login.
+// One permanent favorite for both retailers;
 // neither dates nor the current onboarding/settings path invalidate the hint.
 export function mobileBookmarkletSetupKeys() {
   const signature = 'universal:' + JUMBO_BOOKMARKLET_VERSION + ':' + LIDL_BOOKMARKLET_VERSION + ':live-period-v1'
@@ -55,13 +56,13 @@ function hintKey(signature) {
 }
 
 export function hasMobileBookmarkletSetup(signature, storage) {
-  try { return Boolean(signature && (storage || globalThis.sessionStorage).getItem(hintKey(signature)) === signature) }
+  try { return Boolean(signature && (storage || globalThis.localStorage).getItem(hintKey(signature)) === signature) }
   catch { return false }
 }
 
 export function rememberMobileBookmarkletSetup(keys, storage) {
   try {
-    for (const signature of Object.values(keys || {})) (storage || globalThis.sessionStorage).setItem(hintKey(signature), signature)
+    for (const signature of Object.values(keys || {})) (storage || globalThis.localStorage).setItem(hintKey(signature), signature)
   } catch { /* No persistent guarantee; installation remains optional guidance. */ }
 }
 
