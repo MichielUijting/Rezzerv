@@ -38,6 +38,9 @@ from app.services.picnic_account_secure_store import (
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 from app.services.retailer_import_queue import stage_confirmed_receipts
 from app.services.retailer_receipt_import_dates import latest_retailer_import_dates
+from app.services.jumbo_history_import_service import (
+    begin_jumbo_history, complete_jumbo_history,
+)
 from app.services.retailer_history_progress import (
     load_retailer_history_progress,
     load_retailer_history_evidence,
@@ -142,6 +145,34 @@ def get_retailer_history_evidence(
 def get_retailer_import_dates(authorization: Optional[str] = Header(None)):
     household_id = _authorized_household_id(authorization)
     return {"dates": latest_retailer_import_dates(engine, household_id=household_id)}
+
+
+class JumboHistoryCompleteRequest(BaseModel):
+    run_id: str = Field(min_length=36, max_length=36)
+    queue_ids: list[str] = Field(default_factory=list, max_length=2000)
+
+
+@router.post("/jumbo/history/begin")
+def begin_jumbo_history_import(authorization: Optional[str] = Header(None)):
+    household_id = _authorized_household_id(authorization)
+    try:
+        return begin_jumbo_history(engine, household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/jumbo/history/complete")
+def complete_jumbo_history_import(
+    payload: JumboHistoryCompleteRequest,
+    authorization: Optional[str] = Header(None),
+):
+    household_id = _authorized_household_id(authorization)
+    try:
+        return complete_jumbo_history(
+            engine, household_id, run_id=payload.run_id, queue_ids=payload.queue_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/providers")

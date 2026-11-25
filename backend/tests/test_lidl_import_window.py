@@ -1,5 +1,5 @@
 """Focused Lidl household import-window tests without a substitute database."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock
 import pytest
@@ -16,7 +16,7 @@ def _engine(row=None):
 def test_default_window_and_household_checkpoint():
     today = datetime.now(ZoneInfo('Europe/Amsterdam')).date()
     automatic = get_window(_engine(), "household-1")
-    assert automatic["from_date"] == (today - timedelta(days=30)).isoformat()
+    assert automatic["from_date"] == date(today.year - 1, 1, 1).isoformat()
     assert automatic["to_date"] == today.isoformat()
     assert automatic["automatic_from"] is True
 
@@ -44,7 +44,7 @@ def test_reverse_period_is_rejected_before_sql():
 def test_import_checkpoint_requires_completed_automatic_window():
     engine = _engine()
     today = datetime.now(ZoneInfo("Europe/Amsterdam")).date()
-    start = today - timedelta(days=30)
+    start = date(today.year - 1, 1, 1)
     complete_import(engine, "h", today, start, today)
     assert engine.begin.called
     assert engine.begin.return_value.__enter__.return_value.execute.call_args.args[1]["day"] == today
@@ -61,9 +61,9 @@ def test_wrong_window_or_future_checkpoint_fails_closed():
     engine = _engine()
     today = datetime.now(ZoneInfo("Europe/Amsterdam")).date()
     with pytest.raises(ValueError):
-        complete_import(engine, "h", today, today - timedelta(days=31), today)
+        complete_import(engine, "h", today, date(today.year - 2, 1, 1), today)
     with pytest.raises(ValueError):
-        complete_import(engine, "h", today + timedelta(days=1), today - timedelta(days=30), today)
+        complete_import(engine, "h", today + timedelta(days=1), date(today.year - 1, 1, 1), today)
     engine.begin.assert_not_called()
 
 

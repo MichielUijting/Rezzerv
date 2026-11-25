@@ -1,5 +1,5 @@
 """Lidl import window settings per household."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
@@ -17,7 +17,7 @@ def get_window(engine, household_id):
     last = _date(data.get("last_imported_date"))
     today = datetime.now(ZoneInfo('Europe/Amsterdam')).date()
     return {
-        "from_date": (start or last or (today - timedelta(days=30))).isoformat(),
+        "from_date": (start or last or date(today.year - 1, 1, 1)).isoformat(),
         "to_date": (end or today).isoformat(),
         "configured_from_date": start.isoformat() if start else None,
         "configured_to_date": end.isoformat() if end else None,
