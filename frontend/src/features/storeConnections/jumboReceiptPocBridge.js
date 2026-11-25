@@ -478,7 +478,7 @@ async function sendBatch(details,index){
     }
     window.addEventListener("message",receive);
     opener.postMessage({type:"inhuis:jumbo-batch",request_id:Q,version:V,
-      source_origin:location.origin,date_range:RANGE,index,total_batches:batches.length,details},O);
+      source_origin:location.origin,date_range:RANGE,index,total_batches:batches.length,total_receipts:total,details},O);
   });
 }
 let imported=0;
@@ -528,7 +528,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
   const requestId = String(options.requestId || '')
   const openerOrigin = String(options.inhuisOrigin || '')
   if (automatic && (!/^[A-Za-z0-9-]{15,72}$/.test(requestId) ||
-      !/^https?:\\/\\/[^/]+$/.test(openerOrigin) ||
+      !/^https?:\/\/[^/]+$/.test(openerOrigin) ||
       !callbackUrl.startsWith(openerOrigin + '/'))) {
     throw new Error('Jumbo-automatisering mist een geldige Inhuis-handshake.')
   }

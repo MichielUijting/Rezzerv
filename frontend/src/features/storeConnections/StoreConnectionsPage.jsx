@@ -49,6 +49,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [activeProvider, setActiveProvider] = useState('')
   const expectedLidlWindowRef = useRef(null)
   const expectedJumboWindowRef = useRef(null)
+  const jumboAutomaticRunRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
   const [pendingStoreSelection, setPendingStoreSelection] = useState(null)
   const [storeOnboardingBusy, setStoreOnboardingBusy] = useState(false)
@@ -709,10 +710,28 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             !Object.prototype.hasOwnProperty.call(response.dates, 'jumbo')) {
           throw new Error('Jumbo-importperiode ontbreekt.')
         }
-        const period = currentJumboImportPeriod(response.dates.jumbo)
+        const baseline = currentJumboImportPeriod(response.dates.jumbo)
+        const reserved = await fetchJson('/api/receipts/retailers/jumbo/history/begin', {
+          method: 'POST', body: JSON.stringify({}),
+        })
+        if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
+        const period = jumboDateWindow(reserved?.from_date, reserved?.to_date)
+        if (!/^[0-9a-f-]{36}$/.test(String(reserved?.run_id || '')) ||
+            period.from_date > baseline.from_date || period.to_date !== baseline.to_date) {
+          throw new Error('Jumbo-herstelperiode kon niet veilig worden vastgelegd.')
+        }
+        // Only this trusted, already opened Jumbo tab receives the script.
+        // The server retains an older unfinished start even if newer receipts
+        // have meanwhile appeared in Kassa.
         const script = decodeURIComponent(buildJumboPocBookmarklet(
           window.location.origin + window.location.pathname, period,
+          { automatic: true, requestId: data.request_id, inhuisOrigin: window.location.origin },
         ).slice('javascript:'.length))
+        jumboAutomaticRunRef.current = {
+          requestId: data.request_id, runId: reserved.run_id, source: sourceWindow,
+          period, queued: [], seen: new Set(), index: 0, received: 0,
+          busy: false, failed: false, complete: false,
+        }
         sourceWindow.postMessage({
           type: 'inhuis:jumbo-script',
           bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
@@ -739,6 +758,113 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     window.addEventListener('message', handleJumboHandshake)
     return () => { cancelled = true; window.removeEventListener('message', handleJumboHandshake) }
   }, [activeProvider, onboardingMode, storeOnboarding, showFeedback])
+
+  // Mobile Jumbo sends one existing <=10 receipt queue batch at a time.
+  // Never mark an entire date range complete based merely on a partial ACK.
+  useEffect(() => {
+    async function handleAutomaticJumbo(event) {
+      if (event.origin !== JUMBO_WEB_ORIGIN ||
+          event.source !== expectedJumboWindowRef.current || activeProvider !== 'jumbo') return
+      const data = event.data
+      if (!data || !['inhuis:jumbo-batch', 'inhuis:jumbo-complete', 'inhuis:jumbo-error'].includes(data.type)) return
+      const run = jumboAutomaticRunRef.current
+      if (!run || run.source !== event.source || run.requestId !== data.request_id ||
+          data.version !== JUMBO_BOOKMARKLET_VERSION || data.source_origin !== JUMBO_WEB_ORIGIN ||
+          run.failed || run.complete) return
+
+      const fail = async (message) => {
+        run.failed = true
+        setJumboPhase('failed')
+        setJumboPocProgress(message + ' De niet-afgeronde periode wordt bij de volgende poging opnieuw gecontroleerd.')
+        if (onboardingMode) await markOnboardingStoreResult('jumbo', 'failed')
+        showFeedback({ variant: 'error', title: 'Jumbo-historie onvolledig', message })
+      }
+      if (data.type === 'inhuis:jumbo-error') {
+        await fail(String(data.error || 'Jumbo-historie kon niet volledig worden gelezen.'))
+        return
+      }
+      if (data.type === 'inhuis:jumbo-batch') {
+        let response = { type: 'inhuis:jumbo-ack', version: JUMBO_BOOKMARKLET_VERSION,
+          request_id: run.requestId, index: data.index, ok: false }
+        try {
+          if (run.busy || data.index !== run.index || !Number.isInteger(data.total_batches) ||
+              data.total_batches < 1 || data.total_batches > 2000 ||
+              !Number.isInteger(data.total_receipts) ||
+              data.total_receipts < 1 || data.total_receipts > 2000 ||
+              !Array.isArray(data.details) || data.details.length < 1 || data.details.length > 10 ||
+              data.date_range?.from_date !== run.period.from_date ||
+              data.date_range?.to_date !== run.period.to_date) {
+            throw new Error('Jumbo-deelbatch komt niet overeen met de gecontroleerde import.')
+          }
+          const ids = data.details.map(item => String(item?.transactionId || ''))
+          if (ids.length !== new Set(ids).size || ids.some(id => run.seen.has(id))) {
+            throw new Error('Jumbo leverde hetzelfde bonnummer in meerdere deelperioden.')
+          }
+          run.busy = true
+          const queue = await stageJumboBatch(
+            { ok: true, version: JUMBO_BOOKMARKLET_VERSION,
+              source_origin: JUMBO_WEB_ORIGIN, details: data.details },
+            async (envelopes) => fetchJson('/api/receipts/retailers/import-queue', {
+              method: 'POST', body: JSON.stringify(envelopes),
+            }),
+            buildJumboImportEnvelope,
+          )
+          queue.forEach(item => run.queued.push(item.queue_id))
+          ids.forEach(id => run.seen.add(id))
+          run.received += queue.length
+          run.index += 1
+          setJumboPhase('queued')
+          setJumboProgress({ processed: run.received, total: data.total_receipts })
+          setJumboPocProgress('Jumbo: ' + run.received + ' van ' + data.total_receipts +
+            ' bonnen veilig ontvangen, deelperiode ' + run.index + ' van ' + data.total_batches +
+            '. Kassa verwerkt de bonnen afzonderlijk.')
+          response = { ...response, ok: true }
+        } catch (error) {
+          const message = normalizeErrorMessage(error?.message) || 'Jumbo-deelimport mislukt.'
+          response = { ...response, error: message }
+          await fail(message)
+        } finally {
+          run.busy = false
+          try { event.source?.postMessage(response, JUMBO_WEB_ORIGIN) }
+          catch { /* Missing ACK leaves the pending server range intact. */ }
+        }
+        return
+      }
+      if (data.type === 'inhuis:jumbo-complete') {
+        if (run.busy || data.index !== undefined ||
+            data.date_range?.from_date !== run.period.from_date ||
+            data.date_range?.to_date !== run.period.to_date ||
+            data.count !== run.received || data.batches !== run.index) {
+          await fail('Jumbo heeft niet alle deelperioden aantoonbaar afgerond.')
+          return
+        }
+        run.complete = true
+        try {
+          const result = await fetchJson('/api/receipts/retailers/jumbo/history/complete', {
+            method: 'POST',
+            body: JSON.stringify({ run_id: run.runId, queue_ids: run.queued }),
+          })
+          if (result?.scan_complete !== true || result.staged_receipts !== run.received) {
+            throw new Error('Jumbo-afronding werd niet door Inhuis bevestigd.')
+          }
+          const message = 'Jumbo: ' + run.received +
+            ' bonnen veilig ontvangen uit de volledige historie. Verwerking in Kassa loopt afzonderlijk.' +
+            (result.queue_completed ? '' : ' De herstelperiode blijft bewaard totdat de bonnen zijn verwerkt.')
+          setJumboPhase(run.received ? 'queued' : 'completed')
+          setJumboPocProgress(message)
+          if (onboardingMode && run.queued.length) {
+            await markOnboardingStoreResult('jumbo', 'success', run.queued[0])
+          }
+          await refreshHistoricalProgress()
+          showFeedback({ variant: 'success', title: 'Jumbo-historie ontvangen', message })
+        } catch (error) {
+          await fail(normalizeErrorMessage(error?.message) || 'Jumbo-import kon niet veilig worden afgerond.')
+        }
+      }
+    }
+    window.addEventListener('message', handleAutomaticJumbo)
+    return () => window.removeEventListener('message', handleAutomaticJumbo)
+  }, [activeProvider, onboardingMode, showFeedback])
 
   useEffect(() => {
     let lidlCounts = { queued: 0, failed: 0 }

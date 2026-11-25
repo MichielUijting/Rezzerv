@@ -52,12 +52,14 @@ def begin_jumbo_history(engine: Engine, household_id: str) -> dict:
             WHERE household_id=:household_id FOR UPDATE
         """), {"household_id": household_id}).mappings().first()
         pending = old["pending_from_date"] if old else None
+        cleared = False
         if old and bool(old["scan_complete"]):
             queue_ids = old["queue_ids"]
             if not isinstance(queue_ids, list) or len(queue_ids) > MAX_HISTORY_RECEIPTS:
                 raise ValueError("Jumbo-herstelstatus bevat ongeldige wachtrijgegevens")
             if _queue_completed(conn, household_id, queue_ids):
                 pending = None
+                cleared = True
         first = min(first, pending) if pending else first
         conn.execute(text("""
             INSERT INTO household_jumbo_import_runs
@@ -65,13 +67,12 @@ def begin_jumbo_history(engine: Engine, household_id: str) -> dict:
             VALUES (:household_id,:run_id,:first,false,'[]')
             ON CONFLICT (household_id) DO UPDATE SET
                 run_id=EXCLUDED.run_id,
-                pending_from_date=LEAST(
-                    household_jumbo_import_runs.pending_from_date,
-                    EXCLUDED.pending_from_date
-                ),
+                pending_from_date=CASE WHEN :cleared THEN EXCLUDED.pending_from_date
+                ELSE LEAST(household_jumbo_import_runs.pending_from_date,
+                           EXCLUDED.pending_from_date) END,
                 scan_complete=false,queue_ids='[]',
                 updated_at=CURRENT_TIMESTAMP
-        """), {"household_id": household_id, "run_id": run_id, "first": first})
+        """), {"household_id": household_id, "run_id": run_id, "first": first, "cleared": cleared})
         # A concurrent initial begin may have an older checkpoint: return the
         # exact persisted lower bound, never a more recent speculative date.
         first = conn.execute(text("""
@@ -123,7 +124,7 @@ def complete_jumbo_history(
         completed = _queue_completed(conn, household_id, ids)
         conn.execute(text("""
             UPDATE household_jumbo_import_runs
-            SET scan_complete=true,queue_ids=:queue_ids,updated_at=CURRENT_TIMESTAMP
+            SET scan_complete=true,queue_ids=CAST(:queue_ids AS json),updated_at=CURRENT_TIMESTAMP
             WHERE household_id=:household_id AND run_id=:run_id
         """), {"household_id": household_id, "run_id": run_id,
                "queue_ids": json.dumps(ids)})
