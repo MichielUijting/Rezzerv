@@ -337,14 +337,17 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       .filter(code => storeOnboarding?.results?.[code] !== 'success')
     const code = remaining.find(item => item !== activeProvider) || remaining[0]
     if (!code) return
-    setActiveProvider(code)
     if (code === 'ah') {
+      // Directly start the existing OAuth route from the selection table.
+      // Never expose a second AH button or scroll into a settings pane.
       if (ahConnection?.connected === true) {
         void markOnboardingStoreResult('ah', 'success')
       } else {
         void startAhLogin()
       }
+      return
     }
+    setActiveProvider(code)
   }
 
   async function openLidlWithSavedPeriod() {
@@ -992,11 +995,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   }
 
   useEffect(() => {
-    if (!activeProvider) return
+    if (!activeProvider || onboardingMode) return
     document.querySelector('[data-testid="receipt-connection-details"]')?.scrollIntoView({
       behavior: 'smooth', block: 'start',
     })
-  }, [activeProvider])
+  }, [activeProvider, onboardingMode])
 
   function handleStoreConnectionAction(row) {
     if (row?.providerCode === 'aldi') return
@@ -1158,7 +1161,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
         {activeProvider ? <div data-testid="receipt-connection-details" /> : null}
 
-        {activeProvider === 'ah' ? (
+        {activeProvider === 'ah' && !onboardingMode ? (
         <Card>
           <div data-testid="ah-digital-receipts" style={{ display: 'grid', rowGap: '12px', maxWidth: '680px' }}>
             <div>
