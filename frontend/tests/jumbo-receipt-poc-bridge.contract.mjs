@@ -138,8 +138,8 @@ assert.doesNotMatch(storeConnectionsSource, /sampleReceipt/)
 assert.doesNotMatch(storeConnectionsSource, /v4-knop/)
 assert.match(storeConnectionsSource, /event\.origin !== JUMBO_WEB_ORIGIN/)
 assert.match(storeConnectionsSource, /event\.source !== expectedJumboWindowRef\.current/)
-assert.match(storeConnectionsSource, /openHref={mobileRetailer \? undefined : JUMBO_ORDERS_URL}/)
-assert.match(storeConnectionsSource, /hideDates={mobileRetailer}/)
+assert.match(storeConnectionsSource, /openHref={mobileRetailer \|\| onboardingMode \? undefined : JUMBO_ORDERS_URL}/)
+assert.match(storeConnectionsSource, /hideDates={mobileRetailer \|\| onboardingMode}/)
 assert.match(storeConnectionsSource, /openTestId="jumbo-poc-open"/)
 const jumboLaunch = sharedPanel.slice(
   sharedPanel.indexOf('<a'),
