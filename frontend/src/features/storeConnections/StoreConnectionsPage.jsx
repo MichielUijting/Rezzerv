@@ -44,6 +44,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
   const [activeProvider, setActiveProvider] = useState('')
+  const expectedLidlWindowRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
   const [storeOnboardingBusy, setStoreOnboardingBusy] = useState(false)
   const lidlOnboardingQueueIdRef = useRef(null)
@@ -307,8 +308,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       const confirmed = await saveStoreOnboardingResult(provider, result, queueId)
       setStoreOnboarding(confirmed)
       if (result === 'success') {
-        const next = confirmed.selected.find(code => confirmed.results[code] == null)
+        const next = ['ah', 'jumbo', 'lidl'].find(code => confirmed.selected.includes(code) && confirmed.results[code] == null)
         if (next) {
+          setSetupHelpStore('')
           lastStoreAttemptRef.current = next
           setActiveProvider(next)
         } else {
@@ -438,6 +440,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (lidlTab.closed) {
         throw new Error('Het Lidl-tabblad is gesloten voordat de periode gereed was.')
       }
+      expectedLidlWindowRef.current = lidlTab
       lidlTab.location.replace(LIDL_HISTORY_URL)
     } catch (err) {
       if (!lidlTab.closed) lidlTab.close()
@@ -570,6 +573,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        if (onboardingMode && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
         lidlOnboardingQueueIdRef.current = null
         setActiveProvider('lidl')
         lidlCounts = { queued: 0, failed: 0 }
@@ -1086,7 +1090,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         maxWidth: '760px',
         minWidth: 0,
         margin: '0 auto',
-      }} data-testid="store-connections-page">
+      }} data-testid="store-connections-page" data-onboarding={onboardingMode ? "true" : undefined}>
         {!onboardingMode ? (
           <Card>
             <details data-testid="store-connections-help" open={connectionHelpOpen}

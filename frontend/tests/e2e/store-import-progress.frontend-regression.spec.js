@@ -513,3 +513,27 @@ for (const width of [390, 500, 896]) {
     await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
   })
 }
+
+
+test('Android onboarding AH callback advances to Jumbo and ignores stale Lidl handshake', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockStorePage(page)
+  let progress = { available: true, selected: ['ah', 'lidl', 'jumbo'], results: {} }
+  await page.route('**/api/onboarding/stores', route => route.fulfill({ json: progress }))
+  await page.route('**/api/onboarding/stores/result', route => {
+    const payload = route.request().postDataJSON()
+    progress = { ...progress, results: { ...progress.results, [payload.provider]: payload.result } }
+    return route.fulfill({ json: progress })
+  })
+  await page.goto('/onboarding/winkels?ah=connected')
+  await expect(page.getByTestId('onboarding-store-row-ah')).toHaveAttribute('data-result', 'success')
+  await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', {
+    origin: 'https://www.lidl.nl', data: { type: 'inhuis:lidl-handshake' }, source: window,
+  })))
+  await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
+  await page.getByTestId('jumbo-help-open').click()
+  await expect(page.getByTestId('jumbo-bookmarklet-dialog')).toBeVisible()
+  await page.getByTestId('jumbo-help-ok').click()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
+})

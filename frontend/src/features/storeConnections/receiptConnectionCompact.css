@@ -265,3 +265,36 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Scope width containment to the first-store onboarding, including Android touch view. */
+.rz-screen:has([data-onboarding="true"]) .rz-content,
+.rz-screen:has([data-onboarding="true"]) .rz-content-inner,
+[data-testid="store-connections-page"][data-onboarding="true"] > .rz-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.rz-mobile-app-chrome:has([data-onboarding="true"]) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100vw;
+}
+.rz-mobile-app-chrome [data-onboarding="true"] .rz-store-onboarding-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.rz-mobile-app-chrome [data-onboarding="true"] .rz-store-onboarding-actions > button {
+  width: 100%; min-width: 0; max-width: 100%; white-space: normal;
+}
+[data-onboarding="true"] .rz-store-receipt-panel--mobile {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+[data-onboarding="true"] .rz-store-receipt-panel--mobile .rz-input-field,
+[data-onboarding="true"] .rz-store-receipt-panel--mobile .rz-input {
+  min-width: 0; max-width: 100%;
+}
+.rz-mobile-app-chrome [data-onboarding="true"] [data-testid="retailer-receipt-action-row"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-content: stretch !important;
+}

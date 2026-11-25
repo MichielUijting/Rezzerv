@@ -61,7 +61,8 @@ export default function RetailerBookmarkletHelp({
       data-testid={provider + '-bookmarklet-help'}
       style={{
         position: 'fixed', inset: 0, zIndex: 3000,
-        display: 'grid', placeItems: 'center', padding: '16px',
+        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', placeItems: 'center', padding: '16px',
+        boxSizing: 'border-box', overflow: 'auto',
         background: 'rgba(0, 0, 0, 0.55)',
       }}
     >
@@ -72,8 +73,8 @@ export default function RetailerBookmarkletHelp({
         aria-labelledby={titleId}
         data-testid={provider + '-bookmarklet-dialog'}
         style={{
-          width: 'min(100%, 520px)',
-          maxHeight: 'calc(100vh - 32px)',
+          width: 'min(100%, 520px)', minWidth: 0, boxSizing: 'border-box', overflowWrap: 'anywhere',
+          maxHeight: 'calc(100dvh - 32px)',
           overflowY: 'auto',
           padding: '24px',
           borderRadius: 'var(--radius-md)',
@@ -95,7 +96,7 @@ export default function RetailerBookmarkletHelp({
           aria-disabled={!valid}
           style={{
             display: 'inline-flex',
-            width: 'fit-content',
+            width: 'fit-content', maxWidth: '100%', minWidth: 0,
             minHeight: '40px',
             alignItems: 'center',
             padding: '8px 12px',
