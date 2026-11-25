@@ -125,10 +125,18 @@ assert.match(windowedScript, /withinWindow\(rowDate\) !== true/)
 assert.match(windowedScript, /entries\.length \+ ' bonnen binnen de ingestelde periode gevonden/)
 console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
 
-// The PO cannot start a Lidl history import with unsaved date edits.
+// Existing Lidl import window persists edited dates BEFORE opening the
+// retailer. A failed PUT cannot result in an import with stale dates.
 const storeConnectionScreen = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(storeConnectionScreen, /const lidlPeriodUnsaved =/)
 assert.match(storeConnectionScreen, /lidlFrom !== \(lidlWindow\.configured_from_date/)
-assert.match(storeConnectionScreen, /data-testid="lidl-period-unsaved"/)
-assert.match(storeConnectionScreen, /disabled=\{lidlPeriodUnsaved \|\| lidlWindowSaving \|\| !lidlWindow\}/)
-console.log('LIDL_UNSAVED_PERIOD_GUARD_GREEN')
+assert.match(storeConnectionScreen, /const needsSave = lidlPeriodUnsaved/)
+assert.match(storeConnectionScreen, /data\?\.configured_from_date !== lidlFrom/)
+const lidlLaunch = storeConnectionScreen.slice(
+  storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()'),
+  storeConnectionScreen.indexOf('useEffect(() => {', storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()')),
+)
+assert.match(lidlLaunch, /lidlTab\.location\.replace\(LIDL_HISTORY_URL\)/)
+assert.ok(lidlLaunch.indexOf("method: 'PUT'") < lidlLaunch.indexOf('lidlTab.location.replace'),
+  'Lidl must not open before the household-scoped period is saved')
+console.log('LIDL_SAVED_PERIOD_GUARD_GREEN')
