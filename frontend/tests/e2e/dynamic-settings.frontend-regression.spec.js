@@ -231,7 +231,8 @@ test('Quick Start onboarding asks for no locations and preserves Wat Inhuis defa
     product_configuration: { inventory_tracking_level: 'quantity', location_tracking_level: 'none' },
   })
   await expect(page).toHaveURL(/\/onboarding\/winkels$/)
-  await expect(page.getByTestId('receipt-connections-overview')).toBeVisible()
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
+  await expect(page.getByTestId('receipt-connections-overview')).toHaveCount(0)
   await expect(page.getByTestId('onboarding-choice-waar_inhuis')).toHaveCount(0)
 
   const onboardingResponse = await page.request.get('/api/onboarding')
