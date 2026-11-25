@@ -1409,6 +1409,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Jumbo"
             testId="jumbo-receipt-poc"
+            datesDisabled={mobileRetailer}
             isMobileViewport={isMobileViewport}
             from={jumboFrom}
             to={jumboTo}
@@ -1436,7 +1437,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             }}
             helpTestId="jumbo-help-open"
             onHelp={() => setSetupHelpStore('jumbo')}
-            periodError={!jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
+            periodError={!mobileRetailer && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
             setupHelp={
               <RetailerBookmarkletHelp
                 provider="jumbo"
@@ -1448,7 +1449,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 setupKeys={setupKeys}
                 preparedCopy={preparedCopy}
                 browserUrl={setupBrowserUrl}
-                valid={jumboPeriodValid}
+                valid={mobileRetailer || jumboPeriodValid}
                 onOpenStore={() => { if (openJumboFromInhuis()) setSetupHelpStore('') }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
                 instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
