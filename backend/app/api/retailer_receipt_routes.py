@@ -41,6 +41,9 @@ from app.services.retailer_receipt_import_dates import latest_retailer_import_da
 from app.services.jumbo_history_import_service import (
     begin_jumbo_history, complete_jumbo_history,
 )
+from app.services.lidl_browser_import_service import (
+    begin_lidl_browser_import, complete_lidl_browser_import,
+)
 from app.services.retailer_history_progress import (
     load_retailer_history_progress,
     load_retailer_history_evidence,
@@ -170,6 +173,39 @@ def complete_jumbo_history_import(
     try:
         return complete_jumbo_history(
             engine, household_id, run_id=payload.run_id, queue_ids=payload.queue_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class LidlBrowserCompleteRequest(BaseModel):
+    run_id: str = Field(min_length=36, max_length=36)
+    queue_ids: list[str] = Field(default_factory=list, max_length=2000)
+    from_date: date
+    to_date: date
+
+
+@router.post("/lidl/history/begin")
+def begin_lidl_browser_history(authorization: Optional[str] = Header(None)):
+    household_id = _authorized_household_id(authorization)
+    try:
+        # The browser must use the automatic historical range during onboarding.
+        return begin_lidl_browser_import(engine, household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/lidl/history/complete")
+def complete_lidl_browser_history(
+    payload: LidlBrowserCompleteRequest,
+    authorization: Optional[str] = Header(None),
+):
+    household_id = _authorized_household_id(authorization)
+    try:
+        return complete_lidl_browser_import(
+            engine, household_id, run_id=payload.run_id,
+            queue_ids=payload.queue_ids, from_date=payload.from_date,
+            to_date=payload.to_date,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

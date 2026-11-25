@@ -63,8 +63,9 @@ class StoreOnboardingSelectionRequest(BaseModel):
 class StoreOnboardingResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     provider: Literal["ah", "jumbo", "lidl"]
-    result: Literal["success", "failed"]
+    result: Literal["success", "empty", "failed"]
     queue_id: str | None = None
+    run_id: str | None = None
 
 
 class PrimaryUseCaseSelectionRequest(BaseModel):
@@ -283,7 +284,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 return record_store_result(
                     conn, str(context.active_household_id),
                     provider=payload.provider, result=payload.result,
-                    queue_id=payload.queue_id,
+                    queue_id=payload.queue_id, run_id=payload.run_id,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc

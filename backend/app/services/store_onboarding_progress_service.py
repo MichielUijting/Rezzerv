@@ -13,7 +13,8 @@ from sqlalchemy import text
 
 STORE_CODES = ("ah", "jumbo", "lidl")
 SETTING_KEY = "first_store_onboarding_v1"
-RESULTS = frozenset({"success", "failed"})
+RESULTS = frozenset({"success", "empty", "failed"})
+FINISHED = frozenset({"success", "empty"})
 
 
 def _empty_state(*, available: bool = False) -> dict:
@@ -35,7 +36,7 @@ def _read(conn, household_id: str) -> dict:
             raise ValueError("Invalid store onboarding state")
         if len(set(selected)) != len(selected) or any(code not in STORE_CODES for code in selected):
             raise ValueError("Invalid store onboarding selection")
-        if any(code not in selected or result not in RESULTS for code, result in results.items()):
+        if any(code not in selected or result not in RESULTS or (result == "empty" and code == "ah") for code, result in results.items()):
             raise ValueError("Invalid store onboarding result")
     except (TypeError, KeyError, ValueError) as exc:
         raise RuntimeError("Ongeldige opgeslagen winkelonboarding; geen automatische reset.") from exc
@@ -90,7 +91,7 @@ def update_store_selection(conn, household_id: str, selected: list[str]) -> dict
     if len(selected) != len(set(selected)) or any(code not in STORE_CODES for code in selected):
         raise ValueError("Ongeldige winkelkeuze")
     # A confirmed success cannot be silently removed or retried.
-    successes = {code for code, result in state["results"].items() if result == "success"}
+    successes = {code for code, result in state["results"].items() if result in FINISHED}
     if not successes.issubset(selected):
         raise ValueError("Een geslaagde koppeling kan hier niet worden verwijderd")
     state["selected"] = [code for code in STORE_CODES if code in selected]
@@ -100,7 +101,7 @@ def update_store_selection(conn, household_id: str, selected: list[str]) -> dict
 
 def record_store_result(
     conn, household_id: str, *, provider: str, result: str,
-    queue_id: str | None = None,
+    queue_id: str | None = None, run_id: str | None = None,
 ) -> dict:
     owner = str(household_id or "").strip()
     state = read_store_onboarding(conn, owner)
@@ -108,25 +109,59 @@ def record_store_result(
         raise ValueError("Kies deze winkel eerst tijdens de onboarding")
     if result not in RESULTS or provider not in STORE_CODES:
         raise ValueError("Ongeldig winkelresultaat")
-    if state["results"].get(provider) == "success":
+    if state["results"].get(provider) in FINISHED:
         return state
-    if result == "success":
+    if result in FINISHED:
         if provider == "ah":
+            if result != "success" or run_id or queue_id:
+                raise ValueError("Albert Heijn vereist een bevestigde accountkoppeling")
             proof = conn.execute(text("""
                 SELECT 1 FROM retailer_account_credentials
                 WHERE household_id = :household_id AND provider = 'ah' LIMIT 1
             """), {"household_id": owner}).scalar_one_or_none()
+            if proof is None:
+                raise ValueError("De koppeling of bonontvangst is nog niet door Inhuis bevestigd")
         else:
-            if not queue_id:
-                raise ValueError("Een bevestigde winkelbon ontbreekt")
-            proof = conn.execute(text("""
-                SELECT 1 FROM retailer_import_queue
-                WHERE household_id = :household_id AND provider = :provider
-                  AND id = :queue_id LIMIT 1
-            """), {
-                "household_id": owner, "provider": provider, "queue_id": queue_id,
-            }).scalar_one_or_none()
-        if proof is None:
-            raise ValueError("De koppeling of bonontvangst is nog niet door Inhuis bevestigd")
+            # Browser-origin messages are never sufficient onboarding proof.
+            # Require the *current* household-specific, completed server run;
+            # a queue identity from a previous scan or another household is not proof.
+            if not run_id:
+                raise ValueError("Een actuele, afgeronde winkelimport ontbreekt")
+            if provider == "jumbo":
+                row = conn.execute(text("""
+                    SELECT run_id,scan_complete,queue_ids
+                    FROM household_jumbo_import_runs
+                    WHERE household_id=:household_id
+                """), {"household_id": owner}).mappings().first()
+                run = dict(row) if row else None
+            else:
+                raw = conn.execute(text("""
+                    SELECT setting_value FROM household_settings
+                    WHERE household_id=:household_id AND setting_key='lidl_browser_import_run_v1'
+                """), {"household_id": owner}).scalar_one_or_none()
+                try:
+                    run = json.loads(raw) if raw else None
+                except (TypeError, ValueError):
+                    run = None
+            if (not isinstance(run, dict) or run.get("run_id") != run_id
+                    or run.get("scan_complete") is not True
+                    or not isinstance(run.get("queue_ids"), list)):
+                raise ValueError("Deze winkelimport is niet door Inhuis afgerond")
+            confirmed_ids = run["queue_ids"]
+            if result == "empty":
+                if confirmed_ids or queue_id:
+                    raise ValueError("Een lege historie vereist nul bevestigde winkelbonnen")
+            elif not queue_id or queue_id not in confirmed_ids:
+                raise ValueError("De opgegeven winkelbon hoort niet bij de huidige import")
+            if result == "success":
+                proof = conn.execute(text("""
+                    SELECT 1 FROM retailer_import_queue
+                    WHERE household_id = :household_id AND provider = :provider
+                      AND id = :queue_id LIMIT 1
+                """), {
+                    "household_id": owner, "provider": provider, "queue_id": queue_id,
+                }).scalar_one_or_none()
+                if proof is None:
+                    raise ValueError("De koppeling of bonontvangst is nog niet door Inhuis bevestigd")
     state["results"][provider] = result
     return _write(conn, owner, state)
