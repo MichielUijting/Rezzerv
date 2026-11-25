@@ -12,6 +12,7 @@ import { copyRetailerBookmarklet, hasMobileBookmarkletSetup, rememberMobileBookm
 export default function RetailerBookmarkletHelp({
   provider, retailer, open, onClose, bookmarklet, valid = true,
   instructions, onOpenStore, onSkip, universalBookmarklet, setupKeys, preparedCopy, browserUrl,
+  onboardingMode = false,
 }) {
   const dialogRef = useRef(null)
   const manualRef = useRef(null)
@@ -23,7 +24,7 @@ export default function RetailerBookmarkletHelp({
   const setupKey = universalBookmarklet ? setupKeys?.[provider] : null
   const environment = detectMobileRetailerEnvironment()
   const mobile = environment.device !== 'desktop'
-  const supported = environment.browser === 'safari' || environment.browser === 'chrome'
+  const supported = !mobile || environment.browser === 'safari' || environment.browser === 'chrome'
   const standalone = mobile && (window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true)
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function RetailerBookmarkletHelp({
     if (!valid || !supported || standalone) return
     // The click indicates that the user has completed the shown bookmark setup.
     // The hint skips repeat instructions, never import/authentication checks.
-    if (!reuse && universalBookmarklet) rememberMobileBookmarkletSetup(setupKeys)
+    if (mobile && !reuse && universalBookmarklet) rememberMobileBookmarkletSetup(setupKeys)
     onOpenStore?.()
   }
 
@@ -101,6 +102,7 @@ export default function RetailerBookmarkletHelp({
   const titleId = provider + '-bookmarklet-help-title'
   const linkTestId = provider === 'jumbo' ? 'jumbo-poc-bookmarklet' : 'lidl-web-bookmarklet'
   const savedName = universalBookmarklet ? 'Inhuis' : 'Inhuis ' + retailer + '-bonnen'
+  const desktopBookmarklet = onboardingMode ? universalBookmarklet : bookmarklet
   return createPortal(
     <div data-testid={provider + '-bookmarklet-help'} className="rz-retailer-help-backdrop">
       <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}
@@ -165,15 +167,21 @@ export default function RetailerBookmarkletHelp({
           </section>
         ) : (
           <>
-            <p style={{ margin: 0 }}>Sleep de knop hieronder naar de favorietenbalk van je browser.
-              Heb je al een oude {retailer}-favoriet? Vervang die eerst.</p>
-            <a href={valid ? bookmarklet : undefined} data-testid={linkTestId}
+            <p style={{ margin: 0 }}>{onboardingMode
+              ? 'Sleep Inhuis één keer naar je favorietenbalk. Dezelfde bladwijzer werkt voor Jumbo én Lidl, ook bij volgende imports.'
+              : 'Sleep de knop hieronder naar de favorietenbalk van je browser. Heb je al een oude favoriet? Vervang die eerst.'}</p>
+            <a href={valid ? desktopBookmarklet : undefined} data-testid={linkTestId}
               draggable={valid} aria-disabled={!valid} className="rz-retailer-desktop-bookmarklet"
-              onClick={event => event.preventDefault()}>{retailer}-bonnen ophalen</a>
-            <p style={{ margin: 0 }}>Klik op <strong>OK</strong> nadat je de favoriet hebt opgeslagen.
-              {instructions}</p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button type="button" onClick={onClose} data-testid={provider + '-help-ok'}>OK</Button>
+              onClick={event => event.preventDefault()}>{onboardingMode ? 'Inhuis' : retailer + '-bonnen ophalen'}</a>
+            <p style={{ margin: 0 }}>{onboardingMode
+              ? <>Klik op <strong>Open {retailer}</strong>, meld je eventueel aan bij de winkel en kies daar de bladwijzer <strong>Inhuis</strong>.</>
+              : <>Klik op <strong>OK</strong> nadat je de favoriet hebt opgeslagen. {instructions}</>}</p>
+            <div className="rz-retailer-help-actions">
+              {onboardingMode ? <Button type="button" onClick={openStore}
+                data-testid={provider + '-desktop-open-store'}>Open {retailer}</Button> : null}
+              {onSkip ? <Button type="button" variant="secondary" onClick={onSkip}>Winkel overslaan</Button> : null}
+              <Button type="button" variant="secondary" onClick={onClose}
+                data-testid={provider + '-help-ok'}>{onboardingMode ? 'Terug naar Inhuis' : 'OK'}</Button>
             </div>
           </>
         )}

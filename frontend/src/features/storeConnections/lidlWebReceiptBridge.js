@@ -405,6 +405,14 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
             const doc = iframe.contentDocument
             anchors = doc ? [...doc.querySelectorAll('a[href*="/mre/purchase-detail"]')] : []
             if (anchors.length) break
+            // Explicit retailer empty-state, not an unloaded or unauthenticated page.
+            const empty = doc?.querySelector('[data-testid="purchase-history-empty"], [data-testid="purchase-history-no-results"]')
+            const emptyLabel = String(empty?.textContent || '').trim()
+            if (doc?.readyState === 'complete' && empty &&
+                /(geen|no|keine).{0,80}(kassabon|bon|receipt|purchase|aankop)/i.test(emptyLabel)) {
+              if (pageNumber === 1) return []
+              break
+            }
           } catch {}
         }
 

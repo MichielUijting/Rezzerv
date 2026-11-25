@@ -8,14 +8,14 @@ export const ONBOARDING_STORES = [
   { code: 'lidl', label: 'Lidl', mark: 'L' },
 ]
 
-const resultLabels = { success: 'Geslaagd', failed: 'Mislukt', pending: 'Nog te koppelen' }
+const resultLabels = { success: 'Geslaagd', empty: 'Geen kassabonnen', failed: 'Mislukt', pending: 'Nog te koppelen' }
 
 export default function StoreOnboardingSelection({
   selected = [], results = {}, busy = false, onSelect, onStart, onLater, onRetry,
 }) {
   const hasResults = Object.keys(results).length > 0
   const hasFailures = selected.some(code => results[code] === 'failed')
-  const remaining = selected.filter(code => results[code] !== 'success')
+  const remaining = selected.filter(code => !['success', 'empty'].includes(results[code]))
   return (
     <Card className="rz-store-onboarding-card">
       <section className="rz-store-onboarding" data-testid="store-onboarding-selection">
@@ -31,13 +31,13 @@ export default function StoreOnboardingSelection({
                   <td>
                     <label className="rz-store-onboarding-choice">
                       <input type="checkbox" aria-label={label + ' koppelen'} checked={selected.includes(code)}
-                        disabled={busy || result === 'success'} onChange={event => onSelect(code, event.target.checked)}
+                        disabled={busy || result === 'success' || result === 'empty'} onChange={event => onSelect(code, event.target.checked)}
                         data-testid={'onboarding-select-' + code} />
                       <span aria-hidden="true" className="rz-store-onboarding-circle">✓</span>
                     </label>
                   </td>
                   <td><span className="rz-store-onboarding-result" aria-live="polite">
-                    {result === 'success' || result === 'failed' ? <span aria-hidden="true">{result === 'success' ? '✓' : '!'}</span> : null}
+                    {['success', 'empty', 'failed'].includes(result) ? <span aria-hidden="true">{result === 'failed' ? '!' : '✓'}</span> : null}
                     {resultLabels[result] || (selected.includes(code) ? 'Nog te koppelen' : 'Niet geselecteerd')}
                   </span></td>
                 </tr>

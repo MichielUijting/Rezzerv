@@ -324,23 +324,27 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function markOnboardingStoreResult(provider, result, queueId = null) {
+  async function markOnboardingStoreResult(provider, result, queueId = null, runId = null) {
     if (!onboardingMode) return
     try {
-      const confirmed = await saveStoreOnboardingResult(provider, result, queueId)
+      // Only a household-bound server run or AH credential may finish a store.
+      const confirmed = await saveStoreOnboardingResult(provider, result, queueId, runId)
       setStoreOnboarding(confirmed)
-      if (result === 'success') {
-        const next = ['ah', 'jumbo', 'lidl'].find(code => confirmed.selected.includes(code) && confirmed.results[code] == null)
-        if (next) {
-          setSetupHelpStore('')
-          lastStoreAttemptRef.current = next
-          setActiveProvider(next)
-        } else {
-          setActiveProvider('')
-          if (confirmed.selected.every(code => confirmed.results[code] === 'success')) onFinish?.()
+      setPendingStoreSelection(null)
+      const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
+      if (next) {
+        setSetupHelpStore('')
+        lastStoreAttemptRef.current = provider
+        launchConfirmedOnboardingStore(confirmed)
+      } else {
+        setActiveProvider('')
+        if (confirmed.selected.every(code => ['success', 'empty'].includes(confirmed.results[code]))) {
+          onFinish?.()
         }
+        // Failed retailers stay visible: explicit Retry or Dashboard, no loop.
       }
     } catch (err) {
+      setActiveProvider('')
       showFeedback({
         variant: 'error', title: 'Winkelonboarding',
         message: normalizeErrorMessage(err?.message) || 'Het winkelresultaat kon niet worden bevestigd.',
@@ -406,7 +410,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
   function launchConfirmedOnboardingStore(confirmed, preparedPromise = null) {
     const code = nextStoreForOnboarding(
-      confirmed.selected, confirmed.results, lastStoreAttemptRef.current,
+      confirmed.selected, confirmed.results, lastStoreAttemptRef.current, true,
     )
     if (!code) return
     lastStoreAttemptRef.current = code
@@ -424,15 +428,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (value && !hasMobileBookmarkletSetup(setupKeys[code])) {
         setPreparedCopy(preparedPromise ? { value, promise: preparedPromise } : null)
       } else setPreparedCopy(null)
-      setSetupHelpStore(code)
     }
+    setSetupHelpStore(code)
     setActiveProvider(code)
   }
 
   async function startOnboardingStore() {
     if (!storeOnboarding?.available || storeOnboardingBusy) return
     const selected = visibleOnboardingSelection
-    const code = nextStoreForOnboarding(selected, storeOnboarding.results, lastStoreAttemptRef.current)
+    const code = nextStoreForOnboarding(selected, storeOnboarding.results, lastStoreAttemptRef.current, true)
     if (!code) return
     // Clipboard activation runs during the click, not after an awaited PUT.
     // Copying only prepares a favorite: it never starts retailer login/import.
@@ -459,7 +463,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   // Open the retailer window synchronously within its user click. Jumbo's
   // favorite will request a fresh window from THIS authenticated opener.
   function openJumboFromInhuis() {
-    if (!mobileRetailer) {
+    if (!mobileRetailer && !onboardingMode) {
       window.location.assign(JUMBO_ORDERS_URL)
       return true
     }
@@ -502,7 +506,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
     // Lidl's browser favorite reads the household-scoped, confirmed window.
     // Save changed dates before visiting Lidl; never run with a stale period.
-    const needsSave = !mobileRetailer && lidlPeriodUnsaved
+    const needsSave = !onboardingMode && !mobileRetailer && lidlPeriodUnsaved
     if (needsSave && !lidlWindow.can_manage) {
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
@@ -852,8 +856,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             (result.queue_completed ? '' : ' De herstelperiode blijft bewaard totdat de bonnen zijn verwerkt.')
           setJumboPhase(run.received ? 'queued' : 'completed')
           setJumboPocProgress(message)
-          if (onboardingMode && run.queued.length) {
-            await markOnboardingStoreResult('jumbo', 'success', run.queued[0])
+          if (onboardingMode) {
+            await markOnboardingStoreResult('jumbo', run.queued.length ? 'success' : 'empty',
+              run.queued[0] || null, run.runId)
           }
           await refreshHistoricalProgress()
           showFeedback({ variant: 'success', title: 'Jumbo-historie ontvangen', message })
@@ -870,6 +875,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     let lidlCounts = { queued: 0, failed: 0 }
     let cancelled = false
     let lidlSourceWindow = null
+    let lidlOnboardingRun = null
 
     async function handleMessage(event) {
       if (cancelled || event.origin !== LIDL_WEB_ORIGIN) return
@@ -901,9 +907,21 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlPhase('fetching')
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         try {
-          const period = await fetchJson('/api/receipts/retailers/lidl/import-window' +
-            (mobileRetailer ? '?automatic=true' : ''))
-          if (cancelled) return
+          const period = onboardingMode
+            ? await fetchJson('/api/receipts/retailers/lidl/history/begin', {
+              method: 'POST', body: JSON.stringify({}),
+            })
+            : await fetchJson('/api/receipts/retailers/lidl/import-window' +
+              (mobileRetailer ? '?automatic=true' : ''))
+          if (cancelled || lidlSourceWindow !== event.source) return
+          if (onboardingMode) {
+            if (!/^[0-9a-f-]{36}$/.test(String(period?.run_id || '')) ||
+                !/^20\d{2}-\d{2}-\d{2}$/.test(period?.from_date || '') ||
+                !/^20\d{2}-\d{2}-\d{2}$/.test(period?.to_date || '')) {
+              throw new Error('Lidl-importperiode kon niet veilig worden vastgelegd.')
+            }
+            lidlOnboardingRun = { id: period.run_id, period, queueIds: [] }
+          }
           setLidlWindow(period)
           setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
           event.source?.postMessage({
@@ -975,6 +993,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           }
           lidlCounts.queued += 1
           lidlOnboardingQueueIdRef.current = result.items[0].queue_id
+          if (onboardingMode && lidlOnboardingRun) {
+            lidlOnboardingRun.queueIds.push(result.items[0].queue_id)
+          }
           setLidlCountsView({ ...lidlCounts })
           setLidlWebProgress('Lidl: ' + lidlCounts.queued
             + ' bonnen veilig ontvangen; verwerking in Kassa volgt automatisch.')
@@ -1005,7 +1026,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (data.type === 'inhuis:lidl-complete') {
         // The old import-window checkpoint means *processed*, not merely queued.
         // Do not advance it until the worker has confirmed completion.
-        if (data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
+        if (!onboardingMode && data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
           try {
             const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
               method: 'POST',
@@ -1033,10 +1054,35 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         void refreshHistoricalProgress()
         setLidlPhase(lidlCounts.failed ? 'failed' : lidlCounts.queued ? 'queued' : 'completed')
         if (onboardingMode) {
-          if (lidlCounts.failed) {
+          try {
+            if (lidlCounts.failed || !lidlOnboardingRun ||
+                data.mode !== 'history' || data.count !== lidlCounts.queued ||
+                data.from_date !== lidlOnboardingRun.period.from_date ||
+                data.to_date !== lidlOnboardingRun.period.to_date ||
+                lidlOnboardingRun.queueIds.length !== lidlCounts.queued) {
+              throw new Error('Lidl heeft niet alle geselecteerde kassabonnen aantoonbaar afgerond.')
+            }
+            const result = await fetchJson('/api/receipts/retailers/lidl/history/complete', {
+              method: 'POST',
+              body: JSON.stringify({
+                run_id: lidlOnboardingRun.id,
+                queue_ids: lidlOnboardingRun.queueIds,
+                from_date: lidlOnboardingRun.period.from_date,
+                to_date: lidlOnboardingRun.period.to_date,
+              }),
+            })
+            if (result?.scan_complete !== true || result.staged_receipts !== lidlCounts.queued) {
+              throw new Error('Lidl-voltooiing is niet door Inhuis bevestigd.')
+            }
+            await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
+              lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id)
+          } catch (error) {
+            lidlCounts.failed += 1
+            setLidlPhase('failed')
             await markOnboardingStoreResult('lidl', 'failed')
-          } else if (lidlCounts.queued > 0 && lidlOnboardingQueueIdRef.current) {
-            await markOnboardingStoreResult('lidl', 'success', lidlOnboardingQueueIdRef.current)
+            showFeedback({ variant: 'error', title: 'Lidl-import onvolledig',
+              message: normalizeErrorMessage(error?.message) || 'Controleer de Lidl-geschiedenis opnieuw.' })
+            return
           }
         }
         const summary = 'Lidl: ' + lidlCounts.queued
@@ -1536,7 +1582,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Jumbo"
             testId="jumbo-receipt-poc"
-            hideDates={mobileRetailer}
+            hideDates={mobileRetailer || onboardingMode}
             isMobileViewport={isMobileViewport}
             from={jumboFrom}
             to={jumboTo}
@@ -1552,7 +1598,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               setJumboImportCandidate(null)
               setJumboPocResult(null)
             }}
-            openHref={mobileRetailer ? undefined : JUMBO_ORDERS_URL}
+            openHref={mobileRetailer || onboardingMode ? undefined : JUMBO_ORDERS_URL}
             openTestId="jumbo-poc-open"
             onOpen={() => {
               setJumboPhase('waiting')
@@ -1560,11 +1606,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
               setJumboPocResult(null)
               setJumboImportCandidate(null)
-              if (mobileRetailer) openJumboFromInhuis()
+              if (mobileRetailer || onboardingMode) openJumboFromInhuis()
             }}
             helpTestId="jumbo-help-open"
             onHelp={() => setSetupHelpStore('jumbo')}
-            periodError={!mobileRetailer && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
+            periodError={!mobileRetailer && !onboardingMode && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
             setupHelp={
               <RetailerBookmarkletHelp
                 provider="jumbo"
@@ -1572,11 +1618,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'jumbo'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={jumboPocBookmarklet}
+                onboardingMode={onboardingMode}
                 universalBookmarklet={universalBookmarklet}
                 setupKeys={setupKeys}
                 preparedCopy={preparedCopy}
                 browserUrl={setupBrowserUrl}
-                valid={mobileRetailer || jumboPeriodValid}
+                valid={mobileRetailer || onboardingMode || jumboPeriodValid}
                 onOpenStore={() => { if (openJumboFromInhuis()) setSetupHelpStore('') }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
                 instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
@@ -1618,7 +1665,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             testId="lidl-digital-receipts"
             dateRangeTestId="lidl-import-window"
             isMobileViewport={isMobileViewport}
-            hideDates={mobileRetailer}
+            hideDates={mobileRetailer || onboardingMode}
             from={lidlFrom}
             to={lidlTo || lidlWindow?.to_date || ''}
             fromTestId="lidl-from-date"
@@ -1639,6 +1686,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'lidl'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={lidlBookmarklet}
+                onboardingMode={onboardingMode}
                 universalBookmarklet={universalBookmarklet}
                 setupKeys={setupKeys}
                 preparedCopy={preparedCopy}
