@@ -34,7 +34,7 @@ export function currentJumboImportPeriod(latestPurchaseDate, now = new Date()) {
     throw new Error('Ongeldige huidige datum voor Jumbo-import.')
   }
   const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
-  const noCheckpoint = latestPurchaseDate === null || latestPurchaseDate === undefined || latestPurchaseDate === ''
+  const noCheckpoint = latestPurchaseDate === null || latestPurchaseDate === undefined
   const from = noCheckpoint ? firstImportDate(now) : safeImportDate(latestPurchaseDate, now)
   if (!from) throw new Error('Ongeldige laatst bevestigde Jumbo-aankoopdatum.')
   return jumboDateWindow(from, today)
