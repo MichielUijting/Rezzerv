@@ -328,6 +328,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     if (!onboardingMode) return
     try {
       // Only a household-bound server run or AH credential may finish a store.
+      if (provider === 'ah' && result === 'success') {
+        // A confirmed AH account is not proof that its historical receipts
+        // were successfully synchronized. Attempt the initial sync now.
+        const synced = await syncAhReceipts()
+        if (!synced) result = 'failed'
+      }
       const confirmed = await saveStoreOnboardingResult(provider, result, queueId, runId)
       setStoreOnboarding(confirmed)
       setPendingStoreSelection(null)
@@ -1322,6 +1328,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       })
       await loadAhStatus()
       await refreshHistoricalProgress()
+      return failed === 0
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
       setAhPhase('failed')
@@ -1333,6 +1340,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         title: 'AH-bonnen ophalen',
         message,
       })
+      return false
     } finally {
       setAhBusy(false)
     }

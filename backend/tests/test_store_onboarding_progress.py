@@ -22,6 +22,12 @@ class _Result:
     def scalar_one_or_none(self):
         return self.value
 
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self.value
+
 
 class HouseholdBoundConnection:
     """In-process DML contract; fail on unexpected SQL or missing owner."""
@@ -30,12 +36,16 @@ class HouseholdBoundConnection:
         self.settings = {}
         self.credentials = set()
         self.queues = set()
+        self.runs = {}
 
     def execute(self, statement, params):
         sql = " ".join(str(statement).split()).upper()
         owner = params.get("household_id")
         assert isinstance(owner, str) and owner, "Missing active owner on write/read"
 
+        if sql.startswith("SELECT SETTING_VALUE FROM HOUSEHOLD_SETTINGS") and "SETTING_KEY='LIDL_BROWSER_IMPORT_RUN_V1'" in sql:
+            assert "HOUSEHOLD_ID=:HOUSEHOLD_ID" in sql
+            return _Result(self.runs.get((owner, "lidl")))
         if sql.startswith("SELECT SETTING_VALUE FROM HOUSEHOLD_SETTINGS"):
             assert "HOUSEHOLD_ID = :HOUSEHOLD_ID" in sql
             assert "SETTING_KEY = :SETTING_KEY" in sql
@@ -54,6 +64,9 @@ class HouseholdBoundConnection:
                 return _Result(rowcount=0)
             self.settings[key] = params["setting_value"]
             return _Result(rowcount=1)
+        if "FROM HOUSEHOLD_JUMBO_IMPORT_RUNS" in sql:
+            assert "WHERE HOUSEHOLD_ID=:HOUSEHOLD_ID" in sql
+            return _Result(self.runs.get((owner, "jumbo")))
         if "FROM RETAILER_ACCOUNT_CREDENTIALS" in sql:
             assert "WHERE HOUSEHOLD_ID = :HOUSEHOLD_ID AND PROVIDER = 'AH'" in sql
             return _Result(1 if (owner, "ah") in self.credentials else None)
@@ -115,21 +128,81 @@ class StoreOnboardingProgressTests(unittest.TestCase):
             "success",
         )
 
-    def test_browser_success_requires_own_queued_receipt(self):
+    def test_browser_success_requires_completed_current_run_and_own_queued_receipt(self):
         update_store_selection(self.conn, "first", ["jumbo", "lidl"])
         self.conn.queues.update({
             ("second", "jumbo", "other-house"),
             ("first", "lidl", "wrong-provider"),
             ("first", "jumbo", "valid-jumbo"),
         })
-        for queue_id in (None, "other-house", "wrong-provider"):
-            with self.assertRaises(ValueError):
+        for queue_id in (None, "other-house", "wrong-provider", "valid-jumbo"):
+            with self.assertRaisesRegex(ValueError, "actuele"):
                 record_store_result(self.conn, "first", provider="jumbo",
                                     result="success", queue_id=queue_id)
+        self.conn.runs[("first", "jumbo")] = {
+            "run_id": "current-jumbo", "scan_complete": True,
+            "queue_ids": ["valid-jumbo"],
+        }
+        for queue_id, run_id in ((None, "current-jumbo"), ("other-house", "current-jumbo"),
+                                 ("wrong-provider", "current-jumbo"), ("valid-jumbo", "stale")):
+            with self.assertRaises(ValueError):
+                record_store_result(self.conn, "first", provider="jumbo",
+                                    result="success", queue_id=queue_id, run_id=run_id)
         result = record_store_result(self.conn, "first", provider="jumbo",
-                                     result="success", queue_id="valid-jumbo")
+                                     result="success", queue_id="valid-jumbo", run_id="current-jumbo")
         self.assertEqual(result["results"], {"jumbo": "success"})
         self.assertEqual(read_store_onboarding(self.conn, "second")["results"], {})
+
+    def test_empty_jumbo_and_lidl_are_finished_only_after_server_confirmation(self):
+        update_store_selection(self.conn, "first", ["jumbo", "lidl"])
+        for store in ("jumbo", "lidl"):
+            with self.assertRaises(ValueError):
+                record_store_result(self.conn, "first", provider=store, result="empty")
+        self.conn.runs[("first", "jumbo")] = {
+            "run_id": "jumbo-empty", "scan_complete": False, "queue_ids": [],
+        }
+        with self.assertRaises(ValueError):
+            record_store_result(self.conn, "first", provider="jumbo",
+                                result="empty", run_id="jumbo-empty")
+        self.conn.runs[("first", "jumbo")]["scan_complete"] = True
+        self.conn.runs[("first", "lidl")] = (
+            '{"run_id":"lidl-empty","scan_complete":true,"queue_ids":[]}'
+        )
+        for provider, run_id in (("jumbo", "jumbo-empty"), ("lidl", "lidl-empty")):
+            self.assertEqual(
+                record_store_result(self.conn, "first", provider=provider,
+                                    result="empty", run_id=run_id)["results"][provider], "empty")
+        with self.assertRaises(ValueError):
+            update_store_selection(self.conn, "first", [])
+        self.assertEqual(
+            record_store_result(self.conn, "first", provider="jumbo", result="failed")["results"]["jumbo"],
+            "empty",
+        )
+
+    def test_an_existing_queue_cannot_turn_into_an_empty_import(self):
+        update_store_selection(self.conn, "first", ["jumbo"])
+        self.conn.runs[("first", "jumbo")] = {
+            "run_id": "complete-with-receipt", "scan_complete": True,
+            "queue_ids": ["stored-item"],
+        }
+        with self.assertRaisesRegex(ValueError, "lege historie"):
+            record_store_result(self.conn, "first", provider="jumbo",
+                                result="empty", run_id="complete-with-receipt")
+
+    def test_lidl_old_run_or_other_household_denied(self):
+        update_store_selection(self.conn, "first", ["lidl"])
+        self.conn.runs[("second", "lidl")] = (
+            '{"run_id":"shared","scan_complete":true,"queue_ids":[]}'
+        )
+        with self.assertRaises(ValueError):
+            record_store_result(self.conn, "first", provider="lidl",
+                                result="empty", run_id="shared")
+        self.conn.runs[("first", "lidl")] = (
+            '{"run_id":"fresh","scan_complete":true,"queue_ids":[]}'
+        )
+        with self.assertRaises(ValueError):
+            record_store_result(self.conn, "first", provider="lidl",
+                                result="empty", run_id="shared")
 
     def test_no_result_for_unselected_store(self):
         with self.assertRaisesRegex(ValueError, "Kies deze winkel"):
