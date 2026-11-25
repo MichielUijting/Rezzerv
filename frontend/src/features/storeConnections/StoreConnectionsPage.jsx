@@ -868,7 +868,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     try {
       const returnTo = window.location.origin + (onboardingMode ? '/onboarding/winkels' : '/instellingen/winkelkoppelingen')
       const data = await fetchJson(
-        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo),
+        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) + (onboardingMode ? '&onboarding=true' : ''),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
       ahLoginNavigatingRef.current = true

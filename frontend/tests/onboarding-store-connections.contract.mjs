@@ -123,4 +123,7 @@ assert.doesNotMatch(connections, /if \(ahResult === 'connected'\) \{\s*setActive
 assert.match(connections, /confirmed\.selected\.find\(code => confirmed\.results\[code\] == null\)/)
 assert.match(connections, /setActiveProvider\(next\)/)
 assert.match(oauth, /only_household_id=flow\.household_id/)
+assert.match(connections, /onboarding=true/)
+assert.match(router, /function SettingsStoreConnectionsRoute/)
+assert.match(router, /progress\.results\?\.ah !== 'success'/)
 console.log('ONBOARDING_STORE_CONNECTIONS_CONTRACT_GREEN')

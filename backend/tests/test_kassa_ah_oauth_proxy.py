@@ -568,3 +568,16 @@ def test_callback_after_backend_restart_returns_and_logs_safe_category(monkeypat
     assert "flow_missing_or_backend_restarted" in caplog.text
     assert flow.flow_id not in caplog.text
     assert "one-time-code" not in caplog.text
+
+
+def test_explicit_onboarding_cannot_fall_back_to_settings(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
+    request = _request(host="inhuis.example")
+    for candidate in ("https://other.example/onboarding/winkels", "http://inhuis.example:5174/instellingen/winkelkoppelingen", None):
+        with pytest.raises(HTTPException) as error:
+            oauth.create_ah_oauth_flow(request, household_id="household-1", return_to=candidate, onboarding=True)
+        assert error.value.status_code == 400
+    flow = oauth.create_ah_oauth_flow(request, household_id="household-1", return_to="http://inhuis.example:5174/onboarding/winkels", onboarding=True)
+    assert oauth._return_with_status(flow, "connected").endswith("/onboarding/winkels?ah=connected")

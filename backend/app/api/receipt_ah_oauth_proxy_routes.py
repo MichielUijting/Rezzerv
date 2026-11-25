@@ -131,7 +131,7 @@ def resolve_backend_public_origin(request: Request) -> str:
     return f"{scheme}://{_format_host(_ah_login_hostname(hostname))}:{public_port}"
 
 
-def _safe_return_to(request: Request, return_to: str | None) -> str:
+def _safe_return_to(request: Request, return_to: str | None, *, onboarding: bool = False) -> str:
     candidate = str(return_to or "").strip()
     request_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
     request_hostname = request_host.split(":", 1)[0].strip("[]").lower()
@@ -143,7 +143,12 @@ def _safe_return_to(request: Request, return_to: str | None) -> str:
             and parsed.hostname.lower() == request_hostname
             and parsed.path in {"/instellingen/winkelkoppelingen", "/onboarding/winkels"}
         ):
+            if onboarding and parsed.path != "/onboarding/winkels":
+                raise HTTPException(status_code=400, detail="Ongeldige terugkeerroute voor winkelonboarding")
             return candidate
+    if onboarding:
+        # Never silently downgrade a first-store flow to regular Settings.
+        raise HTTPException(status_code=400, detail="De terugkeerroute voor winkelonboarding kon niet veilig worden bevestigd")
     app_origin = str(os.getenv("REZZERV_APP_BASE_URL", "http://localhost:5174") or "").strip().rstrip("/")
     return f"{app_origin}/instellingen/winkelkoppelingen"
 
@@ -153,6 +158,7 @@ def create_ah_oauth_flow(
     *,
     household_id: str,
     return_to: str | None = None,
+    onboarding: bool = False,
 ) -> AHOAuthFlow:
     _clean_expired_flows()
     flow = AHOAuthFlow(
@@ -160,7 +166,7 @@ def create_ah_oauth_flow(
         installation_id=str(uuid4()).upper(),
         household_id=str(household_id),
         backend_origin=resolve_backend_public_origin(request),
-        return_to=_safe_return_to(request, return_to),
+        return_to=_safe_return_to(request, return_to, onboarding=onboarding),
         expires_at=datetime.now(timezone.utc) + _FLOW_TTL,
     )
     with _flow_lock:

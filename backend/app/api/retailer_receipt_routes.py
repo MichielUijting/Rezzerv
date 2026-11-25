@@ -234,6 +234,7 @@ def get_structured_retailer_receipt_queue_status(
 def start_ah_account_connection(
     request: Request,
     return_to: str | None = Query(default=None, max_length=2048),
+    onboarding: bool = Query(default=False),
     authorization: Optional[str] = Header(None),
 ):
     household_id = _authorized_household_id(authorization)
@@ -241,6 +242,7 @@ def start_ah_account_connection(
         request,
         household_id=household_id,
         return_to=return_to,
+        onboarding=onboarding,
     )
     return {
         **ah_session_status(engine, household_id),
