@@ -113,11 +113,12 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   }
   // Later never blocks Home, even when stores remain selected.
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
-  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
+  // Even an obsolete link must never render the deleted dashboard guide.
+  await page.goto('/home?wegwijs=1')
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
+  await page.goto('/home')
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
   await expect(page.getByTestId('home-tile-bijna-op')).toBeVisible()
@@ -151,5 +152,25 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   expect(session.context_type).toBe('regular')
   expect(session.role).toBe('admin')
 
+  // Touch-sized Android Chrome onboarding uses the retailer's actual import
+  // bookmarklet, not the desktop drag-to-favorites control or a fake login.
+  await page.addInitScript(() => Object.defineProperty(navigator, 'userAgent', {
+    configurable: true,
+    get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36',
+  }))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/onboarding/winkels')
+  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
+  await page.getByTestId('onboarding-store-row-ah').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
+  await page.getByTestId('onboarding-stores-start').click()
+  await expect(page.getByTestId('lidl-mobile-setup')).toHaveAttribute('data-browser', 'chrome')
+  await expect(page.getByTestId('lidl-mobile-copy')).toBeVisible()
+  await expect(page.getByTestId('lidl-mobile-open-store')).toBeVisible()
+  await expect(page.getByTestId('lidl-web-bookmarklet')).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2)).toBe(true)
+  await page.getByTestId('lidl-mobile-skip').click()
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   console.log('P0_L4_01_ONBOARDING_BROWSER_GREEN')
 })

@@ -30,11 +30,12 @@ import ImportProgress from './ImportProgress.jsx'
 import StoreOnboardingSelection from '../onboarding/StoreOnboardingSelection.jsx'
 import {
   fetchStoreOnboardingProgress, saveStoreOnboardingSelection,
-  saveStoreOnboardingResult, nextStoreForOnboarding,
+  saveStoreOnboardingResult, nextStoreForOnboarding, skipStoreForOnboarding,
 } from '../onboarding/onboardingStoreConnections.js'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
+import { detectMobileRetailerEnvironment } from './retailerMobileEnvironment.js'
 import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
 import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConnections.js'
 import './receiptConnectionCompact.css'
@@ -43,6 +44,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const navigate = useNavigate()
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
+  const mobileRetailer = detectMobileRetailerEnvironment().device !== 'desktop'
   const [activeProvider, setActiveProvider] = useState('')
   const expectedLidlWindowRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
@@ -344,6 +346,37 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       setStoreOnboardingBusy(false)
     }
   }
+
+  async function skipCurrentOnboardingStore(provider) {
+    if (!onboardingMode || !storeOnboarding?.available || storeOnboardingBusy) return
+    setStoreOnboardingBusy(true)
+    try {
+      const confirmed = await saveStoreOnboardingSelection(skipStoreForOnboarding(storeOnboarding.selected, provider))
+      setStoreOnboarding(confirmed)
+      setSetupHelpStore('')
+      const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
+      if (next) {
+        lastStoreAttemptRef.current = provider
+        setActiveProvider(next)
+      } else {
+        setActiveProvider('')
+        onFinish?.()
+      }
+    } catch (err) {
+      showFeedback({ variant: 'error', title: 'Winkel overslaan',
+        message: normalizeErrorMessage(err?.message) || 'De keuze kon niet worden opgeslagen.' })
+    } finally {
+      setStoreOnboardingBusy(false)
+    }
+  }
+
+  // Open the appropriate touch guide as soon as the active mobile retailer
+  // is chosen. Site navigation alone is never marked as a successful import.
+  useEffect(() => {
+    if (onboardingMode && mobileRetailer && (activeProvider === 'jumbo' || activeProvider === 'lidl')) {
+      setSetupHelpStore(activeProvider)
+    }
+  }, [activeProvider, onboardingMode, mobileRetailer])
 
   function startOnboardingStore() {
     const code = nextStoreForOnboarding(
@@ -1099,7 +1132,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               <div style={{ display: 'grid', rowGap: '8px', marginTop: '10px' }}>
                 <p style={{ margin: 0 }}>1. Kies een winkel in het overzicht. Albert Heijn vraagt om een
                   aanmelding bij Mijn AH; daarna keer je terug naar Winkelkoppelingen.
-                  Lidl en Jumbo gebruiken een browserfavoriet, dat niet op iedere telefoon werkt.</p>
+                  Lidl en Jumbo gebruiken op je telefoon een apart in te stellen bladwijzerscript. Volg de mobiele stappen om de bonnen daadwerkelijk op te halen.</p>
                 <p style={{ margin: 0 }}>2. Controleer of AH gekoppeld is en tik op Nu synchroniseren als je
                   bonnen wilt ophalen. Geen gevonden bonnen kan correct zijn. Historische aankopen
                   toont opgeslagen bonrecords en verwerkingen, niet het totaal bij de winkel.</p>
@@ -1107,9 +1140,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                   Boodschappen, Kassa en Voorraad vind je via de actiebalk;
                   onder Meer staan andere functies en Instellingen.</p>
                 <div>
-                  <Button type="button" variant="secondary" onClick={() => navigate('/home?wegwijs=1')}
+                  <Button type="button" variant="secondary" onClick={() => navigate('/home')}
                     data-testid="store-connections-guide-dashboard">
-                    Bekijk dashboard met uitleg
+                    Bekijk dashboard
                   </Button>
                 </div>
               </div>
@@ -1263,6 +1296,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={jumboPocBookmarklet}
                 valid={jumboPeriodValid}
+                onOpenStore={() => { setSetupHelpStore(''); window.location.assign(JUMBO_ORDERS_URL) }}
+                onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
                 instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
                   wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
                   sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
@@ -1322,6 +1357,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'lidl'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={lidlBookmarklet}
+                onOpenStore={() => { setSetupHelpStore(''); void openLidlWithSavedPeriod() }}
+                onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('lidl') } : null}
                 instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
                   opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
               />

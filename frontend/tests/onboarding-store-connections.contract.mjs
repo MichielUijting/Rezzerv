@@ -4,8 +4,9 @@ import {
   shouldOfferStoreConnectionOnboarding,
   filterOnboardingReceiptStores,
   hasStoreOnboardingToResume,
-  nextStoreForOnboarding,
+  nextStoreForOnboarding, skipStoreForOnboarding,
 } from '../src/features/onboarding/onboardingStoreConnections.js'
+import { detectMobileRetailerEnvironment } from '../src/features/storeConnections/retailerMobileEnvironment.js'
 
 function read(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -53,7 +54,8 @@ const progressClient = read('../src/features/onboarding/onboardingStoreConnectio
 const progressBackend = read('../../backend/app/services/store_onboarding_progress_service.py')
 const routes = read('../../backend/app/api/household_onboarding_routes.py')
 const defaults = read('../../backend/app/services/quick_start_onboarding_service.py')
-const dashboardGuide = read('../src/features/onboarding/FirstUseDashboardGuide.jsx')
+const mobileHelp = read('../src/features/storeConnections/RetailerBookmarkletHelp.jsx')
+const compactStyle = read('../src/features/storeConnections/receiptConnectionCompact.css')
 const home = read('../src/features/home/HomePage.jsx')
 const oauth = read('../../backend/app/api/receipt_ah_oauth_proxy_routes.py')
 
@@ -101,10 +103,25 @@ assert.match(progressBackend, /FROM retailer_import_queue/)
 assert.match(progressBackend, /AND id = :queue_id/)
 assert.match(progressBackend, /SETTING_KEY = "first_store_onboarding_v1"/)
 assert.match(defaults, /seed_store_onboarding\(conn, household_id\)/)
-assert.match(router, /navigate\('\/home\?wegwijs=1'/)
-assert.match(home, /<FirstUseDashboardGuide/)
-assert.match(dashboardGuide, /rz-first-use-action-hint/)
-assert.doesNotMatch(dashboardGuide, /rgba\(0, 0, 0/)
+assert.match(router, /onFinish=\{\(\) => navigate\('\/home'/)
+assert.doesNotMatch(router, /wegwijs=1/)
+assert.doesNotMatch(home, /FirstUseDashboardGuide|first-use-dashboard-guide|wegwijs/)
+assert.doesNotMatch(compactStyle, /rz-first-use-action-hint/)
+assert.match(compactStyle, /rz-onboarding-arrow-overlay/)
+assert.match(mobileHelp, /Kopieer script/)
+assert.match(mobileHelp, /Stap 3 van 3/)
+assert.match(mobileHelp, /onOpenStore/)
+assert.match(connections, /skipCurrentOnboardingStore/)
+assert.match(connections, /saveStoreOnboardingSelection\(skipStoreForOnboarding/)
+assert.match(connections, /detectMobileRetailerEnvironment/)
+assert.match(connections, /onOpenStore=\{\(\) =>/)
+assert.equal(detectMobileRetailerEnvironment({ userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36' }).browser, 'chrome')
+assert.deepEqual(detectMobileRetailerEnvironment({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1' }), { device: 'iphone', browser: 'safari' })
+assert.equal(detectMobileRetailerEnvironment({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0.0 Mobile Safari/604.1' }).browser, 'other')
+assert.equal(detectMobileRetailerEnvironment({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0.0.0' }).device, 'desktop')
+assert.deepEqual(skipStoreForOnboarding(['ah','jumbo','lidl'], 'jumbo'), ['ah','lidl'])
+assert.deepEqual(skipStoreForOnboarding(['lidl'], 'lidl'), [])
+assert.equal(nextStoreForOnboarding(skipStoreForOnboarding(['jumbo','lidl'], 'jumbo'), {}, 'jumbo'), 'lidl')
 assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/onboarding\/winkels"\}/)
 
 // Android return and browser OAuth never substitute navigation for proof.

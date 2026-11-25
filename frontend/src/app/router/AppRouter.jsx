@@ -103,7 +103,7 @@ function OnboardingRoute() {
 
 function OnboardingStoresRoute() {
   const navigate = useNavigate()
-  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home?wegwijs=1', { replace: true })} />
+  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home', { replace: true })} />
 }
 
 // Recover a misplaced AH callback only when the authenticated household has

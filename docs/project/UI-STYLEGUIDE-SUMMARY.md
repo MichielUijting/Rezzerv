@@ -43,9 +43,9 @@ reguliere pagina Instellingen → Winkelkoppelingen. Boven de tabel staat één 
   de beveiligde Inhuis-backend. Alleen een beheerder met
   `household_settings.manage` kan ze aanpassen. Een onvoltooide keuze wordt
   na opnieuw aanmelden aangeboden; **Later koppelen** laat het dashboard vrij.
-- De eerste dashboarduitleg blijft de bestaande korte actiebarhint, zonder
-  schermverduistering. De eerdere drie oranje winkelpijlen zijn **niet** meer
-  van toepassing op de eerste winkelonboarding.
+- De oranje dashboard-introductieoverlay inclusief pijl is volledig verwijderd;
+  afronding gaat rechtstreeks naar het dashboard zonder introductietrigger.
+  Eventuele afzonderlijke onboardingpijlen blijven buiten deze correctie.
 
 ## Snelle onboarding op één scherm — 23 november 2026
 

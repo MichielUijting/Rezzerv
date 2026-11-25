@@ -63,3 +63,9 @@ export function nextStoreForOnboarding(selected, results = {}, previous = '') {
     || order.find(code => results?.[code] === 'failed')
     || ''
 }
+
+
+/** Explicitly skip a store without recording a false connection or failure. */
+export function skipStoreForOnboarding(selected, provider) {
+  return Array.isArray(selected) ? selected.filter(code => code !== provider) : []
+}

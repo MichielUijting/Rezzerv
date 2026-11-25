@@ -56,8 +56,7 @@ export default function RetailerReceiptPanel({
         <h3 style={{ margin: 0 }}>{retailer} digitale kassabonnen</h3>
         {isMobileViewport ? (
           <p role="status" style={{ margin: '6px 0 0' }}>
-            Voor het ophalen is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
-            Dit werkt niet betrouwbaar in alle mobiele browsers.
+            Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.
           </p>
         ) : null}
         <p style={{ margin: '6px 0 0' }}>
