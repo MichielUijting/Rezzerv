@@ -24,7 +24,7 @@ assert.deepEqual(currentJumboImportPeriod('2026-09-10', new Date('2027-01-02T12:
 assert.deepEqual(currentJumboImportPeriod(undefined, new Date('2027-01-02T12:00:00')), {
   from_date: '2026-01-01', to_date: '2027-01-02',
 })
-for (const bad of ['2026-02-30', '2027-11-01', '2026/10/22', 12345, '2026-10-22T12:00:00Z']) {
+for (const bad of ['', '2026-02-30', '2027-11-01', '2026/10/22', 12345, '2026-10-22T12:00:00Z']) {
   assert.throws(() => currentJumboImportPeriod(bad, clock), /Ongeldige/)
 }
 assert.throws(() => currentJumboImportPeriod('2026-10-22', new Date(NaN)), /Ongeldige/);
