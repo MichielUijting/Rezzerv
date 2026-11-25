@@ -11,6 +11,16 @@
 
 ---
 
+## PO-besluit 25 november 2026 — afzonderlijke winkelonboarding
+
+Dit besluit vervangt de drie pijlen en de hergebruikte Winkelkoppelingen-pagina als eerste winkelonboarding. Het reguliere scherm onder Instellingen blijft behouden.
+
+- Vraag: **Met welke winkels wil je koppelen om je kassabonnen op te halen?** Toon Albert Heijn, Jumbo en Lidl in een compacte tabel met onafhankelijke ronde Ja-selectievakjes (meerdere keuzes mogelijk), centrale primaire kleur (standaard #005F6A) en wit vinkje.
+- Start uitsluitend gekozen winkelprocedures; hergebruik bestaande autorisatie, AH-aanmelding en Jumbo/Lidl-browseroverdracht. Geen tweede AH-knop of scroll naar een instellingenpaneel.
+- Keer terug naar dezelfde tabel. Gebruik dezelfde winkellabels in keuze en resultaat. Centreer vinkjes/statusiconen verticaal naast de tekst. Arceer bevestigde successen groen, expliciete mislukkingen oranje; een geopende website is geen bewijs van succes. Niet geselecteerd of nog niet bevestigd blijft neutraal.
+- Bewaar voortgang huishoudgebonden en duurzaam; uitsluitend bevoegde beheerders mogen deze wijzigen. Bied mislukte koppelingen bij een volgende aanmelding opnieuw aan, zonder reeds geslaagde koppelingen te herhalen. Later afronden mag het dashboard niet blokkeren.
+- Behoud de eerste dashboarduitleg. Geen wijzigingen aan bonstatusautoriteit, importdata of winkelcredentials.
+
 ## PO-besluit 23 november 2026 — snelle onboarding voor nieuwe gebruikers
 
 Dit besluit is **nieuwer dan** de oorspronkelijke vragenwizard in hoofdstuk 4, 5 en 7 en vervangt die vragen voor de standaardinstroom van een nieuwe gebruiker.
