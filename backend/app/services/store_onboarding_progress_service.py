@@ -1,7 +1,9 @@
 """Durable, household-scoped first-store onboarding without retailer credentials.
 
-Only new regular households are seeded by quick-start. A success requires
-server-side proof: an AH account credential or a staged retailer receipt.
+Only new regular households are seeded by quick-start. A finished result
+requires an AH credential or a completed household-scoped retailer import run;
+receipt queue IDs must belong to that same run. Empty histories remain distinct
+from persistent account connections.
 This is separate from the canonical receipt-import status authority.
 """
 from __future__ import annotations
