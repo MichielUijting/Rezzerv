@@ -22,6 +22,8 @@ In **Platformbeheer → Gebruikers** heeft de tabelgroep maximaal 930 px breedte
 
 ## Afzonderlijke winkelonboarding — 25 november 2026
 
+De winkelnaam krijgt links het herkenbare label uit het PO-ontwerp: wit `ah` op lichtblauw, zwart `J` op geel en wit `L` op donkerblauw. De drie kolomkoppen gebruiken de centrale primaire achtergrond en witte tekstkleur op de cellen zelf. Op smalle mobiele schermen blijven tabel en acties binnen de viewport; namen en statustekst mogen omlopen.
+
 Na het aanmaken en inrichten van een nieuw huishouden toont Inhuis een zelfstandige
 keuzetabel met **Albert Heijn**, **Jumbo** en **Lidl**, zonder hergebruik van de
 reguliere pagina Instellingen → Winkelkoppelingen. Boven de tabel staat één vraag:

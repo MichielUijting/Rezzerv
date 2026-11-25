@@ -3,9 +3,9 @@ import Card from '../../ui/Card.jsx'
 import './storeOnboardingSelection.css'
 
 export const ONBOARDING_STORES = [
-  { code: 'ah', label: 'Albert Heijn' },
-  { code: 'jumbo', label: 'Jumbo' },
-  { code: 'lidl', label: 'Lidl' },
+  { code: 'ah', label: 'Albert Heijn', mark: 'ah' },
+  { code: 'jumbo', label: 'Jumbo', mark: 'J' },
+  { code: 'lidl', label: 'Lidl', mark: 'L' },
 ]
 
 const resultLabels = { success: 'Geslaagd', failed: 'Mislukt', pending: 'Nog te koppelen' }
@@ -17,17 +17,17 @@ export default function StoreOnboardingSelection({
   const hasFailures = selected.some(code => results[code] === 'failed')
   const remaining = selected.filter(code => results[code] !== 'success')
   return (
-    <Card>
+    <Card className="rz-store-onboarding-card">
       <section className="rz-store-onboarding" data-testid="store-onboarding-selection">
         <h2>Met welke winkels wil je koppelen om je kassabonnen op te halen?</h2>
         <table className="rz-store-onboarding-table">
           <thead><tr><th scope="col">Winkel</th><th scope="col">Ja</th><th scope="col">Resultaat</th></tr></thead>
           <tbody>
-            {ONBOARDING_STORES.map(({ code, label }) => {
+            {ONBOARDING_STORES.map(({ code, label, mark }) => {
               const result = results[code]
               return (
                 <tr key={code} data-result={result || 'neutral'} data-testid={'onboarding-store-row-' + code}>
-                  <th scope="row">{label}</th>
+                  <th scope="row"><span className="rz-store-onboarding-name"><span aria-hidden="true" className={`rz-store-onboarding-mark rz-store-onboarding-mark--${code}`} data-testid={`onboarding-store-mark-${code}`}>{mark}</span><span>{label}</span></span></th>
                   <td>
                     <label className="rz-store-onboarding-choice">
                       <input type="checkbox" aria-label={label + ' koppelen'} checked={selected.includes(code)}

@@ -1,8 +1,18 @@
 .rz-store-onboarding { display: grid; gap: 12px; min-width: 0; }
 .rz-store-onboarding h2 { margin: 0; font-size: 1.1rem; }
-.rz-store-onboarding-table { width: 100%; border-collapse: collapse; }
+.rz-store-onboarding-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.rz-store-onboarding-table { width: 100%; max-width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; }
 .rz-store-onboarding-table th, .rz-store-onboarding-table td { text-align: left; vertical-align: middle; padding: 8px; border-bottom: 1px solid #d7e1df; }
-.rz-store-onboarding-table thead { background: var(--color-ui-primary); color: white; }
+.rz-store-onboarding-table thead th { background: var(--color-ui-primary); color: var(--color-ui-primary-text) !important; }
+.rz-store-onboarding-table th:first-child { width: 49%; }
+.rz-store-onboarding-table th:nth-child(2) { width: 15%; }
+.rz-store-onboarding-table th, .rz-store-onboarding-table td { overflow-wrap: anywhere; white-space: normal; }
+.rz-store-onboarding-table th:nth-child(2), .rz-store-onboarding-table td:nth-child(2) { text-align: center; }
+.rz-store-onboarding-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 400; }
+.rz-store-onboarding-mark { display: inline-flex; flex: 0 0 32px; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 6px; font-weight: 700; }
+.rz-store-onboarding-mark--ah { background: #009FE3; color: #fff; }
+.rz-store-onboarding-mark--jumbo { background: #FFD200; color: #171717; }
+.rz-store-onboarding-mark--lidl { background: #0050AA; color: #fff; }
 .rz-store-onboarding-table tr[data-result="success"] { background: #e5f3e7; color: #164b29; }
 .rz-store-onboarding-table tr[data-result="failed"] { background: #fff0d9; color: #87420d; }
 .rz-store-onboarding-choice { position: relative; display: inline-flex; align-items: center; min-height: 32px; cursor: pointer; }
@@ -12,3 +22,11 @@
 .rz-store-onboarding-choice input:focus-visible + span { outline: 3px solid var(--color-ui-primary); outline-offset: 3px; }
 .rz-store-onboarding-result { display: inline-flex; align-items: center; gap: 6px; }
 .rz-store-onboarding-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.rz-store-onboarding-actions > button { max-width: 100%; min-width: 0; white-space: normal; }
+@media (max-width: 720px) {
+  .rz-store-onboarding { grid-template-columns: minmax(0, 1fr); }
+  .rz-store-onboarding-table th, .rz-store-onboarding-table td { padding: 6px 4px; font-size: 14px; }
+  .rz-store-onboarding-name { gap: 5px; }
+  .rz-store-onboarding-mark { flex-basis: 28px; width: 28px; height: 28px; }
+}

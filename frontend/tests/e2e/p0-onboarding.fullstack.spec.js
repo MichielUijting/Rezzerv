@@ -67,6 +67,20 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     await expect(page.getByTestId('onboarding-select-' + retailer)).toBeVisible()
     await expect(page.getByTestId('onboarding-store-row-' + retailer)).toHaveAttribute('data-result', 'neutral')
   }
+  for (const [code, mark] of [['ah', 'ah'], ['jumbo', 'J'], ['lidl', 'L']]) {
+    await expect(page.getByTestId('onboarding-store-mark-' + code)).toHaveText(mark)
+  }
+  for (const width of [390, 320, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    const selection = page.getByTestId('store-onboarding-selection')
+    for (const header of await selection.locator('thead th').all()) {
+      await expect(header).toHaveCSS('color', 'rgb(255, 255, 255)')
+    }
+    const table = await selection.locator('table').boundingBox()
+    expect(table.x + table.width).toBeLessThanOrEqual(width + 1)
+    const later = await page.getByTestId('onboarding-stores-later').boundingBox()
+    expect(later.x + later.width).toBeLessThanOrEqual(width + 1)
+  }
   await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
   await page.getByTestId('onboarding-store-row-ah').locator('label').click()
   await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
