@@ -685,6 +685,61 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     return () => { cancelled = true }
   }, [showFeedback])
 
+  // The permanent mobile favorite asks the exact Inhuis-opened Jumbo tab for
+  // a fresh household-scoped period before running the existing v14 importer.
+  useEffect(() => {
+    let cancelled = false
+    async function handleJumboHandshake(event) {
+      if (event.origin !== JUMBO_WEB_ORIGIN ||
+          !expectedJumboWindowRef.current ||
+          event.source !== expectedJumboWindowRef.current ||
+          activeProvider !== 'jumbo') return
+      const data = event.data
+      if (!data || data.type !== 'inhuis:jumbo-handshake' ||
+          data.bookmarklet_version !== JUMBO_BOOKMARKLET_VERSION ||
+          typeof data.request_id !== 'string' ||
+          !/^[A-Za-z0-9-]{15,72}$/.test(data.request_id)) return
+      if (onboardingMode && (!storeOnboarding?.selected?.includes('jumbo') ||
+          storeOnboarding?.results?.jumbo === 'success')) return
+      const sourceWindow = event.source
+      try {
+        const response = await fetchJson('/api/receipts/retailers/last-updated')
+        if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
+        if (!response?.dates || typeof response.dates !== 'object' ||
+            !Object.prototype.hasOwnProperty.call(response.dates, 'jumbo')) {
+          throw new Error('Jumbo-importperiode ontbreekt.')
+        }
+        const period = currentJumboImportPeriod(response.dates.jumbo)
+        const script = decodeURIComponent(buildJumboPocBookmarklet(
+          window.location.origin + window.location.pathname, period,
+        ).slice('javascript:'.length))
+        sourceWindow.postMessage({
+          type: 'inhuis:jumbo-script',
+          bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
+          request_id: data.request_id, script,
+        }, JUMBO_WEB_ORIGIN)
+        setJumboPhase('fetching')
+        setJumboPocProgress('Jumbo-bonnen ophalen van ' + period.from_date + ' tot ' + period.to_date + '…')
+      } catch (err) {
+        if (cancelled) return
+        try {
+          sourceWindow.postMessage({
+            type: 'inhuis:jumbo-script',
+            bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
+            request_id: data.request_id, script: '',
+          }, JUMBO_WEB_ORIGIN)
+        } catch { /* Tab may have closed. */ }
+        setJumboPhase('failed')
+        showFeedback({
+          variant: 'error', title: 'Jumbo-importperiode',
+          message: normalizeErrorMessage(err?.message) || 'Jumbo-importperiode kon niet veilig worden bepaald.',
+        })
+      }
+    }
+    window.addEventListener('message', handleJumboHandshake)
+    return () => { cancelled = true; window.removeEventListener('message', handleJumboHandshake) }
+  }, [activeProvider, onboardingMode, storeOnboarding, showFeedback])
+
   useEffect(() => {
     let lidlCounts = { queued: 0, failed: 0 }
     let cancelled = false
