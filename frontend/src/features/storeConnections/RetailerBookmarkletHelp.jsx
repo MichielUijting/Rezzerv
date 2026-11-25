@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Button from '../../ui/Button'
-import { detectMobileRetailerEnvironment } from './retailerMobileEnvironment.js'
+import { detectMobileRetailerEnvironment, retailerBrowserHandoff } from './retailerMobileEnvironment.js'
 import { copyRetailerBookmarklet, hasMobileBookmarkletSetup, rememberMobileBookmarkletSetup } from './universalRetailerBookmarklet.js'
 
 /**
@@ -26,6 +26,9 @@ export default function RetailerBookmarkletHelp({
   const mobile = environment.device !== 'desktop'
   const supported = !mobile || environment.browser === 'safari' || environment.browser === 'chrome'
   const standalone = mobile && (window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true)
+  const needsBrowser = mobile && (standalone || !supported)
+  const handoff = retailerBrowserHandoff(browserUrl, environment.device, window.location.origin)
+  const [addressCopied, setAddressCopied] = useState(false)
 
   useEffect(() => {
     if (!open) return undefined
@@ -113,16 +116,20 @@ export default function RetailerBookmarkletHelp({
         {mobile ? (
           <section className="rz-retailer-mobile-setup" data-testid={provider + '-mobile-setup'}
             data-device={environment.device} data-browser={environment.browser}>
-            {standalone ? (
+            {needsBrowser ? (
               <>
-                <p>Open deze pagina in {environment.device === 'iphone' ? 'Safari' : 'Chrome'} om je bladwijzer te gebruiken.</p>
-                {browserUrl ? <a href={browserUrl} target="_blank" rel="noopener noreferrer"
-                  className="rz-button-primary" role="button">Open in {environment.device === 'iphone' ? 'Safari' : 'Chrome'}</a> : null}
+                <p>Ga verder in {environment.device === 'iphone' ? 'Safari' : 'Chrome'} om je bladwijzer te gebruiken. Je eerdere winkelkeuzes blijven bewaard.</p>
+                {handoff ? <a href={handoff} className="rz-button-primary" role="button"
+                  data-testid={provider + '-open-chrome'}>Open in Chrome</a> : null}
+                {browserUrl ? <>
+                  <Button type="button" variant="secondary" onClick={async () => {
+                    setAddressCopied(await copyRetailerBookmarklet(browserUrl))
+                  }}>Kopieer Inhuis-adres</Button>
+                  <p role="status">{addressCopied ? 'Adres gekopieerd. ' : ''}Open {environment.device === 'iphone' ? 'Safari' : 'Chrome'} zelf en plak het adres in de adresbalk als het openen niet lukt.</p>
+                  <input className="rz-retailer-handoff-address" aria-label="Inhuis-adres" readOnly
+                    value={browserUrl} onFocus={event => event.currentTarget.select()} />
+                </> : null}
               </>
-            ) : !supported ? (
-              <p role="alert" data-testid={provider + '-browser-warning'}>
-                Open Inhuis in {environment.device === 'iphone' ? 'Safari' : 'Chrome'}.
-              </p>
             ) : reuse ? (
               <div className="rz-retailer-mobile-step">
                 <p>Log zo nodig in bij {retailer}. Kies daarna de bladwijzer <strong>{savedName}</strong>.</p>

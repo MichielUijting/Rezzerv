@@ -404,7 +404,10 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     url.searchParams.delete('inhuis_setup')
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
     if (['jumbo', 'lidl'].includes(provider) && storeOnboarding.selected.includes(provider) &&
-        !['success', 'empty'].includes(storeOnboarding.results[provider])) setActiveProvider(provider)
+        !['success', 'empty'].includes(storeOnboarding.results[provider])) {
+      setActiveProvider(provider)
+      setSetupHelpStore(provider)
+    }
   }, [onboardingMode, isLoading, storeOnboarding])
 
   // No second start screen after selecting stores. Do not cover a returned

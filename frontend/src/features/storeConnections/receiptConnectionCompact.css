@@ -275,3 +275,11 @@
 /* Compact mobile bookmark instructions: one short action, no separator wall. */
 .rz-retailer-mobile-setup .rz-retailer-mobile-step{border-top:0;padding-top:0;gap:8px}
 .rz-retailer-mobile-setup>a[role=button]{min-height:44px;display:flex;align-items:center;justify-content:center;text-decoration:none}
+
+/* Keep portal and grid children inside the actual mobile viewport, even
+ * with long addresses, browser font scaling and global button rules. */
+.rz-retailer-help-backdrop{width:100%;max-width:100vw}
+.rz-retailer-help-dialog{grid-template-columns:minmax(0,1fr);max-width:100%;outline-offset:-2px}
+.rz-retailer-mobile-setup,.rz-retailer-mobile-step{grid-template-columns:minmax(0,1fr);max-width:100%}
+.rz-retailer-mobile-setup>a[role=button],.rz-retailer-mobile-setup button,.rz-retailer-handoff-address{box-sizing:border-box;min-width:0;max-width:100%;width:100%;white-space:normal;overflow-wrap:anywhere}
+.rz-retailer-handoff-address{font-size:16px}

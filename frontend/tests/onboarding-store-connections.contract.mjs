@@ -288,3 +288,15 @@ assert.match(connections, /sourceWindow\.postMessage\(/)
 assert.match(connections, /openJumboFromInhuis\(\)/)
 assert.match(connections, /universalBookmarklet=\{universalBookmarklet\}/)
 console.log('UNIVERSAL_MOBILE_BOOKMARKLET_CONTRACT_GREEN')
+
+import { retailerBrowserHandoff } from '../src/features/storeConnections/retailerMobileEnvironment.js'
+assert.equal(retailerBrowserHandoff('http://inhuis.example:5174/onboarding/winkels?inhuis_setup=jumbo','android','http://inhuis.example:5174'),
+  'intent://inhuis.example:5174/onboarding/winkels?inhuis_setup=jumbo#Intent;scheme=http;package=com.android.chrome;end')
+assert.equal(retailerBrowserHandoff('https://inhuis.example/onboarding/winkels?inhuis_setup=lidl','android','https://inhuis.example'),
+  'intent://inhuis.example/onboarding/winkels?inhuis_setup=lidl#Intent;scheme=https;package=com.android.chrome;end')
+assert.equal(retailerBrowserHandoff('https://evil.example/','android','https://inhuis.example'),null)
+assert.equal(retailerBrowserHandoff('https://inhuis.example/','iphone','https://inhuis.example'),null)
+assert.equal(retailerBrowserHandoff('javascript:alert(1)','android','https://inhuis.example'),null)
+assert.match(mobileHelp,/href=\{handoff\}/)
+assert.match(mobileHelp,/Kopieer Inhuis-adres/)
+assert.match(compactStyle,/\.rz-retailer-help-dialog\{grid-template-columns:minmax\(0,1fr\);max-width:100%/)

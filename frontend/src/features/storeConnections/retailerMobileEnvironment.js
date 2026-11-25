@@ -8,3 +8,19 @@ export function detectMobileRetailerEnvironment(agent = (typeof navigator !== 'u
   if (android) return { device: 'android', browser: /Chrome\/\d+/i.test(ua) && !/EdgA|OPR|SamsungBrowser|Firefox|\bwv\b|Version\/4\.0/i.test(ua) ? 'chrome' : 'other' }
   return { device: 'desktop', browser: 'desktop' }
 }
+
+// Explicit Android browser targeting avoids the installed PWA's same-origin
+// link capture. Never put session data in the handoff or trust it as proof.
+export function retailerBrowserHandoff(browserUrl, device, origin) {
+  try {
+    const url = new URL(browserUrl)
+    if (url.origin !== origin || !['http:', 'https:'].includes(url.protocol) ||
+        url.username || url.password) return null
+    if (device !== 'android') return null
+    return 'intent://' + url.host + url.pathname + url.search +
+      '#Intent;scheme=' + url.protocol.slice(0, -1) +
+      ';package=com.android.chrome;end'
+  } catch {
+    return null
+  }
+}
