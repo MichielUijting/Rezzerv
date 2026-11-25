@@ -81,19 +81,57 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     const later = await page.getByTestId('onboarding-stores-later').boundingBox()
     expect(later.x + later.width).toBeLessThanOrEqual(width + 1)
   }
-  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
-  await page.getByTestId('onboarding-store-row-ah').locator('label').click()
-  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
-  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
-  await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
-  const selectionResponse = await page.request.get('/api/onboarding/stores')
+  // Checkbox clicks never persist or refresh; several shops can be picked
+  // immediately, then adjusted locally before one explicit confirmation.
+  const selectionWrites = []
+  page.on('request', request => {
+    if (request.url().includes('/api/onboarding/stores/selection') && request.method() === 'PUT') {
+      selectionWrites.push(JSON.parse(request.postData()))
+    }
+  })
+  await page.evaluate(() => { window.__inhuisSelectionPageMarker = 'same-document' })
+  for (const code of ['ah', 'jumbo', 'lidl']) {
+    await page.getByTestId('onboarding-store-row-' + code).locator('label').click()
+    await expect(page.getByTestId('onboarding-select-' + code)).toBeChecked()
+    expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  }
+  expect(selectionWrites).toEqual([])
+  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  let selectionResponse = await page.request.get('/api/onboarding/stores')
   expect(selectionResponse.status()).toBe(200)
   expect(await selectionResponse.json()).toMatchObject({
-    available: true, selected: ['ah', 'lidl'], results: {},
+    available: true, selected: [], results: {},
+  })
+  for (const code of ['ah', 'jumbo']) {
+    await page.getByTestId('onboarding-store-row-' + code).locator('label').click()
+    await expect(page.getByTestId('onboarding-select-' + code)).not.toBeChecked()
+  }
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  expect(selectionWrites).toEqual([])
+
+  // Simulate slow server acknowledgement: no retailer flow may start while
+  // the single selection PUT is unresolved.
+  let permitSave
+  const saveGate = new Promise(resolve => { permitSave = resolve })
+  await page.route('**/api/onboarding/stores/selection', async route => {
+    await saveGate
+    await route.continue()
+  })
+  await page.getByTestId('onboarding-stores-start').click()
+  await expect.poll(() => selectionWrites.length).toBe(1)
+  expect(selectionWrites).toEqual([{ selected: ['lidl'] }])
+  await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
+  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  permitSave()
+  await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
+  await page.unroute('**/api/onboarding/stores/selection')
+  selectionResponse = await page.request.get('/api/onboarding/stores')
+  expect(selectionResponse.status()).toBe(200)
+  expect(await selectionResponse.json()).toMatchObject({
+    available: true, selected: ['lidl'], results: {},
   })
   await page.reload()
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
 
@@ -166,9 +204,11 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/onboarding/winkels')
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
-  await page.getByTestId('onboarding-store-row-ah').locator('label').click()
-  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-lidl')).not.toBeChecked()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await page.getByTestId('onboarding-stores-start').click()
   await expect(page.getByTestId('lidl-mobile-setup')).toHaveAttribute('data-browser', 'chrome')
   await expect(page.getByTestId('lidl-mobile-open-store')).toBeVisible()
