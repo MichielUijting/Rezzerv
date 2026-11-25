@@ -1300,7 +1300,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         {onboardingMode ? (
           storeOnboarding?.available ? (
             <StoreOnboardingSelection
-              selected={storeOnboarding.selected}
+              selected={visibleOnboardingSelection}
               results={storeOnboarding.results}
               busy={storeOnboardingBusy || isLoading || ahBusy || jumboImportBusy || lidlWindowSaving}
               onSelect={chooseOnboardingStore}
@@ -1424,7 +1424,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               setJumboImportCandidate(null)
               setJumboPocResult(null)
             }}
-            openHref={JUMBO_ORDERS_URL}
+            openHref={mobileRetailer ? undefined : JUMBO_ORDERS_URL}
             openTestId="jumbo-poc-open"
             onOpen={() => {
               setJumboPhase('waiting')
@@ -1432,6 +1432,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
               setJumboPocResult(null)
               setJumboImportCandidate(null)
+              if (mobileRetailer) openJumboFromInhuis()
             }}
             helpTestId="jumbo-help-open"
             onHelp={() => setSetupHelpStore('jumbo')}
@@ -1443,16 +1444,16 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'jumbo'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={jumboPocBookmarklet}
-                universalBookmarklet={onboardingMode ? universalBookmarklet : ''}
+                universalBookmarklet={universalBookmarklet}
                 setupKeys={setupKeys}
-                preparedCopy={onboardingMode ? preparedCopy : null}
+                preparedCopy={preparedCopy}
                 browserUrl={setupBrowserUrl}
                 valid={jumboPeriodValid}
-                onOpenStore={() => { setSetupHelpStore(''); window.location.assign(JUMBO_ORDERS_URL) }}
+                onOpenStore={() => { if (openJumboFromInhuis()) setSetupHelpStore('') }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
                 instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
-                  wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
-                  sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
+                  wanneer je op de website van Jumbo bent. Op desktop hoort bij een aangepaste periode
+                  nog de bijbehorende Jumbo-favoriet.</>}
               />
             }
           >
@@ -1509,9 +1510,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 open={setupHelpStore === 'lidl'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={lidlBookmarklet}
-                universalBookmarklet={onboardingMode ? universalBookmarklet : ''}
+                universalBookmarklet={universalBookmarklet}
                 setupKeys={setupKeys}
-                preparedCopy={onboardingMode ? preparedCopy : null}
+                preparedCopy={preparedCopy}
                 browserUrl={setupBrowserUrl}
                 onOpenStore={() => { void openLidlWithSavedPeriod().then(opened => { if (opened) setSetupHelpStore('') }) }}
                 onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('lidl') } : null}
