@@ -50,7 +50,8 @@ async function registerAndCompleteWatInhuis(page, email, accountPassword, househ
     await expect(row).toBeVisible()
     await expect(row).toHaveAttribute('data-result', 'neutral')
     await expect(page.getByTestId(`onboarding-select-${store}`)).not.toBeChecked()
-    await expect(row.locator('td')).toHaveCount(3)
+    // The store name is the semantic row header (th); two data cells follow.
+    await expect(row.locator('th, td')).toHaveCount(3)
   }
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.getByTestId('onboarding-stores-later').click()
