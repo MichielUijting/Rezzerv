@@ -1334,7 +1334,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               data-testid="onboarding-stores-back"
               onClick={() => setActiveProvider('')}
               disabled={ahBusy || jumboImportBusy || lidlWindowSaving}>
-              Terug naar winkelkeuze
+              Winkelkeuze
             </Button>
           </div>
         ) : null}
