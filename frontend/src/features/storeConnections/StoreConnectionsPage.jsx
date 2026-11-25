@@ -361,7 +361,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   // Checkbox clicks never call the backend, open a browser or navigate.
   function chooseOnboardingStore(provider, checked) {
     if (!storeOnboarding?.available || storeOnboardingBusy ||
-        storeOnboarding.results?.[provider] === 'success') return
+        ['success', 'empty'].includes(storeOnboarding.results?.[provider])) return
     setPendingStoreSelection(previous => {
       const current = previous ?? storeOnboarding.selected
       return ['ah', 'jumbo', 'lidl'].filter(code =>
@@ -379,10 +379,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
       if (next) {
         lastStoreAttemptRef.current = provider
-        setActiveProvider(next)
+        launchConfirmedOnboardingStore(confirmed)
       } else {
         setActiveProvider('')
-        onFinish?.()
+        if (confirmed.selected.every(code => ['success', 'empty'].includes(confirmed.results[code]))) {
+          onFinish?.()
+        }
       }
     } catch (err) {
       showFeedback({ variant: 'error', title: 'Winkel overslaan',
@@ -402,7 +404,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     url.searchParams.delete('inhuis_setup')
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
     if (['jumbo', 'lidl'].includes(provider) && storeOnboarding.selected.includes(provider) &&
-        storeOnboarding.results[provider] !== 'success') setActiveProvider(provider)
+        !['success', 'empty'].includes(storeOnboarding.results[provider])) setActiveProvider(provider)
   }, [onboardingMode, isLoading, storeOnboarding])
 
   // No second start screen after selecting stores. Do not cover a returned

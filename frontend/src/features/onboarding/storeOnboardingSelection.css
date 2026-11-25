@@ -13,7 +13,8 @@
 .rz-store-onboarding-mark--ah { background: #009FE3; color: #fff; }
 .rz-store-onboarding-mark--jumbo { background: #FFD200; color: #171717; }
 .rz-store-onboarding-mark--lidl { background: #0050AA; color: #fff; }
-.rz-store-onboarding-table tr[data-result="success"] { background: #e5f3e7; color: #164b29; }
+.rz-store-onboarding-table tr[data-result="success"],
+.rz-store-onboarding-table tr[data-result="empty"] { background: #e5f3e7; color: #164b29; }
 .rz-store-onboarding-table tr[data-result="failed"] { background: #fff0d9; color: #87420d; }
 .rz-store-onboarding-choice { position: relative; display: inline-flex; align-items: center; min-height: 32px; cursor: pointer; }
 .rz-store-onboarding-choice input { position: absolute; opacity: 0; width: 26px; height: 26px; margin: 0; }
