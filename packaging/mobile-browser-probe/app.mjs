@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
-import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboNavigationScript, acceptJumboNavigation, jumboNavigateScript } from './probe.mjs';
+import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboNavigationScript, acceptJumboNavigation } from './probe.mjs';
 
 const status = document.getElementById('status');
 const buttons = [...document.querySelectorAll('button')];
@@ -33,7 +33,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
-    ...(run.store === stores.jumbo ? ['Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
+    ...(run.store === stores.jumbo ? ['Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -59,7 +59,7 @@ async function initialize() {
     const run = active;
     if(acceptJumboNavigation(event,run)){
       run.navigationAttempted=true;
-      void InAppBrowser.executeScript({id:run.id,code:jumboNavigateScript()}).catch(()=>{run.scriptFailed=true;});
+      void InAppBrowser.setUrl({id:run.id,url:stores.jumbo.url}).then(()=>{run.navigationAccepted=true;}).catch(()=>{run.scriptFailed=true;});
       return;
     }
     const evidence = (run?.phase === 'history' || run?.phase === 'combined') ? acceptEvidence(event, run) : null;
