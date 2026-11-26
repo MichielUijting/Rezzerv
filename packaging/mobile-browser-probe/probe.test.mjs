@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import {stores, isHistoryUrl, probeScript, acceptEvidence} from './probe.mjs';
+import {stores, isHistoryUrl, probeScript, acceptEvidence, jumboNavigationScript, acceptJumboNavigation, jumboNavigateScript} from './probe.mjs';
 
 test('allow only exact HTTPS store history route', () => {
   for (const store of Object.values(stores)) {
@@ -61,4 +61,23 @@ test('Jumbo accepts exact orders redirect but not other origins, routes or Lidl 
  assert.deepEqual(evaluate(stores.lidl,{path:'/orders'}),[]);
  const active={id:'j',store:s,url:s.origin+'/orders',nonce:'n'};
  assert.deepEqual(acceptEvidence({id:'j',detail:{kind:'inhuis-history-probe',nonce:'n',history:true,markers:true}},active),{history:true,markers:true});
+});
+
+test('navigation needs current Jumbo view, nonce and positive evidence only once',()=>{
+ const r={store:stores.jumbo,phase:'combined',id:'j',nonce:'n',jumboOrigin:true};
+ const e={id:'j',detail:{kind:'inhuis-jumbo-navigation',nonce:'n',ready:true}};
+ assert.equal(acceptJumboNavigation(e,r),true);
+ for(const change of [{jumboOrigin:false},{navigationAttempted:true},{historyReached:true},{store:stores.lidl},{id:'other'},{nonce:'other'}])assert.equal(acceptJumboNavigation(e,{...r,...change}),false);
+});
+test('navigation script only uses visible retailer link after logout control is present',()=>{
+ for(const [logout,origin,path,expected] of [[true,'https://www.jumbo.com','/account',1],[false,'https://www.jumbo.com','/account',0],[true,'https://evil.example','/account',0],[true,'https://www.jumbo.com','/login',0]]){
+ let clicks=0;const messages=[];
+ const link={href:'https://www.jumbo.com/bestellingen',textContent:'Bestellingen',getClientRects:()=>[1],click:()=>clicks++};
+ const out={textContent:'Uitloggen',getClientRects:()=>[1]};
+ const document={querySelectorAll:s=>s.includes('password')?[]:s==='a[href]'?[link]:logout?[out]:[]};
+ const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
+ const ctx={window,document,location:{origin,pathname:path},URL};
+ vm.runInNewContext(jumboNavigationScript('n'),ctx);vm.runInNewContext(jumboNavigateScript(),ctx);
+ assert.equal(messages.length,expected);assert.equal(clicks,expected);
+ }
 });

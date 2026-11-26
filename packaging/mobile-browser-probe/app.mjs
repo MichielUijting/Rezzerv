@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
-import { stores, isHistoryUrl, probeScript, acceptEvidence } from './probe.mjs';
+import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboNavigationScript, acceptJumboNavigation, jumboNavigateScript } from './probe.mjs';
 
 const status = document.getElementById('status');
 const buttons = [...document.querySelectorAll('button')];
@@ -10,9 +10,12 @@ const listeners = [];
 function report(message) { status.textContent = message; }
 function busy(value) { buttons.forEach(button => { button.disabled = value; }); }
 async function inspect(run) {
-  if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || !isHistoryUrl(run.store, run.url) || run.inspecting) return;
+  if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || run.inspecting) return;
+  const history = isHistoryUrl(run.store,run.url);
+  const navigation = run.store===stores.jumbo && run.jumboOrigin && !run.navigationAttempted && !run.historyReached;
+  if(!history && !navigation) return;
   run.inspecting = true;
-  try { await InAppBrowser.executeScript({id: run.id, code: probeScript(run.store, run.nonce)}); }
+  try { await InAppBrowser.executeScript({id: run.id, code: history ? probeScript(run.store, run.nonce) : jumboNavigationScript(run.nonce)}); }
   catch { if (active === run) run.scriptFailed = true; }
   finally { run.inspecting = false; }
 }
@@ -30,7 +33,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
-    ...(run.store === stores.jumbo ? ['Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
+    ...(run.store === stores.jumbo ? ['Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -44,6 +47,7 @@ async function initialize() {
   listeners.push(await InAppBrowser.addListener('urlChangeEvent', event => {
     const run = active;
     if (!run || !run.id || event.id !== run.id) return;
+    if(run.store===stores.jumbo){try{const u=new URL(event.url);run.jumboOrigin=u.origin===run.store.origin && !u.username && !u.password;}catch{run.jumboOrigin=false;}}
     run.url = isHistoryUrl(run.store,event.url) ? run.store.origin + new URL(event.url).pathname : null;
     if (run.store === stores.jumbo && run.url) run.historyReached = true;
     void inspect(run);
@@ -53,8 +57,16 @@ async function initialize() {
   }));
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     const run = active;
+    if(acceptJumboNavigation(event,run)){
+      run.navigationAttempted=true;
+      void InAppBrowser.executeScript({id:run.id,code:jumboNavigateScript()}).catch(()=>{run.scriptFailed=true;});
+      return;
+    }
     const evidence = (run?.phase === 'history' || run?.phase === 'combined') ? acceptEvidence(event, run) : null;
-    if (evidence) run.evidence = {history:true,markers:Boolean(run.evidence?.markers || evidence.markers)};
+    if (evidence) {
+      run.evidence = {history:true,markers:Boolean(run.evidence?.markers || evidence.markers)};
+      if(run.store===stores.jumbo && evidence.markers && !run.closing){run.closing=true;void InAppBrowser.close({id:run.id}).catch(()=>{run.closing=false;run.scriptFailed=true;});}
+    }
   }));
   listeners.push(await InAppBrowser.addListener('closeEvent', event => {
     if (active?.id && event.id === active.id) finish(active);
