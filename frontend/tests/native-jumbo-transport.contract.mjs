@@ -16,6 +16,11 @@ assert.equal(acceptsNativeJumboMessage(relay, channel, 'other'), false)
 assert.equal(acceptsNativeJumboMessage({ detail: { ...relay.detail, channel: 'other' } }, channel, nonce), false)
 assert.equal(acceptsNativeJumboMessage({ detail: { ...relay.detail, data: { type: 'unsafe' } } }, channel, nonce), false)
 assert.equal(startNativeJumboTransport({}), null)
+// The native start message must always carry the immutable Inhuis context.
+const source = await import('node:fs').then(fs => fs.readFileSync(
+  new URL('../src/features/storeConnections/nativeJumboTransport.js', import.meta.url), 'utf8'))
+assert.match(source, /inhuis-native-jumbo-start', binding: boundContext/)
+
 assert.equal(startNativeJumboTransport({ __inhuisNativeShell: { version: 1, channel },
   mobileApp: { postMessage() {} }, crypto: { randomUUID: () => nonce } }), null)
 console.log('Native Jumbo transport checks: OK')

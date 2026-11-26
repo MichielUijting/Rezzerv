@@ -60,7 +60,7 @@ export function startNativeJumboTransport(win = globalThis.window) {
   source.expectedContext = boundContext
   win.addEventListener(INHUIS_NATIVE_EVENT, relay)
   win.addEventListener(AUTH_CONTEXT_CHANGED_EVENT, authChanged)
-  if (!post({ kind: 'inhuis-native-jumbo-start' })) {
+  if (!post({ kind: 'inhuis-native-jumbo-start', binding: boundContext })) {
     source.close()
     return null
   }

@@ -124,12 +124,45 @@ async function installOpenerAndScript(run, script) {
   run.scriptInjected = true
   await InAppBrowser.executeScript({ id: run.id, code: script })
 }
+// Persist only a salted-free, nonreversible context digest, never an Inhuis
+// password/session cookie or a Jumbo token. All browsing data must be cleared
+// before a different Inhuis identity can reuse persistent Jumbo login state.
+const JUMBO_OWNER_KEY = 'inhuis-jumbo-owner-sha256'
+async function safeJumboOwner(binding) {
+  if (!binding || !/^[^\\s]{1,128}$/.test(String(binding.userId || '')) ||
+      !/^[^\\s]{1,128}$/.test(String(binding.householdId || '')) ||
+      String(binding.householdId) === '0') return false
+  const bytes = new TextEncoder().encode(JSON.stringify([
+    binding.userId, binding.householdId,
+  ]))
+  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map(byte => byte.toString(16).padStart(2, '0')).join('')
+  const old = localStorage.getItem(JUMBO_OWNER_KEY)
+  if (old && old !== digest) {
+    // CookieManager/WebStorage are process-wide on Android. Selectively
+    // clearing one WebView cannot prove an old Jumbo OAuth session is gone.
+    // Clear and refuse this run; the user signs into Inhuis afresh.
+    await InAppBrowser.clearAllBrowsingData()
+    localStorage.setItem(JUMBO_OWNER_KEY, digest)
+    say('Andere Inhuis-gebruiker of ander huishouden. Bewaarde winkelsessies zijn gewist. Meld je opnieuw aan bij Inhuis en probeer Jumbo opnieuw.')
+    return false
+  }
+  localStorage.setItem(JUMBO_OWNER_KEY, digest)
+  return true
+}
 async function handleInhuisMessage(event) {
   const runShell = inhuis
   const d = event?.detail
   if (!runShell || !validShellMessage(event, runShell.id, runShell.channel, runShell.origin, d)) return
   if (d.kind === 'inhuis-native-jumbo-start') {
     if (jumbo || opening) return
+    opening = true
+    try {
+      if (!await safeJumboOwner(d.binding)) return
+    } catch {
+      say('Jumbo is voor dit Inhuis-account geblokkeerd: de oude winkelsessie kon niet veilig worden gewist.')
+      return
+    } finally { opening = false }
     opening = true
     const run = {
       store, phase: 'combined', manual: false, id: null, url: null,
