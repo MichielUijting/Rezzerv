@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
-import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboNavigationScript, acceptJumboNavigation } from './probe.mjs';
+import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript } from './probe.mjs';
 
 const status = document.getElementById('status');
 const buttons = [...document.querySelectorAll('button')];
@@ -12,10 +12,10 @@ function busy(value) { buttons.forEach(button => { button.disabled = value; }); 
 async function inspect(run) {
   if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || run.inspecting) return;
   const history = isHistoryUrl(run.store,run.url);
-  const navigation = run.store===stores.jumbo && run.jumboOrigin && !run.navigationAttempted && !run.historyReached;
+  const navigation = run.store===stores.jumbo && run.jumboOrigin && !history;
   if(!history && !navigation) return;
   run.inspecting = true;
-  try { await InAppBrowser.executeScript({id: run.id, code: history ? probeScript(run.store, run.nonce) : jumboNavigationScript(run.nonce)}); }
+  try { await InAppBrowser.executeScript({id: run.id, code: history ? probeScript(run.store, run.nonce) : jumboStateScript(run.nonce)}); }
   catch { if (active === run) run.scriptFailed = true; }
   finally { run.inspecting = false; }
 }
@@ -33,7 +33,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
-    ...(run.store === stores.jumbo ? ['Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
+    ...(run.store === stores.jumbo ? ['Cookievenster gezien: ' + (run.cookieSeen ? 'JA' : 'NIET AANGETOOND'), 'Aanmeldbediening geprobeerd: ' + (run.loginAttempted ? 'JA' : 'NEE'), 'Aanmeldformulier gezien: ' + (run.loginSeen ? 'JA' : 'NIET AANGETOOND'), 'Laatste processtap: ' + ({cookies:'Cookiekeuze',login:'Aanmelden',authenticated:'Aanmeldindicatie',login_available:'Aanmeldknop',unknown:'Onbekend'}[run.jumboState] || 'Onbekend'), 'Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -57,9 +57,11 @@ async function initialize() {
   }));
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     const run = active;
-    if(acceptJumboNavigation(event,run)){
-      run.navigationAttempted=true;
-      void InAppBrowser.setUrl({id:run.id,url:stores.jumbo.url}).then(()=>{run.navigationAccepted=true;}).catch(()=>{run.scriptFailed=true;});
+    const state=acceptJumboState(event,run);
+    if(state){
+      const action=jumboTransition(run,state);
+      if(action==='history')void InAppBrowser.setUrl({id:run.id,url:stores.jumbo.url}).then(()=>{run.navigationAccepted=true;}).catch(()=>{run.scriptFailed=true;});
+      if(action==='login')void InAppBrowser.executeScript({id:run.id,code:jumboOpenLoginScript()}).catch(()=>{run.scriptFailed=true;});
       return;
     }
     const evidence = (run?.phase === 'history' || run?.phase === 'combined') ? acceptEvidence(event, run) : null;

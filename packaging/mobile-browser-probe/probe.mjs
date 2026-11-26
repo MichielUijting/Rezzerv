@@ -40,19 +40,43 @@ export function acceptEvidence(event, active) {
 }
 
 
-export function jumboNavigationScript(nonce) {
- const c=JSON.stringify({origin:stores.jumbo.origin,nonce});
+
+export function jumboStateScript(nonce) {
+ const config=JSON.stringify({origin:stores.jumbo.origin,nonce});
  return `(() => {
- const c=${c};
- if(window.top!==window || location.origin!==c.origin || /login|signin|oauth|auth/i.test(location.pathname)) return;
- if(typeof window.mobileApp?.postMessage!=='function') return;
- const visible=e=>e.getClientRects().length>0;
- if(Array.from(document.querySelectorAll('input[type="password"],input[autocomplete="username"],input[type="email"]')).some(visible)) return;
+ const c=${config};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
+ const text=e=>(e.textContent||'').trim();
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(text(e)) || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
  const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
- const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()));
- if(logout) window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-navigation',nonce:c.nonce,ready:true}});
+ const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test(text(e)));
+ const login=controls.find(e=>/^(inloggen|aanmelden|log in)$/i.test(text(e)) && !e.closest('[role=dialog],[aria-modal=true]'));
+ const state=cookie?'cookies':forms||/login|signin|oauth|auth/i.test(location.pathname)?'login':logout?'authenticated':login?'login_available':'unknown';
+ window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-state',nonce:c.nonce,state}});
  })();`;
 }
-export function acceptJumboNavigation(event,run) {
- return Boolean(run && run.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && !run.navigationAttempted && !run.historyReached && event.detail?.kind==='inhuis-jumbo-navigation' && event.detail.nonce===run.nonce && event.detail.ready===true);
+export function acceptJumboState(event,run) {
+ const d=event?.detail;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','unknown'].includes(d.state) ? d.state : null;
+}
+export function jumboTransition(run,state) {
+ run.jumboState=state;
+ if(state==='cookies'){run.cookieSeen=true;return null;}
+ if(state==='login'){run.loginSeen=true;return null;}
+ if(state==='authenticated' && !run.navigationAttempted && !run.historyReached){run.navigationAttempted=true;return 'history';}
+ if(state==='login_available' && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.loginAttempted=true;return 'login';}
+ return null;
+}
+// Recheck the live DOM before clicking only the retailer's visible sign-in control.
+export function jumboOpenLoginScript(){
+ return `(() => {
+ if(window.top!==window || location.origin!=='https://www.jumbo.com' || /login|signin|oauth|auth/i.test(location.pathname))return;
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
+ if(Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||'')))return;
+ if(Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible))return;
+ const control=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).find(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()) && !e.closest('[role=dialog],[aria-modal=true]'));
+ if(control)control.click();
+ })();`;
 }

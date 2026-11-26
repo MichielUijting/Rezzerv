@@ -37,3 +37,6 @@ PO bevestigt eigen bonnen zichtbaar na handmatige navigatie op 0.1.2. De proef z
 
 ## 0.1.4 — Jumbo native navigatie
 Publieke Jumbo-startpagina https://www.jumbo.com/?login=true is gevonden; automatisch tonen van login nog niet op Android bewezen. Gebruik native setUrl met bestaande view-ID na zichtbare uitlogbediening, nooit op login of bij zichtbare credentialvelden. Geen automatische klik meer. Screenshot toont Bestellingen, Afgerond en een gedateerde winkelregel; herkenning vereist titel plus afgeronde regel of expliciete lege historie. DOM-structuur van de regel/lege tekst blijft een hypothese. Geen bondata-export, geen API-verzoek; Lidl behouden. TEST_LEVEL_PROVISIONAL: L.
+
+## 0.1.5 — Jumbo cookie- en aanmeldstappen
+Herken zichtbare bekende cookie-dialogen vóór andere acties, wacht op gebruikerskeuze, klik maximaal één keer op zichtbare officiële aanmeldbediening, wacht op uitlogindicatie en navigeer daarna native naar historie. Geen cookiekeuze door app, geen uitlezen van invoerwaarden. Diagnostiek rapporteert uitsluitend toestandslabels en booleans. Selectors zijn nog niet op echte Jumbo DOM bewezen; herhaalde cookieprompt en sessiepersistentie blijven onderwerp van PO-test, geen wijziging aan cookieopslag. Lidl ongewijzigd. TEST_LEVEL_PROVISIONAL: L.
