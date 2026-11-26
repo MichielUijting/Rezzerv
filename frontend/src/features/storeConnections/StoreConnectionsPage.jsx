@@ -23,6 +23,7 @@ import {
 import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, copyRetailerBookmarklet } from './universalRetailerBookmarklet.js'
 import { JUMBO_WEB_ORIGIN, buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
+import { snapshotJumboImportContext, jumboImportContextHeaders, verifyJumboImportContext } from './jumboImportContext.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
@@ -719,6 +720,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           storeOnboarding?.results?.jumbo === 'success')) return
       const sourceWindow = event.source
       try {
+        const expectedContext = snapshotJumboImportContext(await fetchJson('/api/session'))
         const response = await fetchJson('/api/receipts/retailers/last-updated')
         if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
         if (!response?.dates || typeof response.dates !== 'object' ||
@@ -727,7 +729,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
         const baseline = currentJumboImportPeriod(response.dates.jumbo)
         const reserved = await fetchJson('/api/receipts/retailers/jumbo/history/begin', {
-          method: 'POST', body: JSON.stringify({}),
+          method: 'POST', headers: jumboImportContextHeaders(expectedContext), body: JSON.stringify({}),
         })
         if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
         const period = jumboDateWindow(reserved?.from_date, reserved?.to_date)
@@ -744,6 +746,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         ).slice('javascript:'.length))
         jumboAutomaticRunRef.current = {
           requestId: data.request_id, runId: reserved.run_id, source: sourceWindow,
+          expectedContext,
           period, queued: [], seen: new Set(), index: 0, received: 0,
           busy: false, failed: false, complete: false,
         }
@@ -816,11 +819,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             throw new Error('Jumbo leverde hetzelfde bonnummer in meerdere deelperioden.')
           }
           run.busy = true
+          const boundHeaders = await verifyJumboImportContext(run.expectedContext, () => fetchJson('/api/session'))
           const queue = await stageJumboBatch(
             { ok: true, version: JUMBO_BOOKMARKLET_VERSION,
               source_origin: JUMBO_WEB_ORIGIN, details: data.details },
             async (envelopes) => fetchJson('/api/receipts/retailers/import-queue', {
-              method: 'POST', body: JSON.stringify(envelopes),
+              method: 'POST', headers: boundHeaders, body: JSON.stringify(envelopes),
             }),
             buildJumboImportEnvelope,
           )
@@ -855,8 +859,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
         run.complete = true
         try {
+          const boundHeaders = await verifyJumboImportContext(run.expectedContext, () => fetchJson('/api/session'))
           const result = await fetchJson('/api/receipts/retailers/jumbo/history/complete', {
-            method: 'POST',
+            method: 'POST', headers: boundHeaders,
             body: JSON.stringify({ run_id: run.runId, queue_ids: run.queued }),
           })
           if (result?.scan_complete !== true || result.staged_receipts !== run.received) {

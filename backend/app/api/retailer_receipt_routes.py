@@ -123,6 +123,43 @@ def _authorized_household_id(authorization: str | None) -> str:
     return household_context.active_household_id
 
 
+def _check_expected_retailer_context(
+    runtime_context: dict, expected_user: str | None, expected_household: str | None,
+) -> str:
+    """Only a backend-confirmed matching user/household may accept a bound import.
+
+    This is an extra context-match check, never a replacement for authentication.
+    Legacy browser and Lidl clients which send neither header keep the existing
+    authorization route. Partial headers and mismatches fail closed.
+    """
+    actual_household = str(runtime_context.get("active_household_id") or "").strip()
+    if expected_user is None and expected_household is None:
+        return actual_household
+    actual_user = str(runtime_context.get("user_id") or "").strip()
+    if (
+        not expected_user or not expected_household
+        or len(expected_user) > 128 or len(expected_household) > 128
+        or expected_user != actual_user or expected_household != actual_household
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Inhuis-gebruiker of huishouden is veranderd; winkelimport veilig gestopt.",
+        )
+    return actual_household
+
+
+def _import_bound_household_id(
+    authorization: str | None, expected_user: str | None, expected_household: str | None,
+) -> str:
+    from app.main import require_household_context
+
+    runtime_context = require_household_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    _check_expected_retailer_context(runtime_context, expected_user, expected_household)
+    # The authorized household remains the backend-derived authority.
+    return household_context.active_household_id
+
+
 @router.get("/history-progress")
 def get_retailer_history_progress(authorization: Optional[str] = Header(None)):
     """Observed Kassa/queue history for the authorized active household only."""
@@ -156,8 +193,12 @@ class JumboHistoryCompleteRequest(BaseModel):
 
 
 @router.post("/jumbo/history/begin")
-def begin_jumbo_history_import(authorization: Optional[str] = Header(None)):
-    household_id = _authorized_household_id(authorization)
+def begin_jumbo_history_import(
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         return begin_jumbo_history(engine, household_id)
     except ValueError as exc:
@@ -168,8 +209,10 @@ def begin_jumbo_history_import(authorization: Optional[str] = Header(None)):
 def complete_jumbo_history_import(
     payload: JumboHistoryCompleteRequest,
     authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
 ):
-    household_id = _authorized_household_id(authorization)
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         return complete_jumbo_history(
             engine, household_id, run_id=payload.run_id, queue_ids=payload.queue_ids,
@@ -255,9 +298,11 @@ def import_structured_retailer_receipt(
 def stage_structured_retailer_receipts(
     payload: list[RetailerReceiptEnvelope],
     authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
 ):
     """Durably accept confirmed receipts; does NOT claim Kassa completion."""
-    household_id = _authorized_household_id(authorization)
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         rows = stage_confirmed_receipts(
             engine, household_id=household_id, envelopes=payload,
