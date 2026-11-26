@@ -24,6 +24,7 @@ import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobil
 import { JUMBO_WEB_ORIGIN, buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { snapshotJumboImportContext, jumboImportContextHeaders, verifyJumboImportContext } from './jumboImportContext.js'
+import { nativeJumboShell, startNativeJumboTransport } from './nativeJumboTransport.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
@@ -50,6 +51,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [activeProvider, setActiveProvider] = useState('')
   const expectedLidlWindowRef = useRef(null)
   const expectedJumboWindowRef = useRef(null)
+  const nativeJumboTransportRef = useRef(null)
+  const nativeJumbo = Boolean(nativeJumboShell())
   const jumboAutomaticRunRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
   const [pendingStoreSelection, setPendingStoreSelection] = useState(null)
@@ -414,11 +417,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   // No second start screen after selecting stores. Do not cover a returned
   // Jumbo import preview with the installation guide.
   useEffect(() => {
-    if (onboardingMode && mobileRetailer && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
+    if (onboardingMode && mobileRetailer && !(nativeJumbo && activeProvider === 'jumbo') && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
         !(activeProvider === 'jumbo' && jumboReturningRef.current)) {
       setSetupHelpStore(activeProvider)
     }
-  }, [activeProvider, onboardingMode, mobileRetailer])
+  }, [activeProvider, onboardingMode, mobileRetailer, nativeJumbo]
 
   function launchConfirmedOnboardingStore(confirmed, preparedPromise = null) {
     const code = nextStoreForOnboarding(
@@ -435,13 +438,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       return
     }
     jumboReturningRef.current = false
-    if (mobileRetailer) {
+    if (mobileRetailer && !(nativeJumbo && code === 'jumbo')) {
       const value = universalBookmarklet
       if (value && !hasMobileBookmarkletSetup(setupKeys[code])) {
         setPreparedCopy(preparedPromise ? { value, promise: preparedPromise } : null)
       } else setPreparedCopy(null)
     }
-    setSetupHelpStore(code)
+    setSetupHelpStore(nativeJumbo && code === 'jumbo' ? '' : code)
     setActiveProvider(code)
   }
 
@@ -452,7 +455,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     if (!code) return
     // Clipboard activation runs during the click, not after an awaited PUT.
     // Copying only prepares a favorite: it never starts retailer login/import.
-    const preparedPromise = mobileRetailer && ['jumbo', 'lidl'].includes(code) &&
+    const preparedPromise = mobileRetailer && !(nativeJumbo && code === 'jumbo') && ['jumbo', 'lidl'].includes(code) &&
       !hasMobileBookmarkletSetup(setupKeys[code])
       ? copyRetailerBookmarklet(universalBookmarklet) : null
     setStoreOnboardingBusy(true)
@@ -475,6 +478,18 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   // Open the retailer window synchronously within its user click. Jumbo's
   // favorite will request a fresh window from THIS authenticated opener.
   function openJumboFromInhuis() {
+    if (nativeJumboShell()) {
+      nativeJumboTransportRef.current?.close()
+      const transport = startNativeJumboTransport()
+      if (!transport) {
+        showFeedback({ variant: 'error', title: 'Jumbo openen',
+          message: 'De veilige native Jumbo-browser is niet beschikbaar.' })
+        return false
+      }
+      nativeJumboTransportRef.current = transport
+      expectedJumboWindowRef.current = transport
+      return true
+    }
     if (!mobileRetailer && !onboardingMode) {
       window.location.assign(JUMBO_ORDERS_URL)
       return true
@@ -742,7 +757,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         // have meanwhile appeared in Kassa.
         const script = decodeURIComponent(buildJumboPocBookmarklet(
           window.location.origin + window.location.pathname, period,
-          { automatic: true, requestId: data.request_id, inhuisOrigin: window.location.origin },
+          { automatic: true, nativeBridge: sourceWindow === nativeJumboTransportRef.current,
+            requestId: data.request_id, inhuisOrigin: window.location.origin },
         ).slice('javascript:'.length))
         jumboAutomaticRunRef.current = {
           requestId: data.request_id, runId: reserved.run_id, source: sourceWindow,
@@ -773,8 +789,17 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         })
       }
     }
+    const handleNative = event => {
+      const relay = event.detail
+      if (relay?.origin === JUMBO_WEB_ORIGIN) void handleJumboHandshake(relay)
+    }
     window.addEventListener('message', handleJumboHandshake)
-    return () => { cancelled = true; window.removeEventListener('message', handleJumboHandshake) }
+    window.addEventListener('inhuis-jumbo-native-message', handleNative)
+    return () => {
+      cancelled = true
+      window.removeEventListener('message', handleJumboHandshake)
+      window.removeEventListener('inhuis-jumbo-native-message', handleNative)
+    }
   }, [activeProvider, onboardingMode, storeOnboarding, showFeedback])
 
   // Mobile Jumbo sends one existing <=10 receipt queue batch at a time.
@@ -883,8 +908,16 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
       }
     }
+    const handleNative = event => {
+      const relay = event.detail
+      if (relay?.origin === JUMBO_WEB_ORIGIN) void handleAutomaticJumbo(relay)
+    }
     window.addEventListener('message', handleAutomaticJumbo)
-    return () => window.removeEventListener('message', handleAutomaticJumbo)
+    window.addEventListener('inhuis-jumbo-native-message', handleNative)
+    return () => {
+      window.removeEventListener('message', handleAutomaticJumbo)
+      window.removeEventListener('inhuis-jumbo-native-message', handleNative)
+    }
   }, [activeProvider, onboardingMode, showFeedback])
 
   useEffect(() => {
@@ -1649,13 +1682,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             onOpen={() => {
               setJumboPhase('waiting')
               setJumboProgress(null)
-              setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
+              setJumboPocProgress(nativeJumbo ? 'Jumbo wordt geopend. Inhuis haalt de bonnen daarna automatisch op.' : 'Open op Jumbo de favoriet om de kassabonnen op te halen.')
               setJumboPocResult(null)
               setJumboImportCandidate(null)
               if (mobileRetailer || onboardingMode) openJumboFromInhuis()
             }}
             helpTestId="jumbo-help-open"
-            onHelp={() => setSetupHelpStore('jumbo')}
+            onHelp={nativeJumbo ? undefined : () => setSetupHelpStore('jumbo')}
             periodError={!mobileRetailer && !onboardingMode && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
             setupHelp={
               <RetailerBookmarkletHelp
