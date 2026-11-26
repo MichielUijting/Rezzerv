@@ -86,7 +86,9 @@ test('cookie choice blocks automation; login and history are each attempted only
  assert.equal(jumboTransition(r,'login_available'),null);
  assert.equal(jumboTransition(r,'login'),null);
  assert.equal(r.loginSeen,true);
- assert.equal(jumboTransition(r,'authenticated'),'history');
+ assert.equal(jumboTransition(r,'authenticated'),null);
+ assert.equal(jumboTransition(r,'receipts_available'),'receipts');
+ assert.equal(jumboTransition(r,'receipts_available'),null);
  assert.equal(jumboTransition(r,'authenticated'),null);
 });
 test('state evidence requires exact active Jumbo view and nonce',()=>{
@@ -156,6 +158,23 @@ test('Jumbo opens official account before sign-in, at most one of each, never du
  assert.equal(jumboTransition(r,'login_available'),'login');
  assert.equal(jumboTransition(r,'login_available'),null);
  assert.equal(jumboTransition(r,'login'),null);
- assert.equal(jumboTransition(r,'authenticated'),'history');
  assert.equal(jumboTransition(r,'authenticated'),null);
+ assert.equal(jumboTransition(r,'receipts_available'),'receipts');
+ assert.equal(jumboTransition(r,'receipts_available'),null);
+ assert.equal(jumboTransition(r,'authenticated'),null);
+});
+
+test('receipt navigation uses one visible retailer control, never a guessed route',()=>{
+ let count=0;const messages=[];
+ const control={textContent:'Bonnetjes',getClientRects:()=>[1],getAttribute:()=>null,closest:()=>null,click:()=>count++};
+ const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
+ const document={querySelectorAll:s=>s==='a,button,[role=button]'?[control]:[]};
+ const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
+ vm.runInNewContext(jumboStateScript('n'),ctx);
+ assert.equal(messages[0].detail.state,'receipts_available');
+ vm.runInNewContext(jumboOpenLoginScript('n','receipts'),ctx);
+ assert.equal(count,1);assert.equal(messages[1].detail.acted,true);
+});
+test('error state permanently blocks automatic Jumbo actions for current run',()=>{
+ const r={};assert.equal(jumboTransition(r,'error'),null);assert.equal(jumboTransition(r,'receipts_available'),null);assert.equal(jumboTransition(r,'account_available'),null);
 });

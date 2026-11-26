@@ -1,5 +1,5 @@
 export const stores = Object.freeze({
-  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/?login=true', origin: 'https://www.jumbo.com', path: '/bestellingen', alternatePath: '/orders', url: 'https://www.jumbo.com/bestellingen' }),
+  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/', origin: 'https://www.jumbo.com', path: '/bestellingen', alternatePath: '/orders', url: 'https://www.jumbo.com/bestellingen' }),
   lidl: Object.freeze({ name: 'Lidl', startUrl: 'https://www.lidl.nl/', origin: 'https://www.lidl.nl', path: '/mre/purchase-history', url: 'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1' })
 });
 export function isHistoryUrl(store, value) {
@@ -22,7 +22,7 @@ export function probeScript(store, nonce) {
         // A header or a generic "Kassabonnen" link is not evidence of accessible history.
         const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,[role=heading]'))
           .map(e => (e.textContent || '').trim());
-        const title = headings.some(t => /^(mijn\\s+)?bestellingen$/i.test(t));
+        const title = headings.some(t => /^(mijn\\s+)?(bestellingen( en bonnen)?|bonnetjes)$/i.test(t));
         const completed = headings.some(t => /^afgerond$/i.test(t));
         const rows = Array.from(document.querySelectorAll('main a,main button,main [role=button],main article,main li'))
           .some(e => {
@@ -34,7 +34,7 @@ export function probeScript(store, nonce) {
           .some(e => /^(je hebt nog geen (bestellingen|kassabonnen)|geen bestellingen gevonden)[.!]?$/i.test((e.textContent || '').trim()));
         const loginForm = Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username]'))
           .some(e => e.getClientRects?.().length > 0);
-        return title && !loginForm && ((completed && rows) || empty);
+        return title && !headings.some(t=>/^deze pagina bestaat niet$/i.test(t)) && !loginForm && ((completed && rows) || empty);
       })();
     window.mobileApp.postMessage({detail:{kind:'inhuis-history-probe',nonce:c.nonce,history:true,markers:Boolean(markers)}});
   })();`;
@@ -60,24 +60,29 @@ export function jumboStateScript(nonce) {
    .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
  const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
  const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
+ const failed=Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^deze pagina bestaat niet$/i.test((e.textContent||'').trim()));
+ const receipts=controls.filter(e=>/^(bonnetjes|bestellingen en bonnen)$/i.test(label(e)) && !e.closest('form,[role=dialog],[aria-modal=true]'));
  const header=controls.filter(e=>e.closest('header,[role=banner]'));
  const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test(label(e)));
  const signIn=header.some(e=>/^(inloggen|aanmelden|log in)$/i.test(label(e)));
  const account=header.some(e=>/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test(label(e)));
  const state=cookie?'cookies':forms||/login|signin|oauth|auth/i.test(location.pathname)?'login':
-   logout?'authenticated':signIn?'login_available':account?'account_available':'unknown';
+   failed?'error':receipts.length===1?'receipts_available':logout?'authenticated':signIn?'login_available':account?'account_available':'unknown';
  window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-state',nonce:c.nonce,state}});
  })();`;
 }
 export function acceptJumboState(event,run) {
  const d=event?.detail;
- return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','account_available','unknown'].includes(d.state) ? d.state : null;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','account_available','receipts_available','error','unknown'].includes(d.state) ? d.state : null;
 }
 export function jumboTransition(run,state) {
  run.jumboState=state;
  if(state==='cookies'){run.cookieSeen=true;return null;}
  if(state==='login'){run.loginSeen=true;return null;}
- if(state==='authenticated' && !run.navigationAttempted && !run.historyReached){run.navigationAttempted=true;return 'history';}
+ if(state==='error'){run.blocked=true;return null;}
+ if(run.blocked)return null;
+ if(state==='receipts_available' && !run.navigationAttempted && !run.historyReached){run.navigationAttempted=true;return 'receipts';}
+ // Logout alone does not establish a valid destination. Wait for retailer navigation.
  if(state==='login_available' && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.loginAttempted=true;return 'login';}
  if(state==='account_available' && !run.accountAttempted && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.accountAttempted=true;return 'account';}
  return null;
@@ -94,11 +99,12 @@ export function jumboOpenLoginScript(nonce, action='login'){
  const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible)
    .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
  const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
- const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).filter(e=>e.closest('header,[role=banner]'));
- const expected=c.action==='account'?/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i:/^(inloggen|aanmelden|log in)$/i;
- const matches=controls.filter(e=>expected.test(label(e)) && !e.closest('[role=dialog],[aria-modal=true]'));
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).filter(e=>c.action==='receipts' || e.closest('header,[role=banner]'));
+ const failed=Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^deze pagina bestaat niet$/i.test((e.textContent||'').trim()));
+ const expected=c.action==='receipts'?/^(bonnetjes|bestellingen en bonnen)$/i:c.action==='account'?/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i:/^(inloggen|aanmelden|log in)$/i;
+ const matches=controls.filter(e=>expected.test(label(e)) && !e.closest('form,[role=dialog],[aria-modal=true]'));
  let acted=false;
- if(!cookie && !forms && !/login|signin|oauth|auth/i.test(location.pathname) && matches.length===1){
+ if(!failed && !cookie && !forms && !/login|signin|oauth|auth/i.test(location.pathname) && matches.length===1){
   try {matches[0].click();acted=true;} catch {}
  }
  window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-action',nonce:c.nonce,action:c.action,acted}});
@@ -107,7 +113,7 @@ export function jumboOpenLoginScript(nonce, action='login'){
 export function acceptJumboAction(event,run){
  const d=event?.detail;
  return run?.store===stores.jumbo && run.phase==='combined' && run.id===event?.id && run.jumboOrigin &&
-   d?.kind==='inhuis-jumbo-action' && d.nonce===run.nonce && ['login','account'].includes(d.action) &&
+   d?.kind==='inhuis-jumbo-action' && d.nonce===run.nonce && ['login','account','receipts'].includes(d.action) &&
    typeof d.acted==='boolean' ? {action:d.action,acted:d.acted} : null;
 }
 
@@ -137,7 +143,8 @@ export function diagnosticScript(nonce) {
  const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
  const login=controls.filter(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()));
  const account=controls.filter(e=>e.closest('header,[role=banner]') && /^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim()));
- const state=cookie?'Cookievenster zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':account.length>1?'Meerdere accountbedieningen':account.length===1?'Accountbediening in kop':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
+ const receiptControl=controls.some(e=>/^(bonnetjes|bestellingen en bonnen)$/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim()));
+ const state=cookie?'Cookievenster zichtbaar':receiptControl?'Bonnetjesbediening zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':account.length>1?'Meerdere accountbedieningen':account.length===1?'Accountbediening in kop':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
  if(window.__inhuisDiagState!==state){window.__inhuisDiagState=state;send(state);}
  if(window.__inhuisDiagNonce===c.nonce)return;
  window.__inhuisDiagNonce=c.nonce;
@@ -154,6 +161,6 @@ export function diagnosticScript(nonce) {
 }
 export function acceptDiagnostic(event,run){
  const d=event?.detail;
- const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Meerdere accountbedieningen','Accountbediening in kop','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
+ const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Meerdere accountbedieningen','Accountbediening in kop','Bonnetjesbediening zichtbaar','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
  return run?.phase==='diagnose' && run.store===stores.jumbo && run.id===event?.id && run.jumboOrigin && d?.kind==='inhuis-jumbo-diagnostic' && d.nonce===run.nonce && allowed.includes(d.label)?d.label:null;
 }

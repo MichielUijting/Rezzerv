@@ -35,7 +35,7 @@ function finish(run, failure = false) {
   if(run.phase==='diagnose'){
     const previous=previousDiagnosticCookie;
     previousDiagnosticCookie=run.cookieSeen;
-    report(['Jumbo diagnose 0.1.7','Cookievenster gezien: '+(run.cookieSeen?'JA':'NIET AANGETOOND'),'Vorige diagnose in deze appsessie: '+(previous===null?'geen':previous?'cookievenster gezien':'cookievenster niet gezien'),'Nieuw browservenster: '+(run.popupSeen?'JA':'NIET AANGETOOND'),'Volgorde van waarnemingen:',...run.trace,'Geen wachtwoorden, cookie-inhoud, URL-parameters of bongegevens opgeslagen.'].join(String.fromCharCode(10)));
+    report(['Jumbo diagnose 0.1.8','Cookievenster gezien: '+(run.cookieSeen?'JA':'NIET AANGETOOND'),'Vorige diagnose in deze appsessie: '+(previous===null?'geen':previous?'cookievenster gezien':'cookievenster niet gezien'),'Nieuw browservenster: '+(run.popupSeen?'JA':'NIET AANGETOOND'),'Volgorde van waarnemingen:',...run.trace,'Geen wachtwoorden, cookie-inhoud, URL-parameters of bongegevens opgeslagen.'].join(String.fromCharCode(10)));
     return;
   }
   if (run.phase === 'login') {
@@ -47,7 +47,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
-    ...(run.store === stores.jumbo ? ['Cookievenster gezien: ' + (run.cookieSeen ? 'JA' : 'NIET AANGETOOND'), 'Accountbediening geprobeerd: ' + (run.accountAttempted ? 'JA' : 'NEE'), 'Accountklik uitgevoerd: ' + (run.accountClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldbediening geprobeerd: ' + (run.loginAttempted ? 'JA' : 'NEE'), 'Aanmeldklik uitgevoerd: ' + (run.loginClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldformulier gezien: ' + (run.loginSeen ? 'JA' : 'NIET AANGETOOND'), 'Laatste processtap: ' + ({cookies:'Cookiekeuze',login:'Aanmelden',authenticated:'Aanmeldindicatie',login_available:'Aanmeldknop',account_available:'Accountbediening',unknown:'Onbekend'}[run.jumboState] || 'Onbekend'), 'Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Historiepagina geladen: ' + (run.historyLoaded ? 'JA' : 'NEE'), 'Geverifieerde historie: ' + (run.evidence?.markers ? 'JA' : 'NEE'), 'Terugkeer: ' + (run.autoCloseRequested && run.evidence?.markers ? 'AUTOMATISCH' : failure ? 'TECHNISCHE FOUT' : 'HANDMATIG / GEANNULEERD'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
+    ...(run.store === stores.jumbo ? ['Cookievenster gezien: ' + (run.cookieSeen ? 'JA' : 'NIET AANGETOOND'), 'Accountbediening geprobeerd: ' + (run.accountAttempted ? 'JA' : 'NEE'), 'Accountklik uitgevoerd: ' + (run.accountClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldbediening geprobeerd: ' + (run.loginAttempted ? 'JA' : 'NEE'), 'Aanmeldklik uitgevoerd: ' + (run.loginClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldformulier gezien: ' + (run.loginSeen ? 'JA' : 'NIET AANGETOOND'), 'Laatste processtap: ' + ({cookies:'Cookiekeuze',login:'Aanmelden',authenticated:'Aanmeldindicatie',login_available:'Aanmeldknop',account_available:'Accountbediening',receipts_available:'Bonnetjes beschikbaar',error:'Jumbo foutpagina; automatisering gestopt',unknown:'Onbekend'}[run.jumboState] || 'Onbekend'), 'Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Bonnetjesklik uitgevoerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Historiepagina geladen: ' + (run.historyLoaded ? 'JA' : 'NEE'), 'Geverifieerde historie: ' + (run.evidence?.markers ? 'JA' : 'NEE'), 'Terugkeer: ' + (run.autoCloseRequested && run.evidence?.markers ? 'AUTOMATISCH' : failure ? 'TECHNISCHE FOUT' : 'HANDMATIG / GEANNULEERD'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -83,12 +83,12 @@ async function initialize() {
     const state=acceptJumboState(event,run);
     if(state){
       const action=jumboTransition(run,state);
-      if(action==='history')void InAppBrowser.setUrl({id:run.id,url:stores.jumbo.url}).then(()=>{run.navigationAccepted=true;}).catch(()=>{run.scriptFailed=true;});
-      if(action==='login' || action==='account')void InAppBrowser.executeScript({id:run.id,code:jumboOpenLoginScript(run.nonce,action)}).catch(()=>{run.scriptFailed=true;});
+      // Never force a guessed Jumbo route; use the retailer's actual receipt control.
+      if(action==='login' || action==='account' || action==='receipts')void InAppBrowser.executeScript({id:run.id,code:jumboOpenLoginScript(run.nonce,action)}).catch(()=>{run.scriptFailed=true;});
       return;
     }
     const signal=acceptJumboAction(event,run);
-    if(signal){if(signal.action==='account')run.accountClicked=signal.acted; if(signal.action==='login')run.loginClicked=signal.acted; return;}
+    if(signal){if(signal.action==='receipts')run.navigationAccepted=signal.acted; if(signal.action==='account')run.accountClicked=signal.acted; if(signal.action==='login')run.loginClicked=signal.acted; return;}
     const evidence = (run?.phase === 'history' || run?.phase === 'combined') && (run?.store!==stores.jumbo || run.historyLoaded) ? acceptEvidence(event, run) : null;
     if (evidence) {
       run.evidence = {history:true,markers:Boolean(run.evidence?.markers || evidence.markers)};
