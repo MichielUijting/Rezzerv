@@ -462,21 +462,21 @@ if(!finished||history.length!==totalResults)
 const batches=planJumboHistoricalBatches(history,RANGE.from_date,RANGE.to_date);
 const total=batches.reduce((n,b)=>n+b.receipts.length,0);
 const detailQuery="query GetDigitalReceipt($transactionId: String) { receipt(transactionId: $transactionId) { receiptImage { image type receiptPoints { earned newBalance oldBalance redeemed } } store { name location { address { city houseNumber postalCode street } } } purchaseEndOn receiptSource transactionId } }";
-const opener=window.opener;
+const opener=NATIVE?window.__inhuisNativeJumboOpener:window.opener;
 if(!opener)throw new Error("Het Inhuis-tabblad is niet langer verbonden.");
 async function sendBatch(details,index){
   await new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{cleanup();reject(new Error("Inhuis bevestigde deelimport niet; later veilig opnieuw proberen."));},60000);
-    function cleanup(){clearTimeout(timer);window.removeEventListener("message",receive);}
+    function cleanup(){clearTimeout(timer);window.removeEventListener(NATIVE?"inhuis-native-jumbo-ack":"message",receive);}
     function receive(event){
-      const d=event.data;
-      if(event.origin!==O||event.source!==opener||!d||d.type!=="inhuis:jumbo-ack"||
+      const d=NATIVE?event.detail:event.data;
+      if((!NATIVE&&(event.origin!==O||event.source!==opener))||!d||d.type!=="inhuis:jumbo-ack"||
          d.request_id!==Q||d.index!==index||d.version!==V)return;
       cleanup();
       if(d.ok===true)resolve();
       else reject(new Error(String(d.error||"Jumbo-deelimport niet veilig ontvangen.")));
     }
-    window.addEventListener("message",receive);
+    window.addEventListener(NATIVE?"inhuis-native-jumbo-ack":"message",receive);
     opener.postMessage({type:"inhuis:jumbo-batch",request_id:Q,version:V,
       source_origin:location.origin,date_range:RANGE,index,total_batches:batches.length,total_receipts:total,details},O);
   });
@@ -526,6 +526,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
   })()
   const checkedRange = jumboDateWindow(range.from_date, range.to_date)
   const automatic = options.automatic === true
+  const nativeBridge = automatic && options.nativeBridge === true
   const requestId = String(options.requestId || '')
   const openerOrigin = String(options.inhuisOrigin || '')
   if (automatic && (!/^[A-Za-z0-9-]{15,72}$/.test(requestId) ||
@@ -535,7 +536,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
   }
 
   const retSource = automatic
-    ? 'const ret=o=>{if(window.opener)window.opener.postMessage({type:"inhuis:jumbo-error",request_id:Q,version:V,source_origin:location.origin,error:String(o.error||"Jumbo-import afgebroken.")},O);};'
+    ? 'const ret=o=>{const opener=NATIVE?window.__inhuisNativeJumboOpener:window.opener;if(opener)opener.postMessage({type:"inhuis:jumbo-error",request_id:Q,version:V,source_origin:location.origin,error:String(o.error||"Jumbo-import afgebroken.")},O);};'
     : 'const ret=o=>{show("Resultaat gereed; terug naar Inhuis…");if(encodeURIComponent(JSON.stringify(o)).length>48000)o={version:V,ok:false,source_origin:location.origin,error:"Te veel bongegevens voor veilige overdracht. Kies een kortere Jumbo-periode."};location.href=C+P+encodeURIComponent(JSON.stringify(o));};'
 
   const bookmarkletSource = (
@@ -544,6 +545,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl, dateRange, options =
     'const C=' + JSON.stringify(callbackUrl) + ';' +
     'const P=' + JSON.stringify(JUMBO_POC_FRAGMENT_PREFIX) + ';' +
     'const AUTO=' + JSON.stringify(automatic) + ';' +
+    'const NATIVE=' + JSON.stringify(nativeBridge) + ';' +
     'const O=' + JSON.stringify(openerOrigin) + ';' +
     'const Q=' + JSON.stringify(requestId) + ';' +
     JUMBO_BOOKMARKLET_PARSER_SOURCE + ';' +
