@@ -1,0 +1,19 @@
+{
+  "name": "inhuis-android-testapp",
+  "version": "1.12.457",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test probe.test.mjs app-contract.test.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.0",
+    "@capacitor/android": "8.6.0",
+    "@capgo/capacitor-inappbrowser": "8.27.9"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0",
+    "esbuild": "0.25.12"
+  }
+}

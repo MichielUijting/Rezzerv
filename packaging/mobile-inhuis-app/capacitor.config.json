@@ -1,0 +1,8 @@
+{
+  "appId": "nl.inhuis.androidtest",
+  "appName": "Inhuis (test)",
+  "webDir": "dist",
+  "server": {
+    "cleartext": false
+  }
+}
