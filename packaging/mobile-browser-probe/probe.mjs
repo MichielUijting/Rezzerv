@@ -22,13 +22,13 @@ export function probeScript(store, nonce) {
         // A header or a generic "Kassabonnen" link is not evidence of accessible history.
         const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,[role=heading]'))
           .map(e => (e.textContent || '').trim());
-        const title = headings.some(t => /^(mijn\s+)?bestellingen$/i.test(t));
+        const title = headings.some(t => /^(mijn\\s+)?bestellingen$/i.test(t));
         const completed = headings.some(t => /^afgerond$/i.test(t));
         const rows = Array.from(document.querySelectorAll('main a,main button,main [role=button],main article,main li'))
           .some(e => {
-            const t = (e.textContent || '').replace(/\s+/g,' ').trim();
-            return /\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\s+\d{1,2}\s+/i.test(t)
-              && /\b\d{1,2}[:.]\d{2}\b/.test(t) && /\bjumbo\b/i.test(t);
+            const t = (e.textContent || '').replace(/\\s+/g,' ').trim();
+            return /\\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\\s+\\d{1,2}\\s+/i.test(t)
+              && /\\b\\d{1,2}[:.]\\d{2}\\b/.test(t) && /\\bjumbo\\b/i.test(t);
           });
         const empty = Array.from(document.querySelectorAll('main p,main [role=status]'))
           .some(e => /^(je hebt nog geen (bestellingen|kassabonnen)|geen bestellingen gevonden)[.!]?$/i.test((e.textContent || '').trim()));

@@ -27,7 +27,13 @@ function evaluate(store,{origin=store.origin,path=store.path,frame=false,markers
   const messages=[];
   const window={mobileApp:{postMessage:value=>messages.push(value)}};
   window.top=frame?{}:window;
-  const document={querySelectorAll:()=>markers?[{textContent:'Kassabonnen'}]:[]};
+  const document={querySelectorAll:s=>{
+    if(!markers)return [];
+    if(store===stores.lidl)return [{textContent:'Kassabonnen'}];
+    if(s==='h1,h2,h3,h4,[role=heading]')return [{textContent:'Bestellingen'},{textContent:'Afgerond'}];
+    if(s==='main a,main button,main [role=button],main article,main li')return [{textContent:'Maandag 1 januari 12:00 Jumbo Testwinkel'}];
+    return [];
+  }};
   vm.runInNewContext(probeScript(store,'nonce-a'),{window,location:{origin,pathname:path},document});
   return JSON.parse(JSON.stringify(messages));
 }
@@ -66,7 +72,7 @@ test('Jumbo accepts exact orders redirect but not other origins, routes or Lidl 
 test('Jumbo screenshot history structure requires title and actual completed row or explicit empty',()=>{
  for(const [title,completed,row,empty,expected] of [[true,true,true,false,true],[true,true,false,false,false],[true,false,false,true,true],[false,true,true,false,false],[true,false,false,false,false]]){
  const messages=[];const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
- const document={querySelectorAll:s=>s==='h1,h2,h3,h4,[role=heading]'?[...(title?[{textContent:'Bestellingen'}]:[]),...(completed?[{textContent:'Afgerond'}]:[])]:s==='a,button,[role=button]'?(row?[{textContent:'Maandag 1 januari 12:00 Jumbo Testwinkel'}]:[]):s==='main p,main [role=status]'?(empty?[{textContent:'Je hebt nog geen bestellingen'}]:[]):[]};
+ const document={querySelectorAll:s=>s==='h1,h2,h3,h4,[role=heading]'?[...(title?[{textContent:'Bestellingen'}]:[]),...(completed?[{textContent:'Afgerond'}]:[])]:s==='main a,main button,main [role=button],main article,main li'?(row?[{textContent:'Maandag 1 januari 12:00 Jumbo Testwinkel'}]:[]):s==='main p,main [role=status]'?(empty?[{textContent:'Je hebt nog geen bestellingen'}]:[]):[]};
  vm.runInNewContext(probeScript(stores.jumbo,'n'),{window,document,location:{origin:stores.jumbo.origin,pathname:'/orders'}});
  assert.equal(messages[0].detail.markers,expected);
  }
