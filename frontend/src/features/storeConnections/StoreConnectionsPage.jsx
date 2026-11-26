@@ -475,6 +475,18 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
+  useEffect(() => {
+    if (activeProvider !== 'jumbo' && nativeJumboTransportRef.current) {
+      nativeJumboTransportRef.current.close()
+      nativeJumboTransportRef.current = null
+      expectedJumboWindowRef.current = null
+    }
+  }, [activeProvider])
+  useEffect(() => () => {
+    nativeJumboTransportRef.current?.close()
+    nativeJumboTransportRef.current = null
+  }, [])
+
   // Open the retailer window synchronously within its user click. Jumbo's
   // favorite will request a fresh window from THIS authenticated opener.
   function openJumboFromInhuis() {
@@ -1672,6 +1684,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Jumbo"
             testId="jumbo-receipt-poc"
+            nativeAutomatic={nativeJumbo}
+            showSetupHelp={!nativeJumbo}
             hideDates={mobileRetailer || onboardingMode}
             isMobileViewport={isMobileViewport}
             from={jumboFrom}
@@ -1701,7 +1715,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             helpTestId="jumbo-help-open"
             onHelp={nativeJumbo ? undefined : () => setSetupHelpStore('jumbo')}
             periodError={!mobileRetailer && !onboardingMode && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
-            setupHelp={
+            setupHelp={!nativeJumbo ? (
               <RetailerBookmarkletHelp
                 provider="jumbo"
                 retailer="Jumbo"
@@ -1720,7 +1734,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                   wanneer je op de website van Jumbo bent. Op desktop hoort bij een aangepaste periode
                   nog de bijbehorende Jumbo-favoriet.</>}
               />
-            }
+            ) : null}
           >
             {!onboardingMode && jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: '10px' }}>

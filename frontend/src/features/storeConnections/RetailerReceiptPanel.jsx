@@ -28,6 +28,8 @@ export default function RetailerReceiptPanel({
   openBusy = false,
   helpTestId,
   onHelp,
+  showSetupHelp = true,
+  nativeAutomatic = false,
   periodError,
   setupHelp,
   children,
@@ -57,7 +59,7 @@ export default function RetailerReceiptPanel({
         <h3 style={{ margin: 0 }}>{retailer} digitale kassabonnen</h3>
         {isMobileViewport ? (
           <p role="status" style={{ margin: '6px 0 0' }}>
-            Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.
+            {nativeAutomatic ? 'Na aanmelden bij Jumbo haalt Inhuis de bonnen automatisch op.' : 'Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.'}
           </p>
         ) : null}
         <p style={{ margin: '6px 0 0' }}>
@@ -92,7 +94,7 @@ export default function RetailerReceiptPanel({
         data-testid="retailer-receipt-action-row"
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobileViewport
+          gridTemplateColumns: nativeAutomatic ? 'minmax(0, 1fr)' : isMobileViewport
             ? 'minmax(0, 1fr) minmax(0, 1.5fr)'
             : 'minmax(0, 160px) minmax(0, 240px)',
           alignItems: 'stretch',
@@ -118,6 +120,7 @@ export default function RetailerReceiptPanel({
             data-testid={openTestId}
           >{openBusy ? `${retailer} voorbereiden…` : `Open mijn ${retailer}`}</Button>
         )}
+        {showSetupHelp ? (
         <Button
           type="button"
           variant="secondary"
@@ -125,6 +128,7 @@ export default function RetailerReceiptPanel({
           onClick={onHelp}
           data-testid={helpTestId}
         >Eerste keer koppelen met {retailer}?</Button>
+        ) : null}
       </div>
       {setupHelp}
       {children}

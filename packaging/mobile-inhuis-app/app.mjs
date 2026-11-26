@@ -133,7 +133,7 @@ async function safeJumboOwner(binding) {
       !/^[^\\s]{1,128}$/.test(String(binding.householdId || '')) ||
       String(binding.householdId) === '0') return false
   const bytes = new TextEncoder().encode(JSON.stringify([
-    binding.userId, binding.householdId,
+    inhuis?.origin, binding.userId, binding.householdId,
   ]))
   const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
     .map(byte => byte.toString(16).padStart(2, '0')).join('')
