@@ -171,9 +171,9 @@ test('receipt navigation uses one visible retailer control, never a guessed rout
  const document={querySelectorAll:s=>s==='a[data-testid="my-jumbo-sub-menu-item-bestellingen-en-bonnetjes"][href="/bestellingen"]'?[control]:[]};
  const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/mijn/jumbo'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
  vm.runInNewContext(jumboStateScript('n'),ctx);
- assert.equal(messages[0].detail.state,'receipts_available');
+ assert.notEqual(messages[0].detail.state,'receipts_available');
  vm.runInNewContext(jumboOpenLoginScript('n','receipts'),ctx);
- assert.equal(count,1);assert.equal(messages[1].detail.acted,true);
+ assert.equal(count,0);assert.equal(messages[1].detail.acted,false);
 });
 test('error state permanently blocks automatic Jumbo actions for current run',()=>{
  const r={};assert.equal(jumboTransition(r,'error'),null);assert.equal(jumboTransition(r,'receipts_available'),null);assert.equal(jumboTransition(r,'account_available'),null);
@@ -194,3 +194,5 @@ test('generic Bonnetjes shortcut is not activated even on account route',()=>{
  const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/mijn/jumbo'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
  vm.runInNewContext(jumboOpenLoginScript('n','receipts'),ctx);assert.equal(clicks,0);assert.equal(messages[0].detail.acted,false);
 });
+
+test('API evidence rejects other view and raw values, accepts only bounded aggregate',async()=>{const {acceptJumboApi}=await import('./probe.mjs');const run={store:stores.jumbo,phase:'combined',id:'j',nonce:'n',jumboOrigin:true,apiRequested:true};const e={id:'j',detail:{kind:'inhuis-jumbo-api',nonce:'n',stage:'detail',http:200,count:1,detail:true}};assert.deepEqual(acceptJumboApi(e,run),{stage:'detail',http:200,count:1,detail:true});assert.equal(acceptJumboApi(e,{...run,apiRequested:false}),null);assert.equal(acceptJumboApi({...e,id:'bad'},run),null);assert.equal(acceptJumboApi({...e,detail:{...e.detail,count:'1'}},run),null);});
