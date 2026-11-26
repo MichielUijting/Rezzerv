@@ -10,7 +10,7 @@ const listeners = [];
 function report(message) { status.textContent = message; }
 function busy(value) { buttons.forEach(button => { button.disabled = value; }); }
 async function inspect(run) {
-  if (active !== run || run.phase !== 'history' || !run.id || !isHistoryUrl(run.store, run.url) || run.inspecting) return;
+  if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || !isHistoryUrl(run.store, run.url) || run.inspecting) return;
   run.inspecting = true;
   try { await InAppBrowser.executeScript({id: run.id, code: probeScript(run.store, run.nonce)}); }
   catch { if (active === run) run.scriptFailed = true; }
@@ -30,6 +30,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
+    ...(run.store === stores.jumbo ? ['Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -43,7 +44,8 @@ async function initialize() {
   listeners.push(await InAppBrowser.addListener('urlChangeEvent', event => {
     const run = active;
     if (!run || !run.id || event.id !== run.id) return;
-    run.url = isHistoryUrl(run.store,event.url) ? run.store.url : null;
+    run.url = isHistoryUrl(run.store,event.url) ? run.store.origin + new URL(event.url).pathname : null;
+    if (run.store === stores.jumbo && run.url) run.historyReached = true;
     void inspect(run);
   }));
   listeners.push(await InAppBrowser.addListener('browserPageLoaded', event => {
@@ -51,14 +53,15 @@ async function initialize() {
   }));
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     const run = active;
-    const evidence = run?.phase === 'history' ? acceptEvidence(event, run) : null;
+    const evidence = (run?.phase === 'history' || run?.phase === 'combined') ? acceptEvidence(event, run) : null;
     if (evidence) run.evidence = {history:true,markers:Boolean(run.evidence?.markers || evidence.markers)};
   }));
   listeners.push(await InAppBrowser.addListener('closeEvent', event => {
     if (active?.id && event.id === active.id) finish(active);
   }));
   for (const [key,store] of Object.entries(stores)) {
-    document.getElementById(key).addEventListener('click', () => void open(store, 'login'));
+    document.getElementById(key).addEventListener('click', () => void open(store, key === 'jumbo' ? 'combined' : 'login'));
+    if (key === 'jumbo') continue;
     document.getElementById(key+'-history').addEventListener('click', () => {
       if (!loaded.has(store.name)) { report('Open eerst '+store.name+' en meld je aan op de winkelwebsite.'); return; }
       void open(store, 'history');
@@ -74,7 +77,7 @@ async function open(store, phase = 'login') {
   report(store.name + ' wordt geopend…');
   try {
     const {id} = await InAppBrowser.openWebView({
-      url:phase === 'login' ? store.startUrl : store.url, javascriptBridgeOrigins:phase === 'history' ? [store.origin] : [],
+      url:phase === 'history' ? store.url : store.startUrl, javascriptBridgeOrigins:phase === 'login' ? [] : [store.origin],
       allowScreenshotsFromWebPage:false, preventDeeplink:true,
       persistWebViewData:true,
       visibleTitle:true, openBlankTargetInWebView:true

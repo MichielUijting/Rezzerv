@@ -48,3 +48,17 @@ test('initial visit uses public HTTPS home, not protected history',()=>{
  assert.equal(isHistoryUrl(store,store.startUrl),false);
  }
 });
+
+test('Jumbo accepts exact orders redirect but not other origins, routes or Lidl orders',()=>{
+ const s=stores.jumbo;
+ assert.equal(isHistoryUrl(s,s.origin+'/orders'),true);
+ assert.equal(isHistoryUrl(s,s.origin+'/orders?test=1'),true);
+ for(const url of [s.origin+'/orders/extra',s.origin+'/orders-fake','https://evil.example/orders','https://user@www.jumbo.com/orders','http://www.jumbo.com/orders']) assert.equal(isHistoryUrl(s,url),false,url);
+ assert.equal(isHistoryUrl(stores.lidl,stores.lidl.origin+'/orders'),false);
+ assert.equal(evaluate(s,{path:'/orders'}).length,1);
+ assert.deepEqual(evaluate(s,{path:'/orders/extra'}),[]);
+ assert.deepEqual(evaluate(s,{path:'/orders',origin:'https://evil.example'}),[]);
+ assert.deepEqual(evaluate(stores.lidl,{path:'/orders'}),[]);
+ const active={id:'j',store:s,url:s.origin+'/orders',nonce:'n'};
+ assert.deepEqual(acceptEvidence({id:'j',detail:{kind:'inhuis-history-probe',nonce:'n',history:true,markers:true}},active),{history:true,markers:true});
+});

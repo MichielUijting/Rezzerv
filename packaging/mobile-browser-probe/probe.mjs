@@ -1,20 +1,20 @@
 export const stores = Object.freeze({
-  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/', origin: 'https://www.jumbo.com', path: '/bestellingen', url: 'https://www.jumbo.com/bestellingen' }),
+  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/', origin: 'https://www.jumbo.com', path: '/bestellingen', alternatePath: '/orders', url: 'https://www.jumbo.com/bestellingen' }),
   lidl: Object.freeze({ name: 'Lidl', startUrl: 'https://www.lidl.nl/', origin: 'https://www.lidl.nl', path: '/mre/purchase-history', url: 'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1' })
 });
 export function isHistoryUrl(store, value) {
   try {
     const url = new URL(value);
-    return url.origin === store.origin && url.pathname === store.path && !url.username && !url.password;
+    return url.origin === store.origin && (url.pathname === store.path || (store === stores.jumbo && url.pathname === store.alternatePath)) && !url.username && !url.password;
   } catch { return false; }
 }
 // No HTML, credentials, cookies, receipt identifiers, URLs or content leave the webview.
 // The only transmitted evidence is a boolean DOM observation, not authentication.
 export function probeScript(store, nonce) {
-  const config = JSON.stringify({origin: store.origin, path: store.path, nonce, lidl: store === stores.lidl});
+  const config = JSON.stringify({origin: store.origin, paths: store === stores.jumbo ? [store.path, store.alternatePath] : [store.path], nonce, lidl: store === stores.lidl});
   return `(() => {
     const c = ${config};
-    if (window.top !== window || location.origin !== c.origin || location.pathname !== c.path) return;
+    if (window.top !== window || location.origin !== c.origin || !c.paths.includes(location.pathname)) return;
     if (typeof window.mobileApp?.postMessage !== 'function') return;
     const markers = c.lidl
       ? document.querySelectorAll('a[href*="/mre/purchase-detail"]').length > 0
