@@ -55,3 +55,7 @@ Exacte Capgo 8.27.9 broncode en definitions.ts bevestigen popupWindowOpened met 
 ## 0.1.8 — PO-waarneming en Jumbo-navigatiereparatie
 
 PO zag de aangemelde homepage met Bonnetjes en een foutpagina na accountbediening. De exacte fout-URL is niet vastgesteld. De geforceerde setUrl naar /bestellingen is verwijderd; alleen een unieke zichtbare Bonnetjes of Bestellingen en bonnen bediening wordt aangeklikt. Geen accountstatus afgeleid uit het groene vinkje zonder DOM-bewijs. Foutpagina blokkeert nieuwe acties; handmatige navigatie blijft mogelijk. Historie blijft aan exacte bekende routes en inhoud gebonden. Werkelijke DOM en nieuwe route nog te bewijzen op Android. Lidl ongewijzigd. TEST_LEVEL_PROVISIONAL: L.
+
+## 0.1.9 — bewezen interne navigatie
+
+PO Firefox-proef: direct /mijn/jumbo geopend, exact data-testid van Bestellingen en bonnetjes gevonden, programmatische click() leidt naar /bestellingen terwijl dezelfde JS-context doorloopt. Geen HTML-documentverzoek naar Jumbo bij handmatige navigatie. Start op /mijn/jumbo, alleen de exacte geteste link op die route, geen generieke Bonnetjes- of accountklik. Same-document historieprobe op basis van actuele origin/path in de webview en vaste routecategorie, view-ID en nonce; geen native laadcallback vereist. Geen GraphQL-uitvoering of bonexport toegevoegd. Android, verlopen sessie, herkenning van werkelijke historie-DOM en provider-toestemming nog te valideren. Lidl ongewijzigd. TEST_LEVEL_PROVISIONAL: L.

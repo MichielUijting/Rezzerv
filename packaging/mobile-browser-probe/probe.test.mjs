@@ -42,15 +42,15 @@ test('injected read-only probe never reports on login, foreign origin or frame',
     assert.deepEqual(evaluate(store,{origin:'https://evil.example'}),[]);
     assert.deepEqual(evaluate(store,{path:'/login'}),[]);
     assert.deepEqual(evaluate(store,{frame:true}),[]);
-    assert.deepEqual(evaluate(store),[{detail:{kind:'inhuis-history-probe',nonce:'nonce-a',history:true,markers:true}}]);
-    assert.deepEqual(evaluate(store,{markers:false}),[{detail:{kind:'inhuis-history-probe',nonce:'nonce-a',history:true,markers:false}}]);
+    assert.deepEqual(evaluate(store),[{detail:{kind:'inhuis-history-probe',nonce:'nonce-a',history:true,markers:true,...(store===stores.jumbo?{route:'bestellingen'}:{})}}]);
+    assert.deepEqual(evaluate(store,{markers:false}),[{detail:{kind:'inhuis-history-probe',nonce:'nonce-a',history:true,markers:false,...(store===stores.jumbo?{route:'bestellingen'}:{})}}]);
   }
 });
 
 test('initial visit uses public HTTPS home, not protected history',()=>{
  for(const store of Object.values(stores)){
  assert.equal(new URL(store.startUrl).origin,store.origin);
- assert.equal(new URL(store.startUrl).pathname,'/');
+ assert.equal(new URL(store.startUrl).pathname,store===stores.jumbo?'/mijn/jumbo':'/');
  assert.equal(isHistoryUrl(store,store.startUrl),false);
  }
 });
@@ -65,14 +65,14 @@ test('Jumbo accepts exact orders redirect but not other origins, routes or Lidl 
  assert.deepEqual(evaluate(s,{path:'/orders/extra'}),[]);
  assert.deepEqual(evaluate(s,{path:'/orders',origin:'https://evil.example'}),[]);
  assert.deepEqual(evaluate(stores.lidl,{path:'/orders'}),[]);
- const active={id:'j',store:s,url:s.origin+'/orders',nonce:'n'};
- assert.deepEqual(acceptEvidence({id:'j',detail:{kind:'inhuis-history-probe',nonce:'n',history:true,markers:true}},active),{history:true,markers:true});
+ const active={id:'j',store:s,url:s.origin+'/orders',nonce:'n',jumboOrigin:true};
+ assert.deepEqual(acceptEvidence({id:'j',detail:{kind:'inhuis-history-probe',nonce:'n',history:true,markers:true,route:'orders'}},active),{history:true,markers:true});
 });
 
 test('Jumbo screenshot history structure requires title and actual completed row or explicit empty',()=>{
  for(const [title,completed,row,empty,expected] of [[true,true,true,false,true],[true,true,false,false,false],[true,false,false,true,true],[false,true,true,false,false],[true,false,false,false,false]]){
  const messages=[];const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
- const document={querySelectorAll:s=>s==='h1,h2,h3,h4,[role=heading]'?[...(title?[{textContent:'Bestellingen'}]:[]),...(completed?[{textContent:'Afgerond'}]:[])]:s==='main a,main button,main [role=button],main article,main li'?(row?[{textContent:'Maandag 1 januari 12:00 Jumbo Testwinkel'}]:[]):s==='main p,main [role=status]'?(empty?[{textContent:'Je hebt nog geen bestellingen'}]:[]):[]};
+ const document={querySelectorAll:s=>s==='h1,h2,h3,h4,[role=heading]'?[...(title?[{textContent:'Bestellingen'}]:[]),...(completed?[{textContent:'Afgerond'}]:[])]:s==='main a,main button,main [role=button],main article,main li'?(row?[{textContent:'Maandag 1 januari 12:00 Jumbo Testwinkel'}]:[]):s==='main p,main [role=status]'?(empty?[{textContent:'Je hebt nog geen kassabonnen'}]:[]):[]};
  vm.runInNewContext(probeScript(stores.jumbo,'n'),{window,document,location:{origin:stores.jumbo.origin,pathname:'/orders'}});
  assert.equal(messages[0].detail.markers,expected);
  }
@@ -153,7 +153,7 @@ test('Jumbo native action acknowledgements require view, nonce and exact origin'
 test('Jumbo opens official account before sign-in, at most one of each, never during cookies',()=>{
  const r={};
  assert.equal(jumboTransition(r,'cookies'),null);
- assert.equal(jumboTransition(r,'account_available'),'account');
+ assert.equal(jumboTransition(r,'account_available'),null);
  assert.equal(jumboTransition(r,'account_available'),null);
  assert.equal(jumboTransition(r,'login_available'),'login');
  assert.equal(jumboTransition(r,'login_available'),null);
@@ -166,10 +166,10 @@ test('Jumbo opens official account before sign-in, at most one of each, never du
 
 test('receipt navigation uses one visible retailer control, never a guessed route',()=>{
  let count=0;const messages=[];
- const control={textContent:'Bonnetjes',getClientRects:()=>[1],getAttribute:()=>null,closest:()=>null,click:()=>count++};
+ const control={textContent:'Bestellingen en bonnetjes',getClientRects:()=>[1],getAttribute:()=>null,closest:()=>null,click:()=>count++};
  const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
- const document={querySelectorAll:s=>s==='a,button,[role=button]'?[control]:[]};
- const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
+ const document={querySelectorAll:s=>s==='a[data-testid="my-jumbo-sub-menu-item-bestellingen-en-bonnetjes"][href="/bestellingen"]'?[control]:[]};
+ const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/mijn/jumbo'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
  vm.runInNewContext(jumboStateScript('n'),ctx);
  assert.equal(messages[0].detail.state,'receipts_available');
  vm.runInNewContext(jumboOpenLoginScript('n','receipts'),ctx);
@@ -177,4 +177,20 @@ test('receipt navigation uses one visible retailer control, never a guessed rout
 });
 test('error state permanently blocks automatic Jumbo actions for current run',()=>{
  const r={};assert.equal(jumboTransition(r,'error'),null);assert.equal(jumboTransition(r,'receipts_available'),null);assert.equal(jumboTransition(r,'account_available'),null);
+});
+
+test('SPA history evidence does not require native route or load event, but requires exact origin, view, nonce and route category',()=>{
+ const r={store:stores.jumbo,id:'j',nonce:'n',jumboOrigin:true,url:null};
+ const e={id:'j',detail:{kind:'inhuis-history-probe',nonce:'n',history:true,markers:true,route:'bestellingen'}};
+ assert.deepEqual(acceptEvidence(e,r),{history:true,markers:true});
+ assert.equal(acceptEvidence({...e,detail:{...e.detail,route:'unknown'}},r),null);
+ assert.equal(acceptEvidence(e,{...r,jumboOrigin:false}),null);
+ assert.equal(acceptEvidence(e,{...r,nonce:'other'}),null);
+});
+test('generic Bonnetjes shortcut is not activated even on account route',()=>{
+ let clicks=0;const c={textContent:'Bonnetjes',getClientRects:()=>[1],getAttribute:()=>null,closest:()=>null,click:()=>clicks++};
+ const messages=[];const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
+ const document={querySelectorAll:s=>s==='a,button,[role=button]'?[c]:[]};
+ const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/mijn/jumbo'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
+ vm.runInNewContext(jumboOpenLoginScript('n','receipts'),ctx);assert.equal(clicks,0);assert.equal(messages[0].detail.acted,false);
 });
