@@ -27,6 +27,12 @@ jobs:
           java-version: '21'
       - name: Test native protocol and proven Jumbo browser functions
         run: npm test
+      - name: Verify Inhuis Jumbo bridge and context contracts
+        working-directory: frontend
+        run: |
+          node tests/jumbo-import-context.contract.mjs
+          node tests/native-jumbo-transport.contract.mjs
+          node tests/jumbo-receipt-poc-bridge.contract.mjs
       - name: Install locked dependencies and audit
         run: |
           npm ci --no-audit --no-fund

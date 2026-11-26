@@ -16,4 +16,6 @@ assert.equal(acceptsNativeJumboMessage(relay, channel, 'other'), false)
 assert.equal(acceptsNativeJumboMessage({ detail: { ...relay.detail, channel: 'other' } }, channel, nonce), false)
 assert.equal(acceptsNativeJumboMessage({ detail: { ...relay.detail, data: { type: 'unsafe' } } }, channel, nonce), false)
 assert.equal(startNativeJumboTransport({}), null)
+assert.equal(startNativeJumboTransport({ __inhuisNativeShell: { version: 1, channel },
+  mobileApp: { postMessage() {} }, crypto: { randomUUID: () => nonce } }), null)
 console.log('Native Jumbo transport checks: OK')

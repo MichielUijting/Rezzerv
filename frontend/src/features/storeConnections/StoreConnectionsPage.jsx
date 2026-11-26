@@ -736,6 +736,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       const sourceWindow = event.source
       try {
         const expectedContext = snapshotJumboImportContext(await fetchJson('/api/session'))
+        if (sourceWindow === nativeJumboTransportRef.current &&
+            (!sourceWindow?.expectedContext ||
+             expectedContext.userId !== sourceWindow.expectedContext.userId ||
+             expectedContext.householdId !== sourceWindow.expectedContext.householdId)) {
+          throw new Error('De actieve Inhuis-gebruiker of het huishouden is gewijzigd.')
+        }
         const response = await fetchJson('/api/receipts/retailers/last-updated')
         if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
         if (!response?.dates || typeof response.dates !== 'object' ||
@@ -891,6 +897,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           })
           if (result?.scan_complete !== true || result.staged_receipts !== run.received) {
             throw new Error('Jumbo-afronding werd niet door Inhuis bevestigd.')
+          }
+          if (run.source === nativeJumboTransportRef.current) {
+            nativeJumboTransportRef.current.close()
+            nativeJumboTransportRef.current = null
+            expectedJumboWindowRef.current = null
           }
           const message = 'Jumbo: ' + run.received +
             ' bonnen veilig ontvangen uit de volledige historie. Verwerking in Kassa loopt afzonderlijk.' +

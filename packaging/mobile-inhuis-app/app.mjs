@@ -27,6 +27,13 @@ function validJumboLocation(url) {
 }
 function afterClose(run) {
   if (jumbo !== run) return
+  if (run.handshakeSent && !run.finished) {
+    void transmitToInhuis(run, {
+      type: 'inhuis:jumbo-error', request_id: run.requestId, version: 14,
+      source_origin: store.origin,
+      error: 'Jumbo is gesloten voordat de import is afgerond.',
+    }).catch(() => {})
+  }
   clearInterval(run.interval)
   jumbo = null
   say('Terug in Inhuis. Een bon is pas verwerkt na bevestiging in Inhuis.')
@@ -155,6 +162,7 @@ async function handleInhuisMessage(event) {
   const run = jumbo
   if (!run || run.transportNonce !== d.nonce) return
   if (d.kind === 'inhuis-native-jumbo-cancel') {
+    run.finished = true
     await closeJumbo()
     return
   }
