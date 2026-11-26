@@ -25,3 +25,6 @@ GitHub Actions `Android winkelbrowser haalbaarheidsproef` genereert in de geïso
 5. Leg alleen per winkel vast: login mogelijk ja/nee, bonnen zichtbaar ja/nee, historiesignaal ja/nee, terugkeer ja/nee. Geen bongegevens of credentials delen.
 
 Vervolg na bewijs: per provider voorwaarden/technische toegang toetsen, bestaande importadapter op native transport aansluiten, echte queue-ACK, huishoudautorisatie en idempotentie testen. iOS afzonderlijk bewijzen. Geen productie- of releaseactie zonder PO-GO.
+
+## 0.1.1 – fysieke PO-proef vervolg
+Open eerst de officiële publieke winkelhomepage en meld je zelf aan. Sluit het venster en kies daarna de afzonderlijke bonhistorieknop. Normale WebView-sessieopslag blijft voor deze proef toegestaan om de aanmelding tussen beide stappen te behouden; geen cookies/tokens worden door Inhuis gelezen of geëxporteerd. Wis na afloop de gegevens van uitsluitend de proefapp. Geen brug tijdens de aanmeldfase, alleen de bestaande exact-origin/route-guard tijdens historie. Geen omzeiling van providerbeveiliging. Een terugkeer uit de winkel bewijst geen login. Bij een blokkade door Play Protect/Norton niet doorgaan of beveiliging uitschakelen.

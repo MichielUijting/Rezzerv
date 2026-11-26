@@ -1,6 +1,6 @@
 export const stores = Object.freeze({
-  jumbo: Object.freeze({ name: 'Jumbo', origin: 'https://www.jumbo.com', path: '/bestellingen', url: 'https://www.jumbo.com/bestellingen' }),
-  lidl: Object.freeze({ name: 'Lidl', origin: 'https://www.lidl.nl', path: '/mre/purchase-history', url: 'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1' })
+  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/', origin: 'https://www.jumbo.com', path: '/bestellingen', url: 'https://www.jumbo.com/bestellingen' }),
+  lidl: Object.freeze({ name: 'Lidl', startUrl: 'https://www.lidl.nl/', origin: 'https://www.lidl.nl', path: '/mre/purchase-history', url: 'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1' })
 });
 export function isHistoryUrl(store, value) {
   try {

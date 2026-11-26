@@ -40,3 +40,11 @@ test('injected read-only probe never reports on login, foreign origin or frame',
     assert.deepEqual(evaluate(store,{markers:false}),[{detail:{kind:'inhuis-history-probe',nonce:'nonce-a',history:true,markers:false}}]);
   }
 });
+
+test('initial visit uses public HTTPS home, not protected history',()=>{
+ for(const store of Object.values(stores)){
+ assert.equal(new URL(store.startUrl).origin,store.origin);
+ assert.equal(new URL(store.startUrl).pathname,'/');
+ assert.equal(isHistoryUrl(store,store.startUrl),false);
+ }
+});
