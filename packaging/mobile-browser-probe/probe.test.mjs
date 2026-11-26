@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import {stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript} from './probe.mjs';
+import {stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction} from './probe.mjs';
 
 test('allow only exact HTTPS store history route', () => {
   for (const store of Object.values(stores)) {
@@ -92,13 +92,13 @@ test('state evidence requires exact active Jumbo view and nonce',()=>{
 test('cookie dialog precedes login control and is never clicked',()=>{
  for(const cookie of [true,false]){
  let clicks=0;const messages=[];
- const control={textContent:'Inloggen',getClientRects:()=>[1],closest:()=>null,click:()=>clicks++};
+ const control={textContent:'Inloggen',getClientRects:()=>[1],getAttribute:()=>null,closest:s=>s==='header,[role=banner]'?{}:null,click:()=>clicks++};
  const dialog={textContent:'Cookies accepteren',getClientRects:()=>[1],click:()=>{throw Error('cookie clicked');}};
  const document={querySelectorAll:s=>s.startsWith('#onetrust')?(cookie?[dialog]:[]):s.startsWith('input')?[]:[control]};
  const window={mobileApp:{postMessage:m=>messages.push(m)}};window.top=window;
  const ctx={window,document,location:{origin:stores.jumbo.origin,pathname:'/'},getComputedStyle:()=>({visibility:'visible'})};
  vm.runInNewContext(jumboStateScript('n'),ctx);
- vm.runInNewContext(jumboOpenLoginScript(),ctx);
+ vm.runInNewContext(jumboOpenLoginScript('n','login'),ctx);
  assert.equal(messages[0].detail.state,cookie?'cookies':'login_available');
  assert.equal(clicks,cookie?0:1);
  }
@@ -115,4 +115,41 @@ test('diagnostic routes never return actual hosts, queries or account identifier
  assert.equal(acceptDiagnostic({...e,detail:{...e.detail,label:'secret'}},r),null);
  assert.equal(acceptDiagnostic(e,{...r,jumboOrigin:false}),null);
  appendDiagnostic(r,'a');appendDiagnostic(r,'a');assert.deepEqual(r.trace,['a']);
+});
+
+test('Jumbo does not accept generic receipt headings without an actual history row',()=>{
+ const messages=[];
+ const window={mobileApp:{postMessage:x=>messages.push(x)}};window.top=window;
+ const doc={querySelectorAll:s=>s==='h1,h2,h3,h4,[role=heading]'?[{textContent:'Kassabonnen'}]:s.includes('input[')?[]:[{textContent:'Bestellingen'}]};
+ vm.runInNewContext(probeScript(stores.jumbo,'strict'),{window,location:{origin:stores.jumbo.origin,pathname:'/orders'},document:doc});
+ assert.equal(messages[0].detail.markers,false);
+});
+test('Jumbo never clicks promotional sign-in outside the official account header',()=>{
+ let count=0;const msgs=[];
+ const control={textContent:'Inloggen',getClientRects:()=>[1],getAttribute:()=>null,closest:()=>null,click:()=>count++};
+ const doc={querySelectorAll:s=>s.startsWith('#onetrust')?[]:s.startsWith('input')?[]:[control]};
+ const window={mobileApp:{postMessage:m=>msgs.push(m)}};window.top=window;
+ const ctx={window,document:doc,location:{origin:stores.jumbo.origin,pathname:'/'},getComputedStyle:()=>({visibility:'visible',display:'block'})};
+ vm.runInNewContext(jumboStateScript('n'),ctx);
+ assert.equal(msgs[0].detail.state,'unknown');
+ vm.runInNewContext(jumboOpenLoginScript('n','login'),ctx);
+ assert.equal(count,0);assert.equal(msgs[1].detail.acted,false);
+});
+test('Jumbo native action acknowledgements require view, nonce and exact origin',()=>{
+ const r={store:stores.jumbo,phase:'combined',id:'j',nonce:'n',jumboOrigin:true};
+ const e={id:'j',detail:{kind:'inhuis-jumbo-action',nonce:'n',action:'login',acted:true}};
+ assert.deepEqual(acceptJumboAction(e,r),{action:'login',acted:true});
+ for(const x of [{id:'wrong'}, {detail:{...e.detail,nonce:'bad'}},{detail:{...e.detail,acted:'yes'}}])assert.equal(acceptJumboAction({...e,...x},r),null);
+ assert.equal(acceptJumboAction(e,{...r,jumboOrigin:false}),null);
+});
+test('Jumbo opens official account before sign-in, at most one of each, never during cookies',()=>{
+ const r={};
+ assert.equal(jumboTransition(r,'cookies'),null);
+ assert.equal(jumboTransition(r,'account_available'),'account');
+ assert.equal(jumboTransition(r,'account_available'),null);
+ assert.equal(jumboTransition(r,'login_available'),'login');
+ assert.equal(jumboTransition(r,'login_available'),null);
+ assert.equal(jumboTransition(r,'login'),null);
+ assert.equal(jumboTransition(r,'authenticated'),'history');
+ assert.equal(jumboTransition(r,'authenticated'),null);
 });

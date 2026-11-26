@@ -18,16 +18,24 @@ export function probeScript(store, nonce) {
     if (typeof window.mobileApp?.postMessage !== 'function') return;
     const markers = c.lidl
       ? document.querySelectorAll('a[href*="/mre/purchase-detail"]').length > 0
-      : Array.from(document.querySelectorAll('h1,h2,h3,h4,main a,main button,[role=heading]'))
-        .some(node => /\\b(kassabonnen?|winkelbonnen?|digitale bonnen?)\\b/i.test(node.textContent || '')) ||
-      (!c.lidl && (() => {
-        const headings=Array.from(document.querySelectorAll('h1,h2,h3,h4,[role=heading]')).map(e=>(e.textContent||'').trim());
-        const completed=headings.some(t=>/^Afgerond$/i.test(t));
-        const title=headings.some(t=>/^Bestellingen$/i.test(t));
-        const rows=Array.from(document.querySelectorAll('a,button,[role=button]')).some(e=>/\\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\\s+\\d{1,2}\\s+/i.test(e.textContent||'') && /\\bJumbo\\b/i.test(e.textContent||''));
-        const empty=Array.from(document.querySelectorAll('main p,main [role=status]')).some(e=>/^(Je hebt nog geen bestellingen|Je hebt nog geen kassabonnen|Geen bestellingen gevonden)[.!]?$/i.test((e.textContent||'').trim()));
-        return title && ((completed && rows) || empty);
-      })());
+      : (() => {
+        // A header or a generic "Kassabonnen" link is not evidence of accessible history.
+        const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,[role=heading]'))
+          .map(e => (e.textContent || '').trim());
+        const title = headings.some(t => /^(mijn\s+)?bestellingen$/i.test(t));
+        const completed = headings.some(t => /^afgerond$/i.test(t));
+        const rows = Array.from(document.querySelectorAll('main a,main button,main [role=button],main article,main li'))
+          .some(e => {
+            const t = (e.textContent || '').replace(/\s+/g,' ').trim();
+            return /\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\s+\d{1,2}\s+/i.test(t)
+              && /\b\d{1,2}[:.]\d{2}\b/.test(t) && /\bjumbo\b/i.test(t);
+          });
+        const empty = Array.from(document.querySelectorAll('main p,main [role=status]'))
+          .some(e => /^(je hebt nog geen (bestellingen|kassabonnen)|geen bestellingen gevonden)[.!]?$/i.test((e.textContent || '').trim()));
+        const loginForm = Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username]'))
+          .some(e => e.getClientRects?.().length > 0);
+        return title && !loginForm && ((completed && rows) || empty);
+      })();
     window.mobileApp.postMessage({detail:{kind:'inhuis-history-probe',nonce:c.nonce,history:true,markers:Boolean(markers)}});
   })();`;
 }
@@ -46,20 +54,24 @@ export function jumboStateScript(nonce) {
  return `(() => {
  const c=${config};
  if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
- const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
- const text=e=>(e.textContent||'').trim();
- const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(text(e)) || /onetrust|cookiebot/i.test(e.id||''));
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none';
+ const label=e=>(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible)
+   .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
  const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
  const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
- const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test(text(e)));
- const login=controls.find(e=>/^(inloggen|aanmelden|log in)$/i.test(text(e)) && !e.closest('[role=dialog],[aria-modal=true]'));
- const state=cookie?'cookies':forms||/login|signin|oauth|auth/i.test(location.pathname)?'login':logout?'authenticated':login?'login_available':'unknown';
+ const header=controls.filter(e=>e.closest('header,[role=banner]'));
+ const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test(label(e)));
+ const signIn=header.some(e=>/^(inloggen|aanmelden|log in)$/i.test(label(e)));
+ const account=header.some(e=>/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test(label(e)));
+ const state=cookie?'cookies':forms||/login|signin|oauth|auth/i.test(location.pathname)?'login':
+   logout?'authenticated':signIn?'login_available':account?'account_available':'unknown';
  window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-state',nonce:c.nonce,state}});
  })();`;
 }
 export function acceptJumboState(event,run) {
  const d=event?.detail;
- return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','unknown'].includes(d.state) ? d.state : null;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','account_available','unknown'].includes(d.state) ? d.state : null;
 }
 export function jumboTransition(run,state) {
  run.jumboState=state;
@@ -67,18 +79,36 @@ export function jumboTransition(run,state) {
  if(state==='login'){run.loginSeen=true;return null;}
  if(state==='authenticated' && !run.navigationAttempted && !run.historyReached){run.navigationAttempted=true;return 'history';}
  if(state==='login_available' && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.loginAttempted=true;return 'login';}
+ if(state==='account_available' && !run.accountAttempted && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.accountAttempted=true;return 'account';}
  return null;
 }
-// Recheck the live DOM before clicking only the retailer's visible sign-in control.
-export function jumboOpenLoginScript(){
+// Only the official header/banners account or sign-in control may be activated.
+// A script dispatch is NOT proof of a trusted user gesture or of a resulting login screen.
+export function jumboOpenLoginScript(nonce, action='login'){
+ const config=JSON.stringify({origin:stores.jumbo.origin,nonce,action});
  return `(() => {
- if(window.top!==window || location.origin!=='https://www.jumbo.com' || /login|signin|oauth|auth/i.test(location.pathname))return;
- const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
- if(Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||'')))return;
- if(Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible))return;
- const control=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).find(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()) && !e.closest('[role=dialog],[aria-modal=true]'));
- if(control)control.click();
+ const c=${config};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none';
+ const label=e=>(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible)
+   .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).filter(e=>e.closest('header,[role=banner]'));
+ const expected=c.action==='account'?/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i:/^(inloggen|aanmelden|log in)$/i;
+ const matches=controls.filter(e=>expected.test(label(e)) && !e.closest('[role=dialog],[aria-modal=true]'));
+ let acted=false;
+ if(!cookie && !forms && !/login|signin|oauth|auth/i.test(location.pathname) && matches.length===1){
+  try {matches[0].click();acted=true;} catch {}
+ }
+ window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-action',nonce:c.nonce,action:c.action,acted}});
  })();`;
+}
+export function acceptJumboAction(event,run){
+ const d=event?.detail;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id===event?.id && run.jumboOrigin &&
+   d?.kind==='inhuis-jumbo-action' && d.nonce===run.nonce && ['login','account'].includes(d.action) &&
+   typeof d.acted==='boolean' ? {action:d.action,acted:d.acted} : null;
 }
 
 export function routeCategory(value) {
@@ -106,7 +136,8 @@ export function diagnosticScript(nonce) {
  const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
  const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
  const login=controls.filter(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()));
- const state=cookie?'Cookievenster zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
+ const account=controls.filter(e=>e.closest('header,[role=banner]') && /^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim()));
+ const state=cookie?'Cookievenster zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':account.length>1?'Meerdere accountbedieningen':account.length===1?'Accountbediening in kop':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
  if(window.__inhuisDiagState!==state){window.__inhuisDiagState=state;send(state);}
  if(window.__inhuisDiagNonce===c.nonce)return;
  window.__inhuisDiagNonce=c.nonce;
@@ -123,6 +154,6 @@ export function diagnosticScript(nonce) {
 }
 export function acceptDiagnostic(event,run){
  const d=event?.detail;
- const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
+ const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Meerdere accountbedieningen','Accountbediening in kop','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
  return run?.phase==='diagnose' && run.store===stores.jumbo && run.id===event?.id && run.jumboOrigin && d?.kind==='inhuis-jumbo-diagnostic' && d.nonce===run.nonce && allowed.includes(d.label)?d.label:null;
 }

@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
-import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, routeCategory, appendDiagnostic, diagnosticScript, acceptDiagnostic } from './probe.mjs';
+import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction, routeCategory, appendDiagnostic, diagnosticScript, acceptDiagnostic } from './probe.mjs';
 
 const status = document.getElementById('status');
 const buttons = [...document.querySelectorAll('button')];
@@ -19,6 +19,7 @@ async function inspect(run) {
   }
   if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || run.inspecting) return;
   const history = isHistoryUrl(run.store,run.url);
+  if (run.store === stores.jumbo && history && !run.historyLoaded) return;
   const navigation = run.store===stores.jumbo && run.jumboOrigin && !history;
   if(!history && !navigation) return;
   run.inspecting = true;
@@ -34,7 +35,7 @@ function finish(run, failure = false) {
   if(run.phase==='diagnose'){
     const previous=previousDiagnosticCookie;
     previousDiagnosticCookie=run.cookieSeen;
-    report(['Jumbo diagnose 0.1.6','Cookievenster gezien: '+(run.cookieSeen?'JA':'NIET AANGETOOND'),'Vorige diagnose in deze appsessie: '+(previous===null?'geen':previous?'cookievenster gezien':'cookievenster niet gezien'),'Nieuw browservenster: '+(run.popupSeen?'JA':'NIET AANGETOOND'),'Volgorde van waarnemingen:',...run.trace,'Geen wachtwoorden, cookie-inhoud, URL-parameters of bongegevens opgeslagen.'].join(String.fromCharCode(10)));
+    report(['Jumbo diagnose 0.1.7','Cookievenster gezien: '+(run.cookieSeen?'JA':'NIET AANGETOOND'),'Vorige diagnose in deze appsessie: '+(previous===null?'geen':previous?'cookievenster gezien':'cookievenster niet gezien'),'Nieuw browservenster: '+(run.popupSeen?'JA':'NIET AANGETOOND'),'Volgorde van waarnemingen:',...run.trace,'Geen wachtwoorden, cookie-inhoud, URL-parameters of bongegevens opgeslagen.'].join(String.fromCharCode(10)));
     return;
   }
   if (run.phase === 'login') {
@@ -46,7 +47,7 @@ function finish(run, failure = false) {
   report([
     run.store.name + ' — resultaten',
     'Browser geopend en teruggekeerd: ' + (failure ? 'MISLUKT' : 'GESLAAGD'),
-    ...(run.store === stores.jumbo ? ['Cookievenster gezien: ' + (run.cookieSeen ? 'JA' : 'NIET AANGETOOND'), 'Aanmeldbediening geprobeerd: ' + (run.loginAttempted ? 'JA' : 'NEE'), 'Aanmeldformulier gezien: ' + (run.loginSeen ? 'JA' : 'NIET AANGETOOND'), 'Laatste processtap: ' + ({cookies:'Cookiekeuze',login:'Aanmelden',authenticated:'Aanmeldindicatie',login_available:'Aanmeldknop',unknown:'Onbekend'}[run.jumboState] || 'Onbekend'), 'Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Pagina geladen gemeld: ' + (run.pageLoaded ? 'JA' : 'NEE'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
+    ...(run.store === stores.jumbo ? ['Cookievenster gezien: ' + (run.cookieSeen ? 'JA' : 'NIET AANGETOOND'), 'Accountbediening geprobeerd: ' + (run.accountAttempted ? 'JA' : 'NEE'), 'Accountklik uitgevoerd: ' + (run.accountClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldbediening geprobeerd: ' + (run.loginAttempted ? 'JA' : 'NEE'), 'Aanmeldklik uitgevoerd: ' + (run.loginClicked ? 'JA' : 'NIET BEVESTIGD'), 'Aanmeldformulier gezien: ' + (run.loginSeen ? 'JA' : 'NIET AANGETOOND'), 'Laatste processtap: ' + ({cookies:'Cookiekeuze',login:'Aanmelden',authenticated:'Aanmeldindicatie',login_available:'Aanmeldknop',account_available:'Accountbediening',unknown:'Onbekend'}[run.jumboState] || 'Onbekend'), 'Automatische navigatie geprobeerd: ' + (run.navigationAttempted ? 'JA' : 'NEE'), 'Native navigatie geaccepteerd: ' + (run.navigationAccepted ? 'JA' : 'NEE'), 'Jumbo historieroute bereikt: ' + (run.historyReached ? 'JA' : 'NEE'), 'Historiepagina geladen: ' + (run.historyLoaded ? 'JA' : 'NEE'), 'Geverifieerde historie: ' + (run.evidence?.markers ? 'JA' : 'NEE'), 'Terugkeer: ' + (run.autoCloseRequested && run.evidence?.markers ? 'AUTOMATISCH' : failure ? 'TECHNISCHE FOUT' : 'HANDMATIG / GEANNULEERD'), 'Scriptfout gemeld: ' + (run.scriptFailed ? 'JA' : 'NEE')] : []),
     'Beveiligde browsercommunicatie: ' + (run.evidence?.history ? 'GESLAAGD' : 'NIET AANGETOOND'),
     'Herkenbare historie-elementen: ' + (run.evidence?.markers ? 'GEZIEN' : 'NIET AANGETOOND'),
     'Bonnen daadwerkelijk geïmporteerd: NEE (niet onderdeel van deze proef).',
@@ -64,13 +65,13 @@ async function initialize() {
     if(run.phase==='diagnose')appendDiagnostic(run,'Hoofdvenster route: '+routeCategory(event.url));
     if(run.store===stores.jumbo){try{const u=new URL(event.url);run.jumboOrigin=u.origin===run.store.origin && !u.username && !u.password;}catch{run.jumboOrigin=false;}}
     run.url = isHistoryUrl(run.store,event.url) ? run.store.origin + new URL(event.url).pathname : null;
-    if (run.store === stores.jumbo && run.url) run.historyReached = true;
+    if (run.store === stores.jumbo) { run.historyLoaded = false; if (run.url) run.historyReached = true; }
     void inspect(run);
   }));
   listeners.push(await InAppBrowser.addListener('browserPageLoaded', event => {
     if(active?.phase==='diagnose' && active.popupIds.has(event.id)){appendDiagnostic(active,'Popup pagina geladen');return;}
     if(active?.phase==='diagnose' && active.id===event.id)appendDiagnostic(active,'Hoofdvenster pagina geladen');
-    if (active?.id && event.id === active.id) { active.pageLoaded = true; void inspect(active); }
+    if (active?.id && event.id === active.id) { active.pageLoaded = true; if (active.store === stores.jumbo && isHistoryUrl(active.store,active.url)) active.historyLoaded = true; void inspect(active); }
   }));
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     const run = active;
@@ -83,13 +84,15 @@ async function initialize() {
     if(state){
       const action=jumboTransition(run,state);
       if(action==='history')void InAppBrowser.setUrl({id:run.id,url:stores.jumbo.url}).then(()=>{run.navigationAccepted=true;}).catch(()=>{run.scriptFailed=true;});
-      if(action==='login')void InAppBrowser.executeScript({id:run.id,code:jumboOpenLoginScript()}).catch(()=>{run.scriptFailed=true;});
+      if(action==='login' || action==='account')void InAppBrowser.executeScript({id:run.id,code:jumboOpenLoginScript(run.nonce,action)}).catch(()=>{run.scriptFailed=true;});
       return;
     }
-    const evidence = (run?.phase === 'history' || run?.phase === 'combined') ? acceptEvidence(event, run) : null;
+    const signal=acceptJumboAction(event,run);
+    if(signal){if(signal.action==='account')run.accountClicked=signal.acted; if(signal.action==='login')run.loginClicked=signal.acted; return;}
+    const evidence = (run?.phase === 'history' || run?.phase === 'combined') && (run?.store!==stores.jumbo || run.historyLoaded) ? acceptEvidence(event, run) : null;
     if (evidence) {
       run.evidence = {history:true,markers:Boolean(run.evidence?.markers || evidence.markers)};
-      if(run.store===stores.jumbo && evidence.markers && !run.closing){run.closing=true;void InAppBrowser.close({id:run.id}).catch(()=>{run.closing=false;run.scriptFailed=true;});}
+      if(run.store===stores.jumbo && evidence.markers && !run.closing){run.closing=true;run.autoCloseRequested=true;void InAppBrowser.close({id:run.id}).catch(()=>{run.closing=false;run.autoCloseRequested=false;run.scriptFailed=true;});}
     }
   }));
   listeners.push(await InAppBrowser.addListener('popupWindowOpened', event=>{
@@ -116,7 +119,7 @@ async function initialize() {
 async function open(store, phase = 'login') {
   if (active) return;
   busy(true);
-  const run = {store,nonce:crypto.randomUUID(),id:null,url:null,phase,evidence:null,inspecting:false,trace:[],popupIds:new Set(),cookieSeen:false};
+  const run = {store,nonce:crypto.randomUUID(),id:null,url:null,phase,evidence:null,inspecting:false,trace:[],popupIds:new Set(),cookieSeen:false,historyLoaded:false};
   active = run;
   report(store.name + ' wordt geopend…');
   try {
