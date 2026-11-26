@@ -1,15 +1,22 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser';
-import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript } from './probe.mjs';
+import { stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, routeCategory, appendDiagnostic, diagnosticScript, acceptDiagnostic } from './probe.mjs';
 
 const status = document.getElementById('status');
 const buttons = [...document.querySelectorAll('button')];
 const loaded = new Set();
 let active = null;
+let previousDiagnosticCookie = null;
 const listeners = [];
 function report(message) { status.textContent = message; }
 function busy(value) { buttons.forEach(button => { button.disabled = value; }); }
 async function inspect(run) {
+  if(active===run && run.phase==='diagnose'){
+    if(!run.id || !run.jumboOrigin || run.inspecting)return;
+    run.inspecting=true;
+    try{await InAppBrowser.executeScript({id:run.id,code:diagnosticScript(run.nonce)});}catch{appendDiagnostic(run,'Diagnosescript niet uitgevoerd');}finally{run.inspecting=false;}
+    return;
+  }
   if (active !== run || (run.phase !== 'history' && run.phase !== 'combined') || !run.id || run.inspecting) return;
   const history = isHistoryUrl(run.store,run.url);
   const navigation = run.store===stores.jumbo && run.jumboOrigin && !history;
@@ -24,6 +31,12 @@ function finish(run, failure = false) {
   clearInterval(run.timer);
   active = null;
   busy(false);
+  if(run.phase==='diagnose'){
+    const previous=previousDiagnosticCookie;
+    previousDiagnosticCookie=run.cookieSeen;
+    report(['Jumbo diagnose 0.1.6','Cookievenster gezien: '+(run.cookieSeen?'JA':'NIET AANGETOOND'),'Vorige diagnose in deze appsessie: '+(previous===null?'geen':previous?'cookievenster gezien':'cookievenster niet gezien'),'Nieuw browservenster: '+(run.popupSeen?'JA':'NIET AANGETOOND'),'Volgorde van waarnemingen:',...run.trace,'Geen wachtwoorden, cookie-inhoud, URL-parameters of bongegevens opgeslagen.'].join(String.fromCharCode(10)));
+    return;
+  }
   if (run.phase === 'login') {
     if (!failure) loaded.add(run.store.name);
     report(run.store.name + ': ' + (failure ? 'Browser openen mislukt.' : 'Teruggekeerd uit winkel. Heb je je kunnen aanmelden? Tik dan op Bonhistorie. Aanmelding is nog niet technisch bewezen.'));
@@ -46,17 +59,26 @@ async function initialize() {
   }
   listeners.push(await InAppBrowser.addListener('urlChangeEvent', event => {
     const run = active;
+    if(run?.phase==='diagnose' && run.popupIds.has(event.id)){appendDiagnostic(run,'Popup route: '+routeCategory(event.url));return;}
     if (!run || !run.id || event.id !== run.id) return;
+    if(run.phase==='diagnose')appendDiagnostic(run,'Hoofdvenster route: '+routeCategory(event.url));
     if(run.store===stores.jumbo){try{const u=new URL(event.url);run.jumboOrigin=u.origin===run.store.origin && !u.username && !u.password;}catch{run.jumboOrigin=false;}}
     run.url = isHistoryUrl(run.store,event.url) ? run.store.origin + new URL(event.url).pathname : null;
     if (run.store === stores.jumbo && run.url) run.historyReached = true;
     void inspect(run);
   }));
   listeners.push(await InAppBrowser.addListener('browserPageLoaded', event => {
+    if(active?.phase==='diagnose' && active.popupIds.has(event.id)){appendDiagnostic(active,'Popup pagina geladen');return;}
+    if(active?.phase==='diagnose' && active.id===event.id)appendDiagnostic(active,'Hoofdvenster pagina geladen');
     if (active?.id && event.id === active.id) { active.pageLoaded = true; void inspect(active); }
   }));
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     const run = active;
+    if(run?.phase==='diagnose'){
+      const label=acceptDiagnostic(event,run);
+      if(label){if(label==='Cookievenster zichtbaar')run.cookieSeen=true;appendDiagnostic(run,label);}
+      return;
+    }
     const state=acceptJumboState(event,run);
     if(state){
       const action=jumboTransition(run,state);
@@ -70,9 +92,17 @@ async function initialize() {
       if(run.store===stores.jumbo && evidence.markers && !run.closing){run.closing=true;void InAppBrowser.close({id:run.id}).catch(()=>{run.closing=false;run.scriptFailed=true;});}
     }
   }));
+  listeners.push(await InAppBrowser.addListener('popupWindowOpened', event=>{
+    const run=active;
+    if(run?.phase!=='diagnose' || !run.id || !(event.parentId===run.id || run.popupIds.has(event.parentId)))return;
+    run.popupIds.add(event.id);run.popupSeen=true;
+    appendDiagnostic(run,'Nieuw browservenster: '+routeCategory(event.url));
+  }));
   listeners.push(await InAppBrowser.addListener('closeEvent', event => {
+    if(active?.phase==='diagnose' && active.popupIds.has(event.id)){active.popupIds.delete(event.id);appendDiagnostic(active,'Popup gesloten');return;}
     if (active?.id && event.id === active.id) finish(active);
   }));
+  document.getElementById('jumbo-diagnose').addEventListener('click',()=>void open(stores.jumbo,'diagnose'));
   for (const [key,store] of Object.entries(stores)) {
     document.getElementById(key).addEventListener('click', () => void open(store, key === 'jumbo' ? 'combined' : 'login'));
     if (key === 'jumbo') continue;
@@ -86,12 +116,12 @@ async function initialize() {
 async function open(store, phase = 'login') {
   if (active) return;
   busy(true);
-  const run = {store,nonce:crypto.randomUUID(),id:null,url:null,phase,evidence:null,inspecting:false};
+  const run = {store,nonce:crypto.randomUUID(),id:null,url:null,phase,evidence:null,inspecting:false,trace:[],popupIds:new Set(),cookieSeen:false};
   active = run;
   report(store.name + ' wordt geopend…');
   try {
     const {id} = await InAppBrowser.openWebView({
-      url:phase === 'history' ? store.url : store.startUrl, javascriptBridgeOrigins:phase === 'login' ? [] : [store.origin],
+      url:phase === 'history' ? store.url : phase==='diagnose' ? store.origin+'/' : store.startUrl, javascriptBridgeOrigins:phase === 'login' ? [] : [store.origin],
       allowScreenshotsFromWebPage:false, preventDeeplink:true,
       persistWebViewData:true,
       visibleTitle:true, openBlankTargetInWebView:true

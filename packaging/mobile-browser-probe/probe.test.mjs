@@ -103,3 +103,16 @@ test('cookie dialog precedes login control and is never clicked',()=>{
  assert.equal(clicks,cookie?0:1);
  }
 });
+
+test('diagnostic routes never return actual hosts, queries or account identifiers',async()=>{
+ const {routeCategory,appendDiagnostic,acceptDiagnostic}=await import('./probe.mjs');
+ assert.equal(routeCategory('https://www.jumbo.com/orders?token=secret'),'Historie');
+ assert.equal(routeCategory('https://login.jumbo.com/path?code=secret'),'Jumbo ander domein');
+ assert.equal(routeCategory('https://example.com/private'),'Extern domein');
+ const r={store:stores.jumbo,phase:'diagnose',id:'j',nonce:'n',jumboOrigin:true,trace:[]};
+ const e={id:'j',detail:{kind:'inhuis-jumbo-diagnostic',nonce:'n',label:'Cookievenster zichtbaar'}};
+ assert.equal(acceptDiagnostic(e,r),'Cookievenster zichtbaar');
+ assert.equal(acceptDiagnostic({...e,detail:{...e.detail,label:'secret'}},r),null);
+ assert.equal(acceptDiagnostic(e,{...r,jumboOrigin:false}),null);
+ appendDiagnostic(r,'a');appendDiagnostic(r,'a');assert.deepEqual(r.trace,['a']);
+});

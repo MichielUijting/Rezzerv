@@ -80,3 +80,49 @@ export function jumboOpenLoginScript(){
  if(control)control.click();
  })();`;
 }
+
+export function routeCategory(value) {
+ try{
+  const u=new URL(value);
+  if(u.protocol!=='https:' || u.username || u.password)return 'overig';
+  if(u.hostname!=='www.jumbo.com')return u.hostname.endsWith('.jumbo.com')?'Jumbo ander domein':'Extern domein';
+  if(['/orders','/bestellingen'].includes(u.pathname))return 'Historie';
+  if(/login|signin|oauth|auth/i.test(u.pathname))return 'Aanmeldroute';
+  if(/account|profiel|mijn-jumbo/i.test(u.pathname))return 'Account';
+  return 'Jumbo overige pagina';
+ }catch{return 'Onbekende route';}
+}
+export function appendDiagnostic(run,label) {
+ if(run.trace.length<50 && run.trace.at(-1)!==label)run.trace.push(label);
+}
+export function diagnosticScript(nonce) {
+ const c=JSON.stringify({origin:'https://www.jumbo.com',nonce});
+ return `(() => {
+ const c=${c};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const send=label=>window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-diagnostic',nonce:c.nonce,label}});
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
+ const login=controls.filter(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()));
+ const state=cookie?'Cookievenster zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
+ if(window.__inhuisDiagState!==state){window.__inhuisDiagState=state;send(state);}
+ if(window.__inhuisDiagNonce===c.nonce)return;
+ window.__inhuisDiagNonce=c.nonce;
+ document.addEventListener('click',event=>{
+  if(!event.isTrusted || window.__inhuisDiagNonce!==c.nonce)return;
+  const e=event.target?.closest?.('a,button,[role=button]');
+  if(!e)return;
+  const label=(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+  if(!/^(inloggen|aanmelden|log in|mijn jumbo|account|profiel)$/i.test(label) && !e.closest('header,nav'))return;
+  if(e.closest('form,[role=dialog],[aria-modal=true]'))return;
+  send(e.tagName==='A'?(e.target==='_blank'?'Handmatige klik: link nieuw venster':'Handmatige klik: link'):'Handmatige klik: knop');
+ },true);
+ })();`;
+}
+export function acceptDiagnostic(event,run){
+ const d=event?.detail;
+ const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
+ return run?.phase==='diagnose' && run.store===stores.jumbo && run.id===event?.id && run.jumboOrigin && d?.kind==='inhuis-jumbo-diagnostic' && d.nonce===run.nonce && allowed.includes(d.label)?d.label:null;
+}
