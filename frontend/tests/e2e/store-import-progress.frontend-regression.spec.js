@@ -537,3 +537,32 @@ test('Android onboarding AH callback advances to Jumbo and ignores stale Lidl ha
   await page.getByTestId('jumbo-help-ok').click()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
 })
+
+test('Onboarding does not launch Lidl before selection acknowledgement', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockStorePage(page)
+  let progress = { available: true, selected: [], results: {} }
+  await page.route('**/api/onboarding/stores', route => route.fulfill({ json: progress }))
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let writes = []
+  await page.route('**/api/onboarding/stores/selection', async route => {
+    writes.push(route.request().postDataJSON())
+    await gate
+    progress = { ...progress, selected: ['lidl'] }
+    await route.fulfill({ json: progress })
+  })
+  await page.goto('/onboarding/winkels')
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  expect(writes).toEqual([])
+  try {
+    await page.getByTestId('onboarding-stores-start').click()
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes).toEqual([{ selected: ['lidl'] }])
+    await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
+  } finally {
+    release()
+  }
+  await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
+})
