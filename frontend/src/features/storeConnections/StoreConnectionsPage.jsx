@@ -735,7 +735,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         const confirmation = await loadAhStatus()
         if (cancelled) return
         ahReturnOutcomeRef.current = null
-        if (ahResult === 'connected' && confirmation?.connected === true) {
+        if (confirmation?.connected === true && (ahResult === 'connected' || onboardingMode)) {
           if (onboardingMode) await markOnboardingStoreResult('ah', 'success')
           else setActiveProvider('ah')
           if (onboardingMode) return
@@ -1712,7 +1712,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             ) : null}
             {activeProvider === 'lidl' ? (
               <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
-                counts={lidlCountsView} testId="lidl-web-progress" />
+                processed={lidlTransferProgress?.processed} total={lidlTransferProgress?.total}
+                counts={lidlCountsView} counterLabel="ontvangen" testId="lidl-web-progress" />
             ) : null}
           </div>
         </Card> : null}

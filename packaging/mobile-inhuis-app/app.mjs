@@ -460,7 +460,7 @@ async function handleInhuisLidlMessage(d) {
       requestId: crypto.randomUUID(), lidlOrigin: false,
       historyReached: false, handshakeSent: false, scriptInjected: false,
       inspecting: false, failed: false, finished: false,
-      receiptPhase: false, completing: false, recoveries: 0, confirmedReceipts: new Set(), pendingReceiptId: null,
+      receiptPhase: false, completing: false, recoveries: 0, confirmedReceipts: new Set(), pendingReceiptId: null, attemptSequence: 0,
     }
     lidl = run
     say('Lidl openen. Je meldt je uitsluitend bij de officiële Lidl-website aan.')
@@ -549,7 +549,18 @@ async function handleLidlMessage(event) {
       } else if (d.data.type === 'inhuis:lidl-progress' && !run.receiptPhase && !run.completing) {
         armLidlWatchdog(run, 'Lidl-historielijst geeft geen voortgang terug.', 90000)
       }
-      if (d.data.type === 'inhuis:lidl-receipt') run.pendingReceiptId = String(d.data.receipt?.id || '')
+      if (d.data.type === 'inhuis:lidl-progress' && d.data.stage === 'receipt-attempt' &&
+          run.receiptPhase && d.data.attempt_sequence === run.attemptSequence + 1) {
+        // A new attempt is distinct from an arbitrary status message.
+        run.attemptSequence = d.data.attempt_sequence
+        run.recoveries = 0
+        armLidlWatchdog(run, 'Binnen 60 seconden geen volgende Lidl-bon ontvangen. De periode blijft hervatbaar.')
+      }
+      if (d.data.type === 'inhuis:lidl-receipt') {
+        run.pendingReceiptId = String(d.data.receipt?.id || '')
+        // Receipt delivery ends the load phase; server confirmation is separate.
+        armLidlWatchdog(run, 'Inhuis bevestigt de ontvangen Lidl-bon niet.', 30000)
+      }
       if (d.data.type === 'inhuis:lidl-complete') {
         run.receiptPhase = false
         run.completing = true

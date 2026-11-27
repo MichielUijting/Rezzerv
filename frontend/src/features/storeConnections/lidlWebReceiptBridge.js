@@ -369,16 +369,20 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     try {
       iframe.src = url
       const started = Date.now()
+      let diagnostic = 'bondetail ontbreekt'
       while (Date.now() - started < timeoutMs) {
         await sleep(250)
         try {
           const doc = iframe.contentDocument
           if (doc && doc.querySelector('[data-testid="ticket-' + CSS.escape(receiptId) + '"] pre')) {
-            return parseReceipt(doc, receiptId, fallback)
-          }
-        } catch {}
+            try { return parseReceipt(doc, receiptId, fallback) }
+            catch { diagnostic = 'bondetail aanwezig maar uitlezen mislukt' }
+          } else if (!doc) diagnostic = 'browserframe niet toegankelijk'
+          else if (doc.readyState !== 'complete') diagnostic = 'pagina nog niet geladen'
+          else diagnostic = 'pagina geladen zonder verwacht bondetail'
+        } catch { diagnostic = 'browserframe uitlezen mislukt' }
       }
-      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen')
+      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen (' + diagnostic + ')')
     } finally {
       iframe.remove()
     }
@@ -496,40 +500,53 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       post({ type: 'inhuis:lidl-progress', stage: 'receipts', processed: 0, total: entries.length, message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
       let lastImportedDay = ''
       let imported = 0
-      for (const entry of entries) {
-        post({
-          type: 'inhuis:lidl-progress',
-          message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
-        })
-        // Three bounded retries for transient detail reads, within the native receipt budget.
-        const deadline = Date.now() + 60000
-        let receipt
-        for (let attempt = 0; attempt <= 3; attempt++) {
+      // Never reload a confirmed receipt during this scan. Defer unreadable
+      // details, but do not declare the scan complete while any remain.
+      let pending = entries.slice()
+      let attemptSequence = 0
+      for (let attempt = 0; attempt <= (nativeRequestId ? 3 : 0) && pending.length; attempt++) {
+        const deferred = []
+        for (const entry of pending) {
+          post({
+            type: 'inhuis:lidl-progress', stage: 'receipt-attempt',
+            attempt_sequence: ++attemptSequence,
+            message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
+          })
+          let receipt
           try {
-            receipt = await loadDetail(entry.href, entry, nativeRequestId ? 10000 : 45000)
-            break
+            receipt = await loadDetail(entry.href, entry, nativeRequestId ? 60000 : 45000)
           } catch (error) {
-            if (attempt === 3 || !nativeRequestId || Date.now() >= deadline - 10000) throw error
-            post({ type: 'inhuis:lidl-progress', message: 'Lidl-bon opnieuw lezen (poging ' + (attempt + 2) + ' van 4)…' })
+            if (!nativeRequestId) throw error
+            deferred.push({ ...entry, diagnostic: String(error.message || 'Bondetail niet beschikbaar') })
+            post({ type: 'inhuis:lidl-progress', stage: 'receipt-deferred',
+              message: 'Lidl-bon tijdelijk uitgesteld; overige bonnen worden opgehaald.' })
+            continue
           }
+          const matchesWindow = withinWindow(receipt.dateTime)
+          if (isHistory && matchesWindow !== true) {
+            if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
+            continue
+          }
+          // A receipt delivered near the deadline still needs its own durable ACK.
+          // Never retry an uncertain write inside the browser: preserve the period.
+          const acknowledgement = waitForAck(receipt.id, 30000)
+          post({ type: 'inhuis:lidl-receipt', receipt })
+          await acknowledgement
+          if (isHistory) {
+            const day = normalizeDay(receipt.dateTime)
+            if (day > lastImportedDay) lastImportedDay = day
+          }
+          imported += 1
+          post({
+            type: 'inhuis:lidl-progress',
+            processed: imported, total: entries.length, message: imported + ' van ' + entries.length + ' bonnen ontvangen.',
+          })
         }
-        const matchesWindow = withinWindow(receipt.dateTime)
-        if (isHistory && matchesWindow !== true) {
-          if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
-          continue
-        }
-        const acknowledgement = waitForAck(receipt.id, nativeRequestId ? Math.max(1, deadline - Date.now()) : 30000)
-        post({ type: 'inhuis:lidl-receipt', receipt })
-        await acknowledgement
-        if (isHistory) {
-          const day = normalizeDay(receipt.dateTime)
-          if (day > lastImportedDay) lastImportedDay = day
-        }
-        imported += 1
-        post({
-          type: 'inhuis:lidl-progress',
-          processed: imported, total: entries.length, message: imported + ' van ' + entries.length + ' bonnen ontvangen.',
-        })
+        pending = deferred
+      }
+      if (pending.length) {
+        throw new Error(pending.length + ' Lidl-bonnen konden niet worden geladen. ' +
+          pending[0].diagnostic + '. De periode blijft hervatbaar.')
       }
 
       post({
