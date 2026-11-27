@@ -7,7 +7,6 @@ receipt date and household cutover. No on-screen or per-item confirmation.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import json
 
@@ -18,9 +17,11 @@ from app.services.historical_household_stock_replay import (
     replay_historical_stock, MAX_HISTORICAL_PURCHASE_LINES,
 )
 from app.services.receipt_historical_learning_service import (
-    OBSERVATION_DAYS, _HISTORICAL_PRODUCT_LINES_SQL, _date,
+    _HISTORICAL_PRODUCT_LINES_SQL, _date,
 )
-from app.services.receipt_historical_import_policy import read_household_cutover
+from app.services.receipt_historical_import_policy import (
+    historical_history_start_date, read_household_cutover,
+)
 from app.services.product_day_auto_consume_service import (
     AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY,
     AUTO_CONSUME_ALL_EXISTING,
@@ -35,7 +36,10 @@ from app.services.synonym_auto_consume_service import _verified_household_packag
 # to determine its household's autonomous historical stock.
 _HISTORICAL_AUTO_SOURCE_SQL = _HISTORICAL_PRODUCT_LINES_SQL.replace(
     "  AND rt.approved_at IS NOT NULL\n",
-    "  AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')\n",
+    "  AND (lower(trim(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')\n"
+    "       OR (lower(trim(COALESCE(rt.parse_status, ''))) IN ('partial', 'review_needed')\n"
+    "           AND rs.type = 'retailer_api'\n"
+    "           AND rs.source_path IN ('ah', 'jumbo', 'lidl')))\n",
 ).replace(
     "rt.store_name, rr.sha256_hash,",
     "rt.store_name, rr.sha256_hash, rs.type AS source_type, rs.source_path AS source_provider, "
@@ -207,9 +211,10 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         return {"status": "legacy_not_enabled", "household_id": owner,
                 "writes_inventory": False, "quantities": {}, "source_line_count": 0}
 
+    history_start = historical_history_start_date(cutoff)
     source = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
         "household_id": owner,
-        "earliest_date": cutoff - timedelta(days=OBSERVATION_DAYS),
+        "earliest_date": history_start,
         "row_limit": MAX_HISTORICAL_PURCHASE_LINES + 1,
     }).mappings().all()
     if len(source) > MAX_HISTORICAL_PURCHASE_LINES:
@@ -229,7 +234,7 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
     for raw in source:
         row = dict(raw)
         day = _date(row.get("purchase_at"))
-        if not day or day >= cutoff or day < cutoff - timedelta(days=OBSERVATION_DAYS):
+        if not day or day >= cutoff or day < history_start:
             excluded += 1
             continue
         if str(row.get("purchase_at_source") or "").strip().lower() == "import_default":

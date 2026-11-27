@@ -161,3 +161,41 @@ def test_digital_historical_line_with_private_article_and_no_unit_replays():
     result = source.load_automatic_historical_stock(Conn([row]), household_id="home")
     assert result["quantities"] == {"ha-1": 1}
     assert result["excluded_untrusted_rows"] == 0
+
+
+
+def test_previous_calendar_year_is_included_even_outside_365_days():
+    from app.services.receipt_historical_import_policy import historical_history_start_date
+    assert historical_history_start_date(CUTOFF) == date(2025, 1, 1)
+    assert historical_history_start_date(date(2026, 1, 1)) == date(2025, 1, 1)
+    conn = Conn([
+        line("2024-12-31", "old", 9),
+        line("2025-01-01", "first", 2),
+        line("2026-11-19", "last", 5),
+        line("2026-11-20", "current", 10),
+    ])
+    result = source.load_automatic_historical_stock(conn, household_id="home")
+    assert result["source_line_count"] == 2
+    assert result["quantities"] == {"ha-1": 5}
+    assert result["purchase_cadences"]["ha-1"]["purchase_day_count"] == 2
+    assert conn.queries[1][1]["earliest_date"] == date(2025, 1, 1)
+
+
+def test_partly_review_needed_digital_receipts_keep_proven_physical_lines():
+    sql = source._HISTORICAL_AUTO_SOURCE_SQL
+    assert "'review_needed'" in sql and "'partial'" in sql
+    assert "rs.type = 'retailer_api'" in sql
+    assert "rs.source_path IN ('ah', 'jumbo', 'lidl')" in sql
+    assert "rt.approved_at IS NOT NULL" not in sql
+    rows = [
+        line("2025-06-01", "trusted-ah", 2),
+        line("2025-06-02", "uncertain-lidl", 3, matched=None, product=None),
+        line("2025-06-03", "financial-jumbo", 4, role="financial"),
+        line("2025-06-04", "trusted-jumbo", 3),
+    ]
+    for row, provider in zip(rows, ("ah", "lidl", "jumbo", "jumbo")):
+        row.update(source_type="retailer_api", source_provider=provider)
+    result = source.load_automatic_historical_stock(Conn(rows), household_id="home")
+    assert result["source_line_count"] == 2
+    assert result["excluded_untrusted_rows"] == 2
+    assert result["quantities"] == {"ha-1": 3}

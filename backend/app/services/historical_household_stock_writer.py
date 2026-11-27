@@ -425,18 +425,18 @@ def _prepare_historical_article_links(conn, owner, cutoff):
     Previously saved selections are retained. The existing receipt-to-stock
     resolver refuses ambiguous same-name items and foreign article IDs.
     """
-    from datetime import timedelta
     from app import main as legacy
     from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
     from app.services.historical_household_stock_source import (
         _HISTORICAL_AUTO_SOURCE_SQL, _is_digital_purchase, _stock_units,
-        MAX_HISTORICAL_PURCHASE_LINES, OBSERVATION_DAYS,
+        MAX_HISTORICAL_PURCHASE_LINES,
     )
+    from app.services.receipt_historical_import_policy import historical_history_start_date
     from app.services.receipt_stock_review_service import resolve_stock_household_article
 
     rows = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
         "household_id": owner,
-        "earliest_date": cutoff - timedelta(days=OBSERVATION_DAYS),
+        "earliest_date": historical_history_start_date(cutoff),
         "row_limit": MAX_HISTORICAL_PURCHASE_LINES + 1,
     }).mappings().all()
     if len(rows) > MAX_HISTORICAL_PURCHASE_LINES:

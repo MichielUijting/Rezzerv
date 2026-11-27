@@ -164,3 +164,16 @@ def activate_cutover_for_new_onboarding(
         ON CONFLICT (household_id) DO NOTHING
     """), {"household_id": normalized})
     return inserted.rowcount == 1
+
+
+def historical_history_start_date(first_current_purchase_date) -> date:
+    """Start of the initial retailer-history period: 1 January previous year.
+
+    Unlike an elapsed-day window, this date stays fixed for a household's
+    original cutover when older receipts arrive later. Current purchases
+    start *on* the cutover day and are never replayed as opening inventory.
+    """
+    cutoff = _date(first_current_purchase_date)
+    if cutoff is None:
+        raise ValueError("Historische beginperiode vereist een geldige huishoudgrens")
+    return date(cutoff.year - 1, 1, 1)

@@ -143,3 +143,21 @@ worden niet als fysiek voorraadaantal gepubliceerd.
 Geen merge of deployment zonder afzonderlijke expliciete PO-GO. PR blijft
 Draft tijdens implementatie. Niet automatisch oude, onbetrouwbare bonnen
 als actuele voorraad boeken.
+
+
+## Aanvulling PR #732 — historische ontvangstperiode en regelniveau
+
+TEST_LEVEL_PROVISIONAL: L. De automatische bewezen beginvoorraad gebruikt
+1 januari van het jaar vóór de huishoudgebonden datumgrens, tot maar exclusief
+de datumgrens zelf. De afzonderlijke indicatieve PR2-analyse behoudt haar
+read-only onzekerheidscontract.
+
+Digitale bonnen van AH, Lidl en Jumbo met `partial` of `review_needed`
+kunnen aantoonbaar betrouwbare fysieke regels bevatten. De selectie kan deze
+regels verwerken zonder de volledige bon goed te keuren. Per regel blijven
+betrouwbare datum, fysieke rol/voorraadgeschiktheid, positieve gehele stuks,
+bewezen huishoudartikelidentiteit en unieke bronidentiteit noodzakelijk.
+Onzekere regels en andere parserstatussen blijven uitgesloten.
+De bestaande transactiebescherming op actuele en handmatige voorraad blijft
+onverminderd van toepassing. Dit is een Draft-tussenreparatie, geen volledige
+acceptatie van alle acht gevraagde herstelpunten.
