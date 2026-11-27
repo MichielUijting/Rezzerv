@@ -1,4 +1,4 @@
-# Inhuis Android-testapp (native Jumbo)
+# Inhuis Android-testapp (native Jumbo en Lidl)
 
 Dit is de reguliere Inhuis-website, geopend binnen een native Android-WebView,
 met de bewezen Jumbo-webview uit Browserproef 0.1.10 (PR #733).
@@ -11,7 +11,7 @@ credentials); alleen de niet-geheime origin wordt bewaard. Een HTTP/Tailscale-IP
 is opzettelijk niet toegestaan. Voor gebruik is dus een echte TLS-verbinding
 met de Inhuis-backend vereist. De app verandert geen servers of certificaten.
 
-Jumbo wordt geopend in de Capgo InAppBrowser met persistente WebView-data.
+Jumbo en Lidl worden geopend in de Capgo InAppBrowser met persistente WebView-data.
 De programmatuur hergebruikt de geteste intern-router navigatie uit PR #733,
 en stuurt alleen de bonpayload via een gebonden, tijdelijke brug naar de bestaande
 Inhuis-batchverwerking. De backend controleert per write de Inhuis-gebruiker en
@@ -32,3 +32,27 @@ een state-mismatch op. De herhaalde sessie werkte, maar die fout is nog niet
 objectief verklaard. De oorspronkelijke cookie- en authbeveiliging blijven intact.
 De winkelvoorwaarden en toestemming voor productie-import moeten apart worden
 beoordeeld. Geen release/merge/deployment vanuit deze testbuild.
+
+
+## AH en Lidl in de native Android-testapp
+
+AH OAuth gebruikt op een via HTTPS geopende Tailscale Inhuis-host een **afzonderlijke
+HTTPS-listener op poort 8443** met dezelfde betrouwbare Tailscale TLS-identiteit.
+Deze listener reverse-proxyt uitsluitend naar de al bestaande lokale backend op
+127.0.0.1:8011. De vertrouwde Inhuis HTTPS-listener op 443 blijft ongewijzigd.
+Tailscale Serve moet vóór de PO-test afzonderlijk beschikbaar worden gemaakt; het
+wijzigen van Docker- of databasebindingen is niet nodig. De backend weigert de
+oude HTTP OAuth-link voor HTTPS-clients. AH-proxycookies zijn namespaced en
+uitsluitend die cookies worden naar AH doorgestuurd. Tailscale certificaat- en
+Android cleartext-beveiliging blijven verplicht.
+
+Lidl gebruikt in de native Android-app voortaan de afzonderlijke Lidl WebView en
+een tijdelijk, aan native browser-ID, request-ID, gebruiker en huishouden gebonden
+transport. De bewezen Lidl-historieparser en bestaande centrale receipt-importqueue
+worden ongewijzigd hergebruikt. Iedere bon heeft een queue-ACK; alleen de bestaande
+backend-afronding van de volledige Lidl-historische import, ook bij een lege periode,
+mag de native WebView sluiten en de onboardingstatus bijwerken. De normale
+desktop-/browserroute met browserfavoriet blijft bestaan.
+
+De bestaande native Jumbo-flow is de regressiebaseline. Er is geen automatische
+merge, deployment, productiepublicatie of wijziging aan Docker-volumes voorzien.
