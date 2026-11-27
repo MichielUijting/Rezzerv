@@ -271,7 +271,7 @@ def test_proxy_preserves_browser_headers_needed_by_login_controls() -> None:
     assert "host" not in headers
     assert "accept-encoding" not in headers
     assert "content-length" not in headers
-    assert "inhuis_ah_oauth_flow" not in headers["cookie"]
+    assert "cookie" not in headers
 
 
 def test_ah_mobile_authorize_uses_trusted_per_flow_installation_id(monkeypatch) -> None:
@@ -397,7 +397,7 @@ def test_proxy_rewrites_nextjs_rsc_and_preserves_flow_cookie(monkeypatch) -> Non
     assert b"ah-oauth/callback?code=synthetic" in result.body
     assert observed["url"] == "https://login.ah.nl/login/ingelogd"
     assert "cookie" not in observed["headers"]
-    assert "inhuis_ah_oauth_flow" not in observed["headers"]["cookie"]
+    assert "cookie" not in observed["headers"]
 
 
 def test_proxy_rewrites_appie_callback_and_sanitizes_login_cookie() -> None:
