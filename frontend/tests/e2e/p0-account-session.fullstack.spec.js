@@ -36,11 +36,8 @@ async function completeInitialRegistrationAndOnboarding(page, accountEmail, acco
   await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
   await expect(page.getByTestId('receipt-connections-overview-table')).toHaveCount(0)
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
-  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
 }
 
 async function logoutThroughMyAccount(page) {
