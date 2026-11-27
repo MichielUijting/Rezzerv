@@ -1309,6 +1309,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) + (onboardingMode ? '&onboarding=true' : ''),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
+      const login = new URL(data.login_url)
+      if (login.username || login.password || login.search || login.hash ||
+          !/^\/ah-oauth\/launch\/[A-Za-z0-9_-]+$/.test(login.pathname) ||
+          (window.location.protocol === 'https:' && login.protocol !== 'https:') ||
+          !['https:', 'http:'].includes(login.protocol)) {
+        throw new Error('De AH-aanmeldroute is niet veilig bereikbaar via HTTPS. Controleer de beveiligde AH-koppeling.')
+      }
       ahLoginNavigatingRef.current = true
       window.location.assign(data.login_url)
     } catch (err) {

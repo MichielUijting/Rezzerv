@@ -40,6 +40,63 @@ def _request(
     return Request(scope, receive=empty_http_body)
 
 
+
+def test_https_tailscale_uses_separate_secure_origin_and_rejects_http_downgrade(monkeypatch):
+    import pytest
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    request = _request(
+        host="inhuis-work.tailnet-example.ts.net", port=5174,
+        extra_headers={"x-forwarded-proto": "https"},
+    )
+    flow = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="https://inhuis-work.tailnet-example.ts.net/onboarding/winkels",
+        onboarding=True,
+    )
+    assert flow.backend_origin == "https://inhuis-work.tailnet-example.ts.net:8443"
+    assert oauth.build_ah_oauth_launch_url(flow).startswith(
+        "https://inhuis-work.tailnet-example.ts.net:8443/ah-oauth/launch/"
+    )
+    response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id, request))
+    assert "secure" in response.headers["set-cookie"].lower()
+
+    monkeypatch.setenv("REZZERV_BACKEND_PUBLIC_URL", "http://inhuis-work.tailnet-example.ts.net:8011")
+    with pytest.raises(RuntimeError, match="HTTPS"):
+        oauth.resolve_backend_public_origin(request)
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    with pytest.raises(RuntimeError, match="HTTPS"):
+        oauth.resolve_backend_public_origin(_request(
+            host="other.example", extra_headers={"x-forwarded-proto": "https"},
+        ))
+
+
+def test_ah_proxy_isolates_cookies_on_same_https_hostname():
+    assert oauth._clean_forward_cookie(
+        "inhuis_session=SECRET; session=SECRET; "
+        "__inhuis_ah_proxy_ah_session=ah-value; "
+        "inhuis_ah_oauth_flow=SECRET; Authorization=SECRET"
+    ) == "ah_session=ah-value"
+    cookie = oauth._namespace_ah_set_cookie(
+        "ah_session=abc; Path=/; HttpOnly; SameSite=None; Domain=login.ah.nl",
+        secure=True,
+    )
+    assert cookie == "__inhuis_ah_proxy_ah_session=abc; Path=/; HttpOnly; Secure"
+    assert oauth._namespace_ah_set_cookie("inhuis_session=abc; Path=/", secure=True) == ""
+    headers = oauth.build_ah_forward_headers(
+        _request(
+            cookie="inhuis_session=private; __inhuis_ah_proxy_ah_session=ah-value",
+            extra_headers={
+                "authorization": "Bearer private",
+                "x-inhuis-expected-household": "private-household",
+            },
+        ),
+        backend_origin="https://inhuis-work.tailnet-example.ts.net:8443",
+    )
+    assert headers["cookie"] == "ah_session=ah-value"
+    assert "authorization" not in headers
+    assert "x-inhuis-expected-household" not in headers
+
+
 def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) -> None:
     oauth.reset_ah_oauth_flows_for_tests()
     monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
@@ -209,7 +266,8 @@ def test_proxy_preserves_browser_headers_needed_by_login_controls() -> None:
     assert headers["x-requested-with"] == "fetch"
     assert headers["origin"] == "https://login.ah.nl"
     assert headers["referer"] == "https://login.ah.nl/login?client_id=appie-ios"
-    assert headers["cookie"] == "ah_session=kept"
+    assert "cookie" not in headers
+    assert "inhuis_ah_oauth_flow" not in str(headers)
     assert "host" not in headers
     assert "accept-encoding" not in headers
     assert "content-length" not in headers
@@ -338,7 +396,7 @@ def test_proxy_rewrites_nextjs_rsc_and_preserves_flow_cookie(monkeypatch) -> Non
     assert b"appie://" not in result.body
     assert b"ah-oauth/callback?code=synthetic" in result.body
     assert observed["url"] == "https://login.ah.nl/login/ingelogd"
-    assert observed["headers"]["cookie"] == "ah_session=synthetic-cookie"
+    assert "cookie" not in observed["headers"]
     assert "inhuis_ah_oauth_flow" not in observed["headers"]["cookie"]
 
 

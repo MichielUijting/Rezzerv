@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import AddressValueError, IPv4Address
 import logging
 import os
+import re
 from pathlib import Path
 import secrets
 from threading import RLock
@@ -64,6 +65,10 @@ _FLOW_RETURN_COOKIE = "inhuis_ah_oauth_return_mode"
 _FLOW_TTL = timedelta(minutes=5)
 _FLOW_RETURN_TTL_SECONDS = 3600
 _DEFAULT_BACKEND_PUBLIC_PORT = "8011"
+_AH_TAILSCALE_HTTPS_PORT = "8443"
+# Cookies on different ports of one hostname are shared by browsers. Only
+# cookie names explicitly namespaced by this proxy may ever be sent to AH.
+_AH_PROXY_COOKIE_PREFIX = "__inhuis_ah_proxy_"
 
 
 @dataclass(frozen=True)
@@ -111,20 +116,31 @@ def _ah_login_hostname(browser_hostname: str) -> str:
 
 def resolve_backend_public_origin(request: Request) -> str:
     configured = str(os.getenv("REZZERV_BACKEND_PUBLIC_URL", "") or "").strip().rstrip("/")
+    scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
+    if scheme not in {"http", "https"}:
+        raise RuntimeError("Ongeldig protocol voor AH OAuth")
     if configured:
         parsed = urlparse(configured)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname or
+            parsed.username or parsed.password or parsed.path not in {"", "/"} or
+            parsed.query or parsed.fragment):
             raise RuntimeError("REZZERV_BACKEND_PUBLIC_URL is ongeldig")
-        return configured
+        if scheme == "https" and parsed.scheme != "https":
+            raise RuntimeError("AH OAuth vereist een afzonderlijke HTTPS-route")
+        return parsed._replace(path="", query="", fragment="").geturl().rstrip("/")
 
     forwarded_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
     hostname = forwarded_host.split(":", 1)[0].strip("[]") if forwarded_host else (request.url.hostname or "")
     if not hostname:
         raise RuntimeError("Backend-host voor AH-login kon niet worden bepaald")
 
-    scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
-    if scheme not in {"http", "https"}:
-        scheme = "http"
+    if scheme == "https":
+        # AH needs a separate root origin for its absolute asset paths. The
+        # existing Inhuis HTTPS listener remains on 443; Serve may expose the
+        # same backend safely at 8443, with its own trusted TLS certificate.
+        if not hostname.lower().endswith(".ts.net") or hostname.count(".") < 2:
+            raise RuntimeError("Configureer een aparte vertrouwde HTTPS-origin voor AH OAuth")
+        return f"https://{hostname.lower()}:{_AH_TAILSCALE_HTTPS_PORT}"
     public_port = str(os.getenv("REZZERV_BACKEND_PUBLIC_PORT", _DEFAULT_BACKEND_PUBLIC_PORT) or "").strip()
     if not public_port.isdigit():
         raise RuntimeError("REZZERV_BACKEND_PUBLIC_PORT is ongeldig")
@@ -310,16 +326,36 @@ def _rewrite_location(location: str, *, backend_origin: str) -> str:
 
 
 def _clean_forward_cookie(cookie_header: str) -> str:
+    """Forward only namespaced AH cookies, never any Inhuis auth/session cookie."""
     pairs = []
     for raw in str(cookie_header or "").split(";"):
         part = raw.strip()
-        if not part:
+        if "=" not in part:
             continue
-        name = part.split("=", 1)[0].strip()
-        if name == _FLOW_COOKIE:
+        name, value = part.split("=", 1)
+        if not name.startswith(_AH_PROXY_COOKIE_PREFIX):
             continue
-        pairs.append(part)
+        original = name[len(_AH_PROXY_COOKIE_PREFIX):]
+        if not original or original.lower().startswith("inhuis_"):
+            continue
+        pairs.append(f"{original}={value}")
     return "; ".join(pairs)
+
+
+def _namespace_ah_set_cookie(value: str, *, secure: bool) -> str:
+    """Keep AH's cookie attributes, but never collide with Inhuis cookies."""
+    clean = sanitize_ah_set_cookie(value)
+    name, sep, remainder = clean.partition("=")
+    if not sep or not name or name.lower().startswith("inhuis_"):
+        return ""
+    # RFC cookie names are tokens; refuse malformed/injected upstream headers.
+    if any(char not in "!#$%&'*+-.^_\x60|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+           for char in name):
+        return ""
+    cookie = f"{_AH_PROXY_COOKIE_PREFIX}{name}={remainder}"
+    if secure and "; secure" not in cookie.lower():
+        cookie += "; Secure"
+    return cookie
 
 
 _REQUEST_HEADER_EXCLUDE = {
@@ -334,6 +370,16 @@ _REQUEST_HEADER_EXCLUDE = {
     "upgrade",
     "accept-encoding",
     "cookie",
+    "authorization",
+    "proxy-authorization",
+    "x-csrf-token",
+    "x-xsrf-token",
+    "x-inhuis-expected-user",
+    "x-inhuis-expected-household",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-forwarded-for",
+    "x-real-ip",
     "x-fraud-detection-installation-id",
 }
 
@@ -536,9 +582,11 @@ async def proxy_ah_login(path: str, request: Request):
         response.headers["location"] = _rewrite_location(location, backend_origin=flow.backend_origin)
 
     for set_cookie in upstream.headers.get_list("set-cookie"):
-        sanitized = sanitize_ah_set_cookie(set_cookie)
-        if sanitized:
-            response.headers.append("set-cookie", sanitized)
+        namespaced = _namespace_ah_set_cookie(
+            set_cookie, secure=flow.backend_origin.startswith("https://"),
+        )
+        if namespaced:
+            response.headers.append("set-cookie", namespaced)
 
     return response
 
