@@ -40,6 +40,9 @@ AH OAuth gebruikt op een via HTTPS geopende Tailscale Inhuis-host een **afzonder
 HTTPS-listener op poort 8443** met dezelfde betrouwbare Tailscale TLS-identiteit.
 Deze listener reverse-proxyt uitsluitend naar de al bestaande lokale backend op
 127.0.0.1:8011. De vertrouwde Inhuis HTTPS-listener op 443 blijft ongewijzigd.
+De separate HTTPS-verbinding wordt veilig ingericht met
+`scripts/po-tests/Inhuis_AH_HTTPS_8443_instellen.bat`; deze controleert eerst
+bestaande Tailscale 443 en 8443 en wijzigt Docker of de database niet.
 Tailscale Serve moet vóór de PO-test afzonderlijk beschikbaar worden gemaakt; het
 wijzigen van Docker- of databasebindingen is niet nodig. Android staat geen
 onbeveiligd HTTP toe, ook niet naar de eigen Tailscale-host. De backend weigert de
@@ -65,7 +68,7 @@ De CI genereert de native Android-app vanuit de Capacitor-template. De template
 begint standaard met Android-versienaam 1.0. Het canonieke
 `sync-android-version.mjs` past daarom na Capacitor sync **versionName en
 versionCode in de gegenereerde Gradle-configuratie** aan op de geversioneerde
-Android-package.json (voor 1.12.459 is versionCode 1120459). De APK-workflow
+Android-package.json (voor 1.12.461 is versionCode 1120461). De APK-workflow
 controleert de daadwerkelijke AndroidManifest-versienaam via de officiële aapt-tool.
 Dit voorkomt dat de Android-installer een andere versie toont en maakt een
 correcte versiecode-volgorde mogelijk. Installatie over een bestaande app is
