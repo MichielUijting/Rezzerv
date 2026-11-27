@@ -73,13 +73,25 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   for (const width of [390, 320, 1280]) {
     await page.setViewportSize({ width, height: 844 })
     const selection = page.getByTestId('store-onboarding-selection')
-    for (const header of await selection.locator('thead th').all()) {
-      await expect(header).toHaveCSS('color', 'rgb(255, 255, 255)')
+    // Changing viewport may remount the responsive shell and reload store selection.
+    // Wait for the actual table, not the temporary loading panel with the same route.
+    const table = selection.locator('table')
+    const headers = table.locator('thead th')
+    await expect(table).toBeVisible()
+    await expect(headers).toHaveCount(3)
+    for (let index = 0; index < 3; index++) {
+      await expect(headers.nth(index)).toHaveCSS('color', 'rgb(255, 255, 255)')
     }
-    const table = await selection.locator('table').boundingBox()
-    expect(table.x + table.width).toBeLessThanOrEqual(width + 1)
-    const later = await page.getByTestId('onboarding-stores-later').boundingBox()
-    expect(later.x + later.width).toBeLessThanOrEqual(width + 1)
+    await expect.poll(async () => {
+      const box = await table.boundingBox()
+      return box ? box.x + box.width : Infinity
+    }).toBeLessThanOrEqual(width + 1)
+    const later = page.getByTestId('onboarding-stores-later')
+    await expect(later).toBeVisible()
+    await expect.poll(async () => {
+      const box = await later.boundingBox()
+      return box ? box.x + box.width : Infinity
+    }).toBeLessThanOrEqual(width + 1)
   }
   // Checkbox clicks never persist or refresh; several shops can be picked
   // immediately, then adjusted locally before one explicit confirmation.
