@@ -655,3 +655,30 @@ def test_ah_expired_https_flow_never_downgrades_to_internal_port(monkeypatch):
         onboarding=False,
     )
     assert flow.return_to.startswith("https://inhuis-work.tailnet-example.ts.net/")
+
+def test_native_android_ah_reuses_existing_tailscale_8011(monkeypatch):
+    import pytest
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    request = _request(
+        host="inhuis-work.tailnet-example.ts.net",
+        extra_headers={"x-forwarded-proto": "https"},
+    )
+    flow = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="https://inhuis-work.tailnet-example.ts.net/onboarding/winkels",
+        onboarding=True, native_http=True,
+    )
+    assert flow.backend_origin == "http://inhuis-work.tailnet-example.ts.net:8011"
+    assert oauth._return_with_status(flow, "connected") == (
+        "https://inhuis-work.tailnet-example.ts.net/onboarding/winkels?ah=connected"
+    )
+    assert oauth._safe_failure_return_url(
+        _request(host="inhuis-work.tailnet-example.ts.net", port=8011)
+    ) == "https://inhuis-work.tailnet-example.ts.net/instellingen/winkelkoppelingen?ah=error"
+    with pytest.raises(RuntimeError):
+        oauth.resolve_backend_public_origin(_request(
+            host="other.example", extra_headers={"x-forwarded-proto": "https"},
+        ), native_http=True)
+    with pytest.raises(RuntimeError):
+        oauth.resolve_backend_public_origin(
+            _request(host="inhuis-work.tailnet-example.ts.net"), native_http=True)

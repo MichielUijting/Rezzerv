@@ -26,6 +26,7 @@ import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { snapshotJumboImportContext, jumboImportContextHeaders, verifyJumboImportContext } from './jumboImportContext.js'
 import { nativeJumboShell, startNativeJumboTransport } from './nativeJumboTransport.js'
 import { startNativeLidlTransport } from './nativeLidlTransport.js'
+import { openNativeAhLogin, validNativeAhLoginUrl } from './nativeAhTransport.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
@@ -1352,19 +1353,26 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     setAhBusy(true)
     try {
       const returnTo = window.location.origin + (onboardingMode ? '/onboarding/winkels' : '/instellingen/winkelkoppelingen')
+      const nativeAh = Boolean(nativeJumboShell())
       const data = await fetchJson(
-        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) + (onboardingMode ? '&onboarding=true' : ''),
+        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) +
+          (onboardingMode ? '&onboarding=true' : '') + (nativeAh ? '&native_http=true' : ''),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
       const login = new URL(data.login_url)
       if (login.username || login.password || login.search || login.hash ||
           !/^\/ah-oauth\/launch\/[A-Za-z0-9_-]+$/.test(login.pathname) ||
-          (window.location.protocol === 'https:' && login.protocol !== 'https:') ||
+          (nativeAh ? !validNativeAhLoginUrl(login.href, window.location.origin) :
+            (window.location.protocol === 'https:' && login.protocol !== 'https:')) ||
           !['https:', 'http:'].includes(login.protocol)) {
         throw new Error('De AH-aanmeldroute is niet veilig bereikbaar via HTTPS. Controleer de beveiligde AH-koppeling.')
       }
       ahLoginNavigatingRef.current = true
-      window.location.assign(data.login_url)
+      if (nativeAh) {
+        if (!openNativeAhLogin(data.login_url)) {
+          throw new Error('De beveiligde Android-AH-browser kon niet worden geopend.')
+        }
+      } else window.location.assign(data.login_url)
     } catch (err) {
       ahLoginNavigatingRef.current = false
       setAhBusy(false)
