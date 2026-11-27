@@ -37,7 +37,8 @@ _RECEIPT_COUNTS_SQL = text("""
                WHEN :cutover_enabled = 1
                 AND rt.purchase_at IS NOT NULL
                 AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
-                AND LOWER(TRIM(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')
+                AND LOWER(TRIM(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved', 'partial', 'review_needed')
+                AND CAST(rt.purchase_at AS DATE) >= :history_start
                 AND rt.purchase_at < :cutoff_datetime
                THEN rt.id END) AS historical_receipts,
            COUNT(DISTINCT CASE
@@ -67,7 +68,20 @@ _RECEIPT_EVIDENCE_SQL = text("""
            (SELECT COUNT(*)
               FROM receipt_table_lines rtl
              WHERE rtl.receipt_table_id = rt.id
-               AND COALESCE(rtl.is_deleted, FALSE) = FALSE) AS line_count
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE) AS line_count,
+           (SELECT COUNT(*)
+              FROM receipt_table_lines rtl
+             WHERE rtl.receipt_table_id = rt.id
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+               AND rtl.line_role = 'product'
+               AND COALESCE(rtl.inventory_eligible, FALSE) = TRUE
+               AND rtl.matched_article_id IS NULL) AS unlinked_product_line_count,
+           (SELECT COUNT(*)
+              FROM receipt_table_lines rtl
+             WHERE rtl.receipt_table_id = rt.id
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+               AND (rtl.line_role IS NULL OR rtl.line_role = 'unknown'
+                 OR (rtl.line_role = 'product' AND COALESCE(rtl.inventory_eligible, FALSE) = FALSE))) AS uncertain_line_count
     FROM raw_receipts rr
     JOIN receipt_tables rt
       ON rt.raw_receipt_id = rr.id
@@ -271,6 +285,8 @@ def load_retailer_history_evidence(
             "purchase_date_source": str(row.get("purchase_at_source") or ""),
             "parse_status": str(row.get("parse_status") or ""),
             "line_count": int(row.get("line_count") or 0),
+            "unlinked_product_line_count": int(row.get("unlinked_product_line_count") or 0),
+            "uncertain_line_count": int(row.get("uncertain_line_count") or 0),
             "approved": row.get("approved_at") is not None,
         } for row in rows],
     }

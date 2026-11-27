@@ -148,6 +148,8 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
                           Aankoopdatum: {item.purchase_date || 'onbekend'};
                           ontvangen: {item.received_date || 'onbekend'};
                           artikelregels: {historyCount(item.line_count)};
+                          {' '}Nog te koppelen fysieke artikelregels: {historyCount(item.unlinked_product_line_count)};
+                          {' '}regels met onzekere artikelclassificatie: {historyCount(item.uncertain_line_count)};
                           verwerking: {item.approved ? 'goedgekeurd' : item.parse_status || 'onbekend'}.
                           {item.purchase_date_source === 'import_default'
                             ? ' Aankoopdatum is niet bevestigd.' : ''}

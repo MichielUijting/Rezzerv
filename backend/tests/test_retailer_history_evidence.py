@@ -41,6 +41,8 @@ class _ReadOnlyConnection:
             "parse_status": "parsed",
             "approved_at": None,
             "line_count": 3,
+            "unlinked_product_line_count": 2,
+            "uncertain_line_count": 1,
             "id": "secret-internal-id",
             "raw_access_token": "must-not-leak",
         }])
@@ -73,6 +75,8 @@ def test_history_evidence_is_read_only_household_scoped_and_minimal():
         "purchase_date_source": "ah_original",
         "parse_status": "parsed",
         "line_count": 3,
+            "unlinked_product_line_count": 2,
+            "uncertain_line_count": 1,
         "approved": False,
     }]
     assert "secret" not in str(result)

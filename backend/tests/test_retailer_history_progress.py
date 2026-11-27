@@ -79,7 +79,8 @@ class _ReadOnlyConnection:
             assert "CAST(rt.purchase_at AS DATE) >= :cutoff_date" in sql
             assert arguments["cutoff_date"] == self.cutoff
             assert "'import_default'" in sql
-            assert "('parsed', 'approved')" in sql
+            assert "('parsed', 'approved', 'partial', 'review_needed')" in sql
+            assert "CAST(rt.purchase_at AS DATE) >= :history_start" in sql
             assert arguments["ah_source"] == self.household + "-retailer-ah"
             assert arguments["lidl_source"] == self.household + "-retailer-lidl"
             assert arguments["jumbo_source"] == self.household + "-retailer-jumbo"
