@@ -17,12 +17,15 @@ en stuurt alleen de bonpayload via een gebonden, tijdelijke brug naar de bestaan
 Inhuis-batchverwerking. De backend controleert per write de Inhuis-gebruiker en
 het actieve huishouden; een bevestigde bonqueue is geen volledig verwerkt bon.
 
-Voor APK-updatecompatibiliteit vereist CI de GitHub Actions **secret**
-`INHUIS_ANDROID_TEST_KEYSTORE_B64` met een vaste, privé bewaarde Android-debugkeystore
-(standaard debug-key alias `androiddebugkey`, wachtwoorden zoals door Android
-debugsigning verwacht). CI weigert een APK te publiceren zonder die secret.
-Commit nooit de keystore of toegangsgegevens; wijziging van de sleutel vereist
-een expliciete migratie van testapparaten.
+Op expliciete PO-instructie is een vaste testsleutel voorlopig optioneel.
+Als `INHUIS_ANDROID_TEST_KEYSTORE_B64` ontbreekt, gebruikt Gradle zijn standaard
+Android-debugondertekening. Elke APK wordt nog op geldige ondertekening en
+SHA-256 gecontroleerd. Verschillende builds kunnen verschillende certificaten
+hebben; Android kan dan een update weigeren. Verwijder de bestaande app niet
+automatisch: lokale appgegevens en winkelsessies kunnen verloren gaan.
+Een aanwezige vaste secret moet geldig zijn; een ongeldige secret blijft een
+buildfout. Commit nooit sleutels. Dit geldt alleen voor `nl.inhuis.androidtest`;
+productieondertekening en Play Store-publicatie vereisen afzonderlijke PO-GO.
 
 Risico: de eerste Jumbo-OAuth-redirect leverde in de browserproef eenmalig
 een state-mismatch op. De herhaalde sessie werkte, maar die fout is nog niet

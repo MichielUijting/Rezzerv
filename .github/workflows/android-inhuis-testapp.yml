@@ -42,22 +42,30 @@ jobs:
           npm run build
           npx --no-install cap add android
           npx --no-install cap sync android
-      - name: Restore stable private APK signing identity (fail closed)
+      - name: Use optional stable private test signing identity
         env:
           KEYSTORE_B64: ${{ secrets.INHUIS_ANDROID_TEST_KEYSTORE_B64 }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo 'Geen vaste private Android-testsleutel beschikbaar; APK-publicatie geblokkeerd.'; exit 1; }
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo 'Geen vaste testsleutel: Gradle gebruikt de standaard debug-ondertekening. Updatecompatibiliteit is niet gegarandeerd.'
+            exit 0
+          fi
           mkdir -p "$HOME/.android"
           umask 077
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
           keytool -list -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey > /dev/null
-      - name: Assemble consistently signed APK
+      - name: Assemble debug-signed test APK
         run: |
           cd android
           ./gradlew --no-daemon assembleDebug
       - name: Verify native APK and checksum
         run: |
           test -s android/app/build/outputs/apk/debug/app-debug.apk
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK_ROOT"
+          APKSIGNER=$(find "$SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
