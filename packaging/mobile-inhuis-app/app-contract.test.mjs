@@ -53,3 +53,8 @@ assert.equal(nativeAhReturn(tailscale+'/onboarding/winkels?ah=connected&token=se
 assert.equal(nativeAhReturn('https://other.ts.net/onboarding/winkels?ah=connected',tailscale),null)
 assert.equal(validShellMessage({id},id,channel,tailscale,
   {...data,kind:'inhuis-native-ah-start'}),true)
+
+// The production frontend minifies the runner: length is not an identity proof.
+assert.doesNotMatch(appSource, /script\.length < 15000/)
+assert.match(appSource, /script\.startsWith\('\/\* INHUIS_LIDL_NATIVE_V2 \*\/\('\)/)
+assert.match(appSource, /if \(lidl \|\| jumbo \|\| ah \|\| opening\) return/)

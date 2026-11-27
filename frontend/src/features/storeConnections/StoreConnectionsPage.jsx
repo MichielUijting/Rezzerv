@@ -337,7 +337,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function markOnboardingStoreResult(provider, result, queueId = null, runId = null) {
+  async function markOnboardingStoreResult(provider, result, queueId = null, runId = null, beforeAdvance = null) {
     if (!onboardingMode) return
     try {
       // Only a household-bound import-run confirmation or AH credential finishes a store.
@@ -348,6 +348,10 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         if (!synced) result = 'failed'
       }
       const confirmed = await saveStoreOnboardingResult(provider, result, queueId, runId)
+      if (beforeAdvance) {
+        if (confirmed.results?.[provider] !== result) throw new Error('Het winkelresultaat is niet bevestigd.')
+        beforeAdvance()
+      }
       setStoreOnboarding(confirmed)
       setPendingStoreSelection(null)
       const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
@@ -362,12 +366,14 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
         // Failed retailers stay visible: explicit Retry or Dashboard, no loop.
       }
+      return true
     } catch (err) {
       setActiveProvider('')
       showFeedback({
         variant: 'error', title: 'Winkelonboarding',
         message: normalizeErrorMessage(err?.message) || 'Het winkelresultaat kon niet worden bevestigd.',
       })
+      return false
     }
   }
 
@@ -728,7 +734,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         const confirmation = await loadAhStatus()
         if (cancelled) return
         ahReturnOutcomeRef.current = null
-        if (confirmation?.connected === true) {
+        if (ahResult === 'connected' && confirmation?.connected === true) {
           if (onboardingMode) await markOnboardingStoreResult('ah', 'success')
           else setActiveProvider('ah')
           if (onboardingMode) return
@@ -986,7 +992,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
-        if ((onboardingMode || nativeJumbo) && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
+        if ((onboardingMode || nativeJumboShell()) && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
         lidlOnboardingQueueIdRef.current = null
         setSetupHelpStore('')
         setActiveProvider('lidl')
@@ -1190,13 +1196,16 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             if (result?.scan_complete !== true || result.staged_receipts !== lidlCounts.queued) {
               throw new Error('Lidl-voltooiing is niet door Inhuis bevestigd.')
             }
+            const finishNative = () => {
+              if (!cancelled && event.source === nativeLidlTransportRef.current) {
+                event.source.postMessage({ type: 'inhuis:lidl-finish' }, LIDL_WEB_ORIGIN)
+              }
+            }
             if (onboardingMode) {
-              await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
-                lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id)
-            }
-            if (!cancelled && event.source === nativeLidlTransportRef.current) {
-              event.source.postMessage({ type: 'inhuis:lidl-finish' }, LIDL_WEB_ORIGIN)
-            }
+              const saved = await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
+                lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id, finishNative)
+              if (!saved) throw new Error('Lidl-onboarding is niet bevestigd.')
+            } else finishNative()
           } catch (error) {
             lidlCounts.failed += 1
             setLidlPhase('failed')

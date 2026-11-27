@@ -401,6 +401,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;opacity:0'
       document.body.appendChild(iframe)
       let anchors = []
+      let explicitEnd = false
       try {
         iframe.src = url.href
         const started = Date.now()
@@ -422,13 +423,14 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
             if (doc?.readyState === 'complete' && historyView && emptyMessage &&
                 (empty || main) && !hasLogin) {
               if (pageNumber === 1) return []
+              explicitEnd = true
               break
             }
           } catch {}
         }
 
         if (!anchors.length) {
-          if (pageNumber === 1) throw new Error('Lidl-historie kon niet worden geladen; er is geen import afgerond.')
+          if (!explicitEnd) throw new Error('Lidl-historie kon niet volledig worden geladen; er is geen import afgerond.')
           break
         }
         let added = 0
@@ -503,8 +505,9 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
           if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
           continue
         }
+        const acknowledgement = waitForAck(receipt.id)
         post({ type: 'inhuis:lidl-receipt', receipt })
-        await waitForAck(receipt.id)
+        await acknowledgement
         if (isHistory) {
           const day = normalizeDay(receipt.dateTime)
           if (day > lastImportedDay) lastImportedDay = day

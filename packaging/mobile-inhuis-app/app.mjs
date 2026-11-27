@@ -383,7 +383,7 @@ async function inspectLidl(run) {
 async function installLidlScript(run, script) {
   if (run !== lidl || !run.id || !run.lidlOrigin || !run.historyReached ||
       run.failed || run.scriptInjected || !run.handshakeSent ||
-      typeof script !== 'string' || script.length < 15000 || script.length > 200000 ||
+      typeof script !== 'string' || script.length > 200000 ||
       !script.startsWith('/* INHUIS_LIDL_NATIVE_V2 */(') ||
       !script.includes('"native_request_id":' + JSON.stringify(run.requestId)) ||
       !script.includes(JSON.stringify(inhuis.origin)) ||
@@ -419,7 +419,7 @@ async function installLidlScript(run, script) {
 
 async function handleInhuisLidlMessage(d) {
   if (d.kind === 'inhuis-native-lidl-start') {
-    if (lidl || jumbo || opening) return
+    if (lidl || jumbo || ah || opening) return
     opening = true
     try {
       if (!await safeJumboOwner(d.binding)) return
@@ -472,6 +472,8 @@ async function handleInhuisLidlMessage(d) {
     try { await installLidlScript(run, cmd.script) }
     catch {
       run.failed = true
+      await transmitLidlToInhuis(run, { type: 'inhuis:lidl-error', request_id: run.requestId,
+        message: 'Het Lidl-importscript kon niet veilig worden gestart.' }).catch(() => {})
       say('Het ophalen van Lidl-bonnen is veilig gestopt. De periode blijft hervatbaar.')
       await closeLidl()
     }

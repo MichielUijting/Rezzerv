@@ -79,7 +79,7 @@ assert.match(windowedScript, /pageNumber === 50/)
 assert.match(windowedScript, /if \(pageNumber === 1\) throw new Error\('Lidl-historie kon niet worden geladen/)
 
 assert.match(windowedScript, /last_imported_date/)
-assert.match(windowedScript, /await waitForAck\(receipt.id\)/)
+assert.match(windowedScript, /const acknowledgement = waitForAck\(receipt.id\)\s+post\(\{ type: 'inhuis:lidl-receipt', receipt \}\)\s+await acknowledgement/)
 
 
 
@@ -160,5 +160,8 @@ assert.match(nativeScript, /inhuis-native-lidl-ack/)
 assert.match(nativeScript, /native_request_id/)
 assert.match(nativeScript, /inhuis:lidl-receipt/)
 assert.match(nativeScript, /collectHistory/)
-assert.match(nativeScript, /await waitForAck\(receipt.id\)/)
+assert.match(nativeScript, /const acknowledgement = waitForAck\(receipt.id\)\s+post\(\{ type: 'inhuis:lidl-receipt', receipt \}\)\s+await acknowledgement/)
 assert.throws(() => buildLidlWebPageScript('https://inhuis.example', {}, 'bad'), /Ongeldige native/)
+
+assert.match(windowedScript, /if \(!explicitEnd\) throw new Error/)
+assert.match(nativeScript, /if \(!explicitEnd\) throw new Error/)

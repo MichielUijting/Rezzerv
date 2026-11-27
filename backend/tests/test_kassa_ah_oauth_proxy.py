@@ -478,7 +478,7 @@ def test_android_callback_missing_cookie_fails_closed_and_returns_to_inhuis(monk
     response = asyncio.run(oauth.ah_oauth_callback(request, code="synthetic-private-code"))
     assert response.status_code == 302
     assert response.headers["location"] == (
-        "http://laptop-michiel.tailfad4a7.ts.net:5174/onboarding/winkels?ah=error"
+        "https://laptop-michiel.tailfad4a7.ts.net/onboarding/winkels?ah=error"
     )
     assert "synthetic-private-code" not in response.headers["location"]
     assert "synthetic-private-code" not in caplog.text
@@ -588,7 +588,7 @@ def test_expired_launch_returns_to_store_connections_without_raw_json(monkeypatc
     ))
     assert response.status_code == 302
     assert response.headers["location"] == (
-        "http://laptop-michiel.tailfad4a7.ts.net:5174"
+        "https://laptop-michiel.tailfad4a7.ts.net"
         "/instellingen/winkelkoppelingen?ah=error"
     )
     assert response.headers["cache-control"] == "no-store"
