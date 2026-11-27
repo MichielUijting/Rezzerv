@@ -518,7 +518,8 @@ for (const width of [390, 500, 896]) {
 test('Android onboarding AH callback advances to Jumbo and ignores stale Lidl handshake', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockStorePage(page)
-  let progress = { available: true, selected: ['ah', 'lidl', 'jumbo'], results: {} }
+  // The real server canonicalizes selections to AH, Jumbo, Lidl.
+  let progress = { available: true, selected: ['ah', 'jumbo', 'lidl'], results: {} }
   await page.route('**/api/onboarding/stores', route => route.fulfill({ json: progress }))
   await page.route('**/api/onboarding/stores/result', route => {
     const payload = route.request().postDataJSON()

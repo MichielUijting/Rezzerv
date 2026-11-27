@@ -198,6 +198,12 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/onboarding/winkels')
+  // Explicit Later clears unfinished choices; verify persisted opt-out before reselecting.
+  await expect(page.getByTestId('onboarding-select-lidl')).not.toBeChecked()
+  const deferredResponse = await page.request.get('/api/onboarding/stores')
+  expect(deferredResponse.ok()).toBeTruthy()
+  expect(await deferredResponse.json()).toMatchObject({ available: true, selected: [], results: {} })
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
   await expect(page.getByTestId('onboarding-select-lidl')).not.toBeChecked()
