@@ -533,9 +533,19 @@ test('Android onboarding AH callback advances to Jumbo and ignores stale Lidl ha
     origin: 'https://www.lidl.nl', data: { type: 'inhuis:lidl-handshake' }, source: window,
   })))
   await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
-  await page.getByTestId('jumbo-help-open').click()
-  await expect(page.getByTestId('jumbo-bookmarklet-dialog')).toBeVisible()
+  // Onboarding opens the next retailer's help automatically after AH succeeds.
+  const jumboHelp = page.getByTestId('jumbo-bookmarklet-dialog')
+  await expect(jumboHelp).toBeVisible()
+  await expect(page.getByTestId('lidl-bookmarklet-dialog')).toHaveCount(0)
+  await expect(page.getByTestId('app-feedback-success-overlay')).toHaveCount(0)
   await page.getByTestId('jumbo-help-ok').click()
+  await expect(jumboHelp).toHaveCount(0)
+  // Manual reopening remains available once the automatic dialog is closed.
+  await page.getByTestId('jumbo-help-open').click()
+  await expect(jumboHelp).toBeVisible()
+  await page.getByTestId('jumbo-help-ok').click()
+  await expect(jumboHelp).toHaveCount(0)
+  await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
 })
 
