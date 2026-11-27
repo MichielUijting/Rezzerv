@@ -56,3 +56,16 @@ desktop-/browserroute met browserfavoriet blijft bestaan.
 
 De bestaande native Jumbo-flow is de regressiebaseline. Er is geen automatische
 merge, deployment, productiepublicatie of wijziging aan Docker-volumes voorzien.
+
+
+## Android-packageversie
+
+De CI genereert de native Android-app vanuit de Capacitor-template. De template
+begint standaard met Android-versienaam 1.0. Het canonieke
+`sync-android-version.mjs` past daarom na Capacitor sync **versionName en
+versionCode in de gegenereerde Gradle-configuratie** aan op de geversioneerde
+Android-package.json (voor 1.12.459 is versionCode 1120459). De APK-workflow
+controleert de daadwerkelijke AndroidManifest-versienaam via de officiële aapt-tool.
+Dit voorkomt dat de Android-installer een andere versie toont en maakt een
+correcte versiecode-volgorde mogelijk. Installatie over een bestaande app is
+nog steeds afhankelijk van een overeenkomende ondertekeningssleutel.

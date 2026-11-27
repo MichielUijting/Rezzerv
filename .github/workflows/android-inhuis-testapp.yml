@@ -44,6 +44,8 @@ jobs:
           npm run build
           npx --no-install cap add android
           npx --no-install cap sync android
+      - name: Set exact Inhuis Android version from canonical package
+        run: node sync-android-version.mjs
       - name: Use optional stable private test signing identity
         env:
           KEYSTORE_B64: ${{ secrets.INHUIS_ANDROID_TEST_KEYSTORE_B64 }}
@@ -68,6 +70,10 @@ jobs:
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT=$(find "$SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -n "$AAPT"
+          EXPECTED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          "$AAPT" dump badging android/app/build/outputs/apk/debug/app-debug.apk | head -n 1 | grep -F "versionName='${EXPECTED_VERSION}'"
           sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
