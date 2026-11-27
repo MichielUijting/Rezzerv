@@ -421,7 +421,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         !(activeProvider === 'jumbo' && jumboReturningRef.current)) {
       setSetupHelpStore(activeProvider)
     }
-  }, [activeProvider, onboardingMode, mobileRetailer, nativeJumbo]
+  }, [activeProvider, onboardingMode, mobileRetailer, nativeJumbo])
 
   function launchConfirmedOnboardingStore(confirmed, preparedPromise = null) {
     const code = nextStoreForOnboarding(

@@ -94,9 +94,9 @@ export default function RetailerReceiptPanel({
         data-testid="retailer-receipt-action-row"
         style={{
           display: 'grid',
-          gridTemplateColumns: nativeAutomatic ? 'minmax(0, 1fr)' : isMobileViewport
-            ? 'minmax(0, 1fr) minmax(0, 1.5fr)'
-            : 'minmax(0, 160px) minmax(0, 240px)',
+          gridTemplateColumns: isMobileViewport
+            ? (nativeAutomatic ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1.5fr)')
+            : (nativeAutomatic ? 'minmax(0, 1fr)' : 'minmax(0, 160px) minmax(0, 240px)'),
           alignItems: 'stretch',
           justifyContent: 'space-between',
           gap: '8px',
