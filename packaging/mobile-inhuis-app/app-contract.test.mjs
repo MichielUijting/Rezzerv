@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { secureInhuisUrl, validShellMessage, jumboNativeEventAllowed, lidlNativeEventAllowed } from './app-contract.mjs'
+import { secureInhuisUrl, validShellMessage, jumboNativeEventAllowed, lidlNativeEventAllowed, validNativeAhLaunch, nativeAhReturn } from './app-contract.mjs'
 assert.equal(secureInhuisUrl('https://inhuis.example.nl'), 'https://inhuis.example.nl')
 for (const url of ['http://inhuis.example.nl', 'https://inhuis.example.nl?token=secret',
   'https://user:pw@inhuis.example.nl', 'https://inhuis.example.nl:8011',
@@ -35,3 +35,21 @@ const appSource=(await import('node:fs')).readFileSync(new URL('./app.mjs', impo
 for(const name of ['handleInhuisLidlMessage','handleLidlMessage','installLidlScript','transmitLidlToInhuis',
   'lidlNativeEventAllowed','inhuis-native-lidl-ack','inhuis:lidl-finish','closeLidl']) assert.match(appSource,new RegExp(name))
 assert.match(appSource, /safeJumboOwner\(d.binding\)/)
+
+const tailscale = 'https://inhuis-work.tailnet-example.ts.net'
+const launch='http://inhuis-work.tailnet-example.ts.net:8011/ah-oauth/launch/' + 'a'.repeat(40)
+assert.equal(validNativeAhLaunch(launch,tailscale),true)
+for(const bad of [
+ launch.replace(':8011',':8443'),launch.replace('http:', 'https:'),
+ launch.replace('inhuis-work.tailnet-example','other.tailnet-example'),
+ launch+'?token=secret','http://user@inhuis-work.tailnet-example.ts.net:8011/ah-oauth/launch/'+'a'.repeat(40)
+]) assert.equal(validNativeAhLaunch(bad,tailscale),false,bad)
+assert.deepEqual(nativeAhReturn(tailscale+'/onboarding/winkels?ah=connected',tailscale),
+  {path:'/onboarding/winkels',result:'connected'})
+assert.deepEqual(nativeAhReturn(tailscale+'/instellingen/winkelkoppelingen?ah=error',tailscale),
+  {path:'/instellingen/winkelkoppelingen',result:'error'})
+assert.equal(nativeAhReturn(tailscale+'/home?ah=connected',tailscale),null)
+assert.equal(nativeAhReturn(tailscale+'/onboarding/winkels?ah=connected&token=secret',tailscale),null)
+assert.equal(nativeAhReturn('https://other.ts.net/onboarding/winkels?ah=connected',tailscale),null)
+assert.equal(validShellMessage({id},id,channel,tailscale,
+  {...data,kind:'inhuis-native-ah-start'}),true)

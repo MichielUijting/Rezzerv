@@ -1,3 +1,24 @@
+export function validNativeAhLaunch(value, appOrigin) {
+  try {
+    const app = new URL(appOrigin)
+    const url = new URL(value)
+    return app.protocol === 'https:' && app.port === '' &&
+      app.hostname.endsWith('.ts.net') && app.hostname.split('.').length >= 3 &&
+      url.protocol === 'http:' && url.hostname === app.hostname && url.port === '8011' &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      /^\/ah-oauth\/launch\/[A-Za-z0-9_-]{20,100}$/.test(url.pathname)
+  } catch { return false }
+}
+export function nativeAhReturn(value, appOrigin) {
+  try {
+    const url = new URL(value)
+    const app = new URL(appOrigin)
+    if (url.origin !== app.origin || url.hash ||
+        !['/onboarding/winkels', '/instellingen/winkelkoppelingen'].includes(url.pathname) ||
+        url.searchParams.size !== 1 || !['connected', 'error'].includes(url.searchParams.get('ah'))) return null
+    return { path: url.pathname, result: url.searchParams.get('ah') }
+  } catch { return null }
+}
 export const INHUIS_NATIVE_MESSAGE_TYPES = Object.freeze([
   'inhuis:jumbo-batch', 'inhuis:jumbo-complete', 'inhuis:jumbo-error',
 ])
@@ -23,6 +44,7 @@ export function validShellMessage(event, id, channel, origin, data) {
     [
       'inhuis-native-jumbo-start','inhuis-native-jumbo-command','inhuis-native-jumbo-cancel',
       'inhuis-native-lidl-start','inhuis-native-lidl-command','inhuis-native-lidl-cancel',
+      'inhuis-native-ah-start',
     ].includes(data.kind) &&
     /^[0-9a-f-]{36}$/i.test(String(data.nonce || '')) &&
     origin && secureInhuisUrl(origin) === origin)

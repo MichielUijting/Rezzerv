@@ -6,6 +6,7 @@ import {
 } from './probe.mjs'
 import {
   secureInhuisUrl, validShellMessage, jumboNativeEventAllowed, lidlNativeEventAllowed,
+  validNativeAhLaunch, nativeAhReturn,
 } from './app-contract.mjs'
 
 const form = document.getElementById('connect')
@@ -17,6 +18,7 @@ const lidlStore = stores.lidl
 let inhuis = null
 let jumbo = null
 let lidl = null
+let ah = null
 let opening = false
 const listeners = []
 
@@ -152,10 +154,53 @@ async function safeJumboOwner(binding) {
   localStorage.setItem(JUMBO_OWNER_KEY, digest)
   return true
 }
+
+// Reuse the AH proxy on the existing Tailscale backend :8011. This window
+// never receives Inhuis native bridge capabilities or household credentials.
+async function finishAh(run, outcome) {
+  if (ah !== run) return
+  ah = null
+  if (run.id) {
+    try { await InAppBrowser.close({ id: run.id }) } catch { /* Already closed. */ }
+  }
+  if (!inhuis?.id) return
+  const target = inhuis.origin + (outcome?.path || '/onboarding/winkels') +
+    '?ah=' + (outcome?.result || 'error')
+  const code = '(() => { if (window.top !== window || location.origin !== ' +
+    JSON.stringify(inhuis.origin) + ') return; location.assign(' +
+    JSON.stringify(target) + '); })()'
+  try { await InAppBrowser.executeScript({ id: inhuis.id, code }) }
+  catch { say('AH is gesloten. Open Winkelkoppelingen opnieuw om de echte status te controleren.') }
+}
+
+async function handleInhuisAhStart(d) {
+  if (ah || jumbo || lidl || opening || !validNativeAhLaunch(d.url, inhuis?.origin)) return
+  opening = true
+  try {
+    if (!await safeJumboOwner(d.binding)) return
+    const run = { id: null }
+    ah = run
+    const view = await InAppBrowser.openWebView({
+      url: d.url, javascriptBridgeOrigins: [],
+      allowScreenshotsFromWebPage: false, preventDeeplink: true,
+      persistWebViewData: true, visibleTitle: true, openBlankTargetInWebView: true,
+    })
+    if (ah !== run || typeof view?.id !== 'string' || !view.id) throw Error('AH WebView ontbreekt')
+    run.id = view.id
+  } catch {
+    if (ah) await finishAh(ah, { path: '/onboarding/winkels', result: 'error' })
+    else say('AH kon niet worden geopend. Geen accountstatus gewijzigd.')
+  } finally { opening = false }
+}
+
 async function handleInhuisMessage(event) {
   const runShell = inhuis
   const d = event?.detail
   if (!runShell || !validShellMessage(event, runShell.id, runShell.channel, runShell.origin, d)) return
+  if (d.kind === 'inhuis-native-ah-start') {
+    await handleInhuisAhStart(d)
+    return
+  }
   if (d.kind.startsWith('inhuis-native-lidl-')) {
     await handleInhuisLidlMessage(d)
     return
@@ -513,6 +558,10 @@ async function initialize() {
   const stored = secureInhuisUrl(localStorage.getItem('inhuis-secure-origin'))
   if (stored) input.value = stored
   listeners.push(await InAppBrowser.addListener('urlChangeEvent', event => {
+    if (ah?.id === event.id) {
+      const result = nativeAhReturn(event.url, inhuis?.origin)
+      if (result) void finishAh(ah, result)
+    }
     if (lidl?.id === event.id) {
       lidl.lidlOrigin = validLidlLocation(event.url)
       lidl.url = isHistoryUrl(lidlStore, event.url) ? event.url : null
@@ -543,10 +592,12 @@ async function initialize() {
   listeners.push(await InAppBrowser.addListener('closeEvent', event => {
     if (jumbo?.id === event.id) afterClose(jumbo)
     if (lidl?.id === event.id) afterLidlClose(lidl)
+    if (ah?.id === event.id) void finishAh(ah, { path: '/onboarding/winkels', result: 'error' })
     if (inhuis?.id === event.id) {
       inhuis = null
       void closeJumbo()
       void closeLidl()
+      if (ah) { const previous = ah; ah = null; if (previous.id) void InAppBrowser.close({ id: previous.id }).catch(() => {}) }
       say('Inhuis is gesloten. Je kunt Inhuis opnieuw openen.')
     }
   }))
@@ -559,6 +610,7 @@ void initialize().catch(() => say('Native browserinitialisatie mislukt. Geen geg
 window.addEventListener('pagehide', () => {
   void closeJumbo()
   void closeLidl()
+  if (ah) { const previous = ah; ah = null; if (previous.id) void InAppBrowser.close({ id: previous.id }).catch(() => {}) }
   if (inhuis?.id) void InAppBrowser.close({ id: inhuis.id }).catch(() => {})
   for (const listener of listeners) void listener.remove().catch(() => {})
 })
