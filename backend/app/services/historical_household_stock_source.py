@@ -65,7 +65,7 @@ _UNITS_PIECES = frozenset(("stuk", "stuks", "st", "pcs", "piece", "pieces"))
 # into piece counts; the separately recorded purchase quantity must still be
 # an exact positive whole number of packages.
 _PACKAGE_SIZE_LABEL = re.compile(
-    r"^(?:[0-9]+(?:[.,][0-9]+)?)\\s*(?:kg|g|gram|l|liter|ml|cl|dl|st|stuk|stuks)$"
+    r"^(?:[0-9]+(?:[.,][0-9]+)?)\s*(?:kg|g|gram|l|liter|ml|cl|dl|st|stuk|stuks)$"
 )
 
 
