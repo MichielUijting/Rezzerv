@@ -109,22 +109,16 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   expect(selectionWrites).toEqual([])
 
-  // Simulate slow server acknowledgement: no retailer flow may start while
-  // the single selection PUT is unresolved.
-  let permitSave
-  const saveGate = new Promise(resolve => { permitSave = resolve })
-  await page.route('**/api/onboarding/stores/selection', async route => {
-    await saveGate
-    await route.continue()
-  })
+  // Use the real server: no request interception in this full-stack authority.
+  const savedSelection = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/onboarding/stores/selection' &&
+    response.request().method() === 'PUT')
   await page.getByTestId('onboarding-stores-start').click()
-  await expect.poll(() => selectionWrites.length).toBe(1)
+  const savedResponse = await savedSelection
+  expect(savedResponse.ok()).toBeTruthy()
   expect(selectionWrites).toEqual([{ selected: ['lidl'] }])
-  await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
-  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
-  permitSave()
   await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
-  await page.unroute('**/api/onboarding/stores/selection')
+  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
   selectionResponse = await page.request.get('/api/onboarding/stores')
   expect(selectionResponse.status()).toBe(200)
   expect(await selectionResponse.json()).toMatchObject({

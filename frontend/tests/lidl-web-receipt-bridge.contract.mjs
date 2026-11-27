@@ -53,7 +53,12 @@ assert.match(script, /toDataURL\('image\/png'\)/)
 assert.doesNotMatch(script, /document\.cookie/)
 assert.doesNotMatch(script, /localStorage/)
 assert.doesNotMatch(script, /sessionStorage/)
-assert.doesNotMatch(script, /Password|password/)
+// A login-form presence check is required to reject a false empty history.
+// Only this exact presence selector is permitted; no credential access.
+const loginPresenceGuard = `const hasLogin = Boolean(doc?.querySelector('input[type="password"], form[action*="login"]'))`
+assert.ok(script.includes(loginPresenceGuard))
+assert.match(script, /\(empty \|\| main\) && !hasLogin/)
+assert.doesNotMatch(script.replace(loginPresenceGuard, ''), /Password|password/)
 
 const windowedScript = buildLidlWebPageScript('http://localhost:5174', {
   from_date: '2026-10-01', to_date: '2026-10-11',

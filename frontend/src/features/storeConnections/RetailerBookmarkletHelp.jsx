@@ -169,7 +169,7 @@ export default function RetailerBookmarkletHelp({
               {onSkip ? <Button type="button" variant="secondary" onClick={onSkip}
                 data-testid={provider + '-mobile-skip'}>Winkel overslaan</Button> : null}
               <Button type="button" variant="secondary" onClick={onClose}
-                data-testid={provider + '-help-ok'}>Terug naar Inhuis</Button>
+                data-testid={provider + '-help-ok'}>Sluiten</Button>
             </div>
           </section>
         ) : (
@@ -188,7 +188,7 @@ export default function RetailerBookmarkletHelp({
                 data-testid={provider + '-desktop-open-store'}>Open {retailer}</Button> : null}
               {onSkip ? <Button type="button" variant="secondary" onClick={onSkip}>Winkel overslaan</Button> : null}
               <Button type="button" variant="secondary" onClick={onClose}
-                data-testid={provider + '-help-ok'}>{onboardingMode ? 'Terug naar Inhuis' : 'OK'}</Button>
+                data-testid={provider + '-help-ok'}>{onboardingMode ? 'Sluiten' : 'OK'}</Button>
             </div>
           </>
         )}

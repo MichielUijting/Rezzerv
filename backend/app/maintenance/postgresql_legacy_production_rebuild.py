@@ -25,7 +25,7 @@ from app.alembic_head_authority import repository_head_revision
 
 HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
-EXPECTED_APPLICATION_TABLES = 116  # Include the 20261125_01 household Jumbo import-run table.
+EXPECTED_APPLICATION_TABLES = 116  # Include the household Jumbo import-run table.
 REQUIRED_HISTORY_TABLES = frozenset({
     "household_jumbo_import_runs",
     "household_receipt_history_cutovers",
