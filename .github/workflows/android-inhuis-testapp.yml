@@ -33,6 +33,7 @@ jobs:
           node tests/jumbo-import-context.contract.mjs
           node tests/native-jumbo-transport.contract.mjs
           node tests/native-lidl-transport.contract.mjs
+          node tests/native-ah-transport.contract.mjs
           node tests/lidl-web-receipt-bridge.contract.mjs
           node tests/jumbo-receipt-poc-bridge.contract.mjs
       - name: Install locked dependencies and audit
@@ -44,6 +45,8 @@ jobs:
           npm run build
           npx --no-install cap add android
           npx --no-install cap sync android
+      - name: Configure existing Tailscale backend 8011 for isolated Android AH test
+        run: node configure-ah-network.mjs
       - name: Set exact Inhuis Android version from canonical package
         run: node sync-android-version.mjs
       - name: Use optional stable private test signing identity
