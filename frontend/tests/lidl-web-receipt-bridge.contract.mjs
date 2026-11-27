@@ -147,7 +147,7 @@ assert.ok(lidlLaunch.indexOf("method: 'PUT'") < lidlLaunch.indexOf('lidlTab.loca
 console.log('LIDL_SAVED_PERIOD_GUARD_GREEN')
 
 const mobileLidlSource = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
-assert.match(mobileLidlSource, /\(mobileRetailer \? '\\?automatic=true' : ''\)/)
+assert.match(mobileLidlSource, /mobileRetailer \? '\?automatic=true' : ''/)
 assert.match(mobileLidlSource, /hideDates=\{mobileRetailer \|\| onboardingMode\}/)
 console.log('LIDL_MOBILE_AUTOMATIC_WINDOW_GREEN')
 
