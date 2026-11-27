@@ -124,9 +124,10 @@ async function installOpenerAndScript(run, script) {
   })()`
   // The provider page is never navigated to guessed routes. The link-click
   // and the authorized /bestellingen origin are proven before injection.
-  await InAppBrowser.executeScript({ id: run.id, code: shim })
+  // One execution avoids a race between installing the opener and starting the runner.
   run.scriptInjected = true
-  await InAppBrowser.executeScript({ id: run.id, code: script })
+  armLidlWatchdog(run, 'Lidl-importscript geeft geen voortgang terug. Probeer opnieuw.')
+  await InAppBrowser.executeScript({ id: run.id, code: shim + ';\n' + script })
 }
 // Persist only a salted-free, nonreversible context digest, never an Inhuis
 // password/session cookie or a Jumbo token. All browsing data must be cleared
@@ -333,6 +334,7 @@ function validLidlLocation(url) {
 
 function afterLidlClose(run) {
   if (lidl !== run) return
+  clearTimeout(run.watchdog)
   if (!run.finished && run.handshakeSent) {
     void transmitLidlToInhuis(run, {
       type: 'inhuis:lidl-error',
@@ -348,6 +350,7 @@ async function closeLidl() {
   const run = lidl
   if (!run) return
   clearInterval(run.interval)
+  clearTimeout(run.watchdog)
   lidl = null
   if (run.id) {
     try { await InAppBrowser.close({ id: run.id }) } catch { /* Already closed. */ }
@@ -368,6 +371,18 @@ async function transmitLidlToInhuis(run, data) {
     window.dispatchEvent(new CustomEvent('inhuis-native-lidl-event', { detail: ${json} }));
   })()`
   await InAppBrowser.executeScript({ id: inhuis.id, code })
+}
+
+function armLidlWatchdog(run, message) {
+  clearTimeout(run.watchdog)
+  run.watchdog = setTimeout(async () => {
+    if (lidl !== run || run.finished) return
+    run.failed = true
+    await transmitLidlToInhuis(run, {
+      type: 'inhuis:lidl-error', request_id: run.requestId, message,
+    }).catch(() => {})
+    await closeLidl()
+  }, 90000)
 }
 
 async function inspectLidl(run) {
@@ -508,9 +523,23 @@ async function handleLidlMessage(event) {
   if (!run || !run.id || event?.id !== run.id) return
   const d = event.detail
   if (lidlNativeEventAllowed(event, run, d)) {
-    if (JSON.stringify(d.data).length > 950000) return
-    try { await transmitLidlToInhuis(run, d.data) }
-    catch { say('Een Lidl-bon kon niet worden bevestigd. De import blijft hervatbaar.') }
+    if (!run.scriptInjected || run.failed) return
+    try {
+      if (JSON.stringify(d.data).length > 950000) throw Error('Lidl-bonbericht is te groot')
+      armLidlWatchdog(run, 'Lidl geeft geen verdere importvoortgang terug. De periode blijft hervatbaar.')
+      if (d.data.type === 'inhuis:lidl-progress' && !run.hidden) {
+        // Keep the authenticated retailer WebView alive; restore the existing Inhuis view.
+        await InAppBrowser.hide({ id: run.id })
+        run.hidden = true
+      }
+      await transmitLidlToInhuis(run, d.data)
+      if (d.data.type === 'inhuis:lidl-error') await closeLidl()
+    } catch {
+      run.failed = true
+      await transmitLidlToInhuis(run, { type: 'inhuis:lidl-error', request_id: run.requestId,
+        message: 'Lidl-achtergrondimport of bonoverdracht kon niet veilig worden voortgezet.' }).catch(() => {})
+      await closeLidl()
+    }
     return
   }
   const evidence = acceptEvidence(event, run)
@@ -520,6 +549,7 @@ async function handleLidlMessage(event) {
   if (!canBeginLidlImport(run, evidence)) return
   run.historyReached = true
   run.handshakeSent = true
+  armLidlWatchdog(run, 'Inhuis bevestigt de Lidl-importperiode niet. Probeer opnieuw.')
   try {
     await transmitLidlToInhuis(run, {
       type: 'inhuis:lidl-handshake', bookmarklet_version: 2, request_id: run.requestId,

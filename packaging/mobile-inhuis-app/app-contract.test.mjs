@@ -58,3 +58,7 @@ assert.equal(validShellMessage({id},id,channel,tailscale,
 assert.doesNotMatch(appSource, /script\.length < 15000/)
 assert.match(appSource, /script\.startsWith\('\/\* INHUIS_LIDL_NATIVE_V2 \*\/\('\)/)
 assert.match(appSource, /if \(lidl \|\| jumbo \|\| ah \|\| opening\) return/)
+
+assert.match(appSource, /await InAppBrowser.hide\(\{ id: run.id \}\)/)
+assert.match(appSource, /armLidlWatchdog\(run,/)
+assert.match(appSource, /code: shim \+ ';\\n' \+ script/)

@@ -165,3 +165,8 @@ assert.throws(() => buildLidlWebPageScript('https://inhuis.example', {}, 'bad'),
 
 assert.match(windowedScript, /if \(!explicitEnd\) throw new Error/)
 assert.match(nativeScript, /if \(!explicitEnd\) throw new Error/)
+
+assert.match(nativeScript, /const useCurrentPage = pageNumber === 1/)
+assert.match(nativeScript, /Lidl-historiepagina/)
+assert.match(nativeScript, /processed: imported, total: entries.length/)
+assert.match(storeConnectionScreen, /testId="lidl-onboarding-progress"/)

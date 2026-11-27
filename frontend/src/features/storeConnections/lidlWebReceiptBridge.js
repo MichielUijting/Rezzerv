@@ -399,16 +399,18 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
 
       const iframe = document.createElement('iframe')
       iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;opacity:0'
-      document.body.appendChild(iframe)
+      const useCurrentPage = pageNumber === 1 && Number(new URL(location.href).searchParams.get('page') || '1') === 1
+      if (!useCurrentPage) document.body.appendChild(iframe)
+      post({ type: 'inhuis:lidl-progress', message: 'Lidl-historiepagina ' + pageNumber + ' controleren…' })
       let anchors = []
       let explicitEnd = false
       try {
-        iframe.src = url.href
+        if (!useCurrentPage) iframe.src = url.href
         const started = Date.now()
         while (Date.now() - started < 30000) {
           await sleep(250)
           try {
-            const doc = iframe.contentDocument
+            const doc = useCurrentPage ? document : iframe.contentDocument
             anchors = doc ? [...doc.querySelectorAll('a[href*="/mre/purchase-detail"]')] : []
             if (anchors.length) break
             // Explicit retailer empty-state, not an unloaded or unauthenticated page.
@@ -434,7 +436,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
           break
         }
         let added = 0
-        const pageDays = anchors.map(anchor => historyRowDay(anchor, iframe.contentDocument))
+        const pageDays = anchors.map(anchor => historyRowDay(anchor, useCurrentPage ? document : iframe.contentDocument))
         const fullyDated = pageDays.every(Boolean)
         const descending = fullyDated && pageDays.every((day, index) => index === 0 || pageDays[index - 1] >= day)
         const pageConsistent = descending && (!previousOldestDay || previousOldestDay >= pageDays[0])
@@ -491,7 +493,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       }
 
       const isHistory = location.pathname.includes('/mre/purchase-history')
-      post({ type: 'inhuis:lidl-progress', message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
+      post({ type: 'inhuis:lidl-progress', processed: 0, total: entries.length, message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
       let lastImportedDay = ''
       let imported = 0
       for (const entry of entries) {
@@ -515,7 +517,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
         imported += 1
         post({
           type: 'inhuis:lidl-progress',
-          message: imported + ' van ' + entries.length + ' bonnen verwerkt.',
+          processed: imported, total: entries.length, message: imported + ' van ' + entries.length + ' bonnen ontvangen.',
         })
       }
 

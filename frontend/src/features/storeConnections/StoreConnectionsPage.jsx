@@ -98,6 +98,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [lidlPhase, setLidlPhase] = useState('')
   const [lidlCountsView, setLidlCountsView] = useState(null)
+  const [lidlTransferProgress, setLidlTransferProgress] = useState(null)
   const [lidlWindow, setLidlWindow] = useState(null)
   const [lidlFrom, setLidlFrom] = useState('')
   const [lidlTo, setLidlTo] = useState('')
@@ -998,6 +999,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setActiveProvider('lidl')
         lidlCounts = { queued: 0, failed: 0 }
         setLidlCountsView(null)
+        setLidlTransferProgress(null)
         setLidlPhase('waiting')
         if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
           setLidlPhase('failed')
@@ -1057,6 +1059,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (data.type === 'inhuis:lidl-progress') {
         setLidlPhase('fetching')
         setLidlWebProgress(String(data.message || 'Lidl-bonnen verwerken…'))
+        if (Number.isSafeInteger(data.total) && data.total >= 0 && Number.isSafeInteger(data.processed) && data.processed >= 0 && data.processed <= data.total) {
+          setLidlTransferProgress({ processed: data.processed, total: data.total })
+        }
         return
       }
 
@@ -1654,7 +1659,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             <StoreOnboardingSelection
               selected={visibleOnboardingSelection}
               results={storeOnboarding.results}
-              busy={storeOnboardingBusy || isLoading || ahBusy || jumboImportBusy || lidlWindowSaving}
+              busy={storeOnboardingBusy || isLoading || ahBusy || jumboImportBusy || lidlWindowSaving || (nativeJumbo && ['waiting', 'fetching', 'importing'].includes(lidlPhase))}
               onSelect={chooseOnboardingStore}
               onStart={startOnboardingStore}
               onRetry={startOnboardingStore}
@@ -1668,6 +1673,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               <Button type="button" variant="secondary" onClick={finishGuidance}>Naar dashboard</Button>
             </Card>
           )
+        ) : null}
+        {onboardingMode && activeProvider === 'lidl' && lidlPhase ? (
+          <Card><ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
+            processed={lidlTransferProgress?.processed} total={lidlTransferProgress?.total}
+            counts={lidlCountsView} testId="lidl-onboarding-progress" /></Card>
         ) : null}
         {!onboardingMode ? <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
