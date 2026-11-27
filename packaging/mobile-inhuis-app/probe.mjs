@@ -19,14 +19,14 @@ export function probeScript(store, nonce) {
     const markers = c.lidl
       ? (() => {
         const rows = document.querySelectorAll('a[href*="/mre/purchase-detail"]').length > 0;
-        const empty = document.querySelector('[data-testid="purchase-history-empty"],[data-testid="purchase-history-no-results"],[data-testid="history-empty-state"]');
-        const main = document.querySelector('main');
-        const title = document.querySelector('[data-testid="purchase-history-page"]') ||
+        const empty = document.querySelector?.('[data-testid="purchase-history-empty"],[data-testid="purchase-history-no-results"],[data-testid="history-empty-state"]');
+        const main = document.querySelector?.('main');
+        const title = document.querySelector?.('[data-testid="purchase-history-page"]') ||
           /(?:digitale\\s*)?kassabonnen|aankoopgeschiedenis|purchase\\s*history/i.test(
-            String(document.querySelector('h1,h2')?.textContent || ''));
+            String(document.querySelector?.('h1,h2')?.textContent || ''));
         const noReceipts = /(?:geen|no|keine).{0,80}(?:kassabonnen?|bonnen?|receipts?|purchases?|aankopen?|aankoopgeschiedenis)/i
           .test(String(empty?.textContent || main?.textContent || ''));
-        const login = document.querySelector('input[type="password"], form[action*="login"]');
+        const login = document.querySelector?.('input[type="password"], form[action*="login"]');
         return rows || Boolean(title && noReceipts && (empty || main) && !login && document.readyState === 'complete');
       })()
       : (() => {

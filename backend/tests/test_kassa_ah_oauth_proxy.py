@@ -639,3 +639,19 @@ def test_explicit_onboarding_cannot_fall_back_to_settings(monkeypatch):
         assert error.value.status_code == 400
     flow = oauth.create_ah_oauth_flow(request, household_id="household-1", return_to="http://inhuis.example:5174/onboarding/winkels", onboarding=True)
     assert oauth._return_with_status(flow, "connected").endswith("/onboarding/winkels?ah=connected")
+
+def test_ah_expired_https_flow_never_downgrades_to_internal_port(monkeypatch):
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
+    request = _request(host="inhuis-work.tailnet-example.ts.net", port=8443, extra_headers={"x-forwarded-proto":"https"})
+    response = asyncio.run(oauth.launch_ah_oauth("expired", request))
+    assert response.headers["location"] == (
+        "https://inhuis-work.tailnet-example.ts.net/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert not response.headers["location"].startswith("http:")
+    flow = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="http://inhuis-work.tailnet-example.ts.net/onboarding/winkels",
+        onboarding=False,
+    )
+    assert flow.return_to.startswith("https://inhuis-work.tailnet-example.ts.net/")

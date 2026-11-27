@@ -18,7 +18,6 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import AddressValueError, IPv4Address
 import logging
 import os
-import re
 from pathlib import Path
 import secrets
 from threading import RLock
@@ -151,10 +150,12 @@ def _safe_return_to(request: Request, return_to: str | None, *, onboarding: bool
     candidate = str(return_to or "").strip()
     request_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
     request_hostname = request_host.split(":", 1)[0].strip("[]").lower()
+    public_https = str(request.headers.get("x-forwarded-proto") or request.url.scheme).split(",", 1)[0].strip() == "https"
     if candidate:
         parsed = urlparse(candidate)
         if (
-            parsed.scheme in {"http", "https"}
+            (not public_https or parsed.scheme == "https")
+            and parsed.scheme in {"http", "https"}
             and parsed.hostname
             and parsed.hostname.lower() == request_hostname
             and parsed.path in {"/instellingen/winkelkoppelingen", "/onboarding/winkels"}
@@ -165,6 +166,8 @@ def _safe_return_to(request: Request, return_to: str | None, *, onboarding: bool
     if onboarding:
         # Never silently downgrade a first-store flow to regular Settings.
         raise HTTPException(status_code=400, detail="De terugkeerroute voor winkelonboarding kon niet veilig worden bevestigd")
+    if public_https and request_hostname.endswith(".ts.net"):
+        return f"https://{request_hostname}/instellingen/winkelkoppelingen"
     app_origin = str(os.getenv("REZZERV_APP_BASE_URL", "http://localhost:5174") or "").strip().rstrip("/")
     return f"{app_origin}/instellingen/winkelkoppelingen"
 
@@ -228,8 +231,10 @@ def _safe_failure_return_url(request: Request) -> str:
     path = "/onboarding/winkels" if mode == "onboarding" else "/instellingen/winkelkoppelingen"
     configured = str(os.getenv("REZZERV_APP_BASE_URL", "") or "").strip().rstrip("/")
     parsed_config = urlparse(configured)
+    public_scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
     if (
-        parsed_config.scheme in {"http", "https"}
+        (public_scheme != "https" or parsed_config.scheme == "https")
+        and parsed_config.scheme in {"http", "https"}
         and parsed_config.hostname
         and parsed_config.hostname.lower() not in {"localhost", "127.0.0.1"}
     ):
@@ -244,6 +249,10 @@ def _safe_failure_return_url(request: Request) -> str:
                 host = str(IPv4Address(".".join(parts)))
             except AddressValueError:
                 pass
+    if public_scheme == "https" and host.endswith(".ts.net"):
+        # HTTPS OAuth failure must return to the existing secured Inhuis URL,
+        # not the internal HTTP frontend port.
+        return f"https://{host}{path}?ah=error"
     # Never derive a redirect from an arbitrary Host header. Limit mobile
     # recovery to Tailscale, literal IPv4, local and numeric sslip.io routes.
     trusted = host == "localhost" or host.endswith(".ts.net")

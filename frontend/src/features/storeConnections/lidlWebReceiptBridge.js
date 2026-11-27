@@ -558,7 +558,8 @@ export function buildLidlWebPageScript(inhuisOrigin, dateWindow = {}, nativeRequ
     throw new Error('Ongeldige native Lidl-importpoging')
   }
   const origin = String(inhuisOrigin || '').replace(/\/$/, '')
-  return '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ',' + JSON.stringify({
+  return (nativeRequestId ? '/* INHUIS_LIDL_NATIVE_V2 */' : '') +
+    '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ',' + JSON.stringify({
     from_date: String(dateWindow.from_date || ''),
     to_date: String(dateWindow.to_date || ''),
     ...(nativeRequestId ? { native_request_id: nativeRequestId } : {}),

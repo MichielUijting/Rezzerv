@@ -339,11 +339,10 @@ async function installLidlScript(run, script) {
   if (run !== lidl || !run.id || !run.lidlOrigin || !run.historyReached ||
       run.failed || run.scriptInjected || !run.handshakeSent ||
       typeof script !== 'string' || script.length < 15000 || script.length > 200000 ||
-      !script.startsWith('(function lidlWebPageRunner(') ||
+      !script.startsWith('/* INHUIS_LIDL_NATIVE_V2 */(') ||
       !script.includes('"native_request_id":' + JSON.stringify(run.requestId)) ||
-      !script.includes('const nativeRequestId = String(DATE_RANGE?.native_request_id') ||
-      !script.includes('const target = nativeRequestId ? window.__inhuisNativeLidlOpener') ||
-      !script.includes('await waitForAck(receipt.id)')) {
+      !script.includes(JSON.stringify(inhuis.origin)) ||
+      !script.includes('/mre/purchase-history')) {
     throw Error('Ongeldig of niet-gebonden Lidl-importscript')
   }
   const config = JSON.stringify({

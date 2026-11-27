@@ -229,8 +229,12 @@ class LidlBrowserCompleteRequest(BaseModel):
 
 
 @router.post("/lidl/history/begin")
-def begin_lidl_browser_history(authorization: Optional[str] = Header(None)):
-    household_id = _authorized_household_id(authorization)
+def begin_lidl_browser_history(
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         # The browser must use the automatic historical range during onboarding.
         return begin_lidl_browser_import(engine, household_id)
@@ -242,8 +246,10 @@ def begin_lidl_browser_history(authorization: Optional[str] = Header(None)):
 def complete_lidl_browser_history(
     payload: LidlBrowserCompleteRequest,
     authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
 ):
-    household_id = _authorized_household_id(authorization)
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         return complete_lidl_browser_import(
             engine, household_id, run_id=payload.run_id,

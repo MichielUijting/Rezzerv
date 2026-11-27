@@ -1009,20 +1009,25 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlPhase('fetching')
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         try {
-          const period = onboardingMode
+          const nativeLidlSource = event.source === nativeLidlTransportRef.current
+          const nativeExpected = nativeLidlSource ? event.source.expectedContext : null
+          const boundHeaders = nativeExpected
+            ? await verifyJumboImportContext(nativeExpected, () => fetchJson('/api/session'))
+            : undefined
+          const period = (onboardingMode || nativeLidlSource)
             ? await fetchJson('/api/receipts/retailers/lidl/history/begin', {
-              method: 'POST', body: JSON.stringify({}),
+              method: 'POST', headers: boundHeaders, body: JSON.stringify({}),
             })
             : await fetchJson('/api/receipts/retailers/lidl/import-window' +
               (mobileRetailer ? '?automatic=true' : ''))
           if (cancelled || lidlSourceWindow !== event.source) return
-          if (onboardingMode) {
+          if (onboardingMode || nativeLidlSource) {
             if (!/^[0-9a-f-]{36}$/.test(String(period?.run_id || '')) ||
                 !/^20\d{2}-\d{2}-\d{2}$/.test(period?.from_date || '') ||
                 !/^20\d{2}-\d{2}-\d{2}$/.test(period?.to_date || '')) {
               throw new Error('Lidl-importperiode kon niet veilig worden vastgelegd.')
             }
-            lidlOnboardingRun = { id: period.run_id, period, queueIds: [] }
+            lidlOnboardingRun = { id: period.run_id, period, queueIds: [], nativeExpected }
           }
           setLidlWindow(period)
           setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
@@ -1069,8 +1074,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
 
         try {
+          const boundHeaders = lidlOnboardingRun?.nativeExpected
+            ? await verifyJumboImportContext(lidlOnboardingRun.nativeExpected, () => fetchJson('/api/session'))
+            : undefined
           const result = await fetchJson('/api/receipts/retailers/import-queue', {
-            method: 'POST',
+            method: 'POST', headers: boundHeaders,
             body: JSON.stringify([{
               schema_version: '1.0',
               provider: 'lidl',
@@ -1096,7 +1104,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           }
           lidlCounts.queued += 1
           lidlOnboardingQueueIdRef.current = result.items[0].queue_id
-          if (onboardingMode && lidlOnboardingRun) {
+          if (lidlOnboardingRun) {
             lidlOnboardingRun.queueIds.push(result.items[0].queue_id)
           }
           setLidlCountsView({ ...lidlCounts })
@@ -1129,7 +1137,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (data.type === 'inhuis:lidl-complete') {
         // The old import-window checkpoint means *processed*, not merely queued.
         // Do not advance it until the worker has confirmed completion.
-        if (!onboardingMode && data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
+        if (!onboardingMode && event.source !== nativeLidlTransportRef.current &&
+            data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
           try {
             const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
               method: 'POST',
@@ -1156,7 +1165,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlCountsView({ ...lidlCounts })
         void refreshHistoricalProgress()
         setLidlPhase(lidlCounts.failed ? 'failed' : lidlCounts.queued ? 'queued' : 'completed')
-        if (onboardingMode) {
+        if (onboardingMode || event.source === nativeLidlTransportRef.current) {
           try {
             if (lidlCounts.failed || !lidlOnboardingRun ||
                 data.mode !== 'history' || data.count !== lidlCounts.queued ||
@@ -1165,8 +1174,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 lidlOnboardingRun.queueIds.length !== lidlCounts.queued) {
               throw new Error('Lidl heeft niet alle geselecteerde kassabonnen aantoonbaar afgerond.')
             }
+            const boundHeaders = lidlOnboardingRun.nativeExpected
+              ? await verifyJumboImportContext(lidlOnboardingRun.nativeExpected, () => fetchJson('/api/session'))
+              : undefined
             const result = await fetchJson('/api/receipts/retailers/lidl/history/complete', {
-              method: 'POST',
+              method: 'POST', headers: boundHeaders,
               body: JSON.stringify({
                 run_id: lidlOnboardingRun.id,
                 queue_ids: lidlOnboardingRun.queueIds,
@@ -1177,8 +1189,10 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             if (result?.scan_complete !== true || result.staged_receipts !== lidlCounts.queued) {
               throw new Error('Lidl-voltooiing is niet door Inhuis bevestigd.')
             }
-            await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
-              lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id)
+            if (onboardingMode) {
+              await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
+                lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id)
+            }
             if (!cancelled && event.source === nativeLidlTransportRef.current) {
               event.source.postMessage({ type: 'inhuis:lidl-finish' }, LIDL_WEB_ORIGIN)
             }
