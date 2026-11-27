@@ -29,10 +29,14 @@ class _Result:
 
 
 class _ReadOnlyConnection:
-    def __init__(self, *, household, cutoff, receipts, queue, enabled=True, state="normal"):
+    def __init__(self, *, household, cutoff, receipts, queue, enabled=True, state="normal",
+                 line_counts=None, outcome=None):
         self.household = household
         self.cutoff = cutoff
         self.receipts = receipts
+        self.line_counts = line_counts or []
+        self.outcome = outcome or {"baseline_article_count": 0, "baseline_unit_count": 0,
+                                   "repurchase_cadence_article_count": 0}
         self.queue = queue
         self.enabled = enabled
         self.state = state
@@ -47,6 +51,19 @@ class _ReadOnlyConnection:
         if "FROM household_receipt_history_cutovers" in sql:
             assert arguments["household_id"] == self.household
             return _Result(scalar=self.cutoff)
+
+        if "JOIN receipt_table_lines rtl" in sql:
+            assert arguments["household_id"] == self.household
+            assert "rr.household_id = :household_id" in sql
+            assert "ha.household_id = :household_id" in sql
+            assert "rr.duplicate_of_raw_receipt_id IS NULL" in sql
+            assert arguments["history_start"] == date(self.cutoff.year - 1, 1, 1)
+            return _Result(rows=self.line_counts)
+
+        if "FROM household_historical_auto_stock_baselines b" in sql:
+            assert arguments["household_id"] == self.household
+            assert "FROM household_historical_purchase_cadences c" in sql
+            return _Result(rows=[self.outcome])
 
         if "FROM raw_receipts rr" in sql:
             assert arguments["household_id"] == self.household
@@ -103,10 +120,12 @@ class _ReadOnlyEngine:
 
 
 def _read(*, household="home-a", cutoff=date(2026, 11, 21),
-          receipts=None, queue=None, enabled=True, state="normal"):
+          receipts=None, queue=None, enabled=True, state="normal",
+          line_counts=None, outcome=None):
     db = _ReadOnlyConnection(
         household=household, cutoff=cutoff, receipts=receipts or [],
         queue=queue or [], enabled=enabled, state=state,
+        line_counts=line_counts, outcome=outcome,
     )
     return load_retailer_history_progress(
         _ReadOnlyEngine(db), household_id=household,
@@ -125,6 +144,11 @@ def test_uses_server_household_original_date_and_durable_queue_only():
             {"source_id": "home-a-retailer-jumbo", "saved_receipts": 1,
              "kassa_receipts": 1, "historical_receipts": 0, "review_receipts": 1},
         ],
+        line_counts=[{"source_id": "home-a-retailer-lidl", "historical_line_count": 100,
+                      "physical_candidate_line_count": 85, "directly_linked_line_count": 50,
+                      "unlinked_physical_line_count": 35, "uncertain_line_count": 12}],
+        outcome={"baseline_article_count": 22, "baseline_unit_count": 25,
+                 "repurchase_cadence_article_count": 8},
         queue=[
             {"provider": "lidl", "status": "pending", "item_count": 2},
             {"provider": "lidl", "status": "processing", "item_count": 1},
@@ -133,7 +157,12 @@ def test_uses_server_household_original_date_and_durable_queue_only():
         ],
     )
     assert result["history_cutover_enabled"] is True
-    assert result["coverage"] == "persisted_retailer_receipts_and_queue_only"
+    assert result["coverage"] == "persisted_receipts_lines_queue_and_historical_baseline"
+    assert result["history_start_date"] == "2025-01-01"
+    assert result["historical_stock"] == {
+        "baseline_article_count": 22, "baseline_unit_count": 25,
+        "repurchase_cadence_article_count": 8,
+    }
     assert result["complete_retailer_history_known"] is False
     assert result["auto_import_paused"] is False
     assert [row["code"] for row in result["providers"]] == ["ah", "lidl", "jumbo"]
@@ -142,11 +171,15 @@ def test_uses_server_household_original_date_and_durable_queue_only():
     assert _store(result, "ah")["historical_receipts"] == 1
     assert _store(result, "ah")["review_receipts"] == 1
     assert _store(result, "lidl")["queue_pending"] == 2
+    assert _store(result, "lidl")["historical_line_count"] == 100
+    assert _store(result, "lidl")["directly_linked_line_count"] == 50
+    assert _store(result, "lidl")["unlinked_physical_line_count"] == 35
+    assert _store(result, "ah")["directly_linked_line_count"] == 0
     assert _store(result, "lidl")["queue_processing"] == 1
     assert _store(result, "lidl")["queue_completed"] == 3
     assert _store(result, "lidl")["kassa_receipts"] == 0
     assert _store(result, "jumbo")["queue_review_required"] == 1
-    assert len(db.queries) == 5
+    assert len(db.queries) == 7
 
 
 def test_legacy_household_never_gets_a_fabricated_historical_zero():
@@ -157,6 +190,9 @@ def test_legacy_household_never_gets_a_fabricated_historical_zero():
     assert result["history_cutover_enabled"] is False
     assert _store(result, "ah")["kassa_receipts"] == 2
     assert _store(result, "ah")["historical_receipts"] is None
+    assert _store(result, "ah")["historical_line_count"] is None
+    assert result["historical_stock"] is None
+    assert result["history_start_date"] is None
     assert _store(result, "ah")["review_receipts"] is None
 
 

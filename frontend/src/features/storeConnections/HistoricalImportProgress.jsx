@@ -40,7 +40,8 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
         Dit zijn bonnen die Inhuis als opgeslagen registreert, ook als ze niet zichtbaar zijn
         in de gewone Kassa-lijst. De winkel bepaalt hoeveel oudere bonnen beschikbaar zijn;
         daarom tonen we geen onbevestigd totaal of percentage.
-        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa. Via 'Welke bonnen?'
+        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa. Ook gekoppelde
+        artikelregels zijn niet automatisch als voorraad geboekt. Via 'Welke bonnen?'
         controleer je welke opgeslagen records meetellen.
       </p>
       {summary && summary.history_cutover_enabled === false ? (
@@ -48,6 +49,13 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
           Voor dit bestaande huishouden is geen historische startgrens vastgelegd.
           Ingelezen bonnen zijn zichtbaar, maar er wordt geen aantal historische aankopen gegokt.
         </p>
+      ) : null}
+      {summary?.historical_stock ? (
+        <div data-testid="historical-stock-outcome" style={{ display: 'grid', rowGap: '4px' }}>
+          <span>Historische inleesperiode vanaf: {summary.history_start_date || 'onbekend'} (tot de start van het huishouden).</span>
+          <span>Daadwerkelijk vastgelegde historische beginvoorraad: {historyCount(summary.historical_stock.baseline_article_count)} artikelen, {historyCount(summary.historical_stock.baseline_unit_count)} stuks.</span>
+          <span>Artikelen met bewezen herhaalaankooptermijn: {historyCount(summary.historical_stock.repurchase_cadence_article_count)}.</span>
+        </div>
       ) : null}
       {summary?.auto_import_paused ? (
         <p data-testid="historical-import-paused" style={{ margin: 0 }}>
@@ -72,6 +80,12 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
               <span>Opgeslagen bonnen (niet noodzakelijk in Kassa): {receiptLabel(row.kassa_receipts)}</span>
               <span>Waarvan nog in Kassa te behandelen: {receiptLabel(row.kassa_inbox_receipts)}</span>
               <span>Historische bonnen bruikbaar voor analyse: {historyCount(row.historical_receipts)}</span>
+              <span>Historische bonregels: {historyCount(row.historical_line_count)}
+                {' · '}Fysieke artikelkandidaten: {historyCount(row.physical_candidate_line_count)}</span>
+              <span>Rechtstreeks gekoppelde artikelregels: {historyCount(row.directly_linked_line_count)}
+                {' · '}Fysieke artikelregels zonder huishoudartikelkoppeling: {historyCount(row.unlinked_physical_line_count)}</span>
+              <span>Onzeker geclassificeerde bonregels: {historyCount(row.uncertain_line_count)}.
+                Dit zijn controlecategorieën; alleen bewezen regels kunnen worden gebruikt bij voorraadopbouw.</span>
               <span>Ontvangen, nog in wachtrij: {historyCount(row.queue_pending)}
                 {' · '}Bezig met verwerken: {historyCount(row.queue_processing)}</span>
               <span>Controle nodig: {historyCount(row.queue_review_required)}
