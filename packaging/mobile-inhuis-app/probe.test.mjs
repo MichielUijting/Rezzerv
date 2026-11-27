@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import {stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction} from './probe.mjs';
+import {stores, isHistoryUrl, probeScript, acceptEvidence, canBeginLidlImport, jumboStateScript, acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction} from './probe.mjs';
 
 test('allow only exact HTTPS store history route', () => {
   for (const store of Object.values(stores)) {
@@ -196,3 +196,13 @@ test('generic Bonnetjes shortcut is not activated even on account route',()=>{
 });
 
 test('API evidence rejects other view and raw values, accepts only bounded aggregate',async()=>{const {acceptJumboApi}=await import('./probe.mjs');const run={store:stores.jumbo,phase:'combined',id:'j',nonce:'n',jumboOrigin:true,apiRequested:true};const e={id:'j',detail:{kind:'inhuis-jumbo-api',nonce:'n',stage:'detail',http:200,count:1,detail:true}};assert.deepEqual(acceptJumboApi(e,run),{stage:'detail',http:200,count:1,detail:true});assert.equal(acceptJumboApi(e,{...run,apiRequested:false}),null);assert.equal(acceptJumboApi({...e,id:'bad'},run),null);assert.equal(acceptJumboApi({...e,detail:{...e.detail,count:'1'}},run),null);});
+
+test('Lidl exact history route starts server-confirmed import even without receipt rows',()=>{
+ const run={id:'lidl-view',url:stores.lidl.url,lidlOrigin:true,failed:false,handshakeSent:false};
+ assert.equal(canBeginLidlImport(run,{history:true,markers:false}),true);
+ assert.equal(canBeginLidlImport(run,{history:true,markers:true}),true);
+ for(const bad of [{url:stores.lidl.origin+'/login'},{lidlOrigin:false},{failed:true},{handshakeSent:true},{id:null}])
+   assert.equal(canBeginLidlImport({...run,...bad},{history:true,markers:false}),false);
+ assert.equal(canBeginLidlImport(run,null),false);
+ assert.equal(canBeginLidlImport(run,{history:false,markers:true}),false);
+});

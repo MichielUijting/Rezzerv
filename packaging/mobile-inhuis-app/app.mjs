@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { InAppBrowser } from '@capgo/capacitor-inappbrowser'
 import {
-  stores, isHistoryUrl, probeScript, acceptEvidence, jumboStateScript,
+  stores, isHistoryUrl, probeScript, acceptEvidence, canBeginLidlImport, jumboStateScript,
   acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction,
 } from './probe.mjs'
 import {
@@ -512,7 +512,10 @@ async function handleLidlMessage(event) {
     return
   }
   const evidence = acceptEvidence(event, run)
-  if (!evidence?.markers || run.handshakeSent || !run.lidlOrigin || run.failed) return
+  // Reuse the proved browser-probe route check, but do not confuse its
+  // optional DOM marker with proof of a complete import. Only the existing
+  // backend confirmed Lidl history/begin and history/complete may finish.
+  if (!canBeginLidlImport(run, evidence)) return
   run.historyReached = true
   run.handshakeSent = true
   try {

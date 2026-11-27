@@ -50,6 +50,12 @@ export function probeScript(store, nonce) {
     window.mobileApp.postMessage({detail:{kind:'inhuis-history-probe',nonce:c.nonce,history:true,markers:Boolean(markers),...(c.lidl?{}:{route:location.pathname===c.paths[0]?'bestellingen':'orders'})}});
   })();`;
 }
+// A row count or read-only DOM marker must not block the genuine
+// server-confirmed history scan. The canonical parser decides empty/complete.
+export function canBeginLidlImport(run, evidence) {
+  return Boolean(evidence?.history && run?.id && run?.lidlOrigin &&
+    isHistoryUrl(stores.lidl, run.url) && !run.failed && !run.handshakeSent)
+}
 export function acceptEvidence(event, active) {
   if (!active || !active.id || event?.id !== active.id) return null;
   if(active.store===stores.jumbo ? !active.jumboOrigin : !isHistoryUrl(active.store,active.url))return null;
