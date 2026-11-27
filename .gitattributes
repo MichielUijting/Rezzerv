@@ -2,3 +2,4 @@
 docker/postgresql/init-roles.sh text eol=lf
 scripts/diagnostics/Inhuis_Winkelproduct_Bronproef.cmd text eol=crlf
 scripts/diagnostics/Inhuis_Winkelproduct_Onlineproef.cmd text eol=crlf
+scripts/po-tests/Inhuis_AH_HTTPS_8443_instellen.bat text eol=crlf

@@ -148,7 +148,8 @@ assert.match(oauth, /parsed\.path in \{"\/instellingen\/winkelkoppelingen", "\/o
 
 // Android return and browser OAuth never substitute navigation for proof.
 assert.match(connections, /const ahLoginNavigatingRef = useRef\(false\)/)
-assert.match(connections, /ahLoginNavigatingRef\.current = true\s+window\.location\.assign\(data\.login_url\)/)
+assert.match(connections, /ahLoginNavigatingRef\.current = true\s+if \(nativeAh\) \{\s+if \(!openNativeAhLogin\(data\.login_url\)\) \{\s+throw new Error\([^\n]+\)\s+\}\s+\} else window\.location\.assign\(data\.login_url\)/)
+assert.match(connections, /nativeAh \? !validNativeAhLoginUrl\(login\.href, window\.location\.origin\)/)
 assert.match(connections, /window\.addEventListener\('pageshow', resumeAhLogin\)/)
 assert.match(connections, /window\.addEventListener\('focus', resumeAhLogin\)/)
 assert.match(connections, /document\.addEventListener\('visibilitychange', resumeAhLogin\)/)
