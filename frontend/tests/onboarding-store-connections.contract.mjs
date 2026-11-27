@@ -203,7 +203,7 @@ assert.equal(lidlCtx.selected, 'lidl')
 // response or a missing opener may not execute an import.
 {
   const alerts = []
-  const ctx = { location: { origin: 'https://www.jumbo.com' }, alert: message => alerts.push(message) }
+  const ctx = { location: { origin: 'https://www.jumbo.com' }, window: { opener: null }, alert: message => alerts.push(message) }
   vm.runInNewContext(routing, ctx)
   assert.match(alerts[0], /Open Jumbo eerst via/)
 }
