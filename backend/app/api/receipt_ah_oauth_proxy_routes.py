@@ -78,6 +78,7 @@ class AHOAuthFlow:
     backend_origin: str
     return_to: str
     expires_at: datetime
+    attempt_id: str = ""
 
     def expired(self) -> bool:
         return datetime.now(timezone.utc) >= self.expires_at
@@ -85,6 +86,8 @@ class AHOAuthFlow:
 
 _flow_lock = RLock()
 _flows: dict[str, AHOAuthFlow] = {}
+# Independent opaque correlation ID, not the OAuth launch credential.
+_attempts: dict[str, tuple[str, datetime, str]] = {}
 
 
 def _clean_expired_flows() -> None:
@@ -92,6 +95,9 @@ def _clean_expired_flows() -> None:
         expired = [flow_id for flow_id, flow in _flows.items() if flow.expired()]
         for flow_id in expired:
             _flows.pop(flow_id, None)
+        for key, (_, expires, _) in list(_attempts.items()):
+            if datetime.now(timezone.utc) >= expires:
+                _attempts.pop(key, None)
 
 
 def _format_host(hostname: str) -> str:
@@ -182,6 +188,7 @@ def create_ah_oauth_flow(
     _clean_expired_flows()
     flow = AHOAuthFlow(
         flow_id=secrets.token_urlsafe(32),
+        attempt_id=str(uuid4()),
         installation_id=str(uuid4()).upper(),
         household_id=str(household_id),
         backend_origin=resolve_backend_public_origin(request),
@@ -190,7 +197,22 @@ def create_ah_oauth_flow(
     )
     with _flow_lock:
         _flows[flow.flow_id] = flow
+        _attempts[flow.attempt_id] = (flow.household_id, flow.expires_at, "pending")
     return flow
+
+
+def ah_oauth_attempt_status(household_id: str, attempt_id: str) -> str:
+    _clean_expired_flows()
+    with _flow_lock:
+        item = _attempts.get(attempt_id)
+        return item[2] if item and item[0] == str(household_id) else "unknown"
+
+
+def _record_ah_attempt(flow: AHOAuthFlow, status: str) -> None:
+    with _flow_lock:
+        item = _attempts.get(flow.attempt_id)
+        if item and item[0] == flow.household_id and item[2] != "connected":
+            _attempts[flow.attempt_id] = (item[0], item[1], status)
 
 
 def get_ah_oauth_flow(flow_id: str | None) -> AHOAuthFlow | None:
@@ -481,6 +503,7 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
         return _redirect_failed_ah_login(request)
     if not str(code or "").strip():
         logger.warning("AH OAuth callback could not complete: reason=missing_authorization_code")
+        _record_ah_attempt(flow, "error")
         consume_ah_oauth_flow(flow.flow_id)
         return _redirect_failed_ah_login(request)
 
@@ -488,6 +511,7 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
     try:
         session = client.exchange_code(str(code))
         save_ah_session(engine, flow.household_id, session)
+        _record_ah_attempt(flow, "connected")
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "connected"), status_code=302)
         if urlparse(flow.return_to).path == "/onboarding/winkels":
@@ -502,6 +526,7 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
     except (httpx.HTTPError, ValueError):
+        _record_ah_attempt(flow, "error")
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "error"), status_code=302)
         response.delete_cookie(_FLOW_COOKIE, path="/")
@@ -604,3 +629,4 @@ async def proxy_ah_login(path: str, request: Request):
 def reset_ah_oauth_flows_for_tests() -> None:
     with _flow_lock:
         _flows.clear()
+        _attempts.clear()

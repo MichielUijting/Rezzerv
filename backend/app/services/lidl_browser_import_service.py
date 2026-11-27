@@ -87,6 +87,20 @@ def begin_lidl_browser_import(engine: Engine, household_id: str) -> dict:
                 raise ValueError("Lidl-herstelstatus bevat dubbele bonidentiteiten")
             if not previous.get("scan_complete") or not _queue_completed(conn, household_id, ids):
                 start = min(start, earlier_date)
+        # Only return exact durable identities to the authenticated Inhuis UI.
+        # Never transmit the household's complete receipt list to the retailer.
+        known = {}
+        if previous is not None and not previous.get("scan_complete"):
+            rows = conn.execute(text("""
+                SELECT DISTINCT ON (external_receipt_id) external_receipt_id,id
+                FROM retailer_import_queue
+                WHERE household_id=:household_id AND provider='lidl'
+                  AND status IN ('pending','processing','completed','review_required')
+                ORDER BY external_receipt_id, created_at DESC, id
+                LIMIT 2001
+            """), {"household_id": household_id}).mappings().all()
+            if len(rows) <= MAX_RECEIPTS:
+                known = {str(row["external_receipt_id"]): str(row["id"]) for row in rows}
         state = {"run_id": run_id, "from_date": start.isoformat(),
                  "to_date": end.isoformat(), "scan_complete": False, "queue_ids": []}
         conn.execute(text("""
@@ -97,7 +111,7 @@ def begin_lidl_browser_import(engine: Engine, household_id: str) -> dict:
         """), {"id": uuid4().hex, "household_id": household_id,
                "key": SETTING_KEY, "value": json.dumps(state)})
     return {"run_id": run_id, "from_date": state["from_date"], "to_date": state["to_date"],
-            "scan_complete": False}
+            "scan_complete": False, "known_receipts": known}
 
 
 def complete_lidl_browser_import(

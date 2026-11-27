@@ -375,14 +375,16 @@ async function transmitLidlToInhuis(run, data) {
 
 function armLidlWatchdog(run, message, delay = 60000) {
   clearTimeout(run.watchdog)
+  const generation = (run.watchdogGeneration || 0) + 1
+  run.watchdogGeneration = generation
   run.watchdog = setTimeout(async () => {
-    if (lidl !== run || run.finished) return
+    if (lidl !== run || run.finished || run.watchdogGeneration !== generation) return
     // Recover a stalled hidden WebView without discarding the current runner.
     if (run.receiptPhase && run.recoveries < 3) {
       run.recoveries += 1
       try {
         await InAppBrowser.show({ id: run.id })
-        if (lidl !== run || run.finished || !run.receiptPhase) return
+        if (lidl !== run || run.finished || !run.receiptPhase || run.watchdogGeneration !== generation) return
         run.hidden = false
         armLidlWatchdog(run, message)
         return
@@ -513,6 +515,7 @@ async function handleInhuisLidlMessage(d) {
       type: 'inhuis:lidl-ack', receipt_id: cmd.receipt_id,
       request_id: run.requestId, ok: cmd.ok,
       ...(typeof cmd.error === 'string' ? { error: cmd.error.slice(0, 240) } : {}),
+      ...(typeof cmd.known === 'boolean' ? { known: cmd.known } : {}),
     })
     const code = `(() => {
       if (window.top !== window || location.origin !== ${JSON.stringify(lidlStore.origin)} ||
@@ -520,7 +523,10 @@ async function handleInhuisLidlMessage(d) {
           !window.__inhuisNativeLidlOpener) return;
       window.dispatchEvent(new CustomEvent('inhuis-native-lidl-ack', { detail: ${ack} }));
     })()`
-    if (cmd.ok && cmd.receipt_id === run.pendingReceiptId && !run.confirmedReceipts.has(cmd.receipt_id)) {
+    if (cmd.ok && cmd.known === false && cmd.receipt_id === run.pendingReceiptId) {
+      armLidlWatchdog(run, 'Lidl-bondetail geeft geen voortgang terug.', 60000)
+    }
+    if (cmd.ok && cmd.known !== false && cmd.receipt_id === run.pendingReceiptId && !run.confirmedReceipts.has(cmd.receipt_id)) {
       run.confirmedReceipts.add(cmd.receipt_id)
       run.recoveries = 0
       armLidlWatchdog(run, 'Binnen 60 seconden geen volgende Lidl-bon bevestigd. De periode blijft hervatbaar.')
@@ -555,6 +561,10 @@ async function handleLidlMessage(event) {
         run.attemptSequence = d.data.attempt_sequence
         run.recoveries = 0
         armLidlWatchdog(run, 'Binnen 60 seconden geen volgende Lidl-bon ontvangen. De periode blijft hervatbaar.')
+      }
+      if (d.data.type === 'inhuis:lidl-progress' && d.data.stage === 'known-receipt-check') {
+        run.pendingReceiptId = String(d.data.receipt_id || '')
+        armLidlWatchdog(run, 'Inhuis controleert eerder ontvangen Lidl-bon niet.', 30000)
       }
       if (d.data.type === 'inhuis:lidl-receipt') {
         run.pendingReceiptId = String(d.data.receipt?.id || '')

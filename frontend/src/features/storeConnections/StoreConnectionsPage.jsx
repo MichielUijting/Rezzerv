@@ -284,8 +284,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function loadAhStatus() {
-    const data = await fetchJson('/api/receipts/retailers/ah/status')
+  async function loadAhStatus(attemptId = '') {
+    const data = await fetchJson('/api/receipts/retailers/ah/status' + (attemptId ? '?attempt_id=' + encodeURIComponent(attemptId) : ''))
     setAhConnection(data || { connected: false, persistence: 'encrypted_database' })
     return data
   }
@@ -732,10 +732,12 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     let cancelled = false
     async function confirmAhLogin() {
       try {
-        const confirmation = await loadAhStatus()
+        const attemptId = sessionStorage.getItem('inhuis-ah-attempt') || ''
+        const confirmation = await loadAhStatus(attemptId)
         if (cancelled) return
+        sessionStorage.removeItem('inhuis-ah-attempt')
         ahReturnOutcomeRef.current = null
-        if (confirmation?.connected === true && (ahResult === 'connected' || onboardingMode)) {
+        if (confirmation?.connected === true && (attemptId ? confirmation.attempt_status === 'connected' : ahResult === 'connected')) {
           if (onboardingMode) await markOnboardingStoreResult('ah', 'success')
           else setActiveProvider('ah')
           if (onboardingMode) return
@@ -1055,6 +1057,25 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       }
 
       if (!lidlSourceWindow || event.source !== lidlSourceWindow) return
+
+      if (data.type === 'inhuis:lidl-progress' && data.stage === 'known-receipt-check') {
+        if (!lidlOnboardingRun || event.source !== nativeLidlTransportRef.current) return
+        const receiptId = String(data.receipt_id || '')
+        if (!/^\d{8,40}$/.test(receiptId)) return
+        const known = lidlOnboardingRun.period.known_receipts || {}
+        const queueId = Object.hasOwn(known, receiptId) ? known[receiptId] : null
+        const reusable = typeof queueId === 'string' && /^[0-9a-f-]{36}$/i.test(queueId) &&
+          !lidlOnboardingRun.queueIds.includes(queueId)
+        if (reusable) {
+          lidlOnboardingRun.queueIds.push(queueId)
+          lidlOnboardingQueueIdRef.current = queueId
+          lidlCounts.queued += 1
+          setLidlCountsView({ ...lidlCounts })
+        }
+        event.source.postMessage({ type: 'inhuis:lidl-ack', receipt_id: receiptId,
+          ok: true, known: Boolean(reusable) }, LIDL_WEB_ORIGIN)
+        return
+      }
 
       if (data.type === 'inhuis:lidl-progress') {
         setLidlPhase('fetching')
@@ -1381,6 +1402,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           !['https:', 'http:'].includes(login.protocol)) {
         throw new Error('De AH-aanmeldroute is niet veilig bereikbaar via HTTPS. Controleer de beveiligde AH-koppeling.')
       }
+      sessionStorage.removeItem('inhuis-ah-attempt')
+      if (/^[0-9a-f-]{36}$/i.test(String(data.attempt_id || ''))) sessionStorage.setItem('inhuis-ah-attempt', data.attempt_id)
       ahLoginNavigatingRef.current = true
       if (nativeAh) {
         if (!openNativeAhLogin(data.login_url)) {

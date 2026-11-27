@@ -382,7 +382,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
           else diagnostic = 'pagina geladen zonder verwacht bondetail'
         } catch { diagnostic = 'browserframe uitlezen mislukt' }
       }
-      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen (' + diagnostic + ')')
+      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen (' + diagnostic + ', ' + Math.round((Date.now() - started) / 1000) + ' seconden)')
     } finally {
       iframe.remove()
     }
@@ -512,6 +512,17 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
             attempt_sequence: ++attemptSequence,
             message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
           })
+          if (nativeRequestId) {
+            const knownAck = waitForAck(entry.id, 30000)
+            post({ type: 'inhuis:lidl-progress', stage: 'known-receipt-check', receipt_id: entry.id })
+            if ((await knownAck).known === true) {
+              imported += 1
+              if (entry.date > lastImportedDay) lastImportedDay = entry.date
+              post({ type: 'inhuis:lidl-progress', processed: imported, total: entries.length,
+                message: imported + ' van ' + entries.length + ' bonnen ontvangen (eerder veilig opgeslagen inbegrepen).' })
+              continue
+            }
+          }
           let receipt
           try {
             receipt = await loadDetail(entry.href, entry, nativeRequestId ? 60000 : 45000)

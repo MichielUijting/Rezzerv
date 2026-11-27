@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.db import engine
 from app.api.receipt_ah_oauth_proxy_routes import (
     build_ah_oauth_launch_url,
+    ah_oauth_attempt_status,
     create_ah_oauth_flow,
 )
 from app.integrations.retailer_receipts import (
@@ -365,6 +366,7 @@ def start_ah_account_connection(
     return {
         **ah_session_status(engine, household_id),
         "login_url": build_ah_oauth_launch_url(flow),
+        "attempt_id": flow.attempt_id,
         "redirect_uri": "automatic",
         "expires_at": flow.expires_at.isoformat(),
         "instructions": (
@@ -395,9 +397,13 @@ def complete_ah_account_connection(
 @router.get("/ah/status")
 def get_ah_account_status(
     authorization: Optional[str] = Header(None),
+    attempt_id: str | None = Query(default=None, max_length=36),
 ):
     household_id = _authorized_household_id(authorization)
-    return ah_session_status(engine, household_id)
+    status = ah_session_status(engine, household_id)
+    if isinstance(attempt_id, str):
+        status["attempt_status"] = ah_oauth_attempt_status(household_id, attempt_id)
+    return status
 
 
 @router.delete("/ah/connect")

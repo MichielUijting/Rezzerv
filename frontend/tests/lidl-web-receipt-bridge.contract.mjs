@@ -178,3 +178,7 @@ assert.doesNotMatch(nativeScript, /nativeRequestId \? 10000/)
 assert.match(nativeScript, /pending = deferred/)
 assert.match(nativeScript, /if \(pending.length\) \{\s*throw new Error/)
 assert.match(storeConnectionScreen, /counterLabel="ontvangen" testId="lidl-web-progress"/)
+
+assert.match(nativeScript, /stage: 'known-receipt-check'/)
+assert.match(nativeScript, /\(await knownAck\).known === true/)
+assert.match(storeConnectionScreen, /Object.hasOwn\(known, receiptId\)/)

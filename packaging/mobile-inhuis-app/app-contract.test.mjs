@@ -64,9 +64,12 @@ assert.match(appSource, /armLidlWatchdog\(run,/)
 assert.match(appSource, /code: shim \+ ';\\n' \+ script/)
 
 assert.match(appSource, /function armLidlWatchdog\(run, message, delay = 60000\)/)
-assert.match(appSource, /cmd.ok && cmd.receipt_id === run.pendingReceiptId && !run.confirmedReceipts.has/)
+assert.match(appSource, /cmd.ok && cmd.known !== false && cmd.receipt_id === run.pendingReceiptId && !run.confirmedReceipts.has/)
 assert.match(appSource, /run.receiptPhase && run.recoveries < 3/)
 assert.match(appSource, /await InAppBrowser.show\(\{ id: run.id \}\)/)
 
 assert.match(appSource, /d.data.attempt_sequence === run.attemptSequence \+ 1/)
 assert.match(appSource, /Inhuis bevestigt de ontvangen Lidl-bon niet.', 30000/)
+
+assert.match(appSource, /run.watchdogGeneration !== generation/)
+assert.match(appSource, /stage === 'known-receipt-check'/)

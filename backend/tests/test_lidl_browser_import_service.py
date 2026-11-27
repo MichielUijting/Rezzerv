@@ -33,6 +33,7 @@ class Conn:
         self.state = {}
         self.queues = set()
         self.statuses = {}
+        self.external_ids = {}
         self.statements = []
 
     def execute(self, query, params):
@@ -51,6 +52,8 @@ class Conn:
             return Result(json.dumps(self.state[owner]) if owner in self.state else None)
         if "FROM RETAILER_IMPORT_QUEUE" in sql:
             assert "HOUSEHOLD_ID=:HOUSEHOLD_ID" in sql and "PROVIDER='LIDL'" in sql
+            if "DISTINCT ON" in sql:
+                return Result([{"id": item, "external_receipt_id": external} for item, external in self.external_ids.items() if self.statuses.get(item) in {"pending", "processing", "completed", "review_required"}])
             return Result([{"id": item, "status": self.statuses[item]}
                            for item in params["queue_ids"] if item in self.queues
                            and item in self.statuses])
@@ -184,3 +187,14 @@ def test_staged_unprocessed_receipt_retains_period_until_completed():
     conn.statuses[q] = "completed"
     advanced = retry()
     assert advanced["from_date"] == "2026-08-01"
+
+
+def test_unfinished_scan_returns_exact_durable_receipt_identity():
+    conn = Conn()
+    _begin(conn)
+    q = "00000000-0000-4000-8000-000000000001"
+    conn.external_ids[q] = "123456789012"
+    conn.statuses[q] = "pending"
+    assert _begin(conn)["known_receipts"] == {"123456789012": q}
+    conn.statuses[q] = "failed"
+    assert _begin(conn)["known_receipts"] == {}
