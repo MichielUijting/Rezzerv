@@ -4,7 +4,7 @@ export function validNativeAhLaunch(value, appOrigin) {
     const url = new URL(value)
     return app.protocol === 'https:' && app.port === '' &&
       app.hostname.endsWith('.ts.net') && app.hostname.split('.').length >= 3 &&
-      url.protocol === 'http:' && url.hostname === app.hostname && url.port === '8011' &&
+      url.protocol === 'https:' && url.hostname === app.hostname && url.port === '8443' &&
       !url.username && !url.password && !url.search && !url.hash &&
       /^\/ah-oauth\/launch\/[A-Za-z0-9_-]{20,100}$/.test(url.pathname)
   } catch { return false }

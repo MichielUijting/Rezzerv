@@ -37,10 +37,10 @@ for(const name of ['handleInhuisLidlMessage','handleLidlMessage','installLidlScr
 assert.match(appSource, /safeJumboOwner\(d.binding\)/)
 
 const tailscale = 'https://inhuis-work.tailnet-example.ts.net'
-const launch='http://inhuis-work.tailnet-example.ts.net:8011/ah-oauth/launch/' + 'a'.repeat(40)
+const launch='https://inhuis-work.tailnet-example.ts.net:8443/ah-oauth/launch/' + 'a'.repeat(40)
 assert.equal(validNativeAhLaunch(launch,tailscale),true)
 for(const bad of [
- launch.replace(':8011',':8443'),launch.replace('http:', 'https:'),
+ launch.replace(':8443',':8011'),launch.replace('https:', 'http:'),
  launch.replace('inhuis-work.tailnet-example','other.tailnet-example'),
  launch+'?token=secret','http://user@inhuis-work.tailnet-example.ts.net:8011/ah-oauth/launch/'+'a'.repeat(40)
 ]) assert.equal(validNativeAhLaunch(bad,tailscale),false,bad)

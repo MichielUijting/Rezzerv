@@ -41,7 +41,8 @@ HTTPS-listener op poort 8443** met dezelfde betrouwbare Tailscale TLS-identiteit
 Deze listener reverse-proxyt uitsluitend naar de al bestaande lokale backend op
 127.0.0.1:8011. De vertrouwde Inhuis HTTPS-listener op 443 blijft ongewijzigd.
 Tailscale Serve moet vóór de PO-test afzonderlijk beschikbaar worden gemaakt; het
-wijzigen van Docker- of databasebindingen is niet nodig. De backend weigert de
+wijzigen van Docker- of databasebindingen is niet nodig. Android staat geen
+onbeveiligd HTTP toe, ook niet naar de eigen Tailscale-host. De backend weigert de
 oude HTTP OAuth-link voor HTTPS-clients. AH-proxycookies zijn namespaced en
 uitsluitend die cookies worden naar AH doorgestuurd. Tailscale certificaat- en
 Android cleartext-beveiliging blijven verplicht.

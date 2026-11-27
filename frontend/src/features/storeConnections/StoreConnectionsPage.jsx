@@ -1356,7 +1356,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       const nativeAh = Boolean(nativeJumboShell())
       const data = await fetchJson(
         '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) +
-          (onboardingMode ? '&onboarding=true' : '') + (nativeAh ? '&native_http=true' : ''),
+          (onboardingMode ? '&onboarding=true' : ''),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
       const login = new URL(data.login_url)

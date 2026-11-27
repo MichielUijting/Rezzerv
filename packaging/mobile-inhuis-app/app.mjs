@@ -155,8 +155,8 @@ async function safeJumboOwner(binding) {
   return true
 }
 
-// Reuse the AH proxy on the existing Tailscale backend :8011. This window
-// never receives Inhuis native bridge capabilities or household credentials.
+// Open AH only through the trusted Tailscale HTTPS listener :8443.
+// This window never receives Inhuis bridge or household credentials.
 async function finishAh(run, outcome) {
   if (ah !== run) return
   ah = null

@@ -113,20 +113,11 @@ def _ah_login_hostname(browser_hostname: str) -> str:
     return f"ah-login.{str(address).replace('.', '-')}.sslip.io"
 
 
-def resolve_backend_public_origin(request: Request, *, native_http: bool = False) -> str:
+def resolve_backend_public_origin(request: Request) -> str:
     configured = str(os.getenv("REZZERV_BACKEND_PUBLIC_URL", "") or "").strip().rstrip("/")
     scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
     if scheme not in {"http", "https"}:
         raise RuntimeError("Ongeldig protocol voor AH OAuth")
-    if native_http:
-        # The isolated Android test browser uses the proven Tailscale backend
-        # listener on 8011. A new port 8443 is not part of the running stack.
-        forwarded = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "")
-        hostname = forwarded.split(":", 1)[0].strip("[]").lower()
-        if (scheme != "https" or configured or not hostname.endswith(".ts.net") or
-            hostname.count(".") < 2 or not hostname.replace(".", "").replace("-", "").isalnum()):
-            raise RuntimeError("AH native testroute vereist bestaande Tailscale HTTPS-origin")
-        return f"http://{hostname}:{_DEFAULT_BACKEND_PUBLIC_PORT}"
     if configured:
         parsed = urlparse(configured)
         if (parsed.scheme not in {"http", "https"} or not parsed.hostname or
@@ -187,14 +178,13 @@ def create_ah_oauth_flow(
     household_id: str,
     return_to: str | None = None,
     onboarding: bool = False,
-    native_http: bool = False,
 ) -> AHOAuthFlow:
     _clean_expired_flows()
     flow = AHOAuthFlow(
         flow_id=secrets.token_urlsafe(32),
         installation_id=str(uuid4()).upper(),
         household_id=str(household_id),
-        backend_origin=resolve_backend_public_origin(request, native_http=native_http),
+        backend_origin=resolve_backend_public_origin(request),
         return_to=_safe_return_to(request, return_to, onboarding=onboarding),
         expires_at=datetime.now(timezone.utc) + _FLOW_TTL,
     )
@@ -260,7 +250,7 @@ def _safe_failure_return_url(request: Request) -> str:
             except AddressValueError:
                 pass
     if host.endswith(".ts.net"):
-        # The Tailscale HTTP test proxy must always recover to HTTPS/443.
+        # The separate AH HTTPS proxy always recovers to HTTPS/443.
         # HTTPS OAuth failure must return to the existing secured Inhuis URL,
         # not the internal HTTP frontend port.
         return f"https://{host}{path}?ah=error"

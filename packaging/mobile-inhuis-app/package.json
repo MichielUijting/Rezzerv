@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test probe.test.mjs app-contract.test.mjs sync-android-version.test.mjs configure-ah-network.test.mjs",
+    "test": "node --test probe.test.mjs app-contract.test.mjs sync-android-version.test.mjs enforce-https-network.test.mjs",
     "build": "node build.mjs"
   },
   "dependencies": {
