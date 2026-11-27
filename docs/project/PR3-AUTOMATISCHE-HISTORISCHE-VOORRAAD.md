@@ -173,3 +173,13 @@ per-huishouden transacties, idempotente bronfingerprint en
 actuele/handmatige-voorraadguards. Er wordt geen nieuwe winkelimport,
 bonherparse, accountkoppeling of database-reset aangevraagd.
 Een bevestigde aanvraag is **geen** voltooid herberekeningsbewijs.
+
+
+### Digitale verpakkingsgroottes versus gekochte hoeveelheid
+
+Wanneer een winkel de **grootte van één verpakking** als `unit` bewaart
+(bijvoorbeeld `1.5 l` of `500 g`), tellen uitsluitend positieve,
+gehele, uit de bon bewezen aantallen verpakkingen. Het getal in de
+verpakkingsomschrijving is geen gekocht aantal en wordt niet omgezet in
+stuks. Fractionele gewogen regels, onbekende eenheden en nul-aantallen
+blijven buiten fysieke voorraad.

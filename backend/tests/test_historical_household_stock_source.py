@@ -199,3 +199,23 @@ def test_partly_review_needed_digital_receipts_keep_proven_physical_lines():
     assert result["source_line_count"] == 2
     assert result["excluded_untrusted_rows"] == 2
     assert result["quantities"] == {"ha-1": 3}
+
+
+
+def test_digital_package_description_is_a_count_of_proven_packages_only():
+    # Lidl supplies the package SIZE as a unit label, not kilogram counts.
+    assert source._stock_units("2", "1.5 l", digital_receipt=True) == 2
+    assert source._stock_units("3", "500 g", digital_receipt=True) == 3
+    assert source._stock_units("2", "pcs", digital_receipt=True) == 2
+    assert source._stock_units("0.122", "0.122 kg", digital_receipt=True) is None
+    assert source._stock_units("1", "unknown", digital_receipt=True) is None
+    assert source._stock_units("2", "1.5 l", digital_receipt=False) is None
+    assert source._stock_units("0", "500 g", digital_receipt=True) is None
+
+
+def test_lidl_valid_package_count_replays_not_a_weight_conversion():
+    row = line("2025-06-01", "lidl-package", 2, unit="1.5 l")
+    row.update(source_type="retailer_api", source_provider="lidl")
+    result = source.load_automatic_historical_stock(Conn([row]), household_id="home")
+    assert result["source_line_count"] == 1
+    assert result["quantities"]["ha-1"] == 2

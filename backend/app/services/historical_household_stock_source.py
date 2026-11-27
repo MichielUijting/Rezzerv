@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 import json
+import re
 
 from sqlalchemy import text
 
@@ -58,13 +59,23 @@ _HISTORICAL_AUTO_SOURCE_SQL = _HISTORICAL_PRODUCT_LINES_SQL.replace(
 _CANONICAL_MODE = {
     AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY, AUTO_CONSUME_ALL_EXISTING,
 }
-_UNITS_PIECES = frozenset(("stuk", "stuks", "st"))
+_UNITS_PIECES = frozenset(("stuk", "stuks", "st", "pcs", "piece", "pieces"))
+# A digital line may describe the size of ONE package rather than a count
+# unit, e.g. "1.5 l" or "500 g". This never converts weighted kilograms
+# into piece counts; the separately recorded purchase quantity must still be
+# an exact positive whole number of packages.
+_PACKAGE_SIZE_LABEL = re.compile(
+    r"^(?:[0-9]+(?:[.,][0-9]+)?)\\s*(?:kg|g|gram|l|liter|ml|cl|dl|st|stuk|stuks)$"
+)
 
 
 def _stock_units(value, unit, *, digital_receipt=False) -> int | None:
     normalized = str(unit or "").strip().lower()
-    if normalized not in _UNITS_PIECES and not (digital_receipt and not normalized):
-        return None
+    if normalized not in _UNITS_PIECES:
+        if not (digital_receipt and (
+            not normalized or (len(normalized) <= 32 and _PACKAGE_SIZE_LABEL.fullmatch(normalized))
+        )):
+            return None
     if isinstance(value, bool):
         return None
     try:
