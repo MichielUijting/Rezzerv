@@ -135,7 +135,7 @@ console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
 const storeConnectionScreen = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(storeConnectionScreen, /const lidlPeriodUnsaved =/)
 assert.match(storeConnectionScreen, /lidlFrom !== \(lidlWindow\.configured_from_date/)
-assert.match(storeConnectionScreen, /const needsSave = !mobileRetailer && lidlPeriodUnsaved/)
+assert.match(storeConnectionScreen, /const needsSave = !onboardingMode && !mobileRetailer && lidlPeriodUnsaved/)
 assert.match(storeConnectionScreen, /data\?\.configured_from_date !== lidlFrom/)
 const lidlLaunch = storeConnectionScreen.slice(
   storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()'),
@@ -148,7 +148,7 @@ console.log('LIDL_SAVED_PERIOD_GUARD_GREEN')
 
 const mobileLidlSource = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(mobileLidlSource, /\(mobileRetailer \? '\\?automatic=true' : ''\)/)
-assert.match(mobileLidlSource, /hideDates=\{mobileRetailer\}/)
+assert.match(mobileLidlSource, /hideDates=\{mobileRetailer \|\| onboardingMode\}/)
 console.log('LIDL_MOBILE_AUTOMATIC_WINDOW_GREEN')
 
 const nativeId = '11e85250-cee9-44ff-9204-acf550ca85a3'

@@ -1,4 +1,4 @@
-name: Inhuis Android native retailer testapp
+name: Inhuis Android native Jumbo testapp
 on:
   pull_request:
     paths:
