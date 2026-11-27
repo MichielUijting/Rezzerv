@@ -161,3 +161,15 @@ Onzekere regels en andere parserstatussen blijven uitgesloten.
 De bestaande transactiebescherming op actuele en handmatige voorraad blijft
 onverminderd van toepassing. Dit is een Draft-tussenreparatie, geen volledige
 acceptatie van alle acht gevraagde herstelpunten.
+
+
+### Veilige hercontrole van reeds opgeslagen bonnen
+
+Het bestaande winkelkoppelingenscherm biedt **Bestaande bonnen opnieuw
+controleren**. Alleen de geautoriseerde huishoudbeheerder met een bestaande
+historische datumgrens mag de bestaande interne artikelherkenningsworker wekken.
+De worker houdt zijn onderhoudspauze, centrale matching-autoriteit,
+per-huishouden transacties, idempotente bronfingerprint en
+actuele/handmatige-voorraadguards. Er wordt geen nieuwe winkelimport,
+bonherparse, accountkoppeling of database-reset aangevraagd.
+Een bevestigde aanvraag is **geen** voltooid herberekeningsbewijs.

@@ -212,3 +212,22 @@ def test_maintenance_or_platform_pause_does_not_change_queue(enabled, state):
 def test_invalid_household_is_refused_before_any_db_access():
     with pytest.raises(ValueError, match="huishouden"):
         load_retailer_history_progress(_ReadOnlyEngine(None), household_id="  ")
+
+
+
+def test_recalculation_route_requires_owned_admin_session_and_only_wakes_worker():
+    """A queued signal is not a full recalculation or a second import path."""
+    from pathlib import Path
+    route = (Path(__file__).resolve().parents[1]
+             / "app/api/retailer_receipt_routes.py").read_text(encoding="utf-8")
+    handler = route.split('def request_historical_stock_recalculation(', 1)[1].split('@router.get("/history-evidence")', 1)[0]
+    assert '_authorized_household_id(authorization)' in handler
+    assert '_context_and_membership(conn)' in handler
+    assert 'permission_key="household_settings.manage"' in handler
+    assert 'read_household_cutover(conn, household_id)' in handler
+    assert 'signal_receipt_committed()' in handler
+    assert '"completed": False' in handler
+    assert not any(s in handler for s in (
+        "refresh_automatic_historical_stock(", "import_retailer_receipt(",
+        "DELETE FROM", "UPDATE inventory", "INSERT INTO",
+    ))

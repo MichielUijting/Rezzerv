@@ -12,6 +12,23 @@ import {
 export default function HistoricalImportProgress({ summary, loading, error, onRefresh }) {
   const rows = historicalStoreRows(summary)
   const [evidence, setEvidence] = useState({ provider: '', loading: false, items: [], error: '' })
+  const [recalculation, setRecalculation] = useState({ busy: false, message: '', error: '' })
+  async function recalculateHistoricalStock() {
+    setRecalculation({ busy: true, message: '', error: '' })
+    try {
+      const result = await fetchJson('/api/receipts/retailers/history-recalculate', { method: 'POST' })
+      if (result?.queued !== true || result?.completed !== false) {
+        throw new Error('Geen bevestigde opdracht voor de historische controle ontvangen.')
+      }
+      setRecalculation({ busy: false,
+        message: 'Controle aangevraagd. Bestaande bonnen blijven bewaard. Dit is nog geen bevestiging dat de voorraad is herberekend.',
+        error: '' })
+      onRefresh?.()
+    } catch {
+      setRecalculation({ busy: false, message: '',
+        error: 'Historische controle kon niet worden aangevraagd. Er is geen voorraad gewijzigd door dit verzoek.' })
+    }
+  }
   async function showEvidence(provider) {
     if (evidence.provider === provider && !evidence.loading) {
       setEvidence({ provider: '', loading: false, items: [], error: '' })
@@ -31,10 +48,18 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
       style={{ display: 'grid', rowGap: '12px', minWidth: 0 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <h3 id="historical-import-title" style={{ margin: 0 }}>Historische aankopen</h3>
-        <Button type="button" variant="secondary" onClick={onRefresh}
-          disabled={loading} data-testid="historical-import-refresh">
-          {loading ? 'Bijwerken…' : 'Vernieuwen'}
-        </Button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {summary?.history_cutover_enabled ? (
+            <Button type="button" variant="secondary" onClick={() => { void recalculateHistoricalStock() }}
+              disabled={recalculation.busy} data-testid="historical-stock-recalculate">
+              {recalculation.busy ? 'Aanvragen…' : 'Bestaande bonnen opnieuw controleren'}
+            </Button>
+          ) : null}
+          <Button type="button" variant="secondary" onClick={onRefresh}
+            disabled={loading} data-testid="historical-import-refresh">
+            {loading ? 'Bijwerken…' : 'Vernieuwen'}
+          </Button>
+        </div>
       </div>
       <p style={{ margin: 0 }}>
         Dit zijn bonnen die Inhuis als opgeslagen registreert, ook als ze niet zichtbaar zijn
@@ -63,6 +88,12 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
           bonnen blijven bewaard; dit overzicht hervat de verwerking niet.
         </p>
       ) : null}
+      {recalculation.message ? <p role="status" data-testid="historical-stock-recalculate-queued" style={{ margin: 0 }}>
+        {recalculation.message}
+      </p> : null}
+      {recalculation.error ? <p role="alert" data-testid="historical-stock-recalculate-error" style={{ margin: 0 }}>
+        {recalculation.error}
+      </p> : null}
       {error ? <p role="status" data-testid="historical-import-error" style={{ margin: 0 }}>
         {error}
       </p> : null}

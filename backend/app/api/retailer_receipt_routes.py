@@ -168,6 +168,37 @@ def get_retailer_history_progress(authorization: Optional[str] = Header(None)):
     return load_retailer_history_progress(engine, household_id=household_id)
 
 
+@router.post("/history-recalculate")
+def request_historical_stock_recalculation(authorization: Optional[str] = Header(None)):
+    """Wake only the established maintenance-admitted, idempotent worker.
+
+    This request never accepts receipt, article or household identifiers from
+    the browser, runs no inventory writes itself, and does not claim that a
+    recalculation finished. Existing stored receipts are reused in place.
+    """
+    household_id = _authorized_household_id(authorization)
+    with engine.connect() as conn:
+        context, membership_id = _context_and_membership(conn)
+        if str(context.active_household_id) != str(household_id):
+            raise HTTPException(status_code=403, detail="Actief huishouden komt niet overeen.")
+        decision = evaluate_household_permission(
+            conn, household_id=household_id, membership_id=membership_id,
+            permission_key="household_settings.manage",
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan de historische controle aanvragen.")
+        from app.services.receipt_historical_import_policy import read_household_cutover
+        if read_household_cutover(conn, household_id) is None:
+            raise HTTPException(status_code=409, detail="Dit huishouden heeft geen historische datumgrens.")
+    from app.services.article_recognition_background_worker import signal_receipt_committed
+    signal_receipt_committed()
+    return {
+        "queued": True,
+        "completed": False,
+        "message": "Historische bonnen worden opnieuw gecontroleerd door de bestaande achtergrondverwerking.",
+    }
+
+
 @router.get("/history-evidence")
 def get_retailer_history_evidence(
     provider: str,
