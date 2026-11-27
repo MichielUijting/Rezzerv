@@ -73,3 +73,14 @@ assert.match(appSource, /Inhuis bevestigt de ontvangen Lidl-bon niet.', 30000/)
 
 assert.match(appSource, /run.watchdogGeneration !== generation/)
 assert.match(appSource, /stage === 'known-receipt-check'/)
+
+
+// Android loads the same canonical Inhuis web frontend. Keep the previously
+// proven native AH/Jumbo/Lidl flows, while ensuring the recovery progress is
+// available in the APK's frontend contract after installing this candidate.
+const historicalPanel = (await import('node:fs')).readFileSync(
+  new URL('../../frontend/src/features/storeConnections/HistoricalImportProgress.jsx', import.meta.url), 'utf8')
+assert.match(historicalPanel, /historical-stock-recalculate/)
+assert.match(historicalPanel, /Bestaande bonnen opnieuw controleren/)
+assert.match(historicalPanel, /historical-stock-outcome/)
+assert.match(historicalPanel, /history-recalculate/)
