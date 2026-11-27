@@ -5,7 +5,7 @@ import {
   acceptJumboState, jumboTransition, jumboOpenLoginScript, acceptJumboAction,
 } from './probe.mjs'
 import {
-  secureInhuisUrl, validShellMessage, jumboNativeEventAllowed,
+  secureInhuisUrl, validShellMessage, jumboNativeEventAllowed, lidlNativeEventAllowed,
 } from './app-contract.mjs'
 
 const form = document.getElementById('connect')
@@ -13,8 +13,10 @@ const input = document.getElementById('inhuis-url')
 const status = document.getElementById('status')
 const button = form.querySelector('button')
 const store = stores.jumbo
+const lidlStore = stores.lidl
 let inhuis = null
 let jumbo = null
+let lidl = null
 let opening = false
 const listeners = []
 
@@ -154,6 +156,10 @@ async function handleInhuisMessage(event) {
   const runShell = inhuis
   const d = event?.detail
   if (!runShell || !validShellMessage(event, runShell.id, runShell.channel, runShell.origin, d)) return
+  if (d.kind.startsWith('inhuis-native-lidl-')) {
+    await handleInhuisLidlMessage(d)
+    return
+  }
   if (d.kind === 'inhuis-native-jumbo-start') {
     if (jumbo || opening) return
     opening = true
@@ -272,6 +278,210 @@ async function handleJumboMessage(event) {
     await closeJumbo()
   }
 }
+
+function validLidlLocation(url) {
+  try {
+    const parsed = new URL(url)
+    return parsed.origin === lidlStore.origin && !parsed.username && !parsed.password
+  } catch { return false }
+}
+
+function afterLidlClose(run) {
+  if (lidl !== run) return
+  if (!run.finished && run.handshakeSent) {
+    void transmitLidlToInhuis(run, {
+      type: 'inhuis:lidl-error',
+      message: 'Lidl is gesloten voordat de bonimport door Inhuis was bevestigd.',
+      request_id: run.requestId,
+    }).catch(() => {})
+  }
+  clearInterval(run.interval)
+  lidl = null
+}
+
+async function closeLidl() {
+  const run = lidl
+  if (!run) return
+  clearInterval(run.interval)
+  lidl = null
+  if (run.id) {
+    try { await InAppBrowser.close({ id: run.id }) } catch { /* Already closed. */ }
+  }
+}
+
+async function transmitLidlToInhuis(run, data) {
+  if (run !== lidl || !inhuis?.id || inhuis.origin !== secureInhuisUrl(inhuis.origin)) return
+  const payload = {
+    kind: 'inhuis-native-lidl-relay', channel: inhuis.channel,
+    nonce: run.transportNonce, data,
+  }
+  const json = JSON.stringify(payload)
+  if (json.length > 950000) throw Error('Lidl batch exceeds native message limit')
+  const code = `(() => {
+    if (window.top !== window || location.origin !== ${JSON.stringify(inhuis.origin)} ||
+        window.__inhuisNativeShell?.channel !== ${JSON.stringify(inhuis.channel)}) return;
+    window.dispatchEvent(new CustomEvent('inhuis-native-lidl-event', { detail: ${json} }));
+  })()`
+  await InAppBrowser.executeScript({ id: inhuis.id, code })
+}
+
+async function inspectLidl(run) {
+  if (run !== lidl || !run.id || run.inspecting || run.failed ||
+      run.handshakeSent || !run.lidlOrigin || !run.url) return
+  run.inspecting = true
+  try {
+    await InAppBrowser.executeScript({ id: run.id, code: probeScript(lidlStore, run.nonce) })
+  } catch { /* Login redirects and page loads can retry safely. */ }
+  finally { run.inspecting = false }
+}
+
+async function installLidlScript(run, script) {
+  if (run !== lidl || !run.id || !run.lidlOrigin || !run.historyReached ||
+      run.failed || run.scriptInjected || !run.handshakeSent ||
+      typeof script !== 'string' || script.length < 15000 || script.length > 200000 ||
+      !script.startsWith('(function lidlWebPageRunner(') ||
+      !script.includes('"native_request_id":' + JSON.stringify(run.requestId)) ||
+      !script.includes('const nativeRequestId = String(DATE_RANGE?.native_request_id') ||
+      !script.includes('const target = nativeRequestId ? window.__inhuisNativeLidlOpener') ||
+      !script.includes('await waitForAck(receipt.id)')) {
+    throw Error('Ongeldig of niet-gebonden Lidl-importscript')
+  }
+  const config = JSON.stringify({
+    origin: lidlStore.origin, inhuis: inhuis.origin,
+    nonce: run.nonce, requestId: run.requestId,
+  })
+  const shim = `(() => {
+    const c = ${config};
+    if (window.top !== window || location.origin !== c.origin ||
+        location.pathname !== '/mre/purchase-history' ||
+        typeof window.mobileApp?.postMessage !== 'function') return;
+    window.__inhuisNativeLidlOpener = Object.freeze({
+      postMessage(data, origin) {
+        if (origin !== c.inhuis || !data || typeof data !== 'object' ||
+            !['inhuis:lidl-progress', 'inhuis:lidl-receipt', 'inhuis:lidl-complete',
+              'inhuis:lidl-error'].includes(data.type)) return;
+        window.mobileApp.postMessage({ detail: {
+          kind: 'inhuis-native-lidl-data', nonce: c.nonce,
+          data: { ...data, request_id: c.requestId },
+        } });
+      },
+      focus() {},
+    });
+  })()`
+  await InAppBrowser.executeScript({ id: run.id, code: shim })
+  run.scriptInjected = true
+  await InAppBrowser.executeScript({ id: run.id, code: script })
+}
+
+async function handleInhuisLidlMessage(d) {
+  if (d.kind === 'inhuis-native-lidl-start') {
+    if (lidl || jumbo || opening) return
+    opening = true
+    try {
+      if (!await safeJumboOwner(d.binding)) return
+    } catch {
+      say('Lidl is geblokkeerd: de oude winkelsessie kon niet veilig worden gewist.')
+      return
+    } finally { opening = false }
+    opening = true
+    const run = {
+      store: lidlStore, id: null, url: null,
+      nonce: crypto.randomUUID(), transportNonce: d.nonce,
+      requestId: crypto.randomUUID(), lidlOrigin: false,
+      historyReached: false, handshakeSent: false, scriptInjected: false,
+      inspecting: false, failed: false, finished: false,
+    }
+    lidl = run
+    say('Lidl openen. Je meldt je uitsluitend bij de officiële Lidl-website aan.')
+    try {
+      const browser = await InAppBrowser.openWebView({
+        url: lidlStore.url, javascriptBridgeOrigins: [lidlStore.origin],
+        allowScreenshotsFromWebPage: false, preventDeeplink: true,
+        persistWebViewData: true, visibleTitle: true, openBlankTargetInWebView: true,
+      })
+      if (lidl !== run || typeof browser?.id !== 'string' || !browser.id) {
+        throw Error('Lidl browservenster kon niet veilig worden geopend')
+      }
+      run.id = browser.id
+      run.lidlOrigin = true
+      run.url = lidlStore.url
+      run.interval = setInterval(() => void inspectLidl(run), 1500)
+      void inspectLidl(run)
+    } catch {
+      await closeLidl()
+      say('Lidl kon niet worden geopend; Inhuis heeft geen Lidl-import bevestigd.')
+    } finally { opening = false }
+    return
+  }
+  const run = lidl
+  if (!run || run.transportNonce !== d.nonce) return
+  if (d.kind === 'inhuis-native-lidl-cancel') {
+    run.finished = true
+    await closeLidl()
+    return
+  }
+  if (d.kind !== 'inhuis-native-lidl-command' || !d.data ||
+      d.data.request_id !== run.requestId) return
+  const cmd = d.data
+  if (cmd.type === 'inhuis:lidl-script') {
+    if (!run.handshakeSent) return
+    try { await installLidlScript(run, cmd.script) }
+    catch {
+      run.failed = true
+      say('Het ophalen van Lidl-bonnen is veilig gestopt. De periode blijft hervatbaar.')
+      await closeLidl()
+    }
+    return
+  }
+  if (cmd.type === 'inhuis:lidl-ack') {
+    if (!run.scriptInjected || !/^[0-9]{8,40}$/.test(String(cmd.receipt_id || '')) ||
+        typeof cmd.ok !== 'boolean') return
+    const ack = JSON.stringify({
+      type: 'inhuis:lidl-ack', receipt_id: cmd.receipt_id,
+      request_id: run.requestId, ok: cmd.ok,
+      ...(typeof cmd.error === 'string' ? { error: cmd.error.slice(0, 240) } : {}),
+    })
+    const code = `(() => {
+      if (window.top !== window || location.origin !== ${JSON.stringify(lidlStore.origin)} ||
+          location.pathname !== '/mre/purchase-history' ||
+          !window.__inhuisNativeLidlOpener) return;
+      window.dispatchEvent(new CustomEvent('inhuis-native-lidl-ack', { detail: ${ack} }));
+    })()`
+    try { await InAppBrowser.executeScript({ id: run.id, code }) } catch { /* Pending receipt times out. */ }
+    return
+  }
+  if (cmd.type === 'inhuis:lidl-finish' && run.scriptInjected && run.handshakeSent) {
+    run.finished = true
+    await closeLidl()
+    say('Lidl-import door Inhuis bevestigd. Je bent terug in Inhuis.')
+  }
+}
+
+async function handleLidlMessage(event) {
+  const run = lidl
+  if (!run || !run.id || event?.id !== run.id) return
+  const d = event.detail
+  if (lidlNativeEventAllowed(event, run, d)) {
+    if (JSON.stringify(d.data).length > 950000) return
+    try { await transmitLidlToInhuis(run, d.data) }
+    catch { say('Een Lidl-bon kon niet worden bevestigd. De import blijft hervatbaar.') }
+    return
+  }
+  const evidence = acceptEvidence(event, run)
+  if (!evidence?.markers || run.handshakeSent || !run.lidlOrigin || run.failed) return
+  run.historyReached = true
+  run.handshakeSent = true
+  try {
+    await transmitLidlToInhuis(run, {
+      type: 'inhuis:lidl-handshake', bookmarklet_version: 2, request_id: run.requestId,
+    })
+  } catch {
+    run.failed = true
+    say('Lidl kon Inhuis niet bereiken. Er is geen import gestart.')
+    await closeLidl()
+  }
+}
+
 async function startInhuis(url) {
   if (opening || inhuis) return
   const origin = secureInhuisUrl(url)
@@ -304,6 +514,12 @@ async function initialize() {
   const stored = secureInhuisUrl(localStorage.getItem('inhuis-secure-origin'))
   if (stored) input.value = stored
   listeners.push(await InAppBrowser.addListener('urlChangeEvent', event => {
+    if (lidl?.id === event.id) {
+      lidl.lidlOrigin = validLidlLocation(event.url)
+      lidl.url = isHistoryUrl(lidlStore, event.url) ? event.url : null
+      if (!lidl.url) lidl.historyReached = false
+      void inspectLidl(lidl)
+    }
     if (jumbo?.id === event.id) {
       jumbo.jumboOrigin = validJumboLocation(event.url)
       jumbo.url = isHistoryUrl(store, event.url) ? store.origin + new URL(event.url).pathname : null
@@ -312,21 +528,26 @@ async function initialize() {
     }
     if (inhuis?.id === event.id && !String(event.url || '').startsWith(inhuis.origin + '/')) {
       void closeJumbo()
+      void closeLidl()
     }
   }))
   listeners.push(await InAppBrowser.addListener('browserPageLoaded', event => {
     if (inhuis?.id === event.id) void advertiseInhuisBridge()
     if (jumbo?.id === event.id) void inspect(jumbo)
+    if (lidl?.id === event.id) void inspectLidl(lidl)
   }))
   listeners.push(await InAppBrowser.addListener('messageFromWebview', event => {
     if (inhuis?.id === event.id) void handleInhuisMessage(event)
     else if (jumbo?.id === event.id) void handleJumboMessage(event)
+    else if (lidl?.id === event.id) void handleLidlMessage(event)
   }))
   listeners.push(await InAppBrowser.addListener('closeEvent', event => {
     if (jumbo?.id === event.id) afterClose(jumbo)
+    if (lidl?.id === event.id) afterLidlClose(lidl)
     if (inhuis?.id === event.id) {
       inhuis = null
       void closeJumbo()
+      void closeLidl()
       say('Inhuis is gesloten. Je kunt Inhuis opnieuw openen.')
     }
   }))
@@ -338,6 +559,7 @@ form.addEventListener('submit', event => {
 void initialize().catch(() => say('Native browserinitialisatie mislukt. Geen gegevens verwerkt.'))
 window.addEventListener('pagehide', () => {
   void closeJumbo()
+  void closeLidl()
   if (inhuis?.id) void InAppBrowser.close({ id: inhuis.id }).catch(() => {})
   for (const listener of listeners) void listener.remove().catch(() => {})
 })
