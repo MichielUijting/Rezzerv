@@ -1677,7 +1677,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         {onboardingMode && activeProvider === 'lidl' && lidlPhase ? (
           <Card><ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
             processed={lidlTransferProgress?.processed} total={lidlTransferProgress?.total}
-            counts={lidlCountsView} testId="lidl-onboarding-progress" /></Card>
+            counts={lidlCountsView} counterLabel="ontvangen" testId="lidl-onboarding-progress" /></Card>
         ) : null}
         {!onboardingMode ? <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>

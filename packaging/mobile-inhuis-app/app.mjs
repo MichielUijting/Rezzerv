@@ -373,16 +373,27 @@ async function transmitLidlToInhuis(run, data) {
   await InAppBrowser.executeScript({ id: inhuis.id, code })
 }
 
-function armLidlWatchdog(run, message) {
+function armLidlWatchdog(run, message, delay = 60000) {
   clearTimeout(run.watchdog)
   run.watchdog = setTimeout(async () => {
     if (lidl !== run || run.finished) return
+    // Recover a stalled hidden WebView without discarding the current runner.
+    if (run.receiptPhase && run.recoveries < 3) {
+      run.recoveries += 1
+      try {
+        await InAppBrowser.show({ id: run.id })
+        if (lidl !== run || run.finished || !run.receiptPhase) return
+        run.hidden = false
+        armLidlWatchdog(run, message)
+        return
+      } catch { /* Fall through to a bounded failure. */ }
+    }
     run.failed = true
     await transmitLidlToInhuis(run, {
       type: 'inhuis:lidl-error', request_id: run.requestId, message,
     }).catch(() => {})
     await closeLidl()
-  }, 90000)
+  }, delay)
 }
 
 async function inspectLidl(run) {
@@ -449,6 +460,7 @@ async function handleInhuisLidlMessage(d) {
       requestId: crypto.randomUUID(), lidlOrigin: false,
       historyReached: false, handshakeSent: false, scriptInjected: false,
       inspecting: false, failed: false, finished: false,
+      receiptPhase: false, completing: false, recoveries: 0, confirmedReceipts: new Set(), pendingReceiptId: null,
     }
     lidl = run
     say('Lidl openen. Je meldt je uitsluitend bij de officiële Lidl-website aan.')
@@ -508,6 +520,11 @@ async function handleInhuisLidlMessage(d) {
           !window.__inhuisNativeLidlOpener) return;
       window.dispatchEvent(new CustomEvent('inhuis-native-lidl-ack', { detail: ${ack} }));
     })()`
+    if (cmd.ok && cmd.receipt_id === run.pendingReceiptId && !run.confirmedReceipts.has(cmd.receipt_id)) {
+      run.confirmedReceipts.add(cmd.receipt_id)
+      run.recoveries = 0
+      armLidlWatchdog(run, 'Binnen 60 seconden geen volgende Lidl-bon bevestigd. De periode blijft hervatbaar.')
+    }
     try { await InAppBrowser.executeScript({ id: run.id, code }) } catch { /* Pending receipt times out. */ }
     return
   }
@@ -526,8 +543,19 @@ async function handleLidlMessage(event) {
     if (!run.scriptInjected || run.failed) return
     try {
       if (JSON.stringify(d.data).length > 950000) throw Error('Lidl-bonbericht is te groot')
-      armLidlWatchdog(run, 'Lidl geeft geen verdere importvoortgang terug. De periode blijft hervatbaar.')
-      if (d.data.type === 'inhuis:lidl-progress' && !run.hidden) {
+      if (d.data.type === 'inhuis:lidl-progress' && d.data.stage === 'receipts' && !run.receiptPhase && !run.completing) {
+        run.receiptPhase = true
+        armLidlWatchdog(run, 'Binnen 60 seconden geen volgende Lidl-bon bevestigd. De periode blijft hervatbaar.')
+      } else if (d.data.type === 'inhuis:lidl-progress' && !run.receiptPhase && !run.completing) {
+        armLidlWatchdog(run, 'Lidl-historielijst geeft geen voortgang terug.', 90000)
+      }
+      if (d.data.type === 'inhuis:lidl-receipt') run.pendingReceiptId = String(d.data.receipt?.id || '')
+      if (d.data.type === 'inhuis:lidl-complete') {
+        run.receiptPhase = false
+        run.completing = true
+        armLidlWatchdog(run, 'Inhuis bevestigt de volledige Lidl-import niet.', 90000)
+      }
+      if (d.data.type === 'inhuis:lidl-progress' && !run.hidden && run.recoveries === 0) {
         // Keep the authenticated retailer WebView alive; restore the existing Inhuis view.
         await InAppBrowser.hide({ id: run.id })
         run.hidden = true
@@ -549,7 +577,7 @@ async function handleLidlMessage(event) {
   if (!canBeginLidlImport(run, evidence)) return
   run.historyReached = true
   run.handshakeSent = true
-  armLidlWatchdog(run, 'Inhuis bevestigt de Lidl-importperiode niet. Probeer opnieuw.')
+  armLidlWatchdog(run, 'Inhuis bevestigt de Lidl-importperiode niet. Probeer opnieuw.', 90000)
   try {
     await transmitLidlToInhuis(run, {
       type: 'inhuis:lidl-handshake', bookmarklet_version: 2, request_id: run.requestId,

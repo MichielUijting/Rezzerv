@@ -360,7 +360,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     }
   }
 
-  async function loadDetail(url, fallback) {
+  async function loadDetail(url, fallback, timeoutMs = 45000) {
     const receiptId = receiptIdFromUrl(url)
     if (!receiptId) throw new Error('Lidl-bon heeft geen bonnummer')
     const iframe = document.createElement('iframe')
@@ -369,7 +369,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     try {
       iframe.src = url
       const started = Date.now()
-      while (Date.now() - started < 45000) {
+      while (Date.now() - started < timeoutMs) {
         await sleep(250)
         try {
           const doc = iframe.contentDocument
@@ -493,7 +493,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       }
 
       const isHistory = location.pathname.includes('/mre/purchase-history')
-      post({ type: 'inhuis:lidl-progress', processed: 0, total: entries.length, message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
+      post({ type: 'inhuis:lidl-progress', stage: 'receipts', processed: 0, total: entries.length, message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
       let lastImportedDay = ''
       let imported = 0
       for (const entry of entries) {
@@ -501,13 +501,24 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
           type: 'inhuis:lidl-progress',
           message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
         })
-        const receipt = await loadDetail(entry.href, entry)
+        // Three bounded retries for transient detail reads, within the native receipt budget.
+        const deadline = Date.now() + 60000
+        let receipt
+        for (let attempt = 0; attempt <= 3; attempt++) {
+          try {
+            receipt = await loadDetail(entry.href, entry, nativeRequestId ? 10000 : 45000)
+            break
+          } catch (error) {
+            if (attempt === 3 || !nativeRequestId || Date.now() >= deadline - 10000) throw error
+            post({ type: 'inhuis:lidl-progress', message: 'Lidl-bon opnieuw lezen (poging ' + (attempt + 2) + ' van 4)…' })
+          }
+        }
         const matchesWindow = withinWindow(receipt.dateTime)
         if (isHistory && matchesWindow !== true) {
           if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
           continue
         }
-        const acknowledgement = waitForAck(receipt.id)
+        const acknowledgement = waitForAck(receipt.id, nativeRequestId ? Math.max(1, deadline - Date.now()) : 30000)
         post({ type: 'inhuis:lidl-receipt', receipt })
         await acknowledgement
         if (isHistory) {
