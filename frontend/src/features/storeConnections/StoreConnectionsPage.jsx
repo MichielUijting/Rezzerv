@@ -25,6 +25,7 @@ import { JUMBO_WEB_ORIGIN, buildJumboImportEnvelope } from './jumboReceiptImport
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
 import { snapshotJumboImportContext, jumboImportContextHeaders, verifyJumboImportContext } from './jumboImportContext.js'
 import { nativeJumboShell, startNativeJumboTransport } from './nativeJumboTransport.js'
+import { startNativeLidlTransport } from './nativeLidlTransport.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
@@ -52,6 +53,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const expectedLidlWindowRef = useRef(null)
   const expectedJumboWindowRef = useRef(null)
   const nativeJumboTransportRef = useRef(null)
+  const nativeLidlTransportRef = useRef(null)
   const [nativeJumbo, setNativeJumbo] = useState(() => Boolean(nativeJumboShell()))
   useEffect(() => {
     const refresh = () => setNativeJumbo(Boolean(nativeJumboShell()))
@@ -423,7 +425,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   // No second start screen after selecting stores. Do not cover a returned
   // Jumbo import preview with the installation guide.
   useEffect(() => {
-    if (onboardingMode && mobileRetailer && !(nativeJumbo && activeProvider === 'jumbo') && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
+    if (onboardingMode && mobileRetailer && !nativeJumbo && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
         !(activeProvider === 'jumbo' && jumboReturningRef.current)) {
       setSetupHelpStore(activeProvider)
     }
@@ -444,13 +446,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       return
     }
     jumboReturningRef.current = false
-    if (mobileRetailer && !(nativeJumbo && code === 'jumbo')) {
+    if (mobileRetailer && !nativeJumbo) {
       const value = universalBookmarklet
       if (value && !hasMobileBookmarkletSetup(setupKeys[code])) {
         setPreparedCopy(preparedPromise ? { value, promise: preparedPromise } : null)
       } else setPreparedCopy(null)
     }
-    setSetupHelpStore(nativeJumbo && code === 'jumbo' ? '' : code)
+    setSetupHelpStore(nativeJumbo && ['jumbo', 'lidl'].includes(code) ? '' : code)
     setActiveProvider(code)
   }
 
@@ -461,7 +463,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     if (!code) return
     // Clipboard activation runs during the click, not after an awaited PUT.
     // Copying only prepares a favorite: it never starts retailer login/import.
-    const preparedPromise = mobileRetailer && !(nativeJumbo && code === 'jumbo') && ['jumbo', 'lidl'].includes(code) &&
+    const preparedPromise = mobileRetailer && !nativeJumbo && ['jumbo', 'lidl'].includes(code) &&
       !hasMobileBookmarkletSetup(setupKeys[code])
       ? copyRetailerBookmarklet(universalBookmarklet) : null
     setStoreOnboardingBusy(true)
@@ -487,10 +489,17 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       nativeJumboTransportRef.current = null
       expectedJumboWindowRef.current = null
     }
+    if (activeProvider !== 'lidl' && nativeLidlTransportRef.current) {
+      nativeLidlTransportRef.current.close()
+      nativeLidlTransportRef.current = null
+      expectedLidlWindowRef.current = null
+    }
   }, [activeProvider])
   useEffect(() => () => {
     nativeJumboTransportRef.current?.close()
     nativeJumboTransportRef.current = null
+    nativeLidlTransportRef.current?.close()
+    nativeLidlTransportRef.current = null
   }, [])
 
   // Open the retailer window synchronously within its user click. Jumbo's
@@ -560,6 +569,21 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         message: 'De gekozen periode kan niet worden opgeslagen. Vraag de beheerder van je huishouden om de Lidl-periode in te stellen.',
       })
       return
+    }
+
+    if (nativeJumboShell()) {
+      nativeLidlTransportRef.current?.close()
+      const transport = startNativeLidlTransport()
+      if (!transport) {
+        showFeedback({ variant: 'error', title: 'Lidl openen', message: 'De veilige native Lidl-browser is niet beschikbaar.' })
+        return false
+      }
+      nativeLidlTransportRef.current = transport
+      expectedLidlWindowRef.current = transport
+      setLidlPhase('waiting')
+      setLidlWebProgress('Lidl wordt geopend. Inhuis haalt de bonnen automatisch op.')
+      setSetupHelpStore('')
+      return true
     }
 
     // Open synchronously within the user click. An async window.open would
@@ -961,7 +985,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
-        if (onboardingMode && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
+        if ((onboardingMode || nativeJumbo) && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
         lidlOnboardingQueueIdRef.current = null
         setSetupHelpStore('')
         setActiveProvider('lidl')
@@ -1004,7 +1028,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
           event.source?.postMessage({
             type: 'inhuis:lidl-script',
-            script: buildLidlWebPageScript(window.location.origin, period),
+            script: buildLidlWebPageScript(window.location.origin, period,
+              event.source === nativeLidlTransportRef.current ? event.source.requestId : ''),
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
           setLidlPhase('failed')
@@ -1154,6 +1179,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             }
             await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
               lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id)
+            if (!cancelled && event.source === nativeLidlTransportRef.current) {
+              event.source.postMessage({ type: 'inhuis:lidl-finish' }, LIDL_WEB_ORIGIN)
+            }
           } catch (error) {
             lidlCounts.failed += 1
             setLidlPhase('failed')
@@ -1189,10 +1217,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       }
     }
 
+    const handleNative = event => {
+      if (event.detail?.origin === LIDL_WEB_ORIGIN) void handleMessage(event.detail)
+    }
     window.addEventListener('message', handleMessage)
+    window.addEventListener('inhuis-lidl-native-message', handleNative)
     return () => {
       cancelled = true
       window.removeEventListener('message', handleMessage)
+      window.removeEventListener('inhuis-lidl-native-message', handleNative)
     }
   }, [showFeedback])
 
@@ -1780,6 +1813,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Lidl"
             testId="lidl-digital-receipts"
+            nativeAutomatic={nativeJumbo}
+            showSetupHelp={!nativeJumbo}
             dateRangeTestId="lidl-import-window"
             isMobileViewport={isMobileViewport}
             hideDates={mobileRetailer || onboardingMode}
@@ -1795,8 +1830,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             openDisabled={lidlWindowSaving || !lidlWindow}
             openBusy={lidlWindowSaving}
             helpTestId="lidl-help-open"
-            onHelp={() => setSetupHelpStore('lidl')}
-            setupHelp={
+            onHelp={nativeJumbo ? undefined : () => setSetupHelpStore('lidl')}
+            setupHelp={!nativeJumbo ? (
               <RetailerBookmarkletHelp
                 provider="lidl"
                 retailer="Lidl"
@@ -1813,7 +1848,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                 instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
                   opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
               />
-            }
+            ) : null}
           />
         </Card>
         ) : null}

@@ -59,7 +59,7 @@ export default function RetailerReceiptPanel({
         <h3 style={{ margin: 0 }}>{retailer} digitale kassabonnen</h3>
         {isMobileViewport ? (
           <p role="status" style={{ margin: '6px 0 0' }}>
-            {nativeAutomatic ? 'Na aanmelden bij Jumbo haalt Inhuis de bonnen automatisch op.' : 'Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.'}
+            {nativeAutomatic ? 'Na aanmelden bij ' + retailer + ' haalt Inhuis de bonnen automatisch op.' : 'Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.'}
           </p>
         ) : null}
         <p style={{ margin: '6px 0 0' }}>

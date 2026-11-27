@@ -1,6 +1,10 @@
 export const INHUIS_NATIVE_MESSAGE_TYPES = Object.freeze([
   'inhuis:jumbo-batch', 'inhuis:jumbo-complete', 'inhuis:jumbo-error',
 ])
+export const INHUIS_NATIVE_LIDL_TYPES = Object.freeze([
+  'inhuis:lidl-handshake', 'inhuis:lidl-progress', 'inhuis:lidl-receipt',
+  'inhuis:lidl-complete', 'inhuis:lidl-error',
+])
 export function secureInhuisUrl(value) {
   try {
     const url = new URL(String(value || ''))
@@ -16,7 +20,10 @@ export function secureInhuisUrl(value) {
 export function validShellMessage(event, id, channel, origin, data) {
   return Boolean(event?.id && event.id === id &&
     data?.channel === channel && data?.kind &&
-    ['inhuis-native-jumbo-start','inhuis-native-jumbo-command','inhuis-native-jumbo-cancel'].includes(data.kind) &&
+    [
+      'inhuis-native-jumbo-start','inhuis-native-jumbo-command','inhuis-native-jumbo-cancel',
+      'inhuis-native-lidl-start','inhuis-native-lidl-command','inhuis-native-lidl-cancel',
+    ].includes(data.kind) &&
     /^[0-9a-f-]{36}$/i.test(String(data.nonce || '')) &&
     origin && secureInhuisUrl(origin) === origin)
 }
@@ -26,4 +33,11 @@ export function jumboNativeEventAllowed(event, run, data) {
     data.data && INHUIS_NATIVE_MESSAGE_TYPES.includes(data.data.type) &&
     data.data.request_id === run.requestId &&
     data.data.version === 14 && data.data.source_origin === 'https://www.jumbo.com')
+}
+
+export function lidlNativeEventAllowed(event, run, data) {
+  return Boolean(run?.id && event?.id === run.id && run.lidlOrigin &&
+    data?.nonce === run.nonce && data.kind === 'inhuis-native-lidl-data' &&
+    data.data && INHUIS_NATIVE_LIDL_TYPES.includes(data.data.type) &&
+    data.data.request_id === run.requestId)
 }

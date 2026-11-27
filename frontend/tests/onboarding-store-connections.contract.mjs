@@ -300,3 +300,7 @@ assert.equal(retailerBrowserHandoff('javascript:alert(1)','android','https://inh
 assert.match(mobileHelp,/href=\{handoff\}/)
 assert.match(mobileHelp,/Kopieer Inhuis-adres/)
 assert.match(compactStyle,/\.rz-retailer-help-dialog\{grid-template-columns:minmax\(0,1fr\);max-width:100%/)
+
+assert.match(connections, /startNativeLidlTransport/)
+assert.match(connections, /inhuis-lidl-native-message/)
+assert.match(connections, /nativeAutomatic=\{nativeJumbo\}/)

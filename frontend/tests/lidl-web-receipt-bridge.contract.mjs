@@ -150,3 +150,15 @@ const mobileLidlSource = readFileSync(new URL('../src/features/storeConnections/
 assert.match(mobileLidlSource, /\(mobileRetailer \? '\\?automatic=true' : ''\)/)
 assert.match(mobileLidlSource, /hideDates=\{mobileRetailer\}/)
 console.log('LIDL_MOBILE_AUTOMATIC_WINDOW_GREEN')
+
+const nativeId = '11e85250-cee9-44ff-9204-acf550ca85a3'
+const nativeScript = buildLidlWebPageScript('https://inhuis.example', {
+  from_date: '2026-01-01', to_date: '2026-11-27',
+}, nativeId)
+assert.match(nativeScript, /__inhuisNativeLidlOpener/)
+assert.match(nativeScript, /inhuis-native-lidl-ack/)
+assert.match(nativeScript, /native_request_id/)
+assert.match(nativeScript, /inhuis:lidl-receipt/)
+assert.match(nativeScript, /collectHistory/)
+assert.match(nativeScript, /await waitForAck\(receipt.id\)/)
+assert.throws(() => buildLidlWebPageScript('https://inhuis.example', {}, 'bad'), /Ongeldige native/)
