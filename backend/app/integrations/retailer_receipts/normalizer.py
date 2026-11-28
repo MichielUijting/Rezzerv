@@ -212,7 +212,8 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
         package_size = _first(item, "package_size", "packageSize")
         gross_amount = _decimal(_first(item, "gross_amount", "grossAmount", "originalAmount"))
         line_total = _decimal(_first(item, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice"))
-        quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
+        original_label = str(label).strip()
+    quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
         unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
 
         raw_detail = _first(item, 'raw_text', 'rawText', 'text', 'label', 'name')
@@ -354,7 +355,7 @@ def _normalize_line(item: dict[str, Any], index: int, *, provider: str = "") -> 
             retailer_sku=str(retailer_sku).strip() if retailer_sku not in (None, "") else None,
         )
 
-    raw_text = str(_first(item, "raw_text", "rawText") or label).strip()
+    raw_text = str(_first(item, "raw_text", "rawText") or original_label).strip()
     tax_rate = _decimal(_first(item, "tax_rate", "taxRate", "vatRate", "taxPercentage"))
     tax_amount = _decimal(_first(item, "tax_amount", "taxAmount", "vatAmount"))
     tax = TaxV1(rate=tax_rate, amount=tax_amount) if tax_rate is not None or tax_amount is not None else None
