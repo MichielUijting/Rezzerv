@@ -1,0 +1,8 @@
+{
+  "appId": "nl.inhuis.browserprobe",
+  "appName": "Inhuis Browserproef",
+  "webDir": "dist",
+  "server": {
+    "cleartext": false
+  }
+}
