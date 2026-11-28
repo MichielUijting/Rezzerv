@@ -3,6 +3,7 @@ import pytest
 
 from app.services.household_onboarding_service import (
     ensure_new_household_repurchase_default,
+    ensure_store_onboarding_prediction_defaults_if_missing,
     NEW_HOUSEHOLD_REPURCHASE_MODE,
 )
 
@@ -88,3 +89,49 @@ def test_new_household_prediction_defaults_are_insert_only():
         "almost_out_prediction_enabled": "true",
         "almost_out_prediction_days": "30",
     }
+
+
+class _ForecastConn:
+    def __init__(self, *, store_onboarding=True, settings=None):
+        self.store_onboarding = store_onboarding
+        self.settings = dict(settings or {})
+        self.commands = []
+
+    def execute(self, stmt, args=None):
+        sql = " ".join(str(stmt).split())
+        self.commands.append((sql, args))
+        if sql.startswith("SELECT 1 FROM household_settings"):
+            return _Result(value=1 if self.store_onboarding else None)
+        if sql.startswith("INSERT INTO household_settings"):
+            assert "ON CONFLICT (household_id, setting_key) DO NOTHING" in sql
+            key = args["setting_key"]
+            if key in self.settings:
+                return _Result(rowcount=0)
+            self.settings[key] = args["setting_value"]
+            return _Result(rowcount=1)
+        raise AssertionError("Unexpected SQL: " + sql)
+
+
+def test_existing_store_onboarding_gets_missing_prediction_only():
+    conn = _ForecastConn(settings={"almost_out_prediction_days": "100"})
+    assert ensure_store_onboarding_prediction_defaults_if_missing(conn, "house-1") == 1
+    assert conn.settings == {
+        "almost_out_prediction_days": "100",
+        "almost_out_prediction_enabled": "true",
+    }
+    assert ensure_store_onboarding_prediction_defaults_if_missing(conn, "house-1") == 0
+
+
+def test_deliberately_disabled_forecast_stays_off_during_history_refresh():
+    conn = _ForecastConn(settings={
+        "almost_out_prediction_enabled": "false",
+        "almost_out_prediction_days": "100",
+    })
+    assert ensure_store_onboarding_prediction_defaults_if_missing(conn, "house-1") == 0
+    assert conn.settings["almost_out_prediction_enabled"] == "false"
+
+
+def test_legacy_households_cannot_get_auto_forecast_defaults():
+    conn = _ForecastConn(store_onboarding=False)
+    assert ensure_store_onboarding_prediction_defaults_if_missing(conn, "old-house") == 0
+    assert conn.settings == {}
