@@ -317,3 +317,19 @@ def test_articlebeheer_does_not_inherit_unconfirmed_or_conflicting_tuple(monkeyp
     assert _confirmed_catalog_product_for_receipt(
         FakeConn(), store="lidl", sku="213", name="Melk", barcode=barcode,
     ) is None
+
+
+def test_regular_import_uses_existing_articlebeheer_code_without_treating_it_as_barcode(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.receipt_stock_review_service._confirmed_catalog_product_for_receipt",
+        Mock(return_value="g-milk"),
+    )
+    conn = FakeConn()
+    module = main()
+    module.find_household_article_for_global_product.return_value = None
+    assert resolve_stock_household_article(
+        conn, main_module=module, household_id="house-1",
+        line={"article_name_raw": "Melk", "external_article_code": "213"},
+        store_provider_code="lidl", allow_new_receipt_article=True,
+    ) == "article-catalog"
+    assert module.ensure_household_article_for_global_product.call_args.kwargs["barcode"] is None

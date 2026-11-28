@@ -588,6 +588,8 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     )
     ensure_store_onboarding_prediction_defaults_if_missing(conn, owner)
     _prepare_historical_article_links(conn, owner, cutoff)
+    from app.services.household_consumable_review import fill_unknown_catalog_consumables
+    fill_unknown_catalog_consumables(conn, household_id=owner)
     calculated = load_automatic_historical_stock(conn, household_id=owner)
     if calculated.get("status") != "calculated":
         return {"status": "not_ready", "created": 0, "revised": 0, "skipped": 0}

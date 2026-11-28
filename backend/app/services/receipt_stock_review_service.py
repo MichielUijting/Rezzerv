@@ -229,10 +229,11 @@ def resolve_stock_household_article(
         return None  # Do not overwrite an invalid/cross-household explicit selection.
 
     global_id = str(line.get("matched_global_product_id") or "").strip()
-    if not global_id and line.get("retailer_sku"):
+    confirmed_sku = line.get("retailer_sku") or (line.get("external_article_code") if not global_id else None)
+    if not global_id and confirmed_sku:
         global_id = _confirmed_catalog_product_for_receipt(
             conn, store=str(store_provider_code or "").strip().lower(),
-            sku=line.get("retailer_sku"), name=line.get("article_name_raw") or "",
+            sku=confirmed_sku, name=line.get("article_name_raw") or "",
             barcode=line.get("barcode"),
         )
     if global_id:
@@ -264,7 +265,7 @@ def resolve_stock_household_article(
         return main_module.ensure_household_article_for_global_product(
             conn, household_id, global_id,
             article_name_hint=line.get("article_name_raw"),
-            barcode=line.get("barcode") if allow_historical_bootstrap else line.get("external_article_code"),
+            barcode=line.get("barcode") if (allow_historical_bootstrap or confirmed_sku) else line.get("external_article_code"),
             brand=line.get("brand_raw"),
         )
 

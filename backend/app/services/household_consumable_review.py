@@ -234,3 +234,46 @@ def record_classification_origin(
             "at": datetime.now(timezone.utc).isoformat(),
         }, sort_keys=True),
     })
+
+
+def fill_unknown_catalog_consumables(conn, *, household_id: str) -> int:
+    """Use the confirmed Catalogus identity and existing food taxonomy.
+
+    No legacy False, explicit choice or existing origin is changed.  A food
+    hint on an unrelated receipt name is not an identity or classification.
+    """
+    owner = _require_household_and_actor(household_id)
+    rows = conn.execute(text("""
+        SELECT ha.id, gp.name AS product_name
+        FROM household_articles ha
+        JOIN global_products gp ON gp.id = ha.global_product_id
+        WHERE ha.household_id = :household_id
+          AND COALESCE(ha.status, 'active') = 'active'
+          AND gp.status = 'active'
+          AND ha.consumable IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM household_article_settings hs
+              WHERE hs.household_article_id = ha.id
+                AND hs.setting_key IN ('consumable_origin', 'consumable_review_history')
+          )
+        ORDER BY ha.id
+        FOR UPDATE OF ha
+    """), {"household_id": owner}).mappings().all()
+    count = 0
+    for row in rows:
+        if infer_food_consumable_from_seed(row.get("product_name")) is not True:
+            continue
+        article_id = str(row["id"])
+        changed = conn.execute(text("""
+            UPDATE household_articles
+            SET consumable = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE household_id = :household_id AND id = :article_id
+              AND consumable IS NULL
+        """), {"household_id": owner, "article_id": article_id})
+        if changed.rowcount == 1:
+            record_classification_origin(
+                conn, household_id=owner, article_id=article_id,
+                kind="automatic_positive",
+            )
+            count += 1
+    return count

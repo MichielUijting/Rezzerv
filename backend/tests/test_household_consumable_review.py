@@ -186,3 +186,37 @@ def test_automatic_origin_requires_known_kind():
             object(), household_id="home-1", article_id="article-1",
             kind="explicit_user",
         )
+
+
+def test_catalog_food_fills_unknown_only(monkeypatch):
+    from app.services import household_consumable_review as review
+
+    class Result:
+        rowcount = 1
+        def mappings(self):
+            return self
+        def all(self):
+            return [{"id": "food", "product_name": "Halfvolle melk"},
+                    {"id": "other", "product_name": "Koekenpan"}]
+
+    class Conn:
+        def __init__(self):
+            self.writes = []
+        def execute(self, query, params):
+            sql = str(query)
+            if "SELECT ha.id" in sql:
+                assert "ha.consumable IS NULL" in sql
+                assert "consumable_review_history" in sql
+                return Result()
+            self.writes.append(params)
+            return Result()
+
+    origin = []
+    monkeypatch.setattr(review, "infer_food_consumable_from_seed",
+                        lambda name: True if name == "Halfvolle melk" else None)
+    monkeypatch.setattr(review, "record_classification_origin",
+                        lambda conn, **kw: origin.append(kw))
+    conn = Conn()
+    assert review.fill_unknown_catalog_consumables(conn, household_id="home") == 1
+    assert conn.writes == [{"household_id": "home", "article_id": "food"}]
+    assert origin[0]["kind"] == "automatic_positive"
