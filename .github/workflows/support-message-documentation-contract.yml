@@ -1,7 +1,10 @@
 name: Support message documentation contract
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/features/support/**'
       - 'frontend/src/features/home/HomePage.jsx'

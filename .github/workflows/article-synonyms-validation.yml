@@ -1,6 +1,9 @@
 name: Article synonyms validation
+# draft-ci-router: routed
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - '.github/workflows/article-synonyms-validation.yml'
