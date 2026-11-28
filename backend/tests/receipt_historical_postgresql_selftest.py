@@ -452,7 +452,7 @@ def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
             SET matched_article_id=:article_id,
                 matched_global_product_id=NULL,
                 article_match_status='matched',
-                line_role='product', inventory_eligible=TRUE, barcode=:barcode
+                line_role='product', inventory_eligible=1, barcode=:barcode
             WHERE receipt_table_id=:receipt_id
         """), {
             "article_id": article_id, "barcode": barcode,

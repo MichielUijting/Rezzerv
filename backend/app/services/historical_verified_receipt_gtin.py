@@ -44,7 +44,7 @@ def verified_uncataloged_groups(conn, *, household_id, cutoff, articles):
           AND rr.duplicate_of_raw_receipt_id IS NULL
           AND COALESCE(rt.workflow_state, 'active')='active'
           AND COALESCE(rtl.is_deleted, FALSE)=FALSE
-          AND rtl.line_role='product' AND rtl.inventory_eligible=TRUE
+          AND rtl.line_role='product' AND rtl.inventory_eligible=1
           AND rt.purchase_at IS NOT NULL
           AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
           AND CAST(rt.purchase_at AS DATE) < CAST(:cutoff AS DATE)
