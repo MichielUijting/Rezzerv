@@ -86,6 +86,20 @@ def find_confirmed_household_article_id(
     return str(memory["article_id"]) if memory else None
 
 
+def _checked_gtin_key(value) -> str | None:
+    raw = str(value or "").strip()
+    if not raw.isdigit() or len(raw) not in {8, 12, 13, 14}:
+        return None
+    digits = [int(digit) for digit in raw]
+    checksum = (10 - sum(
+        digit * (3 if (len(digits) - 1 - index) % 2 else 1)
+        for index, digit in enumerate(digits[:-1])
+    ) % 10) % 10
+    if checksum != digits[-1]:
+        return None
+    return raw[1:] if len(raw) == 14 and raw[0] == "0" else raw
+
+
 def find_proven_store_sku_household_article_id(
     conn, *, household_id: str, store_provider_code: str, retailer_sku: str,
     article_name: str, barcode: str | None = None,
@@ -138,19 +152,22 @@ def find_proven_store_sku_household_article_id(
     if not expected:
         return None
     # Only a syntactically valid EAN/GTIN may be compared as a barcode.
-    expected_gtin = str(barcode or "").strip()
-    if not expected_gtin.isdigit() or len(expected_gtin) not in {8, 12, 13, 14}:
-        expected_gtin = ""
+    expected_gtin = _checked_gtin_key(barcode)
     targets = set()
+    observed_gtins = set()
     for row in rows:
         if label_key(row.get("corrected_raw_label") or row.get("raw_label")) != expected:
             return None
-        candidate_gtin = str(row.get("barcode") or "").strip()
-        if (expected_gtin and candidate_gtin.isdigit()
-                and len(candidate_gtin) in {8, 12, 13, 14}
-                and candidate_gtin != expected_gtin):
-            return None
+        candidate_gtin = _checked_gtin_key(row.get("barcode"))
+        if candidate_gtin:
+            observed_gtins.add(candidate_gtin)
+            if expected_gtin and candidate_gtin != expected_gtin:
+                return None
         targets.add(str(row["matched_article_id"]))
+    # A retailer may recycle an article number. Conflicting proven EANs
+    # prohibit automatic reuse, even when the incoming line lacks an EAN.
+    if len(observed_gtins) > 1:
+        return None
     return next(iter(targets)) if len(targets) == 1 else None
 
 
