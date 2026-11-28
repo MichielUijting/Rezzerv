@@ -13739,6 +13739,56 @@ def update_household_automation_settings(payload: HouseholdAutomationSettingsUpd
     }
 
 
+
+class HouseholdConsumableReviewRequest(BaseModel):
+    consumable: bool
+    expected_state: str
+
+
+@app.get("/api/household/consumable-review")
+def list_household_consumable_review(
+    limit: int = 10, offset: int = 0,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization)
+    from app.services.household_consumable_review import list_consumable_review_candidates
+    try:
+        with engine.begin() as conn:
+            return list_consumable_review_candidates(
+                conn, household_id=str(context["active_household_id"]),
+                limit=limit, offset=offset,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/household/consumable-review/{household_article_id}")
+def save_household_consumable_review(
+    household_article_id: str, payload: HouseholdConsumableReviewRequest,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization)
+    from app.services.household_consumable_review import (
+        ReviewConflict, ReviewNotFound, record_explicit_consumable_review,
+    )
+    try:
+        with engine.begin() as conn:
+            return record_explicit_consumable_review(
+                conn,
+                household_id=str(context["active_household_id"]),
+                article_id=household_article_id,
+                actor_id=str(context["user_id"]),
+                consumable=payload.consumable,
+                expected_state=payload.expected_state,
+            )
+    except ReviewNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReviewConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/household/almost-out-settings")
 def get_household_almost_out_settings_endpoint(authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
