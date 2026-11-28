@@ -213,4 +213,3 @@ De 24 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, t
 ## Bewijs en controle
 
 De machineleesbare gelijkwaardige lijst staat in `quality/ci/draft_ci_workflow_inventory.json`. De fail-closed validator `scripts/ci/validate_draft_ci_workflow_inventory.py` vergelijkt deze lijst met iedere aanwezige workflow en controleert Ready-/dispatch-contracten bij alle gerouteerde bestanden. De centrale Draft-router voert dit contract vóór dispatch uit. Een nieuw workflowbestand zonder inventarisupdate veroorzaakt een expliciete fout. Verplichte directe controles blijven verantwoordelijk voor hun eigen kandidaatbewijs en worden niet door de router geannuleerd.
-
