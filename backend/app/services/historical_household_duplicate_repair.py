@@ -17,6 +17,7 @@ import json
 from uuid import uuid4
 
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from app.services.historical_household_stock_writer import (
     _block_existing_business_history, _expire_unreferenced_owned_baseline,
@@ -264,6 +265,7 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
         # The whole group either succeeds or reverts. A stale auto-baseline is
         # not allowed to be forcibly dropped to make a merge pass.
         try:
+            group_rebound = group_merged = 0
             with conn.begin_nested():
                 for loser in losers:
                     old_id = str(loser["id"])
@@ -306,9 +308,12 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
                             "source": "historical_catalog_identity_repair",
                         }, sort_keys=True),
                     })
-                    rebound += changed["receipt_lines"]
-                    merged += 1
-        except UnsafeHistoricalMerge:
+                    group_rebound += changed["receipt_lines"]
+                    group_merged += 1
+            # The counts must describe COMMITTED savepoints, never attempts.
+            rebound += group_rebound
+            merged += group_merged
+        except (UnsafeHistoricalMerge, IntegrityError):
             blocked += 1
     return {
         "confirmed_groups": len(candidates),
