@@ -255,6 +255,15 @@ def cancel_superseded(repo: str, token: str, number: int, branch: str, old_sha: 
                       new_sha: str, plan: dict) -> list[int]:
     if not old_sha or old_sha == new_sha or not current_draft(repo, token, number, branch, new_sha):
         return []
+    # Prove the previous head is an ancestor, not a force-pushed or unrelated commit.
+    if api_json(repo, f"compare/{old_sha}...{new_sha}", token).get("status") != "ahead":
+        return []
+    # A branch shared by multiple open PRs is ambiguous: do not cancel anything.
+    owner = repo.split("/", 1)[0]
+    query = urllib.parse.urlencode({"state": "open", "head": f"{owner}:{branch}", "per_page": 100})
+    open_prs = api_json(repo, f"pulls?{query}", token)
+    if not isinstance(open_prs, list) or len(open_prs) != 1 or open_prs[0].get("number") != number:
+        return []
     replacements = latest_runs_by_name(repo, new_sha, token)
     candidates = {str(item["name"]): item for item in routed_workflows()}
     cancelled = []
@@ -277,6 +286,21 @@ def cancel_superseded(repo: str, token: str, number: int, branch: str, old_sha: 
         if not is_obsolete_router_run(fresh, repo=repo, branch=branch, old_sha=old_sha,
                                      new_sha=new_sha, workflow=workflow):
             continue
+        # Re-read the replacement immediately before cancellation; stale evidence
+        # must never authorize cancellation of an older still-useful run.
+        replacement_id = replacement.get("id")
+        if not isinstance(replacement_id, int) or replacement_id == run["id"]:
+            continue
+        live = api_json(repo, f"actions/runs/{replacement_id}", token)
+        if (live.get("head_sha") != new_sha or live.get("head_branch") != branch
+                or (live.get("head_repository") or {}).get("full_name") != repo
+                or live.get("path") != workflow["path"]
+                or live.get("name") != name
+                or not (live.get("status") in ACTIVE_STATUSES
+                        or (live.get("status") == "completed" and live.get("conclusion") == "success"))):
+            continue
+        if not current_draft(repo, token, number, branch, new_sha):
+            break
         api_post(repo, f"actions/runs/{run['id']}/cancel", token)
         cancelled.append(run["id"])
     return cancelled
@@ -449,17 +473,37 @@ jobs:
          patch.object(module, "routed_workflows", return_value=[workflow]), \
          patch.object(module, "latest_runs_by_name", return_value={"Demo": replacement}), \
          patch.object(module, "runs_for_sha", return_value=[run]), \
-         patch.object(module, "api_json", return_value=run), \
+         patch.object(module, "api_json", side_effect=[{"status": "ahead"}, [{"number": 1}], run, replacement]), \
          patch.object(module, "api_post") as post:
         assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == [123]
         post.assert_called_once_with("owner/repo", "actions/runs/123/cancel", "test")
     with patch.object(module, "current_draft", return_value=True), \
          patch.object(module, "routed_workflows", return_value=[workflow]), \
          patch.object(module, "latest_runs_by_name", return_value={}), \
+         patch.object(module, "api_json", side_effect=[{"status": "ahead"}, [{"number": 1}]]), \
          patch.object(module, "runs_for_sha", return_value=[run]), \
          patch.object(module, "api_post") as post:
         assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == []
         post.assert_not_called()
+    for responses in ([{"status": "diverged"}],
+                      [{"status": "ahead"}, [{"number": 1}, {"number": 2}]],
+                      [{"status": "ahead"}, [{"number": 2}]]):
+        with patch.object(module, "current_draft", return_value=True), \
+             patch.object(module, "api_json", side_effect=responses), \
+             patch.object(module, "api_post") as post:
+            assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == []
+            post.assert_not_called()
+    for invalid in (dict(replacement, status="completed", conclusion="failure"),
+                    dict(replacement, head_sha="other"),
+                    dict(replacement, head_branch="other")):
+        with patch.object(module, "current_draft", return_value=True), \
+             patch.object(module, "routed_workflows", return_value=[workflow]), \
+             patch.object(module, "latest_runs_by_name", return_value={"Demo": replacement}), \
+             patch.object(module, "runs_for_sha", return_value=[run]), \
+             patch.object(module, "api_json", side_effect=[{"status": "ahead"}, [{"number": 1}], run, invalid]), \
+             patch.object(module, "api_post") as post:
+            assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == []
+            post.assert_not_called()
     print("DRAFT_CI_ROUTER_PLANNER_AND_CANCEL_CONTRACT_GREEN")
     print("DRAFT_CI_ROUTER_SELF_TEST_GREEN")
 
