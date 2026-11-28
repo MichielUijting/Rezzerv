@@ -44,9 +44,10 @@ def article(identifier, name, product=None):
             "custom_name": None}
 
 
-def stock(identifier, name, quantity):
+def stock(identifier, name, quantity, *, household_article_id=None):
     return {
         "id": identifier, "article_name": name, "quantity": quantity,
+        "household_article_id": household_article_id,
         "space_id": None, "sublocation_id": None,
         "space_name": "", "sublocation_name": "", "status": "active",
     }
@@ -68,7 +69,7 @@ def test_replays_exact_name_and_id_membership_without_duplicate_events():
         article("c", "Groente"),
     ]
     connection = Connection(
-        # Sorted as in the legacy SQL query; first row must stay primary.
+        # Sorted as in the database query; first row must stay primary.
         [stock("i-2", "HV Melk", 2), stock("i-1", "Melk", 1),
          stock("i-3", "Groente", 9)],
         [event("e-3", "c", "Groente", 9),
@@ -124,12 +125,56 @@ def test_same_name_is_not_grouping_authority():
     # article evaluation. It never silently aggregates independent IDs.
     a = article("a", "Melk")
     b = article("b", "Melk")
-    conn = Connection([stock("i", "Melk", 1)],
-                      [event("e-a", "a", "Melk", 1)])
+    conn = Connection(
+        [stock("i-a", "Melk", 1, household_article_id="a"),
+         stock("i-b", "Melk", 3, household_article_id="b")],
+        [event("e-a", "a", "Melk", 1),
+         event("e-b", "b", "Melk", 3),
+         event("legacy-unproven", "legacy", "Melk", 7)],
+    )
     result = prefetch_individual_almost_out(
         conn, "household-A", [a, b], [a, b], include_purchases=False)
     assert set(result) == {"a", "b"}
+    assert [row["id"] for row in result["a"]["inventory_rows"]] == ["i-a"]
+    assert [row["id"] for row in result["b"]["inventory_rows"]] == ["i-b"]
     assert result["a"]["inventory_rows"][0]["product_scope_article_ids"] == ["a"]
     assert result["b"]["inventory_rows"][0]["product_scope_article_ids"] == ["b"]
     assert [x["id"] for x in result["a"]["event_rows"]] == ["e-a"]
-    assert [x["id"] for x in result["b"]["event_rows"]] == ["e-a"]
+    assert [x["id"] for x in result["b"]["event_rows"]] == ["e-b"]
+    assert all("legacy-unproven" not in [row["id"] for row in result[aid]["event_rows"]]
+               for aid in ("a", "b"))
+
+
+def test_ambiguous_legacy_stock_is_not_attributed_to_both_same_name_articles():
+    a = article("a", "Melk")
+    b = article("b", "Melk")
+    connection = Connection(
+        [stock("unknown-stock", "Melk", 5)],
+        [event("unverified", "legacy", "Melk", 5)],
+    )
+    result = prefetch_individual_almost_out(
+        connection, "household-A", [a, b], [a, b],
+        include_purchases=False,
+    )
+    assert result["a"]["inventory_rows"] == []
+    assert result["b"]["inventory_rows"] == []
+    assert result["a"]["event_rows"] == []
+    assert result["b"]["event_rows"] == []
+
+
+def test_known_article_id_is_authority_even_when_snapshot_name_differs():
+    a = article("a", "Nieuwe naam")
+    b = article("b", "Oude naam")
+    connection = Connection(
+        [stock("stock-a", "Oude naam", 2, household_article_id="a")],
+        [dict(event("event-a", "b", "Oude naam", 2),
+              household_article_id="a")],
+    )
+    result = prefetch_individual_almost_out(
+        connection, "household-A", [a, b], [a, b],
+        include_purchases=False,
+    )
+    assert [row["id"] for row in result["a"]["inventory_rows"]] == ["stock-a"]
+    assert result["b"]["inventory_rows"] == []
+    assert [row["id"] for row in result["a"]["event_rows"]] == ["event-a"]
+    assert result["b"]["event_rows"] == []
