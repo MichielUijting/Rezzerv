@@ -102,8 +102,12 @@ def glob_regex(pattern: str) -> re.Pattern[str]:
         char = pattern[index]
         if char == "*":
             if index + 1 < len(pattern) and pattern[index + 1] == "*":
-                pieces.append(".*")
-                index += 2
+                if index + 2 < len(pattern) and pattern[index + 2] == "/":
+                    pieces.append("(?:.*/)?")
+                    index += 3
+                else:
+                    pieces.append(".*")
+                    index += 2
                 continue
             pieces.append("[^/]*")
         elif char == "?":
@@ -170,11 +174,11 @@ def api_json(repo: str, endpoint: str, token: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def api_post(repo: str, endpoint: str, token: str, payload: dict) -> None:
+def api_post(repo: str, endpoint: str, token: str, payload: dict | None = None) -> None:
     url = f"https://api.github.com/repos/{repo}/{endpoint.lstrip('/')}"
     request = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode("utf-8"),
+        data=json.dumps(payload).encode("utf-8") if payload is not None else b"",
         method="POST",
         headers={
             "Accept": "application/vnd.github+json",
@@ -186,23 +190,96 @@ def api_post(repo: str, endpoint: str, token: str, payload: dict) -> None:
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            if response.status not in (201, 204):
+            if response.status not in (201, 202, 204):
                 raise RuntimeError(f"dispatch gaf HTTP {response.status}")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"dispatch faalde: HTTP {exc.code}: {detail}") from exc
 
 
-def latest_runs_by_name(repo: str, sha: str, token: str) -> dict[str, dict]:
+ACTIVE_STATUSES = {"queued", "in_progress", "waiting", "requested", "pending"}
+RETRY_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}
+
+
+def runs_for_sha(repo: str, sha: str, token: str) -> list[dict]:
     if not sha:
-        return {}
-    payload = api_json(repo, f"actions/runs?head_sha={urllib.parse.quote(sha)}&per_page=100", token)
+        return []
+    runs = []
+    for page in range(1, 11):
+        payload = api_json(repo, f"actions/runs?head_sha={urllib.parse.quote(sha)}&per_page=100&page={page}", token)
+        batch = payload.get("workflow_runs")
+        if not isinstance(batch, list):
+            raise RuntimeError("invalid workflow run inventory")
+        runs.extend(batch)
+        if len(batch) < 100:
+            return runs
+    raise RuntimeError("workflow run inventory exceeds safe pagination limit")
+
+
+def latest_runs_by_name(repo: str, sha: str, token: str) -> dict[str, dict]:
     latest: dict[str, dict] = {}
-    for run in payload.get("workflow_runs", []):
+    for run in runs_for_sha(repo, sha, token):
         name = str(run.get("name") or "")
         if name and name not in latest:
             latest[name] = run
     return latest
+
+
+def is_obsolete_router_run(run: dict, *, repo: str, branch: str, old_sha: str,
+                           new_sha: str, workflow: dict) -> bool:
+    # Only cancel router-dispatched runs, never manual, PR, push or release runs.
+    # A matching replacement must already be visible on the current SHA.
+    return bool(
+        old_sha and old_sha != new_sha and branch not in {"main", "master"}
+        and run.get("head_sha") == old_sha
+        and run.get("head_branch") == branch
+        and (run.get("head_repository") or {}).get("full_name") == repo
+        and run.get("event") == "workflow_dispatch"
+        and (run.get("actor") or {}).get("login") == "github-actions[bot]"
+        and run.get("status") in ACTIVE_STATUSES
+        and run.get("path") == workflow["path"]
+        and run.get("name") == workflow["name"]
+        and isinstance(run.get("id"), int)
+    )
+
+
+def current_draft(repo: str, token: str, number: int, branch: str, sha: str) -> bool:
+    pr = api_json(repo, f"pulls/{number}", token)
+    head = pr.get("head") or {}
+    return bool(pr.get("state") == "open" and pr.get("draft") is True
+                and head.get("sha") == sha and head.get("ref") == branch
+                and (head.get("repo") or {}).get("full_name") == repo)
+
+
+def cancel_superseded(repo: str, token: str, number: int, branch: str, old_sha: str,
+                      new_sha: str, plan: dict) -> list[int]:
+    if not old_sha or old_sha == new_sha or not current_draft(repo, token, number, branch, new_sha):
+        return []
+    replacements = latest_runs_by_name(repo, new_sha, token)
+    candidates = {str(item["name"]): item for item in routed_workflows()}
+    cancelled = []
+    for run in runs_for_sha(repo, old_sha, token):
+        name = str(run.get("name") or "")
+        workflow = candidates.get(name)
+        replacement = replacements.get(name, {})
+        if not workflow or not is_obsolete_router_run(run, repo=repo, branch=branch,
+                old_sha=old_sha, new_sha=new_sha, workflow=workflow):
+            continue
+        if (replacement.get("head_sha") != new_sha or replacement.get("head_branch") != branch
+                or (replacement.get("head_repository") or {}).get("full_name") != repo
+                or replacement.get("path") != workflow["path"]
+                or not (replacement.get("status") in ACTIVE_STATUSES
+                        or replacement.get("conclusion") == "success")):
+            continue
+        if not current_draft(repo, token, number, branch, new_sha):
+            break
+        fresh = api_json(repo, f"actions/runs/{run['id']}", token)
+        if not is_obsolete_router_run(fresh, repo=repo, branch=branch, old_sha=old_sha,
+                                     new_sha=new_sha, workflow=workflow):
+            continue
+        api_post(repo, f"actions/runs/{run['id']}/cancel", token)
+        cancelled.append(run["id"])
+    return cancelled
 
 
 def build_plan(
@@ -244,7 +321,8 @@ def build_plan(
         for name, run in previous_runs.items():
             if name not in by_name:
                 continue
-            if run.get("status") == "completed" and run.get("conclusion") == "failure":
+            if (run.get("status") in ACTIVE_STATUSES or
+                    (run.get("status") == "completed" and run.get("conclusion") in RETRY_CONCLUSIONS)):
                 selected[name] = by_name[name]
                 previous_failed.append(name)
 
@@ -255,7 +333,7 @@ def build_plan(
         workflow = selected[name]
         existing = current_runs.get(name)
         if existing and (
-            existing.get("status") in {"queued", "in_progress"}
+            existing.get("status") in ACTIVE_STATUSES
             or (existing.get("status") == "completed" and existing.get("conclusion") == "success")
         ):
             skipped_existing.append(
@@ -330,6 +408,19 @@ jobs:
     unsafe_dispatch_line = "ref: ${{ github.event.pull_request.head.sha }}"
     assert "github.event.pull_request" in safe_dispatch_line and "||" in safe_dispatch_line
     assert "github.event.pull_request" in unsafe_dispatch_line and "||" not in unsafe_dispatch_line
+    assert path_matches("backend/tests/test_unpacking.py", ["backend/tests/**/*unpacking*"])
+    assert path_matches("backend/tests/nested/test_unpacking.py", ["backend/tests/**/*unpacking*"])
+    workflow = {"path": ".github/workflows/demo.yml", "name": "Demo"}
+    run = {"id": 123, "head_sha": "old", "head_branch": "task", "head_repository": {"full_name": "owner/repo"},
+           "event": "workflow_dispatch", "actor": {"login": "github-actions[bot]"}, "status": "queued",
+           "path": workflow["path"], "name": "Demo"}
+    scope = dict(repo="owner/repo", branch="task", old_sha="old", new_sha="new", workflow=workflow)
+    assert is_obsolete_router_run(run, **scope)
+    for field, value in (("head_sha", "new"), ("head_branch", "other"), ("event", "push"),
+                         ("actor", {"login": "human"}), ("status", "completed"), ("path", "other"),
+                         ("head_repository", {"full_name": "other/repo"})):
+        assert not is_obsolete_router_run(dict(run, **{field: value}), **scope)
+    assert not is_obsolete_router_run(run, **dict(scope, branch="main"))
     print("DRAFT_CI_ROUTER_SELF_TEST_GREEN")
 
 
@@ -346,6 +437,7 @@ def main() -> int:
     run_parser.add_argument("--before-sha", default="")
     run_parser.add_argument("--head-sha", required=True)
     run_parser.add_argument("--head-ref", required=True)
+    run_parser.add_argument("--pr-number", type=int, default=0)
     run_parser.add_argument("--evidence", default="draft-ci-router-plan.json")
 
     args = parser.parse_args()
@@ -380,6 +472,12 @@ def main() -> int:
         print(f"ROUTER_REUSE_EXISTING={item['name']}:{item['status']}:{item.get('conclusion')}")
 
     for item in plan["dispatch_targets"]:
+        if draft and args.pr_number and not current_draft(args.repo, token, args.pr_number, args.head_ref, args.head_sha):
+            raise RuntimeError("Draft candidate changed before dispatch")
+        existing = latest_runs_by_name(args.repo, args.head_sha, token).get(str(item["name"]), {})
+        if existing.get("status") in ACTIVE_STATUSES or existing.get("conclusion") == "success":
+            print(f"ROUTER_REUSE_LIVE={item['file']}")
+            continue
         file_name = str(item["file"])
         api_post(
             args.repo,
@@ -389,6 +487,10 @@ def main() -> int:
         )
         print(f"ROUTER_DISPATCHED={file_name}")
 
+    if draft and args.action == "synchronize" and args.pr_number:
+        plan["cancelled_obsolete_runs"] = cancel_superseded(args.repo, token, args.pr_number, args.head_ref, args.before_sha, args.head_sha, plan)
+        Path(args.evidence).write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"ROUTER_CANCELLED_OBSOLETE={len(plan['cancelled_obsolete_runs'])}")
     write_outputs(plan)
     print("DRAFT_CI_ROUTER_GREEN")
     return 0

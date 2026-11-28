@@ -1,11 +1,9 @@
 name: Receipt lifecycle foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
     types:
-      - opened
-      - reopened
-      - synchronize
       - ready_for_review
     paths:
       - 'backend/alembic/**'

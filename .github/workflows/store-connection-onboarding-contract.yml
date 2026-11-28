@@ -1,7 +1,10 @@
 name: Winkelkoppelingen onboarding en AH auto-import contract
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/store_onboarding_progress_service.py'
       - 'backend/app/services/quick_start_onboarding_service.py'

@@ -60,9 +60,10 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           PR_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          python scripts/ci/draft_workflow_router.py run             --repo "$GITHUB_REPOSITORY"             --action "$PR_ACTION"             --draft "$PR_DRAFT"             --base-sha "$BASE_SHA"             --before-sha "${BEFORE_SHA:-}"             --head-sha "$HEAD_SHA"             --head-ref "$HEAD_REF"             --evidence draft-ci-router-plan.json             | tee draft-ci-router.log
+          python scripts/ci/draft_workflow_router.py run             --repo "$GITHUB_REPOSITORY"             --action "$PR_ACTION"             --draft "$PR_DRAFT"             --base-sha "$BASE_SHA"             --before-sha "${BEFORE_SHA:-}"             --head-sha "$HEAD_SHA"             --head-ref "$HEAD_REF"             --pr-number "$PR_NUMBER"             --evidence draft-ci-router-plan.json             | tee draft-ci-router.log
           grep -Fx 'DRAFT_CI_ROUTER_GREEN' draft-ci-router.log
 
       - name: Publish routing summary
