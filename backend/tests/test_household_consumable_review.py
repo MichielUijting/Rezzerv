@@ -152,3 +152,35 @@ def test_review_list_preserves_original_values_and_household_filter(monkeypatch)
     assert len(conn.statements) == 2
     assert all(not sql.lstrip().startswith(("UPDATE", "DELETE", "INSERT"))
                for sql in conn.statements)
+
+
+def test_proven_auto_origin_is_owned_and_cannot_override_explicit_user_choice():
+    from app.services.household_consumable_review import record_classification_origin
+
+    class RecordingConnection:
+        def __init__(self):
+            self.calls = []
+        def execute(self, statement, params):
+            self.calls.append((str(statement), params))
+
+    conn = RecordingConnection()
+    record_classification_origin(
+        conn, household_id="home-1", article_id="article-1",
+        kind="automatic_positive",
+    )
+    assert len(conn.calls) == 1
+    sql, args = conn.calls[0]
+    assert "ha.household_id = :household_id AND ha.id = :article_id" in sql
+    assert "ON CONFLICT (household_article_id, setting_key) DO NOTHING" in sql
+    assert args["household_id"] == "home-1"
+    assert args["key"] == ORIGIN_KEY
+    assert json.loads(args["value"])["kind"] == "automatic_positive"
+
+
+def test_automatic_origin_requires_known_kind():
+    from app.services.household_consumable_review import record_classification_origin
+    with pytest.raises(ValueError):
+        record_classification_origin(
+            object(), household_id="home-1", article_id="article-1",
+            kind="explicit_user",
+        )

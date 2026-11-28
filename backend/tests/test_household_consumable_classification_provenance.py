@@ -45,6 +45,16 @@ def test_new_household_article_retains_classification_provenance(
     assert len(inserts) == 1
     assert inserts[0][1]["consumable"] is expected
     assert inserts[0][1]["household_id"] == "house-1"
+    origins = [args for sql, args in conn.writes
+               if "INSERT INTO household_article_settings" in sql]
+    if expected is None:
+        assert origins == []
+    else:
+        import json
+        assert len(origins) == 1
+        assert json.loads(origins[0]["value"])["kind"] == (
+            "automatic_positive" if explicit is None else "caller_supplied"
+        )
 
 
 def test_unknown_existing_classification_is_not_persisted_as_manual_false(monkeypatch):
@@ -102,6 +112,14 @@ def test_inventory_created_article_never_persists_unknown_as_nonconsumable(name,
     assert len(inserts) == 1
     assert inserts[0][1]["consumable"] is expected
     assert inserts[0][1]["household_id"] == "house-1"
+    origins = [args for sql, args in conn.calls
+               if "INSERT INTO household_article_settings" in sql]
+    if expected is None:
+        assert origins == []
+    else:
+        import json
+        assert len(origins) == 1
+        assert json.loads(origins[0]["value"])["kind"] == "automatic_positive"
 
 
 
@@ -163,3 +181,11 @@ def test_missing_canonical_article_id_never_falls_back_to_same_name(monkeypatch)
         conn, "home-1", "foreign-or-deleted-id", "Halfvolle melk",
     ) is False
     assert conn.writes == []
+
+
+def test_legacy_emergency_creation_never_persists_false_for_unknown():
+    """The secondary create-if-missing path must follow the same tri-state contract."""
+    import inspect
+    source = inspect.getsource(legacy.resolve_household_article_reference)
+    assert "'consumable': 1 if resolved_consumable else None" in source
+    assert "'consumable': 1 if resolved_consumable else 0" not in source
