@@ -197,3 +197,40 @@ def record_explicit_consumable_review(
     })
     return {"status": "reviewed", "article_id": identifier,
             "consumable": consumable, "provenance": EXPLICIT}
+
+CLASSIFICATION_ORIGINS = {"automatic_positive", "caller_supplied"}
+
+
+def record_classification_origin(
+    conn, *, household_id: str, article_id: str, kind: str,
+) -> None:
+    """Persist a proven automatic/caller source without overwriting user provenance.
+
+    The owning transaction has already created or positively classified the
+    article. An explicit later administrator choice always takes precedence.
+    """
+    owner = _require_household_and_actor(household_id)
+    identifier = str(article_id or "").strip()
+    if not identifier or kind not in CLASSIFICATION_ORIGINS:
+        raise ValueError("Ongeldige classificatiebron")
+    conn.execute(text("""
+        INSERT INTO household_article_settings (
+            id, household_article_id, setting_key, setting_value,
+            created_at, updated_at
+        )
+        SELECT :id, ha.id, :key, :value,
+               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        FROM household_articles ha
+        WHERE ha.household_id = :household_id AND ha.id = :article_id
+          AND ha.consumable IS NOT NULL
+        ON CONFLICT (household_article_id, setting_key) DO NOTHING
+    """), {
+        "id": str(uuid4()),
+        "article_id": identifier,
+        "household_id": owner,
+        "key": ORIGIN_KEY,
+        "value": json.dumps({
+            "kind": kind,
+            "at": datetime.now(timezone.utc).isoformat(),
+        }, sort_keys=True),
+    })
