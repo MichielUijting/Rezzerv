@@ -8595,13 +8595,17 @@ def resolve_or_create_inventory_household_article(
         raise HTTPException(status_code=409, detail="Meerdere huishoudartikelen gevonden; voorraadmutatie is geblokkeerd")
 
     household_article_id = str(uuid.uuid4())
+    # A new article created as a side-effect of a stock event is not a
+    # deliberate user decision that the product is non-consumable.
+    inferred_consumable = infer_consumable_from_name(normalized_article_name)
     conn.execute(
         text(
             """
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, created_at, updated_at, source, status
             ) VALUES (
-                :id, :household_id, :naam, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
+                :id, :household_id, :naam, :consumable,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
             )
             """
         ),
@@ -8609,6 +8613,7 @@ def resolve_or_create_inventory_household_article(
             "id": household_article_id,
             "household_id": normalized_household_id,
             "naam": normalized_article_name,
+            "consumable": 1 if inferred_consumable else None,
             "source": str(source or "inventory").strip() or "inventory",
         },
     )

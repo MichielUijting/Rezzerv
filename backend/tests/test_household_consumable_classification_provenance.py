@@ -68,3 +68,37 @@ def test_new_positive_evidence_fills_only_null_not_an_existing_user_decision(mon
     assert "consumable IS NULL" in sql
     assert "SET consumable = 1" in sql
     assert params["household_id"] == "house-1"
+
+
+class _Scalars:
+    def all(self):
+        return []
+
+
+class _InventoryConn:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, query, params=None):
+        self.calls.append((str(query), dict(params or {})))
+        return self
+
+    def scalars(self):
+        return _Scalars()
+
+
+@pytest.mark.parametrize(("name", "expected"), [
+    ("Verse halfvolle melk", 1),
+    ("Onbekend huishoudartikel", None),
+])
+def test_inventory_created_article_never_persists_unknown_as_nonconsumable(name, expected):
+    conn = _InventoryConn()
+    article_id = legacy.resolve_or_create_inventory_household_article(
+        conn, household_id="house-1", article_name=name,
+    )
+    assert article_id
+    inserts = [(sql, params) for sql, params in conn.calls
+               if "INSERT INTO household_articles" in sql]
+    assert len(inserts) == 1
+    assert inserts[0][1]["consumable"] is expected
+    assert inserts[0][1]["household_id"] == "house-1"
