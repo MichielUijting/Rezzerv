@@ -1,0 +1,99 @@
+name: PR732 historical household repair PostgreSQL contract
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/historical_household_duplicate_repair.py'
+      - 'backend/app/services/historical_household_stock_writer.py'
+      - 'backend/app/services/household_consumable_review.py'
+      - 'backend/tests/receipt_historical_postgresql_selftest.py'
+      - 'backend/tests/test_historical_household_duplicate_repair.py'
+      - 'backend/tests/test_household_consumable_review.py'
+      - '.github/workflows/pr732-historical-repair-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr732-historical-repair-postgresql
+  cancel-in-progress: true
+
+jobs:
+  historical-postgresql:
+    name: Proven catalog merge, stock and cadence on DML-only PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
+      DATABASE_SSLMODE: disable
+      MIGRATION_DATABASE_SSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Configure proven migrator and DML-only runtime permissions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
+          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+      - name: Migrate with the official schema-migration preflight
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          python -m app.schema_migration_preflight
+          python -m alembic current
+      - name: Focused contract and classification tests
+        run: |
+          env -u MIGRATION_DATABASE_URL python -m pytest -q             backend/tests/test_household_consumable_review.py             backend/tests/test_household_consumable_classification_provenance.py             backend/tests/test_historical_household_duplicate_repair.py
+      - name: Synthetic physical AH Lidl Jumbo history on real PostgreSQL
+        run: |
+          set -euo pipefail
+          env -u MIGRATION_DATABASE_URL             python backend/tests/receipt_historical_postgresql_selftest.py             | tee pr732-postgresql-evidence.log
+          grep -F 'PR732_POSTGRESQL_VERIFIED_CATALOG_RECOVERY_GREEN' pr732-postgresql-evidence.log
+          grep -F 'PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN' pr732-postgresql-evidence.log
+          grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' pr732-postgresql-evidence.log
+      - name: Preserve synthetic numeric evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr732-historical-postgresql-synthetic-evidence
+          path: pr732-postgresql-evidence.log
+          if-no-files-found: ignore
+          retention-days: 14
