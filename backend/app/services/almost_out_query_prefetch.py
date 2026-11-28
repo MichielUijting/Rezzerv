@@ -124,7 +124,10 @@ def prefetch_individual_almost_out(conn, household_id, all_articles, candidates,
           AND COALESCE(i.status, 'active') = 'active'
           AND COALESCE(i.aantal, 0) > 0
         ORDER BY COALESCE(i.updated_at, i.created_at) DESC, i.id ASC
-    """).bindparams(bindparam('article_names', expanding=True)), args).mappings().all()
+    """).bindparams(
+        bindparam('article_names', expanding=True),
+        bindparam('article_ids', expanding=True),
+    ), args).mappings().all()
 
     event_rows = conn.execute(text("""
         SELECT id, article_id, household_article_id, article_name, location_id, location_label,
