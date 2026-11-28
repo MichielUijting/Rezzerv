@@ -12,7 +12,7 @@ Status: Draft-implementatie; momentopname van alle `.github/workflows/*.yml` op 
 | Overige uitzondering met technische reden | 32 |
 | **Totaal** | **191** |
 
-De 24 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, jobs/testinhoud, permissions en eventuele `push`-triggers. Alleen de PR-Draft-planning wordt gewijzigd: `ready_for_review` is de directe Ready-trigger en `workflow_dispatch` stelt de centrale Draft-router in staat uitsluitend passende checks te starten. De bestaande onafhankelijke gates hieronder blijven rechtstreeks actief. Geen van deze classificaties geeft toestemming om F7 exact-candidate, release, security of andere vereiste Ready-gates over te slaan.
+De 24 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, teststappen, permissions en eventuele `push`-triggers. Eén workflow (`uitpakken-admin-location-create-validation.yml`) gebruikt na een concrete mislukte Chromium-installatie expliciet `ubuntu-24.04` in plaats van `ubuntu-latest`, omdat de op de runner aangetroffen Ubuntu 26.04 door de bestaande Playwright-versie niet wordt ondersteund; teststappen en dekking blijven identiek. Alleen de PR-Draft-planning wordt gewijzigd: `ready_for_review` is de directe Ready-trigger en `workflow_dispatch` stelt de centrale Draft-router in staat uitsluitend passende checks te starten. De bestaande onafhankelijke gates hieronder blijven rechtstreeks actief. Geen van deze classificaties geeft toestemming om F7 exact-candidate, release, security of andere vereiste Ready-gates over te slaan.
 
 ## Volledige inventaris (191 bestanden)
 
