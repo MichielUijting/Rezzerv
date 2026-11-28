@@ -594,3 +594,34 @@ def test_lidl_proven_gtin_shape_is_preserved():
     identifiers = canonical.receipt.lines[0].identifiers
     assert identifiers.gtin == "8712345678906"
     assert identifiers.barcode == "8712345678906"
+
+
+@pytest.mark.parametrize(("provider", "raw_label", "expected_description"), [
+    ("ah", "Verse halfvolle melk 0,99 B", "Verse halfvolle melk 0,99 B"),
+    ("jumbo", "Verse halfvolle melk 0,99 B", "Verse halfvolle melk 0,99 B"),
+    ("lidl", "Verse halfvolle melk 0,99 B", "Verse halfvolle melk"),
+])
+def test_provider_normalization_preserves_original_source_line(
+    provider, raw_label, expected_description,
+):
+    """Structured normalization must keep source facts for all three chains."""
+    envelope = RetailerReceiptEnvelope(
+        provider=provider,
+        external_receipt_id=f"{provider}-source-preservation",
+        receipt={
+            "dateTime": "2026-10-15T12:00:00",
+            "totalAmount": "0.99",
+            "items": [{"name": raw_label, "quantity": 1, "lineTotal": "0.99"}],
+        },
+    )
+    result = normalize_retailer_receipt(
+        envelope, scan_id="synthetic-source-preservation",
+        document_sha256="a" * 64,
+    )
+    assert result.receipt is not None
+    assert len(result.receipt.lines) == 1
+    line = result.receipt.lines[0]
+    assert line.raw_text == raw_label
+    assert line.description == expected_description
+    assert line.quantity == Decimal("1")
+    assert line.line_total == Decimal("0.99")
