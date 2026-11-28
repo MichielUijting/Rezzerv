@@ -195,7 +195,8 @@ def test_validated_kassa_quantity_passes_before_approval():
     assert _validate_direct_receipt_quantities(module, conn, "receipt-1") is None
 
 
-def test_proven_lidl_sku_reuses_one_household_identity_across_prices():
+def test_proven_lidl_sku_reuses_one_household_identity_across_prices(monkeypatch):
+    monkeypatch.setattr("app.services.receipt_stock_review_service._confirmed_catalog_product_for_receipt", lambda *a, **kw: None)
     conn = FakeConn(receipt_lines=[
         {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,88 B",
          "barcode": None, "global_product_id": None},
@@ -264,4 +265,55 @@ def test_recycled_sku_with_conflicting_valid_gtins_fails_closed_without_new_barc
     assert find_proven_store_sku_household_article_id(
         conn, household_id="house-1", store_provider_code="lidl",
         retailer_sku="lidl-213", article_name="Verse halfvolle melk",
+    ) is None
+
+
+@pytest.mark.parametrize("historical", [True, False])
+def test_articlebeheer_confirmed_tuple_reused_in_shared_stock_resolver(monkeypatch, historical):
+    reader = Mock(return_value={
+        "status": "confirmed", "confirmed_by": "authorized",
+        "receipt_text_normalized": "verse halfvolle melk",
+        "external_article_code": "213", "global_product_id": "g-milk",
+        "primary_gtin": "",
+    })
+    monkeypatch.setattr(
+        "app.services.external_article_product_link_service.get_confirmed_external_article_product_link",
+        reader,
+    )
+    conn = FakeConn()
+    module = main()
+    assert resolve_stock_household_article(
+        conn, main_module=module, household_id="house-1",
+        line={"article_name_raw": "Verse halfvolle melk 0,99 B", "retailer_sku": "213"},
+        store_provider_code="lidl", allow_historical_bootstrap=historical,
+        allow_new_receipt_article=not historical,
+    ) == "article-catalog"
+    module.find_household_article_for_global_product.assert_called_once_with(
+        conn, "house-1", "g-milk",
+    )
+    module.ensure_household_article.assert_not_called()
+
+
+@pytest.mark.parametrize("change,barcode", [
+    ({"receipt_text_normalized": "volle melk"}, None),
+    ({"external_article_code": "999"}, None),
+    ({"status": "classification_pending"}, None),
+    ({"confirmed_by": None}, None),
+    ({"primary_gtin": "8712345678906"}, "8712345678913"),
+    ({"primary_gtin": "8712345678906"}, "not-a-gtin"),
+])
+def test_articlebeheer_does_not_inherit_unconfirmed_or_conflicting_tuple(monkeypatch, change, barcode):
+    from app.services.receipt_stock_review_service import _confirmed_catalog_product_for_receipt
+    link = {
+        "status": "confirmed", "confirmed_by": "authorized",
+        "receipt_text_normalized": "melk", "external_article_code": "213",
+        "global_product_id": "g-milk", "primary_gtin": "",
+    }
+    link.update(change)
+    monkeypatch.setattr(
+        "app.services.external_article_product_link_service.get_confirmed_external_article_product_link",
+        Mock(return_value=link),
+    )
+    assert _confirmed_catalog_product_for_receipt(
+        FakeConn(), store="lidl", sku="213", name="Melk", barcode=barcode,
     ) is None

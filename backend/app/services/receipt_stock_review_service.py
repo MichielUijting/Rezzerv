@@ -171,6 +171,38 @@ def find_proven_store_sku_household_article_id(
     return next(iter(targets)) if len(targets) == 1 else None
 
 
+def _confirmed_catalog_product_for_receipt(conn, *, store, sku, name, barcode):
+    """Read existing Artikelbeheer decisions; never create a central match."""
+    from app.services.external_article_product_link_service import (
+        get_confirmed_external_article_product_link,
+        normalize_external_link_article_code,
+        normalize_external_link_receipt_text,
+    )
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
+
+    label = clean_lidl_transaction_label(name)[0] if store == "lidl" else name
+    label_key = normalize_external_link_receipt_text(label)
+    code_key = normalize_external_link_article_code(sku)
+    if store not in {"ah", "jumbo", "lidl"} or not label_key or not code_key:
+        return None
+    link = get_confirmed_external_article_product_link(
+        conn, retailer_code=store, receipt_text=label, external_article_code=sku,
+    )
+    if not link or link.get("status") != "confirmed" or not link.get("confirmed_by"):
+        return None
+    # The older central reader may return a code-only match. Do not inherit
+    # that decision for another receipt description.
+    if (link.get("receipt_text_normalized") != label_key
+            or link.get("external_article_code") != code_key):
+        return None
+    if str(barcode or "").strip():
+        actual = _checked_gtin_key(barcode)
+        expected = _checked_gtin_key(link.get("primary_gtin"))
+        if not actual or actual != expected:
+            return None
+    return str(link.get("global_product_id") or "").strip() or None
+
+
 def resolve_stock_household_article(
     conn, *,
     main_module, household_id: str, line, store_provider_code: str,
@@ -197,6 +229,12 @@ def resolve_stock_household_article(
         return None  # Do not overwrite an invalid/cross-household explicit selection.
 
     global_id = str(line.get("matched_global_product_id") or "").strip()
+    if not global_id and line.get("retailer_sku"):
+        global_id = _confirmed_catalog_product_for_receipt(
+            conn, store=str(store_provider_code or "").strip().lower(),
+            sku=line.get("retailer_sku"), name=line.get("article_name_raw") or "",
+            barcode=line.get("barcode"),
+        )
     if global_id:
         linked = main_module.find_household_article_for_global_product(
             conn, household_id, global_id,
