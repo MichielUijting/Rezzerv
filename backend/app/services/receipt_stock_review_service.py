@@ -86,6 +86,74 @@ def find_confirmed_household_article_id(
     return str(memory["article_id"]) if memory else None
 
 
+def find_proven_store_sku_household_article_id(
+    conn, *, household_id: str, store_provider_code: str, retailer_sku: str,
+    article_name: str, barcode: str | None = None,
+) -> str | None:
+    """Reuse an already linked exact retailer SKU only with consistent evidence.
+
+    A store article number is never a GTIN. A SKU by itself cannot override
+    different product names, conflicting EANs, or competing household IDs.
+    """
+    owner = str(household_id or "").strip()
+    store = str(store_provider_code or "").strip().lower()
+    sku = str(retailer_sku or "").strip()
+    if not owner or owner == "0" or store not in {"ah", "jumbo", "lidl"} or not sku:
+        return None
+    # We only deduplicate confirmed original receipt links, not a global
+    # name lookup. Truncation is unsafe and is rejected below.
+    rows = conn.execute(text("""
+        SELECT rtl.matched_article_id, rtl.raw_label, rtl.corrected_raw_label,
+               rtl.barcode, ha.global_product_id
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                            AND rr.household_id = rt.household_id
+        JOIN receipt_sources rs ON rs.id = rr.source_id
+                               AND rs.household_id = rt.household_id
+        JOIN household_articles ha ON ha.id = rtl.matched_article_id
+                                  AND ha.household_id = rt.household_id
+        WHERE rt.household_id = :household_id
+          AND rs.type = 'retailer_api' AND rs.source_path = :store
+          AND rtl.external_article_code = :retailer_sku
+          AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL
+          AND rr.duplicate_of_raw_receipt_id IS NULL
+          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+          AND COALESCE(ha.status, 'active') = 'active'
+        ORDER BY rt.purchase_at DESC, rtl.id
+        LIMIT 101
+    """), {"household_id": owner, "store": store, "retailer_sku": sku}).mappings().all()
+    if not rows or len(rows) > 100:
+        return None
+
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
+
+    def label_key(value):
+        raw = " ".join(str(value or "").split())
+        if store == "lidl":
+            raw = clean_lidl_transaction_label(raw)[0]
+        return raw.casefold()
+
+    expected = label_key(article_name)
+    if not expected:
+        return None
+    # Only a syntactically valid EAN/GTIN may be compared as a barcode.
+    expected_gtin = str(barcode or "").strip()
+    if not expected_gtin.isdigit() or len(expected_gtin) not in {8, 12, 13, 14}:
+        expected_gtin = ""
+    targets = set()
+    for row in rows:
+        if label_key(row.get("corrected_raw_label") or row.get("raw_label")) != expected:
+            return None
+        candidate_gtin = str(row.get("barcode") or "").strip()
+        if (expected_gtin and candidate_gtin.isdigit()
+                and len(candidate_gtin) in {8, 12, 13, 14}
+                and candidate_gtin != expected_gtin):
+            return None
+        targets.add(str(row["matched_article_id"]))
+    return next(iter(targets)) if len(targets) == 1 else None
+
+
 def resolve_stock_household_article(
     conn, *,
     main_module, household_id: str, line, store_provider_code: str,
@@ -144,6 +212,21 @@ def resolve_stock_household_article(
             barcode=line.get("barcode") if allow_historical_bootstrap else line.get("external_article_code"),
             brand=line.get("brand_raw"),
         )
+
+    # A proven, household-owned retailer SKU is stronger than an unconfirmed
+    # receipt label; the existing canonical household resolver remains the
+    # only authority to create or select the final article ID.
+    retailer_sku = str(line.get("retailer_sku") or "").strip()
+    if retailer_sku:
+        proven = find_proven_store_sku_household_article_id(
+            conn, household_id=household_id,
+            store_provider_code=store_provider_code,
+            retailer_sku=retailer_sku,
+            article_name=line.get("article_name_raw"),
+            barcode=line.get("barcode"),
+        )
+        if proven:
+            return proven
 
     remembered = find_confirmed_household_article_id(
         conn, household_id=household_id,
