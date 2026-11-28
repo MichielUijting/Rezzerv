@@ -94,6 +94,9 @@ def validate(manifest_path: Path) -> dict[str, int]:
                 elif kind == "self_change_diagnostic":
                     if not has_dispatch or pr_paths(text) != [".github/workflows/" + name]:
                         raise ValueError(f"{name}: diagnostic path changed")
+                elif kind == "legacy_sqlite_direct":
+                    if not has_pr or has_dispatch or "sqlite:///:memory:" not in text:
+                        raise ValueError(f"{name}: legacy SQLite direct exception changed")
                 else:
                     raise ValueError(f"{name}: unknown exception kind {kind}")
         counts[category] += 1

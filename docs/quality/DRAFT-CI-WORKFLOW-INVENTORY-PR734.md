@@ -7,12 +7,12 @@ Status: Draft-implementatie; momentopname van alle `.github/workflows/*.yml` op 
 | Categorie | Aantal |
 |---|---:|
 | Reeds centraal gerouteerd vóór stap 1 | 118 |
-| Geschikt en in stap 1 gemigreerd | 27 |
+| Geschikt en in stap 1 gemigreerd | 24 |
 | Verplicht rechtstreeks uitvoeren | 17 |
-| Overige uitzondering met technische reden | 29 |
+| Overige uitzondering met technische reden | 32 |
 | **Totaal** | **191** |
 
-De 27 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, jobs/testinhoud, permissions en eventuele `push`-triggers. Alleen de PR-Draft-planning wordt gewijzigd: `ready_for_review` is de directe Ready-trigger en `workflow_dispatch` stelt de centrale Draft-router in staat uitsluitend passende checks te starten. De bestaande onafhankelijke gates hieronder blijven rechtstreeks actief. Geen van deze classificaties geeft toestemming om F7 exact-candidate, release, security of andere vereiste Ready-gates over te slaan.
+De 24 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, jobs/testinhoud, permissions en eventuele `push`-triggers. Alleen de PR-Draft-planning wordt gewijzigd: `ready_for_review` is de directe Ready-trigger en `workflow_dispatch` stelt de centrale Draft-router in staat uitsluitend passende checks te starten. De bestaande onafhankelijke gates hieronder blijven rechtstreeks actief. Geen van deze classificaties geeft toestemming om F7 exact-candidate, release, security of andere vereiste Ready-gates over te slaan.
 
 ## Volledige inventaris (191 bestanden)
 
@@ -127,13 +127,13 @@ De 27 nieuw gerouteerde workflows behouden hun oorspronkelijke PR-pathfilters, j
 | `picnic-postgresql-chain.yml` | Reeds centraal gerouteerd | Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch. |
 | `picnic-readonly-protocol.yml` | Reeds centraal gerouteerd | Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch. |
 | `platform-admin-acceptance-closure-validation.yml` | Reeds centraal gerouteerd | Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch. |
-| `platform-audit-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
+| `platform-audit-authorization.yml` | Overige uitzondering | Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren. |
 | `platform-authority-api-validation.yml` | Reeds centraal gerouteerd | Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch. |
 | `platform-authorizations-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
 | `platform-background-jobs-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
 | `platform-feature-flags-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
-| `platform-integrations-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
-| `platform-logs-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
+| `platform-integrations-authorization.yml` | Overige uitzondering | Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren. |
+| `platform-logs-authorization.yml` | Overige uitzondering | Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren. |
 | `platform-sessions-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
 | `platform-users-authorization.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |
 | `po-beta-superuser-provisioning-validation.yml` | Geschikt — gemigreerd in stap 1 | Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden. |

@@ -5,9 +5,9 @@
   "workflow_count": 191,
   "counts": {
     "already_routed": 118,
-    "migrated_in_pr734": 27,
+    "migrated_in_pr734": 24,
     "mandatory_direct": 17,
-    "other_exception": 29
+    "other_exception": 32
   },
   "workflows": [
     {
@@ -585,8 +585,9 @@
     },
     {
       "file": "platform-audit-authorization.yml",
-      "category": "migrated_in_pr734",
-      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+      "category": "other_exception",
+      "reason": "Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren.",
+      "exception_kind": "legacy_sqlite_direct"
     },
     {
       "file": "platform-authority-api-validation.yml",
@@ -610,13 +611,15 @@
     },
     {
       "file": "platform-integrations-authorization.yml",
-      "category": "migrated_in_pr734",
-      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+      "category": "other_exception",
+      "reason": "Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren.",
+      "exception_kind": "legacy_sqlite_direct"
     },
     {
       "file": "platform-logs-authorization.yml",
-      "category": "migrated_in_pr734",
-      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+      "category": "other_exception",
+      "reason": "Bestaande directe PR-authority met SQLite-in-memory tests in workflow-YAML. Wijziging van deze YAML raakt de fail-closed PostgreSQL-testinfrastructuurgrens (locked-base audit); zonder wijzigingen aan tests of compatibiliteitsallowlist niet veilig te migreren.",
+      "exception_kind": "legacy_sqlite_direct"
     },
     {
       "file": "platform-sessions-authorization.yml",

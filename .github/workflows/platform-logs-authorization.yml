@@ -1,10 +1,7 @@
 name: Platform Logs authorization validation
-# draft-ci-router: routed
 
 on:
-  workflow_dispatch:
   pull_request:
-    types: [ready_for_review]
     paths:
       - 'backend/app/api/platform_logs_routes.py'
       - 'backend/app/api/router.py'
