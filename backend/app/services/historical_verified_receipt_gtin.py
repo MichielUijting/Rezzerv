@@ -60,20 +60,27 @@ def verified_uncataloged_groups(conn, *, household_id, cutoff, articles):
     observed = defaultdict(set)
     source_codes = defaultdict(set)
     conflicting_products = set()
+    conflicting_barcodes = set()
     for row in rows:
         article_id = str(row["matched_article_id"])
         if row.get("matched_global_product_id") is not None:
             conflicting_products.add(article_id)
             continue
-        checked = _checked_gtin_key(row.get("barcode"))
+        raw_barcode = str(row.get("barcode") or "").strip()
+        checked = _checked_gtin_key(raw_barcode)
         if checked:
             observed[article_id].add(checked.zfill(14))
             source_codes[article_id].add(str(row["source_path"]))
+        elif raw_barcode:
+            # An unverified source barcode is conflicting evidence. It must
+            # not silently disappear when another receipt carries a valid GTIN.
+            conflicting_barcodes.add(article_id)
 
     groups = defaultdict(list)
     for article_id, article in candidates.items():
         gtins = observed.get(article_id, set())
-        if article_id in conflicting_products or len(gtins) != 1:
+        if (article_id in conflicting_products
+                or article_id in conflicting_barcodes or len(gtins) != 1):
             continue
         gtin = next(iter(gtins))
         stored_barcode = str(article.get("barcode") or "").strip()

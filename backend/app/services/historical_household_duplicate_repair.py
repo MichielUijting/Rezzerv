@@ -179,6 +179,14 @@ def _receipt_source_consistent(conn, owner, old_id, product_id):
     return conflict is None
 
 
+def _all_member_receipt_sources_consistent(conn, owner, items, product_id):
+    """Check the retained canonical anchor too, not only the losing identities."""
+    return all(
+        _receipt_source_consistent(conn, owner, str(item["id"]), product_id)
+        for item in items
+    )
+
+
 def _rewrite_verified_references(conn, owner, old_id, winner_id):
     counts = {}
     counts["receipt_lines"] = int(conn.execute(text("""
@@ -280,7 +288,10 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
             blocked += 1
             continue
         ids = [str(item["id"]) for item in items]
-        if _block_existing_business_history(conn, owner, ids):
+        if (_block_existing_business_history(conn, owner, ids)
+                or not _all_member_receipt_sources_consistent(
+                    conn, owner, items, product_id
+                )):
             blocked += 1
             continue
         safe = True
@@ -288,10 +299,7 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
             old_id = str(loser["id"])
             if (not _no_manual_markers(conn, old_id)
                     or not _no_override(conn, owner, old_id)
-                    or _contains_unknown_refs(conn, old_id, unknown_columns)
-                    or not _receipt_source_consistent(
-                        conn, owner, old_id, product_id
-                    )):
+                    or _contains_unknown_refs(conn, old_id, unknown_columns)):
                 safe = False
                 break
         if not safe:
