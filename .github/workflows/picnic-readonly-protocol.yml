@@ -1,7 +1,10 @@
 name: Picnic read-only API protocol contract
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/integrations/picnic_readonly_probe.py'
       - 'backend/tests/test_picnic_readonly_probe.py'
