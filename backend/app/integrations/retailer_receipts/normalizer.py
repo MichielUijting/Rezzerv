@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Any, Iterable
 
 from app.integrations.receipt_scanners.schemas.canonical_receipt_v1 import (
@@ -41,6 +42,46 @@ _PROVIDER_NAMES = {
     "lidl": "Lidl",
     "picnic": "Picnic",
 }
+
+# Lidl's digital source sometimes puts the transaction tail in 'name'. The
+# original line remains verbatim in raw_text; parsing this retailer-specific
+# format must never remove product contents such as "500g" or "12%".
+_LIDL_TRANSACTION_TAIL = re.compile(
+    r"^(?P<name>.+?)\\s+(?:(?P<count>\\d{1,3})\\s*[x×]\\s*"
+    r"(?P<unit>\\d{1,5}[,.]\\d{2})\\s+)?"
+    r"(?P<total>\\d{1,6}[,.]\\d{2})\\s+(?P<tax>[ABC])$",
+    re.IGNORECASE,
+)
+
+
+def clean_lidl_transaction_label(
+    value: str, *, quantity: Decimal | None = None,
+    unit_price: Decimal | None = None, line_total: Decimal | None = None,
+) -> tuple[str, Decimal | None, Decimal | None, Decimal | None]:
+    """Strip only a verified Lidl transaction suffix, preserving source facts."""
+    raw = " ".join(str(value or "").split())
+    match = _LIDL_TRANSACTION_TAIL.fullmatch(raw)
+    if not match:
+        return raw, None, None, None
+    name = match.group("name").strip()
+    if not name or not any(char.isalpha() for char in name):
+        return raw, None, None, None
+    total = Decimal(match.group("total").replace(",", "."))
+    count = Decimal(match.group("count")) if match.group("count") else None
+    unit = Decimal(match.group("unit").replace(",", ".")) if match.group("unit") else None
+    if total <= 0 or (line_total is not None and abs(total - line_total) > Decimal("0.01")):
+        return raw, None, None, None
+    if count is not None:
+        if count <= 0 or count > 100 or unit * count != total:
+            return raw, None, None, None
+        if quantity is not None and quantity != count:
+            return raw, None, None, None
+        if unit_price is not None and abs(unit_price - unit) > Decimal("0.01"):
+            return raw, None, None, None
+    elif unit_price is not None and abs(unit_price - total) > Decimal("0.01"):
+        return raw, None, None, None
+    return name, count, unit, total
+
 
 _LINE_KEYS = ("items", "products", "lines", "entries", "receiptLines", "basketItems")
 _WRAPPER_KEYS = ("receipt", "data", "ticket", "order")
@@ -264,7 +305,7 @@ def _line_type(item: dict[str, Any]) -> str:
     return "product"
 
 
-def _normalize_line(item: dict[str, Any], index: int) -> ReceiptLineV1:
+def _normalize_line(item: dict[str, Any], index: int, *, provider: str = "") -> ReceiptLineV1:
     product = _mapping(_first(item, "product", "article", "item"))
     label = (
         _first(item, "description", "name", "productName", "title", "label", "text")
@@ -272,14 +313,26 @@ def _normalize_line(item: dict[str, Any], index: int) -> ReceiptLineV1:
         or f"Artikel {index}"
     )
     quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
-    if quantity is None:
-        quantity = Decimal("1")
-
     unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
     if unit_price is None:
         unit_price = _decimal(_first(product, "unitPrice", "price"))
 
     line_total = _decimal(_first(item, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice"))
+    if provider == "lidl":
+        original = str(label).strip()
+        clean, count, embedded_unit, embedded_total = clean_lidl_transaction_label(
+            original, quantity=quantity, unit_price=unit_price, line_total=line_total,
+        )
+        if clean != original:
+            label = clean
+            if quantity is None and count is not None:
+                quantity = count
+            if unit_price is None:
+                unit_price = embedded_unit if embedded_unit is not None else embedded_total
+            if line_total is None:
+                line_total = embedded_total
+    if quantity is None:
+        quantity = Decimal("1")
     if line_total is None and unit_price is not None:
         line_total = unit_price * quantity
 
@@ -379,7 +432,7 @@ def normalize_retailer_receipt(
     for item in raw_lines:
         if parse_weight_detail(_first(item, 'raw_text', 'rawText', 'text', 'label', 'name', 'description', 'productName', 'title')):
             item['_inhuis_unresolved_weight_detail'] = True
-    lines = [_normalize_line(item, index) for index, item in enumerate(raw_lines, start=1)]
+    lines = [_normalize_line(item, index, provider=envelope.provider) for index, item in enumerate(raw_lines, start=1)]
     grand_total = _total(payload, lines)
 
     purchase_value = _nested_first(
