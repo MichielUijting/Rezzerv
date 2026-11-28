@@ -289,8 +289,17 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         household_id=owner, cutoff=cutoff, purchases=purchases, modes=modes,
         synonym_groups=groups, package_sizes=package_sizes,
     )
+    # Diagnostic counts are not identity proof and never mutate the receipts.
+    from app.services.historical_onboarding_repair_audit import (
+        summarize_historical_repair_evidence, prediction_setting_blockers,
+    )
+    repair_evidence = {
+        **summarize_historical_repair_evidence(source, articles),
+        **prediction_setting_blockers(conn, owner),
+    }
     return {
         **result,
+        "repair_evidence": repair_evidence,
         "status": "calculated",
         "source_rows": len(source),
         "excluded_untrusted_rows": excluded,

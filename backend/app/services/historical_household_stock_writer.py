@@ -524,6 +524,7 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         )
         return {"status": "no_trusted_matches", "created": 0, "revised": 0,
                 "skipped": 0, "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+                "repair_evidence": calculated.get("repair_evidence", {}),
                 **cadence}
 
     baseline = _owned_baselines(conn, owner)
@@ -576,5 +577,6 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         "status": "applied", "created": created, "revised": revised,
         "unchanged": unchanged, "skipped": skipped,
         "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+        "repair_evidence": calculated.get("repair_evidence", {}),
         **cadence,
     }
