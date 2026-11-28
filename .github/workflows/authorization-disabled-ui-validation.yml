@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   authorization-disabled-ui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
       COMPOSE_PROFILES: postgresql
