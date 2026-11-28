@@ -145,3 +145,77 @@ def test_unknown_household_or_cross_household_not_resolved():
     else:
         raise AssertionError("System household must never inherit stock")
     assert conn.queries == []
+
+
+def test_missing_digital_unit_is_not_a_fractional_or_unknown_quantity():
+    assert source._stock_units("1", None, digital_receipt=True) == 1
+    assert source._stock_units("2", "", digital_receipt=True) == 2
+    assert source._stock_units("0.5", None, digital_receipt=True) is None
+    assert source._stock_units("1", None) is None
+    assert source._stock_units(None, None, digital_receipt=True) is None
+
+
+def test_digital_historical_line_with_private_article_and_no_unit_replays():
+    row = line("2026-11-01", "a", 1, product=None, unit=None)
+    row.update(source_type="retailer_api", source_provider="ah")
+    result = source.load_automatic_historical_stock(Conn([row]), household_id="home")
+    assert result["quantities"] == {"ha-1": 1}
+    assert result["excluded_untrusted_rows"] == 0
+
+
+
+def test_previous_calendar_year_is_included_even_outside_365_days():
+    from app.services.receipt_historical_import_policy import historical_history_start_date
+    assert historical_history_start_date(CUTOFF) == date(2025, 1, 1)
+    assert historical_history_start_date(date(2026, 1, 1)) == date(2025, 1, 1)
+    conn = Conn([
+        line("2024-12-31", "old", 9),
+        line("2025-01-01", "first", 2),
+        line("2026-11-19", "last", 5),
+        line("2026-11-20", "current", 10),
+    ])
+    result = source.load_automatic_historical_stock(conn, household_id="home")
+    assert result["source_line_count"] == 2
+    assert result["quantities"] == {"ha-1": 5}
+    assert result["purchase_cadences"]["ha-1"]["purchase_day_count"] == 2
+    assert conn.queries[1][1]["earliest_date"] == date(2025, 1, 1)
+
+
+def test_partly_review_needed_digital_receipts_keep_proven_physical_lines():
+    sql = source._HISTORICAL_AUTO_SOURCE_SQL
+    assert "'review_needed'" in sql and "'partial'" in sql
+    assert "rs.type = 'retailer_api'" in sql
+    assert "rs.source_path IN ('ah', 'jumbo', 'lidl')" in sql
+    assert "rt.approved_at IS NOT NULL" not in sql
+    rows = [
+        line("2025-06-01", "trusted-ah", 2),
+        line("2025-06-02", "uncertain-lidl", 3, matched=None, product=None),
+        line("2025-06-03", "financial-jumbo", 4, role="financial"),
+        line("2025-06-04", "trusted-jumbo", 3),
+    ]
+    for row, provider in zip(rows, ("ah", "lidl", "jumbo", "jumbo")):
+        row.update(source_type="retailer_api", source_provider=provider)
+    result = source.load_automatic_historical_stock(Conn(rows), household_id="home")
+    assert result["source_line_count"] == 2
+    assert result["excluded_untrusted_rows"] == 2
+    assert result["quantities"] == {"ha-1": 3}
+
+
+
+def test_digital_package_description_is_a_count_of_proven_packages_only():
+    # Lidl supplies the package SIZE as a unit label, not kilogram counts.
+    assert source._stock_units("2", "1.5 l", digital_receipt=True) == 2
+    assert source._stock_units("3", "500 g", digital_receipt=True) == 3
+    assert source._stock_units("2", "pcs", digital_receipt=True) == 2
+    assert source._stock_units("0.122", "0.122 kg", digital_receipt=True) is None
+    assert source._stock_units("1", "unknown", digital_receipt=True) is None
+    assert source._stock_units("2", "1.5 l", digital_receipt=False) is None
+    assert source._stock_units("0", "500 g", digital_receipt=True) is None
+
+
+def test_lidl_valid_package_count_replays_not_a_weight_conversion():
+    row = line("2025-06-01", "lidl-package", 2, unit="1.5 l")
+    row.update(source_type="retailer_api", source_provider="lidl")
+    result = source.load_automatic_historical_stock(Conn([row]), household_id="home")
+    assert result["source_line_count"] == 1
+    assert result["quantities"]["ha-1"] == 2

@@ -7,9 +7,9 @@ receipt date and household cutover. No on-screen or per-item confirmation.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import json
+import re
 
 from sqlalchemy import text
 
@@ -18,9 +18,11 @@ from app.services.historical_household_stock_replay import (
     replay_historical_stock, MAX_HISTORICAL_PURCHASE_LINES,
 )
 from app.services.receipt_historical_learning_service import (
-    OBSERVATION_DAYS, _HISTORICAL_PRODUCT_LINES_SQL, _date,
+    _HISTORICAL_PRODUCT_LINES_SQL, _date,
 )
-from app.services.receipt_historical_import_policy import read_household_cutover
+from app.services.receipt_historical_import_policy import (
+    historical_history_start_date, read_household_cutover,
+)
 from app.services.product_day_auto_consume_service import (
     AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY,
     AUTO_CONSUME_ALL_EXISTING,
@@ -35,18 +37,45 @@ from app.services.synonym_auto_consume_service import _verified_household_packag
 # to determine its household's autonomous historical stock.
 _HISTORICAL_AUTO_SOURCE_SQL = _HISTORICAL_PRODUCT_LINES_SQL.replace(
     "  AND rt.approved_at IS NOT NULL\n",
-    "  AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')\n",
+    "  AND (lower(trim(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')\n"
+    "       OR (lower(trim(COALESCE(rt.parse_status, ''))) IN ('partial', 'review_needed')\n"
+    "           AND rs.type = 'retailer_api'\n"
+    "           AND rs.source_path IN ('ah', 'jumbo', 'lidl')))\n",
+).replace(
+    "rt.store_name, rr.sha256_hash,",
+    "rt.store_name, rr.sha256_hash, rs.type AS source_type, rs.source_path AS source_provider, "
+    "rtl.raw_label, rtl.corrected_raw_label, rtl.external_article_code, rtl.barcode,",
+).replace(
+    "JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id",
+    "JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id AND rr.household_id = rt.household_id "
+    "LEFT JOIN receipt_sources rs ON rs.id = rr.source_id AND rs.household_id = rt.household_id",
+).replace(
+    "AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL",
+    "AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL "
+    "AND rr.duplicate_of_raw_receipt_id IS NULL "
+    "AND COALESCE(rt.workflow_state, 'active') = 'active'",
 )
 
 _CANONICAL_MODE = {
     AUTO_CONSUME_NONE, AUTO_CONSUME_PURCHASED_QUANTITY, AUTO_CONSUME_ALL_EXISTING,
 }
-_UNITS_PIECES = frozenset(("stuk", "stuks", "st"))
+_UNITS_PIECES = frozenset(("stuk", "stuks", "st", "pcs", "piece", "pieces"))
+# A digital line may describe the size of ONE package rather than a count
+# unit, e.g. "1.5 l" or "500 g". This never converts weighted kilograms
+# into piece counts; the separately recorded purchase quantity must still be
+# an exact positive whole number of packages.
+_PACKAGE_SIZE_LABEL = re.compile(
+    r"^(?:[0-9]+(?:[.,][0-9]+)?)\s*(?:kg|g|gram|l|liter|ml|cl|dl|st|stuk|stuks)$"
+)
 
 
-def _stock_units(value, unit) -> int | None:
-    if str(unit or "").strip().lower() not in _UNITS_PIECES:
-        return None
+def _stock_units(value, unit, *, digital_receipt=False) -> int | None:
+    normalized = str(unit or "").strip().lower()
+    if normalized not in _UNITS_PIECES:
+        if not (digital_receipt and (
+            not normalized or (len(normalized) <= 32 and _PACKAGE_SIZE_LABEL.fullmatch(normalized))
+        )):
+            return None
     if isinstance(value, bool):
         return None
     try:
@@ -56,6 +85,10 @@ def _stock_units(value, unit) -> int | None:
     if not amount.is_finite() or amount < 1 or amount > 10000 or amount != amount.to_integral_value():
         return None
     return int(amount)
+
+
+def _is_digital_purchase(row):
+    return row.get("source_type") == "retailer_api" and row.get("source_provider") in {"ah", "jumbo", "lidl"}
 
 
 def _setting_modes(conn, owner):
@@ -189,9 +222,10 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         return {"status": "legacy_not_enabled", "household_id": owner,
                 "writes_inventory": False, "quantities": {}, "source_line_count": 0}
 
+    history_start = historical_history_start_date(cutoff)
     source = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
         "household_id": owner,
-        "earliest_date": cutoff - timedelta(days=OBSERVATION_DAYS),
+        "earliest_date": history_start,
         "row_limit": MAX_HISTORICAL_PURCHASE_LINES + 1,
     }).mappings().all()
     if len(source) > MAX_HISTORICAL_PURCHASE_LINES:
@@ -211,7 +245,7 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
     for raw in source:
         row = dict(raw)
         day = _date(row.get("purchase_at"))
-        if not day or day >= cutoff or day < cutoff - timedelta(days=OBSERVATION_DAYS):
+        if not day or day >= cutoff or day < history_start:
             excluded += 1
             continue
         if str(row.get("purchase_at_source") or "").strip().lower() == "import_default":
@@ -221,7 +255,8 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         if semantics.get("line_role") != "product" or not semantics.get("inventory_eligible"):
             excluded += 1
             continue
-        quantity = _stock_units(row.get("quantity"), row.get("unit"))
+        quantity = _stock_units(row.get("quantity"), row.get("unit"),
+                                digital_receipt=_is_digital_purchase(row))
         if quantity is None:
             excluded += 1
             continue
@@ -254,8 +289,17 @@ def load_automatic_historical_stock(conn, *, household_id: str) -> dict:
         household_id=owner, cutoff=cutoff, purchases=purchases, modes=modes,
         synonym_groups=groups, package_sizes=package_sizes,
     )
+    # Diagnostic counts are not identity proof and never mutate the receipts.
+    from app.services.historical_onboarding_repair_audit import (
+        summarize_historical_repair_evidence, prediction_setting_blockers,
+    )
+    repair_evidence = {
+        **summarize_historical_repair_evidence(source, articles),
+        **prediction_setting_blockers(conn, owner),
+    }
     return {
         **result,
+        "repair_evidence": repair_evidence,
         "status": "calculated",
         "source_rows": len(source),
         "excluded_untrusted_rows": excluded,

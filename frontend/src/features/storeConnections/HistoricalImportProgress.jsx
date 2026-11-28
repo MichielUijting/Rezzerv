@@ -12,6 +12,23 @@ import {
 export default function HistoricalImportProgress({ summary, loading, error, onRefresh }) {
   const rows = historicalStoreRows(summary)
   const [evidence, setEvidence] = useState({ provider: '', loading: false, items: [], error: '' })
+  const [recalculation, setRecalculation] = useState({ busy: false, message: '', error: '' })
+  async function recalculateHistoricalStock() {
+    setRecalculation({ busy: true, message: '', error: '' })
+    try {
+      const result = await fetchJson('/api/receipts/retailers/history-recalculate', { method: 'POST' })
+      if (result?.queued !== true || result?.completed !== false) {
+        throw new Error('Geen bevestigde opdracht voor de historische controle ontvangen.')
+      }
+      setRecalculation({ busy: false,
+        message: 'Controle aangevraagd. Bestaande bonnen blijven bewaard. Dit is nog geen bevestiging dat de voorraad is herberekend.',
+        error: '' })
+      onRefresh?.()
+    } catch {
+      setRecalculation({ busy: false, message: '',
+        error: 'Historische controle kon niet worden aangevraagd. Er is geen voorraad gewijzigd door dit verzoek.' })
+    }
+  }
   async function showEvidence(provider) {
     if (evidence.provider === provider && !evidence.loading) {
       setEvidence({ provider: '', loading: false, items: [], error: '' })
@@ -31,16 +48,25 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
       style={{ display: 'grid', rowGap: '12px', minWidth: 0 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <h3 id="historical-import-title" style={{ margin: 0 }}>Historische aankopen</h3>
-        <Button type="button" variant="secondary" onClick={onRefresh}
-          disabled={loading} data-testid="historical-import-refresh">
-          {loading ? 'Bijwerken…' : 'Vernieuwen'}
-        </Button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {summary?.history_cutover_enabled ? (
+            <Button type="button" variant="secondary" onClick={() => { void recalculateHistoricalStock() }}
+              disabled={recalculation.busy} data-testid="historical-stock-recalculate">
+              {recalculation.busy ? 'Aanvragen…' : 'Bestaande bonnen opnieuw controleren'}
+            </Button>
+          ) : null}
+          <Button type="button" variant="secondary" onClick={onRefresh}
+            disabled={loading} data-testid="historical-import-refresh">
+            {loading ? 'Bijwerken…' : 'Vernieuwen'}
+          </Button>
+        </div>
       </div>
       <p style={{ margin: 0 }}>
         Dit zijn bonnen die Inhuis als opgeslagen registreert, ook als ze niet zichtbaar zijn
         in de gewone Kassa-lijst. De winkel bepaalt hoeveel oudere bonnen beschikbaar zijn;
         daarom tonen we geen onbevestigd totaal of percentage.
-        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa. Via 'Welke bonnen?'
+        Bonnen uit de wachtrij zijn nog niet verwerkt in Kassa. Ook gekoppelde
+        artikelregels zijn niet automatisch als voorraad geboekt. Via 'Welke bonnen?'
         controleer je welke opgeslagen records meetellen.
       </p>
       {summary && summary.history_cutover_enabled === false ? (
@@ -49,12 +75,25 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
           Ingelezen bonnen zijn zichtbaar, maar er wordt geen aantal historische aankopen gegokt.
         </p>
       ) : null}
+      {summary?.historical_stock ? (
+        <div data-testid="historical-stock-outcome" style={{ display: 'grid', rowGap: '4px' }}>
+          <span>Historische inleesperiode vanaf: {summary.history_start_date || 'onbekend'} (tot de start van het huishouden).</span>
+          <span>Daadwerkelijk vastgelegde historische beginvoorraad: {historyCount(summary.historical_stock.baseline_article_count)} artikelen, {historyCount(summary.historical_stock.baseline_unit_count)} stuks.</span>
+          <span>Artikelen met bewezen herhaalaankooptermijn: {historyCount(summary.historical_stock.repurchase_cadence_article_count)}.</span>
+        </div>
+      ) : null}
       {summary?.auto_import_paused ? (
         <p data-testid="historical-import-paused" style={{ margin: 0 }}>
           De automatische winkelimport is momenteel gepauzeerd. Al ontvangen
           bonnen blijven bewaard; dit overzicht hervat de verwerking niet.
         </p>
       ) : null}
+      {recalculation.message ? <p role="status" data-testid="historical-stock-recalculate-queued" style={{ margin: 0 }}>
+        {recalculation.message}
+      </p> : null}
+      {recalculation.error ? <p role="alert" data-testid="historical-stock-recalculate-error" style={{ margin: 0 }}>
+        {recalculation.error}
+      </p> : null}
       {error ? <p role="status" data-testid="historical-import-error" style={{ margin: 0 }}>
         {error}
       </p> : null}
@@ -72,6 +111,12 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
               <span>Opgeslagen bonnen (niet noodzakelijk in Kassa): {receiptLabel(row.kassa_receipts)}</span>
               <span>Waarvan nog in Kassa te behandelen: {receiptLabel(row.kassa_inbox_receipts)}</span>
               <span>Historische bonnen bruikbaar voor analyse: {historyCount(row.historical_receipts)}</span>
+              <span>Historische bonregels: {historyCount(row.historical_line_count)}
+                {' · '}Fysieke artikelkandidaten: {historyCount(row.physical_candidate_line_count)}</span>
+              <span>Rechtstreeks gekoppelde artikelregels: {historyCount(row.directly_linked_line_count)}
+                {' · '}Fysieke artikelregels zonder huishoudartikelkoppeling: {historyCount(row.unlinked_physical_line_count)}</span>
+              <span>Onzeker geclassificeerde bonregels: {historyCount(row.uncertain_line_count)}.
+                Dit zijn controlecategorieën; alleen bewezen regels kunnen worden gebruikt bij voorraadopbouw.</span>
               <span>Ontvangen, nog in wachtrij: {historyCount(row.queue_pending)}
                 {' · '}Bezig met verwerken: {historyCount(row.queue_processing)}</span>
               <span>Controle nodig: {historyCount(row.queue_review_required)}
@@ -103,6 +148,8 @@ export default function HistoricalImportProgress({ summary, loading, error, onRe
                           Aankoopdatum: {item.purchase_date || 'onbekend'};
                           ontvangen: {item.received_date || 'onbekend'};
                           artikelregels: {historyCount(item.line_count)};
+                          {' '}Nog te koppelen fysieke artikelregels: {historyCount(item.unlinked_product_line_count)};
+                          {' '}regels met onzekere artikelclassificatie: {historyCount(item.uncertain_line_count)};
                           verwerking: {item.approved ? 'goedgekeurd' : item.parse_status || 'onbekend'}.
                           {item.purchase_date_source === 'import_default'
                             ? ' Aankoopdatum is niet bevestigd.' : ''}

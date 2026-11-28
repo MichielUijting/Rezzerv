@@ -21,6 +21,17 @@ class _FakeConnection:
         sql = str(query)
         self.calls.append((sql, dict(params)))
         assert params["household_id"] == "household-a"
+        if "MAX(CAST(rt.purchase_at AS date))" in sql:
+            # The Jumbo checkpoint is a confirmed purchase, never upload time.
+            assert "JOIN receipt_tables rt" in sql
+            assert "rr.household_id = :household_id" in sql
+            assert "rt.household_id = :household_id" in sql
+            assert "rr.duplicate_of_raw_receipt_id IS NULL" in sql
+            assert "rt.purchase_at_source" in sql
+            assert "'import_default'" in sql
+            assert "'parsed', 'approved'" in sql
+            assert params["source_id"] == "household-a-retailer-jumbo"
+            return _Scalar(self.responses[params["source_id"]])
         if "MAX(created_at)" in sql:
             assert "household_id = :household_id" in sql
             assert "source_id = :source_id" in sql
@@ -84,3 +95,18 @@ def test_invalid_provider_values_not_exposed():
     assert _iso_date("not-a-date") is None
     assert _iso_date("2026-02-30T12:00:00") is None
     assert _iso_date(date(2026, 10, 19)) == "2026-10-19"
+
+
+def test_jumbo_purchase_checkpoint_is_inclusive_and_not_upload_day():
+    # The query does not use raw_receipts.created_at, which can be weeks later.
+    engine = _FakeEngine({
+        "household-a-retailer-jumbo": date(2026, 8, 19),
+        "household-a-retailer-lidl": None,
+        "lidl-checkpoint": None,
+    })
+    result = latest_retailer_import_dates(engine, household_id="household-a")
+    assert result["jumbo"] == "2026-08-19"
+    jumbo_sql = engine.connection.calls[0][0]
+    assert "MAX(CAST(rt.purchase_at AS date))" in jumbo_sql
+    assert "MAX(created_at)" not in jumbo_sql
+    assert "rr.source_id = :source_id" in jumbo_sql

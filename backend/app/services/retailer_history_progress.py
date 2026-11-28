@@ -15,7 +15,7 @@ from app.services.platform_feature_flag_service import (
     FEATURE_FLAG_RETAILER_AUTO_IMPORT,
     is_platform_feature_enabled,
 )
-from app.services.receipt_historical_import_policy import read_household_cutover
+from app.services.receipt_historical_import_policy import historical_history_start_date, read_household_cutover
 
 _PROVIDERS = (("ah", "Albert Heijn"), ("lidl", "Lidl"), ("jumbo", "Jumbo"))
 
@@ -37,7 +37,8 @@ _RECEIPT_COUNTS_SQL = text("""
                WHEN :cutover_enabled = 1
                 AND rt.purchase_at IS NOT NULL
                 AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
-                AND LOWER(TRIM(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')
+                AND LOWER(TRIM(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved', 'partial', 'review_needed')
+                AND CAST(rt.purchase_at AS DATE) >= :history_start
                 AND rt.purchase_at < :cutoff_datetime
                THEN rt.id END) AS historical_receipts,
            COUNT(DISTINCT CASE
@@ -67,7 +68,20 @@ _RECEIPT_EVIDENCE_SQL = text("""
            (SELECT COUNT(*)
               FROM receipt_table_lines rtl
              WHERE rtl.receipt_table_id = rt.id
-               AND COALESCE(rtl.is_deleted, FALSE) = FALSE) AS line_count
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE) AS line_count,
+           (SELECT COUNT(*)
+              FROM receipt_table_lines rtl
+             WHERE rtl.receipt_table_id = rt.id
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+               AND rtl.line_role = 'product'
+               AND COALESCE(rtl.inventory_eligible, FALSE) = TRUE
+               AND rtl.matched_article_id IS NULL) AS unlinked_product_line_count,
+           (SELECT COUNT(*)
+              FROM receipt_table_lines rtl
+             WHERE rtl.receipt_table_id = rt.id
+               AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+               AND (rtl.line_role IS NULL OR rtl.line_role = 'unknown'
+                 OR (rtl.line_role = 'product' AND COALESCE(rtl.inventory_eligible, FALSE) = FALSE))) AS uncertain_line_count
     FROM raw_receipts rr
     JOIN receipt_tables rt
       ON rt.raw_receipt_id = rr.id
@@ -81,6 +95,71 @@ _RECEIPT_EVIDENCE_SQL = text("""
     LIMIT :limit
 """)
 
+
+
+# Historical LINE evidence is independent of the receipt-level parser status.
+# A fully imported queue item does not prove any recognized or stocked items.
+# These counts are deliberately distinct from the automatic stock baseline.
+_HISTORICAL_LINE_COUNTS_SQL = text("""
+    SELECT rr.source_id,
+           COUNT(rtl.id) AS historical_line_count,
+           COUNT(rtl.id) FILTER (
+             WHERE rtl.line_role = 'product'
+               AND COALESCE(rtl.inventory_eligible, FALSE) = TRUE
+           ) AS physical_candidate_line_count,
+           COUNT(rtl.id) FILTER (
+             WHERE rtl.line_role = 'product'
+               AND COALESCE(rtl.inventory_eligible, FALSE) = TRUE
+               AND ha.id IS NOT NULL
+           ) AS directly_linked_line_count,
+           COUNT(rtl.id) FILTER (
+             WHERE rtl.line_role = 'product'
+               AND COALESCE(rtl.inventory_eligible, FALSE) = TRUE
+               AND ha.id IS NULL
+           ) AS unlinked_physical_line_count,
+           COUNT(rtl.id) FILTER (
+             WHERE rtl.line_role IS NULL
+                OR rtl.line_role = 'unknown'
+                OR (rtl.line_role = 'product'
+                    AND COALESCE(rtl.inventory_eligible, FALSE) = FALSE)
+           ) AS uncertain_line_count
+    FROM raw_receipts rr
+    JOIN receipt_tables rt
+      ON rt.raw_receipt_id = rr.id
+     AND rt.household_id = :household_id
+     AND rt.deleted_at IS NULL
+     AND COALESCE(rt.workflow_state, 'active') = 'active'
+    JOIN receipt_table_lines rtl
+      ON rtl.receipt_table_id = rt.id
+     AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+    LEFT JOIN household_articles ha
+      ON ha.id = rtl.matched_article_id
+     AND ha.household_id = :household_id
+     AND COALESCE(ha.status, 'active') = 'active'
+    WHERE rr.household_id = :household_id
+      AND rr.deleted_at IS NULL
+      AND rr.duplicate_of_raw_receipt_id IS NULL
+      AND rr.source_id IN (:ah_source, :lidl_source, :jumbo_source)
+      AND rt.purchase_at IS NOT NULL
+      AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
+      AND CAST(rt.purchase_at AS DATE) >= :history_start
+      AND CAST(rt.purchase_at AS DATE) < :cutoff_date
+    GROUP BY rr.source_id
+""")
+
+_HISTORICAL_OUTCOME_SQL = text("""
+    SELECT
+      (SELECT COUNT(*)
+         FROM household_historical_auto_stock_baselines b
+        WHERE b.household_id = :household_id) AS baseline_article_count,
+      (SELECT COALESCE(SUM(b.quantity), 0)
+         FROM household_historical_auto_stock_baselines b
+        WHERE b.household_id = :household_id) AS baseline_unit_count,
+      (SELECT COUNT(*)
+         FROM household_historical_purchase_cadences c
+        WHERE c.household_id = :household_id
+          AND c.purchase_day_count >= 2) AS repurchase_cadence_article_count
+""")
 
 _QUEUE_COUNTS_SQL = text("""
     SELECT provider, status, COUNT(*) AS item_count
@@ -108,12 +187,20 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
             "cutover_enabled": int(cutoff is not None),
             "cutoff_datetime": datetime.combine(cutoff, time.min) if cutoff else None,
             "cutoff_date": cutoff,
+            "history_start": historical_history_start_date(cutoff) if cutoff else None,
             **{f"{code}_source": f"{owner}-retailer-{code}" for code, _ in _PROVIDERS},
         }
         receipts = {
             str(row["source_id"]): dict(row)
             for row in conn.execute(_RECEIPT_COUNTS_SQL, params).mappings().all()
         }
+        historical_lines = ({
+            str(row["source_id"]): dict(row)
+            for row in conn.execute(_HISTORICAL_LINE_COUNTS_SQL, params).mappings().all()
+        } if cutoff else {})
+        historical_outcome = (dict(conn.execute(
+            _HISTORICAL_OUTCOME_SQL, {"household_id": owner},
+        ).mappings().first()) if cutoff else None)
         queue = {
             (str(row["provider"]), str(row["status"])): int(row["item_count"])
             for row in conn.execute(_QUEUE_COUNTS_SQL, {"household_id": owner}).mappings().all()
@@ -127,6 +214,7 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
     providers = []
     for code, name in _PROVIDERS:
         row = receipts.get(f"{owner}-retailer-{code}", {})
+        evidence = historical_lines.get(f"{owner}-retailer-{code}", {})
         providers.append({
             "code": code,
             "name": name,
@@ -136,13 +224,26 @@ def load_retailer_history_progress(engine: Engine, *, household_id: str) -> dict
             # Null means no cutover, NOT "zero historical purchases".
             "historical_receipts": int(row.get("historical_receipts") or 0) if cutoff else None,
             "review_receipts": int(row.get("review_receipts") or 0) if cutoff else None,
+            # Informational *line* evidence. Links alone do not prove that
+            # a line passed all quantity/date/replay guards or was stocked.
+            "historical_line_count": int(evidence.get("historical_line_count") or 0) if cutoff else None,
+            "physical_candidate_line_count": int(evidence.get("physical_candidate_line_count") or 0) if cutoff else None,
+            "directly_linked_line_count": int(evidence.get("directly_linked_line_count") or 0) if cutoff else None,
+            "unlinked_physical_line_count": int(evidence.get("unlinked_physical_line_count") or 0) if cutoff else None,
+            "uncertain_line_count": int(evidence.get("uncertain_line_count") or 0) if cutoff else None,
             "queue_pending": queue.get((code, "pending"), 0),
             "queue_processing": queue.get((code, "processing"), 0),
             "queue_review_required": queue.get((code, "review_required"), 0),
             "queue_completed": queue.get((code, "completed"), 0),
         })
     return {
-        "coverage": "persisted_retailer_receipts_and_queue_only",
+        "coverage": "persisted_receipts_lines_queue_and_historical_baseline",
+        "history_start_date": historical_history_start_date(cutoff).isoformat() if cutoff else None,
+        "historical_stock": ({
+            "baseline_article_count": int(historical_outcome.get("baseline_article_count") or 0),
+            "baseline_unit_count": int(historical_outcome.get("baseline_unit_count") or 0),
+            "repurchase_cadence_article_count": int(historical_outcome.get("repurchase_cadence_article_count") or 0),
+        } if historical_outcome is not None else None),
         "history_cutover_enabled": cutoff is not None,
         "auto_import_paused": auto_import_paused,
         "complete_retailer_history_known": False,
@@ -184,6 +285,8 @@ def load_retailer_history_evidence(
             "purchase_date_source": str(row.get("purchase_at_source") or ""),
             "parse_status": str(row.get("parse_status") or ""),
             "line_count": int(row.get("line_count") or 0),
+            "unlinked_product_line_count": int(row.get("unlinked_product_line_count") or 0),
+            "uncertain_line_count": int(row.get("uncertain_line_count") or 0),
             "approved": row.get("approved_at") is not None,
         } for row in rows],
     }

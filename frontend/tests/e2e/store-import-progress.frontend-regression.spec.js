@@ -513,3 +513,67 @@ for (const width of [390, 500, 896]) {
     await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
   })
 }
+
+
+test('Android onboarding AH callback advances to Jumbo and ignores stale Lidl handshake', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockStorePage(page)
+  // The real server canonicalizes selections to AH, Jumbo, Lidl.
+  let progress = { available: true, selected: ['ah', 'jumbo', 'lidl'], results: {} }
+  await page.route('**/api/onboarding/stores', route => route.fulfill({ json: progress }))
+  await page.route('**/api/onboarding/stores/result', route => {
+    const payload = route.request().postDataJSON()
+    progress = { ...progress, results: { ...progress.results, [payload.provider]: payload.result } }
+    return route.fulfill({ json: progress })
+  })
+  await page.goto('/onboarding/winkels?ah=connected')
+  await expect(page.getByTestId('onboarding-store-row-ah')).toHaveAttribute('data-result', 'success')
+  await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', {
+    origin: 'https://www.lidl.nl', data: { type: 'inhuis:lidl-handshake' }, source: window,
+  })))
+  await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
+  // Onboarding opens the next retailer's help automatically after AH succeeds.
+  const jumboHelp = page.getByTestId('jumbo-bookmarklet-dialog')
+  await expect(jumboHelp).toBeVisible()
+  await expect(page.getByTestId('lidl-bookmarklet-dialog')).toHaveCount(0)
+  await expect(page.getByTestId('app-feedback-success-overlay')).toHaveCount(0)
+  await page.getByTestId('jumbo-help-ok').click()
+  await expect(jumboHelp).toHaveCount(0)
+  // Manual reopening remains available once the automatic dialog is closed.
+  await page.getByTestId('jumbo-help-open').click()
+  await expect(jumboHelp).toBeVisible()
+  await page.getByTestId('jumbo-help-ok').click()
+  await expect(jumboHelp).toHaveCount(0)
+  await expect(page.getByTestId('jumbo-receipt-poc')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
+})
+
+test('Onboarding does not launch Lidl before selection acknowledgement', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockStorePage(page)
+  let progress = { available: true, selected: [], results: {} }
+  await page.route('**/api/onboarding/stores', route => route.fulfill({ json: progress }))
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let writes = []
+  await page.route('**/api/onboarding/stores/selection', async route => {
+    writes.push(route.request().postDataJSON())
+    await gate
+    progress = { ...progress, selected: ['lidl'] }
+    await route.fulfill({ json: progress })
+  })
+  await page.goto('/onboarding/winkels')
+  await expect(page.getByTestId('store-onboarding-selection')).toBeVisible()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  expect(writes).toEqual([])
+  try {
+    await page.getByTestId('onboarding-stores-start').click()
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes).toEqual([{ selected: ['lidl'] }])
+    await expect(page.getByTestId('lidl-digital-receipts')).toHaveCount(0)
+  } finally {
+    release()
+  }
+  await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
+})

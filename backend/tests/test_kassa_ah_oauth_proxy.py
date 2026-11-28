@@ -40,6 +40,63 @@ def _request(
     return Request(scope, receive=empty_http_body)
 
 
+
+def test_https_tailscale_uses_separate_secure_origin_and_rejects_http_downgrade(monkeypatch):
+    import pytest
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    request = _request(
+        host="inhuis-work.tailnet-example.ts.net", port=5174,
+        extra_headers={"x-forwarded-proto": "https"},
+    )
+    flow = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="https://inhuis-work.tailnet-example.ts.net/onboarding/winkels",
+        onboarding=True,
+    )
+    assert flow.backend_origin == "https://inhuis-work.tailnet-example.ts.net:8443"
+    assert oauth.build_ah_oauth_launch_url(flow).startswith(
+        "https://inhuis-work.tailnet-example.ts.net:8443/ah-oauth/launch/"
+    )
+    response = asyncio.run(oauth.launch_ah_oauth(flow.flow_id, request))
+    assert "secure" in response.headers["set-cookie"].lower()
+
+    monkeypatch.setenv("REZZERV_BACKEND_PUBLIC_URL", "http://inhuis-work.tailnet-example.ts.net:8011")
+    with pytest.raises(RuntimeError, match="HTTPS"):
+        oauth.resolve_backend_public_origin(request)
+    monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
+    with pytest.raises(RuntimeError, match="HTTPS"):
+        oauth.resolve_backend_public_origin(_request(
+            host="other.example", extra_headers={"x-forwarded-proto": "https"},
+        ))
+
+
+def test_ah_proxy_isolates_cookies_on_same_https_hostname():
+    assert oauth._clean_forward_cookie(
+        "inhuis_session=SECRET; session=SECRET; "
+        "__inhuis_ah_proxy_ah_session=ah-value; "
+        "inhuis_ah_oauth_flow=SECRET; Authorization=SECRET"
+    ) == "ah_session=ah-value"
+    cookie = oauth._namespace_ah_set_cookie(
+        "ah_session=abc; Path=/; HttpOnly; SameSite=None; Domain=login.ah.nl",
+        secure=True,
+    )
+    assert cookie == "__inhuis_ah_proxy_ah_session=abc; Path=/; HttpOnly; Secure"
+    assert oauth._namespace_ah_set_cookie("inhuis_session=abc; Path=/", secure=True) == ""
+    headers = oauth.build_ah_forward_headers(
+        _request(
+            cookie="inhuis_session=private; __inhuis_ah_proxy_ah_session=ah-value",
+            extra_headers={
+                "authorization": "Bearer private",
+                "x-inhuis-expected-household": "private-household",
+            },
+        ),
+        backend_origin="https://inhuis-work.tailnet-example.ts.net:8443",
+    )
+    assert headers["cookie"] == "ah_session=ah-value"
+    assert "authorization" not in headers
+    assert "x-inhuis-expected-household" not in headers
+
+
 def test_create_flow_uses_backend_public_port_and_same_host_return(monkeypatch) -> None:
     oauth.reset_ah_oauth_flows_for_tests()
     monkeypatch.delenv("REZZERV_BACKEND_PUBLIC_URL", raising=False)
@@ -209,11 +266,12 @@ def test_proxy_preserves_browser_headers_needed_by_login_controls() -> None:
     assert headers["x-requested-with"] == "fetch"
     assert headers["origin"] == "https://login.ah.nl"
     assert headers["referer"] == "https://login.ah.nl/login?client_id=appie-ios"
-    assert headers["cookie"] == "ah_session=kept"
+    assert "cookie" not in headers
+    assert "inhuis_ah_oauth_flow" not in str(headers)
     assert "host" not in headers
     assert "accept-encoding" not in headers
     assert "content-length" not in headers
-    assert "inhuis_ah_oauth_flow" not in headers["cookie"]
+    assert "cookie" not in headers
 
 
 def test_ah_mobile_authorize_uses_trusted_per_flow_installation_id(monkeypatch) -> None:
@@ -338,8 +396,8 @@ def test_proxy_rewrites_nextjs_rsc_and_preserves_flow_cookie(monkeypatch) -> Non
     assert b"appie://" not in result.body
     assert b"ah-oauth/callback?code=synthetic" in result.body
     assert observed["url"] == "https://login.ah.nl/login/ingelogd"
-    assert observed["headers"]["cookie"] == "ah_session=synthetic-cookie"
-    assert "inhuis_ah_oauth_flow" not in observed["headers"]["cookie"]
+    assert "cookie" not in observed["headers"]
+    assert "cookie" not in observed["headers"]
 
 
 def test_proxy_rewrites_appie_callback_and_sanitizes_login_cookie() -> None:
@@ -420,7 +478,7 @@ def test_android_callback_missing_cookie_fails_closed_and_returns_to_inhuis(monk
     response = asyncio.run(oauth.ah_oauth_callback(request, code="synthetic-private-code"))
     assert response.status_code == 302
     assert response.headers["location"] == (
-        "http://laptop-michiel.tailfad4a7.ts.net:5174/onboarding/winkels?ah=error"
+        "https://laptop-michiel.tailfad4a7.ts.net/onboarding/winkels?ah=error"
     )
     assert "synthetic-private-code" not in response.headers["location"]
     assert "synthetic-private-code" not in caplog.text
@@ -530,7 +588,7 @@ def test_expired_launch_returns_to_store_connections_without_raw_json(monkeypatc
     ))
     assert response.status_code == 302
     assert response.headers["location"] == (
-        "http://laptop-michiel.tailfad4a7.ts.net:5174"
+        "https://laptop-michiel.tailfad4a7.ts.net"
         "/instellingen/winkelkoppelingen?ah=error"
     )
     assert response.headers["cache-control"] == "no-store"
@@ -568,3 +626,46 @@ def test_callback_after_backend_restart_returns_and_logs_safe_category(monkeypat
     assert "flow_missing_or_backend_restarted" in caplog.text
     assert flow.flow_id not in caplog.text
     assert "one-time-code" not in caplog.text
+
+
+def test_explicit_onboarding_cannot_fall_back_to_settings(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
+    request = _request(host="inhuis.example")
+    for candidate in ("https://other.example/onboarding/winkels", "http://inhuis.example:5174/instellingen/winkelkoppelingen", None):
+        with pytest.raises(HTTPException) as error:
+            oauth.create_ah_oauth_flow(request, household_id="household-1", return_to=candidate, onboarding=True)
+        assert error.value.status_code == 400
+    flow = oauth.create_ah_oauth_flow(request, household_id="household-1", return_to="http://inhuis.example:5174/onboarding/winkels", onboarding=True)
+    assert oauth._return_with_status(flow, "connected").endswith("/onboarding/winkels?ah=connected")
+
+def test_ah_expired_https_flow_never_downgrades_to_internal_port(monkeypatch):
+    oauth.reset_ah_oauth_flows_for_tests()
+    monkeypatch.setenv("REZZERV_APP_BASE_URL", "http://localhost:5174")
+    request = _request(host="inhuis-work.tailnet-example.ts.net", port=8443, extra_headers={"x-forwarded-proto":"https"})
+    response = asyncio.run(oauth.launch_ah_oauth("expired", request))
+    assert response.headers["location"] == (
+        "https://inhuis-work.tailnet-example.ts.net/instellingen/winkelkoppelingen?ah=error"
+    )
+    assert not response.headers["location"].startswith("http:")
+    flow = oauth.create_ah_oauth_flow(
+        request, household_id="household-1",
+        return_to="http://inhuis-work.tailnet-example.ts.net/onboarding/winkels",
+        onboarding=False,
+    )
+    assert flow.return_to.startswith("https://inhuis-work.tailnet-example.ts.net/")
+
+def test_native_android_ah_uses_trusted_separate_https_listener(monkeypatch):
+    import pytest
+    monkeypatch.delenv('REZZERV_BACKEND_PUBLIC_URL', raising=False)
+    req = _request(host='inhuis-work.tailnet-example.ts.net', extra_headers={'x-forwarded-proto': 'https'})
+    flow = oauth.create_ah_oauth_flow(req, household_id='household-1',
+        return_to='https://inhuis-work.tailnet-example.ts.net/onboarding/winkels', onboarding=True)
+    assert flow.backend_origin == 'https://inhuis-work.tailnet-example.ts.net:8443'
+    assert oauth.build_ah_oauth_launch_url(flow).startswith(flow.backend_origin + '/ah-oauth/launch/')
+    assert oauth._return_with_status(flow, 'connected') == (
+        'https://inhuis-work.tailnet-example.ts.net/onboarding/winkels?ah=connected')
+    with pytest.raises(RuntimeError):
+        oauth.resolve_backend_public_origin(_request(
+            host='other.example', extra_headers={'x-forwarded-proto': 'https'}))

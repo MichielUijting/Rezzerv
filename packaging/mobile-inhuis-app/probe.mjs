@@ -1,0 +1,214 @@
+export const stores = Object.freeze({
+  jumbo: Object.freeze({ name: 'Jumbo', startUrl: 'https://www.jumbo.com/mijn/jumbo', origin: 'https://www.jumbo.com', path: '/bestellingen', alternatePath: '/orders', url: 'https://www.jumbo.com/bestellingen' }),
+  lidl: Object.freeze({ name: 'Lidl', startUrl: 'https://www.lidl.nl/', origin: 'https://www.lidl.nl', path: '/mre/purchase-history', url: 'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1' })
+});
+export function isHistoryUrl(store, value) {
+  try {
+    const url = new URL(value);
+    return url.origin === store.origin && (url.pathname === store.path || (store === stores.jumbo && url.pathname === store.alternatePath)) && !url.username && !url.password;
+  } catch { return false; }
+}
+// No HTML, credentials, cookies, receipt identifiers, URLs or content leave the webview.
+// The only transmitted evidence is a boolean DOM observation, not authentication.
+export function probeScript(store, nonce) {
+  const config = JSON.stringify({origin: store.origin, paths: store === stores.jumbo ? [store.path, store.alternatePath] : [store.path], nonce, lidl: store === stores.lidl});
+  return `(() => {
+    const c = ${config};
+    if (window.top !== window || location.origin !== c.origin || !c.paths.includes(location.pathname)) return;
+    if (typeof window.mobileApp?.postMessage !== 'function') return;
+    const markers = c.lidl
+      ? (() => {
+        const rows = document.querySelectorAll('a[href*="/mre/purchase-detail"]').length > 0;
+        const empty = document.querySelector?.('[data-testid="purchase-history-empty"],[data-testid="purchase-history-no-results"],[data-testid="history-empty-state"]');
+        const main = document.querySelector?.('main');
+        const title = document.querySelector?.('[data-testid="purchase-history-page"]') ||
+          /(?:digitale\\s*)?kassabonnen|aankoopgeschiedenis|purchase\\s*history/i.test(
+            String(document.querySelector?.('h1,h2')?.textContent || ''));
+        const noReceipts = /(?:geen|no|keine).{0,80}(?:kassabonnen?|bonnen?|receipts?|purchases?|aankopen?|aankoopgeschiedenis)/i
+          .test(String(empty?.textContent || main?.textContent || ''));
+        const login = document.querySelector?.('input[type="password"], form[action*="login"]');
+        return rows || Boolean(title && noReceipts && (empty || main) && !login && document.readyState === 'complete');
+      })()
+      : (() => {
+        // A header or a generic "Kassabonnen" link is not evidence of accessible history.
+        const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,[role=heading]'))
+          .map(e => (e.textContent || '').trim());
+        const title = headings.some(t => /^(mijn\\s+)?(bestellingen( en bonnetjes)?|bonnetjes)$/i.test(t));
+        const completed = headings.some(t => /^afgerond$/i.test(t));
+        const rows = Array.from(document.querySelectorAll('main a,main button,main [role=button],main article,main li'))
+          .some(e => {
+            const t = (e.textContent || '').replace(/\\s+/g,' ').trim();
+            return /\\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|ma|di|wo|do|vr|za|zo)\\s+\\d{1,2}\\s+/i.test(t)
+              && /\\b\\d{1,2}[:.]\\d{2}\\b/.test(t) && /\\bjumbo\\b/i.test(t);
+          });
+        const empty = Array.from(document.querySelectorAll('main p,main [role=status]'))
+          .some(e => /^(je hebt nog geen (kassabonnen|bonnetjes)|geen (kassabonnen|bonnetjes) gevonden)[.!]?$/i.test((e.textContent || '').trim()));
+        const loginForm = Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username]'))
+          .some(e => e.getClientRects?.().length > 0);
+        return title && !headings.some(t=>/^deze pagina bestaat niet$/i.test(t)) && !loginForm && ((completed && rows) || empty);
+      })();
+    window.mobileApp.postMessage({detail:{kind:'inhuis-history-probe',nonce:c.nonce,history:true,markers:Boolean(markers),...(c.lidl?{}:{route:location.pathname===c.paths[0]?'bestellingen':'orders'})}});
+  })();`;
+}
+// A row count or read-only DOM marker must not block the genuine
+// server-confirmed history scan. The canonical parser decides empty/complete.
+export function canBeginLidlImport(run, evidence) {
+  return Boolean(evidence?.history && run?.id && run?.lidlOrigin &&
+    isHistoryUrl(stores.lidl, run.url) && !run.failed && !run.handshakeSent)
+}
+export function acceptEvidence(event, active) {
+  if (!active || !active.id || event?.id !== active.id) return null;
+  if(active.store===stores.jumbo ? !active.jumboOrigin : !isHistoryUrl(active.store,active.url))return null;
+  const d = event.detail;
+  if (!d || d.kind !== 'inhuis-history-probe' || d.nonce !== active.nonce ||
+      d.history !== true || typeof d.markers !== 'boolean') return null;
+  if(active.store===stores.jumbo && !['bestellingen','orders'].includes(d.route))return null;
+  return {history: true, markers: d.markers};
+}
+
+
+
+export function jumboStateScript(nonce) {
+ const config=JSON.stringify({origin:stores.jumbo.origin,nonce});
+ return `(() => {
+ const c=${config};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none';
+ const label=e=>(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible)
+   .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
+ const failed=Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^deze pagina bestaat niet$/i.test((e.textContent||'').trim()));
+ const receipts=location.pathname==='/mijn/jumbo' ? Array.from(document.querySelectorAll('a[data-testid="my-jumbo-sub-menu-item-bestellingen-en-bonnetjes"][href="/bestellingen"]')).filter(e=>visible(e) && !e.closest('form,[role=dialog],[aria-modal=true]')) : [];
+ const header=controls.filter(e=>e.closest('header,[role=banner]'));
+ const logout=controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test(label(e)));
+ const signIn=header.some(e=>/^(inloggen|aanmelden|log in)$/i.test(label(e)));
+ const account=header.some(e=>/^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test(label(e)));
+ const signedIn=location.pathname==='/mijn/jumbo' && Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^Hallo\\s+\\S/i.test((e.textContent||'').trim()));
+ const loggedOut=controls.some(e=>/^inloggen of account maken$/i.test(label(e)));
+ const state=cookie?'cookies':forms||/login|signin|oauth|auth/i.test(location.pathname)?'login':
+   failed?'error':loggedOut?'login_available':receipts.length===1 && signedIn?'receipts_available':logout?'authenticated':signIn?'login_available':account?'account_available':'unknown';
+ window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-state',nonce:c.nonce,state}});
+ })();`;
+}
+export function acceptJumboState(event,run) {
+ const d=event?.detail;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id && event?.id===run.id && run.jumboOrigin && d?.nonce===run.nonce && d.kind==='inhuis-jumbo-state' && ['cookies','login','authenticated','login_available','account_available','receipts_available','error','unknown'].includes(d.state) ? d.state : null;
+}
+export function jumboTransition(run,state) {
+ run.jumboState=state;
+ if(state==='cookies'){run.cookieSeen=true;return null;}
+ if(state==='login'){run.loginSeen=true;return null;}
+ if(state==='error'){run.blocked=true;return null;}
+ if(run.blocked)return null;
+ if(state==='receipts_available' && !run.manual && !run.navigationAttempted && !run.historyReached){run.navigationAttempted=true;return 'receipts';}
+ // Logout alone does not establish a valid destination. Wait for retailer navigation.
+ if(state==='login_available' && !run.manual && !run.loginAttempted && !run.navigationAttempted && !run.historyReached){run.loginAttempted=true;return 'login';}
+ // Account-menu navigation is not automated: the verified account start route is used.
+ return null;
+}
+// Only the official header/banners account or sign-in control may be activated.
+// A script dispatch is NOT proof of a trusted user gesture or of a resulting login screen.
+export function jumboOpenLoginScript(nonce, action='login'){
+ const config=JSON.stringify({origin:stores.jumbo.origin,nonce,action});
+ return `(() => {
+ const c=${config};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none';
+ const label=e=>(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible)
+   .some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible).filter(e=>c.action==='receipts' || e.closest('header,[role=banner]') || (location.pathname==='/mijn/jumbo' && /^inloggen of account maken$/i.test(label(e))));
+ const failed=Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^deze pagina bestaat niet$/i.test((e.textContent||'').trim()));
+ const matches=(c.action==='receipts' && location.pathname==='/mijn/jumbo' ? Array.from(document.querySelectorAll('a[data-testid="my-jumbo-sub-menu-item-bestellingen-en-bonnetjes"][href="/bestellingen"]')).filter(visible) : c.action==='login' ? controls.filter(e=>/^(inloggen|aanmelden|log in|inloggen of account maken)$/i.test(label(e))) : []).filter(e=>!e.closest('form,[role=dialog],[aria-modal=true]'));
+ const signedIn=location.pathname==='/mijn/jumbo' && Array.from(document.querySelectorAll('h1,h2,[role=heading]')).some(e=>visible(e) && /^Hallo\\s+\\S/i.test((e.textContent||'').trim()));
+ let acted=false;
+ if(!failed && !cookie && !forms && !/login|signin|oauth|auth/i.test(location.pathname) && matches.length===1){
+  try {if(c.action==='receipts'){if(signedIn && !controls.some(e=>/^inloggen of account maken$/i.test(label(e)))){const link=matches[0];const guard=e=>{acted=e.defaultPrevented;e.preventDefault();};link.addEventListener('click',guard,{once:true});try{link.click();}finally{link.removeEventListener('click',guard);}}}else{matches[0].click();acted=true;}} catch {}
+ }
+ window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-action',nonce:c.nonce,action:c.action,acted}});
+ })();`;
+}
+export function acceptJumboAction(event,run){
+ const d=event?.detail;
+ return run?.store===stores.jumbo && run.phase==='combined' && run.id===event?.id && run.jumboOrigin &&
+   d?.kind==='inhuis-jumbo-action' && d.nonce===run.nonce && ['login','account','receipts'].includes(d.action) &&
+   typeof d.acted==='boolean' ? {action:d.action,acted:d.acted} : null;
+}
+
+export function routeCategory(value) {
+ try{
+  const u=new URL(value);
+  if(u.protocol!=='https:' || u.username || u.password)return 'overig';
+  if(u.hostname!=='www.jumbo.com')return u.hostname.endsWith('.jumbo.com')?'Jumbo ander domein':'Extern domein';
+  if(['/orders','/bestellingen'].includes(u.pathname))return 'Historie';
+  if(/login|signin|oauth|auth/i.test(u.pathname))return 'Aanmeldroute';
+  if(u.pathname==='/mijn/jumbo' || /account|profiel|mijn-jumbo/i.test(u.pathname))return 'Account';
+  return 'Jumbo overige pagina';
+ }catch{return 'Onbekende route';}
+}
+export function appendDiagnostic(run,label) {
+ if(run.trace.length<50 && run.trace.at(-1)!==label)run.trace.push(label);
+}
+export function diagnosticScript(nonce) {
+ const c=JSON.stringify({origin:'https://www.jumbo.com',nonce});
+ return `(() => {
+ const c=${c};
+ if(window.top!==window || location.origin!==c.origin || typeof window.mobileApp?.postMessage!=='function')return;
+ const send=label=>window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-diagnostic',nonce:c.nonce,label}});
+ const visible=e=>e.getClientRects().length>0 && getComputedStyle(e).visibility!=='hidden';
+ const cookie=Array.from(document.querySelectorAll('#onetrust-banner-sdk,#onetrust-pc-sdk,[role=dialog],[aria-modal=true],#CybotCookiebotDialog')).filter(visible).some(e=>/cookie|privacyvoorkeur/i.test(e.textContent||'') || /onetrust|cookiebot/i.test(e.id||''));
+ const forms=Array.from(document.querySelectorAll('input[type=password],input[autocomplete=username],input[type=email]')).some(visible);
+ const controls=Array.from(document.querySelectorAll('a,button,[role=button]')).filter(visible);
+ const login=controls.filter(e=>/^(inloggen|aanmelden|log in)$/i.test((e.textContent||'').trim()));
+ const account=controls.filter(e=>e.closest('header,[role=banner]') && /^(mijn jumbo|mijn account|account|profiel|account openen|mijn profiel)$/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim()));
+ const receiptControl=controls.some(e=>/^(bonnetjes|bestellingen en bonnen)$/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim()));
+ const state=cookie?'Cookievenster zichtbaar':receiptControl?'Bonnetjesbediening zichtbaar':forms?'Aanmeldvelden zichtbaar':controls.some(e=>/^(uitloggen|afmelden|log uit)$/i.test((e.textContent||'').trim()))?'Uitlogbediening zichtbaar':account.length>1?'Meerdere accountbedieningen':account.length===1?'Accountbediening in kop':login.length>1?'Meerdere aanmeldknoppen':login.length===1?'Een aanmeldknop':'Geen bekende bediening';
+ if(window.__inhuisDiagState!==state){window.__inhuisDiagState=state;send(state);}
+ if(window.__inhuisDiagNonce===c.nonce)return;
+ window.__inhuisDiagNonce=c.nonce;
+ document.addEventListener('click',event=>{
+  if(!event.isTrusted || window.__inhuisDiagNonce!==c.nonce)return;
+  const e=event.target?.closest?.('a,button,[role=button]');
+  if(!e)return;
+  const label=(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||'').trim();
+  if(!/^(inloggen|aanmelden|log in|mijn jumbo|account|profiel)$/i.test(label) && !e.closest('header,nav'))return;
+  if(e.closest('form,[role=dialog],[aria-modal=true]'))return;
+  send(e.tagName==='A'?(e.target==='_blank'?'Handmatige klik: link nieuw venster':'Handmatige klik: link'):'Handmatige klik: knop');
+ },true);
+ })();`;
+}
+export function acceptDiagnostic(event,run){
+ const d=event?.detail;
+ const allowed=['Cookievenster zichtbaar','Aanmeldvelden zichtbaar','Uitlogbediening zichtbaar','Meerdere aanmeldknoppen','Een aanmeldknop','Meerdere accountbedieningen','Accountbediening in kop','Bonnetjesbediening zichtbaar','Geen bekende bediening','Handmatige klik: link nieuw venster','Handmatige klik: link','Handmatige klik: knop'];
+ return run?.phase==='diagnose' && run.store===stores.jumbo && run.id===event?.id && run.jumboOrigin && d?.kind==='inhuis-jumbo-diagnostic' && d.nonce===run.nonce && allowed.includes(d.label)?d.label:null;
+}
+
+// Explicit, bounded read-only test. Only aggregate evidence crosses the bridge.
+export function jumboReceiptTestScript(nonce){
+ const c=JSON.stringify({nonce,origin:stores.jumbo.origin});
+ return `(async()=>{
+ const c=${c}; const valid=()=>window.top===window && location.origin===c.origin && location.pathname==='/bestellingen';
+ if(!valid() || typeof window.mobileApp?.postMessage!=='function' || window.__inhuisReceiptTest===c.nonce)return;
+ window.__inhuisReceiptTest=c.nonce;
+ const send=(stage,http,count,detail)=>{if(valid())window.mobileApp.postMessage({detail:{kind:'inhuis-jumbo-api',nonce:c.nonce,stage,http,count,detail}});};
+ let http=0,count=0;
+ const gql=async(operationName,query,variables)=>{
+  if(!valid())throw Error('route');
+  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
+  try{const r=await fetch('/api/graphql',{method:'POST',credentials:'include',redirect:'error',signal:controller.signal,headers:{'Content-Type':'application/json',Accept:'application/json','apollographql-client-name':'JUMBO_WEB-orders','apollographql-client-version':'master-v29.2.0-web','x-source':'JUMBO_WEB-orders'},body:JSON.stringify({operationName,query,variables})});http=r.status;const j=await r.json();if(!r.ok||!j?.data||j.errors?.length)throw Error('response');return j.data;}finally{clearTimeout(timeout);}
+ };
+ try{
+ const d=await gql('GetOnlineOrdersAndStoreReceipts','query GetOnlineOrdersAndStoreReceipts($ordersInput: OrdersInput!, $page: Int, $pageSize: Int) { storeReceipts: receiptOverview(page: $page, pageSize: $pageSize) { totalResults currentPage receipts { transactionId purchaseEndOn } } onlineOrders: orders(input: $ordersInput) { totalCount } }',{ordersInput:{offset:0,limit:1,direction:'DESC',sortBy:'deliveryDate',statusCategory:'CLOSED'},page:0,pageSize:10});
+ const s=d.storeReceipts;if(!Number.isSafeInteger(s?.totalResults)||s.totalResults<0||s.totalResults>100000||s.currentPage!==0||!Array.isArray(s.receipts))throw Error('list');count=s.totalResults;
+ if(count===0){if(s.receipts.length!==0)throw Error('list');send('empty',http,count,false);return;}
+ const row=s.receipts[0];if(typeof row?.transactionId!=='string'||!row.transactionId||typeof row.purchaseEndOn!=='string')throw Error('list');
+ send('list',http,count,false);
+ const detail=await gql('GetDigitalReceipt','query GetDigitalReceipt($transactionId: String) { receipt(transactionId: $transactionId) { receiptImage { image type } purchaseEndOn transactionId } }',{transactionId:row.transactionId});
+ const b=detail.receipt;if(b?.transactionId!==row.transactionId||b.purchaseEndOn!==row.purchaseEndOn||typeof b.receiptImage?.image!=='string'||!b.receiptImage.image.length)throw Error('detail');send('detail',http,count,true);
+ }catch(e){send(e?.name==='AbortError'?'timeout':'failed',http,count,false);}
+ })();`;
+}
+export function acceptJumboApi(event,run){const d=event?.detail;if(run?.store!==stores.jumbo||run.phase!=='combined'||!run.id||run.id!==event?.id||!run.jumboOrigin||!run.apiRequested||d?.nonce!==run.nonce||d.kind!=='inhuis-jumbo-api'||!['list','detail','empty','timeout','failed'].includes(d.stage)||!Number.isInteger(d.http)||d.http<0||d.http>599||!Number.isSafeInteger(d.count)||d.count<0||d.count>100000||typeof d.detail!=='boolean'||d.detail!==(d.stage==='detail'))return null;if(['list','detail','empty'].includes(d.stage)&&(d.http!==200||(d.stage==='empty'?d.count!==0:d.count===0)))return null;return {stage:d.stage,http:d.http,count:d.count,detail:d.detail};}

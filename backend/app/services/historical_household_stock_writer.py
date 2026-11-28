@@ -243,6 +243,72 @@ def _revise_baseline(conn, *, owner, article_id, qty, baseline, fingerprint, cut
         raise ValueError("Historische voorraadregistratie kon niet worden bijgewerkt")
 
 
+def _expire_unreferenced_owned_baseline(conn, *, owner, article_id, baseline, cutoff) -> bool:
+    """Remove ONLY a completely unmodified automatic baseline without evidence.
+
+    This is the reverse of our own _create_baseline: never touches a manual
+    transaction, location or non-baseline inventory. The caller owns the one
+    maintenance transaction and the household cutover lock. A failed integrity
+    assertion aborts the transaction; no partial cleanup is committed.
+    """
+    if _lock_owned_article(conn, owner, article_id) is None:
+        return False
+    if _block_existing_business_history(conn, owner, (article_id,)):
+        return False
+    event_id = str(baseline.get("inventory_event_id") or "")
+    event = conn.execute(text("""
+        SELECT id, quantity, source, event_type, effective_at
+        FROM inventory_events
+        WHERE household_id=:household_id
+          AND household_article_id=:article_id AND id=:event_id
+        FOR UPDATE
+    """), {
+        "household_id": owner, "article_id": article_id, "event_id": event_id,
+    }).mappings().first()
+    if (not event or event.get("source") != SOURCE
+            or event.get("event_type") != "baseline"
+            or int(event["quantity"]) != int(baseline["quantity"])
+            or str(event.get("effective_at") or "")[:10] != str(cutoff)[:10]):
+        raise ValueError("Vervallen automatische beginvoorraad is niet meer intact")
+    stock = _existing_baseline_stock(conn, owner, article_id, baseline)
+
+    if stock is not None:
+        deleted = conn.execute(text("""
+            DELETE FROM inventory
+            WHERE id=:inventory_id AND household_id=:household_id
+              AND household_article_id=:article_id
+              AND space_id IS NULL AND sublocation_id IS NULL
+              AND aantal=:quantity
+        """), {
+            "inventory_id": baseline["inventory_id"], "household_id": owner,
+            "article_id": article_id, "quantity": int(baseline["quantity"]),
+        })
+        if deleted.rowcount != 1:
+            raise ValueError("Gewijzigde beginvoorraad mag niet worden verwijderd")
+    deleted_event = conn.execute(text("""
+        DELETE FROM inventory_events
+        WHERE id=:event_id AND household_id=:household_id
+          AND household_article_id=:article_id AND source=:source
+          AND event_type='baseline' AND quantity=:quantity
+    """), {
+        "event_id": event_id, "household_id": owner, "article_id": article_id,
+        "source": SOURCE, "quantity": int(baseline["quantity"]),
+    })
+    if deleted_event.rowcount != 1:
+        raise ValueError("Automatisch beginvoorraadevent is tussentijds gewijzigd")
+    deleted_baseline = conn.execute(text("""
+        DELETE FROM household_historical_auto_stock_baselines
+        WHERE household_id=:household_id AND household_article_id=:article_id
+          AND inventory_event_id=:event_id AND quantity=:quantity
+    """), {
+        "household_id": owner, "article_id": article_id, "event_id": event_id,
+        "quantity": int(baseline["quantity"]),
+    })
+    if deleted_baseline.rowcount != 1:
+        raise ValueError("De geregistreerde automatische baseline is tussentijds gewijzigd")
+    return True
+
+
 def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) -> dict:
     """Store trusted cadence per matched article, including all synonym members.
 
@@ -418,6 +484,89 @@ def _sync_historical_purchase_cadences(conn, *, owner: str, calculated: dict) ->
     return {"cadences_written": written, "cadences_expired": int(removed.rowcount or 0)}
 
 
+def _prepare_historical_article_links(conn, owner, cutoff):
+    """Materialize private article identities, never invent a Catalogus match.
+
+    Runs under the cutover lock, after the existing recognition authorities.
+    Previously saved selections are retained. The existing receipt-to-stock
+    resolver refuses ambiguous same-name items and foreign article IDs.
+    """
+    from app import main as legacy
+    from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+    from app.services.historical_household_stock_source import (
+        _HISTORICAL_AUTO_SOURCE_SQL, _is_digital_purchase, _stock_units,
+        MAX_HISTORICAL_PURCHASE_LINES,
+    )
+    from app.services.receipt_historical_import_policy import historical_history_start_date
+    from app.services.receipt_stock_review_service import resolve_stock_household_article
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
+
+    rows = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
+        "household_id": owner,
+        "earliest_date": historical_history_start_date(cutoff),
+        "row_limit": MAX_HISTORICAL_PURCHASE_LINES + 1,
+    }).mappings().all()
+    if len(rows) > MAX_HISTORICAL_PURCHASE_LINES:
+        return
+    # Normalize only previously uncorrected historical Lidl text in place.
+    # Preserve original receipt lines, user corrections and article identities.
+    from app.services.historical_lidl_name_backfill import (
+        normalize_stored_lidl_purchase_names,
+    )
+    normalize_stored_lidl_purchase_names(
+        conn, household_id=owner, rows=rows,
+    )
+    for row in rows:
+        if row.get("matched_article_id") or not _is_digital_purchase(row):
+            continue
+        if not row.get("sha256_hash") or not _stock_units(
+            row.get("quantity"), row.get("unit"), digital_receipt=True,
+        ):
+            continue
+        semantics = derive_receipt_line_semantics(dict(row))
+        if semantics.get("line_role") != "product" or not semantics.get("inventory_eligible"):
+            continue
+        if row.get("matched_global_product_id") and (
+            row.get("product_status") != "active"
+            or row.get("article_match_status") not in {"matched", "product_matched"}
+        ):
+            continue
+        name = str(row.get("corrected_raw_label") or row.get("raw_label") or "").strip()
+        if row["source_provider"] == "lidl":
+            name = clean_lidl_transaction_label(name)[0]
+        if not name:
+            continue
+        # Do not let a retailer SKU masquerade as a GTIN. No new central
+        # product is created for a private, unidentified household article.
+        article_id = resolve_stock_household_article(
+            conn, main_module=legacy, household_id=owner,
+            line={
+                "article_name_raw": name,
+                "matched_global_product_id": row.get("matched_global_product_id"),
+                "retailer_sku": row.get("external_article_code"),
+                "barcode": row.get("barcode"),
+            },
+            store_provider_code=row["source_provider"],
+            allow_historical_bootstrap=True,
+        )
+        if not article_id:
+            continue
+        conn.execute(text("""
+            UPDATE receipt_table_lines
+            SET matched_article_id = :article_id,
+                article_match_status = 'matched'
+            WHERE id = :line_id AND receipt_table_id = :receipt_id
+              AND matched_article_id IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM receipt_tables rt
+                  WHERE rt.id = :receipt_id AND rt.household_id = :household_id
+              )
+        """), {
+            "article_id": article_id, "line_id": row["line_id"],
+            "receipt_id": row["receipt_table_id"], "household_id": owner,
+        })
+
+
 def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     """ONE writer-operation transaction. No global session or browser identity.
 
@@ -432,18 +581,32 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     if cutoff is None:
         return {"status": "legacy_untouched", "created": 0, "revised": 0, "skipped": 0}
 
+    # The old new-household onboarding could omit prediction settings entirely.
+    # Never overwrite even an explicit 'false' / 100-day user configuration.
+    from app.services.household_onboarding_service import (
+        ensure_store_onboarding_prediction_defaults_if_missing,
+    )
+    ensure_store_onboarding_prediction_defaults_if_missing(conn, owner)
+    _prepare_historical_article_links(conn, owner, cutoff)
     calculated = load_automatic_historical_stock(conn, household_id=owner)
     if calculated.get("status") != "calculated":
         return {"status": "not_ready", "created": 0, "revised": 0, "skipped": 0}
+    # Historic duplicates with a confirmed *central* product identity may be
+    # repaired only while original automatic baselines are untouched. The
+    # service preserves all receipts and aborts each unsafe group separately.
+    from app.services.historical_household_duplicate_repair import (
+        repair_proven_historical_household_duplicates,
+    )
+    recovered = repair_proven_historical_household_duplicates(
+        conn, household_id=owner, cutoff=str(cutoff),
+    )
+    if recovered["merged"]:
+        # Rebuild from original receipts after all safe identity links changed.
+        # A failed replay aborts the same outer maintenance transaction.
+        calculated = load_automatic_historical_stock(conn, household_id=owner)
+        if calculated.get("status") != "calculated":
+            raise ValueError("Historische herverwerking na canonieke reparatie onvolledig")
     quantities = calculated["quantities"]
-    if not quantities:
-        cadence = _sync_historical_purchase_cadences(
-            conn, owner=owner, calculated=calculated,
-        )
-        return {"status": "no_trusted_matches", "created": 0, "revised": 0,
-                "skipped": 0, "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
-                **cadence}
-
     baseline = _owned_baselines(conn, owner)
     group_by_article = calculated.get("synonym_groups") or {}
     # Grouped records must be all-or-none; another current event from a
@@ -454,8 +617,19 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         components.setdefault(members, set()).add(article_id)
 
     ensure_locationless_inventory_identity_guard(conn)
-    created = revised = skipped = unchanged = 0
+    created = revised = skipped = unchanged = expired = 0
     fingerprint = str(calculated["source_fingerprint"])
+    # A previously recognized product may no longer have any trustworthy
+    # historical receipt lines after identity repair or source invalidation.
+    # Remove only our own provably untouched baseline, never unrelated stock.
+    for article_id in sorted(set(baseline) - set(quantities)):
+        if _expire_unreferenced_owned_baseline(
+            conn, owner=owner, article_id=article_id,
+            baseline=baseline[article_id], cutoff=cutoff,
+        ):
+            expired += 1
+        else:
+            skipped += 1
     for members, active_articles in sorted(components.items()):
         if any(quantities[a] > MAX_AUTO_STOCK_PER_ARTICLE or quantities[a] < 0
                for a in active_articles):
@@ -491,8 +665,11 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         conn, owner=owner, calculated=calculated,
     )
     return {
-        "status": "applied", "created": created, "revised": revised,
-        "unchanged": unchanged, "skipped": skipped,
+        "status": "applied" if quantities else "no_trusted_matches",
+        "created": created, "revised": revised,
+        "unchanged": unchanged, "expired": expired, "skipped": skipped,
         "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+        "canonical_repair": recovered,
+        "repair_evidence": calculated.get("repair_evidence", {}),
         **cadence,
     }

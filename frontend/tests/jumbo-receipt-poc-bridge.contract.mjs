@@ -136,8 +136,10 @@ assert.doesNotMatch(storeConnectionsSource, /SOURCE_MISMATCH/)
 assert.doesNotMatch(storeConnectionsSource, /HANDSHAKE_OK/)
 assert.doesNotMatch(storeConnectionsSource, /sampleReceipt/)
 assert.doesNotMatch(storeConnectionsSource, /v4-knop/)
-assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
-assert.match(storeConnectionsSource, /openHref={JUMBO_ORDERS_URL}/)
+assert.match(storeConnectionsSource, /event\.origin !== JUMBO_WEB_ORIGIN/)
+assert.match(storeConnectionsSource, /event\.source !== expectedJumboWindowRef\.current/)
+assert.match(storeConnectionsSource, /openHref={mobileRetailer \|\| onboardingMode \? undefined : JUMBO_ORDERS_URL}/)
+assert.match(storeConnectionsSource, /hideDates={mobileRetailer \|\| onboardingMode}/)
 assert.match(storeConnectionsSource, /openTestId="jumbo-poc-open"/)
 const jumboLaunch = sharedPanel.slice(
   sharedPanel.indexOf('<a'),
@@ -160,7 +162,12 @@ const setupModalSource = fs.readFileSync(
 assert.match(setupModalSource, /provider \+ '-bookmarklet-help'/)
 assert.match(setupModalSource, /data-testid={linkTestId}/)
 assert.match(setupModalSource, /onClick={onClose}/)
-assert.ok(!storeConnectionsSource.includes('window.location.assign(JUMBO_ORDERS_URL)'))
+// The mobile guide launches only after its explicit Open Jumbo action.
+assert.match(storeConnectionsSource, /onOpenStore=\{\(\) => \{ if \(openJumboFromInhuis\(\)\) setSetupHelpStore\(''\) \}\}/)
+assert.match(storeConnectionsSource, /expectedJumboWindowRef\.current = tab/)
+assert.match(storeConnectionsSource, /tab\.location\.replace\(JUMBO_ORDERS_URL\)/)
+assert.match(storeConnectionsSource, /currentJumboImportPeriod\(response\.dates\.jumbo\)/)
+assert.match(storeConnectionsSource, /buildJumboPocBookmarklet\(/)
 assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 // The Lidl bridge legitimately uses postMessage; isolate the Jumbo redirect handler.

@@ -105,3 +105,37 @@ export async function saveHouseholdAutomationSettings(settings = {}) {
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: saved }))
   return saved
 }
+
+export async function fetchConsumableReviewCandidates({ offset = 0, limit = 10 } = {}) {
+  const response = await fetchJsonWithAuth(
+    API_BASE_URL + '/api/household/consumable-review?offset=' + encodeURIComponent(offset)
+    + '&limit=' + encodeURIComponent(limit),
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...getAuthHeaders() },
+      credentials: 'include',
+    },
+  )
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data?.detail || 'Classificaties konden niet worden opgehaald.')
+  return data
+}
+
+export async function saveConsumableReviewChoice(articleId, consumable, expectedState) {
+  const response = await fetchJsonWithAuth(
+    API_BASE_URL + '/api/household/consumable-review/' + encodeURIComponent(articleId),
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ consumable, expected_state: expectedState }),
+    },
+  )
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data?.detail || 'De expliciete classificatie is niet opgeslagen.')
+  return data
+}

@@ -1,6 +1,6 @@
 // Shared, accessible progress presentation for supported digital receipt imports.
 // Totals are shown only when the provider has supplied a trustworthy count.
-export default function ImportProgress({ store, phase, message, processed, total, counts, testId }) {
+export default function ImportProgress({ store, phase, message, processed, total, counts, testId, counterLabel = 'verwerkt' }) {
   if (!message && !phase) return null
   const hasTotal = Number.isSafeInteger(total) && total >= 0
   const hasProcessed = Number.isSafeInteger(processed) && processed >= 0
@@ -18,12 +18,12 @@ export default function ImportProgress({ store, phase, message, processed, total
     <div className="rz-inline-feedback" role="status" aria-live="polite" data-testid={testId} style={{ display: 'grid', gap: 6 }}>
       <strong>{store} — {headings[phase] || 'Importstatus'}</strong>
       {hasTotal && hasProcessed ? (
-        <div data-testid={testId + '-counter'}>{processed} van {total} bonnen verwerkt</div>
+        <div data-testid={testId + '-counter'}>{processed} van {total} bonnen {counterLabel}</div>
       ) : hasProcessed ? (
-        <div data-testid={testId + '-counter'}>{processed} bonnen verwerkt (totaal nog onbekend)</div>
+        <div data-testid={testId + '-counter'}>{processed} bonnen {counterLabel} (totaal nog onbekend)</div>
       ) : null}
       {fraction !== null ? (
-        <progress value={processed} max={total} aria-label={store + ': bonnen verwerkt'} style={{ width: '100%' }} />
+        <progress value={processed} max={total} aria-label={store + ': bonnen ' + counterLabel} style={{ width: '100%' }} />
       ) : null}
       {message ? <div>{message}</div> : null}
       {counts ? (

@@ -270,3 +270,27 @@ def test_next_repeat_improves_mean_over_all_purchase_gaps():
     assert initial["average_repurchase_interval_days"] == 10.0
     assert expanded["purchase_day_count"] == 3
     assert expanded["average_repurchase_interval_days"] == 15.0
+
+
+
+def test_stored_history_replay_rebuild_is_idempotent_across_ah_lidl_jumbo():
+    """Replaying unchanged original receipts never increments the baseline."""
+    events = [
+        receipt("2025-01-05", 2, line="ah-1"),
+        receipt("2025-04-05", 3, line="lidl-2"),
+        receipt("2026-10-05", 5, line="jumbo-3"),
+    ]
+    first = replay(events, {"h-a": RESET})
+    repeated = replay(list(reversed(events)), {"h-a": RESET})
+    assert first == repeated
+    assert first["source_line_count"] == 3
+    assert first["quantities"] == {"h-a": 5}
+    assert first["purchase_cadences"]["h-a"]["purchase_day_count"] == 3
+
+
+def test_duplicate_imported_receipt_sha_does_not_inflate_replayed_stock():
+    original = receipt("2025-01-05", 2, line="first", sha="same-sha", receipt_id="r1")
+    duplicate = receipt("2025-01-05", 2, line="other", sha="same-sha", receipt_id="r2")
+    result = replay([original, duplicate], {"h-a": NONE})
+    assert result["quantities"] == {"h-a": 2}
+    assert result["excluded_duplicate_receipt_lines"] == 1

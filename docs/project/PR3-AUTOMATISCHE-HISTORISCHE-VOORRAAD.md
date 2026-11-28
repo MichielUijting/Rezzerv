@@ -143,3 +143,43 @@ worden niet als fysiek voorraadaantal gepubliceerd.
 Geen merge of deployment zonder afzonderlijke expliciete PO-GO. PR blijft
 Draft tijdens implementatie. Niet automatisch oude, onbetrouwbare bonnen
 als actuele voorraad boeken.
+
+
+## Aanvulling PR #732 — historische ontvangstperiode en regelniveau
+
+TEST_LEVEL_PROVISIONAL: L. De automatische bewezen beginvoorraad gebruikt
+1 januari van het jaar vóór de huishoudgebonden datumgrens, tot maar exclusief
+de datumgrens zelf. De afzonderlijke indicatieve PR2-analyse behoudt haar
+read-only onzekerheidscontract.
+
+Digitale bonnen van AH, Lidl en Jumbo met `partial` of `review_needed`
+kunnen aantoonbaar betrouwbare fysieke regels bevatten. De selectie kan deze
+regels verwerken zonder de volledige bon goed te keuren. Per regel blijven
+betrouwbare datum, fysieke rol/voorraadgeschiktheid, positieve gehele stuks,
+bewezen huishoudartikelidentiteit en unieke bronidentiteit noodzakelijk.
+Onzekere regels en andere parserstatussen blijven uitgesloten.
+De bestaande transactiebescherming op actuele en handmatige voorraad blijft
+onverminderd van toepassing. Dit is een Draft-tussenreparatie, geen volledige
+acceptatie van alle acht gevraagde herstelpunten.
+
+
+### Veilige hercontrole van reeds opgeslagen bonnen
+
+Het bestaande winkelkoppelingenscherm biedt **Bestaande bonnen opnieuw
+controleren**. Alleen de geautoriseerde huishoudbeheerder met een bestaande
+historische datumgrens mag de bestaande interne artikelherkenningsworker wekken.
+De worker houdt zijn onderhoudspauze, centrale matching-autoriteit,
+per-huishouden transacties, idempotente bronfingerprint en
+actuele/handmatige-voorraadguards. Er wordt geen nieuwe winkelimport,
+bonherparse, accountkoppeling of database-reset aangevraagd.
+Een bevestigde aanvraag is **geen** voltooid herberekeningsbewijs.
+
+
+### Digitale verpakkingsgroottes versus gekochte hoeveelheid
+
+Wanneer een winkel de **grootte van één verpakking** als `unit` bewaart
+(bijvoorbeeld `1.5 l` of `500 g`), tellen uitsluitend positieve,
+gehele, uit de bon bewezen aantallen verpakkingen. Het getal in de
+verpakkingsomschrijving is geen gekocht aantal en wordt niet omgezet in
+stuks. Fractionele gewogen regels, onbekende eenheden en nul-aantallen
+blijven buiten fysieke voorraad.

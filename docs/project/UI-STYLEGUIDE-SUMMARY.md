@@ -22,6 +22,8 @@ In **Platformbeheer → Gebruikers** heeft de tabelgroep maximaal 930 px breedte
 
 ## Afzonderlijke winkelonboarding — 25 november 2026
 
+De winkelnaam krijgt links het herkenbare label uit het PO-ontwerp: wit `ah` op lichtblauw, zwart `J` op geel en wit `L` op donkerblauw. De drie kolomkoppen gebruiken de centrale primaire achtergrond en witte tekstkleur op de cellen zelf. Op smalle mobiele schermen blijven tabel en acties binnen de viewport; namen en statustekst mogen omlopen.
+
 Na het aanmaken en inrichten van een nieuw huishouden toont Inhuis een zelfstandige
 keuzetabel met **Albert Heijn**, **Jumbo** en **Lidl**, zonder hergebruik van de
 reguliere pagina Instellingen → Winkelkoppelingen. Boven de tabel staat één vraag:
@@ -41,9 +43,9 @@ reguliere pagina Instellingen → Winkelkoppelingen. Boven de tabel staat één 
   de beveiligde Inhuis-backend. Alleen een beheerder met
   `household_settings.manage` kan ze aanpassen. Een onvoltooide keuze wordt
   na opnieuw aanmelden aangeboden; **Later koppelen** laat het dashboard vrij.
-- De eerste dashboarduitleg blijft de bestaande korte actiebarhint, zonder
-  schermverduistering. De eerdere drie oranje winkelpijlen zijn **niet** meer
-  van toepassing op de eerste winkelonboarding.
+- De oranje dashboard-introductieoverlay inclusief pijl is volledig verwijderd;
+  afronding gaat rechtstreeks naar het dashboard zonder introductietrigger.
+  Eventuele afzonderlijke onboardingpijlen blijven buiten deze correctie.
 
 ## Snelle onboarding op één scherm — 23 november 2026
 
@@ -2160,3 +2162,7 @@ In **Mijn winkelkoppelingen** komt `Status` vóór `Laatst bijgewerkt` op deskto
 
 
 **PO-correctie 24 november 2026:** op mobiel staan de winkelnaam, echte winkelactie en datum expliciet in respectievelijk kolom 1, 2 (Status) en 3, ook bij liggende telefoon. De oranje aanwijzing bevat uitsluitend **Nu winkel(s) koppelen!**, zonder stapnummer of winkelnaam. De pijlspits wijst naar het midden van de boven- of onderrand van de werkelijke actieknop. De gewone winkelactieknoppen en hun teksten blijven functioneel ongewijzigd.
+
+
+### Mobiele winkelonboarding: minimale handelingen (25 november 2026)
+Na de bestaande winkelkeuze toont Inhuis alleen de noodzakelijke handeling. De mobiele bladwijzernaam wordt via de paginatitel voorbereid; bij de start wordt kopieren geprobeerd binnen de gebruikersklik. Bij weigering blijft handmatig kopieren beschikbaar. Een gecombineerde bladwijzer kiest uitsluitend de exacte Jumbo- of Lidl-origin en behoudt de bestaande importbevestiging. Een browsersessiehint mag installatie-instructies overslaan, maar is geen koppelbewijs. De Jumbo-periode blijft vooralsnog in de bladwijzer vastgelegd; bij een periodewijziging moet deze opnieuw worden ingesteld. Desktop blijft ongewijzigd.

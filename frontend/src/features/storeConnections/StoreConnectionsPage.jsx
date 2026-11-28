@@ -20,21 +20,27 @@ import {
   JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
-import { buildJumboImportEnvelope } from './jumboReceiptImport.js'
+import { buildUniversalRetailerBookmarklet, mobileBookmarkletSetupKeys, hasMobileBookmarkletSetup, copyRetailerBookmarklet } from './universalRetailerBookmarklet.js'
+import { JUMBO_WEB_ORIGIN, buildJumboImportEnvelope } from './jumboReceiptImport.js'
 import { jumboDateWindow, stageJumboBatch } from './jumboReceiptBatch.js'
+import { snapshotJumboImportContext, jumboImportContextHeaders, verifyJumboImportContext } from './jumboImportContext.js'
+import { nativeJumboShell, startNativeJumboTransport } from './nativeJumboTransport.js'
+import { startNativeLidlTransport } from './nativeLidlTransport.js'
+import { openNativeAhLogin, validNativeAhLoginUrl } from './nativeAhTransport.js'
 import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
-import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate } from './receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview, displayedImportDate, firstImportDate, currentJumboImportPeriod } from './receiptConnectionOverviewModel.js'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import PicnicAccountResearchPanel from './PicnicAccountResearchPanel.jsx'
 import ImportProgress from './ImportProgress.jsx'
 import StoreOnboardingSelection from '../onboarding/StoreOnboardingSelection.jsx'
 import {
   fetchStoreOnboardingProgress, saveStoreOnboardingSelection,
-  saveStoreOnboardingResult, nextStoreForOnboarding,
+  saveStoreOnboardingResult, nextStoreForOnboarding, skipStoreForOnboarding,
 } from '../onboarding/onboardingStoreConnections.js'
 import HistoricalImportProgress from './HistoricalImportProgress.jsx'
 import { hasPendingHistoryWork } from './historicalImportStatusModel.js'
 import RetailerBookmarkletHelp from './RetailerBookmarkletHelp.jsx'
+import { detectMobileRetailerEnvironment } from './retailerMobileEnvironment.js'
 import RetailerReceiptPanel from './RetailerReceiptPanel.jsx'
 import { filterOnboardingReceiptStores } from '../onboarding/onboardingStoreConnections.js'
 import './receiptConnectionCompact.css'
@@ -43,8 +49,22 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const navigate = useNavigate()
   const { showFeedback, dismissFeedbackIfKey } = useAppFeedback()
   const isMobileViewport = useMobileAppViewport()
+  const mobileRetailer = detectMobileRetailerEnvironment().device !== 'desktop'
   const [activeProvider, setActiveProvider] = useState('')
+  const expectedLidlWindowRef = useRef(null)
+  const expectedJumboWindowRef = useRef(null)
+  const nativeJumboTransportRef = useRef(null)
+  const nativeLidlTransportRef = useRef(null)
+  const [nativeJumbo, setNativeJumbo] = useState(() => Boolean(nativeJumboShell()))
+  useEffect(() => {
+    const refresh = () => setNativeJumbo(Boolean(nativeJumboShell()))
+    window.addEventListener('inhuis-native-shell-ready', refresh)
+    refresh()
+    return () => window.removeEventListener('inhuis-native-shell-ready', refresh)
+  }, [])
+  const jumboAutomaticRunRef = useRef(null)
   const [storeOnboarding, setStoreOnboarding] = useState(null)
+  const [pendingStoreSelection, setPendingStoreSelection] = useState(null)
   const [storeOnboardingBusy, setStoreOnboardingBusy] = useState(false)
   const lidlOnboardingQueueIdRef = useRef(null)
   const lastStoreAttemptRef = useRef('')
@@ -54,6 +74,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [setupHelpStore, setSetupHelpStore] = useState('')
+  const [preparedCopy, setPreparedCopy] = useState(null)
+  const jumboReturningRef = useRef(String(window.location.hash || '').startsWith(JUMBO_POC_FRAGMENT_PREFIX))
   const ahSyncPageMountedRef = useRef(false)
   const ahLoginNavigatingRef = useRef(false)
   const ahReturnOutcomeRef = useRef(null)
@@ -76,6 +98,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [lidlPhase, setLidlPhase] = useState('')
   const [lidlCountsView, setLidlCountsView] = useState(null)
+  const [lidlTransferProgress, setLidlTransferProgress] = useState(null)
   const [lidlWindow, setLidlWindow] = useState(null)
   const [lidlFrom, setLidlFrom] = useState('')
   const [lidlTo, setLidlTo] = useState('')
@@ -130,6 +153,20 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       : '',
     [jumboFrom, jumboTo, jumboPeriodValid],
   )
+
+  // Permanent across periods, dates and both entry routes. Desktop retains
+  // its existing date-specific Jumbo bookmarklet and drag-to-favorites flow.
+  const universalBookmarklet = useMemo(
+    () => buildUniversalRetailerBookmarklet(window.location.origin, lidlBookmarklet),
+    [lidlBookmarklet],
+  )
+  const setupKeys = useMemo(() => mobileBookmarkletSetupKeys(), [])
+  const visibleOnboardingSelection = pendingStoreSelection ?? storeOnboarding?.selected ?? []
+  const setupBrowserUrl = useMemo(() => {
+    const url = new URL(window.location.pathname, window.location.origin)
+    if (onboardingMode && ['jumbo', 'lidl'].includes(activeProvider)) url.searchParams.set('inhuis_setup', activeProvider)
+    return url.href
+  }, [activeProvider, onboardingMode])
 
   const receiptConnectionColumns = useMemo(() => [
     {
@@ -247,8 +284,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function loadAhStatus() {
-    const data = await fetchJson('/api/receipts/retailers/ah/status')
+  async function loadAhStatus(attemptId = '') {
+    const data = await fetchJson('/api/receipts/retailers/ah/status' + (attemptId ? '?attempt_id=' + encodeURIComponent(attemptId) : ''))
     setAhConnection(data || { connected: false, persistence: 'encrypted_database' })
     return data
   }
@@ -301,49 +338,114 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  async function markOnboardingStoreResult(provider, result, queueId = null) {
+  async function markOnboardingStoreResult(provider, result, queueId = null, runId = null, beforeAdvance = null) {
     if (!onboardingMode) return
     try {
-      const confirmed = await saveStoreOnboardingResult(provider, result, queueId)
+      // Only a household-bound import-run confirmation or AH credential finishes a store.
+      if (provider === 'ah' && result === 'success') {
+        // A confirmed AH account is not proof that its historical receipts
+        // were successfully synchronized. Attempt the initial sync now.
+        const synced = await syncAhReceipts()
+        if (!synced) result = 'failed'
+      }
+      const confirmed = await saveStoreOnboardingResult(provider, result, queueId, runId)
+      if (beforeAdvance) {
+        if (confirmed.results?.[provider] !== result) throw new Error('Het winkelresultaat is niet bevestigd.')
+        beforeAdvance()
+      }
       setStoreOnboarding(confirmed)
-      if (result === 'success') setActiveProvider('')
+      setPendingStoreSelection(null)
+      const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
+      if (next) {
+        setSetupHelpStore('')
+        lastStoreAttemptRef.current = provider
+        launchConfirmedOnboardingStore(confirmed)
+      } else {
+        setActiveProvider('')
+        if (confirmed.selected.every(code => ['success', 'empty'].includes(confirmed.results[code]))) {
+          onFinish?.()
+        }
+        // Failed retailers stay visible: explicit Retry or Dashboard, no loop.
+      }
+      return true
     } catch (err) {
+      setActiveProvider('')
       showFeedback({
         variant: 'error', title: 'Winkelonboarding',
         message: normalizeErrorMessage(err?.message) || 'Het winkelresultaat kon niet worden bevestigd.',
       })
+      return false
     }
   }
 
-  async function chooseOnboardingStore(provider, checked) {
-    if (!storeOnboarding?.available || storeOnboardingBusy) return
-    const selected = checked
-      ? [...storeOnboarding.selected, provider]
-      : storeOnboarding.selected.filter(code => code !== provider)
+  // Checkbox clicks never call the backend, open a browser or navigate.
+  function chooseOnboardingStore(provider, checked) {
+    if (!storeOnboarding?.available || storeOnboardingBusy ||
+        ['success', 'empty'].includes(storeOnboarding.results?.[provider])) return
+    setPendingStoreSelection(previous => {
+      const current = previous ?? storeOnboarding.selected
+      return ['ah', 'jumbo', 'lidl'].filter(code =>
+        code === provider ? checked : current.includes(code))
+    })
+  }
+
+  async function skipCurrentOnboardingStore(provider) {
+    if (!onboardingMode || !storeOnboarding?.available || storeOnboardingBusy) return
     setStoreOnboardingBusy(true)
     try {
-      const saved = await saveStoreOnboardingSelection(selected)
-      setStoreOnboarding(saved)
+      const confirmed = await saveStoreOnboardingSelection(skipStoreForOnboarding(storeOnboarding.selected, provider))
+      setStoreOnboarding(confirmed)
+      setSetupHelpStore('')
+      const next = nextStoreForOnboarding(confirmed.selected, confirmed.results, provider)
+      if (next) {
+        lastStoreAttemptRef.current = provider
+        launchConfirmedOnboardingStore(confirmed)
+      } else {
+        setActiveProvider('')
+        if (confirmed.selected.every(code => ['success', 'empty'].includes(confirmed.results[code]))) {
+          onFinish?.()
+        }
+      }
     } catch (err) {
-      showFeedback({
-        variant: 'error', title: 'Winkelkeuze',
-        message: normalizeErrorMessage(err?.message) || 'De winkelkeuze kon niet worden bewaard.',
-      })
+      showFeedback({ variant: 'error', title: 'Winkel overslaan',
+        message: normalizeErrorMessage(err?.message) || 'De keuze kon niet worden opgeslagen.' })
     } finally {
       setStoreOnboardingBusy(false)
     }
   }
 
-  function startOnboardingStore() {
+  // A browser launch from a standalone PWA may require the normal browser.
+  // Resume only a selected, unfinished store, never a connection result.
+  useEffect(() => {
+    if (!onboardingMode || isLoading || !storeOnboarding?.available) return
+    const url = new URL(window.location.href)
+    const provider = url.searchParams.get('inhuis_setup')
+    if (!provider) return
+    url.searchParams.delete('inhuis_setup')
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
+    if (['jumbo', 'lidl'].includes(provider) && storeOnboarding.selected.includes(provider) &&
+        !['success', 'empty'].includes(storeOnboarding.results[provider])) {
+      setActiveProvider(provider)
+      setSetupHelpStore(provider)
+    }
+  }, [onboardingMode, isLoading, storeOnboarding])
+
+  // No second start screen after selecting stores. Do not cover a returned
+  // Jumbo import preview with the installation guide.
+  useEffect(() => {
+    if (onboardingMode && mobileRetailer && !nativeJumbo && (activeProvider === 'jumbo' || activeProvider === 'lidl') &&
+        !(activeProvider === 'jumbo' && jumboReturningRef.current)) {
+      setSetupHelpStore(activeProvider)
+    }
+  }, [activeProvider, onboardingMode, mobileRetailer, nativeJumbo])
+
+  function launchConfirmedOnboardingStore(confirmed, preparedPromise = null) {
     const code = nextStoreForOnboarding(
-      storeOnboarding?.selected, storeOnboarding?.results,
-      lastStoreAttemptRef.current,
+      confirmed.selected, confirmed.results, lastStoreAttemptRef.current, true,
     )
     if (!code) return
     lastStoreAttemptRef.current = code
     if (code === 'ah') {
-      // Directly start the existing OAuth route from the selection table.
-      // Never expose a second AH button or scroll into a settings pane.
       if (ahConnection?.connected === true) {
         void markOnboardingStoreResult('ah', 'success')
       } else {
@@ -351,12 +453,110 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       }
       return
     }
+    jumboReturningRef.current = false
+    if (mobileRetailer && !nativeJumbo) {
+      const value = universalBookmarklet
+      if (value && !hasMobileBookmarkletSetup(setupKeys[code])) {
+        setPreparedCopy(preparedPromise ? { value, promise: preparedPromise } : null)
+      } else setPreparedCopy(null)
+    }
+    setSetupHelpStore(nativeJumbo && ['jumbo', 'lidl'].includes(code) ? '' : code)
     setActiveProvider(code)
+  }
+
+  async function startOnboardingStore() {
+    if (!storeOnboarding?.available || storeOnboardingBusy) return
+    const selected = visibleOnboardingSelection
+    const code = nextStoreForOnboarding(selected, storeOnboarding.results, lastStoreAttemptRef.current, true)
+    if (!code) return
+    // Clipboard activation runs during the click, not after an awaited PUT.
+    // Copying only prepares a favorite: it never starts retailer login/import.
+    const preparedPromise = mobileRetailer && !nativeJumbo && ['jumbo', 'lidl'].includes(code) &&
+      !hasMobileBookmarkletSetup(setupKeys[code])
+      ? copyRetailerBookmarklet(universalBookmarklet) : null
+    setStoreOnboardingBusy(true)
+    try {
+      const confirmed = await saveStoreOnboardingSelection(selected)
+      setStoreOnboarding(confirmed)
+      setPendingStoreSelection(null)
+      launchConfirmedOnboardingStore(confirmed, preparedPromise)
+    } catch (err) {
+      // Retain every local checkbox for an explicit retry of the same selection.
+      showFeedback({
+        variant: 'error', title: 'Winkelkeuze',
+        message: normalizeErrorMessage(err?.message) || 'De winkelkeuze kon niet worden bewaard. Probeer opnieuw.',
+      })
+    } finally {
+      setStoreOnboardingBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeProvider !== 'jumbo' && nativeJumboTransportRef.current) {
+      nativeJumboTransportRef.current.close()
+      nativeJumboTransportRef.current = null
+      expectedJumboWindowRef.current = null
+    }
+    if (activeProvider !== 'lidl' && nativeLidlTransportRef.current) {
+      nativeLidlTransportRef.current.close()
+      nativeLidlTransportRef.current = null
+      expectedLidlWindowRef.current = null
+    }
+  }, [activeProvider])
+  useEffect(() => () => {
+    nativeJumboTransportRef.current?.close()
+    nativeJumboTransportRef.current = null
+    nativeLidlTransportRef.current?.close()
+    nativeLidlTransportRef.current = null
+  }, [])
+
+  // Open the retailer window synchronously within its user click. Jumbo's
+  // favorite will request a fresh window from THIS authenticated opener.
+  function openJumboFromInhuis() {
+    if (nativeJumboShell()) {
+      nativeJumboTransportRef.current?.close()
+      const transport = startNativeJumboTransport()
+      if (!transport) {
+        showFeedback({ variant: 'error', title: 'Jumbo openen',
+          message: 'De veilige native Jumbo-browser is niet beschikbaar.' })
+        return false
+      }
+      nativeJumboTransportRef.current = transport
+      expectedJumboWindowRef.current = transport
+      return true
+    }
+    if (!mobileRetailer && !onboardingMode) {
+      window.location.assign(JUMBO_ORDERS_URL)
+      return true
+    }
+    let tab = null
+    try { tab = window.open('about:blank', '_blank') } catch { /* blocked */ }
+    if (!tab) {
+      showFeedback({
+        variant: 'error', title: 'Jumbo openen',
+        message: 'De browser heeft het Jumbo-tabblad geblokkeerd. Sta pop-ups voor Inhuis toe en probeer opnieuw.',
+      })
+      return false
+    }
+    expectedJumboWindowRef.current = tab
+    try {
+      if (tab.document?.body) {
+        tab.document.title = 'Inhuis - Jumbo'
+        tab.document.body.textContent = 'Openen van Jumbo…'
+      }
+      tab.location.replace(JUMBO_ORDERS_URL)
+      return true
+    } catch {
+      expectedJumboWindowRef.current = null
+      try { tab.close() } catch { /* noop */ }
+      showFeedback({ variant: 'error', title: 'Jumbo openen', message: 'Jumbo kon niet veilig worden geopend.' })
+      return false
+    }
   }
 
   async function openLidlWithSavedPeriod() {
     if (lidlWindowSaving) return
-    if (!lidlWindow || !lidlFrom || (lidlTo && lidlFrom > lidlTo)) {
+    if (!lidlWindow || (!mobileRetailer && (!lidlFrom || (lidlTo && lidlFrom > lidlTo)))) {
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
         variant: 'error',
@@ -368,7 +568,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
     // Lidl's browser favorite reads the household-scoped, confirmed window.
     // Save changed dates before visiting Lidl; never run with a stale period.
-    const needsSave = lidlPeriodUnsaved
+    const needsSave = !onboardingMode && !mobileRetailer && lidlPeriodUnsaved
     if (needsSave && !lidlWindow.can_manage) {
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
       showFeedback({
@@ -377,6 +577,21 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         message: 'De gekozen periode kan niet worden opgeslagen. Vraag de beheerder van je huishouden om de Lidl-periode in te stellen.',
       })
       return
+    }
+
+    if (nativeJumboShell()) {
+      nativeLidlTransportRef.current?.close()
+      const transport = startNativeLidlTransport()
+      if (!transport) {
+        showFeedback({ variant: 'error', title: 'Lidl openen', message: 'De veilige native Lidl-browser is niet beschikbaar.' })
+        return false
+      }
+      nativeLidlTransportRef.current = transport
+      expectedLidlWindowRef.current = transport
+      setLidlPhase('waiting')
+      setLidlWebProgress('Lidl wordt geopend. Inhuis haalt de bonnen automatisch op.')
+      setSetupHelpStore('')
+      return true
     }
 
     // Open synchronously within the user click. An async window.open would
@@ -429,7 +644,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (lidlTab.closed) {
         throw new Error('Het Lidl-tabblad is gesloten voordat de periode gereed was.')
       }
+      expectedLidlWindowRef.current = lidlTab
       lidlTab.location.replace(LIDL_HISTORY_URL)
+      return true
     } catch (err) {
       if (!lidlTab.closed) lidlTab.close()
       if (onboardingMode) void markOnboardingStoreResult('lidl', 'failed')
@@ -515,12 +732,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     let cancelled = false
     async function confirmAhLogin() {
       try {
-        const confirmation = await loadAhStatus()
+        const attemptId = sessionStorage.getItem('inhuis-ah-attempt') || ''
+        const confirmation = await loadAhStatus(attemptId)
         if (cancelled) return
+        sessionStorage.removeItem('inhuis-ah-attempt')
         ahReturnOutcomeRef.current = null
-        if (confirmation?.connected === true) {
+        if (confirmation?.connected === true && (attemptId ? confirmation.attempt_status === 'connected' : ahResult === 'connected')) {
           if (onboardingMode) await markOnboardingStoreResult('ah', 'success')
           else setActiveProvider('ah')
+          if (onboardingMode) return
           showFeedback({
             variant: 'success',
             title: 'Albert Heijn gekoppeld',
@@ -549,10 +769,225 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     return () => { cancelled = true }
   }, [showFeedback])
 
+  // The permanent mobile favorite asks the exact Inhuis-opened Jumbo tab for
+  // a fresh household-scoped period before running the existing v14 importer.
+  useEffect(() => {
+    let cancelled = false
+    async function handleJumboHandshake(event) {
+      if (event.origin !== JUMBO_WEB_ORIGIN ||
+          !expectedJumboWindowRef.current ||
+          event.source !== expectedJumboWindowRef.current ||
+          activeProvider !== 'jumbo') return
+      const data = event.data
+      if (!data || data.type !== 'inhuis:jumbo-handshake' ||
+          data.bookmarklet_version !== JUMBO_BOOKMARKLET_VERSION ||
+          typeof data.request_id !== 'string' ||
+          !/^[A-Za-z0-9-]{15,72}$/.test(data.request_id)) return
+      if (onboardingMode && (!storeOnboarding?.selected?.includes('jumbo') ||
+          storeOnboarding?.results?.jumbo === 'success')) return
+      const sourceWindow = event.source
+      try {
+        const expectedContext = snapshotJumboImportContext(await fetchJson('/api/session'))
+        if (sourceWindow === nativeJumboTransportRef.current &&
+            (!sourceWindow?.expectedContext ||
+             expectedContext.userId !== sourceWindow.expectedContext.userId ||
+             expectedContext.householdId !== sourceWindow.expectedContext.householdId)) {
+          throw new Error('De actieve Inhuis-gebruiker of het huishouden is gewijzigd.')
+        }
+        const response = await fetchJson('/api/receipts/retailers/last-updated')
+        if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
+        if (!response?.dates || typeof response.dates !== 'object' ||
+            !Object.prototype.hasOwnProperty.call(response.dates, 'jumbo')) {
+          throw new Error('Jumbo-importperiode ontbreekt.')
+        }
+        const baseline = currentJumboImportPeriod(response.dates.jumbo)
+        const reserved = await fetchJson('/api/receipts/retailers/jumbo/history/begin', {
+          method: 'POST', headers: jumboImportContextHeaders(expectedContext), body: JSON.stringify({}),
+        })
+        if (cancelled || expectedJumboWindowRef.current !== sourceWindow) return
+        const period = jumboDateWindow(reserved?.from_date, reserved?.to_date)
+        if (!/^[0-9a-f-]{36}$/.test(String(reserved?.run_id || '')) ||
+            period.from_date > baseline.from_date || period.to_date !== baseline.to_date) {
+          throw new Error('Jumbo-herstelperiode kon niet veilig worden vastgelegd.')
+        }
+        // Only this trusted, already opened Jumbo tab receives the script.
+        // The import service retains an older unfinished start even if newer receipts
+        // have meanwhile appeared in Kassa.
+        const script = decodeURIComponent(buildJumboPocBookmarklet(
+          window.location.origin + window.location.pathname, period,
+          { automatic: true, nativeBridge: sourceWindow === nativeJumboTransportRef.current,
+            requestId: data.request_id, inhuisOrigin: window.location.origin },
+        ).slice('javascript:'.length))
+        jumboAutomaticRunRef.current = {
+          requestId: data.request_id, runId: reserved.run_id, source: sourceWindow,
+          expectedContext,
+          period, queued: [], seen: new Set(), index: 0, received: 0,
+          busy: false, failed: false, complete: false,
+        }
+        sourceWindow.postMessage({
+          type: 'inhuis:jumbo-script',
+          bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
+          request_id: data.request_id, script,
+        }, JUMBO_WEB_ORIGIN)
+        setJumboPhase('fetching')
+        setJumboPocProgress('Jumbo-bonnen ophalen van ' + period.from_date + ' tot ' + period.to_date + '…')
+      } catch (err) {
+        if (cancelled) return
+        try {
+          sourceWindow.postMessage({
+            type: 'inhuis:jumbo-script',
+            bookmarklet_version: JUMBO_BOOKMARKLET_VERSION,
+            request_id: data.request_id, script: '',
+          }, JUMBO_WEB_ORIGIN)
+        } catch { /* Tab may have closed. */ }
+        setJumboPhase('failed')
+        showFeedback({
+          variant: 'error', title: 'Jumbo-importperiode',
+          message: normalizeErrorMessage(err?.message) || 'Jumbo-importperiode kon niet veilig worden bepaald.',
+        })
+      }
+    }
+    const handleNative = event => {
+      const relay = event.detail
+      if (relay?.origin === JUMBO_WEB_ORIGIN) void handleJumboHandshake(relay)
+    }
+    window.addEventListener('message', handleJumboHandshake)
+    window.addEventListener('inhuis-jumbo-native-message', handleNative)
+    return () => {
+      cancelled = true
+      window.removeEventListener('message', handleJumboHandshake)
+      window.removeEventListener('inhuis-jumbo-native-message', handleNative)
+    }
+  }, [activeProvider, onboardingMode, storeOnboarding, showFeedback])
+
+  // Mobile Jumbo sends one existing <=10 receipt queue batch at a time.
+  // Never mark an entire date range complete based merely on a partial ACK.
+  useEffect(() => {
+    async function handleAutomaticJumbo(event) {
+      if (event.origin !== JUMBO_WEB_ORIGIN ||
+          event.source !== expectedJumboWindowRef.current || activeProvider !== 'jumbo') return
+      const data = event.data
+      if (!data || !['inhuis:jumbo-batch', 'inhuis:jumbo-complete', 'inhuis:jumbo-error'].includes(data.type)) return
+      const run = jumboAutomaticRunRef.current
+      if (!run || run.source !== event.source || run.requestId !== data.request_id ||
+          data.version !== JUMBO_BOOKMARKLET_VERSION || data.source_origin !== JUMBO_WEB_ORIGIN ||
+          run.failed || run.complete) return
+
+      const fail = async (message) => {
+        run.failed = true
+        setJumboPhase('failed')
+        setJumboPocProgress(message + ' De niet-afgeronde periode wordt bij de volgende poging opnieuw gecontroleerd.')
+        if (onboardingMode) await markOnboardingStoreResult('jumbo', 'failed')
+        showFeedback({ variant: 'error', title: 'Jumbo-historie onvolledig', message })
+      }
+      if (data.type === 'inhuis:jumbo-error') {
+        await fail(String(data.error || 'Jumbo-historie kon niet volledig worden gelezen.'))
+        return
+      }
+      if (data.type === 'inhuis:jumbo-batch') {
+        let response = { type: 'inhuis:jumbo-ack', version: JUMBO_BOOKMARKLET_VERSION,
+          request_id: run.requestId, index: data.index, ok: false }
+        try {
+          if (run.busy || data.index !== run.index || !Number.isInteger(data.total_batches) ||
+              data.total_batches < 1 || data.total_batches > 2000 ||
+              !Number.isInteger(data.total_receipts) ||
+              data.total_receipts < 1 || data.total_receipts > 2000 ||
+              !Array.isArray(data.details) || data.details.length < 1 || data.details.length > 10 ||
+              data.date_range?.from_date !== run.period.from_date ||
+              data.date_range?.to_date !== run.period.to_date) {
+            throw new Error('Jumbo-deelbatch komt niet overeen met de gecontroleerde import.')
+          }
+          const ids = data.details.map(item => String(item?.transactionId || ''))
+          if (ids.length !== new Set(ids).size || ids.some(id => run.seen.has(id))) {
+            throw new Error('Jumbo leverde hetzelfde bonnummer in meerdere deelperioden.')
+          }
+          run.busy = true
+          const boundHeaders = await verifyJumboImportContext(run.expectedContext, () => fetchJson('/api/session'))
+          const queue = await stageJumboBatch(
+            { ok: true, version: JUMBO_BOOKMARKLET_VERSION,
+              source_origin: JUMBO_WEB_ORIGIN, details: data.details },
+            async (envelopes) => fetchJson('/api/receipts/retailers/import-queue', {
+              method: 'POST', headers: boundHeaders, body: JSON.stringify(envelopes),
+            }),
+            buildJumboImportEnvelope,
+          )
+          queue.forEach(item => run.queued.push(item.queue_id))
+          ids.forEach(id => run.seen.add(id))
+          run.received += queue.length
+          run.index += 1
+          setJumboPhase('queued')
+          setJumboProgress({ processed: run.received, total: data.total_receipts })
+          setJumboPocProgress('Jumbo: ' + run.received + ' van ' + data.total_receipts +
+            ' bonnen veilig ontvangen, deelperiode ' + run.index + ' van ' + data.total_batches +
+            '. Kassa verwerkt de bonnen afzonderlijk.')
+          response = { ...response, ok: true }
+        } catch (error) {
+          const message = normalizeErrorMessage(error?.message) || 'Jumbo-deelimport mislukt.'
+          response = { ...response, error: message }
+          await fail(message)
+        } finally {
+          run.busy = false
+          try { event.source?.postMessage(response, JUMBO_WEB_ORIGIN) }
+          catch { /* Missing ACK leaves the pending import range intact. */ }
+        }
+        return
+      }
+      if (data.type === 'inhuis:jumbo-complete') {
+        if (run.busy || data.index !== undefined ||
+            data.date_range?.from_date !== run.period.from_date ||
+            data.date_range?.to_date !== run.period.to_date ||
+            data.count !== run.received || data.batches !== run.index) {
+          await fail('Jumbo heeft niet alle deelperioden aantoonbaar afgerond.')
+          return
+        }
+        run.complete = true
+        try {
+          const boundHeaders = await verifyJumboImportContext(run.expectedContext, () => fetchJson('/api/session'))
+          const result = await fetchJson('/api/receipts/retailers/jumbo/history/complete', {
+            method: 'POST', headers: boundHeaders,
+            body: JSON.stringify({ run_id: run.runId, queue_ids: run.queued }),
+          })
+          if (result?.scan_complete !== true || result.staged_receipts !== run.received) {
+            throw new Error('Jumbo-afronding werd niet door Inhuis bevestigd.')
+          }
+          if (run.source === nativeJumboTransportRef.current) {
+            nativeJumboTransportRef.current.close()
+            nativeJumboTransportRef.current = null
+            expectedJumboWindowRef.current = null
+          }
+          const message = 'Jumbo: ' + run.received +
+            ' bonnen veilig ontvangen uit de volledige historie. Verwerking in Kassa loopt afzonderlijk.' +
+            (result.queue_completed ? '' : ' De herstelperiode blijft bewaard totdat de bonnen zijn verwerkt.')
+          setJumboPhase(run.received ? 'queued' : 'completed')
+          setJumboPocProgress(message)
+          if (onboardingMode) {
+            await markOnboardingStoreResult('jumbo', run.queued.length ? 'success' : 'empty',
+              run.queued[0] || null, run.runId)
+          }
+          await refreshHistoricalProgress()
+          showFeedback({ variant: 'success', title: 'Jumbo-historie ontvangen', message })
+        } catch (error) {
+          await fail(normalizeErrorMessage(error?.message) || 'Jumbo-import kon niet veilig worden afgerond.')
+        }
+      }
+    }
+    const handleNative = event => {
+      const relay = event.detail
+      if (relay?.origin === JUMBO_WEB_ORIGIN) void handleAutomaticJumbo(relay)
+    }
+    window.addEventListener('message', handleAutomaticJumbo)
+    window.addEventListener('inhuis-jumbo-native-message', handleNative)
+    return () => {
+      window.removeEventListener('message', handleAutomaticJumbo)
+      window.removeEventListener('inhuis-jumbo-native-message', handleNative)
+    }
+  }, [activeProvider, onboardingMode, showFeedback])
+
   useEffect(() => {
     let lidlCounts = { queued: 0, failed: 0 }
     let cancelled = false
     let lidlSourceWindow = null
+    let lidlOnboardingRun = null
 
     async function handleMessage(event) {
       if (cancelled || event.origin !== LIDL_WEB_ORIGIN) return
@@ -560,10 +995,13 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        if ((onboardingMode || nativeJumboShell()) && (!expectedLidlWindowRef.current || event.source !== expectedLidlWindowRef.current)) return
         lidlOnboardingQueueIdRef.current = null
+        setSetupHelpStore('')
         setActiveProvider('lidl')
         lidlCounts = { queued: 0, failed: 0 }
         setLidlCountsView(null)
+        setLidlTransferProgress(null)
         setLidlPhase('waiting')
         if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
           setLidlPhase('failed')
@@ -582,13 +1020,32 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlPhase('fetching')
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         try {
-          const period = await fetchJson('/api/receipts/retailers/lidl/import-window')
-          if (cancelled) return
+          const nativeLidlSource = event.source === nativeLidlTransportRef.current
+          const nativeExpected = nativeLidlSource ? event.source.expectedContext : null
+          const boundHeaders = nativeExpected
+            ? await verifyJumboImportContext(nativeExpected, () => fetchJson('/api/session'))
+            : undefined
+          const period = (onboardingMode || nativeLidlSource)
+            ? await fetchJson('/api/receipts/retailers/lidl/history/begin', {
+              method: 'POST', headers: boundHeaders, body: JSON.stringify({}),
+            })
+            : await fetchJson('/api/receipts/retailers/lidl/import-window' +
+              (mobileRetailer ? '?automatic=true' : ''))
+          if (cancelled || lidlSourceWindow !== event.source) return
+          if (onboardingMode || nativeLidlSource) {
+            if (!/^[0-9a-f-]{36}$/.test(String(period?.run_id || '')) ||
+                !/^20\d{2}-\d{2}-\d{2}$/.test(period?.from_date || '') ||
+                !/^20\d{2}-\d{2}-\d{2}$/.test(period?.to_date || '')) {
+              throw new Error('Lidl-importperiode kon niet veilig worden vastgelegd.')
+            }
+            lidlOnboardingRun = { id: period.run_id, period, queueIds: [], nativeExpected }
+          }
           setLidlWindow(period)
           setLidlWebProgress('Lidl-bonnen zoeken van ' + period.from_date + ' tot ' + period.to_date + '…')
           event.source?.postMessage({
             type: 'inhuis:lidl-script',
-            script: buildLidlWebPageScript(window.location.origin, period),
+            script: buildLidlWebPageScript(window.location.origin, period,
+              event.source === nativeLidlTransportRef.current ? event.source.requestId : ''),
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
           setLidlPhase('failed')
@@ -601,9 +1058,31 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
 
       if (!lidlSourceWindow || event.source !== lidlSourceWindow) return
 
+      if (data.type === 'inhuis:lidl-progress' && data.stage === 'known-receipt-check') {
+        if (!lidlOnboardingRun || event.source !== nativeLidlTransportRef.current) return
+        const receiptId = String(data.receipt_id || '')
+        if (!/^\d{8,40}$/.test(receiptId)) return
+        const known = lidlOnboardingRun.period.known_receipts || {}
+        const queueId = Object.hasOwn(known, receiptId) ? known[receiptId] : null
+        const reusable = typeof queueId === 'string' && /^[0-9a-f-]{36}$/i.test(queueId) &&
+          !lidlOnboardingRun.queueIds.includes(queueId)
+        if (reusable) {
+          lidlOnboardingRun.queueIds.push(queueId)
+          lidlOnboardingQueueIdRef.current = queueId
+          lidlCounts.queued += 1
+          setLidlCountsView({ ...lidlCounts })
+        }
+        event.source.postMessage({ type: 'inhuis:lidl-ack', receipt_id: receiptId,
+          ok: true, known: Boolean(reusable) }, LIDL_WEB_ORIGIN)
+        return
+      }
+
       if (data.type === 'inhuis:lidl-progress') {
         setLidlPhase('fetching')
         setLidlWebProgress(String(data.message || 'Lidl-bonnen verwerken…'))
+        if (Number.isSafeInteger(data.total) && data.total >= 0 && Number.isSafeInteger(data.processed) && data.processed >= 0 && data.processed <= data.total) {
+          setLidlTransferProgress({ processed: data.processed, total: data.total })
+        }
         return
       }
 
@@ -628,8 +1107,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         }
 
         try {
+          const boundHeaders = lidlOnboardingRun?.nativeExpected
+            ? await verifyJumboImportContext(lidlOnboardingRun.nativeExpected, () => fetchJson('/api/session'))
+            : undefined
           const result = await fetchJson('/api/receipts/retailers/import-queue', {
-            method: 'POST',
+            method: 'POST', headers: boundHeaders,
             body: JSON.stringify([{
               schema_version: '1.0',
               provider: 'lidl',
@@ -655,6 +1137,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           }
           lidlCounts.queued += 1
           lidlOnboardingQueueIdRef.current = result.items[0].queue_id
+          if (lidlOnboardingRun) {
+            lidlOnboardingRun.queueIds.push(result.items[0].queue_id)
+          }
           setLidlCountsView({ ...lidlCounts })
           setLidlWebProgress('Lidl: ' + lidlCounts.queued
             + ' bonnen veilig ontvangen; verwerking in Kassa volgt automatisch.')
@@ -685,7 +1170,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       if (data.type === 'inhuis:lidl-complete') {
         // The old import-window checkpoint means *processed*, not merely queued.
         // Do not advance it until the worker has confirmed completion.
-        if (data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
+        if (!onboardingMode && event.source !== nativeLidlTransportRef.current &&
+            data.mode === 'history' && lidlCounts.failed === 0 && lidlCounts.queued === 0) {
           try {
             const updated = await fetchJson('/api/receipts/retailers/lidl/complete', {
               method: 'POST',
@@ -712,11 +1198,47 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         setLidlCountsView({ ...lidlCounts })
         void refreshHistoricalProgress()
         setLidlPhase(lidlCounts.failed ? 'failed' : lidlCounts.queued ? 'queued' : 'completed')
-        if (onboardingMode) {
-          if (lidlCounts.failed) {
+        if (onboardingMode || event.source === nativeLidlTransportRef.current) {
+          try {
+            if (lidlCounts.failed || !lidlOnboardingRun ||
+                data.mode !== 'history' || data.count !== lidlCounts.queued ||
+                data.from_date !== lidlOnboardingRun.period.from_date ||
+                data.to_date !== lidlOnboardingRun.period.to_date ||
+                lidlOnboardingRun.queueIds.length !== lidlCounts.queued) {
+              throw new Error('Lidl heeft niet alle geselecteerde kassabonnen aantoonbaar afgerond.')
+            }
+            const boundHeaders = lidlOnboardingRun.nativeExpected
+              ? await verifyJumboImportContext(lidlOnboardingRun.nativeExpected, () => fetchJson('/api/session'))
+              : undefined
+            const result = await fetchJson('/api/receipts/retailers/lidl/history/complete', {
+              method: 'POST', headers: boundHeaders,
+              body: JSON.stringify({
+                run_id: lidlOnboardingRun.id,
+                queue_ids: lidlOnboardingRun.queueIds,
+                from_date: lidlOnboardingRun.period.from_date,
+                to_date: lidlOnboardingRun.period.to_date,
+              }),
+            })
+            if (result?.scan_complete !== true || result.staged_receipts !== lidlCounts.queued) {
+              throw new Error('Lidl-voltooiing is niet door Inhuis bevestigd.')
+            }
+            const finishNative = () => {
+              if (!cancelled && event.source === nativeLidlTransportRef.current) {
+                event.source.postMessage({ type: 'inhuis:lidl-finish' }, LIDL_WEB_ORIGIN)
+              }
+            }
+            if (onboardingMode) {
+              const saved = await markOnboardingStoreResult('lidl', lidlCounts.queued ? 'success' : 'empty',
+                lidlOnboardingQueueIdRef.current, lidlOnboardingRun.id, finishNative)
+              if (!saved) throw new Error('Lidl-onboarding is niet bevestigd.')
+            } else finishNative()
+          } catch (error) {
+            lidlCounts.failed += 1
+            setLidlPhase('failed')
             await markOnboardingStoreResult('lidl', 'failed')
-          } else if (lidlCounts.queued > 0 && lidlOnboardingQueueIdRef.current) {
-            await markOnboardingStoreResult('lidl', 'success', lidlOnboardingQueueIdRef.current)
+            showFeedback({ variant: 'error', title: 'Lidl-import onvolledig',
+              message: normalizeErrorMessage(error?.message) || 'Controleer de Lidl-geschiedenis opnieuw.' })
+            return
           }
         }
         const summary = 'Lidl: ' + lidlCounts.queued
@@ -745,10 +1267,15 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       }
     }
 
+    const handleNative = event => {
+      if (event.detail?.origin === LIDL_WEB_ORIGIN) void handleMessage(event.detail)
+    }
     window.addEventListener('message', handleMessage)
+    window.addEventListener('inhuis-lidl-native-message', handleNative)
     return () => {
       cancelled = true
       window.removeEventListener('message', handleMessage)
+      window.removeEventListener('inhuis-lidl-native-message', handleNative)
     }
   }, [showFeedback])
 
@@ -756,6 +1283,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   useEffect(() => {
     const hash = String(window.location.hash || '')
     if (!hash.startsWith(JUMBO_POC_FRAGMENT_PREFIX)) return
+    jumboReturningRef.current = true
+    setSetupHelpStore('')
     setActiveProvider('jumbo')
 
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
@@ -813,7 +1342,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
   }, [showFeedback])
 
   async function confirmJumboImport() {
-    if (!jumboImportCandidate || jumboImportBusy) return
+    // Desktop onboarding uses the current automatic run; old URL fragments
+    // are not authorized to stage an unbound receipt or finish onboarding.
+    if (onboardingMode || !jumboImportCandidate || jumboImportBusy) return
     setJumboImportBusy(true)
     setJumboPhase('validating')
     setJumboProgress(null)
@@ -857,12 +1388,28 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     setAhBusy(true)
     try {
       const returnTo = window.location.origin + (onboardingMode ? '/onboarding/winkels' : '/instellingen/winkelkoppelingen')
+      const nativeAh = Boolean(nativeJumboShell())
       const data = await fetchJson(
-        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo),
+        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo) +
+          (onboardingMode ? '&onboarding=true' : ''),
       )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
+      const login = new URL(data.login_url)
+      if (login.username || login.password || login.search || login.hash ||
+          !/^\/ah-oauth\/launch\/[A-Za-z0-9_-]+$/.test(login.pathname) ||
+          (nativeAh ? !validNativeAhLoginUrl(login.href, window.location.origin) :
+            (window.location.protocol === 'https:' && login.protocol !== 'https:')) ||
+          !['https:', 'http:'].includes(login.protocol)) {
+        throw new Error('De AH-aanmeldroute is niet veilig bereikbaar via HTTPS. Controleer de beveiligde AH-koppeling.')
+      }
+      sessionStorage.removeItem('inhuis-ah-attempt')
+      if (/^[0-9a-f-]{36}$/i.test(String(data.attempt_id || ''))) sessionStorage.setItem('inhuis-ah-attempt', data.attempt_id)
       ahLoginNavigatingRef.current = true
-      window.location.assign(data.login_url)
+      if (nativeAh) {
+        if (!openNativeAhLogin(data.login_url)) {
+          throw new Error('De beveiligde Android-AH-browser kon niet worden geopend.')
+        }
+      } else window.location.assign(data.login_url)
     } catch (err) {
       ahLoginNavigatingRef.current = false
       setAhBusy(false)
@@ -954,6 +1501,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
       })
       await loadAhStatus()
       await refreshHistoricalProgress()
+      return failed === 0
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.'
       setAhPhase('failed')
@@ -965,6 +1513,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         title: 'AH-bonnen ophalen',
         message,
       })
+      return false
     } finally {
       setAhBusy(false)
     }
@@ -1062,8 +1611,34 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
     }
   }
 
-  function finishGuidance() {
-    onFinish?.()
+  async function finishGuidance() {
+    if (!onboardingMode || !storeOnboarding?.available) {
+      onFinish?.()
+      return
+    }
+    if (storeOnboardingBusy) return
+    // "Later koppelen" must persist an intentional opt-out: an unfinished
+    // selection must not force the user back to onboarding at next login.
+    // Previously confirmed stores stay intact; settings can reconnect others.
+    const completed = storeOnboarding.selected.filter(code =>
+      ['success', 'empty'].includes(storeOnboarding.results?.[code]))
+    if (completed.length === storeOnboarding.selected.length) {
+      onFinish?.()
+      return
+    }
+    setStoreOnboardingBusy(true)
+    try {
+      const confirmed = await saveStoreOnboardingSelection(completed)
+      setStoreOnboarding(confirmed)
+      setPendingStoreSelection(null)
+      onFinish?.()
+    } catch (error) {
+      showFeedback({ variant: 'error', title: 'Winkels later koppelen',
+        message: normalizeErrorMessage(error?.message) ||
+          'De keuze kon niet worden opgeslagen. Probeer opnieuw.' })
+    } finally {
+      setStoreOnboardingBusy(false)
+    }
   }
 
   return (
@@ -1076,7 +1651,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         maxWidth: '760px',
         minWidth: 0,
         margin: '0 auto',
-      }} data-testid="store-connections-page">
+      }} data-testid="store-connections-page" data-onboarding={onboardingMode ? "true" : undefined}>
         {!onboardingMode ? (
           <Card>
             <details data-testid="store-connections-help" open={connectionHelpOpen}
@@ -1085,7 +1660,7 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               <div style={{ display: 'grid', rowGap: '8px', marginTop: '10px' }}>
                 <p style={{ margin: 0 }}>1. Kies een winkel in het overzicht. Albert Heijn vraagt om een
                   aanmelding bij Mijn AH; daarna keer je terug naar Winkelkoppelingen.
-                  Lidl en Jumbo gebruiken een browserfavoriet, dat niet op iedere telefoon werkt.</p>
+                  Lidl en Jumbo gebruiken op je telefoon een apart in te stellen bladwijzerscript. Volg de mobiele stappen om de bonnen daadwerkelijk op te halen.</p>
                 <p style={{ margin: 0 }}>2. Controleer of AH gekoppeld is en tik op Nu synchroniseren als je
                   bonnen wilt ophalen. Geen gevonden bonnen kan correct zijn. Historische aankopen
                   toont opgeslagen bonrecords en verwerkingen, niet het totaal bij de winkel.</p>
@@ -1093,9 +1668,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
                   Boodschappen, Kassa en Voorraad vind je via de actiebalk;
                   onder Meer staan andere functies en Instellingen.</p>
                 <div>
-                  <Button type="button" variant="secondary" onClick={() => navigate('/home?wegwijs=1')}
+                  <Button type="button" variant="secondary" onClick={() => navigate('/home')}
                     data-testid="store-connections-guide-dashboard">
-                    Bekijk dashboard met uitleg
+                    Bekijk dashboard
                   </Button>
                 </div>
               </div>
@@ -1105,9 +1680,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
         {onboardingMode ? (
           storeOnboarding?.available ? (
             <StoreOnboardingSelection
-              selected={storeOnboarding.selected}
+              selected={visibleOnboardingSelection}
               results={storeOnboarding.results}
-              busy={storeOnboardingBusy || isLoading || ahBusy || jumboImportBusy || lidlWindowSaving}
+              busy={storeOnboardingBusy || isLoading || ahBusy || jumboImportBusy || lidlWindowSaving || (nativeJumbo && ['waiting', 'fetching', 'importing'].includes(lidlPhase))}
               onSelect={chooseOnboardingStore}
               onStart={startOnboardingStore}
               onRetry={startOnboardingStore}
@@ -1121,6 +1696,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               <Button type="button" variant="secondary" onClick={finishGuidance}>Naar dashboard</Button>
             </Card>
           )
+        ) : null}
+        {onboardingMode && activeProvider === 'lidl' && lidlPhase ? (
+          <Card><ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
+            processed={lidlTransferProgress?.processed} total={lidlTransferProgress?.total}
+            counts={lidlCountsView} counterLabel="ontvangen" testId="lidl-onboarding-progress" /></Card>
         ) : null}
         {!onboardingMode ? <Card>
           <div data-testid="receipt-connections-overview" style={{ display: 'grid', gap: '12px', minWidth: 0 }}>
@@ -1155,7 +1735,8 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             ) : null}
             {activeProvider === 'lidl' ? (
               <ImportProgress store="Lidl" phase={lidlPhase} message={lidlWebProgress}
-                counts={lidlCountsView} testId="lidl-web-progress" />
+                processed={lidlTransferProgress?.processed} total={lidlTransferProgress?.total}
+                counts={lidlCountsView} counterLabel="ontvangen" testId="lidl-web-progress" />
             ) : null}
           </div>
         </Card> : null}
@@ -1214,6 +1795,9 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Jumbo"
             testId="jumbo-receipt-poc"
+            nativeAutomatic={nativeJumbo}
+            showSetupHelp={!nativeJumbo}
+            hideDates={mobileRetailer || onboardingMode}
             isMobileViewport={isMobileViewport}
             from={jumboFrom}
             to={jumboTo}
@@ -1229,33 +1813,41 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
               setJumboImportCandidate(null)
               setJumboPocResult(null)
             }}
-            openHref={JUMBO_ORDERS_URL}
+            openHref={mobileRetailer || onboardingMode ? undefined : JUMBO_ORDERS_URL}
             openTestId="jumbo-poc-open"
             onOpen={() => {
               setJumboPhase('waiting')
               setJumboProgress(null)
-              setJumboPocProgress('Open op Jumbo de favoriet om de kassabonnen op te halen.')
+              setJumboPocProgress(nativeJumbo ? 'Jumbo wordt geopend. Inhuis haalt de bonnen daarna automatisch op.' : 'Open op Jumbo de favoriet om de kassabonnen op te halen.')
               setJumboPocResult(null)
               setJumboImportCandidate(null)
+              if (mobileRetailer || onboardingMode) openJumboFromInhuis()
             }}
             helpTestId="jumbo-help-open"
-            onHelp={() => setSetupHelpStore('jumbo')}
-            periodError={!jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
-            setupHelp={
+            onHelp={nativeJumbo ? undefined : () => setSetupHelpStore('jumbo')}
+            periodError={!mobileRetailer && !onboardingMode && !jumboPeriodValid ? 'Kies een geldige begin- en einddatum voor Jumbo.' : ''}
+            setupHelp={!nativeJumbo ? (
               <RetailerBookmarkletHelp
                 provider="jumbo"
                 retailer="Jumbo"
                 open={setupHelpStore === 'jumbo'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={jumboPocBookmarklet}
-                valid={jumboPeriodValid}
+                onboardingMode={onboardingMode}
+                universalBookmarklet={universalBookmarklet}
+                setupKeys={setupKeys}
+                preparedCopy={preparedCopy}
+                browserUrl={setupBrowserUrl}
+                valid={mobileRetailer || onboardingMode || jumboPeriodValid}
+                onOpenStore={() => { if (openJumboFromInhuis()) setSetupHelpStore('') }}
+                onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('jumbo') } : null}
                 instructions={<>Gebruik daarna <strong>Open mijn Jumbo</strong> en klik op de favoriet
-                  wanneer je op de website van Jumbo bent. Kies je later een andere importperiode,
-                  sleep de favoriet dan opnieuw naar de favorietenbalk.</>}
+                  wanneer je op de website van Jumbo bent. Op desktop hoort bij een aangepaste periode
+                  nog de bijbehorende Jumbo-favoriet.</>}
               />
-            }
+            ) : null}
           >
-            {jumboPocResult ? (
+            {!onboardingMode && jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', rowGap: '10px' }}>
                 {jumboPocResult.details.length ? (
                   <>
@@ -1286,8 +1878,11 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
           <RetailerReceiptPanel
             retailer="Lidl"
             testId="lidl-digital-receipts"
+            nativeAutomatic={nativeJumbo}
+            showSetupHelp={!nativeJumbo}
             dateRangeTestId="lidl-import-window"
             isMobileViewport={isMobileViewport}
+            hideDates={mobileRetailer || onboardingMode}
             from={lidlFrom}
             to={lidlTo || lidlWindow?.to_date || ''}
             fromTestId="lidl-from-date"
@@ -1300,18 +1895,25 @@ export default function StoreConnectionsPage({ onboardingMode = false, onFinish 
             openDisabled={lidlWindowSaving || !lidlWindow}
             openBusy={lidlWindowSaving}
             helpTestId="lidl-help-open"
-            onHelp={() => setSetupHelpStore('lidl')}
-            setupHelp={
+            onHelp={nativeJumbo ? undefined : () => setSetupHelpStore('lidl')}
+            setupHelp={!nativeJumbo ? (
               <RetailerBookmarkletHelp
                 provider="lidl"
                 retailer="Lidl"
                 open={setupHelpStore === 'lidl'}
                 onClose={() => setSetupHelpStore('')}
                 bookmarklet={lidlBookmarklet}
+                onboardingMode={onboardingMode}
+                universalBookmarklet={universalBookmarklet}
+                setupKeys={setupKeys}
+                preparedCopy={preparedCopy}
+                browserUrl={setupBrowserUrl}
+                onOpenStore={() => { void openLidlWithSavedPeriod().then(opened => { if (opened) setSetupHelpStore('') }) }}
+                onSkip={onboardingMode ? () => { void skipCurrentOnboardingStore('lidl') } : null}
                 instructions={<>Open daarna <strong>mijn Lidl</strong>, meld je aan bij Lidl en klik op de
                   opgeslagen favoriet. Laat het Inhuis-tabblad open terwijl Lidl de bonnen doorgeeft.</>}
               />
-            }
+            ) : null}
           />
         </Card>
         ) : null}

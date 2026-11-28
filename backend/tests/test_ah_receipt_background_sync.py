@@ -235,3 +235,12 @@ def test_missing_or_unreadable_ah_session_is_preimport(monkeypatch, tmp_path):
             None, tmp_path, household_id="household-a", client=object(),
             classify_preimport_failures=True,
         )
+
+
+def test_immediate_onboarding_sync_is_household_scoped(monkeypatch, tmp_path):
+    engine = FakeEngine([{"household_id": "household-a", "last_sync_at": None},
+                         {"household_id": "household-b", "last_sync_at": None}])
+    calls = []
+    monkeypatch.setattr(worker, "_admitted_ah_sync", lambda _e, _r, owner: calls.append(owner))
+    assert worker.sync_due_ah_households(engine, tmp_path, only_household_id="household-b")["completed"] == 1
+    assert calls == ["household-b"]

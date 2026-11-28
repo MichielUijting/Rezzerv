@@ -5,7 +5,8 @@ export const LIDL_HISTORY_URL =
   'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1'
 
 function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
-  const target = window.opener
+  const nativeRequestId = String(DATE_RANGE?.native_request_id || '')
+  const target = nativeRequestId ? window.__inhuisNativeLidlOpener : window.opener
   if (!target) {
     alert('De bestaande Inhuis-sessie is niet meer beschikbaar. Open Lidl opnieuw via Inhuis > Winkelkoppelingen.')
     return
@@ -28,20 +29,24 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
 
   function waitForAck(receiptId, timeoutMs = 30000) {
     return new Promise((resolve, reject) => {
+      const eventName = nativeRequestId ? 'inhuis-native-lidl-ack' : 'message'
       const timer = setTimeout(() => {
-        window.removeEventListener('message', onMessage)
+        window.removeEventListener(eventName, onMessage)
         reject(new Error('Inhuis reageert niet op bon ' + receiptId))
       }, timeoutMs)
       function onMessage(event) {
-        if (event.origin !== INHUIS_ORIGIN || event.source !== target) return
-        if (!event.data || event.data.type !== 'inhuis:lidl-ack') return
-        if (String(event.data.receipt_id || '') !== String(receiptId)) return
+        if (nativeRequestId) {
+          if (event.detail?.request_id !== nativeRequestId) return
+        } else if (event.origin !== INHUIS_ORIGIN || event.source !== target) return
+        const data = nativeRequestId ? event.detail : event.data
+        if (!data || data.type !== 'inhuis:lidl-ack') return
+        if (String(data.receipt_id || '') !== String(receiptId)) return
         clearTimeout(timer)
-        window.removeEventListener('message', onMessage)
-        if (event.data.ok) resolve(event.data)
-        else reject(new Error(event.data.error || 'Import in Inhuis is mislukt'))
+        window.removeEventListener(eventName, onMessage)
+        if (data.ok) resolve(data)
+        else reject(new Error(data.error || 'Import in Inhuis is mislukt'))
       }
-      window.addEventListener('message', onMessage)
+      window.addEventListener(eventName, onMessage)
     })
   }
 
@@ -355,7 +360,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     }
   }
 
-  async function loadDetail(url, fallback) {
+  async function loadDetail(url, fallback, timeoutMs = 45000) {
     const receiptId = receiptIdFromUrl(url)
     if (!receiptId) throw new Error('Lidl-bon heeft geen bonnummer')
     const iframe = document.createElement('iframe')
@@ -364,16 +369,20 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
     try {
       iframe.src = url
       const started = Date.now()
-      while (Date.now() - started < 45000) {
+      let diagnostic = 'bondetail ontbreekt'
+      while (Date.now() - started < timeoutMs) {
         await sleep(250)
         try {
           const doc = iframe.contentDocument
           if (doc && doc.querySelector('[data-testid="ticket-' + CSS.escape(receiptId) + '"] pre')) {
-            return parseReceipt(doc, receiptId, fallback)
-          }
-        } catch {}
+            try { return parseReceipt(doc, receiptId, fallback) }
+            catch { diagnostic = 'bondetail aanwezig maar uitlezen mislukt' }
+          } else if (!doc) diagnostic = 'browserframe niet toegankelijk'
+          else if (doc.readyState !== 'complete') diagnostic = 'pagina nog niet geladen'
+          else diagnostic = 'pagina geladen zonder verwacht bondetail'
+        } catch { diagnostic = 'browserframe uitlezen mislukt' }
       }
-      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen')
+      throw new Error('Lidl-bon ' + receiptId + ' kon niet worden geladen (' + diagnostic + ', ' + Math.round((Date.now() - started) / 1000) + ' seconden)')
     } finally {
       iframe.remove()
     }
@@ -394,26 +403,44 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
 
       const iframe = document.createElement('iframe')
       iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0;opacity:0'
-      document.body.appendChild(iframe)
+      const useCurrentPage = pageNumber === 1 && Number(new URL(location.href).searchParams.get('page') || '1') === 1
+      if (!useCurrentPage) document.body.appendChild(iframe)
+      post({ type: 'inhuis:lidl-progress', message: 'Lidl-historiepagina ' + pageNumber + ' controleren…' })
       let anchors = []
+      let explicitEnd = false
       try {
-        iframe.src = url.href
+        if (!useCurrentPage) iframe.src = url.href
         const started = Date.now()
         while (Date.now() - started < 30000) {
           await sleep(250)
           try {
-            const doc = iframe.contentDocument
+            const doc = useCurrentPage ? document : iframe.contentDocument
             anchors = doc ? [...doc.querySelectorAll('a[href*="/mre/purchase-detail"]')] : []
             if (anchors.length) break
+            // Explicit retailer empty-state, not an unloaded or unauthenticated page.
+            const empty = doc?.querySelector('[data-testid="purchase-history-empty"], [data-testid="purchase-history-no-results"], [data-testid="history-empty-state"]')
+            const main = doc?.querySelector('main')
+            const explicitEmpty = String(empty?.textContent || main?.textContent || '').trim()
+            const historyView = doc?.querySelector('[data-testid="purchase-history-page"]') ||
+              /(?:digitale\s*)?kassabonnen|aankoopgeschiedenis|purchase\s*history/i.test(
+                String(doc?.querySelector('h1,h2')?.textContent || ''))
+            const emptyMessage = /(?:geen|no|keine).{0,80}(?:kassabonnen?|bonnen?|receipts?|purchases?|aankopen?|aankoopgeschiedenis)/i.test(explicitEmpty)
+            const hasLogin = Boolean(doc?.querySelector('input[type="password"], form[action*="login"]'))
+            if (doc?.readyState === 'complete' && historyView && emptyMessage &&
+                (empty || main) && !hasLogin) {
+              if (pageNumber === 1) return []
+              explicitEnd = true
+              break
+            }
           } catch {}
         }
 
         if (!anchors.length) {
-          if (pageNumber === 1) throw new Error('Lidl-historie kon niet worden geladen; er is geen import afgerond.')
+          if (!explicitEnd) throw new Error('Lidl-historie kon niet volledig worden geladen; er is geen import afgerond.')
           break
         }
         let added = 0
-        const pageDays = anchors.map(anchor => historyRowDay(anchor, iframe.contentDocument))
+        const pageDays = anchors.map(anchor => historyRowDay(anchor, useCurrentPage ? document : iframe.contentDocument))
         const fullyDated = pageDays.every(Boolean)
         const descending = fullyDated && pageDays.every((day, index) => index === 0 || pageDays[index - 1] >= day)
         const pageConsistent = descending && (!previousOldestDay || previousOldestDay >= pageDays[0])
@@ -465,35 +492,72 @@ function lidlWebPageRunner(INHUIS_ORIGIN, DATE_RANGE) {
       if (!entries.length) {
         post({ type: 'inhuis:lidl-complete', count: 0, mode: 'history',
           last_imported_date: null, from_date: fromDate, to_date: toDate })
+        target.focus()
         return
       }
 
       const isHistory = location.pathname.includes('/mre/purchase-history')
-      post({ type: 'inhuis:lidl-progress', message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
+      post({ type: 'inhuis:lidl-progress', stage: 'receipts', processed: 0, total: entries.length, message: entries.length + ' bonnen binnen de ingestelde periode gevonden; details worden verwerkt…' })
       let lastImportedDay = ''
       let imported = 0
-      for (const entry of entries) {
-        post({
-          type: 'inhuis:lidl-progress',
-          message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
-        })
-        const receipt = await loadDetail(entry.href, entry)
-        const matchesWindow = withinWindow(receipt.dateTime)
-        if (isHistory && matchesWindow !== true) {
-          if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
-          continue
+      // Never reload a confirmed receipt during this scan. Defer unreadable
+      // details, but do not declare the scan complete while any remain.
+      let pending = entries.slice()
+      let attemptSequence = 0
+      for (let attempt = 0; attempt <= (nativeRequestId ? 3 : 0) && pending.length; attempt++) {
+        const deferred = []
+        for (const entry of pending) {
+          post({
+            type: 'inhuis:lidl-progress', stage: 'receipt-attempt',
+            attempt_sequence: ++attemptSequence,
+            message: 'Lidl-bon ' + (imported + 1) + ' van ' + entries.length + ' lezen…',
+          })
+          if (nativeRequestId) {
+            const knownAck = waitForAck(entry.id, 30000)
+            post({ type: 'inhuis:lidl-progress', stage: 'known-receipt-check', receipt_id: entry.id })
+            if ((await knownAck).known === true) {
+              imported += 1
+              if (entry.date > lastImportedDay) lastImportedDay = entry.date
+              post({ type: 'inhuis:lidl-progress', processed: imported, total: entries.length,
+                message: imported + ' van ' + entries.length + ' bonnen ontvangen (eerder veilig opgeslagen inbegrepen).' })
+              continue
+            }
+          }
+          let receipt
+          try {
+            receipt = await loadDetail(entry.href, entry, nativeRequestId ? 60000 : 45000)
+          } catch (error) {
+            if (!nativeRequestId) throw error
+            deferred.push({ ...entry, diagnostic: String(error.message || 'Bondetail niet beschikbaar') })
+            post({ type: 'inhuis:lidl-progress', stage: 'receipt-deferred',
+              message: 'Lidl-bon tijdelijk uitgesteld; overige bonnen worden opgehaald.' })
+            continue
+          }
+          const matchesWindow = withinWindow(receipt.dateTime)
+          if (isHistory && matchesWindow !== true) {
+            if (matchesWindow === null) throw new Error('Datum van Lidl-bon ' + receipt.id + ' ontbreekt; import gestopt om verkeerde periode te voorkomen.')
+            continue
+          }
+          // A receipt delivered near the deadline still needs its own durable ACK.
+          // Never retry an uncertain write inside the browser: preserve the period.
+          const acknowledgement = waitForAck(receipt.id, 30000)
+          post({ type: 'inhuis:lidl-receipt', receipt })
+          await acknowledgement
+          if (isHistory) {
+            const day = normalizeDay(receipt.dateTime)
+            if (day > lastImportedDay) lastImportedDay = day
+          }
+          imported += 1
+          post({
+            type: 'inhuis:lidl-progress',
+            processed: imported, total: entries.length, message: imported + ' van ' + entries.length + ' bonnen ontvangen.',
+          })
         }
-        target.postMessage({ type: 'inhuis:lidl-receipt', receipt }, INHUIS_ORIGIN)
-        await waitForAck(receipt.id)
-        if (isHistory) {
-          const day = normalizeDay(receipt.dateTime)
-          if (day > lastImportedDay) lastImportedDay = day
-        }
-        imported += 1
-        post({
-          type: 'inhuis:lidl-progress',
-          message: imported + ' van ' + entries.length + ' bonnen verwerkt.',
-        })
+        pending = deferred
+      }
+      if (pending.length) {
+        throw new Error(pending.length + ' Lidl-bonnen konden niet worden geladen. ' +
+          pending[0].diagnostic + '. De periode blijft hervatbaar.')
       }
 
       post({
@@ -533,10 +597,15 @@ export function buildLidlWebBookmarklet(inhuisOrigin) {
   )
 }
 
-export function buildLidlWebPageScript(inhuisOrigin, dateWindow = {}) {
+export function buildLidlWebPageScript(inhuisOrigin, dateWindow = {}, nativeRequestId = '') {
+  if (nativeRequestId && !/^[0-9a-f-]{36}$/i.test(nativeRequestId)) {
+    throw new Error('Ongeldige native Lidl-importpoging')
+  }
   const origin = String(inhuisOrigin || '').replace(/\/$/, '')
-  return '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ',' + JSON.stringify({
+  return (nativeRequestId ? '/* INHUIS_LIDL_NATIVE_V2 */' : '') +
+    '(' + lidlWebPageRunner.toString() + ')(' + JSON.stringify(origin) + ',' + JSON.stringify({
     from_date: String(dateWindow.from_date || ''),
     to_date: String(dateWindow.to_date || ''),
+    ...(nativeRequestId ? { native_request_id: nativeRequestId } : {}),
   }) + ')'
 }

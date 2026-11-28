@@ -341,7 +341,65 @@ def ensure_new_household_repurchase_default(conn, household_id: str) -> bool:
         "household_id": owner,
         "mode": NEW_HOUSEHOLD_REPURCHASE_MODE,
     })
+    # New regular households start with prediction enabled, while an
+    # explicitly disabled existing setting is never overwritten. A non-zero
+    # horizon is required for the already existing Bijna op predictor.
+    for setting_key, setting_value in (
+        ("almost_out_prediction_enabled", "true"),
+        ("almost_out_prediction_days", "30"),
+    ):
+        conn.execute(text("""
+            INSERT INTO household_settings (
+                id, household_id, setting_key, setting_value, updated_at
+            ) VALUES (
+                :id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (household_id, setting_key) DO NOTHING
+        """), {
+            "id": __import__("uuid").uuid4().hex,
+            "household_id": owner,
+            "setting_key": setting_key,
+            "setting_value": setting_value,
+        })
     return row.rowcount == 1
+
+
+
+def ensure_store_onboarding_prediction_defaults_if_missing(conn, household_id: str) -> int:
+    """Repair a missing prediction default, never an explicit user setting.
+
+    Only households that actually entered first-store onboarding are eligible.
+    Legacy household policy and deliberate disabled forecasts stay unchanged.
+    """
+    owner = str(household_id or "").strip()
+    if not owner or owner == "0":
+        raise ValueError("Regulier huishouden vereist voor voorspelinstelling")
+    available = conn.execute(text("""
+        SELECT 1 FROM household_settings
+        WHERE household_id=:household_id
+          AND setting_key='first_store_onboarding_v1'
+        LIMIT 1
+    """), {"household_id": owner}).scalar_one_or_none()
+    if available is None:
+        return 0
+    created = 0
+    for setting_key, setting_value in (
+        ("almost_out_prediction_enabled", "true"),
+        ("almost_out_prediction_days", "30"),
+    ):
+        inserted = conn.execute(text("""
+            INSERT INTO household_settings (
+                id, household_id, setting_key, setting_value, updated_at
+            ) VALUES (
+                :id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (household_id, setting_key) DO NOTHING
+        """), {
+            "id": __import__("uuid").uuid4().hex, "household_id": owner,
+            "setting_key": setting_key, "setting_value": setting_value,
+        })
+        created += int(inserted.rowcount or 0)
+    return created
 
 
 def complete_household_onboarding(

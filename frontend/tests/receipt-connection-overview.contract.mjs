@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { deriveReceiptConnectionOverview, receiptConnectionSummary, displayedImportDate, firstImportDate, safeImportDate } from '../src/features/storeConnections/receiptConnectionOverviewModel.js'
+import { deriveReceiptConnectionOverview, receiptConnectionSummary, displayedImportDate, firstImportDate, safeImportDate, currentJumboImportPeriod } from '../src/features/storeConnections/receiptConnectionOverviewModel.js'
 
 const clock = new Date('2026-10-23T12:00:00')
 assert.equal(firstImportDate(clock), '2025-01-01')
@@ -10,6 +10,25 @@ assert.equal(displayedImportDate('2026-10-19', clock).isDefault, false)
 assert.equal(safeImportDate('2026-02-30', clock), null)
 assert.equal(safeImportDate('2027-01-01', clock), null)
 assert.equal(safeImportDate('2026-10-19 15:04:06', clock), null)
+// Every activation derives a new window, without re-installing the favorite.
+// The last confirmed purchase date is included, not shifted by one day.
+assert.deepEqual(currentJumboImportPeriod(null, clock), {
+  from_date: '2025-01-01', to_date: '2026-10-23',
+})
+assert.deepEqual(currentJumboImportPeriod('2026-09-10', clock), {
+  from_date: '2026-09-10', to_date: '2026-10-23',
+})
+assert.deepEqual(currentJumboImportPeriod('2026-09-10', new Date('2027-01-02T12:00:00')), {
+  from_date: '2026-09-10', to_date: '2027-01-02',
+})
+assert.deepEqual(currentJumboImportPeriod(undefined, new Date('2027-01-02T12:00:00')), {
+  from_date: '2026-01-01', to_date: '2027-01-02',
+})
+for (const bad of ['', '2026-02-30', '2027-11-01', '2026/10/22', 12345, '2026-10-22T12:00:00Z']) {
+  assert.throws(() => currentJumboImportPeriod(bad, clock), /Ongeldige/)
+}
+assert.throws(() => currentJumboImportPeriod('2026-10-22', new Date(NaN)), /Ongeldige/);
+
 const seenRows = deriveReceiptConnectionOverview([], { connected: false },
   { jumbo: '2026-10-19', lidl: '2026-10-21' }, clock)
 assert.equal(seenRows.find(row => row.providerCode === 'jumbo').lastSyncLabel, '19-10-2026')
@@ -80,7 +99,8 @@ assert.match(page, /retailer="Lidl"/)
 assert.match(page, /openTestId="lidl-web-open-history"/)
 assert.match(page, /onOpen={openLidlWithSavedPeriod}/)
 assert.match(page, /async function openLidlWithSavedPeriod\(\)/)
-assert.match(page, /const needsSave = lidlPeriodUnsaved/)
+assert.match(page, /const needsSave = !onboardingMode && !mobileRetailer && lidlPeriodUnsaved/)
+assert.match(page, /const period = \(onboardingMode \|\| nativeLidlSource\)\s+\? await fetchJson\('\/api\/receipts\/retailers\/lidl\/history\/begin'/)
 assert.match(page, /needsSave && !lidlWindow\.can_manage/)
 assert.match(page, /window\.open\('about:blank', '_blank'\)/)
 assert.match(page, /lidlTab\.location\.replace\(LIDL_HISTORY_URL\)/)

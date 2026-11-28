@@ -8,7 +8,16 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
-from app.db import engine
+
+def _database_engine():
+    """Import the database only for SQL-backed taxonomy operations.
+
+    Historical stock evidence and seed-only food inference must not initialize
+    the database or create local filesystem paths as an import side effect.
+    """
+    from app.db import engine
+    return engine
+
 
 TAXONOMY_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "product_taxonomy_seed.json"
 
@@ -107,7 +116,7 @@ def _seed_payload() -> dict[str, Any]:
 
 def ensure_product_taxonomy_schema() -> None:
     """Validate the Alembic-owned taxonomy schema without mutating it."""
-    with engine.connect() as conn:
+    with _database_engine().connect() as conn:
         inspector = inspect(conn)
         for table_name, required_columns in _REQUIRED_COLUMNS.items():
             if not inspector.has_table(table_name):
@@ -227,7 +236,7 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
     inserted_synonyms = 0
     inserted_retailer_terms = 0
 
-    with engine.begin() as conn:
+    with _database_engine().begin() as conn:
         for item in taxonomy_rows:
             intent_key = str(item.get("intent_key") or "").strip()
             if not intent_key:
@@ -295,6 +304,37 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
     }
 
 
+# The public, versioned product taxonomy already describes food categories.
+# Keep the article-consumable inference read-only: unlike the regular taxonomy
+# loader this helper never opens a database connection or seeds shared tables.
+_CONSUMABLE_SEED_CATEGORIES = frozenset({
+    "zuivel", "broodbeleg", "fruit", "bakkerij", "groente", "peulvrucht",
+    "eieren", "graan", "saus", "soep", "maaltijd", "kruiden",
+    "vleeswaren", "vlees", "drank", "pasta", "snack", "ontbijt", "babyvoeding",
+    "olie",
+})
+
+
+def infer_food_consumable_from_seed(value: str | None) -> bool | None:
+    """Return True for an independently recognized food term, else unknown.
+
+    Never turn an unfamiliar name into an explicit non-consumable decision.
+    Matching tokens rather than substrings protects names like 'eiersnijder'.
+    """
+    normalized = normalize_taxonomy_text(value)
+    if not normalized:
+        return None
+    hits = set()
+    for item in _seed_payload().get("taxonomy") or []:
+        terms = [item.get("canonical_name"), *(item.get("synonyms") or [])]
+        if any(contains_taxonomy_term(normalized, normalize_taxonomy_text(term))
+               for term in terms if normalize_taxonomy_text(term)):
+            hits.add(normalize_taxonomy_text(item.get("category")))
+    if hits and hits.issubset(_CONSUMABLE_SEED_CATEGORIES):
+        return True
+    return None
+
+
 def _fallback_rules_from_seed(retailer_code: str | None = None) -> list[dict[str, Any]]:
     payload = _seed_payload()
     rules: list[dict[str, Any]] = []
@@ -343,7 +383,7 @@ def load_taxonomy_rules(retailer_code: str | None = None) -> tuple[dict[str, Any
     normalized_retailer = normalize_taxonomy_text(retailer_code)
     try:
         ensure_product_taxonomy_seeded()
-        with engine.begin() as conn:
+        with _database_engine().begin() as conn:
             rows = conn.execute(
                 text(
                     """
@@ -398,7 +438,7 @@ def _fallback_metadata_from_seed() -> dict[str, dict[str, str]]:
 def load_taxonomy_metadata() -> dict[str, dict[str, str]]:
     try:
         ensure_product_taxonomy_seeded()
-        with engine.begin() as conn:
+        with _database_engine().begin() as conn:
             rows = conn.execute(
                 text(
                     """

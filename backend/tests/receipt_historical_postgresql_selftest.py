@@ -327,6 +327,225 @@ def _prove_historical_workflows(
             ), {"home": household_id}).scalar_one() == 0
 
 
+
+def _prove_pr732_historical_identity_recovery(
+    conn, *, household_id, other_household, provider_id, connection_id, cutover,
+):
+    """Current PostgreSQL uniquely prevents two active catalog-linked owners."""
+    from sqlalchemy.exc import IntegrityError
+    from app.services.global_product_service import get_or_create_global_product
+
+    product = get_or_create_global_product(
+        conn, gtin=None, name="PR732 catalog uniqueness " + _id(), source="ci",
+    )
+    first, duplicate = _id(), _id()
+    conn.execute(text("""
+        INSERT INTO household_articles (
+            id, household_id, naam, consumable, global_product_id, status
+        ) VALUES (:id,:home,'PR732 catalog unique',1,:product,'active')
+    """), {"id": first, "home": household_id, "product": product})
+    try:
+        with conn.begin_nested():
+            conn.execute(text("""
+                INSERT INTO household_articles (
+                    id, household_id, naam, consumable, global_product_id, status
+                ) VALUES (:id,:home,'PR732 catalog duplicate',1,:product,'active')
+            """), {"id": duplicate, "home": household_id, "product": product})
+    except IntegrityError:
+        pass
+    else:
+        raise AssertionError(
+            "The current PostgreSQL schema must prevent a duplicate active catalog match"
+        )
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM household_articles
+        WHERE household_id=:home AND global_product_id=:product
+          AND COALESCE(status,'active')='active'
+    """), {"home": household_id, "product": product}).scalar_one() == 1
+    print("PR732_POSTGRESQL_CATALOG_UNIQUE_GUARD_GREEN")
+
+
+def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
+    """Real DML-only PostgreSQL: AH/Jumbo GTIN proof, manual guard, idempotence."""
+    from app.services.historical_household_stock_writer import refresh_automatic_historical_stock
+    from app.services.historical_household_purchase_cadence import (
+        read_historical_household_purchase_cadence,
+    )
+
+    home, other_home = _seed_household(conn), _seed_household(conn)
+    assert activate_cutover_for_new_onboarding(conn, household_id=home)
+    provider, connection = _seed_provider_and_connection(conn, home)
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'consumable_auto_deduction_mode','consume_all_existing_before_purchase')
+    """), {"id": _id(), "home": home})
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'almost_out_prediction_days','100')
+    """), {"id": _id(), "home": home})
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'almost_out_prediction_enabled','true')
+    """), {"id": _id(), "home": home})
+
+    winner, duplicate = sorted((_id(), _id()))
+    protected, manual = sorted((_id(), _id()))
+    for article_id, name in (
+        (winner, "PR732 EAN without catalog"),
+        (duplicate, "PR732 EAN without catalog"),
+        (protected, "PR732 different manual item"),
+        (manual, "PR732 different manual item"),
+    ):
+        conn.execute(text("""
+            INSERT INTO household_articles (
+                id, household_id, naam, consumable, status
+            ) VALUES (:id,:home,:name,1,'active')
+        """), {"id": article_id, "home": home, "name": name})
+    foreign_id = _id()
+    conn.execute(text("""
+        INSERT INTO household_articles (id,household_id,naam,consumable,status)
+        VALUES (:id,:home,'PR732 other EAN household',1,'active')
+    """), {"id": foreign_id, "home": other_home})
+
+    # The classification review is a production PostgreSQL SELECT over an
+    # INTEGER 0/1/NULL column. Review must never mutate the article itself.
+    review_id = _id()
+    conn.execute(text("""
+        INSERT INTO household_articles (id,household_id,naam,consumable,status)
+        VALUES (:id,:home,'Verse halfvolle melk',0,'active')
+    """), {"id": review_id, "home": home})
+    from app.services.household_consumable_review import list_consumable_review_candidates
+    review = list_consumable_review_candidates(
+        conn, household_id=home, limit=10, offset=0,
+    )
+    assert review["total"] == 1 and review["items"][0]["id"] == review_id, review
+    assert review["items"][0]["consumable"] is False, review
+    assert conn.execute(text("""
+        SELECT consumable FROM household_articles
+        WHERE household_id=:home AND id=:id
+    """), {"home": home, "id": review_id}).scalar_one() == 0
+    print("PR732_POSTGRESQL_CONSUMABLE_REVIEW_GREEN")
+
+    receipt_ids = []
+    for days_ago, store, store_code, article_id, barcode in (
+        (35, "Albert Heijn", "ah", winner, "4006381333931"),
+        (20, "Jumbo", "jumbo", duplicate, "4006381333931"),
+        (36, "Albert Heijn", "ah", protected, "5901234123457"),
+        (21, "Jumbo", "jumbo", manual, "5901234123457"),
+    ):
+        receipt_id, _ = _seed_receipt(
+            conn, household_id=home, provider_id=provider,
+            connection_id=connection, store=store,
+            purchase_date=cutoff - timedelta(days=days_ago), with_line=True,
+        )
+        receipt_ids.append(receipt_id)
+        conn.execute(text("""
+            UPDATE receipt_sources rs
+            SET source_path=:store_code
+            FROM raw_receipts rr
+            JOIN receipt_tables rt ON rt.raw_receipt_id=rr.id
+            WHERE rt.id=:receipt_id AND rr.source_id=rs.id
+              AND rr.household_id=:home AND rs.household_id=:home
+        """), {"store_code": store_code, "receipt_id": receipt_id, "home": home})
+        conn.execute(text("""
+            UPDATE receipt_table_lines
+            SET matched_article_id=:article_id,
+                matched_global_product_id=NULL,
+                article_match_status='matched',
+                line_role='product', inventory_eligible=1, barcode=:barcode
+            WHERE receipt_table_id=:receipt_id
+        """), {
+            "article_id": article_id, "barcode": barcode,
+            "receipt_id": receipt_id,
+        })
+
+    manual_event = _id()
+    conn.execute(text("""
+        INSERT INTO inventory_events (
+            id, household_id, article_id, household_article_id,
+            article_name, location_id, location_label,
+            event_type, quantity, old_quantity, new_quantity,
+            source, note, purchase_date, effective_at, recorded_at,
+            effective_at_precision, event_priority, created_at
+        ) VALUES (
+            :id,:home,:article_id,:article_id,
+            'PR732 protected',NULL,NULL,
+            'purchase',1,0,1,'ci_manual_adjustment','preserve',
+            :day,:moment,CURRENT_TIMESTAMP,'date',10,CURRENT_TIMESTAMP
+        )
+    """), {
+        "id": manual_event, "home": home, "article_id": manual,
+        "day": cutoff.isoformat(),
+        "moment": cutoff.isoformat() + "T00:00:00+00:00",
+    })
+    first = refresh_automatic_historical_stock(conn, household_id=home)
+    assert first["status"] == "applied", first
+    assert first["canonical_repair"]["merged"] == 1, first
+    assert first["canonical_repair"]["blocked"] >= 1, first
+
+    active = conn.execute(text("""
+        SELECT id FROM household_articles
+        WHERE household_id=:home AND id IN (:winner,:duplicate)
+          AND COALESCE(status,'active')='active'
+    """), {"home": home, "winner": winner, "duplicate": duplicate}).scalars().all()
+    assert [str(x) for x in active] == [winner], active
+    for receipt_id in receipt_ids[:2]:
+        matched = conn.execute(text("""
+            SELECT matched_article_id FROM receipt_table_lines
+            WHERE receipt_table_id=:receipt_id
+        """), {"receipt_id": receipt_id}).scalar_one()
+        assert str(matched) == winner, matched
+
+    cadence = read_historical_household_purchase_cadence(
+        conn, household_id=home, household_article_id=winner,
+    )
+    assert cadence["purchase_day_count"] == 2, cadence
+    assert cadence["average_repurchase_interval_days"] == 15.0, cadence
+    assert conn.execute(text("""
+        SELECT COALESCE(SUM(aantal),0) FROM inventory
+        WHERE household_id=:home AND household_article_id=:winner
+    """), {"home": home, "winner": winner}).scalar_one() == 1
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM household_articles
+        WHERE household_id=:home AND id IN (:protected,:manual)
+          AND COALESCE(status,'active')='active'
+    """), {"home": home, "protected": protected, "manual": manual}).scalar_one() == 2
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events
+        WHERE id=:id AND household_id=:home AND household_article_id=:manual
+    """), {"id": manual_event, "home": home, "manual": manual}).scalar_one() == 1
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM household_articles
+        WHERE household_id=:home AND id=:id AND status='active'
+    """), {"home": other_home, "id": foreign_id}).scalar_one() == 1
+    assert conn.execute(text("""
+        SELECT setting_value FROM household_settings
+        WHERE household_id=:home AND setting_key='almost_out_prediction_days'
+    """), {"home": home}).scalar_one() == "100"
+    assert conn.execute(text("""
+        SELECT setting_value FROM household_settings
+        WHERE household_id=:home AND setting_key='almost_out_prediction_enabled'
+    """), {"home": home}).scalar_one() == "true"
+    # Check the real Bijna op production evaluator, not a synthetic forecast.
+    from app.main import build_almost_out_items
+    near = build_almost_out_items(conn, home)
+    assert winner in {str(item["household_article_id"]) for item in near}, near
+    print("PR732_POSTGRESQL_100_DAY_BIJNA_OP_GREEN")
+
+    before = conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events WHERE household_id=:home
+    """), {"home": home}).scalar_one()
+    repeated = refresh_automatic_historical_stock(conn, household_id=home)
+    assert repeated["canonical_repair"]["merged"] == 0, repeated
+    assert repeated["created"] == repeated["revised"] == 0, repeated
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events WHERE household_id=:home
+    """), {"home": home}).scalar_one() == before
+    print("PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN")
+    print("PR732_POSTGRESQL_VERIFIED_GTIN_RECOVERY_GREEN")
+
+
+
 def main() -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("Deze DML-test mag uitsluitend in de geïsoleerde GitHub CI draaien")
@@ -836,6 +1055,18 @@ def main() -> None:
                         ), {"household_id": current_home}).scalar_one() == 0, table
                     current_only_savepoint.rollback()
                 print("RECEIPT_HISTORY_POSTGRESQL_CURRENT_ONLY_CADENCE_GREEN")
+
+                with conn.begin_nested() as pr732_savepoint:
+                    _prove_pr732_historical_identity_recovery(
+                        conn, household_id=new_household,
+                        other_household=other_household,
+                        provider_id=provider, connection_id=connection,
+                        cutover=first_current,
+                    )
+                    pr732_savepoint.rollback()
+                with conn.begin_nested() as gtin_savepoint:
+                    _prove_pr732_verified_gtin_recovery(conn, cutoff=first_current)
+                    gtin_savepoint.rollback()
 
 
 

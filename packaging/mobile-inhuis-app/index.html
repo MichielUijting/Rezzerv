@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inhuis</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main>
+    <h1>Inhuis</h1>
+    <p>Open je bestaande Inhuis-omgeving in de beveiligde Android-app.</p>
+    <form id="connect">
+      <label for="inhuis-url">Beveiligd Inhuis-adres (https)</label>
+      <input id="inhuis-url" type="url" inputmode="url" autocomplete="url"
+        placeholder="https://inhuis.example.nl" required />
+      <button type="submit">Open Inhuis</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

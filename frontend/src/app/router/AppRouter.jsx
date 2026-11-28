@@ -103,7 +103,29 @@ function OnboardingRoute() {
 
 function OnboardingStoresRoute() {
   const navigate = useNavigate()
-  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home?wegwijs=1', { replace: true })} />
+  return <StoreConnectionsPage onboardingMode onFinish={() => navigate('/home', { replace: true })} />
+}
+
+// Recover a misplaced AH callback only when the authenticated household has
+// an unfinished first-store selection. Ordinary Settings visits stay unchanged.
+function SettingsStoreConnectionsRoute() {
+  const navigate = useNavigate()
+  const [checking, setChecking] = React.useState(() => ['connected', 'error'].includes(new URLSearchParams(window.location.search).get('ah')))
+  React.useEffect(() => {
+    if (!checking) return undefined
+    let cancelled = false
+    fetchStoreOnboardingProgress().then(progress => {
+      if (cancelled) return
+      if (hasStoreOnboardingToResume(progress) && progress.selected.includes('ah') && progress.results?.ah !== 'success') {
+        const outcome = new URLSearchParams(window.location.search).get('ah')
+        navigate('/onboarding/winkels?ah=' + encodeURIComponent(outcome), { replace: true })
+      } else {
+        setChecking(false)
+      }
+    }).catch(() => { if (!cancelled) setChecking(false) })
+    return () => { cancelled = true }
+  }, [checking, navigate])
+  return checking ? null : <StoreConnectionsPage />
 }
 
 function ResetSessionRoute() {
@@ -244,7 +266,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettingsRoute settingKey="household-automation"><SettingsHouseholdAutomationPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
-  { path: '/instellingen/winkelkoppelingen', element: <ProtectedSettingsRoute settingKey="store-connections"><StoreConnectionsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/winkelkoppelingen', element: <ProtectedSettingsRoute settingKey="store-connections"><SettingsStoreConnectionsRoute /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishoudprofiel', element: <ProtectedSettingsRoute settingKey="household-profile"><SettingsHouseholdProfilePage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishouden', element: <ProtectedSettingsRoute settingKey="household"><SettingsHouseholdPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/frontteam', element: <ProtectedSuperuser><Navigate to="/superuser" replace /></ProtectedSuperuser> },

@@ -27,27 +27,46 @@ def _iso_date(value) -> str | None:
 def latest_retailer_import_dates(engine: Engine, *, household_id: str) -> dict[str, str | None]:
     """Report only dates supported by persisted, scoped data.
 
-    Jumbo: latest saved non-deleted digital receipt (import date).
-    Lidl: latest saved receipt OR the acknowledged scan checkpoint.
+    Jumbo: latest confirmed parsed/approved receipt PURCHASE date, never
+    receipt upload/creation time. This checkpoint is inclusive on next import.
+    Lidl: preserve the existing saved-receipt/acknowledged scan checkpoint.
     The frontend decides how to present a never-imported retailer.
     """
     household = str(household_id)
     result: dict[str, str | None] = {"jumbo": None, "lidl": None}
     with engine.connect() as conn:
         for provider in result:
-            recorded = conn.execute(
-                text("""
+            # Jumbo requires the trusted acquisition date, not the upload
+            # date. Ignore deleted/duplicate or unparsed/default-date entries.
+            # Do not change Lidl's separate, acknowledged window policy.
+            if provider == "jumbo":
+                query = text("""
+                    SELECT MAX(CAST(rt.purchase_at AS date))
+                    FROM raw_receipts rr
+                    JOIN receipt_tables rt
+                      ON rt.raw_receipt_id = rr.id
+                     AND rt.household_id = :household_id
+                     AND rt.deleted_at IS NULL
+                    WHERE rr.household_id = :household_id
+                      AND rr.source_id = :source_id
+                      AND rr.deleted_at IS NULL
+                      AND rr.duplicate_of_raw_receipt_id IS NULL
+                      AND rt.purchase_at IS NOT NULL
+                      AND LOWER(TRIM(COALESCE(rt.purchase_at_source, ''))) <> 'import_default'
+                      AND LOWER(TRIM(COALESCE(rt.parse_status, ''))) IN ('parsed', 'approved')
+                """)
+            else:
+                query = text("""
                     SELECT MAX(created_at)
                     FROM raw_receipts
                     WHERE household_id = :household_id
                       AND source_id = :source_id
                       AND deleted_at IS NULL
-                """),
-                {
-                    "household_id": household,
-                    "source_id": f"{household}-retailer-{provider}",
-                },
-            ).scalar_one_or_none()
+                """)
+            recorded = conn.execute(query, {
+                "household_id": household,
+                "source_id": f"{household}-retailer-{provider}",
+            }).scalar_one_or_none()
             result[provider] = _iso_date(recorded)
 
         lidl_checkpoint = conn.execute(

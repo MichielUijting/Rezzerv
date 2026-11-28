@@ -1906,6 +1906,11 @@ def infer_consumable_from_name(article_name: str | None) -> bool:
         return False
     if normalized in KNOWN_CONSUMABLE_ARTICLE_NAMES:
         return True
+    # Reuse verified product taxonomy instead of assuming that an unfamiliar
+    # receipt label is non-food. The source-only helper does no DB mutations.
+    from app.services.product_taxonomy_store import infer_food_consumable_from_seed
+    if infer_food_consumable_from_seed(normalized) is True:
+        return True
     keywords = [
         "melk", "pasta", "koffie", "mosterd", "sap", "saus", "soep", "rijst", "banaan", "tomaat", "brood",
         "kaas", "yoghurt", "thee", "pindakaas", "jam", "suiker", "zout", "bloem", "eieren", "water",
@@ -2019,31 +2024,69 @@ def get_article_consumable_state(conn, household_id: str, article_id: str | None
     normalized_name = normalize_household_article_name(article_name)
     if normalized_article_id in MOCK_ARTICLE_LOOKUP:
         return bool(MOCK_ARTICLE_LOOKUP[normalized_article_id].get("consumable"))
-    if normalized_article_id.startswith("live::"):
+    alias = normalized_article_id.startswith("live::")
+    if alias:
         normalized_name = normalize_household_article_name(normalized_article_id.split("::", 1)[1])
+
+    # Never resolve a stored classification by display name when a canonical
+    # article ID was supplied. Names are not household identities, and two
+    # different items may legitimately have the same label.
     row = None
-    if normalized_name:
+    if normalized_article_id and not alias:
         row = conn.execute(
-            text(
-                """
-                SELECT consumable, naam
+            text("""
+                SELECT id, consumable, naam
                 FROM household_articles
-                WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+                WHERE household_id = :household_id AND id = :article_id
+                  AND COALESCE(status, 'active') = 'active'
                 LIMIT 1
-                """
-            ),
-            {"household_id": str(household_id), "naam": normalized_name},
+            """),
+            {"household_id": str(household_id), "article_id": normalized_article_id},
         ).mappings().first()
+        if not row:
+            # A missing or cross-household ID is not a license to use an
+            # unrelated similarly named item's classification.
+            return False
+    elif normalized_name:
+        # Legacy name-only preview is read-only and unambiguous or unknown.
+        candidates = conn.execute(
+            text("""
+                SELECT id, consumable, naam
+                FROM household_articles
+                WHERE household_id = :household_id
+                  AND lower(trim(naam)) = lower(trim(:naam))
+                  AND COALESCE(status, 'active') = 'active'
+                ORDER BY id
+                LIMIT 2
+            """),
+            {"household_id": str(household_id), "naam": normalized_name},
+        ).mappings().all()
+        if len(candidates) == 1:
+            row = candidates[0]
+        elif len(candidates) > 1:
+            return False
     if row and row.get("consumable") is not None:
         return bool(row["consumable"])
-    inferred = infer_consumable_from_name(normalized_name)
-    if row and row.get("naam"):
-        conn.execute(
-            text(
-                "UPDATE household_articles SET consumable = :consumable, updated_at = CURRENT_TIMESTAMP WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))"
-            ),
-            {"consumable": 1 if inferred else 0, "household_id": str(household_id), "naam": row["naam"]},
+    inferred = infer_consumable_from_name(row.get("naam") if row else normalized_name)
+    # Only positive automatic evidence may fill an unknown value. A NULL must
+    # never become False; an explicit True/False must never be overwritten.
+    # Persist by the *exact owned article ID*, never by its display name.
+    if row and normalized_article_id and not alias and inferred:
+        updated = conn.execute(
+            text("""
+                UPDATE household_articles
+                SET consumable = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE household_id = :household_id AND id = :article_id
+                  AND consumable IS NULL
+            """),
+            {"household_id": str(household_id), "article_id": normalized_article_id},
         )
+        if getattr(updated, "rowcount", 0) == 1:
+            from app.services.household_consumable_review import record_classification_origin
+            record_classification_origin(
+                conn, household_id=household_id, article_id=normalized_article_id,
+                kind="automatic_positive",
+            )
     return inferred
 
 
@@ -2144,7 +2187,14 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
 
     existing_name = find_existing_household_article_name(conn, household_id, normalized)
     final_name = existing_name or normalized
-    resolved_consumable = infer_consumable_from_name(final_name) if consumable is None else bool(consumable)
+    # Tristate provenance: an unrecognized auto-created item is unknown,
+    # never a persisted, falsely explicit non-consumable user decision.
+    # A caller-provided False is a deliberate value and must remain False.
+    inferred_consumable = infer_consumable_from_name(final_name)
+    resolved_consumable = (
+        (True if inferred_consumable else None)
+        if consumable is None else bool(consumable)
+    )
     if not existing_name:
         article_id = str(uuid.uuid4())
         conn.execute(
@@ -2154,7 +2204,7 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
                 VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP)
                 """
             ),
-            {"id": article_id, "household_id": str(household_id), "naam": normalized, "consumable": 1 if resolved_consumable else 0},
+            {"id": article_id, "household_id": str(household_id), "naam": normalized, "consumable": None if resolved_consumable is None else int(resolved_consumable)},
         )
     else:
         conn.execute(
@@ -2165,11 +2215,17 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
                 WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
                 """
             ),
-            {"household_id": str(household_id), "naam": final_name, "consumable": 1 if resolved_consumable else 0},
+            {"household_id": str(household_id), "naam": final_name, "consumable": None if resolved_consumable is None else int(resolved_consumable)},
         )
         existing_row = get_household_article_row_by_name(conn, household_id, final_name)
         article_id = str(existing_row.get('id')) if existing_row and existing_row.get('id') else None
     if article_id:
+        if not existing_name and resolved_consumable is not None:
+            from app.services.household_consumable_review import record_classification_origin
+            record_classification_origin(
+                conn, household_id=household_id, article_id=article_id,
+                kind=("automatic_positive" if consumable is None else "caller_supplied"),
+            )
         if str(article_id).startswith("live::"):
             article_id = _adopt_synthetic_household_article_identity(conn, household_id, str(article_id))
         ensure_household_article_global_product_link(conn, article_id)
@@ -2346,7 +2402,7 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
                     'id': direct_id,
                     'household_id': str(household_id),
                     'naam': normalized_name,
-                    'consumable': 1 if resolved_consumable else 0,
+                    'consumable': 1 if resolved_consumable else None,
                 },
             )
             row = get_household_article_row_by_name(conn, household_id, normalized_name)
@@ -5783,7 +5839,8 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
             raise HTTPException(status_code=409, detail="Artikel heeft al een andere barcode")
 
     option_id = ensure_household_article(
-        conn, normalized_household_id, product_name, consumable=infer_consumable_from_name(product_name)
+        conn, normalized_household_id, product_name,
+        consumable=(True if infer_consumable_from_name(product_name) else None),
     )
     article_row = get_household_article_row_by_id(conn, normalized_household_id, option_id)
     if not article_row:
@@ -8575,13 +8632,17 @@ def resolve_or_create_inventory_household_article(
         raise HTTPException(status_code=409, detail="Meerdere huishoudartikelen gevonden; voorraadmutatie is geblokkeerd")
 
     household_article_id = str(uuid.uuid4())
+    # A new article created as a side-effect of a stock event is not a
+    # deliberate user decision that the product is non-consumable.
+    inferred_consumable = infer_consumable_from_name(normalized_article_name)
     conn.execute(
         text(
             """
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, created_at, updated_at, source, status
             ) VALUES (
-                :id, :household_id, :naam, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
+                :id, :household_id, :naam, :consumable,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
             )
             """
         ),
@@ -8589,9 +8650,16 @@ def resolve_or_create_inventory_household_article(
             "id": household_article_id,
             "household_id": normalized_household_id,
             "naam": normalized_article_name,
+            "consumable": 1 if inferred_consumable else None,
             "source": str(source or "inventory").strip() or "inventory",
         },
     )
+    if inferred_consumable:
+        from app.services.household_consumable_review import record_classification_origin
+        record_classification_origin(
+            conn, household_id=normalized_household_id, article_id=household_article_id,
+            kind="automatic_positive",
+        )
     return household_article_id
 
 
@@ -13687,6 +13755,56 @@ def update_household_automation_settings(payload: HouseholdAutomationSettingsUpd
         "has_explicit_value": True,
         "is_household_admin": True,
     }
+
+
+
+class HouseholdConsumableReviewRequest(BaseModel):
+    consumable: bool
+    expected_state: str
+
+
+@app.get("/api/household/consumable-review")
+def list_household_consumable_review(
+    limit: int = 10, offset: int = 0,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization)
+    from app.services.household_consumable_review import list_consumable_review_candidates
+    try:
+        with engine.begin() as conn:
+            return list_consumable_review_candidates(
+                conn, household_id=str(context["active_household_id"]),
+                limit=limit, offset=offset,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/household/consumable-review/{household_article_id}")
+def save_household_consumable_review(
+    household_article_id: str, payload: HouseholdConsumableReviewRequest,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_household_admin_context(authorization)
+    from app.services.household_consumable_review import (
+        ReviewConflict, ReviewNotFound, record_explicit_consumable_review,
+    )
+    try:
+        with engine.begin() as conn:
+            return record_explicit_consumable_review(
+                conn,
+                household_id=str(context["active_household_id"]),
+                article_id=household_article_id,
+                actor_id=str(context["user_id"]),
+                consumable=payload.consumable,
+                expected_state=payload.expected_state,
+            )
+    except ReviewNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReviewConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/household/almost-out-settings")

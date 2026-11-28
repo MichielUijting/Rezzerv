@@ -436,3 +436,23 @@ def test_dashboard_drilldown_selects_exact_bar_period_and_deduplicates_store_vis
             assert previous_year["spend"] == 12.0
     finally:
         engine.dispose()
+
+
+def test_historical_receipt_is_not_open_even_without_approval_or_batch():
+    from app.services.household_dashboard_service import _put_away_counts
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE household_receipt_history_cutovers (household_id TEXT, first_current_purchase_date TEXT)"))
+            conn.execute(text("INSERT INTO household_receipt_history_cutovers VALUES ('h1', '2026-11-25')"))
+            conn.execute(text("""
+                INSERT INTO receipt_tables (id, household_id, purchase_at, created_at, parse_status)
+                VALUES ('old', 'h1', '2026-10-07', '2026-11-25', 'approved')
+            """))
+            conn.execute(text("""
+                INSERT INTO receipt_table_lines (id, receipt_table_id, quantity, inventory_eligible, line_role)
+                VALUES ('l1', 'old', 1, 1, 'product')
+            """))
+            assert _put_away_counts(conn, "h1") == (0, 0)
+    finally:
+        engine.dispose()

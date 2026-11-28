@@ -29,10 +29,14 @@ class _Result:
 
 
 class _ReadOnlyConnection:
-    def __init__(self, *, household, cutoff, receipts, queue, enabled=True, state="normal"):
+    def __init__(self, *, household, cutoff, receipts, queue, enabled=True, state="normal",
+                 line_counts=None, outcome=None):
         self.household = household
         self.cutoff = cutoff
         self.receipts = receipts
+        self.line_counts = line_counts or []
+        self.outcome = outcome or {"baseline_article_count": 0, "baseline_unit_count": 0,
+                                   "repurchase_cadence_article_count": 0}
         self.queue = queue
         self.enabled = enabled
         self.state = state
@@ -48,6 +52,19 @@ class _ReadOnlyConnection:
             assert arguments["household_id"] == self.household
             return _Result(scalar=self.cutoff)
 
+        if "JOIN receipt_table_lines rtl" in sql:
+            assert arguments["household_id"] == self.household
+            assert "rr.household_id = :household_id" in sql
+            assert "ha.household_id = :household_id" in sql
+            assert "rr.duplicate_of_raw_receipt_id IS NULL" in sql
+            assert arguments["history_start"] == date(self.cutoff.year - 1, 1, 1)
+            return _Result(rows=self.line_counts)
+
+        if "FROM household_historical_auto_stock_baselines b" in sql:
+            assert arguments["household_id"] == self.household
+            assert "FROM household_historical_purchase_cadences c" in sql
+            return _Result(rows=[self.outcome])
+
         if "FROM raw_receipts rr" in sql:
             assert arguments["household_id"] == self.household
             assert "rt.household_id = :household_id" in sql
@@ -62,7 +79,8 @@ class _ReadOnlyConnection:
             assert "CAST(rt.purchase_at AS DATE) >= :cutoff_date" in sql
             assert arguments["cutoff_date"] == self.cutoff
             assert "'import_default'" in sql
-            assert "('parsed', 'approved')" in sql
+            assert "('parsed', 'approved', 'partial', 'review_needed')" in sql
+            assert "CAST(rt.purchase_at AS DATE) >= :history_start" in sql
             assert arguments["ah_source"] == self.household + "-retailer-ah"
             assert arguments["lidl_source"] == self.household + "-retailer-lidl"
             assert arguments["jumbo_source"] == self.household + "-retailer-jumbo"
@@ -103,10 +121,12 @@ class _ReadOnlyEngine:
 
 
 def _read(*, household="home-a", cutoff=date(2026, 11, 21),
-          receipts=None, queue=None, enabled=True, state="normal"):
+          receipts=None, queue=None, enabled=True, state="normal",
+          line_counts=None, outcome=None):
     db = _ReadOnlyConnection(
         household=household, cutoff=cutoff, receipts=receipts or [],
         queue=queue or [], enabled=enabled, state=state,
+        line_counts=line_counts, outcome=outcome,
     )
     return load_retailer_history_progress(
         _ReadOnlyEngine(db), household_id=household,
@@ -125,6 +145,11 @@ def test_uses_server_household_original_date_and_durable_queue_only():
             {"source_id": "home-a-retailer-jumbo", "saved_receipts": 1,
              "kassa_receipts": 1, "historical_receipts": 0, "review_receipts": 1},
         ],
+        line_counts=[{"source_id": "home-a-retailer-lidl", "historical_line_count": 100,
+                      "physical_candidate_line_count": 85, "directly_linked_line_count": 50,
+                      "unlinked_physical_line_count": 35, "uncertain_line_count": 12}],
+        outcome={"baseline_article_count": 22, "baseline_unit_count": 25,
+                 "repurchase_cadence_article_count": 8},
         queue=[
             {"provider": "lidl", "status": "pending", "item_count": 2},
             {"provider": "lidl", "status": "processing", "item_count": 1},
@@ -133,7 +158,12 @@ def test_uses_server_household_original_date_and_durable_queue_only():
         ],
     )
     assert result["history_cutover_enabled"] is True
-    assert result["coverage"] == "persisted_retailer_receipts_and_queue_only"
+    assert result["coverage"] == "persisted_receipts_lines_queue_and_historical_baseline"
+    assert result["history_start_date"] == "2025-01-01"
+    assert result["historical_stock"] == {
+        "baseline_article_count": 22, "baseline_unit_count": 25,
+        "repurchase_cadence_article_count": 8,
+    }
     assert result["complete_retailer_history_known"] is False
     assert result["auto_import_paused"] is False
     assert [row["code"] for row in result["providers"]] == ["ah", "lidl", "jumbo"]
@@ -142,11 +172,15 @@ def test_uses_server_household_original_date_and_durable_queue_only():
     assert _store(result, "ah")["historical_receipts"] == 1
     assert _store(result, "ah")["review_receipts"] == 1
     assert _store(result, "lidl")["queue_pending"] == 2
+    assert _store(result, "lidl")["historical_line_count"] == 100
+    assert _store(result, "lidl")["directly_linked_line_count"] == 50
+    assert _store(result, "lidl")["unlinked_physical_line_count"] == 35
+    assert _store(result, "ah")["directly_linked_line_count"] == 0
     assert _store(result, "lidl")["queue_processing"] == 1
     assert _store(result, "lidl")["queue_completed"] == 3
     assert _store(result, "lidl")["kassa_receipts"] == 0
     assert _store(result, "jumbo")["queue_review_required"] == 1
-    assert len(db.queries) == 5
+    assert len(db.queries) == 7
 
 
 def test_legacy_household_never_gets_a_fabricated_historical_zero():
@@ -157,6 +191,9 @@ def test_legacy_household_never_gets_a_fabricated_historical_zero():
     assert result["history_cutover_enabled"] is False
     assert _store(result, "ah")["kassa_receipts"] == 2
     assert _store(result, "ah")["historical_receipts"] is None
+    assert _store(result, "ah")["historical_line_count"] is None
+    assert result["historical_stock"] is None
+    assert result["history_start_date"] is None
     assert _store(result, "ah")["review_receipts"] is None
 
 
@@ -176,3 +213,22 @@ def test_maintenance_or_platform_pause_does_not_change_queue(enabled, state):
 def test_invalid_household_is_refused_before_any_db_access():
     with pytest.raises(ValueError, match="huishouden"):
         load_retailer_history_progress(_ReadOnlyEngine(None), household_id="  ")
+
+
+
+def test_recalculation_route_requires_owned_admin_session_and_only_wakes_worker():
+    """A queued signal is not a full recalculation or a second import path."""
+    from pathlib import Path
+    route = (Path(__file__).resolve().parents[1]
+             / "app/api/retailer_receipt_routes.py").read_text(encoding="utf-8")
+    handler = route.split('def request_historical_stock_recalculation(', 1)[1].split('@router.get("/history-evidence")', 1)[0]
+    assert '_authorized_household_id(authorization)' in handler
+    assert '_context_and_membership(conn)' in handler
+    assert 'permission_key="household_settings.manage"' in handler
+    assert 'read_household_cutover(conn, household_id)' in handler
+    assert 'signal_receipt_committed()' in handler
+    assert '"completed": False' in handler
+    assert not any(s in handler for s in (
+        "refresh_automatic_historical_stock(", "import_retailer_receipt(",
+        "DELETE FROM", "UPDATE inventory", "INSERT INTO",
+    ))

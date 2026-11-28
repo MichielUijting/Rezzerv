@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from ipaddress import AddressValueError, IPv4Address
 import logging
 import os
+from pathlib import Path
 import secrets
 from threading import RLock
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -25,6 +26,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from starlette.background import BackgroundTask
 from fastapi.responses import RedirectResponse, Response
 from starlette.convertors import Convertor, register_url_convertor
 
@@ -36,6 +38,7 @@ from app.integrations.retailer_accounts.ah import (
     AHReceiptClient,
 )
 from app.services.retailer_account_secure_store import save_ah_session
+from app.services.ah_receipt_background_sync import sync_due_ah_households
 
 class _AHProxyPathConvertor(Convertor):
     # The OAuth proxy is intentionally root-relative for AH login assets, but it
@@ -61,6 +64,10 @@ _FLOW_RETURN_COOKIE = "inhuis_ah_oauth_return_mode"
 _FLOW_TTL = timedelta(minutes=5)
 _FLOW_RETURN_TTL_SECONDS = 3600
 _DEFAULT_BACKEND_PUBLIC_PORT = "8011"
+_AH_TAILSCALE_HTTPS_PORT = "8443"
+# Cookies on different ports of one hostname are shared by browsers. Only
+# cookie names explicitly namespaced by this proxy may ever be sent to AH.
+_AH_PROXY_COOKIE_PREFIX = "__inhuis_ah_proxy_"
 
 
 @dataclass(frozen=True)
@@ -71,6 +78,7 @@ class AHOAuthFlow:
     backend_origin: str
     return_to: str
     expires_at: datetime
+    attempt_id: str = ""
 
     def expired(self) -> bool:
         return datetime.now(timezone.utc) >= self.expires_at
@@ -78,6 +86,8 @@ class AHOAuthFlow:
 
 _flow_lock = RLock()
 _flows: dict[str, AHOAuthFlow] = {}
+# Independent opaque correlation ID, not the OAuth launch credential.
+_attempts: dict[str, tuple[str, datetime, str]] = {}
 
 
 def _clean_expired_flows() -> None:
@@ -85,6 +95,9 @@ def _clean_expired_flows() -> None:
         expired = [flow_id for flow_id, flow in _flows.items() if flow.expired()]
         for flow_id in expired:
             _flows.pop(flow_id, None)
+        for key, (_, expires, _) in list(_attempts.items()):
+            if datetime.now(timezone.utc) >= expires:
+                _attempts.pop(key, None)
 
 
 def _format_host(hostname: str) -> str:
@@ -108,39 +121,59 @@ def _ah_login_hostname(browser_hostname: str) -> str:
 
 def resolve_backend_public_origin(request: Request) -> str:
     configured = str(os.getenv("REZZERV_BACKEND_PUBLIC_URL", "") or "").strip().rstrip("/")
+    scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
+    if scheme not in {"http", "https"}:
+        raise RuntimeError("Ongeldig protocol voor AH OAuth")
     if configured:
         parsed = urlparse(configured)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname or
+            parsed.username or parsed.password or parsed.path not in {"", "/"} or
+            parsed.query or parsed.fragment):
             raise RuntimeError("REZZERV_BACKEND_PUBLIC_URL is ongeldig")
-        return configured
+        if scheme == "https" and parsed.scheme != "https":
+            raise RuntimeError("AH OAuth vereist een afzonderlijke HTTPS-route")
+        return parsed._replace(path="", query="", fragment="").geturl().rstrip("/")
 
     forwarded_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
     hostname = forwarded_host.split(":", 1)[0].strip("[]") if forwarded_host else (request.url.hostname or "")
     if not hostname:
         raise RuntimeError("Backend-host voor AH-login kon niet worden bepaald")
 
-    scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
-    if scheme not in {"http", "https"}:
-        scheme = "http"
+    if scheme == "https":
+        # AH needs a separate root origin for its absolute asset paths. The
+        # existing Inhuis HTTPS listener remains on 443; Serve may expose the
+        # same backend safely at 8443, with its own trusted TLS certificate.
+        if not hostname.lower().endswith(".ts.net") or hostname.count(".") < 2:
+            raise RuntimeError("Configureer een aparte vertrouwde HTTPS-origin voor AH OAuth")
+        return f"https://{hostname.lower()}:{_AH_TAILSCALE_HTTPS_PORT}"
     public_port = str(os.getenv("REZZERV_BACKEND_PUBLIC_PORT", _DEFAULT_BACKEND_PUBLIC_PORT) or "").strip()
     if not public_port.isdigit():
         raise RuntimeError("REZZERV_BACKEND_PUBLIC_PORT is ongeldig")
     return f"{scheme}://{_format_host(_ah_login_hostname(hostname))}:{public_port}"
 
 
-def _safe_return_to(request: Request, return_to: str | None) -> str:
+def _safe_return_to(request: Request, return_to: str | None, *, onboarding: bool = False) -> str:
     candidate = str(return_to or "").strip()
     request_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
     request_hostname = request_host.split(":", 1)[0].strip("[]").lower()
+    public_https = str(request.headers.get("x-forwarded-proto") or request.url.scheme).split(",", 1)[0].strip() == "https"
     if candidate:
         parsed = urlparse(candidate)
         if (
-            parsed.scheme in {"http", "https"}
+            (not public_https or parsed.scheme == "https")
+            and parsed.scheme in {"http", "https"}
             and parsed.hostname
             and parsed.hostname.lower() == request_hostname
             and parsed.path in {"/instellingen/winkelkoppelingen", "/onboarding/winkels"}
         ):
+            if onboarding and parsed.path != "/onboarding/winkels":
+                raise HTTPException(status_code=400, detail="Ongeldige terugkeerroute voor winkelonboarding")
             return candidate
+    if onboarding:
+        # Never silently downgrade a first-store flow to regular Settings.
+        raise HTTPException(status_code=400, detail="De terugkeerroute voor winkelonboarding kon niet veilig worden bevestigd")
+    if public_https and request_hostname.endswith(".ts.net"):
+        return f"https://{request_hostname}/instellingen/winkelkoppelingen"
     app_origin = str(os.getenv("REZZERV_APP_BASE_URL", "http://localhost:5174") or "").strip().rstrip("/")
     return f"{app_origin}/instellingen/winkelkoppelingen"
 
@@ -150,19 +183,36 @@ def create_ah_oauth_flow(
     *,
     household_id: str,
     return_to: str | None = None,
+    onboarding: bool = False,
 ) -> AHOAuthFlow:
     _clean_expired_flows()
     flow = AHOAuthFlow(
         flow_id=secrets.token_urlsafe(32),
+        attempt_id=str(uuid4()),
         installation_id=str(uuid4()).upper(),
         household_id=str(household_id),
         backend_origin=resolve_backend_public_origin(request),
-        return_to=_safe_return_to(request, return_to),
+        return_to=_safe_return_to(request, return_to, onboarding=onboarding),
         expires_at=datetime.now(timezone.utc) + _FLOW_TTL,
     )
     with _flow_lock:
         _flows[flow.flow_id] = flow
+        _attempts[flow.attempt_id] = (flow.household_id, flow.expires_at, "pending")
     return flow
+
+
+def ah_oauth_attempt_status(household_id: str, attempt_id: str) -> str:
+    _clean_expired_flows()
+    with _flow_lock:
+        item = _attempts.get(attempt_id)
+        return item[2] if item and item[0] == str(household_id) else "unknown"
+
+
+def _record_ah_attempt(flow: AHOAuthFlow, status: str) -> None:
+    with _flow_lock:
+        item = _attempts.get(flow.attempt_id)
+        if item and item[0] == flow.household_id and item[2] != "connected":
+            _attempts[flow.attempt_id] = (item[0], item[1], status)
 
 
 def get_ah_oauth_flow(flow_id: str | None) -> AHOAuthFlow | None:
@@ -203,8 +253,10 @@ def _safe_failure_return_url(request: Request) -> str:
     path = "/onboarding/winkels" if mode == "onboarding" else "/instellingen/winkelkoppelingen"
     configured = str(os.getenv("REZZERV_APP_BASE_URL", "") or "").strip().rstrip("/")
     parsed_config = urlparse(configured)
+    public_scheme = str(request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",", 1)[0].strip()
     if (
-        parsed_config.scheme in {"http", "https"}
+        (public_scheme != "https" or parsed_config.scheme == "https")
+        and parsed_config.scheme in {"http", "https"}
         and parsed_config.hostname
         and parsed_config.hostname.lower() not in {"localhost", "127.0.0.1"}
     ):
@@ -219,6 +271,11 @@ def _safe_failure_return_url(request: Request) -> str:
                 host = str(IPv4Address(".".join(parts)))
             except AddressValueError:
                 pass
+    if host.endswith(".ts.net"):
+        # The separate AH HTTPS proxy always recovers to HTTPS/443.
+        # HTTPS OAuth failure must return to the existing secured Inhuis URL,
+        # not the internal HTTP frontend port.
+        return f"https://{host}{path}?ah=error"
     # Never derive a redirect from an arbitrary Host header. Limit mobile
     # recovery to Tailscale, literal IPv4, local and numeric sslip.io routes.
     trusted = host == "localhost" or host.endswith(".ts.net")
@@ -301,16 +358,36 @@ def _rewrite_location(location: str, *, backend_origin: str) -> str:
 
 
 def _clean_forward_cookie(cookie_header: str) -> str:
+    """Forward only namespaced AH cookies, never any Inhuis auth/session cookie."""
     pairs = []
     for raw in str(cookie_header or "").split(";"):
         part = raw.strip()
-        if not part:
+        if "=" not in part:
             continue
-        name = part.split("=", 1)[0].strip()
-        if name == _FLOW_COOKIE:
+        name, value = part.split("=", 1)
+        if not name.startswith(_AH_PROXY_COOKIE_PREFIX):
             continue
-        pairs.append(part)
+        original = name[len(_AH_PROXY_COOKIE_PREFIX):]
+        if not original or original.lower().startswith("inhuis_"):
+            continue
+        pairs.append(f"{original}={value}")
     return "; ".join(pairs)
+
+
+def _namespace_ah_set_cookie(value: str, *, secure: bool) -> str:
+    """Keep AH's cookie attributes, but never collide with Inhuis cookies."""
+    clean = sanitize_ah_set_cookie(value)
+    name, sep, remainder = clean.partition("=")
+    if not sep or not name or name.lower().startswith("inhuis_"):
+        return ""
+    # RFC cookie names are tokens; refuse malformed/injected upstream headers.
+    if any(char not in "!#$%&'*+-.^_\x60|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+           for char in name):
+        return ""
+    cookie = f"{_AH_PROXY_COOKIE_PREFIX}{name}={remainder}"
+    if secure and "; secure" not in cookie.lower():
+        cookie += "; Secure"
+    return cookie
 
 
 _REQUEST_HEADER_EXCLUDE = {
@@ -325,6 +402,16 @@ _REQUEST_HEADER_EXCLUDE = {
     "upgrade",
     "accept-encoding",
     "cookie",
+    "authorization",
+    "proxy-authorization",
+    "x-csrf-token",
+    "x-xsrf-token",
+    "x-inhuis-expected-user",
+    "x-inhuis-expected-household",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-forwarded-for",
+    "x-real-ip",
     "x-fraud-detection-installation-id",
 }
 
@@ -416,6 +503,7 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
         return _redirect_failed_ah_login(request)
     if not str(code or "").strip():
         logger.warning("AH OAuth callback could not complete: reason=missing_authorization_code")
+        _record_ah_attempt(flow, "error")
         consume_ah_oauth_flow(flow.flow_id)
         return _redirect_failed_ah_login(request)
 
@@ -423,14 +511,22 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
     try:
         session = client.exchange_code(str(code))
         save_ah_session(engine, flow.household_id, session)
+        _record_ah_attempt(flow, "connected")
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "connected"), status_code=302)
+        if urlparse(flow.return_to).path == "/onboarding/winkels":
+            response.background = BackgroundTask(
+                sync_due_ah_households, engine,
+                Path(os.getenv("RETAILER_RECEIPT_STORAGE_ROOT", "/app/data/retailer-receipts/raw")),
+                only_household_id=flow.household_id,
+            )
         response.delete_cookie(_FLOW_COOKIE, path="/")
         response.delete_cookie(_FLOW_RETURN_COOKIE, path="/")
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
     except (httpx.HTTPError, ValueError):
+        _record_ah_attempt(flow, "error")
         consume_ah_oauth_flow(flow.flow_id)
         response = RedirectResponse(url=_return_with_status(flow, "error"), status_code=302)
         response.delete_cookie(_FLOW_COOKIE, path="/")
@@ -521,9 +617,11 @@ async def proxy_ah_login(path: str, request: Request):
         response.headers["location"] = _rewrite_location(location, backend_origin=flow.backend_origin)
 
     for set_cookie in upstream.headers.get_list("set-cookie"):
-        sanitized = sanitize_ah_set_cookie(set_cookie)
-        if sanitized:
-            response.headers.append("set-cookie", sanitized)
+        namespaced = _namespace_ah_set_cookie(
+            set_cookie, secure=flow.backend_origin.startswith("https://"),
+        )
+        if namespaced:
+            response.headers.append("set-cookie", namespaced)
 
     return response
 
@@ -531,3 +629,4 @@ async def proxy_ah_login(path: str, request: Request):
 def reset_ah_oauth_flows_for_tests() -> None:
     with _flow_lock:
         _flows.clear()
+        _attempts.clear()

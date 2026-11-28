@@ -36,22 +36,24 @@ export function saveStoreOnboardingSelection(selected) {
   return storeOnboardingRequest('/api/onboarding/stores/selection', 'PUT', { selected })
 }
 
-export function saveStoreOnboardingResult(provider, result, queueId = null) {
+export function saveStoreOnboardingResult(provider, result, queueId = null, runId = null) {
   return storeOnboardingRequest('/api/onboarding/stores/result', 'POST', {
-    provider, result, ...(queueId ? { queue_id: queueId } : {}),
+    provider, result,
+    ...(queueId ? { queue_id: queueId } : {}),
+    ...(runId ? { run_id: runId } : {}),
   })
 }
 
 export function hasStoreOnboardingToResume(state) {
   return state?.available === true
     && Array.isArray(state.selected)
-    && state.selected.some(code => state?.results?.[code] !== 'success')
+    && state.selected.some(code => !['success', 'empty'].includes(state?.results?.[code]))
 }
 
 
 /** Cycle through every selected retailer without letting a failed store block
  * the others. Successful transfers are never attempted again automatically. */
-export function nextStoreForOnboarding(selected, results = {}, previous = '') {
+export function nextStoreForOnboarding(selected, results = {}, previous = '', includeFailed = false) {
   if (!Array.isArray(selected)) return ''
   const valid = selected.filter(code => ['ah', 'jumbo', 'lidl'].includes(code))
   const start = valid.indexOf(previous)
@@ -60,6 +62,12 @@ export function nextStoreForOnboarding(selected, results = {}, previous = '') {
   // Durable failed results therefore come after untouched selections, even
   // when there is no in-memory previous retailer.
   return order.find(code => results?.[code] == null)
-    || order.find(code => results?.[code] === 'failed')
+    || (includeFailed ? order.find(code => results?.[code] === 'failed') : '')
     || ''
+}
+
+
+/** Explicitly skip a store without recording a false connection or failure. */
+export function skipStoreForOnboarding(selected, provider) {
+  return Array.isArray(selected) ? selected.filter(code => code !== provider) : []
 }

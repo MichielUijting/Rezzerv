@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.db import engine
 from app.api.receipt_ah_oauth_proxy_routes import (
     build_ah_oauth_launch_url,
+    ah_oauth_attempt_status,
     create_ah_oauth_flow,
 )
 from app.integrations.retailer_receipts import (
@@ -38,6 +39,12 @@ from app.services.picnic_account_secure_store import (
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 from app.services.retailer_import_queue import stage_confirmed_receipts
 from app.services.retailer_receipt_import_dates import latest_retailer_import_dates
+from app.services.jumbo_history_import_service import (
+    begin_jumbo_history, complete_jumbo_history,
+)
+from app.services.lidl_browser_import_service import (
+    begin_lidl_browser_import, complete_lidl_browser_import,
+)
 from app.services.retailer_history_progress import (
     load_retailer_history_progress,
     load_retailer_history_evidence,
@@ -57,14 +64,14 @@ class LidlImportWindowRequest(BaseModel):
 
 
 @router.get("/lidl/import-window")
-def get_lidl_import_window():
+def get_lidl_import_window(automatic: bool = Query(default=False)):
     with engine.connect() as conn:
         context, membership_id = _context_and_membership(conn)
         decision = evaluate_household_permission(
             conn, household_id=str(context.active_household_id),
             membership_id=membership_id, permission_key="household_settings.manage",
         )
-    return {**get_window(engine, str(context.active_household_id)), "can_manage": bool(decision.allowed)}
+    return {**get_window(engine, str(context.active_household_id), force_automatic=automatic), "can_manage": bool(decision.allowed)}
 
 
 @router.put("/lidl/import-window")
@@ -117,11 +124,79 @@ def _authorized_household_id(authorization: str | None) -> str:
     return household_context.active_household_id
 
 
+def _check_expected_retailer_context(
+    runtime_context: dict, expected_user: str | None, expected_household: str | None,
+) -> str:
+    """Only a backend-confirmed matching user/household may accept a bound import.
+
+    This is an extra context-match check, never a replacement for authentication.
+    Legacy browser and Lidl clients which send neither header keep the existing
+    authorization route. Partial headers and mismatches fail closed.
+    """
+    actual_household = str(runtime_context.get("active_household_id") or "").strip()
+    if expected_user is None and expected_household is None:
+        return actual_household
+    actual_user = str(runtime_context.get("user_id") or "").strip()
+    if (
+        not expected_user or not expected_household
+        or len(expected_user) > 128 or len(expected_household) > 128
+        or expected_user != actual_user or expected_household != actual_household
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Inhuis-gebruiker of huishouden is veranderd; winkelimport veilig gestopt.",
+        )
+    return actual_household
+
+
+def _import_bound_household_id(
+    authorization: str | None, expected_user: str | None, expected_household: str | None,
+) -> str:
+    from app.main import require_household_context
+
+    runtime_context = require_household_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    _check_expected_retailer_context(runtime_context, expected_user, expected_household)
+    # The authorized household remains the backend-derived authority.
+    return household_context.active_household_id
+
+
 @router.get("/history-progress")
 def get_retailer_history_progress(authorization: Optional[str] = Header(None)):
     """Observed Kassa/queue history for the authorized active household only."""
     household_id = _authorized_household_id(authorization)
     return load_retailer_history_progress(engine, household_id=household_id)
+
+
+@router.post("/history-recalculate")
+def request_historical_stock_recalculation(authorization: Optional[str] = Header(None)):
+    """Wake only the established maintenance-admitted, idempotent worker.
+
+    This request never accepts receipt, article or household identifiers from
+    the browser, runs no inventory writes itself, and does not claim that a
+    recalculation finished. Existing stored receipts are reused in place.
+    """
+    household_id = _authorized_household_id(authorization)
+    with engine.connect() as conn:
+        context, membership_id = _context_and_membership(conn)
+        if str(context.active_household_id) != str(household_id):
+            raise HTTPException(status_code=403, detail="Actief huishouden komt niet overeen.")
+        decision = evaluate_household_permission(
+            conn, household_id=household_id, membership_id=membership_id,
+            permission_key="household_settings.manage",
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan de historische controle aanvragen.")
+        from app.services.receipt_historical_import_policy import read_household_cutover
+        if read_household_cutover(conn, household_id) is None:
+            raise HTTPException(status_code=409, detail="Dit huishouden heeft geen historische datumgrens.")
+    from app.services.article_recognition_background_worker import signal_receipt_committed
+    signal_receipt_committed()
+    return {
+        "queued": True,
+        "completed": False,
+        "message": "Historische bonnen worden opnieuw gecontroleerd door de bestaande achtergrondverwerking.",
+    }
 
 
 @router.get("/history-evidence")
@@ -142,6 +217,79 @@ def get_retailer_history_evidence(
 def get_retailer_import_dates(authorization: Optional[str] = Header(None)):
     household_id = _authorized_household_id(authorization)
     return {"dates": latest_retailer_import_dates(engine, household_id=household_id)}
+
+
+class JumboHistoryCompleteRequest(BaseModel):
+    run_id: str = Field(min_length=36, max_length=36)
+    queue_ids: list[str] = Field(default_factory=list, max_length=2000)
+
+
+@router.post("/jumbo/history/begin")
+def begin_jumbo_history_import(
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
+    try:
+        return begin_jumbo_history(engine, household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/jumbo/history/complete")
+def complete_jumbo_history_import(
+    payload: JumboHistoryCompleteRequest,
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
+    try:
+        return complete_jumbo_history(
+            engine, household_id, run_id=payload.run_id, queue_ids=payload.queue_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class LidlBrowserCompleteRequest(BaseModel):
+    run_id: str = Field(min_length=36, max_length=36)
+    queue_ids: list[str] = Field(default_factory=list, max_length=2000)
+    from_date: date
+    to_date: date
+
+
+@router.post("/lidl/history/begin")
+def begin_lidl_browser_history(
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
+    try:
+        # The browser must use the automatic historical range during onboarding.
+        return begin_lidl_browser_import(engine, household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/lidl/history/complete")
+def complete_lidl_browser_history(
+    payload: LidlBrowserCompleteRequest,
+    authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
+):
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
+    try:
+        return complete_lidl_browser_import(
+            engine, household_id, run_id=payload.run_id,
+            queue_ids=payload.queue_ids, from_date=payload.from_date,
+            to_date=payload.to_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/providers")
@@ -188,9 +336,11 @@ def import_structured_retailer_receipt(
 def stage_structured_retailer_receipts(
     payload: list[RetailerReceiptEnvelope],
     authorization: Optional[str] = Header(None),
+    x_inhuis_expected_user: str | None = Header(default=None),
+    x_inhuis_expected_household: str | None = Header(default=None),
 ):
     """Durably accept confirmed receipts; does NOT claim Kassa completion."""
-    household_id = _authorized_household_id(authorization)
+    household_id = _import_bound_household_id(authorization, x_inhuis_expected_user, x_inhuis_expected_household)
     try:
         rows = stage_confirmed_receipts(
             engine, household_id=household_id, envelopes=payload,
@@ -234,6 +384,7 @@ def get_structured_retailer_receipt_queue_status(
 def start_ah_account_connection(
     request: Request,
     return_to: str | None = Query(default=None, max_length=2048),
+    onboarding: bool = Query(default=False),
     authorization: Optional[str] = Header(None),
 ):
     household_id = _authorized_household_id(authorization)
@@ -241,10 +392,12 @@ def start_ah_account_connection(
         request,
         household_id=household_id,
         return_to=return_to,
+        onboarding=onboarding,
     )
     return {
         **ah_session_status(engine, household_id),
         "login_url": build_ah_oauth_launch_url(flow),
+        "attempt_id": flow.attempt_id,
         "redirect_uri": "automatic",
         "expires_at": flow.expires_at.isoformat(),
         "instructions": (
@@ -275,9 +428,13 @@ def complete_ah_account_connection(
 @router.get("/ah/status")
 def get_ah_account_status(
     authorization: Optional[str] = Header(None),
+    attempt_id: str | None = Query(default=None, max_length=36),
 ):
     household_id = _authorized_household_id(authorization)
-    return ah_session_status(engine, household_id)
+    status = ah_session_status(engine, household_id)
+    if isinstance(attempt_id, str):
+        status["attempt_status"] = ah_oauth_attempt_status(household_id, attempt_id)
+    return status
 
 
 @router.delete("/ah/connect")

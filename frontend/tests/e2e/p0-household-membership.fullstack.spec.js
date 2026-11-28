@@ -55,11 +55,9 @@ async function registerAndCompleteWatInhuis(page, email, accountPassword, househ
   }
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
-  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
+  // PO-approved onboarding ends directly on the dashboard without the retired guide.
   await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
 }
 
 async function readSession(page) {

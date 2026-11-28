@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
+import ConsumableReviewPanel from './ConsumableReviewPanel'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import {
@@ -170,6 +171,7 @@ export default function SettingsHouseholdAutomationPage() {
           </div>
         </div>
         </Card>
+        <ConsumableReviewPanel enabled={!isLoading && canEdit} />
       {showLeaveModal ? (
         <div className="rz-modal-backdrop" role="presentation">
           <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-household-automation-title">

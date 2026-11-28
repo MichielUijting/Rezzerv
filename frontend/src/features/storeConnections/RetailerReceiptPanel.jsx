@@ -18,6 +18,7 @@ export default function RetailerReceiptPanel({
   toTestId,
   dateRangeTestId,
   datesDisabled = false,
+  hideDates = false,
   onFromChange,
   onToChange,
   openHref,
@@ -27,6 +28,8 @@ export default function RetailerReceiptPanel({
   openBusy = false,
   helpTestId,
   onHelp,
+  showSetupHelp = true,
+  nativeAutomatic = false,
   periodError,
   setupHelp,
   children,
@@ -56,16 +59,15 @@ export default function RetailerReceiptPanel({
         <h3 style={{ margin: 0 }}>{retailer} digitale kassabonnen</h3>
         {isMobileViewport ? (
           <p role="status" style={{ margin: '6px 0 0' }}>
-            Voor het ophalen is momenteel een browser met ondersteuning voor JavaScript-favorieten nodig.
-            Dit werkt niet betrouwbaar in alle mobiele browsers.
+            {nativeAutomatic ? 'Na aanmelden bij ' + retailer + ' haalt Inhuis de bonnen automatisch op.' : 'Volg de mobiele stappen onder Eerste keer koppelen. Alleen de winkelwebsite openen haalt nog geen kassabonnen op.'}
           </p>
         ) : null}
         <p style={{ margin: '6px 0 0' }}>
-          Kies de periode en haal je kassabonnen op.
+          {hideDates ? 'Inhuis bepaalt bij iedere import de actuele periode.' : 'Kies de periode en haal je kassabonnen op.'}
         </p>
       </div>
 
-      <div
+      {!hideDates && <div
         data-testid={dateRangeTestId || 'retailer-receipt-date-range'}
         style={{ display: 'flex', columnGap: '12px', rowGap: '12px', flexWrap: 'wrap' }}
       >
@@ -85,7 +87,7 @@ export default function RetailerReceiptPanel({
           disabled={datesDisabled}
           data-testid={toTestId}
         />
-      </div>
+      </div>}
 
 
       <div
@@ -93,8 +95,8 @@ export default function RetailerReceiptPanel({
         style={{
           display: 'grid',
           gridTemplateColumns: isMobileViewport
-            ? 'minmax(0, 1fr) minmax(0, 1.5fr)'
-            : 'minmax(0, 160px) minmax(0, 240px)',
+            ? (nativeAutomatic ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1.5fr)')
+            : (nativeAutomatic ? 'minmax(0, 1fr)' : 'minmax(0, 160px) minmax(0, 240px)'),
           alignItems: 'stretch',
           justifyContent: 'space-between',
           gap: '8px',
@@ -118,6 +120,7 @@ export default function RetailerReceiptPanel({
             data-testid={openTestId}
           >{openBusy ? `${retailer} voorbereiden…` : `Open mijn ${retailer}`}</Button>
         )}
+        {showSetupHelp ? (
         <Button
           type="button"
           variant="secondary"
@@ -125,6 +128,7 @@ export default function RetailerReceiptPanel({
           onClick={onHelp}
           data-testid={helpTestId}
         >Eerste keer koppelen met {retailer}?</Button>
+        ) : null}
       </div>
       {setupHelp}
       {children}

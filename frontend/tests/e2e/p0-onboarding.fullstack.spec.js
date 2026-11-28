@@ -67,19 +67,77 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
     await expect(page.getByTestId('onboarding-select-' + retailer)).toBeVisible()
     await expect(page.getByTestId('onboarding-store-row-' + retailer)).toHaveAttribute('data-result', 'neutral')
   }
-  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
-  await page.getByTestId('onboarding-store-row-ah').locator('label').click()
-  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
-  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
-  await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
-  const selectionResponse = await page.request.get('/api/onboarding/stores')
+  for (const [code, mark] of [['ah', 'ah'], ['jumbo', 'J'], ['lidl', 'L']]) {
+    await expect(page.getByTestId('onboarding-store-mark-' + code)).toHaveText(mark)
+  }
+  for (const width of [390, 320, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    const selection = page.getByTestId('store-onboarding-selection')
+    // Changing viewport may remount the responsive shell and reload store selection.
+    // Wait for the actual table, not the temporary loading panel with the same route.
+    const table = selection.locator('table')
+    const headers = table.locator('thead th')
+    await expect(table).toBeVisible()
+    await expect(headers).toHaveCount(3)
+    for (let index = 0; index < 3; index++) {
+      await expect(headers.nth(index)).toHaveCSS('color', 'rgb(255, 255, 255)')
+    }
+    await expect.poll(async () => {
+      const box = await table.boundingBox()
+      return box ? box.x + box.width : Infinity
+    }).toBeLessThanOrEqual(width + 1)
+    const later = page.getByTestId('onboarding-stores-later')
+    await expect(later).toBeVisible()
+    await expect.poll(async () => {
+      const box = await later.boundingBox()
+      return box ? box.x + box.width : Infinity
+    }).toBeLessThanOrEqual(width + 1)
+  }
+  // Checkbox clicks never persist or refresh; several shops can be picked
+  // immediately, then adjusted locally before one explicit confirmation.
+  const selectionWrites = []
+  page.on('request', request => {
+    if (request.url().includes('/api/onboarding/stores/selection') && request.method() === 'PUT') {
+      selectionWrites.push(JSON.parse(request.postData()))
+    }
+  })
+  await page.evaluate(() => { window.__inhuisSelectionPageMarker = 'same-document' })
+  for (const code of ['ah', 'jumbo', 'lidl']) {
+    await page.getByTestId('onboarding-store-row-' + code).locator('label').click()
+    await expect(page.getByTestId('onboarding-select-' + code)).toBeChecked()
+    expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  }
+  expect(selectionWrites).toEqual([])
+  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  let selectionResponse = await page.request.get('/api/onboarding/stores')
   expect(selectionResponse.status()).toBe(200)
   expect(await selectionResponse.json()).toMatchObject({
-    available: true, selected: ['ah', 'lidl'], results: {},
+    available: true, selected: [], results: {},
+  })
+  for (const code of ['ah', 'jumbo']) {
+    await page.getByTestId('onboarding-store-row-' + code).locator('label').click()
+    await expect(page.getByTestId('onboarding-select-' + code)).not.toBeChecked()
+  }
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  expect(selectionWrites).toEqual([])
+
+  // Use the real server: no request interception in this full-stack authority.
+  const savedSelection = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/onboarding/stores/selection' &&
+    response.request().method() === 'PUT')
+  await page.getByTestId('onboarding-stores-start').click()
+  const savedResponse = await savedSelection
+  expect(savedResponse.ok()).toBeTruthy()
+  expect(selectionWrites).toEqual([{ selected: ['lidl'] }])
+  await expect(page.getByTestId('lidl-digital-receipts')).toBeVisible()
+  expect(await page.evaluate(() => window.__inhuisSelectionPageMarker)).toBe('same-document')
+  selectionResponse = await page.request.get('/api/onboarding/stores')
+  expect(selectionResponse.status()).toBe(200)
+  expect(await selectionResponse.json()).toMatchObject({
+    available: true, selected: ['lidl'], results: {},
   })
   await page.reload()
-  await expect(page.getByTestId('onboarding-select-ah')).toBeChecked()
+  await expect(page.getByTestId('onboarding-select-ah')).not.toBeChecked()
   await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
   await expect(page.getByTestId('onboarding-select-jumbo')).not.toBeChecked()
 
@@ -99,11 +157,12 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   }
   // Later never blocks Home, even when stores remain selected.
   await page.getByTestId('onboarding-stores-later').click()
-  await expect(page).toHaveURL(/\/home\?wegwijs=1$/)
-  await expect(page.getByTestId('first-use-dashboard-guide')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
+  // Even an obsolete link must never render the deleted dashboard guide.
+  await page.goto('/home?wegwijs=1')
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
+  await page.goto('/home')
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
   await expect(page.getByTestId('home-tile-bijna-op')).toBeVisible()
@@ -137,5 +196,42 @@ test('L4-01 one-screen registration -> Wat Inhuis defaults -> stores -> usable a
   expect(session.context_type).toBe('regular')
   expect(session.role).toBe('admin')
 
+  // Touch-sized Android Chrome onboarding uses the retailer's actual import
+  // bookmarklet, not the desktop drag-to-favorites control or a fake login.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36',
+    })
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async value => { window.__inhuisCopiedBookmarklet = value } },
+    })
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/onboarding/winkels')
+  // Explicit Later clears unfinished choices; verify persisted opt-out before reselecting.
+  await expect(page.getByTestId('onboarding-select-lidl')).not.toBeChecked()
+  const deferredResponse = await page.request.get('/api/onboarding/stores')
+  expect(deferredResponse.ok()).toBeTruthy()
+  expect(await deferredResponse.json()).toMatchObject({ available: true, selected: [], results: {} })
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-lidl')).not.toBeChecked()
+  await page.getByTestId('onboarding-store-row-lidl').locator('label').click()
+  await expect(page.getByTestId('onboarding-select-lidl')).toBeChecked()
+  await page.getByTestId('onboarding-stores-start').click()
+  await expect(page.getByTestId('lidl-mobile-setup')).toHaveAttribute('data-browser', 'chrome')
+  await expect(page.getByTestId('lidl-mobile-open-store')).toBeVisible()
+  await expect(page.getByTestId('lidl-mobile-copy')).toHaveCount(0)
+  await expect(page.getByTestId('lidl-mobile-setup')).toContainText('Adres gekopieerd')
+  expect(await page.evaluate(() => window.__inhuisCopiedBookmarklet?.startsWith('javascript:'))).toBe(true)
+  await expect(page.getByTestId('lidl-mobile-setup')).not.toContainText('Stap 3 van 3')
+  await expect(page.getByTestId('lidl-web-bookmarklet')).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2)).toBe(true)
+  await page.getByTestId('lidl-mobile-skip').click()
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('first-use-dashboard-guide')).toHaveCount(0)
   console.log('P0_L4_01_ONBOARDING_BROWSER_GREEN')
 })

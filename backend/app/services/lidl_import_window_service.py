@@ -1,5 +1,5 @@
 """Lidl import window settings per household."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
@@ -8,16 +8,18 @@ def _date(value):
     return date.fromisoformat(value) if isinstance(value, str) else value
 
 
-def get_window(engine, household_id):
+def get_window(engine, household_id, *, force_automatic=False):
     with engine.connect() as conn:
         row = conn.execute(text("SELECT from_date, to_date, last_imported_date FROM household_lidl_import_windows WHERE household_id=:id"), {"id": household_id}).mappings().first()
     data = dict(row or {})
-    start = _date(data.get("from_date"))
-    end = _date(data.get("to_date"))
+    # Mobile onboarding uses the canonical rolling range even if an old
+    # desktop-specific manual range remains saved for this household.
+    start = None if force_automatic else _date(data.get("from_date"))
+    end = None if force_automatic else _date(data.get("to_date"))
     last = _date(data.get("last_imported_date"))
     today = datetime.now(ZoneInfo('Europe/Amsterdam')).date()
     return {
-        "from_date": (start or last or (today - timedelta(days=30))).isoformat(),
+        "from_date": (start or last or date(today.year - 1, 1, 1)).isoformat(),
         "to_date": (end or today).isoformat(),
         "configured_from_date": start.isoformat() if start else None,
         "configured_to_date": end.isoformat() if end else None,

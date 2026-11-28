@@ -53,7 +53,12 @@ assert.match(script, /toDataURL\('image\/png'\)/)
 assert.doesNotMatch(script, /document\.cookie/)
 assert.doesNotMatch(script, /localStorage/)
 assert.doesNotMatch(script, /sessionStorage/)
-assert.doesNotMatch(script, /Password|password/)
+// A login-form presence check is required to reject a false empty history.
+// Only this exact presence selector is permitted; no credential access.
+const loginPresenceGuard = `const hasLogin = Boolean(doc?.querySelector('input[type="password"], form[action*="login"]'))`
+assert.ok(script.includes(loginPresenceGuard))
+assert.match(script, /\(empty \|\| main\) && !hasLogin/)
+assert.doesNotMatch(script.replace(loginPresenceGuard, ''), /Password|password/)
 
 const windowedScript = buildLidlWebPageScript('http://localhost:5174', {
   from_date: '2026-10-01', to_date: '2026-10-11',
@@ -71,10 +76,10 @@ console.log('LIDL_WEB_RECEIPT_BRIDGE_CONTRACT_GREEN')
 assert.match(windowedScript, /isHistory && matchesWindow !== true/)
 assert.match(windowedScript, /orderedPages >= 2/)
 assert.match(windowedScript, /pageNumber === 50/)
-assert.match(windowedScript, /if \(pageNumber === 1\) throw new Error\('Lidl-historie kon niet worden geladen/)
+assert.match(windowedScript, /if \(!explicitEnd\) throw new Error\('Lidl-historie kon niet volledig worden geladen/)
 
 assert.match(windowedScript, /last_imported_date/)
-assert.match(windowedScript, /await waitForAck\(receipt.id\)/)
+assert.match(windowedScript, /const acknowledgement = waitForAck\(receipt.id, 30000\)\s+post\(\{ type: 'inhuis:lidl-receipt', receipt \}\)\s+await acknowledgement/)
 
 
 
@@ -125,10 +130,55 @@ assert.match(windowedScript, /withinWindow\(rowDate\) !== true/)
 assert.match(windowedScript, /entries\.length \+ ' bonnen binnen de ingestelde periode gevonden/)
 console.log('LIDL_HISTORY_YEAR_FILTER_REGRESSION_GREEN')
 
-// The PO cannot start a Lidl history import with unsaved date edits.
+// Existing Lidl import window persists edited dates BEFORE opening the
+// retailer. A failed PUT cannot result in an import with stale dates.
 const storeConnectionScreen = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
 assert.match(storeConnectionScreen, /const lidlPeriodUnsaved =/)
 assert.match(storeConnectionScreen, /lidlFrom !== \(lidlWindow\.configured_from_date/)
-assert.match(storeConnectionScreen, /data-testid="lidl-period-unsaved"/)
-assert.match(storeConnectionScreen, /disabled=\{lidlPeriodUnsaved \|\| lidlWindowSaving \|\| !lidlWindow\}/)
-console.log('LIDL_UNSAVED_PERIOD_GUARD_GREEN')
+assert.match(storeConnectionScreen, /const needsSave = !onboardingMode && !mobileRetailer && lidlPeriodUnsaved/)
+assert.match(storeConnectionScreen, /data\?\.configured_from_date !== lidlFrom/)
+const lidlLaunch = storeConnectionScreen.slice(
+  storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()'),
+  storeConnectionScreen.indexOf('useEffect(() => {', storeConnectionScreen.indexOf('async function openLidlWithSavedPeriod()')),
+)
+assert.match(lidlLaunch, /lidlTab\.location\.replace\(LIDL_HISTORY_URL\)/)
+assert.ok(lidlLaunch.indexOf("method: 'PUT'") < lidlLaunch.indexOf('lidlTab.location.replace'),
+  'Lidl must not open before the household-scoped period is saved')
+console.log('LIDL_SAVED_PERIOD_GUARD_GREEN')
+
+const mobileLidlSource = readFileSync(new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url), 'utf8')
+assert.match(mobileLidlSource, /mobileRetailer \? '\?automatic=true' : ''/)
+assert.match(mobileLidlSource, /hideDates=\{mobileRetailer \|\| onboardingMode\}/)
+console.log('LIDL_MOBILE_AUTOMATIC_WINDOW_GREEN')
+
+const nativeId = '11e85250-cee9-44ff-9204-acf550ca85a3'
+const nativeScript = buildLidlWebPageScript('https://inhuis.example', {
+  from_date: '2026-01-01', to_date: '2026-11-27',
+}, nativeId)
+assert.match(nativeScript, /__inhuisNativeLidlOpener/)
+assert.match(nativeScript, /inhuis-native-lidl-ack/)
+assert.match(nativeScript, /native_request_id/)
+assert.match(nativeScript, /inhuis:lidl-receipt/)
+assert.match(nativeScript, /collectHistory/)
+assert.match(nativeScript, /const acknowledgement = waitForAck\(receipt.id, 30000\)\s+post\(\{ type: 'inhuis:lidl-receipt', receipt \}\)\s+await acknowledgement/)
+assert.throws(() => buildLidlWebPageScript('https://inhuis.example', {}, 'bad'), /Ongeldige native/)
+
+assert.match(windowedScript, /if \(!explicitEnd\) throw new Error/)
+assert.match(nativeScript, /if \(!explicitEnd\) throw new Error/)
+
+assert.match(nativeScript, /const useCurrentPage = pageNumber === 1/)
+assert.match(nativeScript, /Lidl-historiepagina/)
+assert.match(nativeScript, /processed: imported, total: entries.length/)
+assert.match(storeConnectionScreen, /testId="lidl-onboarding-progress"/)
+
+assert.match(nativeScript, /stage: 'receipts'/)
+assert.match(nativeScript, /attempt <= \(nativeRequestId \? 3 : 0\)/)
+assert.match(nativeScript, /nativeRequestId \? 60000 : 45000/)
+assert.doesNotMatch(nativeScript, /nativeRequestId \? 10000/)
+assert.match(nativeScript, /pending = deferred/)
+assert.match(nativeScript, /if \(pending.length\) \{\s*throw new Error/)
+assert.match(storeConnectionScreen, /counterLabel="ontvangen" testId="lidl-web-progress"/)
+
+assert.match(nativeScript, /stage: 'known-receipt-check'/)
+assert.match(nativeScript, /\(await knownAck\).known === true/)
+assert.match(storeConnectionScreen, /Object.hasOwn\(known, receiptId\)/)
