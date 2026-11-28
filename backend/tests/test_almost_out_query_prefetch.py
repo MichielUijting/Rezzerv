@@ -177,4 +177,6 @@ def test_known_article_id_is_authority_even_when_snapshot_name_differs():
     assert [row["id"] for row in result["a"]["inventory_rows"]] == ["stock-a"]
     assert result["b"]["inventory_rows"] == []
     assert [row["id"] for row in result["a"]["event_rows"]] == ["event-a"]
+    assert result["a"]["event_rows"][0]["article_id"] == "a"
+    assert result["a"]["event_rows"][0]["source_article_id"] == "b"
     assert result["b"]["event_rows"] == []
