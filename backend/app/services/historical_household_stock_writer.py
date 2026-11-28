@@ -508,6 +508,14 @@ def _prepare_historical_article_links(conn, owner, cutoff):
     }).mappings().all()
     if len(rows) > MAX_HISTORICAL_PURCHASE_LINES:
         return
+    # Normalize only previously uncorrected historical Lidl text in place.
+    # Preserve original receipt lines, user corrections and article identities.
+    from app.services.historical_lidl_name_backfill import (
+        normalize_stored_lidl_purchase_names,
+    )
+    normalize_stored_lidl_purchase_names(
+        conn, household_id=owner, rows=rows,
+    )
     for row in rows:
         if row.get("matched_article_id") or not _is_digital_purchase(row):
             continue
