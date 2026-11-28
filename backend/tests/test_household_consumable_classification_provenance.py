@@ -102,3 +102,64 @@ def test_inventory_created_article_never_persists_unknown_as_nonconsumable(name,
     assert len(inserts) == 1
     assert inserts[0][1]["consumable"] is expected
     assert inserts[0][1]["household_id"] == "house-1"
+
+
+
+class _ArticleScopedConn:
+    """Synthetic same-label rows must never share one classification write."""
+    def __init__(self, records):
+        self.records = records
+        self.writes = []
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        args = dict(params or {})
+        assert args["household_id"] == "home-1"
+        if sql.lstrip().upper().startswith("SELECT"):
+            assert "id = :article_id" in sql
+            assert "lower(trim(naam))" not in sql
+            self.current = self.records.get(args["article_id"])
+            return self
+        assert "UPDATE household_articles" in sql
+        assert "id = :article_id" in sql
+        assert "consumable IS NULL" in sql
+        assert "lower(trim(naam))" not in sql
+        self.writes.append(args["article_id"])
+        assert self.records[args["article_id"]]["consumable"] is None
+        self.records[args["article_id"]]["consumable"] = 1
+        return self
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self.current
+
+
+def test_same_name_articles_keep_independent_consumable_classification(monkeypatch):
+    """Canonical ID, not display name, is the classification authority."""
+    monkeypatch.setattr(legacy, "infer_consumable_from_name",
+                        lambda name: "melk" in str(name or "").lower())
+    conn = _ArticleScopedConn({
+        "auto": {"id": "auto", "naam": "Halfvolle melk", "consumable": None},
+        "manual-no": {"id": "manual-no", "naam": "Halfvolle melk", "consumable": 0},
+        "manual-yes": {"id": "manual-yes", "naam": "Halfvolle melk", "consumable": 1},
+    })
+    assert legacy.get_article_consumable_state(conn, "home-1", "auto", "Halfvolle melk") is True
+    assert legacy.get_article_consumable_state(conn, "home-1", "manual-no", "Halfvolle melk") is False
+    assert legacy.get_article_consumable_state(conn, "home-1", "manual-yes", "Halfvolle melk") is True
+    assert conn.writes == ["auto"]
+    assert conn.records["manual-no"]["consumable"] == 0
+    assert conn.records["manual-yes"]["consumable"] == 1
+
+
+def test_missing_canonical_article_id_never_falls_back_to_same_name(monkeypatch):
+    monkeypatch.setattr(legacy, "infer_consumable_from_name",
+                        lambda name: True)
+    conn = _ArticleScopedConn({
+        "owned": {"id": "owned", "naam": "Halfvolle melk", "consumable": 1},
+    })
+    assert legacy.get_article_consumable_state(
+        conn, "home-1", "foreign-or-deleted-id", "Halfvolle melk",
+    ) is False
+    assert conn.writes == []
