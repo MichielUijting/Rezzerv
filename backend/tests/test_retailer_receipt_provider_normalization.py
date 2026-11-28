@@ -563,3 +563,34 @@ def test_lidl_product_properties_are_not_transaction_suffixes():
     from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
     for label in ("Lasagnebladen 500g", "Rundergehakt 12%", "Vitamine B12", "Kwastenset"):
         assert clean_lidl_transaction_label(label)[0] == label
+
+
+def test_lidl_short_store_code_is_not_a_barcode():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl", external_receipt_id="synthetic-lidl-code",
+        receipt={"date": "2026-10-15", "totalAmount": "0.99",
+                 "items": [{"name": "Verse halfvolle melk 0,99 B",
+                            "codeInput": "123456", "articleNumber": "123456"}]},
+    )
+    canonical = normalize_retailer_receipt(
+        envelope, scan_id="synthetic-code", document_sha256="d" * 64,
+    )
+    identifiers = canonical.receipt.lines[0].identifiers
+    assert identifiers.retailer_sku == "123456"
+    assert identifiers.barcode is None
+    assert identifiers.gtin is None
+
+
+def test_lidl_proven_gtin_shape_is_preserved():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl", external_receipt_id="synthetic-lidl-gtin",
+        receipt={"date": "2026-10-15", "totalAmount": "0.99",
+                 "items": [{"name": "Verse halfvolle melk 0,99 B",
+                            "codeInput": "8712345678906"}]},
+    )
+    canonical = normalize_retailer_receipt(
+        envelope, scan_id="synthetic-gtin", document_sha256="e" * 64,
+    )
+    identifiers = canonical.receipt.lines[0].identifiers
+    assert identifiers.gtin == "8712345678906"
+    assert identifiers.barcode == "8712345678906"
