@@ -2042,12 +2042,19 @@ def get_article_consumable_state(conn, household_id: str, article_id: str | None
     if row and row.get("consumable") is not None:
         return bool(row["consumable"])
     inferred = infer_consumable_from_name(normalized_name)
-    if row and row.get("naam"):
+    # Unknown automatic classification is not a user's explicit decision.
+    # Only positive, independently recognized consumable evidence may fill
+    # NULL; keep NULL otherwise so later improved evidence can still apply.
+    if row and row.get("naam") and inferred:
         conn.execute(
             text(
-                "UPDATE household_articles SET consumable = :consumable, updated_at = CURRENT_TIMESTAMP WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))"
+                """UPDATE household_articles
+                   SET consumable = 1, updated_at = CURRENT_TIMESTAMP
+                   WHERE household_id = :household_id
+                     AND lower(trim(naam)) = lower(trim(:naam))
+                     AND consumable IS NULL"""
             ),
-            {"consumable": 1 if inferred else 0, "household_id": str(household_id), "naam": row["naam"]},
+            {"household_id": str(household_id), "naam": row["naam"]},
         )
     return inferred
 
@@ -2149,7 +2156,14 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
 
     existing_name = find_existing_household_article_name(conn, household_id, normalized)
     final_name = existing_name or normalized
-    resolved_consumable = infer_consumable_from_name(final_name) if consumable is None else bool(consumable)
+    # Tristate provenance: an unrecognized auto-created item is unknown,
+    # never a persisted, falsely explicit non-consumable user decision.
+    # A caller-provided False is a deliberate value and must remain False.
+    inferred_consumable = infer_consumable_from_name(final_name)
+    resolved_consumable = (
+        (True if inferred_consumable else None)
+        if consumable is None else bool(consumable)
+    )
     if not existing_name:
         article_id = str(uuid.uuid4())
         conn.execute(
@@ -2159,7 +2173,7 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
                 VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP)
                 """
             ),
-            {"id": article_id, "household_id": str(household_id), "naam": normalized, "consumable": 1 if resolved_consumable else 0},
+            {"id": article_id, "household_id": str(household_id), "naam": normalized, "consumable": None if resolved_consumable is None else int(resolved_consumable)},
         )
     else:
         conn.execute(
@@ -2170,7 +2184,7 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
                 WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
                 """
             ),
-            {"household_id": str(household_id), "naam": final_name, "consumable": 1 if resolved_consumable else 0},
+            {"household_id": str(household_id), "naam": final_name, "consumable": None if resolved_consumable is None else int(resolved_consumable)},
         )
         existing_row = get_household_article_row_by_name(conn, household_id, final_name)
         article_id = str(existing_row.get('id')) if existing_row and existing_row.get('id') else None
@@ -5788,7 +5802,8 @@ def ensure_household_article_for_global_product(conn, household_id: str, global_
             raise HTTPException(status_code=409, detail="Artikel heeft al een andere barcode")
 
     option_id = ensure_household_article(
-        conn, normalized_household_id, product_name, consumable=infer_consumable_from_name(product_name)
+        conn, normalized_household_id, product_name,
+        consumable=(True if infer_consumable_from_name(product_name) else None),
     )
     article_row = get_household_article_row_by_id(conn, normalized_household_id, option_id)
     if not article_row:
