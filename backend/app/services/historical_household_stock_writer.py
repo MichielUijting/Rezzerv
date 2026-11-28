@@ -433,6 +433,7 @@ def _prepare_historical_article_links(conn, owner, cutoff):
     )
     from app.services.receipt_historical_import_policy import historical_history_start_date
     from app.services.receipt_stock_review_service import resolve_stock_household_article
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
 
     rows = conn.execute(text(_HISTORICAL_AUTO_SOURCE_SQL), {
         "household_id": owner,
@@ -457,6 +458,8 @@ def _prepare_historical_article_links(conn, owner, cutoff):
         ):
             continue
         name = str(row.get("corrected_raw_label") or row.get("raw_label") or "").strip()
+        if row["source_provider"] == "lidl":
+            name = clean_lidl_transaction_label(name)[0]
         if not name:
             continue
         # Do not let a retailer SKU masquerade as a GTIN. No new central
@@ -466,6 +469,7 @@ def _prepare_historical_article_links(conn, owner, cutoff):
             line={
                 "article_name_raw": name,
                 "matched_global_product_id": row.get("matched_global_product_id"),
+                "retailer_sku": row.get("external_article_code"),
                 "barcode": row.get("barcode"),
             },
             store_provider_code=row["source_provider"],
