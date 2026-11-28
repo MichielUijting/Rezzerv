@@ -2072,7 +2072,7 @@ def get_article_consumable_state(conn, household_id: str, article_id: str | None
     # never become False; an explicit True/False must never be overwritten.
     # Persist by the *exact owned article ID*, never by its display name.
     if row and normalized_article_id and not alias and inferred:
-        conn.execute(
+        updated = conn.execute(
             text("""
                 UPDATE household_articles
                 SET consumable = 1, updated_at = CURRENT_TIMESTAMP
@@ -2081,6 +2081,12 @@ def get_article_consumable_state(conn, household_id: str, article_id: str | None
             """),
             {"household_id": str(household_id), "article_id": normalized_article_id},
         )
+        if getattr(updated, "rowcount", 0) == 1:
+            from app.services.household_consumable_review import record_classification_origin
+            record_classification_origin(
+                conn, household_id=household_id, article_id=normalized_article_id,
+                kind="automatic_positive",
+            )
     return inferred
 
 
@@ -2214,6 +2220,12 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
         existing_row = get_household_article_row_by_name(conn, household_id, final_name)
         article_id = str(existing_row.get('id')) if existing_row and existing_row.get('id') else None
     if article_id:
+        if not existing_name and resolved_consumable is not None:
+            from app.services.household_consumable_review import record_classification_origin
+            record_classification_origin(
+                conn, household_id=household_id, article_id=article_id,
+                kind=("automatic_positive" if consumable is None else "caller_supplied"),
+            )
         if str(article_id).startswith("live::"):
             article_id = _adopt_synthetic_household_article_identity(conn, household_id, str(article_id))
         ensure_household_article_global_product_link(conn, article_id)
@@ -2390,7 +2402,7 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
                     'id': direct_id,
                     'household_id': str(household_id),
                     'naam': normalized_name,
-                    'consumable': 1 if resolved_consumable else 0,
+                    'consumable': 1 if resolved_consumable else None,
                 },
             )
             row = get_household_article_row_by_name(conn, household_id, normalized_name)
@@ -8642,6 +8654,12 @@ def resolve_or_create_inventory_household_article(
             "source": str(source or "inventory").strip() or "inventory",
         },
     )
+    if inferred_consumable:
+        from app.services.household_consumable_review import record_classification_origin
+        record_classification_origin(
+            conn, household_id=normalized_household_id, article_id=household_article_id,
+            kind="automatic_positive",
+        )
     return household_article_id
 
 
