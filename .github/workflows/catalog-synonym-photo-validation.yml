@@ -1,7 +1,9 @@
 name: Catalogus synonym photo and pagination validation
+# draft-ci-router: routed
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - '.github/workflows/catalog-synonym-photo-validation.yml'

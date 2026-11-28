@@ -1,7 +1,10 @@
 name: Uitpakken dagartikelen Release A
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/services/day_article_service.py'

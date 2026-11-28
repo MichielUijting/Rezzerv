@@ -1,7 +1,10 @@
 name: Technical schema platform authorization validation
+# draft-ci-router: routed
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/app/services/authorization_foundation_service.py'

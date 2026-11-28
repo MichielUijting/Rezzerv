@@ -1,6 +1,8 @@
 name: CBS official complete appendix import
+# draft-ci-router: routed
 on:
   pull_request:
+    types: [ready_for_review]
     branches: [main]
     paths:
       - 'tools/inhuis_cbs_official_appendix_import.py'

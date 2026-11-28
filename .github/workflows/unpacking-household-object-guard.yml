@@ -1,7 +1,9 @@
 name: Unpacking household object guard
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types: [ready_for_review]
     branches:
       - main
     paths:

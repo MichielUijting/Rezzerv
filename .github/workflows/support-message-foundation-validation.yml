@@ -1,11 +1,9 @@
 name: Support message foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
     types:
-      - opened
-      - reopened
-      - synchronize
       - ready_for_review
     paths:
       - 'backend/alembic/**'
@@ -16,6 +14,7 @@ on:
       - 'scripts/ci/draft_domain_impact.py'
       - 'quality/ci/draft_domain_impact_policy.json'
       - '.github/workflows/support-message-foundation-validation.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

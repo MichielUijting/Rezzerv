@@ -1,7 +1,9 @@
 name: Frontend cookie session authority
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'frontend/**'
       - '!frontend/version.json'

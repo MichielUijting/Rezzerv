@@ -1,6 +1,9 @@
 name: Server maintenance isolated PostgreSQL validation
+# draft-ci-router: routed
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/maintenance*'
       - 'backend/app/services/household_notification_service.py'

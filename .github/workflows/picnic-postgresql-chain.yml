@@ -1,7 +1,10 @@
 name: Picnic isolated PostgreSQL inventory chain proof
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/testing/picnic_postgresql_chain_proof.py'
       - 'backend/app/integrations/picnic_order_converter.py'

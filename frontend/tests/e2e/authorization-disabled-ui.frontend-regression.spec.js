@@ -28,6 +28,16 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
       }),
     })
   })
+  // Keep the synthetic authenticated session consistent with the real API contract.
+  // These two background requests otherwise reach the real cookie-protected API.
+  await page.route('**/api/maintenance/status', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({ status: 200, json: { state: 'normal', announcement: null } })
+  })
+  await page.route('**/api/session/heartbeat', async (route) => {
+    expect(route.request().method()).toBe('POST')
+    await route.fulfill({ status: 204 })
+  })
   await page.route(/\/api\/session\/households(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,

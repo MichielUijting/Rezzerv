@@ -1,7 +1,10 @@
 name: Aldi unavailable store-connection contract
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/features/storeConnections/StoreConnectionsPage.jsx'
       - 'frontend/src/features/storeConnections/storeConnectionsModel.js'

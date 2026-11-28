@@ -1,7 +1,10 @@
 name: PostgreSQL data migration equivalence
+# draft-ci-router: routed
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'backend/app/maintenance/postgresql_data_migration.py'
       - 'backend/app/maintenance/postgresql_data_migration_head.py'

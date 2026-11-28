@@ -1,7 +1,9 @@
 name: Unpacking readiness article model validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types: [ready_for_review]
     branches: [main]
     paths:
       - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'

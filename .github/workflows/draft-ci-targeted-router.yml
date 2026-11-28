@@ -49,6 +49,14 @@ jobs:
           python scripts/ci/draft_workflow_router.py self-test | tee draft-ci-router-self-test.log
           grep -Fx 'DRAFT_CI_ROUTER_SELF_TEST_GREEN' draft-ci-router-self-test.log
 
+      - name: Validate full Draft workflow inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/validate_draft_ci_workflow_inventory.py
+          python scripts/ci/validate_draft_ci_workflow_inventory.py --manifest quality/ci/draft_ci_workflow_inventory.json | tee draft-ci-router-inventory.log
+          grep -Fx 'DRAFT_CI_WORKFLOW_INVENTORY_GREEN' draft-ci-router-inventory.log
+
       - name: Plan and dispatch targeted Draft workflows
         id: router
         shell: bash
@@ -60,9 +68,10 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           PR_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          python scripts/ci/draft_workflow_router.py run             --repo "$GITHUB_REPOSITORY"             --action "$PR_ACTION"             --draft "$PR_DRAFT"             --base-sha "$BASE_SHA"             --before-sha "${BEFORE_SHA:-}"             --head-sha "$HEAD_SHA"             --head-ref "$HEAD_REF"             --evidence draft-ci-router-plan.json             | tee draft-ci-router.log
+          python scripts/ci/draft_workflow_router.py run             --repo "$GITHUB_REPOSITORY"             --action "$PR_ACTION"             --draft "$PR_DRAFT"             --base-sha "$BASE_SHA"             --before-sha "${BEFORE_SHA:-}"             --head-sha "$HEAD_SHA"             --head-ref "$HEAD_REF"             --pr-number "$PR_NUMBER"             --evidence draft-ci-router-plan.json             | tee draft-ci-router.log
           grep -Fx 'DRAFT_CI_ROUTER_GREEN' draft-ci-router.log
 
       - name: Publish routing summary
@@ -103,6 +112,7 @@ jobs:
           name: draft-ci-router-${{ github.run_id }}
           path: |
             draft-ci-router-self-test.log
+            draft-ci-router-inventory.log
             draft-ci-router.log
             draft-ci-router-plan.json
           if-no-files-found: warn

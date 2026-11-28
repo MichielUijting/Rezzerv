@@ -1,7 +1,10 @@
 name: Winkelen frontend regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/features/shopping/**'
       - 'frontend/tests/e2e/winkelen.mobile.frontend-regression.spec.js'

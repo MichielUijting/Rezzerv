@@ -1,7 +1,10 @@
 name: Unpacking household location isolation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:
