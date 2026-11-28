@@ -237,7 +237,7 @@ def test_store_sku_does_not_merge_conflicting_identity(rows):
     assert find_proven_store_sku_household_article_id(
         conn, household_id="house-1", store_provider_code="lidl",
         retailer_sku="lidl-213", article_name="Verse halfvolle melk",
-        barcode="8712345678901",
+        barcode="8712345678913",
     ) is None
 
 
@@ -252,3 +252,16 @@ def test_unproven_sku_or_cross_household_is_never_article_proof():
             retailer_sku=sku, article_name="Melk",
         ) is None
         assert not conn.queries
+
+
+def test_recycled_sku_with_conflicting_valid_gtins_fails_closed_without_new_barcode():
+    conn = FakeConn(receipt_lines=[
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,88 B",
+         "barcode": "8712345678906"},
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,99 B",
+         "barcode": "8712345678913"},
+    ])
+    assert find_proven_store_sku_household_article_id(
+        conn, household_id="house-1", store_provider_code="lidl",
+        retailer_sku="lidl-213", article_name="Verse halfvolle melk",
+    ) is None
