@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -264,10 +265,26 @@ def cancel_superseded(repo: str, token: str, number: int, branch: str, old_sha: 
     open_prs = api_json(repo, f"pulls?{query}", token)
     if not isinstance(open_prs, list) or len(open_prs) != 1 or open_prs[0].get("number") != number:
         return []
-    replacements = latest_runs_by_name(repo, new_sha, token)
     candidates = {str(item["name"]): item for item in routed_workflows()}
+    old_runs = [run for run in runs_for_sha(repo, old_sha, token)
+                if (workflow := candidates.get(str(run.get("name") or "")))
+                and is_obsolete_router_run(run, repo=repo, branch=branch,
+                    old_sha=old_sha, new_sha=new_sha, workflow=workflow)]
+    if not old_runs:
+        return []
+    # GitHub dispatch is asynchronous. Wait only for replacement evidence for
+    # eligible obsolete runs; timeout preserves the old run, never cancels blind.
+    replacements = {}
+    wanted = {str(run["name"]) for run in old_runs}
+    for attempt in range(7):
+        if not current_draft(repo, token, number, branch, new_sha):
+            return []
+        replacements = latest_runs_by_name(repo, new_sha, token)
+        if wanted.issubset(replacements) or attempt == 6:
+            break
+        time.sleep(5)
     cancelled = []
-    for run in runs_for_sha(repo, old_sha, token):
+    for run in old_runs:
         name = str(run.get("name") or "")
         workflow = candidates.get(name)
         replacement = replacements.get(name, {})
@@ -480,11 +497,22 @@ jobs:
     with patch.object(module, "current_draft", return_value=True), \
          patch.object(module, "routed_workflows", return_value=[workflow]), \
          patch.object(module, "latest_runs_by_name", return_value={}), \
+         patch.object(time, "sleep"), \
          patch.object(module, "api_json", side_effect=[{"status": "ahead"}, [{"number": 1}]]), \
          patch.object(module, "runs_for_sha", return_value=[run]), \
          patch.object(module, "api_post") as post:
         assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == []
         post.assert_not_called()
+    with patch.object(module, "current_draft", return_value=True), \
+         patch.object(module, "routed_workflows", return_value=[workflow]), \
+         patch.object(module, "latest_runs_by_name", side_effect=[{}, {"Demo": replacement}]), \
+         patch.object(module, "runs_for_sha", return_value=[run]), \
+         patch.object(module, "api_json", side_effect=[{"status": "ahead"}, [{"number": 1}], run, replacement]), \
+         patch.object(time, "sleep") as wait, \
+         patch.object(module, "api_post") as post:
+        assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == [123]
+        wait.assert_called_once_with(5)
+        post.assert_called_once_with("owner/repo", "actions/runs/123/cancel", "test")
     for responses in ([{"status": "diverged"}],
                       [{"status": "ahead"}, [{"number": 1}, {"number": 2}]],
                       [{"status": "ahead"}, [{"number": 2}]]):
