@@ -37,6 +37,12 @@ def _index(rows, id_key, name_key, *, known_article_ids, unique_names,
         # household ID. Prefer the latter whenever it was written.
         owner_id = str(row.get('household_article_id') or '').strip()
         identifier = owner_id or str(row.get(id_key) or '').strip()
+        if owner_id and id_key == 'article_id' and str(row.get('article_id') or '') != owner_id:
+            # Read-only normalization of a stale event snapshot. The physical
+            # ledger is unchanged; downstream predictors receive the trusted
+            # household article identity instead of the historic alias.
+            row['source_article_id'] = row.get('article_id')
+            row['article_id'] = owner_id
         name = str(row.get(name_key) or '').strip().lower()
         if identifier:
             by_id[identifier].append((position, row))
