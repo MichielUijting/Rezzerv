@@ -1,7 +1,10 @@
 name: Authorization disabled UI validation
+# draft-ci-router: routed
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'frontend/src/ui/AuthorizedControl.jsx'
       - 'frontend/src/ui/authorizedControl.css'
