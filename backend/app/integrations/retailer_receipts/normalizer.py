@@ -338,12 +338,24 @@ def _normalize_line(item: dict[str, Any], index: int, *, provider: str = "") -> 
         line_total = unit_price * quantity
 
     discount = _decimal(_first(item, "discount_amount", "discountAmount", "discount", "priceDiscount"))
-    barcode = _first(item, "gtin", "ean", "barcode", "codeInput", "productCode")
+    barcode = _first(item, "gtin", "ean", "barcode")
     if barcode in (None, ""):
-        barcode = _first(product, "gtin", "ean", "barcode", "code", "id")
+        barcode = _first(product, "gtin", "ean", "barcode")
     retailer_sku = _first(item, "retailer_sku", "retailerSku", "sku", "articleNumber", "articleId")
     if retailer_sku in (None, ""):
         retailer_sku = _first(product, "sku", "articleNumber", "id")
+    # A Lidl codeInput/productCode is not necessarily an EAN/GTIN. Keep
+    # unverified codes as retailer SKUs, never as canonical barcodes.
+    source_code = _first(item, "codeInput", "productCode")
+    if source_code in (None, ""):
+        source_code = _first(product, "code")
+    if source_code not in (None, ""):
+        identifier = str(source_code).strip()
+        is_gtin_shape = identifier.isdigit() and len(identifier) in {8, 12, 13, 14}
+        if barcode in (None, "") and is_gtin_shape:
+            barcode = identifier
+        elif retailer_sku in (None, ""):
+            retailer_sku = identifier
 
     identifiers = None
     if barcode not in (None, "") or retailer_sku not in (None, ""):
