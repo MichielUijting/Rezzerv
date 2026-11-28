@@ -591,6 +591,21 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     calculated = load_automatic_historical_stock(conn, household_id=owner)
     if calculated.get("status") != "calculated":
         return {"status": "not_ready", "created": 0, "revised": 0, "skipped": 0}
+    # Historic duplicates with a confirmed *central* product identity may be
+    # repaired only while original automatic baselines are untouched. The
+    # service preserves all receipts and aborts each unsafe group separately.
+    from app.services.historical_household_duplicate_repair import (
+        repair_proven_historical_household_duplicates,
+    )
+    recovered = repair_proven_historical_household_duplicates(
+        conn, household_id=owner, cutoff=str(cutoff),
+    )
+    if recovered["merged"]:
+        # Rebuild from original receipts after all safe identity links changed.
+        # A failed replay aborts the same outer maintenance transaction.
+        calculated = load_automatic_historical_stock(conn, household_id=owner)
+        if calculated.get("status") != "calculated":
+            raise ValueError("Historische herverwerking na canonieke reparatie onvolledig")
     quantities = calculated["quantities"]
     baseline = _owned_baselines(conn, owner)
     group_by_article = calculated.get("synonym_groups") or {}
@@ -654,6 +669,7 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
         "created": created, "revised": revised,
         "unchanged": unchanged, "expired": expired, "skipped": skipped,
         "excluded_rows": calculated.get("excluded_untrusted_rows", 0),
+        "canonical_repair": recovered,
         "repair_evidence": calculated.get("repair_evidence", {}),
         **cadence,
     }
