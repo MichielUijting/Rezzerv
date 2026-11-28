@@ -2024,37 +2024,62 @@ def get_article_consumable_state(conn, household_id: str, article_id: str | None
     normalized_name = normalize_household_article_name(article_name)
     if normalized_article_id in MOCK_ARTICLE_LOOKUP:
         return bool(MOCK_ARTICLE_LOOKUP[normalized_article_id].get("consumable"))
-    if normalized_article_id.startswith("live::"):
+    alias = normalized_article_id.startswith("live::")
+    if alias:
         normalized_name = normalize_household_article_name(normalized_article_id.split("::", 1)[1])
+
+    # Never resolve a stored classification by display name when a canonical
+    # article ID was supplied. Names are not household identities, and two
+    # different items may legitimately have the same label.
     row = None
-    if normalized_name:
+    if normalized_article_id and not alias:
         row = conn.execute(
-            text(
-                """
-                SELECT consumable, naam
+            text("""
+                SELECT id, consumable, naam
                 FROM household_articles
-                WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+                WHERE household_id = :household_id AND id = :article_id
+                  AND COALESCE(status, 'active') = 'active'
                 LIMIT 1
-                """
-            ),
-            {"household_id": str(household_id), "naam": normalized_name},
+            """),
+            {"household_id": str(household_id), "article_id": normalized_article_id},
         ).mappings().first()
+        if not row:
+            # A missing or cross-household ID is not a license to use an
+            # unrelated similarly named item's classification.
+            return False
+    elif normalized_name:
+        # Legacy name-only preview is read-only and unambiguous or unknown.
+        candidates = conn.execute(
+            text("""
+                SELECT id, consumable, naam
+                FROM household_articles
+                WHERE household_id = :household_id
+                  AND lower(trim(naam)) = lower(trim(:naam))
+                  AND COALESCE(status, 'active') = 'active'
+                ORDER BY id
+                LIMIT 2
+            """),
+            {"household_id": str(household_id), "naam": normalized_name},
+        ).mappings().all()
+        if len(candidates) == 1:
+            row = candidates[0]
+        elif len(candidates) > 1:
+            return False
     if row and row.get("consumable") is not None:
         return bool(row["consumable"])
-    inferred = infer_consumable_from_name(normalized_name)
-    # Unknown automatic classification is not a user's explicit decision.
-    # Only positive, independently recognized consumable evidence may fill
-    # NULL; keep NULL otherwise so later improved evidence can still apply.
-    if row and row.get("naam") and inferred:
+    inferred = infer_consumable_from_name(row.get("naam") if row else normalized_name)
+    # Only positive automatic evidence may fill an unknown value. A NULL must
+    # never become False; an explicit True/False must never be overwritten.
+    # Persist by the *exact owned article ID*, never by its display name.
+    if row and normalized_article_id and not alias and inferred:
         conn.execute(
-            text(
-                """UPDATE household_articles
-                   SET consumable = 1, updated_at = CURRENT_TIMESTAMP
-                   WHERE household_id = :household_id
-                     AND lower(trim(naam)) = lower(trim(:naam))
-                     AND consumable IS NULL"""
-            ),
-            {"household_id": str(household_id), "naam": row["naam"]},
+            text("""
+                UPDATE household_articles
+                SET consumable = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE household_id = :household_id AND id = :article_id
+                  AND consumable IS NULL
+            """),
+            {"household_id": str(household_id), "article_id": normalized_article_id},
         )
     return inferred
 
