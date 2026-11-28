@@ -507,6 +507,12 @@ def refresh_automatic_historical_stock(conn, *, household_id: str) -> dict:
     if cutoff is None:
         return {"status": "legacy_untouched", "created": 0, "revised": 0, "skipped": 0}
 
+    # The old new-household onboarding could omit prediction settings entirely.
+    # Never overwrite even an explicit 'false' / 100-day user configuration.
+    from app.services.household_onboarding_service import (
+        ensure_store_onboarding_prediction_defaults_if_missing,
+    )
+    ensure_store_onboarding_prediction_defaults_if_missing(conn, owner)
     _prepare_historical_article_links(conn, owner, cutoff)
     calculated = load_automatic_historical_stock(conn, household_id=owner)
     if calculated.get("status") != "calculated":
