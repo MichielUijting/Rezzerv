@@ -1,7 +1,10 @@
 name: PO beta superuser provisioning validation
+# draft-ci-router: routed
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'backend/app/services/beta_superuser_provisioning_service.py'
       - 'backend/app/cli/provision_po_beta_superuser.py'
