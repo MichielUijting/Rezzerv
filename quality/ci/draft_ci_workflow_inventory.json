@@ -1,0 +1,998 @@
+{
+  "schema_version": 1,
+  "baseline_pr": 734,
+  "baseline_head": "2f7466633601b668a68113c417193bd8c983126b",
+  "workflow_count": 191,
+  "counts": {
+    "already_routed": 118,
+    "migrated_in_pr734": 27,
+    "mandatory_direct": 17,
+    "other_exception": 29
+  },
+  "workflows": [
+    {
+      "file": "aldi-unavailable-contract.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "almost-out-api-projection-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "archived-receipt-purge-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "article-detail-write-guard.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "article-group-household-isolation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "article-synonyms-abc-every-pr.yml",
+      "category": "mandatory_direct",
+      "reason": "Bindend A-B-C-contract: verplicht voor iedere PR ongeacht gewijzigde paden; geen padfilter."
+    },
+    {
+      "file": "article-synonyms-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "authorization-disabled-ui-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "authorization-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "authorization-matrix-acceptance.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "authorization-membership-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "authorization-membership-guards-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "authorization-membership-ui-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "canonical-acceptance-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "catalog-shared-barcode-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "catalog-synonym-photo-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "cbs-classification-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "cbs-official-appendix-import.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "change-risk-classification.yml",
+      "category": "mandatory_direct",
+      "reason": "Fail-closed S/M/L-risicobepaling op de volledige kandidaatdelta, per PR/SHA vereist."
+    },
+    {
+      "file": "circular-capability-expansion-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "day-article-direct-consumption-no-stock.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "draft-ci-targeted-router.yml",
+      "category": "mandatory_direct",
+      "reason": "Centrale Draft-orchestrator zelf; moet rechtstreeks op Draft-PR-events starten."
+    },
+    {
+      "file": "dynamic-home-navigation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "dynamic-settings-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "external-recognition-confirmation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "external-relation-batch-decision-platform-authorization.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-conditional-locations-tab-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-boolean-runtime-portability-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-historical-quantity-restoration-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-history-null-sorting-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-household-article-canonical-identity-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-household-location-policy-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-json-serialization-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-locationless-history-events-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-locationless-unpacking-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-quantity-unbounded-decimals-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-receipt-source-runtime-wiring-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-receipt-worker-fail-closed-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-postgresql-unclassified-unpacking-choice-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f5-standard-api-error-feedback-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-02-temporary-failure-safe-retry-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-03-invalid-import-fail-closed-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-05-authorization-functional-4xx-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-failure-recovery-gap-audit-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-final-formal-closure-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f6-inventory-controlled-5xx-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "f6-receipt-controlled-5xx-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "f7-ci-orchestration-audit-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "f7-deep-nightly-gate.yml",
+      "category": "mandatory_direct",
+      "reason": "Zelfstandige geplande/exact-candidate F7-gate; schedule en niet-Draft kandidaatbewaking behouden."
+    },
+    {
+      "file": "f7-full-regression-gate.yml",
+      "category": "mandatory_direct",
+      "reason": "Verplichte 21-authority exact-SHA F7 Full Regression bij niveau L, niet routerbaar."
+    },
+    {
+      "file": "f7-pr-fast-regression-gate.yml",
+      "category": "mandatory_direct",
+      "reason": "Verplichte F7-02 risicoselectie en aggregatie per kandidaat, niet routerbaar."
+    },
+    {
+      "file": "f7-rel-03-backup-restore-postgresql-authority.yml",
+      "category": "mandatory_direct",
+      "reason": "F7 REL-03 backup/restore exact-candidate gate; zelfstandige release-acceptatie."
+    },
+    {
+      "file": "f7-release-acceptance-gate.yml",
+      "category": "mandatory_direct",
+      "reason": "F7 REL-01 exacte releasekandidaat en workflow_call-keten, zelfstandige gate."
+    },
+    {
+      "file": "f7-release-package-authority.yml",
+      "category": "other_exception",
+      "exception_kind": "reusable_release_authority",
+      "reason": "workflow_call vanuit F7 REL-01 plus handmatige dispatch; geen zelfstandige PR-padselectie."
+    },
+    {
+      "file": "f8-po-acceptance-pack-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "fixture-lifecycle-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "frontend-cookie-session.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "frontteam-personal-household-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "functional-acceptance-matrix-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "gpc-article-assignment-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "gpc-catalog-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "gpc-live-language-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "gpc-nl-import-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "gpc-translation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "household-article-identity-slice2b2.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "household-article-identity-slice2b3.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "household-article-identity-slice2b4.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "household-invitation-acceptance-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "household-invitation-delivery-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "household-invitation-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "household-invitation-ui-closure-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "household-viewer-role-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "hybrid-regression-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "incremental-ci-carry-forward-validation.yml",
+      "category": "mandatory_direct",
+      "reason": "Onafhankelijke fail-closed controle van CI-planning en bewijsoverdracht; bij routerwijziging niet afhankelijk maken van de router zelf."
+    },
+    {
+      "file": "inventory-location-household-isolation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "jumbo-phase1-contract-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "kassa-diagnostic-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "kassa-review-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "kassa-supermarket-baseline-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "loyalty-stamp-read-api.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "m2c2n-final-closure.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-forecast-purchase-route-audit.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-household-fallback-audit.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-notification-route-audit.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-product-route-audit.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-product-route-guard.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "m2c2n-route-catalog.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "maintenance-recompute-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "onboarding-household-membership-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "onboarding-v2-acceptance-closure-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "p0-account-session-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-article-identity-history-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-authorization-isolation-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-household-membership-fullstack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "p0-inventory-correction-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-l4-03-detail-diagnostic.yml",
+      "category": "other_exception",
+      "exception_kind": "self_change_diagnostic",
+      "reason": "Diagnostische workflow; enige PR-pad is het eigen workflowbestand. Heeft al minimale directe selectie, geen nuttige Draft-routerwinst."
+    },
+    {
+      "file": "p0-onboarding-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-platform-authority-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-receipt-inventory-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-receipt-nonphysical-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "p0-residual-matrix-closure.yml",
+      "category": "mandatory_direct",
+      "reason": "Centrale P0-governance-acceptatie over brede test- en workflowpaden; zelfstandig kandidaatbewijs."
+    },
+    {
+      "file": "p0-unpacking-fullstack-postgresql-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "picnic-postgresql-chain.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "picnic-readonly-protocol.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "platform-admin-acceptance-closure-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "platform-audit-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-authority-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "platform-authorizations-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-background-jobs-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-feature-flags-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-integrations-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-logs-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-sessions-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "platform-users-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "po-beta-superuser-provisioning-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "po-test-script-validation.yml",
+      "category": "mandatory_direct",
+      "reason": "Algemene PO-scriptautoriteit zonder PR-pathfilter; directe eventselectie vereist."
+    },
+    {
+      "file": "postgresql-catalog-off-request-portability.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-data-migration-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "postgresql-day-article-direct-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-gpc-residual-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-household-invitation-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-main-legacy-schema-retirement.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-migration-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-onboarding-use-case-portability.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-operational-startup-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-platform-feature-support-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-receipt-residual-portability.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-runtime-startup-schema-authority.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "postgresql-test-infrastructure-boundary.yml",
+      "category": "mandatory_direct",
+      "reason": "Algemene PostgreSQL-testinfrastructuurgrens zonder PR-pathfilter; directe gate."
+    },
+    {
+      "file": "postgresql-zero-residual-gate.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "pr253-full-frontend-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "pr253-v0112109-release-package.yml",
+      "category": "mandatory_direct",
+      "reason": "Releasepackage-/version-/buildcontract; zelfstandig preflightbewijs vóór Ready."
+    },
+    {
+      "file": "pr671-catalog-identity-postgresql.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "product-day-auto-consume-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "product-enrichment-write-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-admin-household-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-export-fixture-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "receipt-gmail-oauth-household-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-inventory-chain-post-merge.yml",
+      "category": "mandatory_direct",
+      "reason": "Verplicht kassabon-voorraadketenbewijs als PR-mergegate én afzonderlijke main-push-gate."
+    },
+    {
+      "file": "receipt-inventory-chain-validation.yml",
+      "category": "other_exception",
+      "exception_kind": "manual_dispatch_only",
+      "reason": "Uitsluitend handmatige workflow_dispatch/exact-authority, geen pull_request.paths-dependency-map; automatisch routeren zou nieuwe onbedoelde PR-dekking toevoegen."
+    },
+    {
+      "file": "receipt-inventory-lifecycle.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-lifecycle-foundation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-lifecycle-release-b-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-resend-inbound-source-household-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-resend-webhook-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-scanner-boundary-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-share-import-household-guard.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "receipt-status-baseline-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "receipt-status-loyalty-local-runner-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "release-version-sync-validation.yml",
+      "category": "mandatory_direct",
+      "reason": "Exacte versie- en versiesynchronisatie per PR/push; geen Draft-router skip."
+    },
+    {
+      "file": "resend-webhook-deployment-config.yml",
+      "category": "mandatory_direct",
+      "reason": "Beveiligingsgevoelige deploymentconfiguratiecontrole; direct bij iedere relevante PR."
+    },
+    {
+      "file": "roles-v2-acceptance-closure.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "server-maintenance-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "server-side-session-security.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "settings-help-about.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "settings-my-account.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "settings-v2-information-architecture.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "store-connection-onboarding-contract.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "superuser-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "superuser-household-readonly-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "superuser-platform-admin-stacking-cutover.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "superuser-v2-permission-cutover.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-broadcast.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-documentation-contract.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-foundation-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-improvements.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-message-role-routing.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "support-messages-reintegration.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "synonym-auto-consume-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "technical-schema-platform-authorization.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "temporal-inventory-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "test-orchestration-platform-authorization.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "ui-styleguide-validation.yml",
+      "category": "mandatory_direct",
+      "reason": "Onafhankelijke styleguide-autoriteit zonder PR-pathfilter; per kandidaat rechtstreeks."
+    },
+    {
+      "file": "uitpakken-admin-location-create-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "uitpakken-dagartikelen-release-a.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "unpacking-household-location-isolation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "unpacking-household-object-guard.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "unpacking-inventory-article-identity-api-validation.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    },
+    {
+      "file": "unpacking-readiness-article-model-validation.yml",
+      "category": "migrated_in_pr734",
+      "reason": "Draft-planning via centrale router; bestaande pull_request.paths, jobs, permissions en overige triggers behouden."
+    },
+    {
+      "file": "winkelen-frontend-regression.yml",
+      "category": "already_routed",
+      "reason": "Bij begin stap 1 al expliciet gemarkeerd, met pull_request.paths en workflow_dispatch."
+    }
+  ]
+}
