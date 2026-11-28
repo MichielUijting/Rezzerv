@@ -47,9 +47,9 @@ _PROVIDER_NAMES = {
 # original line remains verbatim in raw_text; parsing this retailer-specific
 # format must never remove product contents such as "500g" or "12%".
 _LIDL_TRANSACTION_TAIL = re.compile(
-    r"^(?P<name>.+?)\\s+(?:(?P<count>\\d{1,3})\\s*[x×]\\s*"
-    r"(?P<unit>\\d{1,5}[,.]\\d{2})\\s+)?"
-    r"(?P<total>\\d{1,6}[,.]\\d{2})\\s+(?P<tax>[ABC])$",
+    r"^(?P<name>.+?)\s+(?:(?P<count>\d{1,3})\s*[x×]\s*"
+    r"(?P<unit>\d{1,5}[,.]\d{2})\s+)?"
+    r"(?P<total>\d{1,6}[,.]\d{2})\s+(?P<tax>[ABC])$",
     re.IGNORECASE,
 )
 
