@@ -44,6 +44,8 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
       DATABASE_SSLMODE: disable
       MIGRATION_DATABASE_SSLMODE: disable
+      # Isolated test imports must not write to the production container path.
+      RECEIPT_STORAGE_ROOT: /tmp/pr732-receipts
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -88,7 +90,8 @@ jobs:
         run: |
           set -euo pipefail
           env -u MIGRATION_DATABASE_URL             python backend/tests/receipt_historical_postgresql_selftest.py             | tee pr732-postgresql-evidence.log
-          grep -F 'PR732_POSTGRESQL_VERIFIED_CATALOG_RECOVERY_GREEN' pr732-postgresql-evidence.log
+          grep -F 'PR732_POSTGRESQL_CATALOG_UNIQUE_GUARD_GREEN' pr732-postgresql-evidence.log
+          grep -F 'PR732_POSTGRESQL_VERIFIED_GTIN_RECOVERY_GREEN' pr732-postgresql-evidence.log
           grep -F 'PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN' pr732-postgresql-evidence.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' pr732-postgresql-evidence.log
       - name: Preserve synthetic numeric evidence

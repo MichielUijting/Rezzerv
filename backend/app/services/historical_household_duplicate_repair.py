@@ -1,7 +1,8 @@
 """Conservative, maintenance-owned repair of PROVEN duplicate household identities.
 
-Only a shared active central product identity authorizes consideration. Two
-retailer SKUs, receipt descriptions or unverified GTINs can never prove identity.
+Shared active catalog identity or independent, validated GTINs from original
+AH and Jumbo physical receipts may authorize consideration. Retailer SKUs,
+receipt descriptions and unchecked barcodes never prove identity.
 The transaction owning the historical stock replay is responsible for this
 procedure and for recomputing its baselines and cadence after remapping.
 
@@ -23,6 +24,8 @@ from app.services.historical_household_stock_writer import (
     _block_existing_business_history, _expire_unreferenced_owned_baseline,
     _owned_baselines,
 )
+from app.services.historical_verified_receipt_gtin import verified_uncataloged_groups
+from app.services.receipt_stock_review_service import _checked_gtin_key
 
 
 class UnsafeHistoricalMerge(ValueError):
@@ -45,9 +48,18 @@ _HANDLED_REFERENCES = {
 }
 
 
-def _comparable(a: dict, b: dict) -> bool:
+def _comparable(a: dict, b: dict, *, trusted_gtin: str | None = None) -> bool:
     """Product variants and manual household choices must not be conflated."""
-    if not a.get("global_product_id") or a.get("global_product_id") != b.get("global_product_id"):
+    if trusted_gtin is not None:
+        if a.get("global_product_id") or b.get("global_product_id"):
+            return False
+        for article in (a, b):
+            stored = str(article.get("barcode") or "").strip()
+            if stored:
+                verified = _checked_gtin_key(stored)
+                if not verified or verified.zfill(14) != trusted_gtin:
+                    return False
+    elif not a.get("global_product_id") or a.get("global_product_id") != b.get("global_product_id"):
         return False
     for key in (
         "barcode", "custom_name", "article_group_id",
@@ -140,18 +152,24 @@ def _no_override(conn, owner, article_id):
 
 
 def _receipt_source_consistent(conn, owner, old_id, product_id):
+    # The uncataloged GTIN route must never absorb another catalog match.
+    conflict_condition = (
+        "rtl.matched_global_product_id IS NOT NULL"
+        if product_id is None else
+        "rtl.matched_global_product_id IS NOT NULL AND rtl.matched_global_product_id <> :product_id"
+    )
+    params = {"household_id": owner, "old_id": old_id}
+    if product_id is not None:
+        params["product_id"] = product_id
     conflict = conn.execute(text("""
         SELECT 1
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
         WHERE rt.household_id=:household_id
           AND rtl.matched_article_id=:old_id
-          AND rtl.matched_global_product_id IS NOT NULL
-          AND rtl.matched_global_product_id <> :product_id
+          AND """ + conflict_condition + """
         LIMIT 1
-    """), {
-        "household_id": owner, "old_id": old_id, "product_id": product_id,
-    }).first()
+    """), params).first()
     return conflict is None
 
 
@@ -217,11 +235,10 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
     originals = conn.execute(text("""
         SELECT ha.*
         FROM household_articles ha
-        JOIN global_products gp ON gp.id = ha.global_product_id
+        LEFT JOIN global_products gp ON gp.id = ha.global_product_id
         WHERE ha.household_id=:household_id
           AND COALESCE(ha.status, 'active')='active'
-          AND gp.status='active'
-          AND ha.global_product_id IS NOT NULL
+          AND (ha.global_product_id IS NULL OR gp.status='active')
         ORDER BY ha.created_at NULLS LAST, ha.id
         FOR UPDATE OF ha
     """), {"household_id": owner}).mappings().all()
@@ -229,18 +246,31 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
         raise ValueError("Te veel huishoudartikelen voor bewezen veilig herstel")
     by_product = defaultdict(list)
     for row in originals:
-        by_product[str(row["global_product_id"])].append(dict(row))
-    candidates = [items for items in by_product.values() if len(items) > 1]
+        if row.get("global_product_id") is not None:
+            by_product[str(row["global_product_id"])].append(dict(row))
+    candidates = [
+        (items, "catalog", product_id)
+        for product_id, items in by_product.items() if len(items) > 1
+    ]
+    candidates.extend(
+        (items, "checked_gtin", gtin)
+        for items, gtin in verified_uncataloged_groups(
+            conn, household_id=owner, cutoff=cutoff, articles=originals,
+        )
+    )
     if not candidates:
         return {"confirmed_groups": 0, "merged": 0, "blocked": 0, "rebound_receipt_lines": 0}
 
     unknown_columns = _unknown_reference_columns(conn)
     baseline = _owned_baselines(conn, owner)
     merged = blocked = rebound = 0
-    for items in candidates:
+    for items, proof_kind, proof_id in candidates:
         winner, *losers = items
+        product_id = proof_id if proof_kind == "catalog" else None
+        checked_gtin = proof_id if proof_kind == "checked_gtin" else None
         # Preserve manual choices of any group member, including the target.
-        if any(not _comparable(winner, loser) for loser in losers):
+        if any(not _comparable(winner, loser, trusted_gtin=checked_gtin)
+               for loser in losers):
             blocked += 1
             continue
         ids = [str(item["id"]) for item in items]
@@ -254,7 +284,7 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
                     or not _no_override(conn, owner, old_id)
                     or _contains_unknown_refs(conn, old_id, unknown_columns)
                     or not _receipt_source_consistent(
-                        conn, owner, old_id, str(winner["global_product_id"])
+                        conn, owner, old_id, product_id
                     )):
                 safe = False
                 break
@@ -278,15 +308,20 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
                     changed = _rewrite_verified_references(
                         conn, owner, old_id, str(winner["id"]),
                     )
+                    identity_guard = (
+                        "global_product_id IS NULL"
+                        if proof_kind == "checked_gtin"
+                        else "global_product_id=:product_id"
+                    )
                     inactive = conn.execute(text("""
                         UPDATE household_articles
                         SET status='inactive', updated_at=CURRENT_TIMESTAMP
                         WHERE household_id=:household_id AND id=:old_id
-                          AND global_product_id=:product_id
+                          AND """ + identity_guard + """
                           AND COALESCE(status,'active')='active'
                     """), {
                         "household_id": owner, "old_id": old_id,
-                        "product_id": str(winner["global_product_id"]),
+                        "product_id": product_id,
                     })
                     if inactive.rowcount != 1:
                         raise UnsafeHistoricalMerge("Oude huishoudidentiteit is gewijzigd")
@@ -303,9 +338,14 @@ def repair_proven_historical_household_duplicates(conn, *, household_id: str,
                         "id": str(uuid4()), "old_id": old_id,
                         "reason": json.dumps({
                             "canonical_household_article_id": str(winner["id"]),
-                            "confirmed_global_product_id": str(winner["global_product_id"]),
+                            "confirmed_global_product_id": product_id,
+                            "confirmed_receipt_gtin": checked_gtin,
                             "at": datetime.now(timezone.utc).isoformat(),
-                            "source": "historical_catalog_identity_repair",
+                            "source": (
+                                "historical_catalog_identity_repair"
+                                if proof_kind == "catalog"
+                                else "historical_verified_receipt_gtin_repair"
+                            ),
                         }, sort_keys=True),
                     })
                     group_rebound += changed["receipt_lines"]

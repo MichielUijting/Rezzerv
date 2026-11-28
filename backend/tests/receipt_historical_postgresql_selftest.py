@@ -329,71 +329,114 @@ def _prove_historical_workflows(
 
 
 def _prove_pr732_historical_identity_recovery(
-    conn, *, household_id, other_household, provider_id,
-    connection_id, cutover,
+    conn, *, household_id, other_household, provider_id, connection_id, cutover,
 ):
-    """Real canonical PG schema, synthetic three-store receipts, outer rollback."""
-    import json
+    """Current PostgreSQL uniquely prevents two active catalog-linked owners."""
+    from sqlalchemy.exc import IntegrityError
     from app.services.global_product_service import get_or_create_global_product
-    from app.services.historical_household_stock_writer import (
-        refresh_automatic_historical_stock,
+
+    product = get_or_create_global_product(
+        conn, gtin=None, name="PR732 catalog uniqueness " + _id(), source="ci",
     )
-    from app.services.historical_household_purchase_cadence import (
-        read_historical_household_purchase_cadence,
-    )
-    product_id = get_or_create_global_product(
-        conn, gtin=None, name="PR732 synthetic product " + _id(), source="ci",
-    )
-    winner, duplicate = sorted((_id(), _id()))
-    for identifier in (winner, duplicate):
-        conn.execute(text("""
-            INSERT INTO household_articles (
-                id, household_id, naam, consumable, global_product_id, status
-            ) VALUES (:id,:home,'PR732 shared catalog item',1,:product,'active')
-        """), {"id": identifier, "home": household_id, "product": product_id})
-    other_id = _id()
+    first, duplicate = _id(), _id()
     conn.execute(text("""
         INSERT INTO household_articles (
             id, household_id, naam, consumable, global_product_id, status
-        ) VALUES (:id,:home,'PR732 other household',1,:product,'active')
-    """), {"id": other_id, "home": other_household, "product": product_id})
+        ) VALUES (:id,:home,'PR732 catalog unique',1,:product,'active')
+    """), {"id": first, "home": household_id, "product": product})
+    try:
+        with conn.begin_nested():
+            conn.execute(text("""
+                INSERT INTO household_articles (
+                    id, household_id, naam, consumable, global_product_id, status
+                ) VALUES (:id,:home,'PR732 catalog duplicate',1,:product,'active')
+            """), {"id": duplicate, "home": household_id, "product": product})
+    except IntegrityError:
+        pass
+    else:
+        raise AssertionError(
+            "The current PostgreSQL schema must prevent a duplicate active catalog match"
+        )
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM household_articles
+        WHERE household_id=:home AND global_product_id=:product
+          AND COALESCE(status,'active')='active'
+    """), {"home": household_id, "product": product}).scalar_one() == 1
+    print("PR732_POSTGRESQL_CATALOG_UNIQUE_GUARD_GREEN")
 
-    physical_ids = []
-    for days_ago, store, old_id in (
-        (90, "Albert Heijn", winner),
-        (60, "Lidl", duplicate),
-        (20, "Jumbo", winner),
+
+def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
+    """Real DML-only PostgreSQL: AH/Jumbo GTIN proof, manual guard, idempotence."""
+    from app.services.historical_household_stock_writer import refresh_automatic_historical_stock
+    from app.services.historical_household_purchase_cadence import (
+        read_historical_household_purchase_cadence,
+    )
+
+    home, other_home = _seed_household(conn), _seed_household(conn)
+    assert activate_cutover_for_new_onboarding(conn, household_id=home)
+    provider, connection = _seed_provider_and_connection(conn, home)
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'consumable_auto_deduction_mode','consume_all_existing_before_purchase')
+    """), {"id": _id(), "home": home})
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'almost_out_prediction_days','100')
+    """), {"id": _id(), "home": home})
+
+    winner, duplicate = sorted((_id(), _id()))
+    protected, manual = sorted((_id(), _id()))
+    for article_id, name in (
+        (winner, "PR732 EAN without catalog"),
+        (duplicate, "PR732 EAN without catalog"),
+        (protected, "PR732 different manual item"),
+        (manual, "PR732 different manual item"),
+    ):
+        conn.execute(text("""
+            INSERT INTO household_articles (
+                id, household_id, naam, consumable, status
+            ) VALUES (:id,:home,:name,1,'active')
+        """), {"id": article_id, "home": home, "name": name})
+    foreign_id = _id()
+    conn.execute(text("""
+        INSERT INTO household_articles (id,household_id,naam,consumable,status)
+        VALUES (:id,:home,'PR732 other EAN household',1,'active')
+    """), {"id": foreign_id, "home": other_home})
+
+    receipt_ids = []
+    for days_ago, store, store_code, article_id, barcode in (
+        (35, "Albert Heijn", "ah", winner, "4006381333931"),
+        (20, "Jumbo", "jumbo", duplicate, "4006381333931"),
+        (36, "Albert Heijn", "ah", protected, "5901234123457"),
+        (21, "Jumbo", "jumbo", manual, "5901234123457"),
     ):
         receipt_id, _ = _seed_receipt(
-            conn, household_id=household_id, provider_id=provider_id,
-            connection_id=connection_id, store=store,
-            purchase_date=cutover - timedelta(days=days_ago),
-            with_line=True,
+            conn, household_id=home, provider_id=provider,
+            connection_id=connection, store=store,
+            purchase_date=cutoff - timedelta(days=days_ago), with_line=True,
         )
-        physical_ids.append(receipt_id)
+        receipt_ids.append(receipt_id)
+        conn.execute(text("""
+            UPDATE receipt_sources rs
+            SET source_path=:store_code
+            FROM raw_receipts rr
+            JOIN receipt_tables rt ON rt.raw_receipt_id=rr.id
+            WHERE rt.id=:receipt_id AND rr.source_id=rs.id
+              AND rr.household_id=:home AND rs.household_id=:home
+        """), {"store_code": store_code, "receipt_id": receipt_id, "home": home})
         conn.execute(text("""
             UPDATE receipt_table_lines
             SET matched_article_id=:article_id,
-                matched_global_product_id=:product_id,
+                matched_global_product_id=NULL,
                 article_match_status='matched',
-                line_role='product', inventory_eligible=1
+                line_role='product', inventory_eligible=TRUE, barcode=:barcode
             WHERE receipt_table_id=:receipt_id
         """), {
-            "article_id": old_id, "product_id": product_id,
+            "article_id": article_id, "barcode": barcode,
             "receipt_id": receipt_id,
         })
 
-    manual_pid = get_or_create_global_product(
-        conn, gtin=None, name="PR732 manual source " + _id(), source="ci",
-    )
-    guarded = sorted((_id(), _id()))
-    for identifier in guarded:
-        conn.execute(text("""
-            INSERT INTO household_articles (
-                id, household_id, naam, consumable, global_product_id, status
-            ) VALUES (:id,:home,'PR732 manual guard item',1,:product,'active')
-        """), {"id": identifier, "home": household_id, "product": manual_pid})
-    manual_event_id = _id()
+    manual_event = _id()
     conn.execute(text("""
         INSERT INTO inventory_events (
             id, household_id, article_id, household_article_id,
@@ -403,98 +446,71 @@ def _prove_pr732_historical_identity_recovery(
             effective_at_precision, event_priority, created_at
         ) VALUES (
             :id,:home,:article_id,:article_id,
-            'PR732 manually protected',NULL,NULL,
-            'purchase',1,0,1,'ci_manual_adjustment','do-not-erase',
+            'PR732 protected',NULL,NULL,
+            'purchase',1,0,1,'ci_manual_adjustment','preserve',
             :day,:moment,CURRENT_TIMESTAMP,'date',10,CURRENT_TIMESTAMP
         )
     """), {
-        "id": manual_event_id, "home": household_id,
-        "article_id": guarded[1], "day": cutover.isoformat(),
-        "moment": cutover.isoformat() + "T00:00:00+00:00",
+        "id": manual_event, "home": home, "article_id": manual,
+        "day": cutoff.isoformat(),
+        "moment": cutoff.isoformat() + "T00:00:00+00:00",
     })
+    first = refresh_automatic_historical_stock(conn, household_id=home)
+    assert first["status"] == "applied", first
+    assert first["canonical_repair"]["merged"] == 1, first
+    assert first["canonical_repair"]["blocked"] >= 1, first
 
-    def measure():
-        stats = {}
-        for label, table, where in (
-            ("receipts", "receipt_tables", "household_id=:home"),
-            ("physical_lines", "receipt_table_lines",
-             "receipt_table_id IN (SELECT id FROM receipt_tables WHERE household_id=:home)"),
-            ("active_household_articles", "household_articles",
-             "household_id=:home AND COALESCE(status,'active')='active'"),
-            ("inventory_rows", "inventory", "household_id=:home"),
-            ("inventory_events", "inventory_events", "household_id=:home"),
-            ("cadences", "household_historical_purchase_cadences", "household_id=:home"),
-        ):
-            stats[label] = conn.execute(text(
-                "SELECT COUNT(*) FROM " + table + " WHERE " + where
-            ), {"home": household_id}).scalar_one()
-        return stats
-
-    before = measure()
-    result = refresh_automatic_historical_stock(
-        conn, household_id=household_id,
-    )
-    assert result["status"] == "applied", result
-    assert result["canonical_repair"]["merged"] == 1, result
-    assert result["canonical_repair"]["blocked"] >= 1, result
     active = conn.execute(text("""
         SELECT id FROM household_articles
-        WHERE household_id=:home AND global_product_id=:product
+        WHERE household_id=:home AND id IN (:winner,:duplicate)
           AND COALESCE(status,'active')='active'
-    """), {"home": household_id, "product": product_id}).scalars().all()
-    assert [str(value) for value in active] == [winner], active
-    for receipt_id in physical_ids:
-        assigned = conn.execute(text("""
+    """), {"home": home, "winner": winner, "duplicate": duplicate}).scalars().all()
+    assert [str(x) for x in active] == [winner], active
+    for receipt_id in receipt_ids[:2]:
+        matched = conn.execute(text("""
             SELECT matched_article_id FROM receipt_table_lines
             WHERE receipt_table_id=:receipt_id
         """), {"receipt_id": receipt_id}).scalar_one()
-        assert str(assigned) == winner, (receipt_id, assigned)
+        assert str(matched) == winner, matched
+
     cadence = read_historical_household_purchase_cadence(
-        conn, household_id=household_id, household_article_id=winner,
+        conn, household_id=home, household_article_id=winner,
     )
-    assert cadence["purchase_day_count"] == 3, cadence
-    assert cadence["average_repurchase_interval_days"] == 35.0, cadence
+    assert cadence["purchase_day_count"] == 2, cadence
+    assert cadence["average_repurchase_interval_days"] == 15.0, cadence
     assert conn.execute(text("""
-        SELECT COALESCE(SUM(aantal), 0) FROM inventory
-        WHERE household_id=:home AND household_article_id=:article_id
-    """), {"home": household_id, "article_id": winner}).scalar_one() == 1
-    assert conn.execute(text("""
-        SELECT COUNT(*) FROM inventory_events WHERE id=:id
-          AND household_id=:home AND household_article_id=:article_id
-          AND source='ci_manual_adjustment'
-    """), {
-        "id": manual_event_id, "home": household_id,
-        "article_id": guarded[1],
-    }).scalar_one() == 1
+        SELECT COALESCE(SUM(aantal),0) FROM inventory
+        WHERE household_id=:home AND household_article_id=:winner
+    """), {"home": home, "winner": winner}).scalar_one() == 1
     assert conn.execute(text("""
         SELECT COUNT(*) FROM household_articles
-        WHERE household_id=:home AND id IN (:id1,:id2)
+        WHERE household_id=:home AND id IN (:protected,:manual)
           AND COALESCE(status,'active')='active'
-    """), {
-        "home": household_id, "id1": guarded[0], "id2": guarded[1],
-    }).scalar_one() == 2
+    """), {"home": home, "protected": protected, "manual": manual}).scalar_one() == 2
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events
+        WHERE id=:id AND household_id=:home AND household_article_id=:manual
+    """), {"id": manual_event, "home": home, "manual": manual}).scalar_one() == 1
     assert conn.execute(text("""
         SELECT COUNT(*) FROM household_articles
         WHERE household_id=:home AND id=:id AND status='active'
-    """), {"home": other_household, "id": other_id}).scalar_one() == 1
+    """), {"home": other_home, "id": foreign_id}).scalar_one() == 1
+    assert conn.execute(text("""
+        SELECT setting_value FROM household_settings
+        WHERE household_id=:home AND setting_key='almost_out_prediction_days'
+    """), {"home": home}).scalar_one() == "100"
 
-    after = measure()
-    assert before["receipts"] == after["receipts"]
-    assert before["physical_lines"] == after["physical_lines"]
-    assert before["active_household_articles"] == after["active_household_articles"] + 1
-    print("PR732_POSTGRESQL_SYNTHETIC_BEFORE_AFTER=" +
-          json.dumps({"before": before, "after": after}, sort_keys=True))
-    print("PR732_POSTGRESQL_VERIFIED_CATALOG_RECOVERY_GREEN")
-
-    events_before = after["inventory_events"]
-    repeated = refresh_automatic_historical_stock(
-        conn, household_id=household_id,
-    )
-    final = measure()
+    before = conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events WHERE household_id=:home
+    """), {"home": home}).scalar_one()
+    repeated = refresh_automatic_historical_stock(conn, household_id=home)
     assert repeated["canonical_repair"]["merged"] == 0, repeated
     assert repeated["created"] == repeated["revised"] == 0, repeated
-    assert final["inventory_events"] == events_before, final
-    print("PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN")
+    assert conn.execute(text("""
+        SELECT COUNT(*) FROM inventory_events WHERE household_id=:home
+    """), {"home": home}).scalar_one() == before
+    print("PR732_POSTGRESQL_VERIFIED_GTIN_RECOVERY_GREEN")
+
 
 
 def main() -> None:
@@ -1015,6 +1031,9 @@ def main() -> None:
                         cutover=first_current,
                     )
                     pr732_savepoint.rollback()
+                with conn.begin_nested() as gtin_savepoint:
+                    _prove_pr732_verified_gtin_recovery(conn, cutoff=first_current)
+                    gtin_savepoint.rollback()
 
 
 
