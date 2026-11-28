@@ -341,6 +341,26 @@ def ensure_new_household_repurchase_default(conn, household_id: str) -> bool:
         "household_id": owner,
         "mode": NEW_HOUSEHOLD_REPURCHASE_MODE,
     })
+    # New regular households start with prediction enabled, while an
+    # explicitly disabled existing setting is never overwritten. A non-zero
+    # horizon is required for the already existing Bijna op predictor.
+    for setting_key, setting_value in (
+        ("almost_out_prediction_enabled", "true"),
+        ("almost_out_prediction_days", "30"),
+    ):
+        conn.execute(text("""
+            INSERT INTO household_settings (
+                id, household_id, setting_key, setting_value, updated_at
+            ) VALUES (
+                :id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (household_id, setting_key) DO NOTHING
+        """), {
+            "id": __import__("uuid").uuid4().hex,
+            "household_id": owner,
+            "setting_key": setting_key,
+            "setting_value": setting_value,
+        })
     return row.rowcount == 1
 
 
