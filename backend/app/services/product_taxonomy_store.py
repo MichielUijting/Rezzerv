@@ -295,6 +295,37 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
     }
 
 
+# The public, versioned product taxonomy already describes food categories.
+# Keep the article-consumable inference read-only: unlike the regular taxonomy
+# loader this helper never opens a database connection or seeds shared tables.
+_CONSUMABLE_SEED_CATEGORIES = frozenset({
+    "zuivel", "broodbeleg", "fruit", "bakkerij", "groente", "peulvrucht",
+    "eieren", "graan", "saus", "soep", "maaltijd", "kruiden",
+    "vleeswaren", "vlees", "drank", "pasta", "snack", "ontbijt", "babyvoeding",
+    "olie",
+})
+
+
+def infer_food_consumable_from_seed(value: str | None) -> bool | None:
+    """Return True for an independently recognized food term, else unknown.
+
+    Never turn an unfamiliar name into an explicit non-consumable decision.
+    Matching tokens rather than substrings protects names like 'eiersnijder'.
+    """
+    normalized = normalize_taxonomy_text(value)
+    if not normalized:
+        return None
+    hits = set()
+    for item in _seed_payload().get("taxonomy") or []:
+        terms = [item.get("canonical_name"), *(item.get("synonyms") or [])]
+        if any(contains_taxonomy_term(normalized, normalize_taxonomy_text(term))
+               for term in terms if normalize_taxonomy_text(term)):
+            hits.add(normalize_taxonomy_text(item.get("category")))
+    if hits and hits.issubset(_CONSUMABLE_SEED_CATEGORIES):
+        return True
+    return None
+
+
 def _fallback_rules_from_seed(retailer_code: str | None = None) -> list[dict[str, Any]]:
     payload = _seed_payload()
     rules: list[dict[str, Any]] = []
