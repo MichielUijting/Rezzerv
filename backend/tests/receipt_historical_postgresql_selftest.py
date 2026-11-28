@@ -541,6 +541,7 @@ def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
     assert conn.execute(text("""
         SELECT COUNT(*) FROM inventory_events WHERE household_id=:home
     """), {"home": home}).scalar_one() == before
+    print("PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN")
     print("PR732_POSTGRESQL_VERIFIED_GTIN_RECOVERY_GREEN")
 
 
