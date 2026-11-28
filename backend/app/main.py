@@ -1906,6 +1906,11 @@ def infer_consumable_from_name(article_name: str | None) -> bool:
         return False
     if normalized in KNOWN_CONSUMABLE_ARTICLE_NAMES:
         return True
+    # Reuse verified product taxonomy instead of assuming that an unfamiliar
+    # receipt label is non-food. The source-only helper does no DB mutations.
+    from app.services.product_taxonomy_store import infer_food_consumable_from_seed
+    if infer_food_consumable_from_seed(normalized) is True:
+        return True
     keywords = [
         "melk", "pasta", "koffie", "mosterd", "sap", "saus", "soep", "rijst", "banaan", "tomaat", "brood",
         "kaas", "yoghurt", "thee", "pindakaas", "jam", "suiker", "zout", "bloem", "eieren", "water",
