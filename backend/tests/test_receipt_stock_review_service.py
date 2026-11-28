@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from app.services.receipt_stock_review_service import (
     checked_stock_quantity,
     find_confirmed_household_article_id,
+    find_proven_store_sku_household_article_id,
     get_confirmed_store_memory,
     resolve_stock_household_article,
     normalized_store_memory_key,
@@ -192,3 +193,62 @@ def test_validated_kassa_quantity_passes_before_approval():
          "unit": "stuk", "corrected_unit": "stuk"},
     ])
     assert _validate_direct_receipt_quantities(module, conn, "receipt-1") is None
+
+
+def test_proven_lidl_sku_reuses_one_household_identity_across_prices():
+    conn = FakeConn(receipt_lines=[
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,88 B",
+         "barcode": None, "global_product_id": None},
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,99 B",
+         "barcode": None, "global_product_id": None},
+    ])
+    module = main()
+    article_id = resolve_stock_household_article(
+        conn, main_module=module, household_id="house-1",
+        line={"article_name_raw": "Verse halfvolle melk", "retailer_sku": "lidl-213"},
+        store_provider_code="lidl", allow_historical_bootstrap=True,
+    )
+    assert article_id == "milk-1"
+    module.ensure_household_article.assert_not_called()
+    assert any(sql.startswith("SELECT rtl.matched_article_id") and
+               args["retailer_sku"] == "lidl-213" and args["store"] == "lidl"
+               and args["household_id"] == "house-1"
+               for sql, args in conn.queries)
+
+
+@pytest.mark.parametrize("rows", [
+    [
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,88 B",
+         "barcode": None},
+        {"matched_article_id": "different", "raw_label": "Verse halfvolle melk 0,99 B",
+         "barcode": None},
+    ],
+    [
+        {"matched_article_id": "milk-1", "raw_label": "Volle melk 0,88 B",
+         "barcode": None},
+    ],
+    [
+        {"matched_article_id": "milk-1", "raw_label": "Verse halfvolle melk 0,88 B",
+         "barcode": "8712345678906"},
+    ],
+])
+def test_store_sku_does_not_merge_conflicting_identity(rows):
+    conn = FakeConn(receipt_lines=rows)
+    assert find_proven_store_sku_household_article_id(
+        conn, household_id="house-1", store_provider_code="lidl",
+        retailer_sku="lidl-213", article_name="Verse halfvolle melk",
+        barcode="8712345678901",
+    ) is None
+
+
+def test_unproven_sku_or_cross_household_is_never_article_proof():
+    for household_id, provider, sku in (
+        ("0", "lidl", "123"), ("house-1", "unknown", "123"),
+        ("house-1", "lidl", ""),
+    ):
+        conn = FakeConn()
+        assert find_proven_store_sku_household_article_id(
+            conn, household_id=household_id, store_provider_code=provider,
+            retailer_sku=sku, article_name="Melk",
+        ) is None
+        assert not conn.queries
