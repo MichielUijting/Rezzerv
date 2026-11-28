@@ -349,13 +349,13 @@ def _prove_pr732_historical_identity_recovery(
         conn.execute(text("""
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, global_product_id, status
-            ) VALUES (:id,:home,'PR732 shared catalog item',TRUE,:product,'active')
+            ) VALUES (:id,:home,'PR732 shared catalog item',1,:product,'active')
         """), {"id": identifier, "home": household_id, "product": product_id})
     other_id = _id()
     conn.execute(text("""
         INSERT INTO household_articles (
             id, household_id, naam, consumable, global_product_id, status
-        ) VALUES (:id,:home,'PR732 other household',TRUE,:product,'active')
+        ) VALUES (:id,:home,'PR732 other household',1,:product,'active')
     """), {"id": other_id, "home": other_household, "product": product_id})
 
     physical_ids = []
@@ -391,7 +391,7 @@ def _prove_pr732_historical_identity_recovery(
         conn.execute(text("""
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, global_product_id, status
-            ) VALUES (:id,:home,'PR732 manual guard item',TRUE,:product,'active')
+            ) VALUES (:id,:home,'PR732 manual guard item',1,:product,'active')
         """), {"id": identifier, "home": household_id, "product": manual_pid})
     manual_event_id = _id()
     conn.execute(text("""

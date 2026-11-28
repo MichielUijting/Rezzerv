@@ -59,7 +59,7 @@ def list_consumable_review_candidates(conn, *, household_id: str,
           ON hs.household_article_id = ha.id AND hs.setting_key = :origin_key
         WHERE ha.household_id = :household_id
           AND COALESCE(ha.status, 'active') = 'active'
-          AND (ha.consumable IS NULL OR ha.consumable = FALSE)
+          AND (ha.consumable IS NULL OR ha.consumable = 0)
           AND hs.id IS NULL
     """
     count = conn.execute(text("SELECT COUNT(*) " + filter_sql), params).scalar_one()
@@ -185,7 +185,7 @@ def record_explicit_consumable_review(
         WHERE household_id = :household_id AND id = :article_id
           AND COALESCE(status, 'active') = 'active'
     """), {
-        "consumable": consumable,
+        "consumable": int(consumable),  # canonical integer 0/1 column on PostgreSQL
         "household_id": owner,
         "article_id": identifier,
     })

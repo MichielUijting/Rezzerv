@@ -72,8 +72,9 @@ def test_explicit_choice_persists_audit_and_preserves_other_articles():
         consumable=True, expected_state="false",
     )
     assert result["status"] == "reviewed"
-    assert conn.articles["a"]["consumable"] is True
+    assert conn.articles["a"]["consumable"] == 1  # legacy PostgreSQL storage is integer
     assert conn.articles["b"]["consumable"] is False
+    assert next(params for sql, params in conn.calls if "UPDATE household_articles" in sql)["consumable"] == 1
     origin = json.loads(conn.settings[("a", ORIGIN_KEY)])
     assert origin["kind"] == "explicit_user"
     assert origin["actor_id"] == "user-1"
@@ -131,6 +132,7 @@ def test_review_list_preserves_original_values_and_household_filter(monkeypatch)
             self.statements.append(sql)
             assert "ha.household_id = :household_id" in sql
             assert "hs.id IS NULL" in sql
+            assert "ha.consumable = 0" in sql
             return _Rows(
                 scalar=2,
                 many=[
