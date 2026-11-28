@@ -1,7 +1,10 @@
 name: Catalogus article identity permanent regressions
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/catalog_identity_resolution_service.py'
       - 'backend/app/services/article_recognition_service_actor.py'

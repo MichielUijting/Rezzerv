@@ -1,7 +1,10 @@
 name: Receipt lifecycle Release B validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/main.py'
@@ -42,6 +45,7 @@ on:
       - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
+  workflow_dispatch:
 
 jobs:
   release-b-contract:

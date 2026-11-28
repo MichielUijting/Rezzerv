@@ -1,7 +1,10 @@
 name: Synonym auto-consume PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - 'backend/app/main.py'
@@ -10,6 +13,7 @@ on:
       - 'backend/app/services/purchase_import_location_policy_patch.py'
       - 'backend/tests/postgresql_synonym_auto_consume_selftest.py'
       - '.github/workflows/synonym-auto-consume-postgresql-validation.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

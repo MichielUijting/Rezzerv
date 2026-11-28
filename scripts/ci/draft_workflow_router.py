@@ -295,7 +295,7 @@ def build_plan(
     workflows = routed_workflows()
     by_name = {str(item["name"]): item for item in workflows}
 
-    if action == "synchronize" and draft and before_sha:
+    if action == "synchronize" and draft and before_sha and before_sha != "0" * 40:
         comparison_base = before_sha
         comparison_mode = "latest-delta"
     elif action == "converted_to_draft":
@@ -316,7 +316,7 @@ def build_plan(
                 selected[str(workflow["name"])] = workflow
 
     previous_failed: list[str] = []
-    if action == "synchronize" and before_sha:
+    if action == "synchronize" and before_sha and before_sha != "0" * 40:
         previous_runs = latest_runs_by_name(repo, before_sha, token)
         for name, run in previous_runs.items():
             if name not in by_name:
@@ -421,6 +421,46 @@ jobs:
                          ("head_repository", {"full_name": "other/repo"})):
         assert not is_obsolete_router_run(dict(run, **{field: value}), **scope)
     assert not is_obsolete_router_run(run, **dict(scope, branch="main"))
+    # Exercise the actual planner without network calls or production mutations.
+    from unittest.mock import patch
+    def fixture(name, paths):
+        return {"name": name, "path": f".github/workflows/{name}.yml",
+                "file": f"{name}.yml", "paths": paths}
+    inventory = [fixture("changed", ["backend/tests/a.py"]),
+                 fixture("green", ["frontend/**"]),
+                 fixture("red", ["docs/**"]),
+                 fixture("duplicate", ["backend/tests/a.py"]),
+                 fixture("active", ["elsewhere/**"])]
+    previous = {"green": {"status": "completed", "conclusion": "success"},
+                "red": {"status": "completed", "conclusion": "failure"},
+                "active": {"status": "in_progress"}}
+    current = {"duplicate": {"status": "queued", "id": 1234}}
+    module = sys.modules[__name__]
+    with patch.object(module, "routed_workflows", return_value=inventory), \
+         patch.object(module, "changed_files", return_value=["backend/tests/a.py"]), \
+         patch.object(module, "latest_runs_by_name", side_effect=[previous, current]):
+        plan = build_plan(repo="owner/repo", token="test", action="synchronize",
+                          draft=True, base_sha="base", before_sha="old", head_sha="new")
+    assert plan["comparison_mode"] == "latest-delta"
+    assert set(plan["selected_workflows"]) == {"changed", "red", "active"}, plan
+    assert [item["name"] for item in plan["skipped_existing"]] == ["duplicate"], plan
+    replacement = dict(run, head_sha="new", id=456)
+    with patch.object(module, "current_draft", return_value=True), \
+         patch.object(module, "routed_workflows", return_value=[workflow]), \
+         patch.object(module, "latest_runs_by_name", return_value={"Demo": replacement}), \
+         patch.object(module, "runs_for_sha", return_value=[run]), \
+         patch.object(module, "api_json", return_value=run), \
+         patch.object(module, "api_post") as post:
+        assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == [123]
+        post.assert_called_once_with("owner/repo", "actions/runs/123/cancel", "test")
+    with patch.object(module, "current_draft", return_value=True), \
+         patch.object(module, "routed_workflows", return_value=[workflow]), \
+         patch.object(module, "latest_runs_by_name", return_value={}), \
+         patch.object(module, "runs_for_sha", return_value=[run]), \
+         patch.object(module, "api_post") as post:
+        assert cancel_superseded("owner/repo", "test", 1, "task", "old", "new", {}) == []
+        post.assert_not_called()
+    print("DRAFT_CI_ROUTER_PLANNER_AND_CANCEL_CONTRACT_GREEN")
     print("DRAFT_CI_ROUTER_SELF_TEST_GREEN")
 
 

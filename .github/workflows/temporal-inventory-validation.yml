@@ -1,7 +1,10 @@
 name: Temporal inventory validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - 'backend/app/main.py'
@@ -19,6 +22,7 @@ on:
       - 'backend/tests/test_temporal_inventory_decimal_reconciliation.py'
       - 'backend/tests/test_receipt_scanner_temporal_inventory_e2e.py'
       - '.github/workflows/temporal-inventory-validation.yml'
+  workflow_dispatch:
 
 jobs:
   validate-temporal-inventory:

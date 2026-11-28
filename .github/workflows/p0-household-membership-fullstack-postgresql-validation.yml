@@ -1,7 +1,10 @@
 name: P0 household membership full-stack PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/api/household_invitation_acceptance_routes.py'
