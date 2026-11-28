@@ -66,7 +66,7 @@ def list_consumable_review_candidates(conn, *, household_id: str,
     rows = conn.execute(text("""
         SELECT ha.id, ha.naam, ha.consumable
     """ + filter_sql + """
-        ORDER BY CASE WHEN ha.consumable IS FALSE THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN ha.consumable = 0 THEN 0 ELSE 1 END,
                  LOWER(TRIM(ha.naam)), ha.id
         LIMIT :limit OFFSET :offset
     """), params).mappings().all()

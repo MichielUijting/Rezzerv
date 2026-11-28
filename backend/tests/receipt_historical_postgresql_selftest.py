@@ -407,6 +407,25 @@ def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
         VALUES (:id,:home,'PR732 other EAN household',1,'active')
     """), {"id": foreign_id, "home": other_home})
 
+    # The classification review is a production PostgreSQL SELECT over an
+    # INTEGER 0/1/NULL column. Review must never mutate the article itself.
+    review_id = _id()
+    conn.execute(text("""
+        INSERT INTO household_articles (id,household_id,naam,consumable,status)
+        VALUES (:id,:home,'Verse halfvolle melk',0,'active')
+    """), {"id": review_id, "home": home})
+    from app.services.household_consumable_review import list_consumable_review_candidates
+    review = list_consumable_review_candidates(
+        conn, household_id=home, limit=10, offset=0,
+    )
+    assert review["total"] == 1 and review["items"][0]["id"] == review_id, review
+    assert review["items"][0]["consumable"] is False, review
+    assert conn.execute(text("""
+        SELECT consumable FROM household_articles
+        WHERE household_id=:home AND id=:id
+    """), {"home": home, "id": review_id}).scalar_one() == 0
+    print("PR732_POSTGRESQL_CONSUMABLE_REVIEW_GREEN")
+
     receipt_ids = []
     for days_ago, store, store_code, article_id, barcode in (
         (35, "Albert Heijn", "ah", winner, "4006381333931"),
