@@ -519,3 +519,47 @@ def test_explicit_payment_line_is_not_reinterpreted_as_deposit():
         envelope, scan_id="payment_test", document_sha256="c" * 64,
     )
     assert canonical.receipt.lines[0].line_type == "payment"
+
+
+@pytest.mark.parametrize(("raw_label", "expected_name", "expected_count", "expected_total"), [
+    ("Feta kaas 2 x 1,69 3,38 B", "Feta kaas", 2, "3.38"),
+    ("Verse halfvolle melk 0,88 B", "Verse halfvolle melk", 1, "0.88"),
+    ("Verse halfvolle melk 0,99 B", "Verse halfvolle melk", 1, "0.99"),
+    ("Courgette groen 3 x 0,89 2,67 B", "Courgette groen", 3, "2.67"),
+    ("Pinot Grigio 6 x 3,85 23,10 C", "Pinot Grigio", 6, "23.10"),
+    ("Lasagnebladen 500g 1,69 B", "Lasagnebladen 500g", 1, "1.69"),
+    ("Rundergehakt 12% 3,49 B", "Rundergehakt 12%", 1, "3.49"),
+])
+def test_lidl_receipt_transaction_tail_preserves_identity_and_source(
+    raw_label, expected_name, expected_count, expected_total,
+):
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="synthetic-lidl-transaction-line",
+        receipt={"date": "2026-10-15", "totalAmount": expected_total,
+                 "items": [{"name": raw_label}]},
+    )
+    result = normalize_retailer_receipt(
+        envelope, scan_id="synthetic-lidl", document_sha256="c" * 64,
+    )
+    line = result.receipt.lines[0]
+    assert line.description == expected_name
+    assert line.raw_text == raw_label
+    assert line.quantity == Decimal(expected_count)
+    assert line.line_total == Decimal(expected_total)
+
+
+def test_lidl_conflicting_explicit_financial_facts_do_not_strip_name():
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
+    name = "Verse halfvolle melk 0,88 B"
+    cleaned, count, unit, total = clean_lidl_transaction_label(
+        name, line_total=Decimal("0.99"),
+    )
+    assert cleaned == name
+    assert count is None and unit is None and total is None
+
+
+def test_lidl_product_properties_are_not_transaction_suffixes():
+    from app.integrations.retailer_receipts.normalizer import clean_lidl_transaction_label
+    for label in ("Lasagnebladen 500g", "Rundergehakt 12%", "Vitamine B12", "Kwastenset"):
+        assert clean_lidl_transaction_label(label)[0] == label
