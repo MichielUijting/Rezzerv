@@ -212,8 +212,7 @@ def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[di
         package_size = _first(item, "package_size", "packageSize")
         gross_amount = _decimal(_first(item, "gross_amount", "grossAmount", "originalAmount"))
         line_total = _decimal(_first(item, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice"))
-        original_label = str(label).strip()
-    quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
+        quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
         unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
 
         raw_detail = _first(item, 'raw_text', 'rawText', 'text', 'label', 'name')
@@ -313,6 +312,7 @@ def _normalize_line(item: dict[str, Any], index: int, *, provider: str = "") -> 
         or _first(product, "description", "name", "title", "label")
         or f"Artikel {index}"
     )
+    original_label = str(label).strip()
     quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
     unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
     if unit_price is None:
