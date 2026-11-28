@@ -383,6 +383,10 @@ def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
         INSERT INTO household_settings (id,household_id,setting_key,setting_value)
         VALUES (:id,:home,'almost_out_prediction_days','100')
     """), {"id": _id(), "home": home})
+    conn.execute(text("""
+        INSERT INTO household_settings (id,household_id,setting_key,setting_value)
+        VALUES (:id,:home,'almost_out_prediction_enabled','true')
+    """), {"id": _id(), "home": home})
 
     winner, duplicate = sorted((_id(), _id()))
     protected, manual = sorted((_id(), _id()))
@@ -499,6 +503,15 @@ def _prove_pr732_verified_gtin_recovery(conn, *, cutoff):
         SELECT setting_value FROM household_settings
         WHERE household_id=:home AND setting_key='almost_out_prediction_days'
     """), {"home": home}).scalar_one() == "100"
+    assert conn.execute(text("""
+        SELECT setting_value FROM household_settings
+        WHERE household_id=:home AND setting_key='almost_out_prediction_enabled'
+    """), {"home": home}).scalar_one() == "true"
+    # Check the real Bijna op production evaluator, not a synthetic forecast.
+    from app.main import build_almost_out_items
+    near = build_almost_out_items(conn, home)
+    assert winner in {str(item["household_article_id"]) for item in near}, near
+    print("PR732_POSTGRESQL_100_DAY_BIJNA_OP_GREEN")
 
     before = conn.execute(text("""
         SELECT COUNT(*) FROM inventory_events WHERE household_id=:home

@@ -92,6 +92,7 @@ jobs:
           env -u MIGRATION_DATABASE_URL             python backend/tests/receipt_historical_postgresql_selftest.py             | tee pr732-postgresql-evidence.log
           grep -F 'PR732_POSTGRESQL_CATALOG_UNIQUE_GUARD_GREEN' pr732-postgresql-evidence.log
           grep -F 'PR732_POSTGRESQL_VERIFIED_GTIN_RECOVERY_GREEN' pr732-postgresql-evidence.log
+          grep -F 'PR732_POSTGRESQL_100_DAY_BIJNA_OP_GREEN' pr732-postgresql-evidence.log
           grep -F 'PR732_POSTGRESQL_REPEAT_NO_NEW_STOCK_EVENTS_GREEN' pr732-postgresql-evidence.log
           grep -F 'RECEIPT_HISTORY_POSTGRESQL_TRANSACTION_ROLLBACK_GREEN' pr732-postgresql-evidence.log
       - name: Preserve synthetic numeric evidence

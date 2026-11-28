@@ -61,11 +61,17 @@ def _comparable(a: dict, b: dict, *, trusted_gtin: str | None = None) -> bool:
                     return False
     elif not a.get("global_product_id") or a.get("global_product_id") != b.get("global_product_id"):
         return False
-    for key in (
-        "barcode", "custom_name", "article_group_id",
-        "default_inventory_handling", "consumable",
-        "min_stock", "ideal_stock",
-    ):
+    # A validated GTIN with independent AH/Jumbo source evidence may have been
+    # copied into one household article but not the other. After validating
+    # the barcode against the exact trusted GTIN above, it is not a manual
+    # preference conflict. Catalog matches retain the original strict rule.
+    keys = (
+        "custom_name", "article_group_id", "default_inventory_handling",
+        "consumable", "min_stock", "ideal_stock",
+    )
+    if trusted_gtin is None:
+        keys = ("barcode",) + keys
+    for key in keys:
         left, right = a.get(key), b.get(key)
         # A manual setting on the losing article must never disappear. A
         # canonical target may safely retain a preference absent on the loser.
