@@ -304,8 +304,10 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       <MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" />
 
       <main className="rz-mobile-inventory-content">
+        <style>{`.rz-mobile-inventory-screen .rz-mobile-inventory-card-title { font-weight: 400; }`}</style>
         <section className="rz-mobile-inventory-toolbar" aria-label="Voorraad zoeken en filteren">
-          <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center' }}>
+            <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
             <span className="rz-mobile-inventory-label">Zoek</span>
             <input
               className="rz-input"
@@ -315,7 +317,17 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               placeholder={locationTrackingEnabled ? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'}
               autoComplete="off"
             />
-          </label>
+            </label>
+            <Button
+              type="button"
+              variant="primary"
+              className="rz-mobile-inventory-add"
+              onClick={() => navigate('/voorraad/incidentele-aankoop')}
+              data-testid="mobile-inventory-add-incidental-purchase"
+            >
+              + Incidentele aankoop
+            </Button>
+          </div>
 
           <div className="rz-mobile-inventory-filter-strip">
             {locationTrackingEnabled ? (
@@ -378,15 +390,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
         <div className="rz-mobile-inventory-summary-row">
           <div className="rz-mobile-inventory-summary" aria-live="polite">{resultSummary}</div>
-          <Button
-            type="button"
-            variant="primary"
-            className="rz-mobile-inventory-add"
-            onClick={() => navigate('/voorraad/incidentele-aankoop')}
-            data-testid="mobile-inventory-add-incidental-purchase"
-          >
-            + Incidentele aankoop
-          </Button>
         </div>
 
 
